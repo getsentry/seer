@@ -1,0 +1,35 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    client.knative.dev/user-image: gcr.io/super-big-data/anomaly-test
+    run.googleapis.com/ingress: all
+    run.googleapis.com/ingress-status: all
+  labels:
+    cloud.googleapis.com/location: us-central1
+  name: anomaly-test
+  namespace: '376382502266'
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '100'
+        client.knative.dev/user-image: gcr.io/super-big-data/anomaly-test
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 351.0.0
+      name: anomaly-test-00016-qad
+    spec:
+      containerConcurrency: 4
+      containers:
+      - image: gcr.io/super-big-data/anomaly-test
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: 4000m
+            memory: 2Gi
+      timeoutSeconds: 600
+  traffic:
+  - latestRevision: true
+    percent: 100

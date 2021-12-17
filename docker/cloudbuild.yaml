@@ -1,0 +1,5 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'gcr.io/super-big-data/anomaly-test', '.' ]
+
+images: ['gcr.io/super-big-data/anomaly-test:latest']

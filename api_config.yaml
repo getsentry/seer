@@ -1,0 +1,22 @@
+swagger: '2.0'
+info:
+  title: API Gateway config for anomaly detection API
+  description: Connects the API Gateway resource to the remote service (Cloud Run).
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json
+paths:
+  /predict:
+    post:
+      summary: predict
+      operationId: predict
+      x-google-backend:
+        address: https://anomaly-test-vmrqv3f7nq-uc.a.run.app/predict
+        protocol: h2
+      responses:
+        '200':
+          description: Returns anomaly scores
+          schema:
+            type: string
