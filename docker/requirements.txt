@@ -2,3 +2,5 @@ kats==0.1.0
 flask==1.1.4
 requests==2.25.1
 gunicorn==20.1.0
+scipy==1.7.3
+tsmoothie==1.0.4

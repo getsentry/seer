@@ -5,6 +5,8 @@ import os
 from kats.models.prophet import ProphetModel, ProphetParams
 from kats.detectors.cusum_detection import CUSUMDetector
 from kats.consts import TimeSeriesData
+from tsmoothie.smoother import DecomposeSmoother
+from scipy import stats
 from flask import Flask, request
 from datetime import datetime
 import pandas as pd
@@ -37,48 +39,112 @@ def changepoint():
 
 @app.route("/predict", endpoint="predict", methods=["POST"])
 def predict():
+    timings = {}
     s = time.time()
     data = request.get_json()
-
-    train = pd.DataFrame()
-    train["value"] = data["train"]["value"]
-    train["time"] = data["train"]["time"]
-
-    # test = pd.DataFrame()
-    # test["y"] = data["test"]["y"]
-    # test["ds"] = data["test"]["ds"]
-    # y_vals = data["test"]["y"]
-
+    start, end = data["start"], data["end"]
+    train = pd.DataFrame(data["train"])
     train["time"] = pd.to_datetime(train["time"], format="%Y-%m-%d %H:%M:%S")
-    # test["ds"] = pd.to_datetime(test["ds"], format="%Y-%m-%d %H:%M:%S")
+    train, bc = pre_process_data(train)
+    train.index = train["time"]
+    test = train[start:end]
+
+    y_vals = test["value"]
+
     train_ts = TimeSeriesData(train)
-    # train["ds"] = pd.to_datetime(train["ds"],unit="s")
-    # test["ds"] = pd.to_datetime(test["ds"],unit="s")
-
-    # create a model param instance
+    test_ts = TimeSeriesData(test)
     params = ProphetParams(
-        seasonality_mode="multiplicative",
         interval_width=0.95,
+        changepoint_prior_scale=0.01,
+        weekly_seasonality=14,
         daily_seasonality=False,
-        weekly_seasonality=40,
-        changepoint_range=0.9,
-        changepoint_prior_scale=0.001,
-        seasonality_prior_scale=0.1
+        uncertainty_samples=None
     )
-
-
-    # create a prophet model instance
     m = ProphetModel(train_ts, params)
+    timings["pre_process"] = time.time() - s
 
+    s = time.time()
     m.fit()
+    timings["train"] = time.time() - s
 
-    fcst = m.predict(steps=100)
-    add_prophet_uncertainty(p, fcst, using_train_df=True)
-    fcst["y"] = y_vals
-    print(time.time() - s)
+    s = time.time()
+    test.columns=["y", "ds"]
+    fcst = gen_forecast(test, m.model)
+    timings["predict"] = time.time() - s
+    s = time.time()
+    add_prophet_uncertainty(m, fcst, using_train_df=True)
+    timings["uncertainty"] = time.time() - s
+    s = time.time()
+    fcst = gen_scores(fcst, bc)
+    timings["gen_scores"] = time.time() - s
+    print(timings)
 
-    return fcst[["ds", "yhat_lower", "yhat_upper", "y"]].to_json()
+    return fcst[["ds", "yhat_lower", "yhat_upper", "y", "score", "scaled_score", "final_score"]].to_json()
 
+
+def scale_anomaly_data(data, smoothing):
+    history = []
+    results = data.copy()
+    for i, entry in enumerate(data):
+        history.insert(0, entry)
+        if len(history) >= smoothing:
+            history.pop()
+        results[i] = 1 + np.sum(history)
+    return results
+
+
+def pre_process_data(data):
+    """
+    Apply kalman filter and log transform
+    """
+    data = data.sort_values(by="time")
+
+    smoother = DecomposeSmoother(smooth_type='convolution', periods=24, window_len=6, window_type='ones')
+    smoother.smooth(data["value"])
+    data["value"] = smoother.smooth_data[0]
+    data["value"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
+    data["value"], bc_lambda = stats.boxcox(data["value"] + 1)
+
+    return data, bc_lambda
+
+def gen_forecast(data, model):
+    forecast = model.predict(data)
+    forecast['y'] = data['y'].values
+
+    return forecast
+
+def gen_scores(forecast, bc):
+    forecast['y'] = _inv_box(forecast["y"], bc)
+    forecast['yhat'] = _inv_box(forecast["yhat"], bc)
+    forecast['yhat_upper'] = _inv_box(forecast["yhat_upper"], bc)
+    forecast['yhat_lower'] = _inv_box(forecast["yhat_lower"], bc)
+
+    forecast["yhat_lower"] = np.where(forecast["yhat_lower"] < 0, 0, forecast["yhat_lower"])
+    forecast['score'] = (
+                (forecast['y'] - forecast['yhat_upper']) * (forecast['y'] >= forecast['yhat']) +
+                (forecast['yhat_lower'] - forecast['y']) * (forecast['y'] < forecast['yhat'])
+        )
+
+    pos_score_max = max(forecast["score"])
+    pos_score_min = min(forecast[forecast["score"] > 0]["score"])
+    neg_score_max = max(forecast[forecast["score"] < 0]["score"])
+    neg_score_min = min(forecast["score"])
+
+    forecast["scaled_score"] = np.where(
+        forecast["score"] > 0,
+        (forecast["score"] - pos_score_min) / pos_score_max,
+        (forecast["score"] - neg_score_max) / (-1 * neg_score_min)
+    )
+    forecast["final_score"] = scale_anomaly_data(forecast["scaled_score"], 6)
+
+    return forecast
+
+
+def _inv_box(y, bc_lambda):
+    if bc_lambda == 0:
+        return np.exp(y) - 1
+    else:
+        return np.exp(np.log(bc_lambda * y + 1) / bc_lambda) - 1
 
 def _make_historical_mat_time(deltas, changepoints_t, t_time, n_row=1):
     """
@@ -176,7 +242,7 @@ def add_prophet_uncertainty(
     if (
         using_train_df
     ):  # there is no trend-based uncertainty if we're only looking on the past where trend is known
-        sample_trends = np.zeros((100, len(forecast_df)))
+        sample_trends = np.zeros((1000, len(forecast_df)))
     else:  # create samples of possible future trends
         future_time_series = ((forecast_df["ds"] - prophet_obj.start) / prophet_obj.t_scale).values
         single_diff = np.diff(future_time_series).mean()
