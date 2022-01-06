@@ -1,11 +1,11 @@
 import json
 import logging
 import os
-# from fbprophet import Prophet
-from kats.models.prophet import ProphetModel, ProphetParams
+
+from prophet_model import ProphetModel, ProphetParams
 from kats.detectors.cusum_detection import CUSUMDetector
 from kats.consts import TimeSeriesData
-from tsmoothie.smoother import DecomposeSmoother
+from tsmoothie.smoother import DecomposeSmoother, SpectralSmoother
 from scipy import stats
 from flask import Flask, request
 from datetime import datetime
@@ -99,10 +99,15 @@ def pre_process_data(data):
     """
     data = data.sort_values(by="time")
 
-    smoother = DecomposeSmoother(smooth_type='convolution', periods=24, window_len=6, window_type='ones')
-    smoother.smooth(data["value"])
-    data["value"] = smoother.smooth_data[0]
-    data["value"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
+    smoother = SpectralSmoother(smooth_fraction=0.25, pad_len=10)
+    smoother.smooth(list(train["value"]))
+    train["value"] = smoother.smooth_data[0]
+    train["value"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
+
+    # smoother = DecomposeSmoother(smooth_type='convolution', periods=24, window_len=6, window_type='ones')
+    # smoother.smooth(data["value"])
+    # data["value"] = smoother.smooth_data[0]
+    # data["value"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
     data["value"], bc_lambda = stats.boxcox(data["value"] + 1)
 
     return data, bc_lambda
