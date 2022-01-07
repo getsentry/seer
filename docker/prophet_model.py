@@ -186,8 +186,8 @@ class ProphetModel(m.Model):
         params: the parameter class definied with `ProphetParams`
     """
     def __init__(self, data: pd.DataFrame, start, end, params: ProphetParams) -> None:
-        train, self.test, self.bc_lambda = self.pre_process_data(data)
         self.start, self.end = start, end
+        train, self.test, self.bc_lambda = self.pre_process_data(data)
         super().__init__(train, params)
         if not isinstance(self.data.value, pd.Series):
             msg = "Only support univariate time series, but get {type}.".format(

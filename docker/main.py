@@ -48,7 +48,7 @@ def predict():
         daily_seasonality=False,
         uncertainty_samples=None
     )
-    m = ProphetModel(data["train"], start, end, params)
+    m = ProphetModel(pd.DataFrame(data["train"]), start, end, params)
 
     timings["pre_process"] = time.time() - s
 
@@ -67,4 +67,4 @@ def predict():
     timings["gen_scores"] = time.time() - s
     print(timings)
 
-    return fcst[["ds", "yhat_lower", "yhat_upper", "y", "score", "scaled_score", "final_score"]].to_json()
+    return fcst[["ds", "y", "yhat", "yhat_lower", "yhat_upper", "score", "scaled_score", "final_score"]].to_json()
