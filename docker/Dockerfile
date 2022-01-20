@@ -8,6 +8,6 @@ RUN pip install -r requirements.txt
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
-COPY main.py ./
+COPY main.py prophet_model.py ./
 
 CMD exec gunicorn --bind :$PORT --workers 4 --timeout 0 main:app
