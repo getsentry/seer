@@ -126,7 +126,7 @@ class ProphetDetector(Prophet):
     def __init__(self, data: pd.DataFrame, start, end, params: ProphetParams) -> None:
         self.data = data
         self.start, self.end = start, end
-        self.low_thresh, self.high_thresh = 0.4, 0.6
+        self.low_thresh, self.high_thresh = 0.5, 0.65
         self.model_params = params
         super().__init__()
 
