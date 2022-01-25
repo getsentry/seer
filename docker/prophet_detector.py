@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 import numpy as np
-from fbprophet import Prophet
+from prophet import Prophet
 from tsmoothie.smoother import SpectralSmoother
 from scipy import stats
 

@@ -3,6 +3,7 @@ import time
 
 from flask import Flask, request
 import pandas as pd
+import numpy as np
 
 from prophet_detector import ProphetDetector, ProphetParams
 
@@ -42,7 +43,8 @@ def predict():
 
     s = time.time()
     fcst = m.scale_scores(fcst)
-    fcst["ds"] = (fcst["ds"].astype(np.int64) * 1e-9).astype(np.int64)
+    # convert to unix seconds
+    fcst["ds"] = fcst["ds"].astype(np.int64) * 1e-9
     timings["gen_scores"] = time.time() - s
 
     s = time.time()
@@ -54,30 +56,37 @@ def predict():
     return output
 
 
-def convert_ts(ts, value_col):
-    data = zip(
-        list(ts["ds"]),
-        [[{"count": x}] for x in list(ts[value_col])],
-    )
-    start = ts["ds"].iloc[0]
-    end = ts["ds"].iloc[-1]
-    return {"data": list(data), "start": start, "end": end}
-
-
 def aggregate_anomalies(data):
+    """
+    Format data for frontend
+
+    Attributes:
+    data: the input dataframe (with anomalies added)
+
+    Returns:
+    results: dictionary containing
+        y: input timeseries
+        yhat_upper: upper confidence bound
+        yhat_lower: lower confidence bound
+        anomaly_scores: raw anomaly scores (debugging)
+        anomalies: all detected anomalies
+
+    """
     anomalies = []
     last_score = None
     anomaly_index = -1
-    granularity = 5 * 60  # TODO get from class
-    for ds_time, score in data[~data["anomalies"].isna()][["ds", "anomalies"]].itertuples(index=False):
+    granularity = 5 * 60  # TODO: get from class
+    for ds_time, score in data[~data["anomalies"].isna()][
+        ["ds", "anomalies"]
+    ].itertuples(index=False):
         if score == last_score:
             anomalies[anomaly_index]["end"] = ds_time + granularity
         else:
             anomaly_index += 1
             anomalies.append(
                 {
-                    "start": ds_time,
-                    "end": ds_time + granularity,
+                    "start": int(ds_time),
+                    "end": int(ds_time + granularity),
                     "confidence": score,
                     "id": anomaly_index,
                 }
@@ -88,6 +97,33 @@ def aggregate_anomalies(data):
 
 
 def process_output(data):
+    """
+    Format data for frontend
+
+    Attributes:
+    data: the input dataframe (with anomalies added)
+
+    Returns:
+    results: dictionary containing
+        y: input timeseries
+        yhat_upper: upper confidence bound
+        yhat_lower: lower confidence bound
+        anomaly_scores: raw anomaly scores (debugging)
+        anomalies: all detected anomalies
+
+    """
+
+    def convert_ts(ts, value_col):
+        """
+        Format a timeseries for the frontend
+        """
+        data = zip(
+            list(map(int, ts["ds"])), [[{"count": x}] for x in list(ts[value_col])]
+        )
+        start = int(ts["ds"].iloc[0])
+        end = int(ts["ds"].iloc[-1])
+        return {"data": list(data), "start": start, "end": end}
+
     results = {
         "y": convert_ts(data, "y"),
         "yhat_upper": convert_ts(data, "yhat_upper"),
