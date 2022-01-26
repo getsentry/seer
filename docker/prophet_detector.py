@@ -301,7 +301,7 @@ class ProphetDetector(Prophet):
         interval_width = self.model_params.interval_width
 
         # there is no trend-based uncertainty if we're only looking on the past where trend is known
-        sample_trends = np.zeros((1000, len(forecast_df)))
+        sample_trends = np.zeros((2000, len(forecast_df)))
 
         # add gaussian noise based on historical levels
         sigma = self.model.params["sigma_obs"][0]
