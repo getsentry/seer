@@ -18,7 +18,6 @@ def predict():
     timings = {}
     s = time.time()
     start, end = args.get("start"), args.get("end")
-    low, high = args.get("low_threshold"), args.get("high_threshold")
     query_start, query_end, granularity = map_snuba_queries(start, end)
     data = snuba_query(
         query_start,
@@ -89,10 +88,10 @@ def map_snuba_queries(start, end):
     if end - start <= days(2):
         granularity = 300
         query_start = end - days(7)
-    elif end - start <= 60 * 24 * 7:
+    elif end - start <= days(7):
         granularity = 600
         query_start = end - days(14)
-    elif end - start <= 60 * 24 * 14:
+    elif end - start <= days(14):
         granularity = 1200
         query_start = end - days(28)
     else:
