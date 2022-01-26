@@ -4,6 +4,7 @@ import time
 from flask import Flask, request
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 from prophet_detector import ProphetDetector, ProphetParams
 
@@ -11,13 +12,22 @@ log = logging.getLogger()
 app = Flask(__name__)
 
 
-@app.route("/predict", endpoint="predict", methods=["POST"])
+@app.route("/predict", endpoint="predict")
 def predict():
 
     timings = {}
     s = time.time()
-    data = request.get_json()
-    start, end = data["start"], data["end"]
+    start, end = args.get("start"), args.get("end")
+    low, high = args.get("low_threshold"), args.get("high_threshold")
+    query_start, query_end, granularity = map_snuba_queries(start, end)
+    data = snuba_query(
+        query_start,
+        query_end,
+        granularity,
+        args.get("project"),
+        args.get("transaction"),
+    )
+
     params = ProphetParams(
         interval_width=0.95,
         changepoint_prior_scale=0.01,
@@ -25,7 +35,7 @@ def predict():
         daily_seasonality=False,
         uncertainty_samples=None,
     )
-    m = ProphetDetector(pd.DataFrame(data["train"]), start, end, params)
+    m = ProphetDetector(pd.DataFrame(data["data"]), start, end, params)
     m.pre_process_data()
     timings["pre_process"] = time.time() - s
 
@@ -54,6 +64,54 @@ def predict():
     logging.info(timings)
 
     return output
+
+
+def map_snuba_queries(start, end):
+    """
+    Takes visualization start/end timestamps
+    and returns the start/end/granularity
+    of the snuba query that we should execute
+
+    Attributes:
+    start: unix timestamp representing start of visualization window
+    end: unix timestamp representing end of visualization window
+
+    Returns:
+    results: dictionary containing
+        query_start: unix timestamp representing start of query window
+        query_end: unix timestamp representing end of query window
+        granularity: granularity to use (in seconds)
+    """
+
+    def days(n):
+        return 60 * 24 * n
+
+    if end - start <= days(2):
+        granularity = 300
+        query_start = end - days(7)
+    elif end - start <= 60 * 24 * 7:
+        granularity = 600
+        query_start = end - days(14)
+    elif end - start <= 60 * 24 * 14:
+        granularity = 1200
+        query_start = end - days(28)
+    else:
+        granularity = 3600
+        query_start = end - days(90)
+    query_end = end
+
+    return query_start, query_end, granularity
+
+
+def snuba_query(query_start, query_end, granularity, project_id, transaction):
+    """
+    query_start: starting unix timestamp (int)
+    query_end: ending unix timestamp (int)
+    granularity: data granularity
+    project_id: project_id
+    transaction: transaction name
+    """
+    return None
 
 
 def aggregate_anomalies(data):

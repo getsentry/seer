@@ -6,6 +6,7 @@ import numpy as np
 from prophet import Prophet
 from tsmoothie.smoother import SpectralSmoother
 from scipy import stats
+from datetime import datetime
 
 
 class ProphetParams:
@@ -125,7 +126,8 @@ class ProphetDetector(Prophet):
 
     def __init__(self, data: pd.DataFrame, start, end, params: ProphetParams) -> None:
         self.data = data
-        self.start, self.end = start, end
+        self.start = datetime.fromtimestamp(start)
+        self.end = datetime.fromtimestamp(end)
         self.low_thresh, self.high_thresh = 0.5, 0.65
         self.model_params = params
         super().__init__()
@@ -143,7 +145,7 @@ class ProphetDetector(Prophet):
             bc_lambda: box-cox lambda used to undo log transform
 
         """
-        train = self.data
+        train = self.data.rename(columns={"time": "ds", "event_count": "y"})
         train["ds"] = pd.to_datetime(train["ds"], format="%Y-%m-%d %H:%M:%S")
         train.index = train["ds"]
 
@@ -167,8 +169,8 @@ class ProphetDetector(Prophet):
         Returns:
             The fitted prophet model object
         """
-        assert (
-            hasattr(self, "train")
+        assert hasattr(
+            self, "train"
         ), "Must build training dataset with pre_process_data before model training"
         df = self.train
 
@@ -271,7 +273,9 @@ class ProphetDetector(Prophet):
             (forecast["score"] - pos_score_min) / pos_score_max,
             (forecast["score"] - neg_score_max) / (-1 * neg_score_min),
         )
-        forecast["final_score"] = forecast["scaled_score"].rolling(6, center=True).mean()
+        forecast["final_score"] = (
+            forecast["scaled_score"].rolling(6, center=True).mean()
+        )
         forecast["anomalies"] = np.where(
             forecast["final_score"] >= self.high_thresh,
             "high",
