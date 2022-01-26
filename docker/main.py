@@ -57,7 +57,7 @@ def predict():
     timings["gen_scores"] = time.time() - s
 
     s = time.time()
-    output = process_output(fcst)
+    output = process_output(fcst, granularity)
     timings["format_output"] = time.time() - s
 
     logging.info(timings)
@@ -83,7 +83,7 @@ def map_snuba_queries(start, end):
     """
 
     def days(n):
-        return 60 * 24 * n
+        return 60 * 60 * 24 * n
 
     if end - start <= days(2):
         granularity = 300
@@ -117,38 +117,45 @@ def snuba_query(query_start, query_end, granularity, project_id, transaction):
     return None
 
 
-def aggregate_anomalies(data):
+def aggregate_anomalies(data, granularity):
     """
     Format data for frontend
 
     Attributes:
     data: the input dataframe (with anomalies added)
+    granularity: data granularity (in seconds)
 
     Returns:
-    results: dictionary containing
-        y: input timeseries
-        yhat_upper: upper confidence bound
-        yhat_lower: lower confidence bound
-        anomaly_scores: raw anomaly scores (debugging)
-        anomalies: all detected anomalies
-
+    results: list of dictionaries containing anomaly information
+        start: when anomaly started
+        end: when anomaly ended
+        confidence: anomaly confidence
+        received: actual count for metric
+        expected: expected count for metric (from yhat)
+        id: "unique" id for each anomaly
     """
     anomalies = []
     last_score = None
     anomaly_index = -1
-    granularity = 5 * 60  # TODO: get from class
-    for ds_time, score in data[~data["anomalies"].isna()][
-        ["ds", "anomalies"]
+    sum_expected, sum_actual = 0, 0
+    for ds_time, score, y, yhat in data[~data["anomalies"].isna()][
+        ["ds", "anomalies", "y", "yhat"]
     ].itertuples(index=False):
         if score == last_score:
             anomalies[anomaly_index]["end"] = ds_time + granularity
+            anomalies[anomaly_index]["received"] += y
+            anomalies[anomaly_index]["expected"] += yhat
         else:
+            sum_expected = yhat
+            sum_actua = y
             anomaly_index += 1
             anomalies.append(
                 {
                     "start": int(ds_time),
                     "end": int(ds_time + granularity),
                     "confidence": score,
+                    "received": y,
+                    "expected": yhat,
                     "id": anomaly_index,
                 }
             )
@@ -157,21 +164,20 @@ def aggregate_anomalies(data):
     return anomalies
 
 
-def process_output(data):
+def process_output(data, granularity):
     """
     Format data for frontend
 
     Attributes:
     data: the input dataframe (with anomalies added)
+    granularity: data granularity (seconds)
 
     Returns:
     results: dictionary containing
         y: input timeseries
         yhat_upper: upper confidence bound
         yhat_lower: lower confidence bound
-        anomaly_scores: raw anomaly scores (debugging)
         anomalies: all detected anomalies
-
     """
 
     def convert_ts(ts, value_col):
@@ -189,8 +195,6 @@ def process_output(data):
         "y": convert_ts(data, "y"),
         "yhat_upper": convert_ts(data, "yhat_upper"),
         "yhat_lower": convert_ts(data, "yhat_lower"),
-        # TODO: remove (this is just for debugging)
-        "anomaly_scores": convert_ts(data, "final_score"),
-        "anomalies": aggregate_anomalies(data),
+        "anomalies": aggregate_anomalies(data, granularity),
     }
     return results
