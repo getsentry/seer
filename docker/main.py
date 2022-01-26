@@ -52,7 +52,7 @@ def predict():
 
     s = time.time()
     fcst = m.scale_scores(fcst)
-    # convert to unix seconds
+    # convert datetime to unix seconds
     fcst["ds"] = fcst["ds"].astype(np.int64) * 1e-9
     timings["gen_scores"] = time.time() - s
 
@@ -77,8 +77,8 @@ def map_snuba_queries(start, end):
 
     Returns:
     results: dictionary containing
-        query_start: unix timestamp representing start of query window
-        query_end: unix timestamp representing end of query window
+        query_start: datetime representing start of query window
+        query_end: datetime representing end of query window
         granularity: granularity to use (in seconds)
     """
 
@@ -99,13 +99,17 @@ def map_snuba_queries(start, end):
         query_start = end - days(90)
     query_end = end
 
-    return query_start, query_end, granularity
+    return (
+        datetime.fromtimestamp(query_start),
+        datetime.fromtimestamp(query_end),
+        granularity,
+    )
 
 
 def snuba_query(query_start, query_end, granularity, project_id, transaction):
     """
-    query_start: starting unix timestamp (int)
-    query_end: ending unix timestamp (int)
+    query_start: starting datetime
+    query_end: ending datetime
     granularity: data granularity
     project_id: project_id
     transaction: transaction name
