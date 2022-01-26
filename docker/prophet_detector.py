@@ -274,7 +274,7 @@ class ProphetDetector(Prophet):
             (forecast["score"] - neg_score_max) / (-1 * neg_score_min),
         )
         forecast["final_score"] = (
-            forecast["scaled_score"].rolling(6, center=True).mean()
+            forecast["scaled_score"].rolling(6, center=True, min_periods=1).mean()
         )
         forecast["anomalies"] = np.where(
             forecast["final_score"] >= self.high_thresh,
