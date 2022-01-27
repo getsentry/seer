@@ -12,7 +12,7 @@ log = logging.getLogger()
 app = Flask(__name__)
 
 
-@app.route("/predict", methods=["GET", "POST"]
+@app.route("/predict", methods=["GET", "POST"])
 def predict():
     timings = {}
     s = time.time()
