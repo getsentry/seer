@@ -1,12 +1,27 @@
 import logging
+import os
 import time
+import json
+import requests
 
-from flask import Flask, request
 import pandas as pd
 import numpy as np
 from datetime import datetime
-
+from flask import Flask, request
 from prophet_detector import ProphetDetector, ProphetParams
+from snuba_sdk import (
+    Column,
+    Condition,
+    Direction,
+    Entity,
+    Function,
+    Granularity,
+    Offset,
+    Op,
+    OrderBy,
+    Query,
+    Limit,
+)
 
 log = logging.getLogger()
 app = Flask(__name__)
@@ -18,14 +33,17 @@ def predict():
     timings = {}
     s = time.time()
     start, end = args.get("start"), args.get("end")
-    query_start, query_end, granularity = map_snuba_queries(start, end)
-    data = snuba_query(
+    query_start, query_end, granularity = _map_snuba_queries(start, end)
+    dataset="events"
+    query = _build_snuba_query(
+        dataset,
         query_start,
         query_end,
         granularity,
         args.get("project"),
         args.get("transaction"),
     )
+    data = _submit_snuba_query(query, dataset)
 
     params = ProphetParams(
         interval_width=0.95,
@@ -65,7 +83,7 @@ def predict():
     return output
 
 
-def map_snuba_queries(start, end):
+def _map_snuba_queries(start, end):
     """
     Takes visualization start/end timestamps
     and returns the start/end/granularity
@@ -106,15 +124,50 @@ def map_snuba_queries(start, end):
     )
 
 
-def snuba_query(query_start, query_end, granularity, project_id, transaction):
+def _build_snuba_query(dataset, query_start, query_end, granularity, project_id, transaction):
     """
+    dataset: dataset name
     query_start: starting datetime
     query_end: ending datetime
-    granularity: data granularity
+    granularity: data granularity in seconds
     project_id: project_id
     transaction: transaction name
     """
-    return None
+    q = Query(
+        dataset=dataset,
+        match=Entity("events"),
+        select=[Function("count", [Column("event_id")], "event_count")],
+        groupby=[Column("time")],
+        where=[Condition(Column("timestamp"), Op.GTE, query_start),
+               Condition(Column("timestamp"), Op.LT, query_end),
+               Condition(Column("project_id"), Op.EQ, project_id),
+               Condition(Column("transaction"), Op.EQ, transaction)],
+        orderby=[OrderBy(Column("time"), Direction.ASC)],
+        offset=Offset(0),
+        limit=Limit(2200),
+        granularity=Granularity(granularity),
+    )
+
+    query_json = json.loads(q.snuba())
+    return query_json.get("query")
+
+
+def _submit_snuba_query(query, dataset):
+    snuba_url = os.environ.get("SNUBA", "http://127.0.0.1:1218")
+    data = json.dumps(
+        {
+            "query": query,
+            "parent_api": "<unknown>",
+            "turbo": False,
+            "consistent": False,
+            "debug": False,
+            "dry_run": False,
+            "legacy": False
+        }
+    )
+
+    response = requests.post(f"{snuba_url}/{dataset}/snql", data=data)
+    return response.json()
 
 
 def aggregate_anomalies(data, granularity):
