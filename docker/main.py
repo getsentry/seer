@@ -30,6 +30,7 @@ def predict():
     elif request.method == "POST":
         data = request.get_json()
         start, end = data["start"], data["end"]
+        granularity = data["granularity"]
 
     params = ProphetParams(
         interval_width=0.95,
