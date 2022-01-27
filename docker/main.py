@@ -12,20 +12,24 @@ log = logging.getLogger()
 app = Flask(__name__)
 
 
-@app.route("/predict", endpoint="predict")
+@app.route("/predict", methods=["GET", "POST"]
 def predict():
-
     timings = {}
     s = time.time()
-    start, end = args.get("start"), args.get("end")
-    query_start, query_end, granularity = map_snuba_queries(start, end)
-    data = snuba_query(
-        query_start,
-        query_end,
-        granularity,
-        args.get("project"),
-        args.get("transaction"),
-    )
+    if request.method == "GET":
+        start, end = args.get("start"), args.get("end")
+        query_start, query_end, granularity = map_snuba_queries(start, end)
+        data = snuba_query(
+            query_start,
+            query_end,
+            granularity,
+            args.get("project"),
+            args.get("transaction"),
+        )
+        start, end = datetime.fromtimestamp(start), datetime.fromtimestamp(end)
+    elif request.method == "POST":
+        data = request.get_json()
+        start, end = data["start"], data["end"]
 
     params = ProphetParams(
         interval_width=0.95,
