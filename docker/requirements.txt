@@ -1,6 +1,7 @@
-prophet==1.0.1
 flask==1.1.4
-requests==2.25.1
 gunicorn==20.1.0
+prophet==1.0.1
+requests==2.25.1
 scipy==1.7.3
+snuba-sdk==0.1.1
 tsmoothie==1.0.4
