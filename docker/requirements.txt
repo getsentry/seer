@@ -3,5 +3,5 @@ gunicorn==20.1.0
 prophet==1.0.1
 requests==2.25.1
 scipy==1.7.3
-snuba-sdk==0.1.1
+snuba-sdk>=0.1.1,<0.2.0
 tsmoothie==1.0.4

@@ -1,16 +1,14 @@
 import logging
-import os
 import time
 import json
-import requests
+import settings
 import pandas as pd
 import numpy as np
 
 from datetime import datetime
 from flask import Flask, request
+from urllib3 import connection_from_url, Retry
 from prophet_detector import ProphetDetector, ProphetParams
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 from snuba_sdk import (
     Column,
     Condition,
@@ -36,7 +34,7 @@ def predict():
     if request.method == "GET":
         start, end = args.get("start"), args.get("end")
         query_start, query_end, granularity = _map_snuba_queries(start, end)
-        dataset = "events"
+        dataset = "transactions"
         query = _build_snuba_query(
             dataset,
             query_start,
@@ -45,7 +43,7 @@ def predict():
             args.get("project"),
             args.get("transaction"),
         )
-        data = _submit_snuba_query(query, dataset)
+        data = _submit_snuba_query(query)
         start, end = datetime.fromtimestamp(start), datetime.fromtimestamp(end)
     elif request.method == "POST":
         data = request.get_json()
@@ -140,13 +138,13 @@ def _build_snuba_query(dataset, query_start, query_end, granularity, project_id,
     project_id: project_id
     transaction: transaction name
     """
-    q = Query(
+    query = Query(
         dataset=dataset,
-        match=Entity("events"),
-        select=[Function("count", [Column("event_id")], "event_count")],
+        match=Entity("transactions"),
+        select=[Function("count", [], "transaction_count")],
         groupby=[Column("time")],
-        where=[Condition(Column("timestamp"), Op.GTE, query_start),
-               Condition(Column("timestamp"), Op.LT, query_end),
+        where=[Condition(Column("finish_ts"), Op.GTE, query_start),
+               Condition(Column("finish_ts"), Op.LT, query_end),
                Condition(Column("project_id"), Op.EQ, project_id),
                Condition(Column("transaction"), Op.EQ, transaction)],
         orderby=[OrderBy(Column("time"), Direction.ASC)],
@@ -155,36 +153,36 @@ def _build_snuba_query(dataset, query_start, query_end, granularity, project_id,
         granularity=Granularity(granularity),
     )
 
-    query_json = json.loads(q.snuba())
-    return query_json.get("query")
+    query.set_parent_api("<unknown>")\
+        .set_turbo(False)\
+        .set_consistent(False)\
+        .set_debug(False)\
+        .set_dry_run(False)\
+        .set_legacy(False)
+
+    return query
 
 
-def _submit_snuba_query(query, dataset):
-    snuba_url = os.environ.get("SNUBA", "http://127.0.0.1:1218")
-    data = json.dumps(
-        {
-            "query": query,
-            "parent_api": "<unknown>",
-            "turbo": False,
-            "consistent": False,
-            "debug": False,
-            "dry_run": False,
-            "legacy": False
-        }
+def _submit_snuba_query(query):
+    snuba_connection_pool = connection_from_url(
+        settings.SNUBA_URL,
+        retries=Retry(
+            total=5,
+            # Our calls to Snuba fail frequently due to network issues. We want to automatically
+            # retry most requests. Some of our POSTs and all of our DELETEs do cause mutations,
+            # but we have other things in place to handle duplicate mutations.
+            method_whitelist={"POST"},
+            status_forcelist=[408, 429, 502, 503, 504],
+        ),
+        timeout=settings.SNUBA_TIMEOUT,
+        maxsize=1,  # since this service is not multithreaded, yet
     )
 
-    retry_strategy = Retry(
-        total=5,
-        status_forcelist=[408, 429, 500, 502, 503, 504],
-        method_whitelist=["POST"],
-        backoff_factor=1,  # 0.5, 1, 2, 4
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    http = requests.Session()
-    http.mount("https://", adapter)
-    http.mount("http://", adapter)
+    response = snuba_connection_pool.urlopen(
+        "POST", f"/{query.dataset}/snql",
+        body=query.snuba(),
+        headers={"referer": settings.SNUBA_REFERER})
 
-    response = http.post(f"{snuba_url}/{dataset}/snql", data=data)
     return response.json()
 
 

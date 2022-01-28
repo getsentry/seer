@@ -10,6 +10,6 @@ RUN pip install --upgrade pip==21.3.1 &&\
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
-COPY main.py prophet_detector.py ./
+COPY main.py prophet_detector.py settings.py ./
 
 CMD exec gunicorn --bind :$PORT --workers 4 --timeout 0 main:app
