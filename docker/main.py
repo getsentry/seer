@@ -143,9 +143,7 @@ def aggregate_anomalies(data, granularity):
     last_score = None
     anomaly_index = -1
     sum_expected, sum_actual = 0, 0
-    for ds_time, score, y, yhat in data[~data["anomalies"].isna()][
-        ["ds", "anomalies", "y", "yhat"]
-    ].itertuples(index=False):
+    for ds_time, score, y, yhat in data.itertuples(index=False):
         if score == last_score:
             anomalies[anomaly_index]["end"] = ds_time + granularity
             anomalies[anomaly_index]["received"] += y
@@ -196,10 +194,16 @@ def process_output(data, granularity):
         end = int(ts["ds"].iloc[-1])
         return {"data": list(data), "start": start, "end": end}
 
+    anomalies_data = data[~data["anomalies"].isna()][["ds", "anomalies", "y", "yhat"]]
+    anomalies = []
+    if len(anomalies_data) > 0:
+        anomalies = aggregate_anomalies(anomalies_data, granularity)
+
     results = {
         "y": convert_ts(data, "y"),
         "yhat_upper": convert_ts(data, "yhat_upper"),
         "yhat_lower": convert_ts(data, "yhat_lower"),
-        "anomalies": aggregate_anomalies(data, granularity),
+        "anomalies": anomalies,
+        "scores": convert_ts(data, "final_score")
     }
     return results
