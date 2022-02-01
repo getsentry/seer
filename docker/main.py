@@ -1,12 +1,21 @@
+import sentry_sdk
 import logging
 import time
+import os
 
 from flask import Flask, request
+from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
 from datetime import datetime
 
 from prophet_detector import ProphetDetector, ProphetParams
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN"),
+    integrations=[FlaskIntegration()],
+    traces_sample_rate=1.0,
+)
 
 log = logging.getLogger()
 app = Flask(__name__)
@@ -14,18 +23,17 @@ app = Flask(__name__)
 
 @app.route("/predict", methods=["GET", "POST"])
 def predict():
-    timings = {}
-    s = time.time()
     if request.method == "GET":
         start, end = args.get("start"), args.get("end")
         query_start, query_end, granularity = map_snuba_queries(start, end)
-        data = snuba_query(
-            query_start,
-            query_end,
-            granularity,
-            args.get("project"),
-            args.get("transaction"),
-        )
+        with sentry_sdk.start_span(op="snuba.query", description="Query anomaly training dataset from snuba") as span:
+            data = snuba_query(
+                query_start,
+                query_end,
+                granularity,
+                args.get("project"),
+                args.get("transaction"),
+            )
         start, end = datetime.fromtimestamp(start), datetime.fromtimestamp(end)
     elif request.method == "POST":
         data = request.get_json()
@@ -39,33 +47,25 @@ def predict():
         daily_seasonality=False,
         uncertainty_samples=None,
     )
-    m = ProphetDetector(pd.DataFrame(data["data"]), start, end, params)
-    m.pre_process_data()
-    timings["pre_process"] = time.time() - s
+    with sentry_sdk.start_span(op="data.preprocess", description="Preprocess data to prepare for anomaly detection") as span:
+        m = ProphetDetector(pd.DataFrame(data["data"]), start, end, params)
+        m.pre_process_data()
 
-    s = time.time()
-    m.fit()
-    timings["train"] = time.time() - s
+    with sentry_sdk.start_span(op="model.train", description="Train forecasting model") as span:
+        m.fit()
 
-    s = time.time()
-    fcst = m.predict()
-    timings["predict"] = time.time() - s
+    with sentry_sdk.start_span(op="model.predict", description="Generate predictions") as span:
+        fcst = m.predict()
 
-    s = time.time()
-    m.add_prophet_uncertainty(fcst)
-    timings["uncertainty"] = time.time() - s
+    with sentry_sdk.start_span(op="model.confidence", description="Generate confidence intervals") as span:
+        m.add_prophet_uncertainty(fcst)
 
-    s = time.time()
-    fcst = m.scale_scores(fcst)
-    # convert datetime to unix seconds
-    fcst["ds"] = fcst["ds"].astype(np.int64) * 1e-9
-    timings["gen_scores"] = time.time() - s
+    with sentry_sdk.start_span(op="data.anomaly.scores", description="Generate anomaly scores using forecast") as span:
+        fcst = m.scale_scores(fcst)
 
-    s = time.time()
-    output = process_output(fcst, granularity)
-    timings["format_output"] = time.time() - s
-
-    logging.info(timings)
+    with sentry_sdk.start_span(op="data.format", description="Format data for frontend") as span:
+        fcst["ds"] = fcst["ds"].astype(np.int64) * 1e-9
+        output = process_output(fcst, granularity)
 
     return output
 
