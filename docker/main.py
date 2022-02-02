@@ -68,12 +68,12 @@ def predict():
 
 @app.route("/health/live", methods=["GET"])
 def health_check():
-    return "OK"
+    return {"status": "OK"}
 
 @app.route("/health/ready", methods=["GET"])
 def ready_check():
     m = ProphetDetector("2022-01-01", "2022-01-14", MODEL_PARAMS)
-    return "OK"
+    return {"status": "READY"}
 
 
 def map_snuba_queries(start, end):
