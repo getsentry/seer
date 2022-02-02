@@ -124,15 +124,14 @@ class ProphetDetector(Prophet):
         params: the parameter class defined with `ProphetParams`
     """
 
-    def __init__(self, data: pd.DataFrame, start, end, params: ProphetParams) -> None:
-        self.data = data
+    def __init__(self, start, end, params: ProphetParams) -> None:
         self.start = start
         self.end = end
         self.low_thresh, self.high_thresh = 0.5, 0.65
         self.model_params = params
         super().__init__()
 
-    def pre_process_data(self):
+    def pre_process_data(self, data: pd.DataFrame, ):
         """
         Apply kalman filter and log transform input data
 
@@ -145,7 +144,7 @@ class ProphetDetector(Prophet):
             bc_lambda: box-cox lambda used to undo log transform
 
         """
-        train = self.data.rename(columns={"time": "ds", "event_count": "y"})
+        train = data.rename(columns={"time": "ds", "event_count": "y"})
         train["ds"] = pd.to_datetime(train["ds"], format="%Y-%m-%d %H:%M:%S")
         train.index = train["ds"]
 
@@ -240,8 +239,9 @@ class ProphetDetector(Prophet):
 
     def scale_scores(self, forecast: pd.DataFrame):
         """
-        Scale anomaly scores
-        See: TODO - add link for explanation of score scaling logic
+        Normalize scores (-1 to 1), construct a moving average,
+        and then identify anomalies by comparing scores to
+        preset thresholds.
 
         Args:
             forecast: dataset containing forecast

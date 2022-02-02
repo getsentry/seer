@@ -1,5 +1,4 @@
 import sentry_sdk
-import logging
 import time
 import os
 
@@ -16,12 +15,17 @@ sentry_sdk.init(
     integrations=[FlaskIntegration()],
     traces_sample_rate=1.0,
 )
-
-log = logging.getLogger()
 app = Flask(__name__)
 
+MODEL_PARAMS = ProphetParams(
+    interval_width=0.95,
+    changepoint_prior_scale=0.01,
+    weekly_seasonality=14,
+    daily_seasonality=False,
+    uncertainty_samples=None,
+)
 
-@app.route("/predict", methods=["GET", "POST"])
+@app.route("/anomaly/predict", methods=["GET", "POST"])
 def predict():
     if request.method == "GET":
         start, end = args.get("start"), args.get("end")
@@ -40,16 +44,9 @@ def predict():
         start, end = data["start"], data["end"]
         granularity = data["granularity"]
 
-    params = ProphetParams(
-        interval_width=0.95,
-        changepoint_prior_scale=0.01,
-        weekly_seasonality=14,
-        daily_seasonality=False,
-        uncertainty_samples=None,
-    )
     with sentry_sdk.start_span(op="data.preprocess", description="Preprocess data to prepare for anomaly detection") as span:
-        m = ProphetDetector(pd.DataFrame(data["data"]), start, end, params)
-        m.pre_process_data()
+        m = ProphetDetector(start, end, MODEL_PARAMS)
+        m.pre_process_data(pd.DataFrame(data["data"]))
 
     with sentry_sdk.start_span(op="model.train", description="Train forecasting model") as span:
         m.fit()
@@ -68,6 +65,15 @@ def predict():
         output = process_output(fcst, granularity)
 
     return output
+
+@app.route("/health/ready", methods=["GET"])
+def health_check():
+    return 200
+
+@app.route("/health/live", methods=["GET"])
+def ready_check():
+    m = ProphetDetector("2022-01-01", "2022-01-14", MODEL_PARAMS)
+    return 200
 
 
 def map_snuba_queries(start, end):
