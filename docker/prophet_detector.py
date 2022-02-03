@@ -118,27 +118,25 @@ class ProphetDetector(Prophet):
     anomaly scores by comparing the intervals to observed values.
 
     Attributes:
-        data: the input time series data (pd.DataFrame)
-        start: start time for the anomaly detection window
-        end: end time for the anomaly detection window
         params: the parameter class defined with `ProphetParams`
+
     """
 
-    def __init__(self, start, end, params: ProphetParams) -> None:
-        self.start = start
-        self.end = end
+    def __init__(self, params: ProphetParams) -> None:
         self.low_thresh, self.high_thresh = 0.5, 0.65
         self.model_params = params
         super().__init__()
 
-    def pre_process_data(self, data: pd.DataFrame, ):
+    def pre_process_data(self, data: pd.DataFrame, start: str, end: str):
         """
         Apply kalman filter and log transform input data
 
         Attributes:
         data: the input time series data (pd.DataFrame)
+        start: start time for the anomaly detection window
+        end: end time for the anomaly detection window
 
-        Returns:
+        Initializes:
             data: training dataset
             test: test dataset
             bc_lambda: box-cox lambda used to undo log transform
@@ -154,7 +152,7 @@ class ProphetDetector(Prophet):
         train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
 
         train["y"], bc_lambda = stats.boxcox(train["y"] + 1)
-        self.test = train[self.start : self.end]
+        self.test = train[start : end]
         self.train = train
         self.bc_lambda = bc_lambda
 
@@ -205,7 +203,7 @@ class ProphetDetector(Prophet):
 
         # limit iter to 250 to avoid long inference times
         self.model = prophet.fit(df=df, iter=250)
-        logging.info("Fitted Prophet model. ")
+        logging.info("Fitted Prophet model.")
 
     def predict(self):
         """

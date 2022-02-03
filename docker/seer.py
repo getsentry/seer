@@ -24,6 +24,10 @@ MODEL_PARAMS = ProphetParams(
     daily_seasonality=False,
     uncertainty_samples=None,
 )
+model_initialized = False
+detector = ProphetDetector(MODEL_PARAMS)
+model_initialized = True
+
 
 @app.route("/anomaly/predict", methods=["POST"])
 def predict():
@@ -31,35 +35,48 @@ def predict():
     start, end = data["start"], data["end"]
     granularity = data["granularity"]
 
-    with sentry_sdk.start_span(op="data.preprocess", description="Preprocess data to prepare for anomaly detection") as span:
-        m = ProphetDetector(start, end, MODEL_PARAMS)
-        m.pre_process_data(pd.DataFrame(data["data"]))
+    with sentry_sdk.start_span(
+        op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
+    ) as span:
+        detector.pre_process_data(pd.DataFrame(data["data"]), start, end)
 
-    with sentry_sdk.start_span(op="model.train", description="Train forecasting model") as span:
-        m.fit()
+    with sentry_sdk.start_span(
+        op="model.train", description="Train forecasting model"
+    ) as span:
+        detector.fit()
 
     with sentry_sdk.start_span(op="model.predict", description="Generate predictions") as span:
-        fcst = m.predict()
+        fcst = detector.predict()
 
-    with sentry_sdk.start_span(op="model.confidence", description="Generate confidence intervals") as span:
-        m.add_prophet_uncertainty(fcst)
+    with sentry_sdk.start_span(
+        op="model.confidence", description="Generate confidence intervals"
+    ) as span:
+        detector.add_prophet_uncertainty(fcst)
 
-    with sentry_sdk.start_span(op="data.anomaly.scores", description="Generate anomaly scores using forecast") as span:
-        fcst = m.scale_scores(fcst)
+    with sentry_sdk.start_span(
+        op="data.anomaly.scores", description="Generate anomaly scores using forecast"
+    ) as span:
+        fcst = detector.scale_scores(fcst)
 
-    with sentry_sdk.start_span(op="data.format", description="Format data for frontend") as span:
+    with sentry_sdk.start_span(
+        op="data.format", description="Format data for frontend"
+    ) as span:
         output = process_output(fcst, granularity)
 
     return output
 
+
 @app.route("/health/live", methods=["GET"])
 def health_check():
-    return {"status": "OK"}
+    return "", 200
+
 
 @app.route("/health/ready", methods=["GET"])
 def ready_check():
-    m = ProphetDetector("2022-01-01", "2022-01-14", MODEL_PARAMS)
-    return {"status": "READY"}
+    if model_initialized:
+        return "", 200
+    else:
+        return "Model not initialized", 503
 
 
 def aggregate_anomalies(data, granularity):
