@@ -84,7 +84,6 @@ def aggregate_anomalies(data, granularity):
     anomaly_index = -1
     sum_expected, sum_actual = 0, 0
     for ds_time, score, y, yhat in data.itertuples(index=False):
-        print(ds_time, score, y, yhat)
         if score == last_score:
             anomalies[anomaly_index]["end"] = ds_time + granularity
             anomalies[anomaly_index]["received"] += y
@@ -129,7 +128,7 @@ def process_output(data, granularity):
         Format a timeseries for the frontend
         """
         data = zip(
-            list(map(int, ts["ds"])), [[{"count": x}] for x in list(ts[value_col])]
+            list(map(int, ts["ds"])), [[{"count": round(x, 5)}] for x in list(ts[value_col])]
         )
         start = int(ts["ds"].iloc[0])
         end = int(ts["ds"].iloc[-1])
@@ -146,6 +145,5 @@ def process_output(data, granularity):
         "yhat_upper": convert_ts(data, "yhat_upper"),
         "yhat_lower": convert_ts(data, "yhat_lower"),
         "anomalies": anomalies,
-        "scores": convert_ts(data, "final_score")
     }
     return results
