@@ -25,24 +25,11 @@ MODEL_PARAMS = ProphetParams(
     uncertainty_samples=None,
 )
 
-@app.route("/anomaly/predict", methods=["GET", "POST"])
+@app.route("/anomaly/predict", methods=["POST"])
 def predict():
-    if request.method == "GET":
-        start, end = args.get("start"), args.get("end")
-        query_start, query_end, granularity = map_snuba_queries(start, end)
-        with sentry_sdk.start_span(op="snuba.query", description="Query anomaly training dataset from snuba") as span:
-            data = snuba_query(
-                query_start,
-                query_end,
-                granularity,
-                args.get("project"),
-                args.get("transaction"),
-            )
-        start, end = datetime.fromtimestamp(start), datetime.fromtimestamp(end)
-    elif request.method == "POST":
-        data = request.get_json()
-        start, end = data["start"], data["end"]
-        granularity = data["granularity"]
+    data = request.get_json()
+    start, end = data["start"], data["end"]
+    granularity = data["granularity"]
 
     with sentry_sdk.start_span(op="data.preprocess", description="Preprocess data to prepare for anomaly detection") as span:
         m = ProphetDetector(start, end, MODEL_PARAMS)
@@ -61,7 +48,6 @@ def predict():
         fcst = m.scale_scores(fcst)
 
     with sentry_sdk.start_span(op="data.format", description="Format data for frontend") as span:
-        fcst["ds"] = fcst["ds"].astype(np.int64) * 1e-9
         output = process_output(fcst, granularity)
 
     return output
@@ -74,58 +60,6 @@ def health_check():
 def ready_check():
     m = ProphetDetector("2022-01-01", "2022-01-14", MODEL_PARAMS)
     return {"status": "READY"}
-
-
-def map_snuba_queries(start, end):
-    """
-    Takes visualization start/end timestamps
-    and returns the start/end/granularity
-    of the snuba query that we should execute
-
-    Attributes:
-    start: unix timestamp representing start of visualization window
-    end: unix timestamp representing end of visualization window
-
-    Returns:
-    results: dictionary containing
-        query_start: datetime representing start of query window
-        query_end: datetime representing end of query window
-        granularity: granularity to use (in seconds)
-    """
-
-    def days(n):
-        return 60 * 60 * 24 * n
-
-    if end - start <= days(2):
-        granularity = 300
-        query_start = end - days(7)
-    elif end - start <= days(7):
-        granularity = 600
-        query_start = end - days(14)
-    elif end - start <= days(14):
-        granularity = 1200
-        query_start = end - days(28)
-    else:
-        granularity = 3600
-        query_start = end - days(90)
-    query_end = end
-
-    return (
-        datetime.fromtimestamp(query_start),
-        datetime.fromtimestamp(query_end),
-        granularity,
-    )
-
-
-def snuba_query(query_start, query_end, granularity, project_id, transaction):
-    """
-    query_start: starting datetime
-    query_end: ending datetime
-    granularity: data granularity
-    project_id: project_id
-    transaction: transaction name
-    """
-    return None
 
 
 def aggregate_anomalies(data, granularity):
@@ -150,6 +84,7 @@ def aggregate_anomalies(data, granularity):
     anomaly_index = -1
     sum_expected, sum_actual = 0, 0
     for ds_time, score, y, yhat in data.itertuples(index=False):
+        print(ds_time, score, y, yhat)
         if score == last_score:
             anomalies[anomaly_index]["end"] = ds_time + granularity
             anomalies[anomaly_index]["received"] += y
@@ -168,7 +103,7 @@ def aggregate_anomalies(data, granularity):
                     "id": anomaly_index,
                 }
             )
-    last_score = score
+        last_score = score
 
     return anomalies
 
@@ -200,6 +135,7 @@ def process_output(data, granularity):
         end = int(ts["ds"].iloc[-1])
         return {"data": list(data), "start": start, "end": end}
 
+    data["ds"] = data["ds"].astype(np.int64) * 1e-9
     anomalies_data = data[~data["anomalies"].isna()][["ds", "anomalies", "y", "yhat"]]
     anomalies = []
     if len(anomalies_data) > 0:
