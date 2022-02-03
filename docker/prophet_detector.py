@@ -250,8 +250,8 @@ class ProphetDetector(Prophet):
         Returns:
             Dataframe with anomaly scores data added to it
         """
-        # for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
-        #     df[col] = self._inv_box(df[col])
+        for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
+            df[col] = self._inv_box(df[col])
 
         df["yhat_lower"] = np.where(df["yhat_lower"] < 0, 0, df["yhat_lower"])
 

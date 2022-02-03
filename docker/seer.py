@@ -34,6 +34,17 @@ def predict():
     data = request.get_json()
     start, end = data["start"], data["end"]
     granularity = data["granularity"]
+    ads_context = {
+        "start": start,
+        "end": end,
+        "low_threshold": detector.low_threshold,
+        "high_threshold": detector.high_threshold,
+    }
+    snuba_context = {
+        "granularity": granularity
+    }
+    sentry_sdk.set_context("snuba_query", snuba_context)
+    sentry_sdk.set_context("anomaly_detection_params", ads_context)
 
     with sentry_sdk.start_span(
         op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
@@ -81,20 +92,21 @@ def ready_check():
 
 def aggregate_anomalies(data, granularity):
     """
-    Format data for frontend
+    Group consecutive anomalies together into single
+    records (with expanded start/end times)
 
     Attributes:
     data: the input dataframe (with anomalies added)
     granularity: data granularity (in seconds)
 
     Returns:
-    results: list of dictionaries containing anomaly information
+    results: list of dictionaries containing combined anomalies
         start: when anomaly started
         end: when anomaly ended
         confidence: anomaly confidence
         received: actual count for metric
         expected: expected count for metric (from yhat)
-        id: "unique" id for each anomaly
+        id: id/label for each anomaly
     """
     anomalies = []
     last_score = None
