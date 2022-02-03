@@ -85,9 +85,9 @@ def aggregate_anomalies(data, granularity):
     sum_expected, sum_actual = 0, 0
     for ds_time, score, y, yhat in data.itertuples(index=False):
         if score == last_score:
-            anomalies[anomaly_index]["end"] = ds_time + granularity
-            anomalies[anomaly_index]["received"] += y
-            anomalies[anomaly_index]["expected"] += yhat
+            anomalies[anomaly_index]["end"] = int(ds_time + granularity)
+            anomalies[anomaly_index]["received"] += round(y, 5)
+            anomalies[anomaly_index]["expected"] += round(yhat, 5)
         else:
             sum_expected = yhat
             sum_actua = y
@@ -97,8 +97,8 @@ def aggregate_anomalies(data, granularity):
                     "start": int(ds_time),
                     "end": int(ds_time + granularity),
                     "confidence": score,
-                    "received": y,
-                    "expected": yhat,
+                    "received": round(y, 5),
+                    "expected": round(yhat, 5),
                     "id": anomaly_index,
                 }
             )
