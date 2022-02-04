@@ -84,10 +84,9 @@ def health_check():
 
 @app.route("/health/ready", methods=["GET"])
 def ready_check():
-    if model_initialized:
-        return "", 200
-    else:
+    if not model_initialized:
         return "Model not initialized", 503
+    return "", 200
 
 
 def aggregate_anomalies(data, granularity):

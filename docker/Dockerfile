@@ -12,4 +12,4 @@ ENV APP_HOME /app
 WORKDIR $APP_HOME
 COPY seer.py prophet_detector.py ./
 
-CMD exec gunicorn --bind :$PORT --workers 2 --threads 4 --timeout 0 seer:app
+CMD exec gunicorn --bind :$PORT --workers 2 --timeout 0 seer:app
