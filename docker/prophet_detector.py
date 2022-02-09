@@ -118,34 +118,31 @@ class ProphetDetector(Prophet):
     anomaly scores by comparing the intervals to observed values.
 
     Attributes:
-        data: the input time series data (pd.DataFrame)
-        start: start time for the anomaly detection window
-        end: end time for the anomaly detection window
         params: the parameter class defined with `ProphetParams`
+
     """
 
-    def __init__(self, data: pd.DataFrame, start, end, params: ProphetParams) -> None:
-        self.data = data
-        self.start = start
-        self.end = end
-        self.low_thresh, self.high_thresh = 0.5, 0.65
+    def __init__(self, params: ProphetParams) -> None:
+        self.low_threshold, self.high_threshold = 0.0, 0.2
         self.model_params = params
         super().__init__()
 
-    def pre_process_data(self):
+    def pre_process_data(self, data: pd.DataFrame, start: str, end: str):
         """
         Apply kalman filter and log transform input data
 
         Attributes:
         data: the input time series data (pd.DataFrame)
+        start: start time for the anomaly detection window
+        end: end time for the anomaly detection window
 
-        Returns:
+        Initializes:
             data: training dataset
             test: test dataset
             bc_lambda: box-cox lambda used to undo log transform
 
         """
-        train = self.data.rename(columns={"time": "ds", "event_count": "y"})
+        train = data.rename(columns={"time": "ds", "event_count": "y"})
         train["ds"] = pd.to_datetime(train["ds"], format="%Y-%m-%d %H:%M:%S")
         train.index = train["ds"]
 
@@ -155,7 +152,7 @@ class ProphetDetector(Prophet):
         train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
 
         train["y"], bc_lambda = stats.boxcox(train["y"] + 1)
-        self.test = train[self.start : self.end]
+        self.test = train[start:end]
         self.train = train
         self.bc_lambda = bc_lambda
 
@@ -206,7 +203,7 @@ class ProphetDetector(Prophet):
 
         # limit iter to 250 to avoid long inference times
         self.model = prophet.fit(df=df, iter=250)
-        logging.info("Fitted Prophet model. ")
+        logging.info("Fitted Prophet model.")
 
     def predict(self):
         """
@@ -238,70 +235,59 @@ class ProphetDetector(Prophet):
         else:
             return np.exp(np.log(self.bc_lambda * y + 1) / self.bc_lambda) - 1
 
-    def scale_scores(self, forecast: pd.DataFrame):
+    def scale_scores(self, df: pd.DataFrame):
         """
-        Scale anomaly scores
-        See: TODO - add link for explanation of score scaling logic
+        Generate anomaly scores by comparing observed values to
+        yhat_lower and yhat_upper (confidence interval) and
+        scaling by standard deviation.
+
+        Identify anomalies by smoothing scores (10 period moving avg) and
+        then comparing results to preset thresholds.
 
         Args:
-            forecast: dataset containing forecast
+            df: dataframe containing forecast and confidence intervals
 
         Returns:
-            Forecast with anomaly score data added to it
+            Dataframe with anomaly scores data added to it
         """
-        forecast["y"] = self._inv_box(forecast["y"])
-        forecast["yhat"] = self._inv_box(forecast["yhat"])
-        forecast["yhat_upper"] = self._inv_box(forecast["yhat_upper"])
-        forecast["yhat_lower"] = self._inv_box(forecast["yhat_lower"])
+        for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
+            df[col] = self._inv_box(df[col])
 
-        forecast["yhat_lower"] = np.where(
-            forecast["yhat_lower"] < 0, 0, forecast["yhat_lower"]
-        )
-        forecast["score"] = (forecast["y"] - forecast["yhat_upper"]) * (
-            forecast["y"] >= forecast["yhat"]
-        ) + (forecast["yhat_lower"] - forecast["y"]) * (
-            forecast["y"] < forecast["yhat"]
-        )
+        df["yhat_lower"] = np.where(df["yhat_lower"] < 0, 0, df["yhat_lower"])
 
-        pos_score_max = max(forecast["score"])
-        pos_score_min = min(forecast[forecast["score"] > 0]["score"])
-        neg_score_max = max(forecast[forecast["score"] < 0]["score"])
-        neg_score_min = min(forecast["score"])
-
-        forecast["scaled_score"] = np.where(
-            forecast["score"] > 0,
-            (forecast["score"] - pos_score_min) / pos_score_max,
-            (forecast["score"] - neg_score_max) / (-1 * neg_score_min),
+        df["score"] = (
+            np.where(
+                df["y"] >= df["yhat"], df["y"] - df["yhat_upper"], df["yhat_lower"] - df["y"]
+            )
+            / df["y"].std()
         )
-        forecast["final_score"] = (
-            forecast["scaled_score"].rolling(6, center=True, min_periods=1).mean()
-        )
-        forecast["anomalies"] = np.where(
-            forecast["final_score"] >= self.high_thresh,
+        df["final_score"] = df["score"].rolling(10, center=True, min_periods=1).mean()
+        df["anomalies"] = np.where(
+            df["final_score"] >= self.high_threshold,
             "high",
-            np.where(forecast["final_score"] >= self.low_thresh, "low", None),
+            np.where(df["final_score"] >= self.low_threshold, "low", None),
         )
 
-        return forecast
+        return df
 
-    def add_prophet_uncertainty(self, forecast_df: pd.DataFrame):
+    def add_prophet_uncertainty(self, df: pd.DataFrame):
         """
         Adds yhat_upper and yhat_lower to the forecast_df,
         based on the params of a trained prophet model and the interval_width.
 
         Args:
-            DataFrame with forecast results
+            df: DataFrame with predicted values
 
         Returns:
             DataFrame with confidence intervals (yhat_upper and yhat_lower) added
         """
         assert (
-            "yhat" in forecast_df.columns
+            "yhat" in df.columns
         ), "Must have the mean yhat forecast to build uncertainty on"
         interval_width = self.model_params.interval_width
 
         # there is no trend-based uncertainty if we're only looking on the past where trend is known
-        sample_trends = np.zeros((2000, len(forecast_df)))
+        sample_trends = np.zeros((2000, len(df)))
 
         # add gaussian noise based on historical levels
         sigma = self.model.params["sigma_obs"][0]
@@ -309,12 +295,12 @@ class ProphetDetector(Prophet):
         full_samples = sample_trends + historical_variance
         # get quantiles and scale back (prophet scales the data before fitting, so sigma and deltas are scaled)
         width_split = (1 - interval_width) / 2
-        quantiles = (
-            np.array([width_split, 1 - width_split]) * 100
-        )  # get quantiles from width
+        quantiles = np.array([width_split, 1 - width_split]) * 100  # get quantiles from width
         quantiles = np.percentile(full_samples, quantiles, axis=0)
         # Prophet scales all the data before fitting and predicting, y_scale re-scales it to original values
         quantiles = quantiles * self.model.y_scale
 
-        forecast_df["yhat_lower"] = forecast_df.yhat + quantiles[0]
-        forecast_df["yhat_upper"] = forecast_df.yhat + quantiles[1]
+        df["yhat_lower"] = df.yhat + quantiles[0]
+        df["yhat_upper"] = df.yhat + quantiles[1]
+
+        return df

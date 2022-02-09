@@ -10,6 +10,7 @@ RUN pip install --upgrade pip==21.3.1 &&\
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
-COPY main.py prophet_detector.py ./
+COPY seer.py prophet_detector.py ./
 
-CMD exec gunicorn --bind :$PORT --workers 4 --timeout 0 main:app
+# The number of gunicorn workers is selected by ops based on k8s configuration.
+CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 seer:app
