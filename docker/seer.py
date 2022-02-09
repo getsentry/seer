@@ -18,7 +18,7 @@ sentry_sdk.init(
 app = Flask(__name__)
 
 MODEL_PARAMS = ProphetParams(
-    interval_width=0.95,
+    interval_width=0.975,
     changepoint_prior_scale=0.01,
     weekly_seasonality=14,
     daily_seasonality=False,
@@ -35,13 +35,20 @@ def predict():
     start, end = data["start"], data["end"]
     granularity = data["granularity"]
     ads_context = {
-        "start": start,
-        "end": end,
+        "detection_window_start": start,
+        "detection_window_end": end,
         "low_threshold": detector.low_threshold,
         "high_threshold": detector.high_threshold,
+        "interval_width": MODEL_PARAMS.interval_width,
+        "changepoint_prior_scale": MODEL_PARAMS.changepoint_prior_scale,
+        "weekly_seasonality": MODEL_PARAMS.weekly_seasonality,
+        "daily_seasonality": MODEL_PARAMS.daily_seasonality,
+        "uncertainty_samples": MODEL_PARAMS.uncertainty_samples,
     }
     snuba_context = {
-        "granularity": granularity
+        "granularity": granularity,
+        "params": data["params"],
+        "query": data["query"]
     }
     sentry_sdk.set_context("snuba_query", snuba_context)
     sentry_sdk.set_context("anomaly_detection_params", ads_context)
@@ -50,7 +57,8 @@ def predict():
     with sentry_sdk.start_span(
         op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
     ) as span:
-        detector.pre_process_data(pd.DataFrame(data["data"]), start, end)
+        detector.pre_process_data(pd.DataFrame(data["data"]), granularity, start, end)
+        ads_context["boxcox_lambda"] = detector.bc_lambda
 
     with sentry_sdk.start_span(
         op="model.train", description="Train forecasting model"
@@ -108,30 +116,32 @@ def aggregate_anomalies(data, granularity):
         expected: expected count for metric (from yhat)
         id: id/label for each anomaly
     """
+    score_map = {1: "low", 2: "high"}
+    score_lookup = {v: k for k, v in score_map.items()}
     anomalies = []
-    last_score = None
+    previous_time = None
     anomaly_index = -1
-    sum_expected, sum_actual = 0, 0
     for ds_time, score, y, yhat in data.itertuples(index=False):
-        if score == last_score:
+        if previous_time and ds_time <= previous_time + (granularity * 3):
             anomalies[anomaly_index]["end"] = int(ds_time + granularity)
             anomalies[anomaly_index]["received"] += round(y, 5)
             anomalies[anomaly_index]["expected"] += round(yhat, 5)
+            anomalies[anomaly_index]["confidence"] = score_map[
+                max(score, score_lookup[anomalies[anomaly_index]["confidence"]])
+            ]
         else:
-            sum_expected = yhat
-            sum_actua = y
             anomaly_index += 1
             anomalies.append(
                 {
                     "start": int(ds_time),
                     "end": int(ds_time + granularity),
-                    "confidence": score,
+                    "confidence": score_map[score],
                     "received": round(y, 5),
                     "expected": round(yhat, 5),
                     "id": anomaly_index,
                 }
             )
-        last_score = score
+        previous_time = ds_time
 
     return anomalies
 
