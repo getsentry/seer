@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 from prophet import Prophet
 from tsmoothie.smoother import SpectralSmoother
-from scipy import stats
-from datetime import datetime
+from scipy import stats, special
+from datetime import datetime, timedelta
 
 
 class ProphetParams:
@@ -127,7 +127,7 @@ class ProphetDetector(Prophet):
         self.model_params = params
         super().__init__()
 
-    def pre_process_data(self, data: pd.DataFrame, start: str, end: str):
+    def pre_process_data(self, data: pd.DataFrame, granularity: int, start: str, end: str):
         """
         Apply kalman filter and log transform input data
 
@@ -142,19 +142,25 @@ class ProphetDetector(Prophet):
             bc_lambda: box-cox lambda used to undo log transform
 
         """
-        train = data.rename(columns={"time": "ds", "event_count": "y"})
-        train["ds"] = pd.to_datetime(train["ds"], format="%Y-%m-%d %H:%M:%S")
-        train.index = train["ds"]
+        train = data.rename(columns={"time": "ds", "count": "y"})
+        train["ds"] = pd.to_datetime(train["ds"], unit="s")
 
-        smoother = SpectralSmoother(smooth_fraction=0.25, pad_len=10)
+        smoother = SpectralSmoother(smooth_fraction=0.35, pad_len=10)
         smoother.smooth(list(train["y"]))
         train["y"] = smoother.smooth_data[0]
         train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
+        train["y"] = self._boxcox(train["y"])
 
-        train["y"], bc_lambda = stats.boxcox(train["y"] + 1)
-        self.test = train[start:end]
+        # we are using zerofill=True, so we need to fill in records even if there is no data
+        train = train.set_index("ds", drop=False).asfreq(timedelta(seconds=granularity))
+        train["ds"] = train.index
+
+        self.start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
+        self.end = datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
+
+        buffer = timedelta(seconds=granularity * 10)
+        self.test = train[self.start - buffer : self.end + buffer]
         self.train = train
-        self.bc_lambda = bc_lambda
 
     def fit(self, **kwargs) -> None:
         """
@@ -216,24 +222,10 @@ class ProphetDetector(Prophet):
             Test dataset with predictions added
         """
         forecast = self.model.predict(self.test)
-        forecast["y"] = self.test["y"].values
+        forecast["y"] = self.test["y"].fillna(0).values
+        forecast.index = forecast["ds"]
 
         return forecast
-
-    def _inv_box(self, y):
-        """
-        Inverse the box-cox log transform
-
-        Args:
-            y: value to be transformed
-
-        Returns:
-            Transformed value (undo log transform)
-        """
-        if self.bc_lambda == 0:
-            return np.exp(y) - 1
-        else:
-            return np.exp(np.log(self.bc_lambda * y + 1) / self.bc_lambda) - 1
 
     def scale_scores(self, df: pd.DataFrame):
         """
@@ -250,11 +242,6 @@ class ProphetDetector(Prophet):
         Returns:
             Dataframe with anomaly scores data added to it
         """
-        for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
-            df[col] = self._inv_box(df[col])
-
-        df["yhat_lower"] = np.where(df["yhat_lower"] < 0, 0, df["yhat_lower"])
-
         df["score"] = (
             np.where(
                 df["y"] >= df["yhat"], df["y"] - df["yhat_upper"], df["yhat_lower"] - df["y"]
@@ -263,12 +250,12 @@ class ProphetDetector(Prophet):
         )
         df["final_score"] = df["score"].rolling(10, center=True, min_periods=1).mean()
         df["anomalies"] = np.where(
-            df["final_score"] >= self.high_threshold,
-            "high",
-            np.where(df["final_score"] >= self.low_threshold, "low", None),
+            (df["final_score"] >= self.high_threshold) & (df["score"] > 0),
+            2,
+            np.where((df["final_score"] >= self.low_threshold) & (df["score"] > 0), 1, None),
         )
 
-        return df
+        return df[self.start : self.end]
 
     def add_prophet_uncertainty(self, df: pd.DataFrame):
         """
@@ -281,9 +268,7 @@ class ProphetDetector(Prophet):
         Returns:
             DataFrame with confidence intervals (yhat_upper and yhat_lower) added
         """
-        assert (
-            "yhat" in df.columns
-        ), "Must have the mean yhat forecast to build uncertainty on"
+        assert "yhat" in df.columns, "Must have the mean yhat forecast to build uncertainty on"
         interval_width = self.model_params.interval_width
 
         # there is no trend-based uncertainty if we're only looking on the past where trend is known
@@ -300,7 +285,22 @@ class ProphetDetector(Prophet):
         # Prophet scales all the data before fitting and predicting, y_scale re-scales it to original values
         quantiles = quantiles * self.model.y_scale
 
-        df["yhat_lower"] = df.yhat + quantiles[0]
-        df["yhat_upper"] = df.yhat + quantiles[1]
+        df["yhat_lower"] = quantiles[0] + df.yhat
+        df["yhat_upper"] = quantiles[1] + df.yhat
+
+        for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
+            df[col] = np.where(df[col] < 0.0, 0.0, df[col])
+            df[col] = self._inv_boxcox(df[col])
 
         return df
+
+    def _boxcox(self, y):
+        transformed, self.bc_lambda = stats.boxcox(y + 1)
+        if self.bc_lambda <= 0:
+            transformed = np.log(y + 1)
+        return transformed
+
+    def _inv_boxcox(self, y):
+        if self.bc_lambda <= 0:
+            return np.exp(y) - 1
+        return special.inv_boxcox(y, self.bc_lambda) - 1
