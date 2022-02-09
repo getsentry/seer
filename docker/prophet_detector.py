@@ -153,10 +153,9 @@ class ProphetDetector(Prophet):
         train = train.set_index("ds", drop=False).asfreq(timedelta(seconds=granularity))
         train["ds"] = train.index
 
-        # add start/end buffe
-
         self.start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
         self.end = datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
+
         buffer = timedelta(seconds=granularity * 10)
         self.test = train[self.start - buffer : self.end + buffer]
         self.train = train
@@ -284,13 +283,8 @@ class ProphetDetector(Prophet):
         # Prophet scales all the data before fitting and predicting, y_scale re-scales it to original values
         quantiles = quantiles * self.model.y_scale
 
-        df["yhat_lower_original"] = quantiles[0] + df.yhat
-        df["yhat_upper_original"] = quantiles[1] + df.yhat
-
         df["yhat_lower"] = quantiles[0] + df.yhat
         df["yhat_upper"] = quantiles[1] + df.yhat
-
-        df["yhat_original"] = df["yhat"]
 
         for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
             df[col] = np.where(df[col] < 0.0, 0.0, df[col])
