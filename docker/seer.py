@@ -40,9 +40,7 @@ def predict():
         "low_threshold": detector.low_threshold,
         "high_threshold": detector.high_threshold,
     }
-    snuba_context = {
-        "granularity": granularity
-    }
+    snuba_context = {"granularity": granularity}
     sentry_sdk.set_context("snuba_query", snuba_context)
     sentry_sdk.set_context("anomaly_detection_params", ads_context)
 
@@ -108,10 +106,7 @@ def aggregate_anomalies(data, granularity):
         expected: expected count for metric (from yhat)
         id: id/label for each anomaly
     """
-    score_map = {
-        1: "low",
-        2: "high"
-    }
+    score_map = {1: "low", 2: "high"}
     score_lookup = {v: k for k, v in score_map.items()}
     anomalies = []
     last_score, last_time = None, None
@@ -122,7 +117,9 @@ def aggregate_anomalies(data, granularity):
             anomalies[anomaly_index]["end"] = int(ds_time + granularity)
             anomalies[anomaly_index]["received"] += round(y, 5)
             anomalies[anomaly_index]["expected"] += round(yhat, 5)
-            anomalies[anomaly_index]["confidence"] = score_map[max(score, score_lookup[anomalies[anomaly_index]["confidence"]])]
+            anomalies[anomaly_index]["confidence"] = score_map[
+                max(score, score_lookup[anomalies[anomaly_index]["confidence"]])
+            ]
         else:
             sum_expected = yhat
             sum_actua = y

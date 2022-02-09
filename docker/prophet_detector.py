@@ -158,7 +158,7 @@ class ProphetDetector(Prophet):
 
         self.start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
         self.end = datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
-        self.buffer = timedelta(seconds=granularity*10)
+        self.buffer = timedelta(seconds=granularity * 10)
         self.test = train[self.start - self.buffer : self.end + self.buffer]
         self.train = train
 
@@ -227,7 +227,6 @@ class ProphetDetector(Prophet):
 
         return forecast
 
-
     def _inv_box(self, y):
         """
         Inverse the box-cox log transform
@@ -271,7 +270,7 @@ class ProphetDetector(Prophet):
             np.where((df["final_score"] >= self.low_threshold) & (df["score"] > 0), 1, None),
         )
 
-        return df[self.start:self.end]
+        return df[self.start : self.end]
 
     def add_prophet_uncertainty(self, df: pd.DataFrame):
         """
@@ -284,9 +283,7 @@ class ProphetDetector(Prophet):
         Returns:
             DataFrame with confidence intervals (yhat_upper and yhat_lower) added
         """
-        assert (
-            "yhat" in df.columns
-        ), "Must have the mean yhat forecast to build uncertainty on"
+        assert "yhat" in df.columns, "Must have the mean yhat forecast to build uncertainty on"
         interval_width = self.model_params.interval_width
 
         # there is no trend-based uncertainty if we're only looking on the past where trend is known
@@ -303,10 +300,10 @@ class ProphetDetector(Prophet):
         # Prophet scales all the data before fitting and predicting, y_scale re-scales it to original values
         quantiles = quantiles * self.model.y_scale
 
-        df["yhat_lower_original"] =  quantiles[0] + df.yhat
+        df["yhat_lower_original"] = quantiles[0] + df.yhat
         df["yhat_upper_original"] = quantiles[1] + df.yhat
 
-        df["yhat_lower"] =  quantiles[0] + df.yhat
+        df["yhat_lower"] = quantiles[0] + df.yhat
         df["yhat_upper"] = quantiles[1] + df.yhat
 
         df["yhat_original"] = df["yhat"]
