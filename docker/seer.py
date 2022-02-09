@@ -35,12 +35,21 @@ def predict():
     start, end = data["start"], data["end"]
     granularity = data["granularity"]
     ads_context = {
-        "start": start,
-        "end": end,
+        "detection_window_start": start,
+        "detection_window_end": end,
         "low_threshold": detector.low_threshold,
         "high_threshold": detector.high_threshold,
+        "interval_width": MODEL_PARAMS.interval_width,
+        "changepoint_prior_scale": MODEL_PARAMS.changepoint_prior_scale,
+        "weekly_seasonality": MODEL_PARAMS.weekly_seasonality,
+        "daily_seasonality": MODEL_PARAMS.daily_seasonality,
+        "uncertainty_samples": MODEL_PARAMS.uncertainty_samples,
     }
-    snuba_context = {"granularity": granularity}
+    snuba_context = {
+        "granularity": granularity,
+        "params": data["params"],
+        "query": data["query"]
+    }
     sentry_sdk.set_context("snuba_query", snuba_context)
     sentry_sdk.set_context("anomaly_detection_params", ads_context)
 
@@ -48,6 +57,7 @@ def predict():
         op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
     ) as span:
         detector.pre_process_data(pd.DataFrame(data["data"]), granularity, start, end)
+        ads_context["boxcox_lambda"] = detector.bc_lambda
 
     with sentry_sdk.start_span(
         op="model.train", description="Train forecasting model"
