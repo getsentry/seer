@@ -12,4 +12,5 @@ ENV APP_HOME /app
 WORKDIR $APP_HOME
 COPY seer.py prophet_detector.py ./
 
-CMD exec gunicorn --bind :$PORT --workers 2 --timeout 0 seer:app
+# The number of gunicorn workers is selected by ops based on k8s configuration.
+CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 seer:app
