@@ -1,4 +1,3 @@
-import pdb
 import logging
 from typing import Dict, List, Optional
 
@@ -316,13 +315,11 @@ class ProphetDetector(Prophet):
             df[col] = np.where(df[col] < 0.0, 0.0, df[col])
             df[col] = self._inv_boxcox(df[col])
 
-        return df#, sigma, historical_variance, full_samples, quantiles, self.bc_lambda
+        return df
 
     def _boxcox(self, y):
         transformed, self.bc_lambda = stats.boxcox(y + 1)
-        print(self.bc_lambda)
         if self.bc_lambda <= 0:
-            print("LOW LAMBDA!")
             transformed = np.log(y + 1)
         return transformed
 
