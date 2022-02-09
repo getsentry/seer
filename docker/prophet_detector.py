@@ -2,7 +2,6 @@ import logging
 from typing import Dict, List, Optional
 
 import pandas as pd
-from pandas.tseries.offsets import DateOffset
 import numpy as np
 from prophet import Prophet
 from tsmoothie.smoother import SpectralSmoother
@@ -158,8 +157,8 @@ class ProphetDetector(Prophet):
 
         self.start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
         self.end = datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
-        self.buffer = timedelta(seconds=granularity * 10)
-        self.test = train[self.start - self.buffer : self.end + self.buffer]
+        buffer = timedelta(seconds=granularity * 10)
+        self.test = train[self.start - buffer : self.end + buffer]
         self.train = train
 
     def fit(self, **kwargs) -> None:
@@ -226,21 +225,6 @@ class ProphetDetector(Prophet):
         forecast.index = forecast["ds"]
 
         return forecast
-
-    def _inv_box(self, y):
-        """
-        Inverse the box-cox log transform
-
-        Args:
-            y: value to be transformed
-
-        Returns:
-            Transformed value (undo log transform)
-        """
-        if self.bc_lambda <= 0:
-            return np.exp(y) - 1
-        else:
-            return np.exp(np.log(self.bc_lambda * y + 1) / self.bc_lambda) - 1
 
     def scale_scores(self, df: pd.DataFrame):
         """

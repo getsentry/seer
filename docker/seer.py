@@ -66,7 +66,6 @@ def predict():
         op="data.anomaly.scores", description="Generate anomaly scores using forecast"
     ) as span:
         fcst = detector.scale_scores(fcst)
-        fcst = fcst[start:end]
 
     with sentry_sdk.start_span(
         op="data.format", description="Format data for frontend"
@@ -178,8 +177,5 @@ def process_output(data, granularity):
         "yhat_upper": convert_ts(data, "yhat_upper"),
         "yhat_lower": convert_ts(data, "yhat_lower"),
         "anomalies": anomalies,
-        "score": convert_ts(data, "score"),
-        "final_score": convert_ts(data, "final_score"),
-        "yhat": convert_ts(data, "yhat"),
     }
     return results
