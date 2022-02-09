@@ -108,10 +108,10 @@ def aggregate_anomalies(data, granularity):
     score_map = {1: "low", 2: "high"}
     score_lookup = {v: k for k, v in score_map.items()}
     anomalies = []
-    last_score, last_time = None, None
+    previous_time = None
     anomaly_index = -1
     for ds_time, score, y, yhat in data.itertuples(index=False):
-        if last_time and ds_time <= last_time + (granularity * 3):
+        if previous_time and ds_time <= previous_time + (granularity * 3):
             anomalies[anomaly_index]["end"] = int(ds_time + granularity)
             anomalies[anomaly_index]["received"] += round(y, 5)
             anomalies[anomaly_index]["expected"] += round(yhat, 5)
@@ -130,8 +130,7 @@ def aggregate_anomalies(data, granularity):
                     "id": anomaly_index,
                 }
             )
-        last_score = score
-        last_time = ds_time
+        previous_time = ds_time
 
     return anomalies
 
