@@ -110,7 +110,6 @@ def aggregate_anomalies(data, granularity):
     anomalies = []
     last_score, last_time = None, None
     anomaly_index = -1
-    sum_expected, sum_actual = 0, 0
     for ds_time, score, y, yhat in data.itertuples(index=False):
         if last_time and ds_time <= last_time + (granularity * 3):
             anomalies[anomaly_index]["end"] = int(ds_time + granularity)
@@ -120,8 +119,6 @@ def aggregate_anomalies(data, granularity):
                 max(score, score_lookup[anomalies[anomaly_index]["confidence"]])
             ]
         else:
-            sum_expected = yhat
-            sum_actua = y
             anomaly_index += 1
             anomalies.append(
                 {
