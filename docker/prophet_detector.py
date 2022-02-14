@@ -255,7 +255,7 @@ class ProphetDetector(Prophet):
             np.where((df["final_score"] >= self.low_threshold) & (df["score"] > 0), 1, None),
         )
 
-        return df[self.start : self.end]
+        return df[self.start: self.end]
 
     def add_prophet_uncertainty(self, df: pd.DataFrame):
         """
@@ -266,7 +266,7 @@ class ProphetDetector(Prophet):
             df: DataFrame with predicted values
 
         Returns:
-            DataFrame with confidence intervals (yhat_upper and yhat_lower) added
+            DataFrame with updated values of the confidence intervals (yhat_upper and yhat_lower)
         """
         assert "yhat" in df.columns, "Must have the mean yhat forecast to build uncertainty on"
         interval_width = self.model_params.interval_width
