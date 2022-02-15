@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-from prophet_detector import ProphetDetector, ProphetParams
+from docker.prophet_detector import ProphetDetector, ProphetParams
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
