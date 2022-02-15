@@ -1,5 +1,5 @@
 steps:
-- name: 'gcr.io/cloud-builders/docker'
+- name: 'us.gcr.io/cloud-builders/docker'
   args: [ 'build', '-t', 'us.gcr.io/sentryio/seer', '.' ]
 
 images: ['us.gcr.io/sentryio/seer:latest']
