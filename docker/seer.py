@@ -1,12 +1,10 @@
 import sentry_sdk
-import time
 import os
 
 from flask import Flask, request
 from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 from prophet_detector import ProphetDetector, ProphetParams
 
@@ -32,6 +30,20 @@ model_initialized = True
 @app.route("/anomaly/predict", methods=["POST"])
 def predict():
     data = request.get_json()
+    if not all (key in data["data"] for key in ("time", "count")):
+        return {
+            "y": {"data": []},
+            "yhat_upper": {"data": []},
+            "yhat_lower": {"data": []},
+            "anomalies": []
+        }
+    if len(data["data"]["time"]) == 0 or len(data["data"]["count"]) == 0:
+        return {
+            "y": {"data": []},
+            "yhat_upper": {"data": []},
+            "yhat_lower": {"data": []},
+            "anomalies": []
+        }
     start, end = data["start"], data["end"]
     granularity = data["granularity"]
     ads_context = {
