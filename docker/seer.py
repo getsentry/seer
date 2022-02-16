@@ -30,7 +30,7 @@ model_initialized = True
 @app.route("/anomaly/predict", methods=["POST"])
 def predict():
     data = request.get_json()
-    if not all (key in data["data"] for key in ("time", "count")):
+    if "data" not in data or not all (key in data["data"] for key in ("time", "count")):
         return {
             "y": {"data": []},
             "yhat_upper": {"data": []},
