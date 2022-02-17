@@ -51,7 +51,7 @@ class TestProphetDetector(unittest.TestCase):
 
         # cannot do a dict comparison since values are numpy arrays
         for k, v in actual_params.items():
-            assert_array_almost_equal(v, expected_params.get(k), decimal=3)
+            assert_array_almost_equal(v, expected_params.get(k), decimal=2)
 
         assert expected_model.start == self.prophet_detector.model.start
 
