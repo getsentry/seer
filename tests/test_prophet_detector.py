@@ -9,7 +9,7 @@ from seer.anomaly_detection.prophet_detector import ProphetDetector, ProphetPara
 
 class TestProphetDetector(unittest.TestCase):
     def setUp(self):
-        self.test_data_dir = "docker/tests/data"
+        self.test_data_dir = "tests/data"
         self.sentry_data_df = pd.DataFrame([
             {'time': 1644350400, 'count': 1},
             {'time': 1644352400, 'count': 1},

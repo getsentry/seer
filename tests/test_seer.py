@@ -3,7 +3,7 @@ import pandas as pd
 
 from unittest import mock
 
-from seer.api.seer import aggregate_anomalies, process_output
+from seer.seer import aggregate_anomalies, process_output
 
 
 class TestSeer(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestSeer(unittest.TestCase):
 
         assert actual_output == expected_output
 
-    @mock.patch('docker.seer.aggregate_anomalies')
+    @mock.patch('seer.seer.aggregate_anomalies')
     def test_process_output(self, mock_aggregate_anomalies):
         mock_aggregate_anomalies.return_value = [
             {'start': 1644367729, 'end': 1644368029, 'confidence': 1.4, 'received': 5.4, 'expected': 5.2, 'id': 0},
