@@ -2,7 +2,7 @@ import unittest
 import pandas as pd
 import pickle
 
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_almost_equal
 from pandas.testing import assert_frame_equal, assert_series_equal
 from seer.anomaly_detection.prophet_detector import ProphetDetector, ProphetParams
 
@@ -51,7 +51,7 @@ class TestProphetDetector(unittest.TestCase):
 
         # cannot do a dict comparison since values are numpy arrays
         for k, v in actual_params.items():
-            assert_array_equal(v, expected_params.get(k))
+            assert_array_almost_equal(v, expected_params.get(k), decimal=3)
 
         assert expected_model.start == self.prophet_detector.model.start
 
@@ -61,7 +61,7 @@ class TestProphetDetector(unittest.TestCase):
         expected_df_with_forecasts = self.read_pickle_file(f"{self.test_data_dir}/expected_df_with_forecasts.pkl")
 
         df_with_forecasts = self.prophet_detector.predict()
-        assert_frame_equal(df_with_forecasts, expected_df_with_forecasts)
+        assert_frame_equal(df_with_forecasts, expected_df_with_forecasts, exact_check=False, check_less_precise=True)
 
     def test_add_prophet_uncertainty(self):
         self.prophet_detector.model = self.read_pickle_file(f"{self.test_data_dir}/prophet_detector_model.pkl")
@@ -71,7 +71,7 @@ class TestProphetDetector(unittest.TestCase):
 
         actual_df_with_uncertainty = self.prophet_detector.add_prophet_uncertainty(df_with_forecasts)
 
-        assert_frame_equal(expected_df_with_uncertainty, actual_df_with_uncertainty)
+        assert_frame_equal(expected_df_with_uncertainty, actual_df_with_uncertainty, exact_check=False, check_less_precise=True)
 
     def test_add_scale_score(self):
         df_with_uncertainty = self.read_pickle_file(f"{self.test_data_dir}/df_with_uncertainty.pkl")
@@ -80,7 +80,7 @@ class TestProphetDetector(unittest.TestCase):
 
         actual_df_with_anomalies = self.prophet_detector.scale_scores(df_with_uncertainty)
 
-        assert_frame_equal(actual_df_with_anomalies, expected_df_with_anomalies)
+        assert_frame_equal(actual_df_with_anomalies, expected_df_with_anomalies, exact_check=False, check_less_precise=True)
 
     def test_boxcox(self):
         y_before_boxcox = self.read_pickle_file(f"{self.test_data_dir}/train_y_before_boxcox.pkl")
