@@ -6,7 +6,8 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
 
-from seer.anomaly_detection.prophet_detector import ProphetDetector, ProphetParams
+from seer.anomaly_detection.prophet_detector import ProphetDetector
+from seer.anomaly_detection.prophet_params import ProphetParams
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
