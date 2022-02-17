@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED True
 ENV APP_HOME /app
 WORKDIR $APP_HOME
 
-COPY setup.py requirements.txt .
+COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==21.3.1 &&\
     pip install pystan==2.19.1.1
 
