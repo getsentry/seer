@@ -31,3 +31,5 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+    - name: Test building the Docker image
+      run: docker build . --file Dockerfile --tag seer:$(date +%s)
