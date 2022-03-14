@@ -31,20 +31,6 @@ model_initialized = True
 @app.route("/anomaly/predict", methods=["POST"])
 def predict():
     data = request.get_json()
-    if "data" not in data or not all (key in data["data"] for key in ("time", "count")):
-        return {
-            "y": {"data": []},
-            "yhat_upper": {"data": []},
-            "yhat_lower": {"data": []},
-            "anomalies": []
-        }
-    if len(data["data"]["time"]) == 0 or len(data["data"]["count"]) == 0:
-        return {
-            "y": {"data": []},
-            "yhat_upper": {"data": []},
-            "yhat_lower": {"data": []},
-            "anomalies": []
-        }
     start, end = data.get("start", None), data.get("end", None)
     granularity = data.get("granularity", None)
     ads_context = {
@@ -69,6 +55,18 @@ def predict():
     with sentry_sdk.start_span(
         op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
     ) as span:
+        if (
+            "data" not in data
+            or not all(key in data["data"] for key in ("time", "count"))
+            or len(data["data"]["time"]) == 0
+            or len(data["data"]["count"]) == 0
+        ):
+            return {
+                "y": {"data": []},
+                "yhat_upper": {"data": []},
+                "yhat_lower": {"data": []},
+                "anomalies": []
+            }
         detector.pre_process_data(pd.DataFrame(data["data"]), granularity, start, end)
         ads_context["boxcox_lambda"] = detector.bc_lambda
 
