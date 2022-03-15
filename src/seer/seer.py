@@ -47,7 +47,7 @@ def predict():
     snuba_context = {
         "granularity": granularity,
         "params": data.get("params", None),
-        "query": data.get("query", None)
+        "query": data.get("query", None),
     }
     sentry_sdk.set_context("snuba_query", snuba_context)
     sentry_sdk.set_context("anomaly_detection_params", ads_context)
@@ -55,12 +55,16 @@ def predict():
     with sentry_sdk.start_span(
         op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
     ) as span:
-        if "data" not in data or len(data["data"]) == 0:
+        if (
+            "data" not in data
+            or len(data["data"]) == 0
+            or not all(key in data["data"][0] for key in ("time", "count"))
+        ):
             return {
                 "y": {"data": []},
                 "yhat_upper": {"data": []},
                 "yhat_lower": {"data": []},
-                "anomalies": []
+                "anomalies": [],
             }
         detector.pre_process_data(pd.DataFrame(data["data"]), granularity, start, end)
         ads_context["boxcox_lambda"] = detector.bc_lambda
