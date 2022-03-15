@@ -55,12 +55,7 @@ def predict():
     with sentry_sdk.start_span(
         op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
     ) as span:
-        if (
-            "data" not in data
-            or not all(key in data["data"] for key in ("time", "count"))
-            or len(data["data"]["time"]) == 0
-            or len(data["data"]["count"]) == 0
-        ):
+        if "data" not in data or len(data["data"]) == 0:
             return {
                 "y": {"data": []},
                 "yhat_upper": {"data": []},
