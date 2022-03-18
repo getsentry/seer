@@ -29,8 +29,9 @@ model_initialized = True
 
 
 @app.route("/anomaly/predict", methods=["POST"])
-def predict():
-    data = request.get_json()
+def predict(data=None):
+    if data is None:
+        data = request.get_json()
     start, end = data.get("start", None), data.get("end", None)
     granularity = data.get("granularity", None)
     ads_context = {

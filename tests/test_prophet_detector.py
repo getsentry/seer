@@ -59,6 +59,34 @@ class TestProphetDetector(unittest.TestCase):
         actual = self.prophet_detector.train.reset_index(drop=True)
         assert_frame_equal(expected, actual)
 
+
+    def test_pre_process_data_constant(self):
+        input_data = pd.DataFrame(
+            [
+                {"time": 1644350400, "count": 1},
+                {"time": 1644350700, "count": 1},
+                {"time": 1644351000, "count": 1},
+                {"time": 1644351300, "count": 1},
+                {"time": 1644351600, "count": 1},
+                {"time": 1644351900, "count": 1},
+            ]
+        )
+        expected = pd.DataFrame(
+            [
+                {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 1},
+                {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1},
+                {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1},
+                {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": 1},
+                {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1},
+                {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1},
+            ]
+        )
+        self.prophet_detector.pre_process_data(
+            input_data, self.granularity, self.start, self.end
+        )
+        actual = self.prophet_detector.train.reset_index(drop=True)
+        assert_frame_equal(expected, actual)
+
     def test_pre_process_data_gaps(self):
         input_data = pd.DataFrame(
             [

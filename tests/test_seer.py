@@ -1,9 +1,10 @@
 import unittest
+import json
 import pandas as pd
 
 from unittest import mock
 
-from seer.seer import aggregate_anomalies, process_output
+from seer.seer import aggregate_anomalies, process_output, predict
 
 
 class TestSeer(unittest.TestCase):
@@ -29,6 +30,21 @@ class TestSeer(unittest.TestCase):
         ]
 
         actual_output = aggregate_anomalies(input_dataframe, granularity)
+
+        assert actual_output == expected_output
+
+    #@mock.patch("seer.seer.flask.request")
+    def test_empty_dataset(self):
+        input_data = {"data": [],}
+
+        expected_output = {
+                "y": {"data": []},
+                "yhat_upper": {"data": []},
+                "yhat_lower": {"data": []},
+                "anomalies": [],
+            }
+
+        actual_output = predict(input_data)
 
         assert actual_output == expected_output
 
