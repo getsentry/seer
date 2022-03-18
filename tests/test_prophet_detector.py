@@ -63,12 +63,12 @@ class TestProphetDetector(unittest.TestCase):
     def test_pre_process_data_constant(self):
         input_data = pd.DataFrame(
             [
-                {"time": 1644350400, "count": 1},
-                {"time": 1644350700, "count": 1},
-                {"time": 1644351000, "count": 1},
-                {"time": 1644351300, "count": 1},
-                {"time": 1644351600, "count": 1},
-                {"time": 1644351900, "count": 1},
+                {"time": 1644350400, "count": 1.0},
+                {"time": 1644350700, "count": 1.0},
+                {"time": 1644351000, "count": 1.0},
+                {"time": 1644351300, "count": 1.0},
+                {"time": 1644351600, "count": 1.0},
+                {"time": 1644351900, "count": 1.0},
             ]
         )
         expected = pd.DataFrame(
