@@ -4,7 +4,7 @@ import pandas as pd
 
 from unittest import mock
 
-from seer.seer import aggregate_anomalies, process_output, predict
+from seer.seer import aggregate_anomalies, process_output, predict, app
 
 
 class TestSeer(unittest.TestCase):
@@ -33,9 +33,15 @@ class TestSeer(unittest.TestCase):
 
         assert actual_output == expected_output
 
-    #@mock.patch("seer.seer.flask.request")
+
     def test_empty_dataset(self):
-        input_data = {"data": [],}
+        response = app.test_client().post(
+            '/anomaly/predict',
+            data=json.dumps({"data": [],}),
+            content_type='application/json',
+        )
+
+        actual_output = json.loads(response.get_data(as_text=True))
 
         expected_output = {
                 "y": {"data": []},
@@ -43,8 +49,6 @@ class TestSeer(unittest.TestCase):
                 "yhat_lower": {"data": []},
                 "anomalies": [],
             }
-
-        actual_output = predict(input_data)
 
         assert actual_output == expected_output
 

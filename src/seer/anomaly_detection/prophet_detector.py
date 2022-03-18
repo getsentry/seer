@@ -199,7 +199,8 @@ class ProphetDetector(Prophet):
 
         for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
             df[col] = np.where(df[col] < 0.0, 0.0, df[col])
-            df[col] = self._inv_boxcox(df[col])
+            if df[col].nunique() != 1:
+                df[col] = self._inv_boxcox(df[col])
 
         return df
 
