@@ -73,12 +73,12 @@ class TestProphetDetector(unittest.TestCase):
         )
         expected = pd.DataFrame(
             [
-                {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 1},
-                {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1},
-                {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1},
-                {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": 1},
-                {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1},
-                {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1},
+                {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 1.0},
+                {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1.0},
+                {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1.0},
+                {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": 1.0},
+                {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1.0},
+                {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1.0},
             ]
         )
         self.prophet_detector.pre_process_data(

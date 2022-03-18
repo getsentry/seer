@@ -46,14 +46,12 @@ class ProphetDetector(Prophet):
         train = data.rename(columns={"time": "ds", "count": "y"})
         train["ds"] = pd.to_datetime(train["ds"], unit="s")
 
-
-        smoother = SpectralSmoother(smooth_fraction=0.35, pad_len=10)
-        smoother.smooth(list(train["y"]))
-        train["y"] = smoother.smooth_data[0]
-        train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
-
-        # no need to transform data if it is constant
+        # no need to preprocess data if it is constant
         if train["y"].nunique() != 1:
+            smoother = SpectralSmoother(smooth_fraction=0.35, pad_len=10)
+            smoother.smooth(list(train["y"]))
+            train["y"] = smoother.smooth_data[0]
+            train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
             train["y"] = self._boxcox(train["y"])
 
         # we are using zerofill=True, so we need to fill in records even if there is no data
