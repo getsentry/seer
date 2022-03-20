@@ -197,9 +197,10 @@ class ProphetDetector(Prophet):
         df["yhat_lower"] = quantiles[0] + df.yhat
         df["yhat_upper"] = quantiles[1] + df.yhat
 
+        should_invert = True if df["y"].nunique() != 1 else False
         for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
             df[col] = np.where(df[col] < 0.0, 0.0, df[col])
-            if df[col].nunique() != 1:
+            if should_invert:
                 df[col] = self._inv_boxcox(df[col])
 
         return df
