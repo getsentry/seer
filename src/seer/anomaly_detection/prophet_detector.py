@@ -46,11 +46,13 @@ class ProphetDetector(Prophet):
         train = data.rename(columns={"time": "ds", "count": "y"})
         train["ds"] = pd.to_datetime(train["ds"], unit="s")
 
-        smoother = SpectralSmoother(smooth_fraction=0.35, pad_len=10)
-        smoother.smooth(list(train["y"]))
-        train["y"] = smoother.smooth_data[0]
-        train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
-        train["y"] = self._boxcox(train["y"])
+        # no need to preprocess data if it is constant
+        if train["y"].nunique() != 1:
+            smoother = SpectralSmoother(smooth_fraction=0.35, pad_len=10)
+            smoother.smooth(list(train["y"]))
+            train["y"] = smoother.smooth_data[0]
+            train["y"] = np.where(smoother.smooth_data[0] < 0, 0, smoother.smooth_data[0])
+            train["y"] = self._boxcox(train["y"])
 
         # we are using zerofill=True, so we need to fill in records even if there is no data
         train = train.set_index("ds", drop=False).asfreq(timedelta(seconds=granularity))
@@ -143,13 +145,19 @@ class ProphetDetector(Prophet):
         Returns:
             Dataframe with anomaly scores data added to it
         """
+
+        # score is the delta between the closest bound and the y-value
         df["score"] = (
             np.where(
                 df["y"] >= df["yhat"], df["y"] - df["yhat_upper"], df["yhat_lower"] - df["y"]
             )
             / df["y"].std()
         )
+
+        # final score is the 10 day rolling average of score
         df["final_score"] = df["score"].rolling(10, center=True, min_periods=1).mean()
+
+        # anomalies: 1 - low confidence, 2 - high confidence, None - normal
         df["anomalies"] = np.where(
             (df["final_score"] >= self.high_threshold) & (df["score"] > 0),
             2,
@@ -189,9 +197,11 @@ class ProphetDetector(Prophet):
         df["yhat_lower"] = quantiles[0] + df.yhat
         df["yhat_upper"] = quantiles[1] + df.yhat
 
+        should_invert = True if df["y"].nunique() != 1 else False
         for col in ["y", "yhat", "yhat_lower", "yhat_upper"]:
             df[col] = np.where(df[col] < 0.0, 0.0, df[col])
-            df[col] = self._inv_boxcox(df[col])
+            if should_invert:
+                df[col] = self._inv_boxcox(df[col])
 
         return df
 
