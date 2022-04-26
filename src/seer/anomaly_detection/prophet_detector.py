@@ -44,7 +44,7 @@ class ProphetDetector(Prophet):
 
         """
         train = data.rename(columns={"time": "ds", "count": "y"})
-        train["ds"] = pd.to_datetime(train["ds"], unit="s")
+        train["ds"] = pd.to_datetime(train["ds"])
 
         # no need to preprocess data if it is constant
         if train["y"].nunique() != 1:
