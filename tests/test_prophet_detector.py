@@ -35,12 +35,12 @@ class TestProphetDetector(unittest.TestCase):
     def test_pre_process_data(self):
         input_data = pd.DataFrame(
             [
-                {"time": 1644350400, "count": 1},
-                {"time": 1644350700, "count": 1},
-                {"time": 1644351000, "count": 2},
-                {"time": 1644351300, "count": 1},
-                {"time": 1644351600, "count": 2},
-                {"time": 1644351900, "count": 1},
+                {"time": "2022-02-08T20:00+00:00", "count": 1},
+                {"time": "2022-02-08T20:05+00:00", "count": 1},
+                {"time": "2022-02-08T20:10+00:00", "count": 2},
+                {"time": "2022-02-08T20:15+00:00", "count": 1},
+                {"time": "2022-02-08T20:20+00:00", "count": 2},
+                {"time": "2022-02-08T20:25+00:00", "count": 1},
             ]
         )
         expected = pd.DataFrame(
@@ -63,12 +63,12 @@ class TestProphetDetector(unittest.TestCase):
     def test_pre_process_data_constant(self):
         input_data = pd.DataFrame(
             [
-                {"time": 1644350400, "count": 2.0},
-                {"time": 1644350700, "count": 2.0},
-                {"time": 1644351000, "count": 2.0},
-                {"time": 1644351300, "count": 2.0},
-                {"time": 1644351600, "count": 2.0},
-                {"time": 1644351900, "count": 2.0},
+                {"time": "2022-02-08T20:00+00:00", "count": 1.0},
+                {"time": "2022-02-08T20:05+00:00", "count": 1.0},
+                {"time": "2022-02-08T20:10+00:00", "count": 1.0},
+                {"time": "2022-02-08T20:15+00:00", "count": 1.0},
+                {"time": "2022-02-08T20:20+00:00", "count": 1.0},
+                {"time": "2022-02-08T20:25+00:00", "count": 1.0},
             ]
         )
         expected = pd.DataFrame(
@@ -90,11 +90,11 @@ class TestProphetDetector(unittest.TestCase):
     def test_pre_process_data_gaps(self):
         input_data = pd.DataFrame(
             [
-                {"time": 1644350400, "count": 1},
-                {"time": 1644350700, "count": 1},
-                {"time": 1644351000, "count": 2},  # missing a record here
-                {"time": 1644351600, "count": 2},
-                {"time": 1644351900, "count": 1},
+                {"time": "2022-02-08T20:00+00:00", "count": 1},
+                {"time": "2022-02-08T20:05+00:00", "count": 1},
+                {"time": "2022-02-08T20:10+00:00", "count": 2}, # missing a record here
+                {"time": "2022-02-08T20:20+00:00", "count": 2},
+                {"time": "2022-02-08T20:25+00:00", "count": 1},
             ]
         )
         expected = pd.DataFrame(
