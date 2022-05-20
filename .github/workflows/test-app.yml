@@ -34,5 +34,9 @@ jobs:
         pytest
         pytest --cov=./ --cov-report=xml
         bash <(curl https://codecov.io/bash)
+    - name: Upload coverage to Codecov
+    - uses: codecov/codecov-action@v2
+      with:
+        token: ${{secrets.CODECOV_TOKEN}}
     - name: Test building the Docker image
       run: docker build . --file Dockerfile --tag seer:$(date +%s)
