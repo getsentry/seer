@@ -46,7 +46,6 @@ def predict():
     }
     snuba_context = {
         "granularity": granularity,
-        "params": data.get("params", None),
         "query": data.get("query", None),
     }
     sentry_sdk.set_context("snuba_query", snuba_context)
