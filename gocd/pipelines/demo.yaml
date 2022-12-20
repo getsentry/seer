@@ -54,7 +54,7 @@ pipelines:
                           timeout: 600
                           elastic_profile_id: timeseries-analysis-service
                           tasks:
-                              exec:
+                              - exec:
                                   working-directory: timeseries-analysis-service
                                   command: gocd/pipelines/demo.sh
                                   arguments:
