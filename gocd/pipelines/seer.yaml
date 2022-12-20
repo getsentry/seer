@@ -18,7 +18,7 @@ pipelines:
         group: timeseries-analysis-service
         lock_behavior: unlockWhenFinished
         materials:
-            timeseries-analysis-service_repo:
+            timeseries_analysis_service_repo:
                 git: git@github.com:getsentry/timeseries-analysis-service.git
                 shallow_clone: true
                 branch: main
@@ -36,11 +36,11 @@ pipelines:
                               - script: |
                                     /devinfra/scripts/checks/githubactions/checkruns.py \
                                     getsentry/timeseries-analysis-service \
-                                    ${GO_REVISION_SEER_REPO} \
+                                    ${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO} \
                                     build
                               - script: |
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
-                                    ${GO_REVISION_SEER_REPO} \
+                                    ${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO} \
                                     sentryio \
                                     "us.gcr.io/sentryio/seer"
             - deploy:
@@ -69,5 +69,5 @@ pipelines:
                                     /devinfra/scripts/k8s/k8sdeploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=seer" \
-                                    --image="us.gcr.io/sentryio/seer:${GO_REVISION_SEER_REPO}" \
+                                    --image="us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
                                     --container-name="seer"
