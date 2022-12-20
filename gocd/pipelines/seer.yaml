@@ -3,6 +3,11 @@
 # - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 format_version: 10
 environments:
+    # The "internal-sentry" environment contains a GITHUB_TOKEN
+    # that is necessary for read access to private repos under the getsentry org.
+    internal-sentry:
+        pipelines:
+            - deploy-timeseries-analysis-service
     timeseries-analysis-service-env:
         pipelines:
             - deploy-timeseries-analysis-service
