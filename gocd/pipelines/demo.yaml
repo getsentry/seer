@@ -56,7 +56,8 @@ pipelines:
                           tasks:
                               - exec:
                                   working-directory: timeseries-analysis-service
-                                  command: gocd/pipelines/demo.sh
+                                  # NOTE: the command needs to start with ./
+                                  command: ./gocd/pipelines/demo.sh
                                   arguments:
                                   - foo
                                   - bar
