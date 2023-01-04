@@ -2,10 +2,6 @@
 # - https://github.com/tomzo/gocd-yaml-config-plugin#pipeline
 # - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 format_version: 10
-environments:
-    timeseries-analysis-service-env:
-        pipelines:
-            - deploy-timeseries-analysis-service
 pipelines:
     deploy-timeseries-analysis-service:
         environment_variables:
@@ -14,7 +10,6 @@ pipelines:
             GKE_REGION: us-central1
             GKE_CLUSTER_ZONE: b
             GKE_BASTION_ZONE: b
-        # Pipeline group needs to start with timeseries-analysis-service.
         group: timeseries-analysis-service
         lock_behavior: unlockWhenFinished
         materials:
@@ -30,6 +25,9 @@ pipelines:
                   fetch_materials: true
                   jobs:
                       checks:
+                          environment_variables:
+                              # Read access to private repositories for checkruns.
+                              GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
                           timeout: 1800
                           elastic_profile_id: timeseries-analysis-service
                           tasks:
