@@ -28,6 +28,43 @@ detector = ProphetDetector(MODEL_PARAMS)
 model_initialized = True
 
 
+@app.route("/trends/mock", methods=["POST"])
+def mock_trends_endpoint():
+    data = request.get_json()
+
+    return {
+        "events": {
+            "data": [{
+            "project": "sentry",
+            "transaction": "sentry.tasks.check_auth_identity",
+            "aggregate_range_1": 11,
+            "aggregate_range_2": 64,
+            "count_range_1": 13858,
+            "count_range_2": 11750,
+            "t_test": -13.800140125042828,
+            "trend_percentage": 5.818181818181818,
+            "trend_difference": 53,
+            "count_percentage": 0.8478856977918892,
+            "tpm": 1.2702380952380952,
+			"breakpoint": int((data['start'] + data['end'])/2) #returns midpoint of time frame for now
+            }]
+        },
+
+        #or return data back to server?
+        "stats": {
+            "transaction name": {
+                "data": data['data'],
+                "start": data['start'],
+                "end": data['end'],
+                'isMetricsData': True,
+                'order': 3,
+            }
+        }
+    }
+
+
+
+
 @app.route("/anomaly/predict", methods=["POST"])
 def predict():
     data = request.get_json()
