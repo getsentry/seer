@@ -6,6 +6,10 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
 
+from kats.models.prophet import ProphetModel, ProphetParams
+from kats.detectors.cusum_detection import CUSUMDetector
+from kats.consts import TimeSeriesData
+
 from seer.anomaly_detection.prophet_detector import ProphetDetector
 from seer.anomaly_detection.prophet_params import ProphetParams
 
@@ -63,6 +67,78 @@ def mock_trends_endpoint():
     }
 
 
+@app.route("/trends/breakpoint_detector", methods=["POST"])
+def breakpoint_trends_endpoint():
+    data = request.get_json()
+    ts_data = data['data']
+
+    timestamps = [x[0] for x in ts_data]
+    counts = [x[1][0]['count'] for x in ts_data]
+
+    df = pd.DataFrame(
+        {
+            'time': timestamps,
+            'y': counts,
+        }
+    )
+
+    # convert to TimeSeriesData object
+    timeseries = TimeSeriesData(df)
+
+    change_points = CUSUMDetector(timeseries).detector()
+
+    if len(change_points) == 0:
+        # use middle of timeseries as breakpoint
+        change_point = int((data['start'] + data['end']) / 2)
+        change_index = timestamps.index(change_point)
+        first_half, second_half = counts[:change_index], counts[change_index:]
+        mu0, mu1 = sum(first_half)/len(first_half), sum(second_half)/len(second_half)
+    else:
+        # get most recent change point
+        change_point = change_points[-1].start_time
+        change_index = timestamps.index(change_point)
+        first_half, second_half = counts[:change_index], counts[change_index:]
+        mu0, mu1 = change_point.mu0, change_point.mu1
+
+    count_range_1 = len(first_half)
+    count_range_2 = len(second_half)
+
+    # calculate variance of both groups
+    var1 = sum((x-mu0)**2 for x in first_half) / count_range_1
+    var2 = sum((x-mu1)**2 for x in second_half) / count_range_2
+
+    # calculate t-value between both groups
+    t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
+    trend_percentage = int(((mu1-mu0)/mu0) * 100)
+
+    # is the project and transaction being sent to this service for us to return back to the server?
+    return {
+        "events": {
+            "data": [{
+            "project": "sentry",
+            "transaction": "sentry.tasks.check_auth_identity",
+            "aggregate_range_1": mu0,
+            "aggregate_range_2": mu1,
+            "count_range_1": count_range_1,
+            "count_range_2": count_range_2,
+            "t_test": t_value,
+            "trend_percentage": trend_percentage,
+            "trend_difference": mu1 - mu0,
+            "count_percentage": count_range_2/count_range_1,
+			"breakpoint": change_point
+            }]
+        },
+
+        # return data back to server?
+        "stats": {
+            "transaction name": {
+                "data": data['data'],
+                "start": data['start'],
+                "end": data['end'],
+                'isMetricsData': True,
+            }
+        }
+    }
 
 
 @app.route("/anomaly/predict", methods=["POST"])
