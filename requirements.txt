@@ -2,7 +2,7 @@ blinker==1.4
 certifi==2021.10.8
 charset-normalizer==2.0.11
 click==8.0.3
-cmdstanpy>=0.9.5
+cmdstanpy==0.9.5
 convertdate==2.4.0
 cycler==0.11.0
 Cython==0.29.27

@@ -6,7 +6,6 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
 
-from kats.models.prophet import ProphetModel, ProphetParams
 from kats.detectors.cusum_detection import CUSUMDetector
 from kats.consts import TimeSeriesData
 
