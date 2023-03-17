@@ -3,8 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from . import bocpd  # noqa # usort: skip
-from . import bocpd_model  # noqa # usort: skip
 from . import cusum_detection  # noqa # usort: skip
 from . import cusum_model  # noqa # usort: skip
 from . import detector  # noqa # usort: skip
