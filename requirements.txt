@@ -24,7 +24,7 @@ numpy==1.21
 packaging==21.3
 pandas
 Pillow==9.0.1
-prophet>=1.1
+prophet==1.0
 PyMeeus==0.5.11
 pyparsing==3.0.7
 python-dateutil==2.8.2
