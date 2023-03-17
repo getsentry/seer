@@ -24,19 +24,6 @@ And here are a few things worth mentioning:
   * We use Gaussian distribution as the underlying model to calculate the cusum
       value and conduct the hypothesis test;
 
-Typical usage example:
-
->>> # Univariate CUSUM
->>> timeseries = TimeSeriesData(...)
->>> detector = CusumDetector(timeseries)
->>> #Run detector
->>> changepoints = detector.detector()
->>> # Plot the results
->>> detector.plot(changepoints)
-
-The usage is the same for multivariate CUSUM except that the time series needs
-to be multivariate and that the plotting functions are not yet supported for
-this use case.
 """
 
 import logging
