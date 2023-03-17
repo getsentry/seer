@@ -2,7 +2,7 @@ blinker==1.4
 certifi==2021.10.8
 charset-normalizer==2.0.11
 click==8.0.3
-cmdstanpy==0.9.68
+cmdstanpy>=0.9.5
 convertdate==2.4.0
 cycler==0.11.0
 Cython==0.29.27
@@ -40,4 +40,4 @@ tsmoothie==1.0.4
 ujson==5.1.0
 urllib3==1.26.8
 Werkzeug==2.0.2
-kats==0.2.0
+kats>=0.1.0
