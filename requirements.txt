@@ -40,4 +40,3 @@ tsmoothie==1.0.4
 ujson==5.1.0
 urllib3==1.26.8
 Werkzeug==2.0.2
-kats
