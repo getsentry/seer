@@ -6,8 +6,8 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
 
-from kats.detectors.cusum_detection import CUSUMDetector
-from kats.consts import TimeSeriesData
+from Kats.kats.detectors.cusum_detection import CUSUMDetector
+from Kats.kats.consts import TimeSeriesData
 
 from seer.anomaly_detection.prophet_detector import ProphetDetector
 from seer.anomaly_detection.prophet_params import ProphetParams
