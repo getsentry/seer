@@ -9,8 +9,8 @@ from typing import Any, Optional, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from kats.consts import TimeSeriesChangePoint, TimeSeriesData
-from kats.detectors.detector import Detector
+from Kats.kats.consts import TimeSeriesChangePoint, TimeSeriesData
+from Kats.kats.detectors.detector import Detector
 from scipy.stats import norm, zscore  # @manual
 
 

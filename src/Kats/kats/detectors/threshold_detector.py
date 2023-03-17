@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from prophet import Prophet
 from prophet.serialize import model_from_json, model_to_json
-from kats.consts import DEFAULT_VALUE_NAME, TimeSeriesData
-from kats.detectors.detector import DetectorModel
-from kats.detectors.detector_consts import AnomalyResponse
+from Kats.kats.consts import DEFAULT_VALUE_NAME, TimeSeriesData
+from Kats.kats.detectors.detector import DetectorModel
+from Kats.kats.detectors.detector_consts import AnomalyResponse
 
 
 class StaticThresholdModel(DetectorModel):

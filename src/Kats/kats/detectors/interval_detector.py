@@ -23,15 +23,6 @@ This implementation supports the following key features:
 
     5. One sided (lower and upper) and two sided tests.
 
-Typical usage example:
-
->>> timeseries = TimeSeriesData(...)
->>> # Any extension of IntervalDetectorModel
->>> detector = TwoSampleProportion()
->>> # Run detector
->>> ab_test_results = detector.fit_predict(data=timeseries)
->>> # Plot the results
->>> detector.plot()
 """
 
 from __future__ import annotations
@@ -47,9 +38,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from kats.consts import IntervalAnomaly, TimeSeriesData
-from kats.detectors.detector import DetectorModel
-from kats.detectors.detector_consts import AnomalyResponse, ConfidenceBand
+from Kats.kats.consts import IntervalAnomaly, TimeSeriesData
+from Kats.kats.detectors.detector import DetectorModel
+from Kats.kats.detectors.detector_consts import AnomalyResponse, ConfidenceBand
 from matplotlib import pyplot as plt
 from numpy.linalg import matrix_power
 from scipy.linalg import toeplitz
