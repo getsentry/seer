@@ -20,8 +20,8 @@ from typing import Dict, List, Optional, Sequence, Type
 
 import numpy as np
 import pandas as pd
-from kats.consts import TimeSeriesChangePoint, TimeSeriesData
-from kats.detectors.detector import Detector
+from Kats.kats.consts import TimeSeriesChangePoint, TimeSeriesData
+from Kats.kats.detectors.detector import Detector
 
 
 class DTWCPDChangePoint(TimeSeriesChangePoint):
