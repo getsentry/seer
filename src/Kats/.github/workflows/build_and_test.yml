@@ -1,0 +1,36 @@
+name: Build
+
+on: [push]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Test with pytest for minimal install
+        run: |
+          pytest -c kats/tests/pytest_minimal.ini kats/tests/test_minimal.py
+
+      - name: Install optional dependencies
+        run: |
+          if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt --use-deprecated=legacy-resolver; fi
+
+      - name: Test with pytest for full install
+        run: |
+          pytest

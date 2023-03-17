@@ -1,0 +1,41 @@
+# System files
+.DS_Store
+.Spotlight-V100
+.Trashes
+
+# generated files
+*.o
+*.pyc
+*.so
+.ipynb_checkpoints/
+*.pkl
+
+# Editor temporaries
+*.swn
+*.swo
+*.swp
+*~
+
+# Installation files
+build/
+dist/
+*.egg-info/
+
+# Node state
+node_modules
+package-lock.json
+
+lib/core/metadata.js
+lib/core/MetadataBlog.js
+
+website/translated_docs
+website/build/
+website/yarn.lock
+website/node_modules
+website/i18n/*
+
+docs/translated_docs
+docs/build/
+docs/yarn.lock
+docs/node_modules
+docs/i18n/*
