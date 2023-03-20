@@ -1,5 +1,0 @@
-import requests
-
-with open("../../Documents/ads_test_data/request_data.json", "r") as data_file:
-  r = requests.post('http://0.0.0.0:3000/anomaly/predict',
-  headers={'Accept': 'application/json', 'Content-Type': 'application/json'}, data=data_file)
