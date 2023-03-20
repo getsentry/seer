@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from Kats.kats.consts import TimeSeriesData
+from kats.consts import TimeSeriesData
 from statsmodels.tsa.seasonal import seasonal_decompose, STL
 
 # from numpy.typing import ArrayLike

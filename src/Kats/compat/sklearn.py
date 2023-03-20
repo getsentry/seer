@@ -6,7 +6,7 @@
 from typing import Optional
 
 import numpy as np
-from Kats.kats.compat import compat
+from kats.compat import compat
 from sklearn.metrics import mean_squared_error as mse, mean_squared_log_error as msle
 
 

@@ -30,7 +30,7 @@ import dateutil
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from Kats.kats.compat.pandas import assert_frame_equal, assert_series_equal
+from kats.compat.pandas import assert_frame_equal, assert_series_equal
 from pandas.api.types import is_datetime64_any_dtype as is_datetime, is_numeric_dtype
 from pandas.tseries.frequencies import to_offset
 

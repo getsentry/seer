@@ -5,25 +5,6 @@
 
 """CUSUMDetectorModel is a wraper of CUSUMDetector to detect multiple change points
 
-Typical usage example:
-
->>> # Define CUSUMDetectorModel
->>> model = CUSUMDetectorModel(
-        scan_window=43200,
-        historical_window=604800,
-        threshold=0.01,
-        delta_std_ratio=1.0,
-        serialized_model=None,
-        change_directions=["increase"],
-        score_func=CusumScoreFunction.percentage_change,
-        remove_seasonality=True,
-    )
->>> # Run detector
->>> respond = model.fit_predict(tsd)
->>> # Plot anomaly score
->>> respond.scores.plot(cols=['value'])
->>> # Get change points in unixtime
->>> change_points = model.cps
 """
 
 import json
@@ -34,7 +15,7 @@ from typing import Any, cast, Dict, List, NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from Kats.kats.consts import (
+from kats.consts import (
     DataIrregualarGranularityError,
     DEFAULT_VALUE_NAME,
     InternalError,
@@ -42,15 +23,15 @@ from Kats.kats.consts import (
     ParameterError,
     TimeSeriesData,
 )
-from Kats.kats.detectors.cusum_detection import (
+from kats.detectors.cusum_detection import (
     CUSUMChangePoint,
     CUSUMDefaultArgs,
     CUSUMDetector,
     VectorizedCUSUMDetector,
 )
-from Kats.kats.detectors.detector import DetectorModel
-from Kats.kats.detectors.detector_consts import AnomalyResponse
-from Kats.kats.utils.decomposition import TimeSeriesDecomposition
+from kats.detectors.detector import DetectorModel
+from kats.detectors.detector_consts import AnomalyResponse
+from kats.utils.decomposition import TimeSeriesDecomposition
 
 
 NORMAL_TOLERENCE = 1  # number of window

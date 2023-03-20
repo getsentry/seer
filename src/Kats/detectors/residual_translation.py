@@ -18,7 +18,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from Kats.kats.consts import TimeSeriesData
+from kats.consts import TimeSeriesData
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.neighbors import KernelDensity
 

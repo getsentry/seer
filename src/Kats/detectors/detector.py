@@ -20,13 +20,13 @@ except ImportError:
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from Kats.kats.consts import (
+from kats.consts import (
     InternalError,
     TimeSeriesChangePoint,
     TimeSeriesData,
     TimeSeriesIterator,
 )
-from Kats.kats.detectors.detector_consts import AnomalyResponse
+from kats.detectors.detector_consts import AnomalyResponse
 
 T = TypeVar("T")
 D = TypeVar("D", bound="DetectorModel")
