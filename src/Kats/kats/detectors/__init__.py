@@ -11,4 +11,3 @@ from . import hourly_ratio_detection  # noqa # usort: skip
 
 from . import residual_translation  # noqa # usort: skip
 from . import robust_stat_detection  # noqa # usort: skip
-from .meta_learning import metalearning_detection_model  # noqa # usort: skip
