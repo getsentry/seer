@@ -68,6 +68,20 @@ def mock_trends_endpoint():
 
 @app.route("/trends/breakpoint_detector", methods=["POST"])
 def breakpoint_trends_endpoint():
+
+    def get_agg_range(seq_data, function):
+        if len(seq_data) == 0:
+            return 0
+
+        if function == "p50":
+            return np.percentile(seq_data, 50)
+        if function == "p75":
+            return np.percentile(seq_data, 75)
+        if function == "p95":
+            return np.percentile(seq_data, 95)
+
+        return np.percentile(seq_data, 99)
+
     data = request.get_json()
     ts_data = data['data']
 
@@ -89,15 +103,24 @@ def breakpoint_trends_endpoint():
     if len(change_points) == 0:
         # use middle of timeseries as breakpoint
         change_point = int((data['start'] + data['end']) / 2)
-        change_index = timestamps.index(change_point)
-        first_half, second_half = counts[:change_index], counts[change_index:]
-        mu0, mu1 = sum(first_half)/len(first_half), sum(second_half)/len(second_half)
     else:
         # get most recent change point
         change_point = change_points[-1].start_time
-        change_index = timestamps.index(change_point)
-        first_half, second_half = counts[:change_index], counts[change_index:]
-        mu0, mu1 = change_point.mu0, change_point.mu1
+
+    change_index = timestamps.index(change_point)
+    first_half, second_half = counts[:change_index], counts[change_index:]
+
+    trend_function = data['trendFunction'].split("(")[0]
+
+    mu0 = sum(first_half)/len(first_half)
+    mu1 = sum(second_half)/len(second_half)
+
+    if trend_function == "avg":
+        agg_range_1 = mu0
+        agg_range_2 = mu1
+    else:
+        agg_range_1 = get_agg_range(first_half, trend_function)
+        agg_range_2 = get_agg_range(second_half, trend_function)
 
     count_range_1 = len(first_half)
     count_range_2 = len(second_half)
@@ -108,7 +131,7 @@ def breakpoint_trends_endpoint():
 
     # calculate t-value between both groups
     t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
-    trend_percentage = int(((mu1-mu0)/mu0) * 100)
+    trend_percentage = int(((agg_range_2-agg_range_1)/agg_range_1) * 100)
 
     # is the project and transaction being sent to this service for us to return back to the server?
     return {
@@ -116,13 +139,13 @@ def breakpoint_trends_endpoint():
             "data": [{
             "project": "sentry",
             "transaction": "sentry.tasks.check_auth_identity",
-            "aggregate_range_1": mu0,
-            "aggregate_range_2": mu1,
+            "aggregate_range_1": agg_range_1,
+            "aggregate_range_2": agg_range_2,
             "count_range_1": count_range_1,
             "count_range_2": count_range_2,
             "t_test": t_value,
             "trend_percentage": trend_percentage,
-            "trend_difference": mu1 - mu0,
+            "trend_difference": agg_range_2 - agg_range_1,
             "count_percentage": count_range_2/count_range_1,
 			"breakpoint": change_point
             }]
