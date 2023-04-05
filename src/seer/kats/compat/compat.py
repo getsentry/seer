@@ -21,7 +21,6 @@ V = Union[str, "Version", pv.Version, pv.LegacyVersion]
 
 class Version:
     """Extend packaging Version to allow comparing to version strings.
-
     Wraps instead of extends, because pv.parse can return either a
     pv.Version or a pv.LegacyVersion.
     """
@@ -30,7 +29,6 @@ class Version:
 
     def __init__(self, version: V) -> None:
         """Parse a version.
-
         Args:
             version: the name of a package, a version string, or a packaging
                 version object.

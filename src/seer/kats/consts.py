@@ -7,10 +7,8 @@
 This module contains some of the key data structures in the Kats library,
 including :class:`TimeSeriesData`, :class:`TimeSeriesChangePoint`, and
 :class:`TimeSeriesIterator`.
-
 :class:`TimeSeriesChangePoint` is the return type of many of the Kats detection
 algorithms.
-
 :class:`TimeSeriesData` is the fundamental data structure in the Kats library,
 that gives uses access to a host of forecasting, detection, and utility
 algorithms right at the user's fingertips.
@@ -30,7 +28,7 @@ import dateutil
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from kats.compat.pandas import assert_frame_equal, assert_series_equal
+from seer.kats.compat.pandas import assert_frame_equal, assert_series_equal
 from pandas.api.types import is_datetime64_any_dtype as is_datetime, is_numeric_dtype
 from pandas.tseries.frequencies import to_offset
 
@@ -87,9 +85,7 @@ def _log_error(msg: str) -> ValueError:
 
 class TimeSeriesChangePoint:
     """Object returned by detector classes.
-
     Attributes:
-
         start_time: Start time of the change.
         end_time: End time of the change.
         confidence: The confidence of the change point.
@@ -141,26 +137,19 @@ class TimeSeriesChangePoint:
 
 class TimeSeriesData:
     """The fundamental Kats data structure to store a time series.
-
     In order to access much of the functionality in the Kats library, users
     must initialize the :class:`TimeSeriesData` class with their data first.
-
     Initialization. :class:`TimeSeriesData` can be initialized from the
     following data sources:
-
         - `pandas.DataFrame`
         - `pandas.Series`
         - `pandas.DatetimeIndex`
-
     Typical usage example for initialization:
-
     >>> import pandas as pd
     >>> df = pd.read_csv("/kats/data/air_passengers.csv")
     >>> ts = TimeSeriesData(df=df, time_col_name="ds")
-
     Initialization arguments (all optional, but must choose one way to
     initialize e.g. `pandas.DataFrame`):
-
     - df: A `pandas.DataFrame` storing the time series (default None).
     - sort_by_time: A boolean indicating whether the :class:`TimeSeriesData`
         should be sorted by time (default True).
@@ -183,26 +172,20 @@ class TimeSeriesData:
     - tz_nonexistant: A string representing how to handle nonexistant timezone
         values (default "raise").
     - categorical_var: A list of column names of categorical variables that are not required to be numerical. Default is None.
-
     Raises:
       ValueError: Invalid params passed when trying to create the
         :class:`TimeSeriesData`.
-
     Operations. Many operations that you can do with `pandas.DataFrame` objects
     are also applicable to :class:`TimeSeriesData`. For example:
-
       >>> ts[0:2] # Slicing
       >>> ts_1 == ts_2 # Equality
       >>> ts_1.extend(ts_2) # Extend
       >>> ts.plot(cols=["y"]) # Visualize
-
     Utility Functions. Many utility functions for converting
     :class:`TimeSeriesData` objects to other common data structures exist.
     For example:
-
       >>> ts.to_dataframe() # Convert to pandas.DataFrame
       >>> ts.to_array() # Convert to numpy.ndarray
-
     Attributes:
       time: A `pandas.Series` object storing the time values of the time
         series.
@@ -392,7 +375,6 @@ class TimeSeriesData:
     @property
     def time(self) -> pd.Series:
         """Returns the time values of the series.
-
         Returns:
           A `pandas.Series` representing the time values of the time series.
         """
@@ -401,7 +383,6 @@ class TimeSeriesData:
     @time.setter
     def time(self, time_values: pd.Series) -> None:
         """Sets the time values of the :class:`TimeSeriesData`.
-
         Args:
           time_values. A `pandas.Series` with the updated time values.
         """
@@ -410,7 +391,6 @@ class TimeSeriesData:
     @property
     def value(self) -> Union[pd.Series, pd.DataFrame]:
         """Returns the value(s) of the series.
-
         Returns:
           A `pandas.Series` or `pandas.DataFrame` representing the value(s) of the
           time series.
@@ -420,7 +400,6 @@ class TimeSeriesData:
     @value.setter
     def value(self, values: Union[pd.Series, pd.DataFrame]) -> None:
         """Sets the value(s) of the :class:`TimeSeriesData.`
-
         Args:
           values: A `pandas.Series` or `pandas.DataFrame` with the updated
           values(s).
@@ -433,7 +412,6 @@ class TimeSeriesData:
     @property
     def min(self) -> Union[pd.Series, float]:
         """Returns the min value(s) of the series.
-
         Returns:
           A `pandas.Series` or float representing the min value(s) of the
           time series.
@@ -443,7 +421,6 @@ class TimeSeriesData:
     @property
     def max(self) -> Union[pd.Series, float]:
         """Returns the max value(s) of the series.
-
         Returns:
           A `pandas.Series` or float representing the max value(s) of the
           time series.
@@ -537,7 +514,6 @@ class TimeSeriesData:
 
     def is_empty(self) -> bool:
         """Checks if the :class:`TimeSeriesData` is empty.
-
         Returns:
           False if :class:`TimeSeriesData` does not have any datapoints.
           Otherwise return True.
@@ -609,13 +585,11 @@ class TimeSeriesData:
         """
         Extends :class:`TimeSeriesData` with another :class:`TimeSeriesData`
         object.
-
         Args:
           other: The other :class:`TimeSeriesData` object (currently
             only other :class:`TimeSeriesData` objects are supported).
           validate (optional): A boolean representing if the new
             :class:`TimeSeriesData` should be validated (default True).
-
         Raises:
           ValueError: The object passed was not an instance of
             :class:`TimeSeriesData`.
@@ -648,7 +622,6 @@ class TimeSeriesData:
         """
         Utility function converting the time in the :class:`TimeSeriesData`
         object to a `pandas.DatetimeIndex`.
-
         Returns:
           A `pandas.DatetimeIndex` representation of the time values of the series.
         """
@@ -659,14 +632,12 @@ class TimeSeriesData:
         """
         Validates the time series for correctness (on both frequency and
         dimension).
-
         Args:
           validate_frequency: A boolean indicating whether the
             :class:`TimeSeriesData` should be validated for constant frequency.
           validate_dimension: A boolean indicating whether the
             :class:`TimeSeriesData` should be validated for having both the
             same number of timesteps and values.
-
         Raises:
           ValueError: The frequency and/or dimensions were invalid.
         """
@@ -697,10 +668,8 @@ class TimeSeriesData:
     def is_data_missing(self) -> bool:
         """
         Checks if data is missing from the time series.
-
         This is very similar to :meth:`validate_data()` but will not raise an
         error.
-
         Returns:
           True when data is missing from the time series. Otherwise False.
         """
@@ -719,7 +688,6 @@ class TimeSeriesData:
         """
         Returns a `pandas.Timedelta` representation of the
         :class:`TimeSeriesdata` frequency.
-
         Returns:
           A `pandas.Timedelta` object representing the frequency of the
           :class:`TimeSeriesData`.
@@ -732,12 +700,10 @@ class TimeSeriesData:
     ) -> Union[datetime.tzinfo, dateutil.tz.tz.tzfile, None]:
         """
         Returns the timezone of the :class:`TimeSeriesData`.
-
         Returns:
           A timezone aware object representing the timezone of the
           :class:`TimeSeriesData`. Returns None when there is no timezone
           present.
-
         For more info, see:
         https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DatetimeIndex.tz.html.
         """
@@ -746,7 +712,6 @@ class TimeSeriesData:
 
     def is_univariate(self) -> bool:
         """Returns whether the :class:`TimeSeriesData` is univariate.
-
         Returns:
           True if the :class:`TimeSeriesData` is univariate. False otherwise.
         """
@@ -756,7 +721,6 @@ class TimeSeriesData:
     def to_dataframe(self, standard_time_col_name: bool = False) -> pd.DataFrame:
         """
         Converts the :class:`TimeSeriesData` object into a `pandas.DataFrame`.
-
         Args:
           standard_time_col (optional): True if the DataFrame's time column name
             should be "time". To keep the same time column name as the current
@@ -782,7 +746,6 @@ class TimeSeriesData:
 
     def to_array(self) -> np.ndarray:
         """Converts the :class:`TimeSeriesData` object to a `numpy.ndarray`.
-
         Returns:
           A `numpy.ndarray` representation of the time series.
         """
@@ -891,10 +854,8 @@ class TimeSeriesData:
         This method is a more robust way to infer the frequency of the time
         series in the presence of missing data. It looks at the diff of the
         time series, and decides the frequency by majority voting.
-
         Returns:
           A `pandas.Timedelta` object representing the frequency of the series.
-
         Raises:
           ValueError: The :class:`TimeSeriesData` has less than 2 data points.
         """
@@ -920,16 +881,13 @@ class TimeSeriesData:
     ) -> TimeSeriesData:
         """
         Interpolate missing date if `time` doesn't have constant frequency.
-
         The following options are available:
           - linear
           - backward fill
           - forward fill
           - all other methods that pd.interpolate supports
-
         See https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
         for more detail on these options.
-
         Args:
           freq: A string representing the pre-defined freq of the time series.
           base: base argument for resample().
@@ -942,7 +900,6 @@ class TimeSeriesData:
             values, as interpolation in this case due to the need to index
             on time (default False).
           kwargs: additional arguments to pass to pd.interpolate
-
         Returns:
             A new :class:`TimeSeriesData` object with interpolated data.
         """
@@ -994,7 +951,6 @@ class TimeSeriesData:
         grid_kwargs: Optional[Dict[str, Any]] = None,
     ) -> plt.Axes:
         """Plots the time series.
-
         Args:
             cols: List of variable names to plot against time. If None,
                 plot all variables in the time series data.
@@ -1102,11 +1058,9 @@ class TimeSeriesIterator:
 
 class TSIterator:
     """Iterates through the values of a single timeseries.
-
     Produces a timeseries with a single point, in case of an
     univariate time series, or a timeseries with an array indicating
     the values at the given location, for a multivariate time series.
-
     Attributes:
         ts: The input timeseries.
     """

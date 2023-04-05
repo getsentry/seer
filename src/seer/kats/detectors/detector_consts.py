@@ -12,7 +12,7 @@ from typing import cast, List, Optional, Tuple, Union
 import attr
 import numpy as np
 import pandas as pd
-from kats.consts import TimeSeriesData
+from seer.kats.consts import TimeSeriesData
 from scipy.stats import norm, t, ttest_ind  # @manual
 from statsmodels.stats import multitest
 
