@@ -164,7 +164,7 @@ class TestProphetDetector(unittest.TestCase):
             ]
         )
 
-        self.prophet_detector.model = self.read_pickle(
+        self.prophet_detector.model = self.read_pickle_file(
             f"{self.test_data_dir}/prophet_detector_model.pkl"
         )
 
@@ -172,7 +172,7 @@ class TestProphetDetector(unittest.TestCase):
         assert_frame_equal(expected_output, actual_output, check_exact=False)
 
     def test_add_prophet_uncertainty(self):
-        self.prophet_detector.model = self.read_pickle(
+        self.prophet_detector.model = self.read_pickle_file(
             f"{self.test_data_dir}/prophet_detector_model.pkl"
         )
         self.prophet_detector.bc_lambda = 0.5719605326696966
