@@ -38,9 +38,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from kats.consts import IntervalAnomaly, TimeSeriesData
-from kats.detectors.detector import DetectorModel
-from kats.detectors.detector_consts import AnomalyResponse, ConfidenceBand
+from seer.kats.consts import IntervalAnomaly, TimeSeriesData
+from seer.kats.detectors.detector import DetectorModel
+from seer.kats.detectors.detector_consts import AnomalyResponse, ConfidenceBand
 from matplotlib import pyplot as plt
 from numpy.linalg import matrix_power
 from scipy.linalg import toeplitz

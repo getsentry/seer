@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Sequence, Type
 
 import numpy as np
 import pandas as pd
-from kats.consts import TimeSeriesChangePoint, TimeSeriesData
+from seer.kats.consts import TimeSeriesChangePoint, TimeSeriesData
 from kats.detectors.detector import Detector
 
 

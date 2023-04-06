@@ -15,7 +15,7 @@ from typing import Any, cast, Dict, List, NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from kats.consts import (
+from seer.kats.consts import (
     DataIrregualarGranularityError,
     DEFAULT_VALUE_NAME,
     InternalError,
@@ -23,15 +23,15 @@ from kats.consts import (
     ParameterError,
     TimeSeriesData,
 )
-from kats.detectors.cusum_detection import (
+from seer.kats.detectors.cusum_detection import (
     CUSUMChangePoint,
     CUSUMDefaultArgs,
     CUSUMDetector,
     VectorizedCUSUMDetector,
 )
-from kats.detectors.detector import DetectorModel
-from kats.detectors.detector_consts import AnomalyResponse
-from kats.utils.decomposition import TimeSeriesDecomposition
+from seer.kats.detectors.detector import DetectorModel
+from seer.kats.detectors.detector_consts import AnomalyResponse
+from seer.kats.utils.decomposition import TimeSeriesDecomposition
 
 
 NORMAL_TOLERENCE = 1  # number of window

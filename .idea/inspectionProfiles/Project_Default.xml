@@ -1,0 +1,65 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="43">
+            <item index="0" class="java.lang.String" itemvalue="simple-salesforce" />
+            <item index="1" class="java.lang.String" itemvalue="cmdstanpy" />
+            <item index="2" class="java.lang.String" itemvalue="ephem" />
+            <item index="3" class="java.lang.String" itemvalue="hijri-converter" />
+            <item index="4" class="java.lang.String" itemvalue="prophet" />
+            <item index="5" class="java.lang.String" itemvalue="python-dateutil" />
+            <item index="6" class="java.lang.String" itemvalue="convertdate" />
+            <item index="7" class="java.lang.String" itemvalue="cycler" />
+            <item index="8" class="java.lang.String" itemvalue="MarkupSafe" />
+            <item index="9" class="java.lang.String" itemvalue="numpy" />
+            <item index="10" class="java.lang.String" itemvalue="requests" />
+            <item index="11" class="java.lang.String" itemvalue="Jinja2" />
+            <item index="12" class="java.lang.String" itemvalue="simdkalman" />
+            <item index="13" class="java.lang.String" itemvalue="tsmoothie" />
+            <item index="14" class="java.lang.String" itemvalue="holidays" />
+            <item index="15" class="java.lang.String" itemvalue="LunarCalendar" />
+            <item index="16" class="java.lang.String" itemvalue="sentry-sdk" />
+            <item index="17" class="java.lang.String" itemvalue="certifi" />
+            <item index="18" class="java.lang.String" itemvalue="PyMeeus" />
+            <item index="19" class="java.lang.String" itemvalue="urllib3" />
+            <item index="20" class="java.lang.String" itemvalue="itsdangerous" />
+            <item index="21" class="java.lang.String" itemvalue="pyparsing" />
+            <item index="22" class="java.lang.String" itemvalue="Cython" />
+            <item index="23" class="java.lang.String" itemvalue="Flask" />
+            <item index="24" class="java.lang.String" itemvalue="blinker" />
+            <item index="25" class="java.lang.String" itemvalue="scipy" />
+            <item index="26" class="java.lang.String" itemvalue="six" />
+            <item index="27" class="java.lang.String" itemvalue="setuptools-git" />
+            <item index="28" class="java.lang.String" itemvalue="Werkzeug" />
+            <item index="29" class="java.lang.String" itemvalue="kiwisolver" />
+            <item index="30" class="java.lang.String" itemvalue="packaging" />
+            <item index="31" class="java.lang.String" itemvalue="gunicorn" />
+            <item index="32" class="java.lang.String" itemvalue="click" />
+            <item index="33" class="java.lang.String" itemvalue="pandas" />
+            <item index="34" class="java.lang.String" itemvalue="tqdm" />
+            <item index="35" class="java.lang.String" itemvalue="fonttools" />
+            <item index="36" class="java.lang.String" itemvalue="korean-lunar-calendar" />
+            <item index="37" class="java.lang.String" itemvalue="matplotlib" />
+            <item index="38" class="java.lang.String" itemvalue="charset-normalizer" />
+            <item index="39" class="java.lang.String" itemvalue="pytz" />
+            <item index="40" class="java.lang.String" itemvalue="idna" />
+            <item index="41" class="java.lang.String" itemvalue="Pillow" />
+            <item index="42" class="java.lang.String" itemvalue="ujson" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="sentry_sdk" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="Stylelint" enabled="true" level="ERROR" enabled_by_default="true" />
+  </profile>
+</component>

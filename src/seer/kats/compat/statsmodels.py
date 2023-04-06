@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from kats.compat import compat
+from seer.kats.compat import compat
 from statsmodels.tsa import holtwinters
 
 ArrayLike = Union[np.ndarray, Sequence[float]]
