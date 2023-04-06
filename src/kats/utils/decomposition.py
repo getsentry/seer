@@ -52,12 +52,12 @@ class TimeSeriesDecomposition:
 
     def __init__(
         self,
-        data: TimeSeriesData,
+        data,
         decomposition: str = "additive",
         method: str = "STL",
         **kwargs: Any,
     ) -> None:
-        if not isinstance(data.value, pd.Series) and method != "seasonal_decompose":
+        if not isinstance(data["increase"], pd.Series) and method != "seasonal_decompose":
             msg = f"Only support univariate time series, but got {type(data.value)}. \
                 For multivariate, use method='seasonal_decompose'."
             logging.error(msg)

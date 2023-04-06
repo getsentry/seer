@@ -81,11 +81,11 @@ class Detector(ABC):
     iter: Optional[TimeSeriesIterator] = None
     outliers: Optional[Sequence[TimeSeriesChangePoint]] = None
 
-    def __init__(self, data: TimeSeriesData) -> None:
+    def __init__(self, data) -> None:
         self.data = data
         self.__type__ = "detector"
         if data is not None:
-            self.data.time = pd.to_datetime(self.data.time)
+            self.data.time = pd.to_datetime(self.data["time"])
 
     @abstractmethod
     def detector(self, method: Optional[str] = None) -> Sequence[TimeSeriesChangePoint]:

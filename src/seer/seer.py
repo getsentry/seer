@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 
 from kats.detectors.cusum_detection import CUSUMDetector
-from kats.consts import TimeSeriesData
 
 from seer.anomaly_detection.prophet_detector import ProphetDetector
 from seer.anomaly_detection.prophet_params import ProphetParams
@@ -74,15 +73,12 @@ def breakpoint_trends_endpoint():
     timestamps = [x[0] for x in ts_data]
     counts = [x[1][0]['count'] for x in ts_data]
 
-    df = pd.DataFrame(
+    timeseries = pd.DataFrame(
         {
             'time': timestamps,
             'y': counts,
         }
     )
-
-    # convert to TimeSeriesData object
-    timeseries = TimeSeriesData(df)
 
     change_points = CUSUMDetector(timeseries).detector()
 
