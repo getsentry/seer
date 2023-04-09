@@ -24,7 +24,7 @@ MarkupSafe==2.0.1
 matplotlib==3.5.1
 numpy==1.21
 packaging==21.3
-pandas==1.2.5
+pandas==1.3.5
 Pillow==9.0.1
 prophet==1.0.1
 PyMeeus==0.5.11
