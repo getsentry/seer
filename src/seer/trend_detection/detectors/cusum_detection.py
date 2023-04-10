@@ -7,7 +7,7 @@
 """
 CUSUM stands for cumulative sum, it is a changepoint detection algorithm.
 
-In the Kats implementation, it has two main components:
+It has two main components:
 
   1. Locate the change point: The algorithm iteratively estimates the means
       before and after the change point and finds the change point
@@ -17,12 +17,6 @@ In the Kats implementation, it has two main components:
   2. Hypothesis testing: Conducting log likelihood ratio test where the null
       hypothesis has no change point with one mean and the alternative
       hypothesis has a change point with two means.
-
-And here are a few things worth mentioning:
-
-  * We assume there is only one increase/decrease change point;
-  * We use Gaussian distribution as the underlying model to calculate the cusum
-      value and conduct the hypothesis test;
 
 """
 
@@ -253,19 +247,10 @@ class CUSUMDetector():
 
     def __init__(
         self,
-        data,
-        is_multivariate: bool = False,
-        is_vectorized: bool = False,
+        data
     ) -> None:
-        """Univariate CUSUM detector for level shifts
-
-        Use cusum to detect changes, the algorithm is based on likelihood ratio
-        cusum. See https://www.fs.isy.liu.se/Edu/Courses/TSFS06/PDFs/Basseville.pdf
-        for details. This detector is used to detect mean changes in Normal
-        Distribution.
-
+        """
         Args:
-
             data: pandas dataframe; The input time series data.
         """
         self.data = data
@@ -444,7 +429,6 @@ class CUSUMDetector():
         magnitude = np.quantile(ts, self.magnitude_quantile, interpolation="nearest")
         return magnitude
 
-    # pyre-fixme[14]: `detector` overrides method defined in `Detector` inconsistently.
     def detector(self, **kwargs: Any) -> Sequence[CUSUMChangePoint]:
         """
         Find the change point and calculate related statistics.
