@@ -2,26 +2,13 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="fdf5f00d-0c07-48c3-a1c3-927360446e50" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/CODE_OF_CONDUCT.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/CONTRIBUTING.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/LICENSE" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/compat/compat.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/compat/pandas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/compat/sklearn.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/compat/statsmodels.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/consts.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kats/consts.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/cusum_detection.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kats/detectors/cusum_detection.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/cusum_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kats/detectors/cusum_model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/detector.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kats/detectors/detector.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/dtwcpd.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/hourly_ratio_detection.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/interval_detector.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/residual_translation.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/robust_stat_detection.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/detectors/threshold_detector.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kats/utils/decomposition.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kats/utils/decomposition.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kats/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kats/compat/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kats/consts.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kats/detectors/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kats/detectors/cusum_detection.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kats/utils/__init__.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/seer/seer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/seer/seer.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -61,7 +48,7 @@
       <recent name="$PROJECT_DIR$/src/seer" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.test_seer">
+  <component name="RunManager" selected="Python.main">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -168,6 +155,7 @@
       <workItem from="1679344120485" duration="468000" />
       <workItem from="1679344599588" duration="4069000" />
       <workItem from="1680303982243" duration="25932000" />
+      <workItem from="1681080069711" duration="6533000" />
     </task>
     <servers />
   </component>
@@ -192,11 +180,6 @@
           <url>file://$PROJECT_DIR$/src/kats/detectors/__init__.py</url>
           <line>5</line>
           <option name="timeStamp" value="2" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/src/kats/detectors/detector.py</url>
-          <line>9</line>
-          <option name="timeStamp" value="5" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

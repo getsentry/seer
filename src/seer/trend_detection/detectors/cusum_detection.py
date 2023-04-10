@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from kats.consts import TimeSeriesChangePoint
+from seer.trend_detection.consts import TimeSeriesChangePoint
 from scipy.stats import chi2
 
 pd.options.plotting.matplotlib.register_converters = True
@@ -267,10 +267,8 @@ class CUSUMDetector():
         Args:
 
             data: pandas dataframe; The input time series data.
-            is_multivariate: Optional; bool; should be False unless running
-                MultiCUSUMDetector,
         """
-        super(CUSUMDetector, self).__init__(data=data)
+        self.data = data
 
     def _get_change_point(
         self, ts: np.ndarray, max_iter: int, start_point: int, change_direction: str
@@ -341,13 +339,12 @@ class CUSUMDetector():
         mu0 = np.mean(ts[: (changepoint + 1)])
         mu1 = np.mean(ts[(changepoint + 1) :])
 
-        change_index = list(self.data["increase"]).index()
 
         return CUSUMChangePointVal(
             changepoint=changepoint,
             mu0=mu0,
             mu1=mu1,
-            changetime=list(self.data["time"])[change_index],
+            changetime=list(self.data["time"])[changepoint],
             stable_changepoint=stable_changepoint,
             delta=mu1 - mu0,
             llr_int=llr_int,

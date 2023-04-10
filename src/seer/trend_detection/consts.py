@@ -1,32 +1,16 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
 """
-This module contains some of the key data structures in the Kats library,
-including :class:`TimeSeriesData`, :class:`TimeSeriesChangePoint`, and
-:class:`TimeSeriesIterator`.
+This module contains :class:`TimeSeriesChangePoint`
 
 :class:`TimeSeriesChangePoint` is the return type of many of the Kats detection
 algorithms.
-
-:class:`TimeSeriesData` is the fundamental data structure in the Kats library,
-that gives uses access to a host of forecasting, detection, and utility
-algorithms right at the user's fingertips.
 """
 
 from __future__ import annotations
 
-import builtins
-import copy
 import datetime
 import logging
-from collections.abc import Iterable
-from enum import auto, Enum, unique
 from typing import Any, cast, Dict, List, Optional, Tuple, Union
 
-import dateutil
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -34,49 +18,6 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime, is_numeric_
 from pandas.tseries.frequencies import to_offset
 
 FigSize = Tuple[int, int]
-
-
-# Constants
-DEFAULT_TIME_NAME = "time"  # Default name for the time column in TimeSeriesData
-DEFAULT_VALUE_NAME = "value"  # Default name for the value column in TimeSeriesData
-PREFIX_OP_1 = "_kats.1"  # Internal prefix used when merging two TimeSeriesData objects
-PREFIX_OP_2 = (
-    "_kats.2"  # Second internal prefix used when merging two TimeSeriesData objects
-)
-INTERPOLATION_METHODS = {
-    "linear",
-    "bfill",
-    "ffill",
-}  # List of possible interpolation methods
-
-IRREGULAR_GRANULARITY_ERROR = (
-    "This algorithm or this parameter setup does not support input data with irregular data granularity. "
-    "Please update your query to ensure that your data have fixed granularity."
-)
-
-
-class KatsError(Exception):
-    pass
-
-
-class DataError(KatsError):
-    pass
-
-
-class DataIrregualarGranularityError(DataError):
-    pass
-
-
-class DataInsufficientError(DataError):
-    pass
-
-
-class ParameterError(KatsError):
-    pass
-
-
-class InternalError(KatsError):
-    pass
 
 
 def _log_error(msg: str) -> ValueError:
