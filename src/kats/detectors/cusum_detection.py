@@ -341,13 +341,13 @@ class CUSUMDetector():
         mu0 = np.mean(ts[: (changepoint + 1)])
         mu1 = np.mean(ts[(changepoint + 1) :])
 
-        change_index = list(data["increase"]).index()
+        change_index = list(self.data["increase"]).index()
 
         return CUSUMChangePointVal(
             changepoint=changepoint,
             mu0=mu0,
             mu1=mu1,
-            changetime=list(data["time"])[change_index],
+            changetime=list(self.data["time"])[change_index],
             stable_changepoint=stable_changepoint,
             delta=mu1 - mu0,
             llr_int=llr_int,
@@ -411,7 +411,7 @@ class CUSUMDetector():
         """
         Compare daily magnitude to avoid daily seasonality false positives.
         """
-        time = list(data["time"])
+        time = list(self.data["time"])
         interest_window = self.interest_window
         magnitude_ratio = self.magnitude_ratio
         if interest_window is None:
@@ -509,7 +509,7 @@ class CUSUMDetector():
         self.magnitude_ratio = magnitude_ratio
 
         # Use array to store the data
-        ts = np.asarray(list(data["increase"]))
+        ts = np.asarray(list(self.data["increase"]))
         ts = ts.astype("float64")
         changes_meta = {}
 
