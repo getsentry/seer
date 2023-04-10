@@ -137,78 +137,8 @@ class TimeSeriesChangePoint:
         # Allow subclasses to override __repr__ without affecting __hash__.
         return hash("{self._start_time},{self._end_time},{self._confidence}")
 
-class Params:
-    def __init__(self) -> None:
-        pass
-
-    def validate_params(self) -> None:
-        pass
-
-
-class IntervalAnomaly:
-    def __init__(
-        self,
-        start: pd.Timestamp,
-        end: pd.Timestamp,
-    ) -> None:
-        if start >= end:
-            raise ValueError("Start value is supposed to be larger than end value.")
-        self.start: pd.Timestamp = start
-        self.end: pd.Timestamp = end
-
-    @property
-    def second_len(self) -> int:
-        return (self.end - self.start) / np.timedelta64(1, "s")
-
-
-@unique
-class ModelEnum(Enum):
-    """
-    This enum lists the options of models to be set for default search space in
-    hyper-parameter tuning.
-    """
-
-    ARIMA = auto()
-    SARIMA = auto()
-    PROPHET = auto()
-    HOLTWINTERS = auto()
-    LINEAR = auto()
-    QUADRATIC = auto()
-
-
-@unique
-class SearchMethodEnum(Enum):
-    """
-    This enum lists the options of search algorithms to be used in
-    hyper-parameter tuning.
-    """
-
-    GRID_SEARCH = auto()
-    RANDOM_SEARCH_UNIFORM = auto()
-    RANDOM_SEARCH_SOBOL = auto()
-    BAYES_OPT = auto()
-
-
-@unique
-class OperationsEnum(Enum):
-    """
-    This enum lists all the mathematical operations that can be performed on
-    :class:`TimeSeriesData` objects.
-    """
-
-    ADD = auto()
-    SUB = auto()
-    DIV = auto()
-    MUL = auto()
 
 
 __all__ = [
-    "ModelEnum",
-    "OperationsEnum",
-    "Params",
-    "SearchMethodEnum",
-    "TimeSeriesChangePoint",
-    "TimeSeriesData",
-    "TimeSeriesIterator",
-    "TSIterator",
+    "TimeSeriesChangePoint"
 ]
