@@ -490,7 +490,7 @@ class CUSUMDetector():
         self.magnitude_ratio = magnitude_ratio
 
         # Use array to store the data
-        ts = np.asarray(list(self.data["increase"]))
+        ts = np.asarray(list(self.data["y"]))
         ts = ts.astype("float64")
         changes_meta = {}
 
