@@ -24,13 +24,13 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from seer.trend_detection.consts import TimeSeriesChangePoint
 from scipy.stats import chi2
 
-pd.options.plotting.matplotlib.register_converters = True
+#pd.options.plotting.matplotlib.register_converters = True
 
 _log: logging.Logger = logging.getLogger("cusum_detection")
 
