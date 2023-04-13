@@ -89,7 +89,7 @@ def breakpoint_trends_endpoint():
 
     for txn in txns_data.keys():
 
-        ts_data = txns_data[txn]
+        ts_data = txns_data[txn]['data']
 
         timestamps = [x[0] for x in ts_data]
         counts = [x[1][0]['count'] for x in ts_data]
@@ -162,7 +162,7 @@ def breakpoint_trends_endpoint():
                 'isMetricsData': True,
             }
         }
-    }
+        }
 
     return output_dict
 
