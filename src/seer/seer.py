@@ -136,7 +136,7 @@ def breakpoint_trends_endpoint():
         t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
         trend_percentage = int(((agg_range_2-agg_range_1)/agg_range_1) * 100)
 
-        output[txn] = {
+        output_dict[txn] = {
         "events": {
             "data": [{
             "project": "sentry",
