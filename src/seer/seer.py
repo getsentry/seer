@@ -84,12 +84,12 @@ def breakpoint_trends_endpoint():
 
     data = request.get_json()
     txns_data = data['data']
-
-    output_dict = {}
+    trend_percentage_list = []
 
     for txn in txns_data.keys():
 
         ts_data = txns_data[txn]['data']
+        output_dict = {}
 
         timestamps = [x[0] for x in ts_data]
         counts = [x[1][0]['count'] for x in ts_data]
@@ -136,7 +136,7 @@ def breakpoint_trends_endpoint():
         t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
         trend_percentage = int(((agg_range_2-agg_range_1)/agg_range_1) * 100)
 
-        output_dict[txn] = {
+        output_dict = {
         "events": {
             "data": [{
             "project": "sentry",
@@ -146,25 +146,28 @@ def breakpoint_trends_endpoint():
             "count_range_1": count_range_1,
             "count_range_2": count_range_2,
             "t_test": t_value,
-            "trend_percentage": trend_percentage,
+            "trend_percentage": abs(trend_percentage),
             "trend_difference": agg_range_2 - agg_range_1,
             "count_percentage": count_range_2/count_range_1,
 			"breakpoint": change_point
             }]
-        },
-
-        # return data back to server?
-        "stats": {
-            "transaction name": {
-                "data": data['data'],
-                "start": data['start'],
-                "end": data['end'],
-                'isMetricsData': True,
-            }
         }
         }
 
-    return output_dict
+        trend_percentage_list.append((txn, trend_percentage, output_dict))
+
+    sort_function = data['sort']
+    if sort_function == 'trend_percentage()':
+        sorted_trends = (sorted(trend_percentage_list, key=lambda x:x[1], reverse=True))[:5]
+    else:
+        sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[1]))[:5]
+
+    top_five_trends = {}
+
+    for trend in sorted_trends:
+        top_five_trends[trend[0]] = output_dict
+
+    return top_five_trends
 
 
 @app.route("/anomaly/predict", methods=["POST"])
