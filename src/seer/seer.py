@@ -69,17 +69,18 @@ def mock_trends_endpoint():
 def breakpoint_trends_endpoint():
 
     def get_agg_range(seq_data, function):
-        if len(seq_data) == 0:
-            return 0
-
-        if function == "p50":
-            return np.percentile(seq_data, 50)
-        if function == "p75":
-            return np.percentile(seq_data, 75)
-        if function == "p95":
-            return np.percentile(seq_data, 95)
-
-        return np.percentile(seq_data, 99)
+        # if len(seq_data) == 0:
+        #     return 0
+        #
+        # if function == "p50":
+        #     return np.percentile(seq_data, 50)
+        # if function == "p75":
+        #     return np.percentile(seq_data, 75)
+        # if function == "p95":
+        #     return np.percentile(seq_data, 95)
+        #
+        # return np.percentile(seq_data, 99)
+        return sum(seq_data)/len(seq_data)
 
 
     data = request.get_json()
@@ -134,7 +135,10 @@ def breakpoint_trends_endpoint():
 
         # calculate t-value between both groups
         t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
-        trend_percentage = int(((agg_range_2-agg_range_1)/agg_range_1) * 100)
+        if agg_range_1 == 0 or agg_range_2 == 0:
+            trend_percentage = int(abs(agg_range_1 - agg_range_2))
+        else:
+            trend_percentage = int(((agg_range_2 - agg_range_1) / agg_range_1) * 100)
 
         output_dict = {
         "events": {
