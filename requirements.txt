@@ -13,7 +13,7 @@ Flask==2.0.2
 fonttools==4.29.1
 gunicorn==20.1.0
 hijri-converter==2.2.2
-holidays==0.12
+holidays==0.13
 idna==3.3
 itsdangerous==2.0.1
 Jinja2==3.0.3
@@ -26,7 +26,7 @@ numpy==1.21
 packaging==21.3
 pandas==1.4.0
 Pillow==9.0.1
-prophet==1.0.1
+prophet==1.1
 PyMeeus==0.5.11
 pyparsing==3.0.7
 python-dateutil==2.8.2
