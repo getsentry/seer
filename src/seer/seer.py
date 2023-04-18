@@ -1,7 +1,7 @@
 import sentry_sdk
 import os
 
-from flask import Flask, request
+from flask import Flask, request, Response
 from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
@@ -163,9 +163,9 @@ def breakpoint_trends_endpoint():
     else:
         sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
 
-    top_trends = {'data': [x[1] for x in sorted_trends]}
+    top_trends = [x[1] for x in sorted_trends]
 
-    return top_trends
+    return Response(top_trends, status=200)
 
 
 @app.route("/anomaly/predict", methods=["POST"])
