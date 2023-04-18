@@ -140,9 +140,10 @@ def breakpoint_trends_endpoint():
         else:
             trend_percentage = int(((agg_range_2 - agg_range_1) / agg_range_1) * 100)
 
+        txn_names = txn.split(",")
         output_dict = {
-            "project": "sentry",
-            "transaction": txn,
+            "project": txn_names[0],
+            "transaction": txn_names[1],
             "aggregate_range_1": agg_range_1,
             "aggregate_range_2": agg_range_2,
             "count_range_1": count_range_1,
@@ -162,7 +163,7 @@ def breakpoint_trends_endpoint():
     else:
         sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
 
-    top_trends = [x[1] for x in sorted_trends]
+    top_trends = {'data': [x[1] for x in sorted_trends]}
 
     return top_trends
 
