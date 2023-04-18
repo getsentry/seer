@@ -163,9 +163,9 @@ def breakpoint_trends_endpoint():
     else:
         sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
 
-    top_trends = [x[1] for x in sorted_trends]
+    top_trends = {'data': [x[1] for x in sorted_trends]}
 
-    return Response(top_trends, status=200)
+    return top_trends
 
 
 @app.route("/anomaly/predict", methods=["POST"])
