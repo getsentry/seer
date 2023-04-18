@@ -136,42 +136,35 @@ def breakpoint_trends_endpoint():
         # calculate t-value between both groups
         t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
         if agg_range_1 == 0 or agg_range_2 == 0:
-            trend_percentage = int(abs(agg_range_1 - agg_range_2))
+            trend_percentage = int(abs((agg_range_1 - agg_range_2) * 100))
         else:
             trend_percentage = int(((agg_range_2 - agg_range_1) / agg_range_1) * 100)
 
         output_dict = {
-        "events": {
-            "data": [{
             "project": "sentry",
-            "transaction": "sentry.tasks.check_auth_identity",
+            "transaction": txn,
             "aggregate_range_1": agg_range_1,
             "aggregate_range_2": agg_range_2,
             "count_range_1": count_range_1,
             "count_range_2": count_range_2,
             "t_test": t_value,
-            "trend_percentage": abs(trend_percentage),
+            "trend_percentage": trend_percentage,
             "trend_difference": agg_range_2 - agg_range_1,
             "count_percentage": count_range_2/count_range_1,
 			"breakpoint": change_point
-            }]
-        }
         }
 
-        trend_percentage_list.append((txn, trend_percentage, output_dict))
+        trend_percentage_list.append((trend_percentage, output_dict))
 
     sort_function = data['sort']
     if sort_function == 'trend_percentage()':
-        sorted_trends = (sorted(trend_percentage_list, key=lambda x:x[1], reverse=True))[:5]
+        sorted_trends = (sorted(trend_percentage_list, key=lambda x:x[0], reverse=True))
     else:
-        sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[1]))[:5]
+        sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
 
-    top_five_trends = {}
+    top_trends = [x[1] for x in sorted_trends]
 
-    for trend in sorted_trends:
-        top_five_trends[trend[0]] = output_dict
-
-    return top_five_trends
+    return top_trends
 
 
 @app.route("/anomaly/predict", methods=["POST"])
