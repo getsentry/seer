@@ -68,29 +68,15 @@ def mock_trends_endpoint():
 @app.route("/trends/breakpoint-detector", methods=["POST"])
 def breakpoint_trends_endpoint():
 
-    def get_agg_range(seq_data, function):
-        # if len(seq_data) == 0:
-        #     return 0
-        #
-        # if function == "p50":
-        #     return np.percentile(seq_data, 50)
-        # if function == "p75":
-        #     return np.percentile(seq_data, 75)
-        # if function == "p95":
-        #     return np.percentile(seq_data, 95)
-        #
-        # return np.percentile(seq_data, 99)
-        return sum(seq_data)/len(seq_data)
-
-
     data = request.get_json()
     txns_data = data['data']
+
+    sort_function = data['sort']
     trend_percentage_list = []
 
     for txn in txns_data.keys():
 
         ts_data = txns_data[txn]['data']
-        output_dict = {}
 
         timestamps = [x[0] for x in ts_data]
         counts = [x[1][0]['count'] for x in ts_data]
@@ -114,54 +100,50 @@ def breakpoint_trends_endpoint():
         change_index = timestamps.index(change_point)
         first_half, second_half = counts[:change_index], counts[change_index:]
 
-        trend_function = data['trendFunction'].split("(")[0]
-
         mu0 = sum(first_half) / len(first_half)
         mu1 = sum(second_half) / len(second_half)
-
-        if trend_function == "avg":
-            agg_range_1 = mu0
-            agg_range_2 = mu1
-        else:
-            agg_range_1 = get_agg_range(first_half, trend_function)
-            agg_range_2 = get_agg_range(second_half, trend_function)
 
         count_range_1 = len(first_half)
         count_range_2 = len(second_half)
 
         # calculate variance of both groups
-        var1 = sum((x-agg_range_1)**2 for x in first_half) / count_range_1
-        var2 = sum((x-agg_range_2)**2 for x in second_half) / count_range_2
+        var1 = sum((x-mu0)**2 for x in first_half) / count_range_1
+        var2 = sum((x-mu1)**2 for x in second_half) / count_range_2
 
         # calculate t-value between both groups
         t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
-        if agg_range_1 == 0 or agg_range_2 == 0:
-            trend_percentage = int(abs((agg_range_1 - agg_range_2) * 100))
+        if mu0 == 0:
+            trend_percentage = mu1
         else:
-            trend_percentage = int(((agg_range_2 - agg_range_1) / agg_range_1) * 100)
+            trend_percentage = mu1/mu0
 
         txn_names = txn.split(",")
         output_dict = {
             "project": txn_names[0],
             "transaction": txn_names[1],
-            "aggregate_range_1": agg_range_1,
-            "aggregate_range_2": agg_range_2,
+            "aggregate_range_1": mu0,
+            "aggregate_range_2": mu1,
             "count_range_1": count_range_1,
             "count_range_2": count_range_2,
             "t_test": t_value,
             "trend_percentage": trend_percentage,
-            "trend_difference": agg_range_2 - agg_range_1,
+            "trend_difference": mu1 - mu0,
             "count_percentage": count_range_2/count_range_1,
 			"breakpoint": change_point
         }
 
-        trend_percentage_list.append((trend_percentage, output_dict))
+        # most improved - get only negatively trending txns
+        if sort_function == 'trend_percentage()' and mu1 <= mu0:
+            trend_percentage_list.append((trend_percentage, output_dict))
 
-    sort_function = data['sort']
+        #otherwise get most regressed txns only
+        elif sort_function == '-trend_percentage()' and mu0 <= mu1:
+            trend_percentage_list.append((trend_percentage, output_dict))
+
     if sort_function == 'trend_percentage()':
-        sorted_trends = (sorted(trend_percentage_list, key=lambda x:x[0], reverse=True))
-    else:
         sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
+    else:
+        sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0], reverse=True))
 
     top_trends = {'data': [x[1] for x in sorted_trends]}
 
