@@ -30,41 +30,6 @@ detector = ProphetDetector(MODEL_PARAMS)
 model_initialized = True
 
 
-@app.route("/trends/mock", methods=["POST"])
-def mock_trends_endpoint():
-    data = request.get_json()
-
-    return {
-        "events": {
-            "data": [{
-            "project": "sentry",
-            "transaction": "sentry.tasks.check_auth_identity",
-            "aggregate_range_1": 11,
-            "aggregate_range_2": 64,
-            "count_range_1": 13858,
-            "count_range_2": 11750,
-            "t_test": -13.800140125042828,
-            "trend_percentage": 5.818181818181818,
-            "trend_difference": 53,
-            "count_percentage": 0.8478856977918892,
-            "tpm": 1.2702380952380952,
-			"breakpoint": int((data['start'] + data['end'])/2) #returns midpoint of time frame for now
-            }]
-        },
-
-        #or return data back to server?
-        "stats": {
-            "transaction name": {
-                "data": data['data'],
-                "start": data['start'],
-                "end": data['end'],
-                'isMetricsData': True,
-                'order': 3,
-            }
-        }
-    }
-
-
 @app.route("/trends/breakpoint-detector", methods=["POST"])
 def breakpoint_trends_endpoint():
 
@@ -76,42 +41,54 @@ def breakpoint_trends_endpoint():
 
     for txn in txns_data.keys():
 
-        ts_data = txns_data[txn]['data']
+        keys = list(txns_data[txn].keys())
+        count_data = txns_data[txn]['count()']['data']
+
+        if keys[0] == 'count()':
+            ts_data = txns_data[txn][keys[1]]['data']
+        else:
+            ts_data = txns_data[txn][keys[0]]['data']
 
         timestamps = [x[0] for x in ts_data]
-        counts = [x[1][0]['count'] for x in ts_data]
+        metrics = [x[1][0]['count'] for x in ts_data]
+        counts = [x[1][0]['count'] for x in count_data]
 
         timeseries = pd.DataFrame(
             {
                 'time': timestamps,
-                'y': counts,
+                'y': metrics,
+                'counts': counts
             }
         )
 
         change_points = CUSUMDetector(timeseries).detector()
+        num_breakpoints = len(change_points)
 
-        if len(change_points) == 0:
-            # use middle of timeseries as breakpoint
-            change_point = int((data['start'] + data['end']) / 2)
-        else:
-            # get most recent change point
+        #if breakpoints are detected, get most recent changepoint
+        if num_breakpoints != 0:
             change_point = change_points[-1].start_time
+            change_index = timestamps.index(change_point)
 
-        change_index = timestamps.index(change_point)
+        #if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
+        elif num_breakpoints == 0 or change_index <= 5:
+            change_point = int((txns_data[txn]['start']['count()'] + txns_data[txn]['end']['count()']) / 2)
+            change_index = timestamps.index(change_point)
+
         first_half, second_half = counts[:change_index], counts[change_index:]
 
-        mu0 = sum(first_half) / len(first_half)
-        mu1 = sum(second_half) / len(second_half)
+        mu0 = np.average(first_half)
+        mu1 = np.average(second_half)
 
         count_range_1 = len(first_half)
         count_range_2 = len(second_half)
 
         # calculate variance of both groups
-        var1 = sum((x-mu0)**2 for x in first_half) / count_range_1
-        var2 = sum((x-mu1)**2 for x in second_half) / count_range_2
+        var1 = np.var(first_half)
+        var2 = np.var(second_half)
 
-        # calculate t-value between both groups
-        t_value = (mu0-mu1) / ((var1/count_range_1) + (var2/count_range_2)) ** (1/2)
+        # calculate t-value between both groups - CHANGE TO WEIGHTED T-TEST
+        t_value = (mu0-mu1) / (((var1/count_range_1) + (var2/count_range_2)) ** (1/2))
+
         if mu0 == 0:
             trend_percentage = mu1
         else:
