@@ -5,6 +5,7 @@ from flask import Flask, request, Response
 from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
+import scipy
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 
@@ -50,7 +51,7 @@ def breakpoint_trends_endpoint():
             ts_data = txns_data[txn][keys[0]]['data']
 
         timestamps_zero_filled = [x[0] for x in ts_data]
-        metrics_zero_filled = [x[1][0]['count'] for x in ts_data]
+        #metrics_zero_filled = [x[1][0]['count'] for x in ts_data]
 
         #data without zero-filling
         timestamps = []
@@ -84,25 +85,41 @@ def breakpoint_trends_endpoint():
 
         #if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
         elif num_breakpoints == 0 or change_index <= 5 or change_index == len(timestamps)-2:
-            change_point = int((txns_data[txn]['count()']['start'] + txns_data[txn]['count()']['end']) / 2)
-            timestamps = timestamps_zero_filled
-            metrics = metrics_zero_filled
-            change_index = timestamps.index(change_point)
+            change_index = int(len(timestamps_zero_filled) / 2)
+            change_point = timestamps_zero_filled[change_index]
 
-        first_half, second_half = metrics[:change_index], metrics[change_index:]
+
+        first_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] < change_point]
+        second_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] >= change_point]
+
+        #if either of the halves don't have any data to compare to then move on to the next txn
+        if len(first_half) == 0 or len(second_half) == 0:
+            continue
+
+        #get the non-zero counts for the first and second halves
+        counts_first_half = [counts[i] for i in range(len(counts)) if timestamps[i] < change_point]
+        counts_second_half = [counts[i] for i in range(len(counts)) if timestamps[i] >= change_point]
 
         mu0 = np.average(first_half)
         mu1 = np.average(second_half)
 
-        count_range_1 = len(first_half)
-        count_range_2 = len(second_half)
+        #get weighted average to calculate weighted t-test
+        mu0_weighted = np.average(first_half, weights=counts_first_half)
+        mu1_weighted = np.average(second_half, weights=counts_second_half)
 
-        # calculate variance of both groups
-        var1 = np.var(first_half)
-        var2 = np.var(second_half)
+        count_range_1 = sum(counts_first_half)
+        count_range_2 = sum(counts_second_half)
+
+        # weighted variances
+        weighted_var1 = np.average((np.asarray(first_half) - mu0) ** 2, weights=counts_first_half)
+        weighted_var2 = np.average((np.asarray(second_half) - mu1) ** 2, weights=counts_second_half)
 
         # calculate t-value between both groups - CHANGE TO WEIGHTED T-TEST
-        t_value = (mu0-mu1) / (((var1/count_range_1) + (var2/count_range_2)) ** (1/2))
+        scipy_t_test = scipy.stats.ttest_ind(first_half, second_half, equal_var=False)
+
+        # calculate weighted t-value between both groups
+        weighted_t_value = (mu0_weighted - mu1_weighted) / (
+                    ((weighted_var1 / sum(counts_first_half)) + (weighted_var2 / sum(counts_second_half))) ** (1/2))
 
         if mu0 == 0:
             trend_percentage = mu1
@@ -117,7 +134,10 @@ def breakpoint_trends_endpoint():
             "aggregate_range_2": mu1,
             "count_range_1": count_range_1,
             "count_range_2": count_range_2,
-            "t_test": t_value,
+            "unweighted_t_value": scipy_t_test.statistic,
+            "unweighted_p_value": scipy_t_test.pvalue,
+            "weighted_t_value": weighted_t_value,
+            "weighted_p_value": scipy.stats.t.sf(abs(weighted_t_value), df=sum(counts)-2),
             "trend_percentage": trend_percentage,
             "trend_difference": mu1 - mu0,
             "count_percentage": count_range_2/count_range_1,
