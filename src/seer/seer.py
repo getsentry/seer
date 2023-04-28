@@ -49,9 +49,22 @@ def breakpoint_trends_endpoint():
         else:
             ts_data = txns_data[txn][keys[0]]['data']
 
-        timestamps = [x[0] for x in ts_data]
-        metrics = [x[1][0]['count'] for x in ts_data]
-        counts = [x[1][0]['count'] for x in count_data]
+        timestamps_zero_filled = [x[0] for x in ts_data]
+        metrics_zero_filled = [x[1][0]['count'] for x in ts_data]
+
+        #data without zero-filling
+        timestamps = []
+        metrics = []
+        counts = []
+
+        #create lists for time/metric lists without 0 values for more accurate breakpoint analysis
+        for i in range(len(ts_data)):
+            count = count_data[i][1][0]['count']
+
+            if count != 0:
+                counts.append(count)
+                timestamps.append(ts_data[i][0])
+                metrics.append(ts_data[i][1][0]['count'])
 
         timeseries = pd.DataFrame(
             {
@@ -70,11 +83,13 @@ def breakpoint_trends_endpoint():
             change_index = timestamps.index(change_point)
 
         #if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        elif num_breakpoints == 0 or change_index <= 5:
+        elif num_breakpoints == 0 or change_index <= 5 or change_index == len(timestamps)-1:
             change_point = int((txns_data[txn]['start']['count()'] + txns_data[txn]['end']['count()']) / 2)
+            timestamps = timestamps_zero_filled
+            metrics = metrics_zero_filled
             change_index = timestamps.index(change_point)
 
-        first_half, second_half = counts[:change_index], counts[change_index:]
+        first_half, second_half = metrics[:change_index], metrics[change_index:]
 
         mu0 = np.average(first_half)
         mu1 = np.average(second_half)
