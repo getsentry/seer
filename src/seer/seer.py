@@ -83,7 +83,7 @@ def breakpoint_trends_endpoint():
             change_index = timestamps.index(change_point)
 
         #if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        elif num_breakpoints == 0 or change_index <= 5 or change_index == len(timestamps)-1:
+        elif num_breakpoints == 0 or change_index <= 5 or change_index == len(timestamps)-2:
             change_point = int((txns_data[txn]['count()']['start'] + txns_data[txn]['count()']['end']) / 2)
             timestamps = timestamps_zero_filled
             metrics = metrics_zero_filled
