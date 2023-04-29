@@ -70,10 +70,13 @@ def breakpoint_trends_endpoint():
         timeseries = pd.DataFrame(
             {
                 'time': timestamps,
-                'y': metrics,
-                'counts': counts
+                'y': metrics
             }
         )
+
+        #don't include transaction if there are less than two datapoints
+        if len(metrics) < 2:
+            continue
 
         change_points = CUSUMDetector(timeseries).detector()
         num_breakpoints = len(change_points)
