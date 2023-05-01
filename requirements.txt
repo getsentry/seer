@@ -9,7 +9,7 @@ cycler==0.11.0
 Cython==0.29.27
 deprecated>=1.2.12
 ephem==4.1.3
-Flask==2.0.2
+Flask==2.3.2
 fonttools==4.29.1
 gunicorn==20.1.0
 hijri-converter==2.2.2
