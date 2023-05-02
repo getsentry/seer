@@ -67,6 +67,10 @@ def breakpoint_trends_endpoint():
                 timestamps.append(ts_data[i][0])
                 metrics.append(ts_data[i][1][0]['count'])
 
+        #snuba query limit was hit and we won't have complete data for this transaction so disregard this txn
+        if None in metrics:
+            continue
+
         timeseries = pd.DataFrame(
             {
                 'time': timestamps,
