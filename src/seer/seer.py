@@ -32,7 +32,7 @@ model_initialized = True
 
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
-def breakpoint_trends_endpoint():
+def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
 
     data = request.get_json()
     txns_data = data['data']
@@ -150,11 +150,11 @@ def breakpoint_trends_endpoint():
         }
 
         # most improved - get only negatively significant trending txns
-        if sort_function == 'trend_percentage()' and mu1 <= mu0 and scipy_t_test.pvalue < 0.01:
+        if sort_function == 'trend_percentage()' and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
             trend_percentage_list.append((trend_percentage, output_dict))
 
         #otherwise get most regressed signiificant txns only
-        elif sort_function == '-trend_percentage()' and mu0 <= mu1 and scipy_t_test.pvalue < 0.01:
+        elif sort_function == '-trend_percentage()' and mu0 <= mu1 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
             trend_percentage_list.append((trend_percentage, output_dict))
 
     if sort_function == 'trend_percentage()':
