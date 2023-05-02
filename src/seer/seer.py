@@ -32,7 +32,7 @@ model_initialized = True
 
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
-def breakpoint_trends_endpoint():
+def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
 
     data = request.get_json()
     txns_data = data['data']
@@ -66,6 +66,10 @@ def breakpoint_trends_endpoint():
                 counts.append(count)
                 timestamps.append(ts_data[i][0])
                 metrics.append(ts_data[i][1][0]['count'])
+
+        #snuba query limit was hit and we won't have complete data for this transaction so disregard this txn
+        if None in metrics:
+            continue
 
         timeseries = pd.DataFrame(
             {
@@ -107,22 +111,22 @@ def breakpoint_trends_endpoint():
         mu1 = np.average(second_half)
 
         #get weighted average to calculate weighted t-test
-        mu0_weighted = np.average(first_half, weights=counts_first_half)
-        mu1_weighted = np.average(second_half, weights=counts_second_half)
+        #mu0_weighted = np.average(first_half, weights=counts_first_half)
+        #mu1_weighted = np.average(second_half, weights=counts_second_half)
 
         count_range_1 = sum(counts_first_half)
         count_range_2 = sum(counts_second_half)
 
         # weighted variances
-        weighted_var1 = np.average((np.asarray(first_half) - mu0) ** 2, weights=counts_first_half)
-        weighted_var2 = np.average((np.asarray(second_half) - mu1) ** 2, weights=counts_second_half)
+        #weighted_var1 = np.average((np.asarray(first_half) - mu0) ** 2, weights=counts_first_half)
+        #weighted_var2 = np.average((np.asarray(second_half) - mu1) ** 2, weights=counts_second_half)
 
         # calculate t-value between both groups - CHANGE TO WEIGHTED T-TEST
         scipy_t_test = scipy.stats.ttest_ind(first_half, second_half, equal_var=False)
 
         # calculate weighted t-value between both groups
-        weighted_t_value = (mu0_weighted - mu1_weighted) / (
-                    ((weighted_var1 / sum(counts_first_half)) + (weighted_var2 / sum(counts_second_half))) ** (1/2))
+        #weighted_t_value = (mu0_weighted - mu1_weighted) / (
+                    #((weighted_var1 / sum(counts_first_half)) + (weighted_var2 / sum(counts_second_half))) ** (1/2))
 
         if mu0 == 0:
             trend_percentage = mu1
@@ -139,20 +143,18 @@ def breakpoint_trends_endpoint():
             "count_range_2": count_range_2,
             "unweighted_t_value": scipy_t_test.statistic,
             "unweighted_p_value": scipy_t_test.pvalue,
-            "weighted_t_value": weighted_t_value,
-            "weighted_p_value": scipy.stats.t.sf(abs(weighted_t_value), df=sum(counts)-2),
             "trend_percentage": trend_percentage,
             "trend_difference": mu1 - mu0,
             "count_percentage": count_range_2/count_range_1,
 			"breakpoint": change_point
         }
 
-        # most improved - get only negatively trending txns
-        if sort_function == 'trend_percentage()' and mu1 <= mu0:
+        # most improved - get only negatively significant trending txns
+        if sort_function == 'trend_percentage()' and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
             trend_percentage_list.append((trend_percentage, output_dict))
 
-        #otherwise get most regressed txns only
-        elif sort_function == '-trend_percentage()' and mu0 <= mu1:
+        #otherwise get most regressed signiificant txns only
+        elif sort_function == '-trend_percentage()' and mu0 <= mu1 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
             trend_percentage_list.append((trend_percentage, output_dict))
 
     if sort_function == 'trend_percentage()':
