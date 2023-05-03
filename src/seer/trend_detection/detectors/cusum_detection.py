@@ -47,7 +47,7 @@ class CUSUMDefaultArgs:
     magnitude_quantile: Optional[float] = None
     magnitude_ratio: float = 1.3
     magnitude_comparable_day: float = 0.5
-    return_all_changepoints: bool = True
+    return_all_changepoints: bool = False
     remove_seasonality: bool = False
 
 
