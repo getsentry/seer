@@ -51,7 +51,6 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
             ts_data = txns_data[txn][keys[0]]['data']
 
         timestamps_zero_filled = [x[0] for x in ts_data]
-        #metrics_zero_filled = [x[1][0]['count'] for x in ts_data]
 
         #data without zero-filling
         timestamps = []
@@ -83,6 +82,9 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
             continue
 
         change_points = CUSUMDetector(timeseries).detector()
+
+        #sort change points by start time to get most recent one
+        change_points.sort(key=lambda x: x.start_time)
         num_breakpoints = len(change_points)
 
         #if breakpoints are detected, get most recent changepoint
@@ -110,28 +112,18 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
         mu0 = np.average(first_half)
         mu1 = np.average(second_half)
 
-        #get weighted average to calculate weighted t-test
-        #mu0_weighted = np.average(first_half, weights=counts_first_half)
-        #mu1_weighted = np.average(second_half, weights=counts_second_half)
-
+        #sum of counts before/after changepoint
         count_range_1 = sum(counts_first_half)
         count_range_2 = sum(counts_second_half)
 
-        # weighted variances
-        #weighted_var1 = np.average((np.asarray(first_half) - mu0) ** 2, weights=counts_first_half)
-        #weighted_var2 = np.average((np.asarray(second_half) - mu1) ** 2, weights=counts_second_half)
-
-        # calculate t-value between both groups - CHANGE TO WEIGHTED T-TEST
+        # calculate t-value between both groups
         scipy_t_test = scipy.stats.ttest_ind(first_half, second_half, equal_var=False)
-
-        # calculate weighted t-value between both groups
-        #weighted_t_value = (mu0_weighted - mu1_weighted) / (
-                    #((weighted_var1 / sum(counts_first_half)) + (weighted_var2 / sum(counts_second_half))) ** (1/2))
 
         if mu0 == 0:
             trend_percentage = mu1
         else:
             trend_percentage = mu1/mu0
+
 
         txn_names = txn.split(",")
         output_dict = {
@@ -149,11 +141,15 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
 			"breakpoint": change_point
         }
 
+        #TREND LOGIC:
+        #  1. p-value of t-test is less than passed in threshold (default = 0.01)
+        #  2. trend percentage is greater than passed in threshold (default = 5%)
+
         # most improved - get only negatively significant trending txns
         if sort_function == 'trend_percentage()' and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
             trend_percentage_list.append((trend_percentage, output_dict))
 
-        #otherwise get most regressed signiificant txns only
+        #if most regressed - get only positively signiificant txns
         elif sort_function == '-trend_percentage()' and mu0 <= mu1 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
             trend_percentage_list.append((trend_percentage, output_dict))
 
