@@ -40,7 +40,10 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
     sort_function = data['sort']
     trend_percentage_list = []
 
-    for txn in txns_data.keys():
+    #defined outside of for loop so error won't throw for empty data 
+    transaction_list = txns_data.keys()
+
+    for txn in transaction_list:
 
         keys = list(txns_data[txn].keys())
         count_data = txns_data[txn]['count()']['data']
