@@ -250,7 +250,7 @@ class TestSeer(unittest.TestCase):
             {'project': 'sentry', 'transaction': '/api/0/organizations/{organization_slug}/issues/',
              'aggregate_range_1': 619.2740384615385, 'aggregate_range_2': 921.5060975609756, 'count_range_1': 64404.5,
              'count_range_2': 75563.5, 'unweighted_t_value': -14.710852035668289,
-             'unweighted_p_value': 7.386632642605361e-32, 'trend_percentage': 1.4880425148295766,
+             'unweighted_p_value': round(7.386632642605361e-32, 10), 'trend_percentage': 1.4880425148295766,
              'trend_difference': 302.23205909943715, 'count_percentage': 1.1732642905387045, 'breakpoint': 1682308800}]}
 
         actual_output = json.loads(response.get_data(as_text=True))

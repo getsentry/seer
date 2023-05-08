@@ -40,7 +40,7 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
     sort_function = data['sort']
     trend_percentage_list = []
 
-    #defined outside of for loop so error won't throw for empty data 
+    #defined outside of for loop so error won't throw for empty data
     transaction_list = txns_data.keys()
 
     for txn in transaction_list:
@@ -137,7 +137,7 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
             "count_range_1": count_range_1,
             "count_range_2": count_range_2,
             "unweighted_t_value": scipy_t_test.statistic,
-            "unweighted_p_value": scipy_t_test.pvalue,
+            "unweighted_p_value": round(scipy_t_test.pvalue, 10),
             "trend_percentage": trend_percentage,
             "trend_difference": mu1 - mu0,
             "count_percentage": count_range_2/count_range_1,
