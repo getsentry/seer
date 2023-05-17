@@ -50,28 +50,31 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
         for txn in transaction_list:
 
             keys = list(txns_data[txn].keys())
-            count_data = txns_data[txn]['count()']['data']
+            #count_data = txns_data[txn]['count()']['data']
 
             if keys[0] == 'count()':
                 ts_data = txns_data[txn][keys[1]]['data']
             else:
                 ts_data = txns_data[txn][keys[0]]['data']
 
-            timestamps_zero_filled = [x[0] for x in ts_data]
+            #timestamps_zero_filled = [x[0] for x in ts_data]
+            start = keys[0]['start']
+            end = keys[0]['end']
 
             #data without zero-filling
-            timestamps = []
-            metrics = []
-            counts = []
+            timestamps = [ts_data[x][0] for x in range(len(ts_data))]
+            metrics = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
+            #counts = []
 
             #create lists for time/metric lists without 0 values for more accurate breakpoint analysis
-            for i in range(len(ts_data)):
-                count = count_data[i][1][0]['count']
+            # for i in range(len(ts_data)):
+            #     count = count_data[i][1][0]['count']
+            #
+            #     if count != 0:
+            #         counts.append(count)
 
-                if count != 0:
-                    counts.append(count)
-                    timestamps.append(ts_data[i][0])
-                    metrics.append(ts_data[i][1][0]['count'])
+            #timestamps.append(ts_data[i][0])
+            #metrics.append(ts_data[i][1][0]['count'])
 
             #snuba query limit was hit and we won't have complete data for this transaction so disregard this txn
             if None in metrics:
@@ -101,9 +104,7 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
 
             #if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
             elif num_breakpoints == 0 or change_index <= 5 or change_index == len(timestamps)-2:
-                change_index = int(len(timestamps_zero_filled) / 2)
-                change_point = timestamps_zero_filled[change_index]
-
+                change_point = (start + end) // 2
 
             first_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] < change_point]
             second_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] >= change_point]
@@ -120,8 +121,8 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
             mu1 = np.average(second_half)
 
             #sum of counts before/after changepoint
-            count_range_1 = sum(counts_first_half)
-            count_range_2 = sum(counts_second_half)
+            #count_range_1 = sum(counts_first_half)
+            #count_range_2 = sum(counts_second_half)
 
             # calculate t-value between both groups
             scipy_t_test = scipy.stats.ttest_ind(first_half, second_half, equal_var=False)
@@ -138,8 +139,8 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                 "transaction": txn_names[1],
                 "aggregate_range_1": mu0,
                 "aggregate_range_2": mu1,
-                "count_range_1": count_range_1,
-                "count_range_2": count_range_2,
+                #"count_range_1": count_range_1,
+                #"count_range_2": count_range_2,
                 "unweighted_t_value": scipy_t_test.statistic,
                 "unweighted_p_value": round(scipy_t_test.pvalue, 10),
                 "trend_percentage": trend_percentage,
