@@ -114,8 +114,8 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                 continue
 
             #get the non-zero counts for the first and second halves
-            counts_first_half = [counts[i] for i in range(len(counts)) if timestamps[i] < change_point]
-            counts_second_half = [counts[i] for i in range(len(counts)) if timestamps[i] >= change_point]
+            #counts_first_half = [counts[i] for i in range(len(counts)) if timestamps[i] < change_point]
+            #counts_second_half = [counts[i] for i in range(len(counts)) if timestamps[i] >= change_point]
 
             mu0 = np.average(first_half)
             mu1 = np.average(second_half)
@@ -145,7 +145,7 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                 "unweighted_p_value": round(scipy_t_test.pvalue, 10),
                 "trend_percentage": trend_percentage,
                 "trend_difference": mu1 - mu0,
-                "count_percentage": count_range_2/count_range_1,
+                #"count_percentage": count_range_2/count_range_1,
                 "breakpoint": change_point
             }
 
