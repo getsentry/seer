@@ -58,8 +58,8 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                 ts_data = txns_data[txn][keys[0]]['data']
 
             #timestamps_zero_filled = [x[0] for x in ts_data]
-            start = keys[0]['start']
-            end = keys[0]['end']
+            start = txns_data[txn][keys[0]]['start']
+            end = txns_data[txn][keys[0]]['end']
 
             #data without zero-filling
             timestamps = [ts_data[x][0] for x in range(len(ts_data))]
