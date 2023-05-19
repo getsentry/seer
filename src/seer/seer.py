@@ -81,14 +81,26 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                         metrics.append(ts_data[i][1][0]['count'])
 
             else:
+                #new format has zerofilled parameter
+                zerofilled = data['zerofilled']
 
-                ts_data = txns_data[txn]['data']
+                if zerofilled:
+                    ts_data = txns_data[txn]['data']
+
+                    for i in range(len(ts_data)):
+                        metric = ts_data[i][1][0]['count']
+
+                        if metric != 0:
+                            timestamps.append(ts_data[i][0])
+                            metrics.append(metric)
+                else:
+
+                    timestamps = [ts_data[x][0] for x in range(len(ts_data))]
+                    metrics = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
+
 
                 start = txns_data[txn]['start']
                 end = txns_data[txn]['end']
-
-                timestamps = [ts_data[x][0] for x in range(len(ts_data))]
-                metrics = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
 
 
             # snuba query limit was hit and we won't have complete data for this transaction so disregard this txn
