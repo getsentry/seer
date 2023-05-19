@@ -37,6 +37,9 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
     data = request.get_json()
     txns_data = data['data']
 
+    # new format has zerofilled parameter - if it's not being sent to microservice default value is True
+    zerofilled = data.get('zerofilled', True)
+
     sort_function = data['sort']
     trend_percentage_list = []
 
@@ -81,8 +84,6 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                         metrics.append(ts_data[i][1][0]['count'])
 
             else:
-                #new format has zerofilled parameter
-                zerofilled = data['zerofilled']
 
                 if zerofilled:
                     ts_data = txns_data[txn]['data']
