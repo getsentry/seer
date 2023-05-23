@@ -57,6 +57,11 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
 
             old_format = 'count()' in keys
 
+            # data without zero-filling
+            timestamps = []
+            metrics = []
+            counts = []
+
             if old_format:
                 count_data = txns_data[txn]['count()']['data']
 
@@ -68,11 +73,6 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
                 timestamps_zero_filled = [x[0] for x in ts_data]
                 start = txns_data[txn][keys[0]]['start']
                 end = txns_data[txn][keys[0]]['end']
-
-                #data without zero-filling
-                timestamps = []
-                metrics = []
-                counts = []
 
                 #create lists for time/metric lists without 0 values for more accurate breakpoint analysis
                 for i in range(len(ts_data)):
