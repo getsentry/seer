@@ -40,7 +40,7 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
     # new format has zerofilled parameter - if it's not being sent to microservice default value is True
     zerofilled = data.get('zerofilled', True)
 
-    sort_function = data['sort']
+    sort_function = data.get('sort', 'no_sort')
     trend_percentage_list = []
 
     #defined outside of for loop so error won't throw for empty data
@@ -53,7 +53,6 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
         for txn in transaction_list:
 
             keys = list(txns_data[txn].keys())
-            output_dict = {}
 
             old_format = 'count()' in keys
 
@@ -183,11 +182,13 @@ def breakpoint_trends_endpoint(pval=0.01, trend_perc=0.05):
             #  2. trend percentage is greater than passed in threshold (default = 5%)
 
             # most improved - get only negatively significant trending txns
-            if sort_function == 'trend_percentage()' and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
+            if (sort_function == 'trend_percentage()' or sort_function == 'no_sort') and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
+                output_dict['change'] = 'improvement'
                 trend_percentage_list.append((trend_percentage, output_dict))
 
             #if most regressed - get only positively signiificant txns
-            elif sort_function == '-trend_percentage()' and mu0 <= mu1 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
+            elif (sort_function == '-trend_percentage()' or sort_function == 'no_sort') and mu0 <= mu1 and scipy_t_test.pvalue < pval and abs(trend_percentage-1) > trend_perc:
+                output_dict['change'] = 'regression'
                 trend_percentage_list.append((trend_percentage, output_dict))
 
     with sentry_sdk.start_span(
