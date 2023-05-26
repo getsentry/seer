@@ -17,7 +17,7 @@ import scipy
 from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 
 
-def find_trends(transaction_list, txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05):
+def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05):
     trend_percentage_list = []
 
     # defined outside of for loop so error won't throw for empty data
