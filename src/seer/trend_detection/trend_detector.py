@@ -74,11 +74,12 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
 
             start = txns_data[txn]['start']
             end = txns_data[txn]['end']
-            timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
 
         # snuba query limit was hit and we won't have complete data for this transaction so disregard this txn
         if None in metrics:
             continue
+
+        timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
 
         timeseries = pd.DataFrame(
             {
@@ -101,7 +102,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         elif sort_function == '-trend_percentage()':
             change_points = CUSUMDetector(timeseries).detector(change_directions=["increase"])
         else:
-            CUSUMDetector(timeseries).detector()
+            change_points = CUSUMDetector(timeseries).detector()
+
 
         # sort change points by start time to get most recent one
         change_points.sort(key=lambda x: x.start_time)
@@ -110,6 +112,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         # if breakpoints are detected, get most recent changepoint
         if num_breakpoints != 0:
             change_point = change_points[-1].start_time
+            #convert back to datetime timestamp 
+            change_point = int(datetime.datetime.timestamp(change_point))
             change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
