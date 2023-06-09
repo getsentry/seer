@@ -73,6 +73,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
 
             start = txns_data[txn]['start']
             end = txns_data[txn]['end']
+            timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
 
         # snuba query limit was hit and we won't have complete data for this transaction so disregard this txn
         if None in metrics:
@@ -80,7 +81,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
 
         timeseries = pd.DataFrame(
             {
-                'time': timestamps,
+                'time': timestamps_pandas,
                 'y': metrics
             }
         )
@@ -89,9 +90,17 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         if len(metrics) < 3:
             continue
 
-        #NEW CODE (Once we get outside start/end too)
+        #NEW CODE (Once we get timeseries data for 7 days prior)
         # change_points = CUSUMDetector(timeseries).detector(interest_window = [168, len(ts_data)-1], magnitude_quantile=1.0)
-        change_points = CUSUMDetector(timeseries).detector()
+
+        #adding in this parameter will make sure the algorithm will only look for change-points in one direction
+        #this will cut the time of cusum detection in half
+        if sort_function == 'trend_percentage()':
+            change_points = CUSUMDetector(timeseries).detector(change_directions=["decrease"])
+        elif sort_function == '-trend_percentage()':
+            change_points = CUSUMDetector(timeseries).detector(change_directions=["increase"])
+        else:
+            CUSUMDetector(timeseries).detector()
 
         # sort change points by start time to get most recent one
         change_points.sort(key=lambda x: x.start_time)

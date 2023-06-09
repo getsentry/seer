@@ -52,10 +52,16 @@ def breakpoint_trends_endpoint():
             op="sort.trends", description="Sort trends by trend percentage"
     ) as span:
 
+        #MOVE ALL OF THIS TO BACKEND (ALREADY IN PR - account for no sort)
         if sort_function == 'trend_percentage()':
             sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
-        else:
+        elif sort_function == '-trend_percentage()':
             sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0], reverse=True))
+        #sort by overall change whether positive or negative
+        elif sort_function == 'no_sort':
+            trend_percentages = [(abs(x[0]), x[1]) for x in trend_percentage_list]
+            sorted_trends = (sorted(trend_percentages, key=lambda x: x[0], reverse=True))
+
 
     top_trends = {'data': [x[1] for x in sorted_trends]}
 
