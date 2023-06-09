@@ -219,7 +219,7 @@ class TestSeer(unittest.TestCase):
                                [1682596800, [{"count": 844.0}]], [1682600400, [{"count": 1014.0}]]],
                       "start": 1681934400, "end": 1683144000}
         input_data = {"data": {
-            "sentry,/api/0/organizations/{organization_slug}/issues/": {'data': trend_data}},'sort': '-trend_percentage()'}
+            "sentry,/api/0/organizations/{organization_slug}/issues/": trend_data},'sort': '-trend_percentage()'}
         return input_data
 
     def test_empty_txns_dataset(self):
