@@ -13,6 +13,7 @@ Trend Detection Logic:
 import pandas as pd
 import numpy as np
 import scipy
+import datetime
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 
