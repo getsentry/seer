@@ -393,7 +393,7 @@ class CUSUMDetector():
         """
         Compare daily magnitude to avoid daily seasonality false positives.
         """
-        time = list(self.data["time"])
+        time = self.data.time
         interest_window = self.interest_window
         magnitude_ratio = self.magnitude_ratio
         if interest_window is None:
@@ -401,7 +401,8 @@ class CUSUMDetector():
         assert magnitude_ratio is not None
 
         # get number of days in historical window
-        days = (max(time) - min(time)).days
+        #days = (max(time) - min(time)).days
+        days = (time[interest_window[0]] - min(time)).days
 
         # get interest window magnitude
         mag_int = self._get_time_series_magnitude(

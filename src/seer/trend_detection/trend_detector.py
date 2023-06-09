@@ -89,6 +89,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         if len(metrics) < 3:
             continue
 
+        #NEW CODE (Once we get outside start/end too)
+        # change_points = CUSUMDetector(timeseries).detector(interest_window = [168, len(ts_data)-1], magnitude_quantile=1.0)
         change_points = CUSUMDetector(timeseries).detector()
 
         # sort change points by start time to get most recent one
@@ -101,7 +103,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
             change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        elif num_breakpoints == 0 or change_index <= 5 or change_index == len(timestamps) - 2:
+        elif num_breakpoints == 0 or change_index <= 10 or change_index == len(timestamps) - 5:
             change_point = (start + end) // 2
 
         first_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] < change_point]
