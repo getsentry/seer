@@ -40,7 +40,7 @@ def breakpoint_trends_endpoint():
     # new format has zerofilled parameter - if it's not being sent to microservice default value is True
     zerofilled = data.get('zerofilled', True)
 
-    sort_function = data.get('sort', 'no_sort')
+    sort_function = data.get('sort', "")
 
     with sentry_sdk.start_span(
             op="cusum.detection", description="Get the breakpoint and t-value for every transaction"
@@ -48,24 +48,9 @@ def breakpoint_trends_endpoint():
 
         trend_percentage_list = find_trends(txns_data, sort_function, zerofilled)
 
-    with sentry_sdk.start_span(
-            op="sort.trends", description="Sort trends by trend percentage"
-    ) as span:
+    trends = {'data': [x[1] for x in trend_percentage_list]}
 
-        #MOVE ALL OF THIS TO BACKEND (ALREADY IN PR - account for no sort)
-        if sort_function == 'trend_percentage()':
-            sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0]))
-        elif sort_function == '-trend_percentage()':
-            sorted_trends = (sorted(trend_percentage_list, key=lambda x: x[0], reverse=True))
-        #sort by overall change whether positive or negative
-        elif sort_function == 'no_sort':
-            trend_percentages = [(abs(x[0]), x[1]) for x in trend_percentage_list]
-            sorted_trends = (sorted(trend_percentages, key=lambda x: x[0], reverse=True))
-
-
-    top_trends = {'data': [x[1] for x in sorted_trends]}
-
-    return top_trends
+    return trends
 
 
 @app.route("/anomaly/predict", methods=["POST"])
