@@ -69,22 +69,38 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         if len(metrics) < 3:
             continue
 
-        #NEW CODE (Once we get timeseries data for 7 days prior)
-        # change_points = CUSUMDetector(timeseries).detector(interest_window = [168, len(ts_data)-1], magnitude_quantile=1.0)
-
         #adding in this parameter will make sure the algorithm will only look for change-points in one direction
-        #this will cut the time of cusum detection in half
+        #this will cut the time of cusum detection in half - only look in second half
         if sort_function == 'trend_percentage()':
-            change_points = CUSUMDetector(timeseries).detector(change_directions=["decrease"])
+            change_points = CUSUMDetector(timeseries).detector(interest_window = [len(timestamps)//2, len(timestamps)-1],
+                                                               magnitude_quantile=1.0, change_directions=["decrease"])
         elif sort_function == '-trend_percentage()':
-            change_points = CUSUMDetector(timeseries).detector(change_directions=["increase"])
+            change_points = CUSUMDetector(timeseries).detector(interest_window = [len(timestamps)//2, len(timestamps)-1],
+                                                               magnitude_quantile=1.0, change_directions=["increase"])
         else:
-            change_points = CUSUMDetector(timeseries).detector()
+            change_points = CUSUMDetector(timeseries).detector(interest_window = [len(timestamps)//2, len(timestamps)-1], magnitude_quantile=1.0)
 
+        #get number of breakpoints in second half of timeseries
+        num_breakpoints = len(change_points)
+
+        if num_breakpoints == 0:
+            if sort_function == 'trend_percentage()':
+                change_points = CUSUMDetector(timeseries).detector(
+                    interest_window=[0, (len(timestamps) // 2)-1], second_half = False,
+                    magnitude_quantile=1.0, change_directions=["decrease"])
+            elif sort_function == '-trend_percentage()':
+                change_points = CUSUMDetector(timeseries).detector(
+                    interest_window=[0, (len(timestamps) // 2)-1], second_half = False,
+                    magnitude_quantile=1.0, change_directions=["increase"])
+            else:
+                change_points = CUSUMDetector(timeseries).detector(
+                    interest_window=[0, (len(timestamps) // 2)-1], magnitude_quantile=1.0, second_half = False)
+
+            #recalculate number of breakpoints for the first half
+            num_breakpoints = len(change_points)
 
         # sort change points by start time to get most recent one
         change_points.sort(key=lambda x: x.start_time)
-        num_breakpoints = len(change_points)
 
         # if breakpoints are detected, get most recent changepoint
         if num_breakpoints != 0:

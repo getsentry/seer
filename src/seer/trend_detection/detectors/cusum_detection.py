@@ -45,6 +45,7 @@ class CUSUMDefaultArgs:
     change_directions: Optional[List[str]] = None
     interest_window: Optional[int] = None
     magnitude_quantile: Optional[float] = None
+    second_half: bool = True
     magnitude_ratio: float = 1.3
     magnitude_comparable_day: float = 0.5
     return_all_changepoints: bool = False
@@ -242,6 +243,7 @@ class CUSUMChangePoint(TimeSeriesChangePoint):
 class CUSUMDetector():
     interest_window: Optional[Tuple[int, int]] = None
     magnitude_quantile: Optional[float] = None
+    second_half: bool = True
     magnitude_ratio: Optional[float] = None
     changes_meta: Optional[Dict[str, Dict[str, Any]]] = None
 
@@ -389,7 +391,7 @@ class CUSUMDetector():
             + 0.5 * (((x - mu1) / sigma1) ** 2 - ((x - mu0) / sigma0) ** 2)
         )
 
-    def _magnitude_compare(self, ts: np.ndarray) -> float:
+    def _magnitude_compare(self, ts: np.ndarray, second_half) -> float:
         """
         Compare daily magnitude to avoid daily seasonality false positives.
         """
@@ -401,8 +403,7 @@ class CUSUMDetector():
         assert magnitude_ratio is not None
 
         # get number of days in historical window
-        #days = (max(time) - min(time)).days
-        days = (time[interest_window[0]] - min(time)).days
+        days = (max(time) - min(time)).days // 2
 
         # get interest window magnitude
         mag_int = self._get_time_series_magnitude(
@@ -412,14 +413,28 @@ class CUSUMDetector():
         comparable_mag = 0
 
         for i in range(days):
-            start_time = time[interest_window[0]] - pd.Timedelta(f"{i}D")
-            end_time = time[interest_window[1]] - pd.Timedelta(f"{i}D")
-            start_idx = time[time == start_time].index[0]
-            end_idx = time[time == end_time].index[0]
+            if second_half:
+                start_time = time[interest_window[0]] - pd.Timedelta(f"{i}D")
+                end_time = time[interest_window[1]] - pd.Timedelta(f"{i}D")
+                if start_time < min(time):
+                    continue
+                start_idx = time[time == start_time].index[0]
+                end_idx = time[time == end_time].index[0]
 
-            hist_int = self._get_time_series_magnitude(ts[start_idx:end_idx])
-            if mag_int / hist_int >= magnitude_ratio:
-                comparable_mag += 1
+                hist_int = self._get_time_series_magnitude(ts[start_idx:end_idx])
+                if mag_int / hist_int >= magnitude_ratio:
+                    comparable_mag += 1
+            else:
+                start_time = time[interest_window[0]] + pd.Timedelta(f"{i}D")
+                end_time = time[interest_window[1]] + pd.Timedelta(f"{i}D")
+                if end_time > max(time):
+                    continue
+                start_idx = time[time == start_time].index[0]
+                end_idx = time[time == end_time].index[0]
+
+                hist_int = self._get_time_series_magnitude(ts[start_idx:end_idx])
+                if mag_int / hist_int >= magnitude_ratio:
+                    comparable_mag += 1
 
         return comparable_mag / days
 
@@ -478,6 +493,9 @@ class CUSUMDetector():
         magnitude_quantile = kwargs.get(
             "magnitude_quantile", defaultArgs.magnitude_quantile
         )
+        second_half = kwargs.get(
+            "second_half", defaultArgs.second_half
+        )
         magnitude_ratio = kwargs.get("magnitude_ratio", defaultArgs.magnitude_ratio)
         magnitude_comparable_day = kwargs.get(
             "magnitude_comparable_day", defaultArgs.magnitude_comparable_day
@@ -488,6 +506,7 @@ class CUSUMDetector():
 
         self.interest_window = interest_window
         self.magnitude_quantile = magnitude_quantile
+        self.second_half = second_half
         self.magnitude_ratio = magnitude_ratio
 
         # Use array to store the data
@@ -524,7 +543,7 @@ class CUSUMDetector():
                 if magnitude_quantile and interest_window:
                     change_ts = ts if change_direction == "increase" else -ts
                     mag_change = (
-                        self._magnitude_compare(change_ts) >= magnitude_comparable_day
+                        self._magnitude_compare(change_ts, second_half) >= magnitude_comparable_day
                     )
                 else:
                     mag_change = True
