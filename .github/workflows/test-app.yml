@@ -20,7 +20,7 @@ jobs:
     - name: Install dependencies
       run: |
         # HACK: we aren't ready for pip 23.1 yet
-        python -m pip install --upgrade 'pip<23.1'
+        python -m pip install --upgrade 'pip'
         pip install flake8 pytest
         pip install .
     - name: Lint with flake8
