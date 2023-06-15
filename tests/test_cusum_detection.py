@@ -117,7 +117,7 @@ class TestCusumDetector(unittest.TestCase):
 
     def setUp(self):
         self.data = self.get_sample_data()
-        self.cusum_detector = CUSUMDetector(self.data)
+        self.cusum_detector = CUSUMDetector(self.data, self.data)
 
     def test_get_changepoint(self):
         change_point = self.cusum_detector._get_change_point(np.asarray(self.data['y']), 10, None, "increase")

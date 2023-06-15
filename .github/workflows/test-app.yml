@@ -19,9 +19,8 @@ jobs:
         python-version: "3.8"
     - name: Install dependencies
       run: |
-        # HACK: we aren't ready for pip 23.1 yet
-        python -m pip install --upgrade 'pip<23.1'
-        pip install flake8 pytest
+        python -m pip install --upgrade 'pip==21.3.1'
+        pip install flake8 pytest pystan==2.19.1.1
         pip install .
     - name: Lint with flake8
       run: |
