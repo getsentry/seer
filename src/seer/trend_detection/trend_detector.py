@@ -73,7 +73,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         if len(metrics) < 3:
             continue
 
-        change_points = CUSUMDetector(timeseries).detector(magnitude_quantile=1.0)
+        change_points = CUSUMDetector(timeseries, timeseries_zerofilled).detector(magnitude_quantile=1.0)
 
         #get number of breakpoints in second half of timeseries
         num_breakpoints = len(change_points)

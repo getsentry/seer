@@ -408,7 +408,7 @@ class CUSUMDetector():
         mag_after_breakpoint = 0
 
         if before_breakpoint != 0:
-            for i in range(days):
+            for i in range(before_breakpoint):
                 start_time = time[breakpoint_index] - pd.Timedelta(f"{i + 1}D")
                 end_time = time[breakpoint_index] - pd.Timedelta(f"{i}D")
 
