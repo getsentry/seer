@@ -26,27 +26,23 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
 
     for txn in transaction_list:
 
-        keys = list(txns_data[txn].keys())
-
         # data without zero-filling
         timestamps = []
         metrics = []
-        counts = []
 
-        if zerofilled:
-            #get all the non-zero data
-            ts_data = txns_data[txn]['data']
+        #get all the non-zero data
+        ts_data = txns_data[txn]['data']
 
-            for i in range(len(ts_data)):
-                metric = ts_data[i][1][0]['count']
+        for i in range(len(ts_data)):
+            metric = ts_data[i][1][0]['count']
 
-                if metric != 0:
-                    timestamps.append(ts_data[i][0])
-                    metrics.append(metric)
-        else:
-            #extract all data if not zero filled
-            timestamps = [ts_data[x][0] for x in range(len(ts_data))]
-            metrics = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
+            if metric != 0:
+                timestamps.append(ts_data[i][0])
+                metrics.append(metric)
+
+        #extract all zero filled data
+        timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
+        metrics_zero_filled = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
 
         start = txns_data[txn]['start']
         end = txns_data[txn]['end']
@@ -57,6 +53,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
 
         #convert to pandas timestamps for magnitude compare method in cusum detection
         timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
+        timestamps_zerofilled_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps_zero_filled]
 
         timeseries = pd.DataFrame(
             {
@@ -65,39 +62,21 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
             }
         )
 
+        timeseries_zerofilled = pd.DataFrame(
+            {
+                'time': timestamps_zerofilled_pandas,
+                'y': metrics_zero_filled
+            }
+        )
+
         # don't include transaction if there are less than three datapoints
         if len(metrics) < 3:
             continue
 
-        #adding in this parameter will make sure the algorithm will only look for change-points in one direction
-        #this will cut the time of cusum detection in half - only look in second half
-        if sort_function == 'trend_percentage()':
-            change_points = CUSUMDetector(timeseries).detector(interest_window = [len(timestamps)//2, len(timestamps)-1],
-                                                               magnitude_quantile=1.0, change_directions=["decrease"])
-        elif sort_function == '-trend_percentage()':
-            change_points = CUSUMDetector(timeseries).detector(interest_window = [len(timestamps)//2, len(timestamps)-1],
-                                                               magnitude_quantile=1.0, change_directions=["increase"])
-        else:
-            change_points = CUSUMDetector(timeseries).detector(interest_window = [len(timestamps)//2, len(timestamps)-1], magnitude_quantile=1.0)
+        change_points = CUSUMDetector(timeseries).detector(magnitude_quantile=1.0)
 
         #get number of breakpoints in second half of timeseries
         num_breakpoints = len(change_points)
-
-        if num_breakpoints == 0:
-            if sort_function == 'trend_percentage()':
-                change_points = CUSUMDetector(timeseries).detector(
-                    interest_window=[0, (len(timestamps) // 2)-1], second_half = False,
-                    magnitude_quantile=1.0, change_directions=["decrease"])
-            elif sort_function == '-trend_percentage()':
-                change_points = CUSUMDetector(timeseries).detector(
-                    interest_window=[0, (len(timestamps) // 2)-1], second_half = False,
-                    magnitude_quantile=1.0, change_directions=["increase"])
-            else:
-                change_points = CUSUMDetector(timeseries).detector(
-                    interest_window=[0, (len(timestamps) // 2)-1], magnitude_quantile=1.0, second_half = False)
-
-            #recalculate number of breakpoints for the first half
-            num_breakpoints = len(change_points)
 
         # sort change points by start time to get most recent one
         change_points.sort(key=lambda x: x.start_time)
@@ -110,7 +89,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
             change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        elif num_breakpoints == 0 or change_index <= 10 or change_index >= len(timestamps) - 5:
+        if num_breakpoints == 0 or change_index <= 15 or change_index >= len(timestamps) - 10:
             change_point = (start + end) // 2
 
         first_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] < change_point]

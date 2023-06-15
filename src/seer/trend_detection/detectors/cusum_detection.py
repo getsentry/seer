@@ -24,13 +24,10 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-# import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from seer.trend_detection.consts import TimeSeriesChangePoint
 from scipy.stats import chi2
-
-#pd.options.plotting.matplotlib.register_converters = True
 
 _log: logging.Logger = logging.getLogger("cusum_detection")
 
@@ -45,8 +42,7 @@ class CUSUMDefaultArgs:
     change_directions: Optional[List[str]] = None
     interest_window: Optional[int] = None
     magnitude_quantile: Optional[float] = None
-    second_half: bool = True
-    magnitude_ratio: float = 1.3
+    magnitude_ratio: float = 1.35
     magnitude_comparable_day: float = 0.5
     return_all_changepoints: bool = False
     remove_seasonality: bool = False
@@ -243,19 +239,21 @@ class CUSUMChangePoint(TimeSeriesChangePoint):
 class CUSUMDetector():
     interest_window: Optional[Tuple[int, int]] = None
     magnitude_quantile: Optional[float] = None
-    second_half: bool = True
     magnitude_ratio: Optional[float] = None
     changes_meta: Optional[Dict[str, Dict[str, Any]]] = None
 
     def __init__(
         self,
-        data
+        data,
+        data_zerofilled,
     ) -> None:
         """
         Args:
             data: pandas dataframe; The input time series data.
+            data_zerofilled: pandas dataframe; time series data zerofilled
         """
         self.data = data
+        self.data_zerofill = data_zerofilled
 
     def _get_change_point(
         self, ts: np.ndarray, max_iter: int, start_point: int, change_direction: str
@@ -391,52 +389,68 @@ class CUSUMDetector():
             + 0.5 * (((x - mu1) / sigma1) ** 2 - ((x - mu0) / sigma0) ** 2)
         )
 
-    def _magnitude_compare(self, ts: np.ndarray, second_half) -> float:
+    def _magnitude_compare(self, ts: np.ndarray, breakpoint)-> float:
         """
         Compare daily magnitude to avoid daily seasonality false positives.
         """
-        time = self.data.time
+        time = self.data_zerofill.time
         interest_window = self.interest_window
         magnitude_ratio = self.magnitude_ratio
-        if interest_window is None:
-            raise ValueError("detect must be called first")
+
         assert magnitude_ratio is not None
 
-        # get number of days in historical window
-        days = (max(time) - min(time)).days // 2
+        breakpoint_index = time[time == breakpoint].index[0]
 
-        # get interest window magnitude
-        mag_int = self._get_time_series_magnitude(
-            ts[interest_window[0] : interest_window[1]]
-        )
+        before_breakpoint = (time[breakpoint_index] - time[0]).days
+        after_breakpoint = (time[len(time) - 1] - time[breakpoint_index]).days
 
-        comparable_mag = 0
+        mag_before_breakpoint = 0
+        mag_after_breakpoint = 0
 
-        for i in range(days):
-            if second_half:
-                start_time = time[interest_window[0]] - pd.Timedelta(f"{i}D")
-                end_time = time[interest_window[1]] - pd.Timedelta(f"{i}D")
+        if before_breakpoint != 0:
+            for i in range(days):
+                start_time = time[breakpoint_index] - pd.Timedelta(f"{i + 1}D")
+                end_time = time[breakpoint_index] - pd.Timedelta(f"{i}D")
+
+                #this shouldn't happen - but if start time is outside the time window then don't continue
                 if start_time < min(time):
                     continue
                 start_idx = time[time == start_time].index[0]
                 end_idx = time[time == end_time].index[0]
 
                 hist_int = self._get_time_series_magnitude(ts[start_idx:end_idx])
-                if mag_int / hist_int >= magnitude_ratio:
-                    comparable_mag += 1
-            else:
-                start_time = time[interest_window[0]] + pd.Timedelta(f"{i}D")
-                end_time = time[interest_window[1]] + pd.Timedelta(f"{i}D")
-                if end_time > max(time):
-                    continue
+
+                #if the day has no data and 0 is the max then don't count this day towards the magnitude ratio
+                if hist_int == 0:
+                    before_breakpoint -= 1
+
+                mag_before_breakpoint += hist_int
+        #if there are no days before the breakpoint
+        else:
+            mag_before_breakpoint = self._get_time_series_magnitude(ts[:breakpoint_index])
+            before_breakpoint = 1
+
+
+        if after_breakpoint != 0:
+            for i in range(after_breakpoint):
+                start_time = time[len(time) - 1] - pd.Timedelta(f"{i + 1}D")
+                end_time = time[len(time) - 1] - pd.Timedelta(f"{i}D")
                 start_idx = time[time == start_time].index[0]
                 end_idx = time[time == end_time].index[0]
 
                 hist_int = self._get_time_series_magnitude(ts[start_idx:end_idx])
-                if mag_int / hist_int >= magnitude_ratio:
-                    comparable_mag += 1
+                if hist_int == 0:
+                    after_breakpoint -= 1
+                mag_after_breakpoint += hist_int
+        #if there are no days after the breakpoint
+        else:
+            mag_before_breakpoint = self._get_time_series_magnitude(ts[breakpoint_index:])
+            after_breakpoint = 1
 
-        return comparable_mag / days
+        avg_before_bp = mag_before_breakpoint / before_breakpoint
+        avg_after_bp = mag_after_breakpoint / after_breakpoint
+
+        return avg_after_bp/avg_before_bp
 
     def _get_time_series_magnitude(self, ts: np.ndarray) -> float:
         """
@@ -493,9 +507,6 @@ class CUSUMDetector():
         magnitude_quantile = kwargs.get(
             "magnitude_quantile", defaultArgs.magnitude_quantile
         )
-        second_half = kwargs.get(
-            "second_half", defaultArgs.second_half
-        )
         magnitude_ratio = kwargs.get("magnitude_ratio", defaultArgs.magnitude_ratio)
         magnitude_comparable_day = kwargs.get(
             "magnitude_comparable_day", defaultArgs.magnitude_comparable_day
@@ -506,12 +517,12 @@ class CUSUMDetector():
 
         self.interest_window = interest_window
         self.magnitude_quantile = magnitude_quantile
-        self.second_half = second_half
         self.magnitude_ratio = magnitude_ratio
 
         # Use array to store the data
         ts = np.asarray(list(self.data["y"]))
         ts = ts.astype("float64")
+        ts_zero_filled = self.data_zerofill["y"]
         changes_meta = {}
 
         if change_directions is None:
@@ -540,10 +551,11 @@ class CUSUMDetector():
 
             # compare magnitude on interest_window and historical_window
             if np.min(ts) >= 0:
-                if magnitude_quantile and interest_window:
-                    change_ts = ts if change_direction == "increase" else -ts
+                if magnitude_quantile:
+                    change_ts = ts_zero_filled
                     mag_change = (
-                        self._magnitude_compare(change_ts, second_half) >= magnitude_comparable_day
+                            self._magnitude_compare(change_ts, change_meta.changetime) >= magnitude_ratio or
+                            self._magnitude_compare(change_ts, change_meta.changetime) <= 1 / magnitude_ratio
                     )
                 else:
                     mag_change = True
