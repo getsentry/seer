@@ -44,9 +44,6 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
         metrics_zero_filled = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
 
-        start = txns_data[txn]['data_start']
-        end = txns_data[txn]['data_end']
-
         req_start = txns_data[txn]['request_start']
         req_end = txns_data[txn]['request_end']
 
@@ -89,14 +86,14 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
             change_point = change_points[-1].start_time
             #convert back to datetime timestamp
             change_point = int(datetime.datetime.timestamp(change_point))
-            change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
         if num_breakpoints == 0 or change_point >= req_end - (60*60) or change_point <= req_start + (60*60):
             change_point = (req_start + req_end) // 2
 
-        first_half = list(timeseries["y"][req_start:change_point])
-        second_half = list(timeseries["y"][change_point:req_end])
+
+        first_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] < change_point and timestamps[i] >= req_start]
+        second_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] >= change_point and timestamps[i] <= req_end]
 
         # if either of the halves don't have any data to compare to then move on to the next txn
         if len(first_half) == 0 or len(second_half) == 0:
