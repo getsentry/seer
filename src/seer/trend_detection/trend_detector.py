@@ -47,7 +47,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         req_start = int(txns_data[txn]['request_start'])
         req_end = int(txns_data[txn]['request_end'])
 
-        req_start_index = timestamps.index(req_start)
+        req_start_index = np.argmin(timestamps[timestamps >= req_start])
 
         # snuba query limit was hit, and we won't have complete data for this transaction so disregard this txn
         if None in metrics:
