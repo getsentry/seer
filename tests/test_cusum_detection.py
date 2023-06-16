@@ -102,7 +102,8 @@ class TestCusumDetector(unittest.TestCase):
                                [1682582400, [{"count": 1109.5}]], [1682586000, [{"count": 884.5}]],
                                [1682589600, [{"count": 833.0}]], [1682593200, [{"count": 897.0}]],
                                [1682596800, [{"count": 844.0}]], [1682600400, [{"count": 1014.0}]]],
-                      "start": 1681934400, "end": 1683144000}
+                      "request_start": 1681934400, "request_end": 1683144000,
+                      "data_start": 1681934400, "data_end": 1683144000 }
         timestamps = [x[0] for x in trend_data["data"]]
         metrics = [x[1][0]['count'] for x in trend_data["data"]]
 
