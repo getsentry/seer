@@ -47,6 +47,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         req_start = txns_data[txn]['request_start']
         req_end = txns_data[txn]['request_end']
 
+        req_start_index = timestamps.index(req_start)
+
         # snuba query limit was hit, and we won't have complete data for this transaction so disregard this txn
         if None in metrics:
             continue
@@ -86,9 +88,10 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
             change_point = change_points[-1].start_time
             #convert back to datetime timestamp
             change_point = int(datetime.datetime.timestamp(change_point))
+            change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        if num_breakpoints == 0 or change_point >= req_end - (60*60) or change_point <= req_start + (60*60):
+        if num_breakpoints == 0 or change_index <= req_start_index + 15 or change_index >= len(timestamps) - 10:
             change_point = (req_start + req_end) // 2
 
 
