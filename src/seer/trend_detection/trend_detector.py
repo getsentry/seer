@@ -44,8 +44,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
         metrics_zero_filled = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
 
-        req_start = txns_data[txn]['request_start']
-        req_end = txns_data[txn]['request_end']
+        req_start = int(txns_data[txn]['request_start'])
+        req_end = int(txns_data[txn]['request_end'])
 
         req_start_index = timestamps.index(req_start)
 
