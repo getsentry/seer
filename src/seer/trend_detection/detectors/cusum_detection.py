@@ -36,7 +36,7 @@ _log: logging.Logger = logging.getLogger("cusum_detection")
 class CUSUMDefaultArgs:
     threshold: float = 0.01
     max_iter: int = 10
-    delta_std_ratio: float = 0.5
+    delta_std_ratio: float = 1.0
     min_abs_change: int = 0
     start_point: Optional[int] = None
     change_directions: Optional[List[str]] = None
