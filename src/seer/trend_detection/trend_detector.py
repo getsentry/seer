@@ -40,6 +40,14 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
                 timestamps.append(ts_data[i][0])
                 metrics.append(metric)
 
+        # snuba query limit was hit, and we won't have complete data for this transaction so disregard this txn
+        if None in metrics:
+            continue
+
+        # don't include transaction if there are less than three datapoints in non zero data
+        if len(metrics) < 3:
+            continue
+
         #extract all zero filled data
         timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
         metrics_zero_filled = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
@@ -47,11 +55,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         req_start = int(txns_data[txn]['request_start'])
         req_end = int(txns_data[txn]['request_end'])
 
+        #grab the index of the request start time
         req_start_index = next(i for i, v in enumerate(timestamps) if v > req_start)
-
-        # snuba query limit was hit, and we won't have complete data for this transaction so disregard this txn
-        if None in metrics:
-            continue
 
         #convert to pandas timestamps for magnitude compare method in cusum detection
         timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
@@ -70,10 +75,6 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
                 'y': metrics_zero_filled
             }
         )
-
-        # don't include transaction if there are less than three datapoints
-        if len(metrics) < 3:
-            continue
 
         change_points = CUSUMDetector(timeseries, timeseries_zerofilled).detector()
 
