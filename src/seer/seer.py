@@ -33,24 +33,28 @@ model_initialized = True
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
 def breakpoint_trends_endpoint():
+    try:
+        data = request.get_json()
+        txns_data = data['data']
 
-    data = request.get_json()
-    txns_data = data['data']
+        # new format has zerofilled parameter - if it's not being sent to microservice default value is True
+        zerofilled = data.get('zerofilled', True)
 
-    # new format has zerofilled parameter - if it's not being sent to microservice default value is True
-    zerofilled = data.get('zerofilled', True)
+        sort_function = data.get('sort', "")
 
-    sort_function = data.get('sort', "")
+        with sentry_sdk.start_span(
+                op="cusum.detection", description="Get the breakpoint and t-value for every transaction"
+        ) as span:
 
-    with sentry_sdk.start_span(
-            op="cusum.detection", description="Get the breakpoint and t-value for every transaction"
-    ) as span:
+            trend_percentage_list = find_trends(txns_data, sort_function, zerofilled)
 
-        trend_percentage_list = find_trends(txns_data, sort_function, zerofilled)
+        trends = {'data': [x[1] for x in trend_percentage_list]}
+        app.logger.info("Trend results: %s", trends)
 
-    trends = {'data': [x[1] for x in trend_percentage_list]}
-
-    return trends
+        return trends
+    except Exception as e:
+        app.logger.exception("Error processing request")
+        return {"Error": str(e)}, 500 
 
 
 @app.route("/anomaly/predict", methods=["POST"])
