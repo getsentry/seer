@@ -256,6 +256,33 @@ class TestSeer(unittest.TestCase):
 
         assert actual_output == expected_output
 
+    def test_no_data_after_request_start(self):
+        mid = 5  # needs to be greater than 3 because that's the minimum time series length
+        input_data = {
+            "data": {
+                "sentry,/api/0/organizations/{organization_slug}/issues/": {
+                    "data": [
+                        [ts, [{"count": 1 if ts <= mid else 0}]]
+                        for ts in range(2 * mid)
+                    ],
+                  "request_start": mid,
+                  "request_end": 2 * mid,
+                  "data_start": 0,
+                  "data_end": 2 * mid,
+                },
+            },
+            "sort": "-trend_percentage()",
+        }
+
+        response = app.test_client().post(
+            '/trends/breakpoint-detector',
+            data=json.dumps(input_data),
+            content_type='application/json',
+        )
+
+        output = json.loads(response.get_data(as_text=True))
+        assert output == {"data": []}
+
 
 if __name__ == "__main__":
     unittest.main()
