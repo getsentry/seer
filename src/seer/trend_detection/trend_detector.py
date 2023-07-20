@@ -44,7 +44,7 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         if None in metrics:
             continue
 
-        #extract all zero filled data
+        # extract all zero filled data
         timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
         metrics_zero_filled = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
 
@@ -56,10 +56,16 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
         if len(metrics) < 3 or req_start > timestamps[-1]:
             continue
 
-        #grab the index of the request start time
-        req_start_index = next(i for i, v in enumerate(timestamps) if v > req_start)
+        try:
+            # grab the index of the request start time
+            req_start_index = next(i for i, v in enumerate(timestamps) if v > req_start)
+        except StopIteration:
+            # After removing the zerofilled entries, it's possible that all
+            # timestamps fall before the request start. When this happens, there
+            # is no trend to be found.
+            continue
 
-        #convert to pandas timestamps for magnitude compare method in cusum detection
+        # convert to pandas timestamps for magnitude compare method in cusum detection
         timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
         timestamps_zerofilled_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps_zero_filled]
 
