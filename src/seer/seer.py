@@ -27,6 +27,7 @@ sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     integrations=[FlaskIntegration()],
     traces_sampler=traces_sampler,
+    profiles_sample_rate=1.0,
 )
 app = Flask(__name__)
 
