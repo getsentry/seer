@@ -12,10 +12,21 @@ from seer.trend_detection.trend_detector import find_trends
 from seer.anomaly_detection.prophet_detector import ProphetDetector
 from seer.anomaly_detection.prophet_params import ProphetParams
 
+def traces_sampler(sampling_context):
+    if sampling_context["parent_sampled"] is not None:
+        return sampling_context["parent_sampled"]
+
+    if "wsgi_environ" in sampling_context:
+        path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
+        if path_info and path_info.startswith("/health/"):
+            return 0.0
+
+    return 1.0
+
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     integrations=[FlaskIntegration()],
-    traces_sample_rate=1.0,
+    traces_sampler=traces_sampler,
 )
 app = Flask(__name__)
 
