@@ -24,6 +24,13 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
     # defined outside for loop so error won't throw for empty data
     transaction_list = txns_data.keys()
 
+    timestamps_cache = {}
+
+    def parse_timestamp(ts):
+        if ts not in timestamps_cache:
+            timestamps_cache[ts] = pd.Timestamp(datetime.datetime.fromtimestamp(ts))
+        return timestamps_cache[ts]
+
     for txn in transaction_list:
 
         # data without zero-filling
@@ -66,8 +73,8 @@ def find_trends(txns_data, sort_function, zerofilled, pval=0.01, trend_perc=0.05
             continue
 
         # convert to pandas timestamps for magnitude compare method in cusum detection
-        timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
-        timestamps_zerofilled_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps_zero_filled]
+        timestamps_pandas = [parse_timestamp(x) for x in timestamps]
+        timestamps_zerofilled_pandas = [parse_timestamp(x) for x in timestamps_zero_filled]
 
         timeseries = pd.DataFrame(
             {
