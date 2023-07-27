@@ -285,7 +285,7 @@ class CUSUMDetector():
             ts_int = ts
 
         pre_cusum = np.cumsum(ts_int)
-        cusum_range = np.arange(len(ts_int))
+        cusum_range = np.arange(len(ts_int)) + 1
 
         if start_point is None:
             cusum_ts = pre_cusum - cusum_range * np.mean(ts_int)
