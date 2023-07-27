@@ -20,6 +20,7 @@ It has two main components:
 
 """
 
+import functools
 import logging
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -30,6 +31,11 @@ from seer.trend_detection.consts import TimeSeriesChangePoint
 from scipy.stats import chi2
 
 _log: logging.Logger = logging.getLogger("cusum_detection")
+
+
+@functools.lru_cache(maxsize=10)
+def chi2_ppf(q, df):
+    return chi2.ppf(q, df)
 
 
 @dataclass
@@ -278,8 +284,11 @@ class CUSUMDetector():
         else:
             ts_int = ts
 
+        pre_cusum = np.cumsum(ts_int)
+        cusum_range = np.arange(len(ts_int)) + 1
+
         if start_point is None:
-            cusum_ts = np.cumsum(ts_int - np.mean(ts_int))
+            cusum_ts = pre_cusum - cusum_range * np.mean(ts_int)
             changepoint = min(changepoint_func(cusum_ts), len(ts_int) - 2)
         else:
             changepoint = start_point
@@ -292,7 +301,7 @@ class CUSUMDetector():
             mu1 = np.mean(ts_int[(changepoint + 1) :])
             mean = (mu0 + mu1) / 2
             # here is where cusum is happening
-            cusum_ts = np.cumsum(ts_int - mean)
+            cusum_ts = pre_cusum - cusum_range * mean
             next_changepoint = max(1, min(changepoint_func(cusum_ts), len(ts_int) - 2))
             if next_changepoint == changepoint:
                 break
@@ -569,8 +578,8 @@ class CUSUMDetector():
                         )
                     )
 
-            if_significant = llr > chi2.ppf(1 - threshold, 2)
-            if_significant_int = change_meta.llr_int > chi2.ppf(1 - threshold, 2)
+            if_significant = llr > chi2_ppf(1 - threshold, 2)
+            if_significant_int = change_meta.llr_int > chi2_ppf(1 - threshold, 2)
             if change_direction == "increase":
                 larger_than_min_abs_change = (
                     change_meta.mu0 + min_abs_change < change_meta.mu1
