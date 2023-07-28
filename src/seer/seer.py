@@ -61,7 +61,7 @@ def breakpoint_trends_endpoint():
             trend_percentage_list = find_trends(txns_data, sort_function, zerofilled)
 
         trends = {'data': [x[1] for x in trend_percentage_list]}
-        app.logger.info("Trend results: %s", trends)
+        app.logger.debug("Trend results: %s", trends)
 
         return trends
     except Exception as e:
