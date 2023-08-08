@@ -47,7 +47,7 @@ model_initialized = True
 def breakpoint_trends_endpoint():
     try:
         data = request.get_json()
-        severity = data.get("severity", 0.5)
+        severity = float(data.get("severity", 0.5))
         results = {"severity": severity}
         return results
     except Exception as e:
