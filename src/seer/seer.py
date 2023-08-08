@@ -44,7 +44,7 @@ model_initialized = True
 
 # DUMMY ENDPOINT FOR TESTING
 @app.route("/issues/severity-score", methods=["POST"])
-def breakpoint_trends_endpoint():
+def def_severity_endpoint():
     try:
         data = request.get_json()
         severity = float(data.get("severity", 0.5))
