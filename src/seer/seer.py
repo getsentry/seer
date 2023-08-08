@@ -42,6 +42,18 @@ model_initialized = False
 detector = ProphetDetector(MODEL_PARAMS)
 model_initialized = True
 
+# DUMMY ENDPOINT FOR TESTING
+@app.route("/issues/severity-score", methods=["POST"])
+def breakpoint_trends_endpoint():
+    try:
+        data = request.get_json()
+        severity = data.get("severity", 0.5)
+        results = {"severity": severity}
+        return results
+    except Exception as e:
+        app.logger.exception("Error processing request")
+        return {"Error": str(e)}, 500 
+
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
 def breakpoint_trends_endpoint():
