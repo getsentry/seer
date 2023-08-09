@@ -308,7 +308,7 @@ class CUSUMDetector():
             changepoint = next_changepoint
 
         if n == max_iter:
-            _log.info("Max iteration reached and no stable changepoint found.")
+            _log.debug("Max iteration reached and no stable changepoint found.")
             stable_changepoint = False
         else:
             stable_changepoint = True
