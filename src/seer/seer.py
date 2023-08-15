@@ -66,11 +66,13 @@ def breakpoint_trends_endpoint():
 
         sort_function = data.get('sort', "")
 
+        lower_limit_trend_percentage = float(data.get('trend_percentage()', 0.05))
+
         with sentry_sdk.start_span(
                 op="cusum.detection", description="Get the breakpoint and t-value for every transaction"
         ) as span:
 
-            trend_percentage_list = find_trends(txns_data, sort_function, zerofilled)
+            trend_percentage_list = find_trends(txns_data, sort_function, zerofilled, trend_perc=lower_limit_trend_percentage)
 
         trends = {'data': [x[1] for x in trend_percentage_list]}
         app.logger.debug("Trend results: %s", trends)
