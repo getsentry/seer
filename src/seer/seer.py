@@ -1,16 +1,16 @@
 import sentry_sdk
 import os
 
-from flask import Flask, request, Response
+from flask import Flask, request
 from sentry_sdk.integrations.flask import FlaskIntegration
 import pandas as pd
 import numpy as np
-import scipy
 
 from seer.trend_detection.trend_detector import find_trends
-
 from seer.anomaly_detection.prophet_detector import ProphetDetector
 from seer.anomaly_detection.prophet_params import ProphetParams
+from seer.severity.severity_inference import SeverityInference
+
 
 def traces_sampler(sampling_context):
     if sampling_context["parent_sampled"] is not None:
@@ -22,6 +22,7 @@ def traces_sampler(sampling_context):
             return 0.0
 
     return 1.0
+
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
@@ -40,11 +41,15 @@ MODEL_PARAMS = ProphetParams(
 )
 model_initialized = False
 detector = ProphetDetector(MODEL_PARAMS)
+embeddings_model = SeverityInference(
+    "embeddings_path", "tokenizer_path", "classifier_path"
+)
 model_initialized = True
 
+
 # DUMMY ENDPOINT FOR TESTING
-@app.route("/issues/severity-score", methods=["POST"])
-def def_severity_endpoint():
+@app.route("/issues/dummy-severity-score", methods=["POST"])
+def def_dummy_severity_endpoint():
     try:
         data = request.get_json()
         severity = float(data.get("severity", 0.5))
@@ -52,7 +57,19 @@ def def_severity_endpoint():
         return results
     except Exception as e:
         app.logger.exception("Error processing request")
-        return {"Error": str(e)}, 500 
+        return {"Error": str(e)}, 500
+
+
+@app.route("/issues/severity-score", methods=["POST"])
+def def_severity_endpoint():
+    try:
+        data = request.get_json()
+        severity = embeddings_model.severity_score(data["message"])
+        results = {"severity": severity}
+        return results
+    except Exception as e:
+        app.logger.exception("Error processing request")
+        return {"Error": str(e)}, 500
 
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
