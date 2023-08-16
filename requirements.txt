@@ -45,3 +45,5 @@ tsmoothie==1.0.4
 ujson==5.1.0
 urllib3==1.26.16
 Werkzeug==2.0.2
+torch==2.0.1 #TODO: remove when we move this out of the repo
+transformers==4.31.0 #TODO: remove when we move this out of the repo
