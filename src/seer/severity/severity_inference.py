@@ -6,13 +6,16 @@ from joblib import load
 class SeverityInference:
     def __init__(self, embeddings_path, tokenizer_path, classifier_path):
         """Initialize the inference class with pre-trained models and tokenizer."""
+        #TODO: needs to read from GCS
         self.embeddings_model = BertForSequenceClassification.from_pretrained(
             embeddings_path
         )
+        #TODO: needs to read from GCS
         self.tokenizer = BertTokenizerFast.from_pretrained(tokenizer_path)
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
+        #TODO: needs to read from GCS
         self.classifier = load(classifier_path)
 
     def get_embeddings(self, text, max_len=128):
