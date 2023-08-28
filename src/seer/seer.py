@@ -7,9 +7,6 @@ import pandas as pd
 import numpy as np
 
 from seer.trend_detection.trend_detector import find_trends
-from seer.anomaly_detection.prophet_detector import ProphetDetector
-from seer.anomaly_detection.prophet_params import ProphetParams
-from seer.severity.severity_inference import SeverityInference
 
 
 def traces_sampler(sampling_context):
