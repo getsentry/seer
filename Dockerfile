@@ -16,7 +16,7 @@ COPY models/ models/
 COPY src/ src/
 
 # Install dependencies
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip==23.0.1
 RUN pip install --default-timeout=120 .
 
 # The number of gunicorn workers is selected by ops based on k8s configuration.
