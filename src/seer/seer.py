@@ -12,6 +12,17 @@ from seer.anomaly_detection.prophet_params import ProphetParams
 from seer.severity.severity_inference import SeverityInference
 
 
+def traces_sampler(sampling_context):
+    if sampling_context["parent_sampled"] is not None:
+        return sampling_context["parent_sampled"]
+
+    if "wsgi_environ" in sampling_context:
+        path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
+        if path_info and path_info.startswith("/health/"):
+            return 0.0
+
+    return 1.0
+
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     integrations=[FlaskIntegration()],
@@ -270,15 +281,3 @@ def process_output(data, granularity):
         "anomalies": anomalies,
     }
     return results
-
-
-def traces_sampler(sampling_context):
-    if sampling_context["parent_sampled"] is not None:
-        return sampling_context["parent_sampled"]
-
-    if "wsgi_environ" in sampling_context:
-        path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
-        if path_info and path_info.startswith("/health/"):
-            return 0.0
-
-    return 1.0
