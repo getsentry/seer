@@ -132,7 +132,9 @@ def find_trends(txns_data, sort_function, zerofilled, trend_perc=0.1, pval=0.01)
             "trend_percentage": trend_percentage,
             "absolute_percentage_change": abs(trend_percentage),
             "trend_difference": mu1 - mu0,
-            "breakpoint": change_point
+            "breakpoint": change_point,
+            "request_start": req_start,
+            "request_end": req_end
         }
 
         # TREND LOGIC:
