@@ -78,7 +78,7 @@ def breakpoint_trends_endpoint():
 
         sort_function = data.get("sort", "")
 
-        lower_limit_trend_percentage = float(data.get("trend_percentage()", 0.05))
+        lower_limit_trend_percentage = float(data.get('trend_percentage()', 0.1))
 
         with sentry_sdk.start_span(
             op="cusum.detection",

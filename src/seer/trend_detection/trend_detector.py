@@ -18,7 +18,7 @@ import datetime
 from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 
 
-def find_trends(txns_data, sort_function, zerofilled, trend_perc=0.05, pval=0.01):
+def find_trends(txns_data, sort_function, zerofilled, trend_perc=0.1, pval=0.01):
     trend_percentage_list = []
 
     # defined outside for loop so error won't throw for empty data
@@ -137,7 +137,7 @@ def find_trends(txns_data, sort_function, zerofilled, trend_perc=0.05, pval=0.01
 
         # TREND LOGIC:
         #  1. p-value of t-test is less than passed in threshold (default = 0.01)
-        #  2. trend percentage is greater than passed in threshold (default = 5%)
+        #  2. trend percentage is greater than passed in threshold (default = 10%)
 
         # most improved - get only negatively significant trending txns
         if (sort_function == 'trend_percentage()' or sort_function == '') and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage - 1) > trend_perc:
