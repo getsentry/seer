@@ -20,4 +20,4 @@ RUN pip install --upgrade pip==23.0.1
 RUN pip install --default-timeout=120 .
 
 # The number of gunicorn workers is selected by ops based on k8s configuration.
-CMD exec gunicorn --bind :9090 --worker-class sync --threads 1 --timeout 0 src.seer.seer:app
+CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 src.seer.seer:app
