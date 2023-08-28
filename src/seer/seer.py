@@ -40,11 +40,12 @@ MODEL_PARAMS = ProphetParams(
     uncertainty_samples=None,
 )
 model_initialized = False
-detector = ProphetDetector(MODEL_PARAMS)
-embeddings_model = SeverityInference(
-    "models/embeddings", "models/tokenizer", "models/classifier"
-)
-model_initialized = True
+if not os.environ.get('PYTEST_CURRENT_TEST'):
+    detector = ProphetDetector(MODEL_PARAMS)
+    embeddings_model = SeverityInference(
+        "models/embeddings", "models/tokenizer", "models/classifier"
+    )
+    model_initialized = True
 
 
 # DUMMY ENDPOINT FOR TESTING
