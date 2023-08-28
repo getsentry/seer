@@ -12,18 +12,6 @@ from seer.anomaly_detection.prophet_params import ProphetParams
 from seer.severity.severity_inference import SeverityInference
 
 
-def traces_sampler(sampling_context):
-    if sampling_context["parent_sampled"] is not None:
-        return sampling_context["parent_sampled"]
-
-    if "wsgi_environ" in sampling_context:
-        path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
-        if path_info and path_info.startswith("/health/"):
-            return 0.0
-
-    return 1.0
-
-
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     integrations=[FlaskIntegration()],
@@ -32,15 +20,21 @@ sentry_sdk.init(
 )
 app = Flask(__name__)
 
-MODEL_PARAMS = ProphetParams(
-    interval_width=0.975,
-    changepoint_prior_scale=0.01,
-    weekly_seasonality=14,
-    daily_seasonality=False,
-    uncertainty_samples=None,
-)
+
 model_initialized = False
-if not os.environ.get('PYTEST_CURRENT_TEST'):
+if not os.environ.get("PYTEST_CURRENT_TEST"):
+    from seer.anomaly_detection.prophet_detector import ProphetDetector
+    from seer.anomaly_detection.prophet_params import ProphetParams
+    from seer.severity.severity_inference import SeverityInference
+
+    MODEL_PARAMS = ProphetParams(
+        interval_width=0.975,
+        changepoint_prior_scale=0.01,
+        weekly_seasonality=14,
+        daily_seasonality=False,
+        uncertainty_samples=None,
+    )
+
     detector = ProphetDetector(MODEL_PARAMS)
     embeddings_model = SeverityInference(
         "models/embeddings", "models/tokenizer", "models/classifier"
@@ -77,28 +71,33 @@ def def_severity_endpoint():
 def breakpoint_trends_endpoint():
     try:
         data = request.get_json()
-        txns_data = data['data']
+        txns_data = data["data"]
 
         # new format has zerofilled parameter - if it's not being sent to microservice default value is True
-        zerofilled = data.get('zerofilled', True)
+        zerofilled = data.get("zerofilled", True)
 
-        sort_function = data.get('sort', "")
+        sort_function = data.get("sort", "")
 
-        lower_limit_trend_percentage = float(data.get('trend_percentage()', 0.05))
+        lower_limit_trend_percentage = float(data.get("trend_percentage()", 0.05))
 
         with sentry_sdk.start_span(
-                op="cusum.detection", description="Get the breakpoint and t-value for every transaction"
+            op="cusum.detection",
+            description="Get the breakpoint and t-value for every transaction",
         ) as span:
+            trend_percentage_list = find_trends(
+                txns_data,
+                sort_function,
+                zerofilled,
+                trend_perc=lower_limit_trend_percentage,
+            )
 
-            trend_percentage_list = find_trends(txns_data, sort_function, zerofilled, trend_perc=lower_limit_trend_percentage)
-
-        trends = {'data': [x[1] for x in trend_percentage_list]}
+        trends = {"data": [x[1] for x in trend_percentage_list]}
         app.logger.debug("Trend results: %s", trends)
 
         return trends
     except Exception as e:
         app.logger.exception("Error processing request")
-        return {"Error": str(e)}, 500 
+        return {"Error": str(e)}, 500
 
 
 @app.route("/anomaly/predict", methods=["POST"])
@@ -125,7 +124,8 @@ def predict():
     sentry_sdk.set_context("anomaly_detection_params", ads_context)
 
     with sentry_sdk.start_span(
-        op="data.preprocess", description="Preprocess data to prepare for anomaly detection"
+        op="data.preprocess",
+        description="Preprocess data to prepare for anomaly detection",
     ) as span:
         if (
             "data" not in data
@@ -146,7 +146,9 @@ def predict():
     ) as span:
         detector.fit()
 
-    with sentry_sdk.start_span(op="model.predict", description="Generate predictions") as span:
+    with sentry_sdk.start_span(
+        op="model.predict", description="Generate predictions"
+    ) as span:
         fcst = detector.predict()
 
     with sentry_sdk.start_span(
@@ -248,7 +250,8 @@ def process_output(data, granularity):
         Format a timeseries for the frontend
         """
         data = zip(
-            list(map(int, ts["ds"])), [[{"count": round(x, 5)}] for x in list(ts[value_col])]
+            list(map(int, ts["ds"])),
+            [[{"count": round(x, 5)}] for x in list(ts[value_col])],
         )
         start = int(ts["ds"].iloc[0])
         end = int(ts["ds"].iloc[-1])
@@ -267,3 +270,15 @@ def process_output(data, granularity):
         "anomalies": anomalies,
     }
     return results
+
+
+def traces_sampler(sampling_context):
+    if sampling_context["parent_sampled"] is not None:
+        return sampling_context["parent_sampled"]
+
+    if "wsgi_environ" in sampling_context:
+        path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
+        if path_info and path_info.startswith("/health/"):
+            return 0.0
+
+    return 1.0
