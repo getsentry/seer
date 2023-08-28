@@ -64,7 +64,7 @@ def def_dummy_severity_endpoint():
 def def_severity_endpoint():
     try:
         data = request.get_json()
-        severity = embeddings_model.severity_score(data["message"])
+        severity = embeddings_model.severity_score(data.get("message", ""))
         results = {"severity": str(severity[0][1])}
         return results
     except Exception as e:
