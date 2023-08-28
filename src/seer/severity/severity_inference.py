@@ -42,5 +42,5 @@ class SeverityInference:
     def severity_score(self, text):
         """Predict the severity score for the given text using the pre-trained classifier."""
         embeddings = self.get_embeddings(text)
-        pred = self.classifier.predict(embeddings.reshape(1, -1))
-        return pred[0]
+        pred = self.classifier.predict_proba(embeddings.reshape(1, -1))
+        return pred

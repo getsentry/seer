@@ -42,7 +42,7 @@ MODEL_PARAMS = ProphetParams(
 model_initialized = False
 detector = ProphetDetector(MODEL_PARAMS)
 embeddings_model = SeverityInference(
-    "embeddings_path", "tokenizer_path", "classifier_path"
+    "models/embeddings", "models/tokenizer", "models/classifier"
 )
 model_initialized = True
 
@@ -52,7 +52,7 @@ model_initialized = True
 def def_dummy_severity_endpoint():
     try:
         data = request.get_json()
-        severity = float(data.get("severity", 0.5))
+        severity = str(data.get("severity", 0.5))
         results = {"severity": severity}
         return results
     except Exception as e:
@@ -65,7 +65,7 @@ def def_severity_endpoint():
     try:
         data = request.get_json()
         severity = embeddings_model.severity_score(data["message"])
-        results = {"severity": severity}
+        results = {"severity": str(severity[0][1])}
         return results
     except Exception as e:
         app.logger.exception("Error processing request")
