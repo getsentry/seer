@@ -218,7 +218,7 @@ class TestSeer(unittest.TestCase):
                                [1682589600, [{"count": 833.0}]], [1682593200, [{"count": 897.0}]],
                                [1682596800, [{"count": 844.0}]], [1682600400, [{"count": 1014.0}]]],
                       "request_start": 1681934400, "request_end": 1683144000,
-                      "data_start": 1681934400, "data_end": 1683144000 }
+                      "data_start": 1681934400, "data_end": 1683144000}
         input_data = {"data": {
             "sentry,/api/0/organizations/{organization_slug}/issues/": trend_data},'sort': '-trend_percentage()'}
         return input_data
@@ -245,12 +245,15 @@ class TestSeer(unittest.TestCase):
             content_type='application/json',
         )
 
+        request_start = input_data["data"]["sentry,/api/0/organizations/{organization_slug}/issues/"]["request_start"]
+        request_end = input_data["data"]["sentry,/api/0/organizations/{organization_slug}/issues/"]["request_end"]
+
         expected_output = {'data': [
             {'project': 'sentry', 'transaction': '/api/0/organizations/{organization_slug}/issues/',
              'aggregate_range_1': 619.2740384615385, 'aggregate_range_2': 921.5060975609756, 'unweighted_t_value': -14.710852035668289,
              'unweighted_p_value': round(7.386632642605361e-32, 10), 'trend_percentage': 1.4880425148295766,
              'trend_difference': 302.23205909943715, 'breakpoint': 1682308800, 'change': 'regression',
-             'absolute_percentage_change': 1.4880425148295766}]}
+             'absolute_percentage_change': 1.4880425148295766, "request_start": request_start, "request_end": request_end}]}
 
         actual_output = json.loads(response.get_data(as_text=True))
 
