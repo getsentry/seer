@@ -1,3 +1,4 @@
+import sentry_sdk
 import torch
 from transformers import BertForSequenceClassification, BertTokenizerFast
 from joblib import load
@@ -41,6 +42,12 @@ class SeverityInference:
 
     def severity_score(self, text):
         """Predict the severity score for the given text using the pre-trained classifier."""
-        embeddings = self.get_embeddings(text)
-        pred = self.classifier.predict_proba(embeddings.reshape(1, -1))
+        with sentry_sdk.start_span(
+            op="model.severity", description="get_embeddings"
+        ):
+            embeddings = self.get_embeddings(text)
+        with sentry_sdk.start_span(
+            op="model.severity", description="predict_proba"
+        ):
+            pred = self.classifier.predict_proba(embeddings.reshape(1, -1))
         return pred
