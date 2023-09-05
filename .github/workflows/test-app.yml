@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
@@ -31,5 +31,14 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+    - id: 'auth'
+      uses: google-github-actions/auth@v1
+      with:
+        workload_identity_provider: 'projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool'
+        service_account: 'gha-seer-models@sac-prod-sa.iam.gserviceaccount.com'
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+    - name: Fetch models
+      run: gcloud storage cp gs://tmp_tillman/models/* ./models/
     - name: Test building the Docker image
       run: docker build . --file Dockerfile --tag seer:$(date +%s)
