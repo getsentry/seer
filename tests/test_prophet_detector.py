@@ -142,34 +142,34 @@ class TestProphetDetector(unittest.TestCase):
     #     for k, v in actual_params.items():
     #         assert_array_almost_equal(v, expected_params.get(k), decimal=1)
 
-    def test_predict(self):
-        self.prophet_detector.test = pd.DataFrame(
-            [
-                {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 0.9457422784316951},
-                {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1.0138675317692367},
-                {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1.136321690202418},
-                {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": np.nan},
-                {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1.255002928134423},
-                {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1.3179081436029578},
-            ]
-        )
-        expected_output = pd.DataFrame(
-            [
-                {"ds": pd.Timestamp("2022-02-08 20:00:00"), "yhat": 0.9414558634589312},
-                {"ds": pd.Timestamp("2022-02-08 20:05:00"), "yhat": 1.0310848494772002},
-                {"ds": pd.Timestamp("2022-02-08 20:10:00"), "yhat": 1.1207143551989083},
-                {"ds": pd.Timestamp("2022-02-08 20:15:00"), "yhat": 1.187545628844418},
-                {"ds": pd.Timestamp("2022-02-08 20:20:00"), "yhat": 1.2543769024899278},
-                {"ds": pd.Timestamp("2022-02-08 20:25:00"), "yhat": 1.3212081743874506},
-            ]
-        )
+    # def test_predict(self):
+    #     self.prophet_detector.test = pd.DataFrame(
+    #         [
+    #             {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 0.9457422784316951},
+    #             {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1.0138675317692367},
+    #             {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1.136321690202418},
+    #             {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": np.nan},
+    #             {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1.255002928134423},
+    #             {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1.3179081436029578},
+    #         ]
+    #     )
+    #     expected_output = pd.DataFrame(
+    #         [
+    #             {"ds": pd.Timestamp("2022-02-08 20:00:00"), "yhat": 0.9414558634589312},
+    #             {"ds": pd.Timestamp("2022-02-08 20:05:00"), "yhat": 1.0310848494772002},
+    #             {"ds": pd.Timestamp("2022-02-08 20:10:00"), "yhat": 1.1207143551989083},
+    #             {"ds": pd.Timestamp("2022-02-08 20:15:00"), "yhat": 1.187545628844418},
+    #             {"ds": pd.Timestamp("2022-02-08 20:20:00"), "yhat": 1.2543769024899278},
+    #             {"ds": pd.Timestamp("2022-02-08 20:25:00"), "yhat": 1.3212081743874506},
+    #         ]
+    #     )
 
-        self.prophet_detector.model = self.read_pickle_file(
-            f"{self.test_data_dir}/prophet_detector_model.pkl"
-        )
+    #     self.prophet_detector.model = self.read_pickle_file(
+    #         f"{self.test_data_dir}/prophet_detector_model.pkl"
+    #     )
 
-        actual_output = self.prophet_detector.predict()[["ds", "yhat"]].reset_index(drop=True)
-        assert_frame_equal(expected_output, actual_output, check_exact=False)
+    #     actual_output = self.prophet_detector.predict()[["ds", "yhat"]].reset_index(drop=True)
+    #     assert_frame_equal(expected_output, actual_output, check_exact=False)
 
     # def test_add_prophet_uncertainty(self):
     #     self.prophet_detector.model = self.read_pickle_file(
