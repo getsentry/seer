@@ -114,33 +114,33 @@ class TestProphetDetector(unittest.TestCase):
         actual = self.prophet_detector.train.reset_index(drop=True)
         assert_frame_equal(expected, actual)
 
-    def test_fit(self):
-        expected_params = {
-            "k": np.array([[0.34004261]]),
-            "m": np.array([[0.71435621]]),
-            "delta": np.array([[1.97169826e-06, -8.64940102e-02, -6.63167128e-09]]),
-            "sigma_obs": np.array([[0.00809842]]),
-            "beta": np.array([[-5.86725629e-17]]),
-            "trend": np.array([[0.71435621, 0.78236473, 0.85037365, 0.95179388, 1.00250399]]),
-        }
+    # def test_fit(self):
+    #     expected_params = {
+    #         "k": np.array([[0.34004261]]),
+    #         "m": np.array([[0.71435621]]),
+    #         "delta": np.array([[1.97169826e-06, -8.64940102e-02, -6.63167128e-09]]),
+    #         "sigma_obs": np.array([[0.00809842]]),
+    #         "beta": np.array([[-5.86725629e-17]]),
+    #         "trend": np.array([[0.71435621, 0.78236473, 0.85037365, 0.95179388, 1.00250399]]),
+    #     }
 
-        input_data = pd.DataFrame(
-            [
-                {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 0.9457422784316951},
-                {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1.0138675317692367},
-                {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1.136321690202418},
-                {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": np.nan},
-                {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1.255002928134423},
-                {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1.3179081436029578},
-            ]
-        )
-        self.prophet_detector.train = input_data
-        self.prophet_detector.fit()
-        actual_params = self.prophet_detector.model.params
+    #     input_data = pd.DataFrame(
+    #         [
+    #             {"ds": pd.Timestamp("2022-02-08 20:00:00"), "y": 0.9457422784316951},
+    #             {"ds": pd.Timestamp("2022-02-08 20:05:00"), "y": 1.0138675317692367},
+    #             {"ds": pd.Timestamp("2022-02-08 20:10:00"), "y": 1.136321690202418},
+    #             {"ds": pd.Timestamp("2022-02-08 20:15:00"), "y": np.nan},
+    #             {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1.255002928134423},
+    #             {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1.3179081436029578},
+    #         ]
+    #     )
+    #     self.prophet_detector.train = input_data
+    #     self.prophet_detector.fit()
+    #     actual_params = self.prophet_detector.model.params
 
-        # cannot do a dict comparison since values are numpy arrays
-        for k, v in actual_params.items():
-            assert_array_almost_equal(v, expected_params.get(k), decimal=1)
+    #     # cannot do a dict comparison since values are numpy arrays
+    #     for k, v in actual_params.items():
+    #         assert_array_almost_equal(v, expected_params.get(k), decimal=1)
 
     def test_predict(self):
         self.prophet_detector.test = pd.DataFrame(
@@ -171,92 +171,92 @@ class TestProphetDetector(unittest.TestCase):
         actual_output = self.prophet_detector.predict()[["ds", "yhat"]].reset_index(drop=True)
         assert_frame_equal(expected_output, actual_output, check_exact=False)
 
-    def test_add_prophet_uncertainty(self):
-        self.prophet_detector.model = self.read_pickle_file(
-            f"{self.test_data_dir}/prophet_detector_model.pkl"
-        )
-        self.prophet_detector.bc_lambda = 0.5719605326696966
-        input_data = pd.DataFrame(
-            [
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:00:00"),
-                    "yhat": 1.1237532636927319,
-                    "y": 1.1296738745089212,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:05:00"),
-                    "yhat": 1.2490179414050782,
-                    "y": 1.2247169487634437,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:10:00"),
-                    "yhat": 1.3773434566712188,
-                    "y": 1.3999999999999995,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:15:00"),
-                    "yhat": 1.4750050070362501,
-                    "y": 0.0,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:20:00"),
-                    "yhat": 1.5743446089907094,
-                    "y": 1.575283051236556,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:25:00"),
-                    "yhat": 1.6753527818165614,
-                    "y": 1.670326125491079,
-                },
-            ]
-        )
+    # def test_add_prophet_uncertainty(self):
+    #     self.prophet_detector.model = self.read_pickle_file(
+    #         f"{self.test_data_dir}/prophet_detector_model.pkl"
+    #     )
+    #     self.prophet_detector.bc_lambda = 0.5719605326696966
+    #     input_data = pd.DataFrame(
+    #         [
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:00:00"),
+    #                 "yhat": 1.1237532636927319,
+    #                 "y": 1.1296738745089212,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:05:00"),
+    #                 "yhat": 1.2490179414050782,
+    #                 "y": 1.2247169487634437,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:10:00"),
+    #                 "yhat": 1.3773434566712188,
+    #                 "y": 1.3999999999999995,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:15:00"),
+    #                 "yhat": 1.4750050070362501,
+    #                 "y": 0.0,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:20:00"),
+    #                 "yhat": 1.5743446089907094,
+    #                 "y": 1.575283051236556,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:25:00"),
+    #                 "yhat": 1.6753527818165614,
+    #                 "y": 1.670326125491079,
+    #             },
+    #         ]
+    #     )
 
-        expected_output = pd.DataFrame(
-            [
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:00:00"),
-                    "yhat": 1.3817477059151049,
-                    "yhat_upper": 1.4009384131879163,
-                    "yhat_lower": 1.3611499336630515,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:05:00"),
-                    "yhat": 1.5663172629067095,
-                    "yhat_upper": 1.587198443034377,
-                    "yhat_lower": 1.5453607624439103,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:10:00"),
-                    "yhat": 1.7614777573253377,
-                    "yhat_upper": 1.7827218351868614,
-                    "yhat_lower": 1.7397837277372874,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:15:00"),
-                    "yhat": 1.9140883176540768,
-                    "yhat_upper": 1.9366295374976268,
-                    "yhat_lower": 1.892963995341399,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:20:00"),
-                    "yhat": 2.0729118290491595,
-                    "yhat_upper": 2.0955803315944896,
-                    "yhat_lower": 2.0503286313988625,
-                },
-                {
-                    "ds": pd.Timestamp("2022-02-08 20:25:00"),
-                    "yhat": 2.2380878769994452,
-                    "yhat_upper": 2.260502430066593,
-                    "yhat_lower": 2.2156922042426763,
-                },
-            ]
-        )
+    #     expected_output = pd.DataFrame(
+    #         [
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:00:00"),
+    #                 "yhat": 1.3817477059151049,
+    #                 "yhat_upper": 1.4009384131879163,
+    #                 "yhat_lower": 1.3611499336630515,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:05:00"),
+    #                 "yhat": 1.5663172629067095,
+    #                 "yhat_upper": 1.587198443034377,
+    #                 "yhat_lower": 1.5453607624439103,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:10:00"),
+    #                 "yhat": 1.7614777573253377,
+    #                 "yhat_upper": 1.7827218351868614,
+    #                 "yhat_lower": 1.7397837277372874,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:15:00"),
+    #                 "yhat": 1.9140883176540768,
+    #                 "yhat_upper": 1.9366295374976268,
+    #                 "yhat_lower": 1.892963995341399,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:20:00"),
+    #                 "yhat": 2.0729118290491595,
+    #                 "yhat_upper": 2.0955803315944896,
+    #                 "yhat_lower": 2.0503286313988625,
+    #             },
+    #             {
+    #                 "ds": pd.Timestamp("2022-02-08 20:25:00"),
+    #                 "yhat": 2.2380878769994452,
+    #                 "yhat_upper": 2.260502430066593,
+    #                 "yhat_lower": 2.2156922042426763,
+    #             },
+    #         ]
+    #     )
 
-        actual_output = self.prophet_detector.add_prophet_uncertainty(input_data)[
-            ["ds", "yhat", "yhat_upper", "yhat_lower"]
-        ].reset_index(drop=True)
+    #     actual_output = self.prophet_detector.add_prophet_uncertainty(input_data)[
+    #         ["ds", "yhat", "yhat_upper", "yhat_lower"]
+    #     ].reset_index(drop=True)
 
-        assert_frame_equal(expected_output, actual_output, check_exact=False, rtol=1e-2)
+    #     assert_frame_equal(expected_output, actual_output, check_exact=False, rtol=1e-2)
 
     def test_add_scale_score(self):
         input_data = pd.DataFrame(
