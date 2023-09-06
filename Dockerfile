@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.11
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
 ENV PYTHONUNBUFFERED True
@@ -6,11 +6,17 @@ ENV PYTHONUNBUFFERED True
 ENV APP_HOME /app
 WORKDIR $APP_HOME
 
+# Copy setup files and requirements
 COPY setup.py requirements.txt ./
-RUN pip install --upgrade pip==21.3.1 &&\
-    pip install pystan==2.19.1.1
 
+# Copy model files (assuming they are in the 'models' directory)
+COPY models/ models/
+
+# Copy source code
 COPY src/ src/
+
+# Install dependencies
+RUN pip install --upgrade pip==23.0.1
 RUN pip install --default-timeout=120 .
 
 COPY models/ models/

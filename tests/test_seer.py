@@ -6,8 +6,13 @@ from unittest import mock
 
 from seer.seer import aggregate_anomalies, process_output, predict, app
 
-
+@mock.patch("seer.seer.SeverityInference")
 class TestSeer(unittest.TestCase):
+    def set_up(self, mock_severity_inference):
+        # Create a mock instance with a dummy severity_score method
+        mock_instance = mock_severity_inference.return_value
+        mock_instance.severity_score.return_value = [0, 1]
+
     def test_aggregate_anomalies(self):
         input_dataframe = pd.DataFrame(
             {
