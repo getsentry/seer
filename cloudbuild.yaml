@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/gsutil'
-  args: ['cp', 'gs://tmp_tillman/models/*', './models']
+  args: ['cp', '-r', 'gs://tmp_tillman/models/*', './models']
 
 - name: 'gcr.io/cloud-builders/docker'
   args: [ 'build', '-t', 'us.gcr.io/sentryio/seer:$COMMIT_SHA', '.' ]
