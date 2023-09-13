@@ -1,22 +1,19 @@
 import sentry_sdk
 import torch
-from transformers import BertForSequenceClassification, BertTokenizerFast
+from transformers import RobertaForSequenceClassification, RobertaTokenizerFast
 from joblib import load
 
 
 class SeverityInference:
     def __init__(self, embeddings_path, tokenizer_path, classifier_path):
         """Initialize the inference class with pre-trained models and tokenizer."""
-        #TODO: needs to read from GCS
-        self.embeddings_model = BertForSequenceClassification.from_pretrained(
+        self.embeddings_model = RobertaForSequenceClassification.from_pretrained(
             embeddings_path
         )
-        #TODO: needs to read from GCS
-        self.tokenizer = BertTokenizerFast.from_pretrained(tokenizer_path)
+        self.tokenizer = RobertaTokenizerFast.from_pretrained(tokenizer_path)
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
-        #TODO: needs to read from GCS
         self.classifier = load(classifier_path)
 
     def get_embeddings(self, text, max_len=128):
@@ -49,5 +46,5 @@ class SeverityInference:
         with sentry_sdk.start_span(
             op="model.severity", description="predict_proba"
         ):
-            pred = self.classifier.predict_proba(embeddings.reshape(1, -1))
-        return pred
+            pred = self.classifier.predict(embeddings.reshape(1, -1))[0]
+        return min(1.0, max(0.0, pred))
