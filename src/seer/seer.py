@@ -86,7 +86,7 @@ def breakpoint_trends_endpoint():
 
         sort_function = data.get("sort", "")
 
-        trends_boolean = data.get("trends", True)
+        allow_midpoint  = data.get("allow_midpoint", "1") == "1"
 
         lower_limit_trend_percentage = float(data.get('trend_percentage()', 0.1))
 
@@ -98,7 +98,7 @@ def breakpoint_trends_endpoint():
                 txns_data,
                 sort_function,
                 zerofilled,
-                trends_boolean,
+                allow_midpoint,
                 trend_perc=lower_limit_trend_percentage,
             )
 
