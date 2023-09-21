@@ -18,7 +18,7 @@ import datetime
 from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 
 
-def find_trends(txns_data, sort_function, zerofilled, trend_perc=0.1, pval=0.01):
+def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc=0.1, pval=0.01):
     trend_percentage_list = []
 
     # defined outside for loop so error won't throw for empty data
@@ -97,6 +97,10 @@ def find_trends(txns_data, sort_function, zerofilled, trend_perc=0.1, pval=0.01)
             #convert back to datetime timestamp
             change_point = int(datetime.datetime.timestamp(change_point))
             change_index = timestamps.index(change_point)
+
+        #check the midpoint boolean - don't get midpoint of the request period if this boolean is false, midpoint should only be used for trends
+        if not allow_midpoint:
+            continue
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
         if num_breakpoints == 0 or change_index <= req_start_index + 15 or change_index >= len(timestamps) - 10:

@@ -86,6 +86,8 @@ def breakpoint_trends_endpoint():
 
         sort_function = data.get("sort", "")
 
+        allow_midpoint  = data.get("allow_midpoint", "1") == "1"
+
         lower_limit_trend_percentage = float(data.get('trend_percentage()', 0.1))
 
         with sentry_sdk.start_span(
@@ -96,6 +98,7 @@ def breakpoint_trends_endpoint():
                 txns_data,
                 sort_function,
                 zerofilled,
+                allow_midpoint,
                 trend_perc=lower_limit_trend_percentage,
             )
 
