@@ -99,7 +99,7 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
             change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        if num_breakpoints == 0 or change_index <= 5:
+        if num_breakpoints == 0 or change_index <= 5 or change_index >= len(timestamps) - 3:
             #check the midpoint boolean - don't get midpoint of the request period if this boolean is false, midpoint should only be used for trends
             if not allow_midpoint:
                 continue
@@ -138,7 +138,9 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
             "trend_difference": mu1 - mu0,
             "breakpoint": change_point,
             "request_start": req_start,
-            "request_end": req_end
+            "request_end": req_end,
+            "data_start": int(txns_data[txn]['data_start']),
+            "data_end": int(txns_data[txn]['data_end']),
         }
 
         # TREND LOGIC:
