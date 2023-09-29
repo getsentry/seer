@@ -138,7 +138,9 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
             "trend_difference": mu1 - mu0,
             "breakpoint": change_point,
             "request_start": req_start,
-            "request_end": req_end
+            "request_end": req_end,
+            "data_start": int(txns_data[txn]['data_start']),
+            "data_end": int(txns_data[txn]['data_end']),
         }
 
         # TREND LOGIC:
