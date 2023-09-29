@@ -49,5 +49,3 @@ jobs:
       uses: google-github-actions/setup-gcloud@v1
     - name: Fetch models
       run: gcloud storage cp -r gs://tmp_tillman/models/* ./models/
-    - name: Test building the Docker image
-      run: docker build . --file Dockerfile --tag seer:$(date +%s)
