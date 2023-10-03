@@ -55,6 +55,6 @@ transformers==4.32.0 #TODO: remove when we move this out of the repo
 tsmoothie==1.0.4
 typing_extensions==4.7.1
 tzdata==2023.3
-urllib3==1.26.16
+urllib3==1.26.17
 Werkzeug==2.3.7
 blinker==1.6.2
