@@ -18,23 +18,30 @@ import datetime
 from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 
 
-def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc=0.1, pval=0.01):
+def find_trends(
+    txns_data,
+    sort_function,
+    zerofilled,
+    allow_midpoint,
+    trend_perc=0.1,
+    pval=0.01,
+    min_ms_change=25,
+):
     trend_percentage_list = []
 
     # defined outside for loop so error won't throw for empty data
     transaction_list = txns_data.keys()
 
     for txn in transaction_list:
-
         # data without zero-filling
         timestamps = []
         metrics = []
 
-        #get all the non-zero data
-        ts_data = txns_data[txn]['data']
+        # get all the non-zero data
+        ts_data = txns_data[txn]["data"]
 
         for i in range(len(ts_data)):
-            metric = ts_data[i][1][0]['count']
+            metric = ts_data[i][1][0]["count"]
 
             if metric != 0:
                 timestamps.append(ts_data[i][0])
@@ -46,13 +53,13 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
 
         # extract all zero filled data
         timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
-        metrics_zero_filled = [ts_data[x][1][0]['count'] for x in range(len(ts_data))]
+        metrics_zero_filled = [ts_data[x][1][0]["count"] for x in range(len(ts_data))]
 
-        req_start = int(txns_data[txn]['request_start'])
-        req_end = int(txns_data[txn]['request_end'])
+        req_start = int(txns_data[txn]["request_start"])
+        req_end = int(txns_data[txn]["request_end"])
 
         # don't include transaction if there are less than three datapoints in non zero data OR
-        # don't include transaction if there is no more data within request time period 
+        # don't include transaction if there is no more data within request time period
         if len(metrics) < 3 or req_start > timestamps[-1]:
             continue
 
@@ -66,26 +73,23 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
             continue
 
         # convert to pandas timestamps for magnitude compare method in cusum detection
-        timestamps_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps]
-        timestamps_zerofilled_pandas = [pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps_zero_filled]
+        timestamps_pandas = [
+            pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps
+        ]
+        timestamps_zerofilled_pandas = [
+            pd.Timestamp(datetime.datetime.fromtimestamp(x))
+            for x in timestamps_zero_filled
+        ]
 
-        timeseries = pd.DataFrame(
-            {
-                'time': timestamps_pandas,
-                'y': metrics
-            }
-        )
+        timeseries = pd.DataFrame({"time": timestamps_pandas, "y": metrics})
 
         timeseries_zerofilled = pd.DataFrame(
-            {
-                'time': timestamps_zerofilled_pandas,
-                'y': metrics_zero_filled
-            }
+            {"time": timestamps_zerofilled_pandas, "y": metrics_zero_filled}
         )
 
         change_points = CUSUMDetector(timeseries, timeseries_zerofilled).detector()
 
-        #get number of breakpoints in second half of timeseries
+        # get number of breakpoints in second half of timeseries
         num_breakpoints = len(change_points)
 
         # sort change points by start time to get most recent one
@@ -94,21 +98,28 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
         # if breakpoints are detected, get most recent changepoint
         if num_breakpoints != 0:
             change_point = change_points[-1].start_time
-            #convert back to datetime timestamp
+            # convert back to datetime timestamp
             change_point = int(datetime.datetime.timestamp(change_point))
             change_index = timestamps.index(change_point)
 
         # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
         if num_breakpoints == 0 or change_index <= 5:
-            #check the midpoint boolean - don't get midpoint of the request period if this boolean is false, midpoint should only be used for trends
+            # check the midpoint boolean - don't get midpoint of the request period if this boolean is false, midpoint should only be used for trends
             if not allow_midpoint:
                 continue
 
             change_point = (req_start + req_end) // 2
 
-
-        first_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] < change_point and timestamps[i] >= req_start]
-        second_half = [metrics[i] for i in range(len(metrics)) if timestamps[i] >= change_point and timestamps[i] <= req_end]
+        first_half = [
+            metrics[i]
+            for i in range(len(metrics))
+            if timestamps[i] < change_point and timestamps[i] >= req_start
+        ]
+        second_half = [
+            metrics[i]
+            for i in range(len(metrics))
+            if timestamps[i] >= change_point and timestamps[i] <= req_end
+        ]
 
         # if either of the halves don't have any data to compare to then move on to the next txn
         if len(first_half) == 0 or len(second_half) == 0:
@@ -139,8 +150,8 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
             "breakpoint": change_point,
             "request_start": req_start,
             "request_end": req_end,
-            "data_start": int(txns_data[txn]['data_start']),
-            "data_end": int(txns_data[txn]['data_end']),
+            "data_start": int(txns_data[txn]["data_start"]),
+            "data_end": int(txns_data[txn]["data_end"]),
         }
 
         # TREND LOGIC:
@@ -148,14 +159,25 @@ def find_trends(txns_data, sort_function, zerofilled, allow_midpoint, trend_perc
         #  2. trend percentage is greater than passed in threshold (default = 10%)
 
         # most improved - get only negatively significant trending txns
-        if (sort_function == 'trend_percentage()' or sort_function == '') and mu1 <= mu0 and scipy_t_test.pvalue < pval and abs(trend_percentage - 1) > trend_perc:
-            output_dict['change'] = 'improvement'
+        if (
+            (sort_function == "trend_percentage()" or sort_function == "")
+            and mu1 <= mu0
+            and scipy_t_test.pvalue < pval
+            and abs(trend_percentage - 1) > trend_perc
+            and mu0 - mu1 > min_ms_change
+        ):
+            output_dict["change"] = "improvement"
             trend_percentage_list.append((trend_percentage, output_dict))
 
         # if most regressed - get only positively signiificant txns
-        elif (sort_function == '-trend_percentage()' or sort_function == '') and mu0 <= mu1 and scipy_t_test.pvalue < pval and abs(trend_percentage - 1) > trend_perc:
-            output_dict['change'] = 'regression'
+        elif (
+            (sort_function == "-trend_percentage()" or sort_function == "")
+            and mu0 <= mu1
+            and scipy_t_test.pvalue < pval
+            and abs(trend_percentage - 1) > trend_perc
+            and mu1 - mu0 > min_ms_change
+        ):
+            output_dict["change"] = "regression"
             trend_percentage_list.append((trend_percentage, output_dict))
-
 
     return trend_percentage_list
