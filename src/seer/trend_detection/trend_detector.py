@@ -21,11 +21,10 @@ from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
 def find_trends(
     txns_data,
     sort_function,
-    zerofilled,
     allow_midpoint,
-    trend_perc=0.1,
+    min_pct_change,
+    min_ms_change,
     pval=0.01,
-    min_ms_change=25,
 ):
     trend_percentage_list = []
 
@@ -163,7 +162,7 @@ def find_trends(
             (sort_function == "trend_percentage()" or sort_function == "")
             and mu1 <= mu0
             and scipy_t_test.pvalue < pval
-            and abs(trend_percentage - 1) > trend_perc
+            and abs(trend_percentage - 1) > min_pct_change
             and mu0 - mu1 > min_ms_change
         ):
             output_dict["change"] = "improvement"
@@ -174,7 +173,7 @@ def find_trends(
             (sort_function == "-trend_percentage()" or sort_function == "")
             and mu0 <= mu1
             and scipy_t_test.pvalue < pval
-            and abs(trend_percentage - 1) > trend_perc
+            and abs(trend_percentage - 1) > min_pct_change
             and mu1 - mu0 > min_ms_change
         ):
             output_dict["change"] = "regression"
