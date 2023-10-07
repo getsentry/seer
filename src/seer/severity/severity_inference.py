@@ -1,53 +1,59 @@
 import sentry_sdk
 import torch
-from transformers import BertForSequenceClassification, BertTokenizerFast
+import numpy as np
+from transformers import RobertaForSequenceClassification, RobertaTokenizerFast
 from joblib import load
 
 
 class SeverityInference:
     def __init__(self, embeddings_path, tokenizer_path, classifier_path):
         """Initialize the inference class with pre-trained models and tokenizer."""
-        #TODO: needs to read from GCS
-        self.embeddings_model = BertForSequenceClassification.from_pretrained(
+        self.embeddings_model = RobertaForSequenceClassification.from_pretrained(
             embeddings_path
         )
-        #TODO: needs to read from GCS
-        self.tokenizer = BertTokenizerFast.from_pretrained(tokenizer_path)
+        self.tokenizer = RobertaTokenizerFast.from_pretrained(tokenizer_path)
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
-        #TODO: needs to read from GCS
         self.classifier = load(classifier_path)
 
     def get_embeddings(self, text, max_len=128):
         """Generate embeddings for the given text using the pre-trained model."""
-        model = self.embeddings_model.to(self.device)
-        inputs = self.tokenizer.encode_plus(
-            text,
-            add_special_tokens=True,
-            max_length=max_len,
-            return_token_type_ids=False,
-            pad_to_max_length=True,
-            return_attention_mask=True,
-            return_tensors="pt",
+        # Tokenize the input string
+        inputs = self.tokenizer(
+            text, return_tensors="pt", padding=True, truncation=True, max_length=max_len
         )
-        inputs = {name: tensor.to(self.device) for name, tensor in inputs.items()}
+        input_ids = inputs["input_ids"].to(self.device)
+        attention_mask = inputs["attention_mask"].to(self.device)
 
+        # Move model to the specified device and set it to eval mode
+        model = self.embeddings_model.to(self.device)
+        model.eval()
+
+        # Forward pass
         with torch.no_grad():
-            outputs = model.bert(inputs["input_ids"], inputs["attention_mask"])
+            outputs = model.roberta(input_ids, attention_mask)
             embeddings = outputs.last_hidden_state[:, 0, :].squeeze()
 
-        embeddings = embeddings.cpu().numpy()
-        return embeddings
+        return embeddings.cpu().numpy()
 
-    def severity_score(self, text):
+    def severity_score(self, data):
         """Predict the severity score for the given text using the pre-trained classifier."""
-        with sentry_sdk.start_span(
-            op="model.severity", description="get_embeddings"
-        ):
-            embeddings = self.get_embeddings(text)
-        with sentry_sdk.start_span(
-            op="model.severity", description="predict_proba"
-        ):
-            pred = self.classifier.predict_proba(embeddings.reshape(1, -1))
-        return pred
+        with sentry_sdk.start_span(op="model.severity", description="get_embeddings"):
+            embeddings = self.get_embeddings(data.get("message"))
+        with sentry_sdk.start_span(op="model.severity", description="predict_proba"):
+            has_stacktrace = data.get("has_stacktrace", 0)
+            log_level_error = (
+                1 if data.get("log_level", "").lower() in ["error", "fatal"] else 0
+            )
+            project_score = 0.052209
+            handled = data.get("handled", 0)
+
+            input_data = np.append(
+                embeddings.reshape(1, -1),
+                [[has_stacktrace, log_level_error, project_score, handled]],
+                axis=1,
+            )
+
+            pred = self.classifier.predict(input_data)[0]
+        return min(1.0, max(0.0, pred))
