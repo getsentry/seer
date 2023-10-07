@@ -50,25 +50,12 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     model_initialized = True
 
 
-# DUMMY ENDPOINT FOR TESTING
-@app.route("/issues/dummy-severity-score", methods=["POST"])
-def def_dummy_severity_endpoint():
-    try:
-        data = request.get_json()
-        severity = str(data.get("severity", 0.5))
-        results = {"severity": severity}
-        return results
-    except Exception as e:
-        app.logger.exception("Error processing request")
-        return {"Error": str(e)}, 500
-
-
 @app.route("/issues/severity-score", methods=["POST"])
 def def_severity_endpoint():
     try:
         data = request.get_json()
-        severity = embeddings_model.severity_score(data.get("message", ""))
-        results = {"severity": str(severity[0][1])}
+        severity = embeddings_model.severity_score(data)
+        results = {"severity": str(severity)}
         return results
     except Exception as e:
         app.logger.exception("Error processing request")
