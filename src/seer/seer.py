@@ -68,7 +68,7 @@ def def_severity_endpoint():
     try:
         data = request.get_json()
         severity = embeddings_model.severity_score(data.get("message", ""))
-        results = {"severity": str(severity[0][1])}
+        results = {"severity": str(severity)}
         return results
     except Exception as e:
         app.logger.exception("Error processing request")
