@@ -160,10 +160,9 @@ def find_trends(
         # most improved - get only negatively significant trending txns
         if (
             (sort_function == "trend_percentage()" or sort_function == "")
-            and mu1 <= mu0
+            and mu1 + min_ms_change <= mu0
             and scipy_t_test.pvalue < pval
             and abs(trend_percentage - 1) > min_pct_change
-            and mu0 - mu1 > min_ms_change
         ):
             output_dict["change"] = "improvement"
             trend_percentage_list.append((trend_percentage, output_dict))
@@ -171,10 +170,9 @@ def find_trends(
         # if most regressed - get only positively signiificant txns
         elif (
             (sort_function == "-trend_percentage()" or sort_function == "")
-            and mu0 <= mu1
+            and mu0 + min_ms_change <= mu1
             and scipy_t_test.pvalue < pval
             and abs(trend_percentage - 1) > min_pct_change
-            and mu1 - mu0 > min_ms_change
         ):
             output_dict["change"] = "regression"
             trend_percentage_list.append((trend_percentage, output_dict))
