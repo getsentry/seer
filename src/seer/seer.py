@@ -72,7 +72,7 @@ def breakpoint_trends_endpoint():
         allow_midpoint  = data.get("allow_midpoint", "1") == "1"
 
         min_pct_change = float(data.get('trend_percentage()', 0.1))
-        min_ms_change = float(data.get('min_ms_change()', 25.0))
+        min_change = float(data.get('min_change()', 0))
 
         with sentry_sdk.start_span(
             op="cusum.detection",
