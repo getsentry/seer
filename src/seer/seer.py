@@ -83,7 +83,7 @@ def breakpoint_trends_endpoint():
                 sort_function,
                 allow_midpoint,
                 min_pct_change,
-                min_ms_change
+                min_change
             )
 
         trends = {"data": [x[1] for x in trend_percentage_list]}
