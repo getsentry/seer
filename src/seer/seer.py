@@ -68,14 +68,11 @@ def breakpoint_trends_endpoint():
         data = request.get_json()
         txns_data = data["data"]
 
-        # new format has zerofilled parameter - if it's not being sent to microservice default value is True
-        zerofilled = data.get("zerofilled", True)
-
         sort_function = data.get("sort", "")
-
         allow_midpoint  = data.get("allow_midpoint", "1") == "1"
 
-        lower_limit_trend_percentage = float(data.get('trend_percentage()', 0.1))
+        min_pct_change = float(data.get('trend_percentage()', 0.1))
+        min_change = float(data.get('min_change()', 0))
 
         with sentry_sdk.start_span(
             op="cusum.detection",
@@ -84,9 +81,9 @@ def breakpoint_trends_endpoint():
             trend_percentage_list = find_trends(
                 txns_data,
                 sort_function,
-                zerofilled,
                 allow_midpoint,
-                trend_perc=lower_limit_trend_percentage,
+                min_pct_change,
+                min_change
             )
 
         trends = {"data": [x[1] for x in trend_percentage_list]}
