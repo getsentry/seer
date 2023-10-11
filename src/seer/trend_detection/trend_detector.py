@@ -23,7 +23,7 @@ def find_trends(
     sort_function,
     allow_midpoint,
     min_pct_change,
-    min_ms_change,
+    min_change,
     pval=0.01,
 ):
     trend_percentage_list = []
