@@ -163,7 +163,7 @@ def find_trends(
         # Filter out the data for the last 24 hours
         last_24h_data = [
             metric for timestamp, metric in zip(timestamps, metrics)
-            if timestamp_24h_ago <= timestamp <= req_end
+            if max(timestamp_24h_ago, change_point) <= timestamp <= req_end
         ]
 
         # Calculate the trend percentage and change for the last 24 hours
