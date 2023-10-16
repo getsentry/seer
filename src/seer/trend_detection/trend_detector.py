@@ -188,9 +188,9 @@ def find_trends(
             (sort_function == "-trend_percentage()" or sort_function == "")
             and mu0 + min_change <= mu1
             and scipy_t_test.pvalue < pval
-            and abs(trend_percentage - 1) > min_pct_change
-            and abs(trend_percentage_24h - 1) > min_pct_change
-            and abs(trend_change_24h) > min_change
+            and trend_percentage - 1 > min_pct_change
+            and trend_percentage_24h - 1 > min_pct_change
+            and trend_change_24h > min_change
         ):
             output_dict["change"] = "regression"
             trend_percentage_list.append((trend_percentage, output_dict))
