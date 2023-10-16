@@ -196,5 +196,3 @@ def find_trends(
             trend_percentage_list.append((trend_percentage, output_dict))
 
     return trend_percentage_list
-
-
