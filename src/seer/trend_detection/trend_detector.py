@@ -156,6 +156,20 @@ def find_trends(
         # TREND LOGIC:
         #  1. p-value of t-test is less than passed in threshold (default = 0.01)
         #  2. trend percentage is greater than passed in threshold (default = 10%)
+        #  3. last 24 hours are also greater than threshold
+
+        timestamp_24h_ago = req_end - 24 * 60 * 60
+
+        # Filter out the data for the last 24 hours
+        last_24h_data = [
+            metric for timestamp, metric in zip(timestamps, metrics)
+            if timestamp_24h_ago <= timestamp <= req_end
+        ]
+
+        # Calculate the trend percentage and change for the last 24 hours
+        mu_24h = np.average(last_24h_data)
+        trend_percentage_24h = mu_24h / mu0 if mu0 != 0 else mu_24h
+        trend_change_24h = mu_24h - mu0
 
         # most improved - get only negatively significant trending txns
         if (
@@ -163,6 +177,8 @@ def find_trends(
             and mu1 + min_change <= mu0
             and scipy_t_test.pvalue < pval
             and abs(trend_percentage - 1) > min_pct_change
+            and abs(trend_percentage_24h - 1) > min_pct_change
+            and abs(trend_change_24h) > min_change
         ):
             output_dict["change"] = "improvement"
             trend_percentage_list.append((trend_percentage, output_dict))
@@ -173,8 +189,12 @@ def find_trends(
             and mu0 + min_change <= mu1
             and scipy_t_test.pvalue < pval
             and abs(trend_percentage - 1) > min_pct_change
+            and abs(trend_percentage_24h - 1) > min_pct_change
+            and abs(trend_change_24h) > min_change
         ):
             output_dict["change"] = "regression"
             trend_percentage_list.append((trend_percentage, output_dict))
 
     return trend_percentage_list
+
+
