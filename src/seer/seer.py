@@ -56,7 +56,7 @@ def def_severity_endpoint():
     try:
         data = request.get_json()
         if data.get("trigger_error") is not None:
-            return {"oh no": str(e)}, 500
+            raise Exception("oh no")
         elif data.get("trigger_timeout") is not None:
             time.sleep(0.5)
         severity = embeddings_model.severity_score(data)
