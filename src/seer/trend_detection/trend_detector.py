@@ -24,6 +24,7 @@ def find_trends(
     allow_midpoint,
     min_pct_change,
     min_change,
+    validate_tail_hours,
     pval=0.01,
 ):
     trend_percentage_list = []
@@ -156,6 +157,27 @@ def find_trends(
         # TREND LOGIC:
         #  1. p-value of t-test is less than passed in threshold (default = 0.01)
         #  2. trend percentage is greater than passed in threshold (default = 10%)
+        #  3. last validate_tail_hours hours are also greater than threshold
+
+        if validate_tail_hours > 0:
+            validation_start = req_end - validate_tail_hours * 60 * 60
+
+            # Filter out the data based on validate_tail_hours
+            validation_data = [
+                metric
+                for timestamp, metric in zip(timestamps, metrics)
+                if max(validation_start, change_point) <= timestamp <= req_end
+            ]
+
+            # Calculate the trend percentage and change for the last validate_tail_hours
+            mu_validation = np.average(validation_data)
+            trend_percentage_validation = (
+                mu_validation / mu0 if mu0 != 0 else mu_validation
+            )
+            trend_change_validation = mu_validation - mu0
+        else:
+            trend_percentage_validation = None
+            trend_change_validation = None
 
         # most improved - get only negatively significant trending txns
         if (
@@ -163,16 +185,31 @@ def find_trends(
             and mu1 + min_change <= mu0
             and scipy_t_test.pvalue < pval
             and abs(trend_percentage - 1) > min_pct_change
+            and (
+                trend_percentage_validation is None
+                or abs(trend_percentage_validation - 1) > min_pct_change
+            )
+            and (
+                trend_change_validation is None
+                or abs(trend_change_validation) > min_change
+            )
         ):
             output_dict["change"] = "improvement"
             trend_percentage_list.append((trend_percentage, output_dict))
 
-        # if most regressed - get only positively signiificant txns
+        # if most regressed - get only positively significant txns
         elif (
             (sort_function == "-trend_percentage()" or sort_function == "")
             and mu0 + min_change <= mu1
             and scipy_t_test.pvalue < pval
-            and abs(trend_percentage - 1) > min_pct_change
+            and trend_percentage - 1 > min_pct_change
+            and (
+                trend_percentage_validation is None
+                or trend_percentage_validation - 1 > min_pct_change
+            )
+            and (
+                trend_change_validation is None or trend_change_validation > min_change
+            )
         ):
             output_dict["change"] = "regression"
             trend_percentage_list.append((trend_percentage, output_dict))
