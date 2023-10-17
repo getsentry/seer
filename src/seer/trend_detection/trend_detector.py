@@ -162,7 +162,7 @@ def find_trends(
         if validate_tail_hours > 0:
             validation_start = req_end - validate_tail_hours * 60 * 60
 
-            # Filter out the data for the last 24 hours
+            # Filter out the data based on validate_tail_hours
             validation_data = [
                 metric
                 for timestamp, metric in zip(timestamps, metrics)
