@@ -75,7 +75,7 @@ def breakpoint_trends_endpoint():
 
         sort_function = data.get("sort", "")
         allow_midpoint  = data.get("allow_midpoint", "1") == "1"
-        validate_tail = data.get("validate_tail", 0)
+        validate_tail_hours = data.get("validate_tail_hours", 0)
 
         min_pct_change = float(data.get('trend_percentage()', 0.1))
         min_change = float(data.get('min_change()', 0))
@@ -91,7 +91,7 @@ def breakpoint_trends_endpoint():
                 allow_midpoint,
                 min_pct_change,
                 min_change,
-                validate_tail
+                validate_tail_hours
             )
 
         trends = {"data": [x[1] for x in trend_percentage_list]}
