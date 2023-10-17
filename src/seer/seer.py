@@ -1,5 +1,6 @@
 import sentry_sdk
 import os
+import time
 
 from flask import Flask, request
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -54,6 +55,10 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
 def def_severity_endpoint():
     try:
         data = request.get_json()
+        if data.get("trigger_error") is not None:
+            return {"oh no": str(e)}, 500
+        elif data.get("trigger_timeout") is not None:
+            time.sleep(0.5)
         severity = embeddings_model.severity_score(data)
         results = {"severity": str(severity)}
         return results
