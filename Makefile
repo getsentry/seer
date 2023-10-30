@@ -22,5 +22,5 @@ shell: image # Opens a bash shell in the context of the project
 	docker run --rm -v $(PWD)/models:/app/models -v $(PWD)/src:/app/src -it $(project_name):latest bash
 
 .PHONY: run
-run: image # Starts the webserver based on the current src
-	docker run --rm $(project_name):latest
+run: image # Starts the webserver based on the current src on port 8900
+	docker run --rm --env PORT=8900 $(project_name):latest
