@@ -1,6 +1,6 @@
 import unittest
 
-from seer.seer import SeverityInference
+from seer.severity import SeverityInference
 
 
 class TestSeverityInference(unittest.TestCase):
