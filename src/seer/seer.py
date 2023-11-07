@@ -1,11 +1,11 @@
-import sentry_sdk
 import os
 import time
 
+import numpy as np
+import pandas as pd
+import sentry_sdk
 from flask import Flask, request
 from sentry_sdk.integrations.flask import FlaskIntegration
-import pandas as pd
-import numpy as np
 
 from seer.trend_detection.trend_detector import find_trends
 
@@ -21,6 +21,7 @@ def traces_sampler(sampling_context):
 
     return 1.0
 
+
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     integrations=[FlaskIntegration()],
@@ -31,6 +32,8 @@ app = Flask(__name__)
 
 
 model_initialized = False
+detector = None
+embeddings_model = None
 if not os.environ.get("PYTEST_CURRENT_TEST"):
     from seer.anomaly_detection.prophet_detector import ProphetDetector
     from seer.anomaly_detection.prophet_params import ProphetParams
@@ -74,12 +77,11 @@ def breakpoint_trends_endpoint():
         txns_data = data["data"]
 
         sort_function = data.get("sort", "")
-        allow_midpoint  = data.get("allow_midpoint", "1") == "1"
+        allow_midpoint = data.get("allow_midpoint", "1") == "1"
         validate_tail_hours = data.get("validate_tail_hours", 0)
 
-        min_pct_change = float(data.get('trend_percentage()', 0.1))
-        min_change = float(data.get('min_change()', 0))
-
+        min_pct_change = float(data.get("trend_percentage()", 0.1))
+        min_change = float(data.get("min_change()", 0))
 
         with sentry_sdk.start_span(
             op="cusum.detection",
@@ -91,7 +93,7 @@ def breakpoint_trends_endpoint():
                 allow_midpoint,
                 min_pct_change,
                 min_change,
-                validate_tail_hours
+                validate_tail_hours,
             )
 
         trends = {"data": [x[1] for x in trend_percentage_list]}
@@ -144,14 +146,10 @@ def predict():
         detector.pre_process_data(pd.DataFrame(data["data"]), granularity, start, end)
         ads_context["boxcox_lambda"] = detector.bc_lambda
 
-    with sentry_sdk.start_span(
-        op="model.train", description="Train forecasting model"
-    ) as span:
+    with sentry_sdk.start_span(op="model.train", description="Train forecasting model") as span:
         detector.fit()
 
-    with sentry_sdk.start_span(
-        op="model.predict", description="Generate predictions"
-    ) as span:
+    with sentry_sdk.start_span(op="model.predict", description="Generate predictions") as span:
         fcst = detector.predict()
 
     with sentry_sdk.start_span(
@@ -164,9 +162,7 @@ def predict():
     ) as span:
         fcst = detector.scale_scores(fcst)
 
-    with sentry_sdk.start_span(
-        op="data.format", description="Format data for frontend"
-    ) as span:
+    with sentry_sdk.start_span(op="data.format", description="Format data for frontend") as span:
         output = process_output(fcst, granularity)
 
     return output
