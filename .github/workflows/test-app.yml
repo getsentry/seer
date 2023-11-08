@@ -36,7 +36,7 @@ jobs:
     - name: Fetch models
       run: |
         rm -rf ./models
-        gcloud storage cp -r gs://tmp_tillman/models ./models
+        gcloud storage cp -r gs://tmp_tillman/models ./
     - uses: actions/checkout@v3
     - name: Build image
       run: |
