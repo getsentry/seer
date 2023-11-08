@@ -18,11 +18,15 @@ image: # Builds the dockerfile image of the project
 	docker build . --tag $(project_name):latest
 
 .PHONY: shell
-shell: image # Opens a bash shell in the context of the project
-	docker run --rm -v $(PWD)/models:/app/models -v $(PWD)/src:/app/src -it $(project_name):latest bash
+shell: # Opens a bash shell in the context of the project
+	docker-compose run app bash
+
+.PHONY: update
+update: # Updates the project's docker-compose image.
+	docker-compose build
 
 .PHONY: run
-run: image # Starts the webserver based on the current src on port 8900
+run: # Starts the webserver based on the current src on port 8900
 	docker run --rm --env PORT=8900 $(project_name):latest
 
 .PHONY: test
