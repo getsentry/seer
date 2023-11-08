@@ -15,7 +15,7 @@ pip: # Runs pip install with the requirements.txt file
 
 .PHONY: image
 image: # Builds the dockerfile image of the project
-	docker build . --tag $(project_name):latest --build-arg="TEST=$$TEST"
+	docker build . --tag $(project_name):latest
 
 .PHONY: shell
 shell: # Opens a bash shell in the context of the project
@@ -31,4 +31,4 @@ run: # Starts the webserver based on the current src on port 8900
 
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
-	docker run --rm $(project_name):latest pytest
+	docker run --rm -v ./tests:/app/tests $(project_name):latest pytest

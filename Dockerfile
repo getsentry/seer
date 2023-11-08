@@ -16,7 +16,6 @@ COPY setup.py requirements.txt ./
 # Install dependencies
 RUN pip install --upgrade pip==23.0.1
 RUN pip install -r requirements.txt
-RUN if [ -n "$TEST" ]; then pip install pytest; fi
 
 # Copy source code
 COPY src/ src/
