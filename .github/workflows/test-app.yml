@@ -34,7 +34,9 @@ jobs:
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
     - name: Fetch models
-      run: gcloud storage cp -r gs://tmp_tillman/models ./
+      run: |
+        rm -rf ./models
+        gcloud storage cp -r gs://tmp_tillman/models ./models
     - uses: actions/checkout@v3
     - name: Build image
       run: |
