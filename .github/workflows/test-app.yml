@@ -37,13 +37,8 @@ jobs:
       run: gcloud storage cp -r gs://tmp_tillman/models ./
     - uses: actions/checkout@v3
     - name: Build image
-      env:
-        TEST: 1
       run: |
-        echo $TEST
         make image
     - name: Test with pytest
-      env:
-        TEST: 1
       run: |
         make test
