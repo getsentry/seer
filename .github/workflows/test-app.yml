@@ -33,13 +33,10 @@ jobs:
         id_token_include_email: true
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
-    - name: Fetch models
+    - name: Fetch models + Build image
       run: |
         rm -rf ./models
         gcloud storage cp -r gs://tmp_tillman/models ./
-    - uses: actions/checkout@v3
-    - name: Build image
-      run: |
         ls -la models
         make image
     - name: Test with pytest
