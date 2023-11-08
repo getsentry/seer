@@ -23,6 +23,7 @@ jobs:
       PYTEST_CURRENT_TEST: true
 
     steps:
+    - uses: actions/checkout@v3
     - id: 'auth'
       uses: google-github-actions/auth@v1
       with:
@@ -33,7 +34,6 @@ jobs:
         id_token_include_email: true
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
-    - uses: actions/checkout@v3
     - name: Fetch models + Build image
       run: |
         rm -rf ./models
