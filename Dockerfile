@@ -1,6 +1,7 @@
 FROM python:3.11
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
+ARG TEST
 ENV PYTHONUNBUFFERED True
 
 ENV APP_HOME /app
@@ -19,7 +20,7 @@ RUN pip install -r requirements.txt
 # Copy source code
 COPY src/ src/
 
-RUN pip install --default-timeout=120 .
+RUN pip install --default-timeout=120 -e .
 
 # The number of gunicorn workers is selected by ops based on k8s configuration.
 CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 src.seer.seer:app
