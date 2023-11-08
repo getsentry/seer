@@ -29,11 +29,11 @@ sentry_sdk.init(
     profiles_sample_rate=1.0,
 )
 app = Flask(__name__)
-root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
+# root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
 
 
 def model_path(subpath: str) -> str:
-    return os.path.join(root, "models", subpath)
+    return os.path.join("models", subpath)
 
 
 model_initialized = False

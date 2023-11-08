@@ -110,15 +110,15 @@ class TestProphetDetector(unittest.TestCase):
         actual = self.prophet_detector.train.reset_index(drop=True)
         assert_frame_equal(expected, actual)
 
-    @pytest.mark.skip(reason="Needs updated model")
     def test_fit(self):
         expected_params = {
-            "k": np.array([[0.34004261]]),
-            "m": np.array([[0.71435621]]),
-            "delta": np.array([[1.97169826e-06, -8.64940102e-02, -6.63167128e-09]]),
+            "lp__": np.array([[19.8373]]),
+            "k": np.array([[0.340043]]),
+            "m": np.array([[0.714356]]),
+            "delta": np.array([[1.97184e-06, -8.64940e-02, -6.63222e-09]]),
             "sigma_obs": np.array([[0.00809842]]),
-            "beta": np.array([[-5.86725629e-17]]),
-            "trend": np.array([[0.71435621, 0.78236473, 0.85037365, 0.95179388, 1.00250399]]),
+            "beta": np.array([[1.24023e-17]]),
+            "trend": np.array([[0.714356, 0.782365, 0.850374, 0.951794, 1.0025]]),
         }
 
         input_data = pd.DataFrame(
@@ -139,7 +139,6 @@ class TestProphetDetector(unittest.TestCase):
         for k, v in actual_params.items():
             assert_array_almost_equal(v, expected_params.get(k), decimal=1)
 
-    @pytest.mark.skip(reason="Needs updated model")
     def test_predict(self):
         self.prophet_detector.test = pd.DataFrame(
             [
@@ -150,7 +149,7 @@ class TestProphetDetector(unittest.TestCase):
                 {"ds": pd.Timestamp("2022-02-08 20:20:00"), "y": 1.255002928134423},
                 {"ds": pd.Timestamp("2022-02-08 20:25:00"), "y": 1.3179081436029578},
             ]
-        )
+)
         expected_output = pd.DataFrame(
             [
                 {"ds": pd.Timestamp("2022-02-08 20:00:00"), "yhat": 0.9414558634589312},
@@ -168,8 +167,7 @@ class TestProphetDetector(unittest.TestCase):
 
         actual_output = self.prophet_detector.predict()[["ds", "yhat"]].reset_index(drop=True)
         assert_frame_equal(expected_output, actual_output, check_exact=False)
-
-    @pytest.mark.skip(reason="Needs updated model")
+    
     def test_add_prophet_uncertainty(self):
         self.prophet_detector.model = self.read_pickle_file(
             f"{self.test_data_dir}/prophet_detector_model.pkl"
