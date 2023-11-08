@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        TEST: true
+    working_dir: /app
+    volumes:
+      - ./:/app

@@ -24,3 +24,7 @@ shell: image # Opens a bash shell in the context of the project
 .PHONY: run
 run: image # Starts the webserver based on the current src on port 8900
 	docker run --rm --env PORT=8900 $(project_name):latest
+
+.PHONY: test
+test: image # Executes all tests in the baked image file.  Requires models/
+	docker run --rm $(project_name):latest pytest

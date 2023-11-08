@@ -1,6 +1,7 @@
 FROM python:3.11
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
+ARG TEST
 ENV PYTHONUNBUFFERED True
 
 ENV APP_HOME /app
@@ -15,6 +16,7 @@ COPY setup.py requirements.txt ./
 # Install dependencies
 RUN pip install --upgrade pip==23.0.1
 RUN pip install -r requirements.txt
+RUN if [ -n "$TEST" ]; then pip install pytest; fi
 
 # Copy source code
 COPY src/ src/
