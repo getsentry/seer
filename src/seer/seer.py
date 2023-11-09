@@ -53,9 +53,7 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     )
 
     detector = ProphetDetector(MODEL_PARAMS)
-    embeddings_model = SeverityInference(
-        model_path("embeddings"), model_path("tokenizer"), model_path("classifier")
-    )
+    embeddings_model = SeverityInference(model_path("embeddings"), model_path("classifier.pkl"))
     model_initialized = True
 
 

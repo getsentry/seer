@@ -4,12 +4,12 @@ from seer.severity.severity_inference import SeverityInference
 
 
 class TestSeverityInference(unittest.TestCase):
-    severity_inference = SeverityInference(
-        "models/embeddings", "models/tokenizer", "models/classifier"
-    )
+    severity_inference = SeverityInference("models/embeddings", "models/classifier.pkl")
 
     def test_high_severity_error(self):
-        score = self.severity_inference.severity_score({"message": "FATAL: App has crashed"})
+        score = self.severity_inference.severity_score(
+            {"message": "TypeError: bad operand type for unary -: 'str'"}
+        )
 
         self.assertIsInstance(score, float)
         self.assertGreater(score, 0.5)
@@ -39,12 +39,12 @@ class TestSeverityInference(unittest.TestCase):
 
     def test_get_embeddings(self):
         embeddings = self.severity_inference.get_embeddings("log: user enjoyed their experience")
-        self.assertEqual(len(embeddings), 768)
+        self.assertEqual(len(embeddings), 384)
 
         embeddings = self.severity_inference.get_embeddings("short")
-        self.assertEqual(len(embeddings), 768)
+        self.assertEqual(len(embeddings), 384)
 
         embeddings = self.severity_inference.get_embeddings(
             "very long gibberish, but how is this going i think it will work right???"
         )
-        self.assertEqual(len(embeddings), 768)
+        self.assertEqual(len(embeddings), 384)
