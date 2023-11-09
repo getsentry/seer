@@ -29,6 +29,11 @@ sentry_sdk.init(
     profiles_sample_rate=1.0,
 )
 app = Flask(__name__)
+root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
+
+
+def model_path(subpath: str) -> str:
+    return os.path.join(root, "models", subpath)
 
 
 model_initialized = False
@@ -49,7 +54,7 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
 
     detector = ProphetDetector(MODEL_PARAMS)
     embeddings_model = SeverityInference(
-        "models/embeddings", "models/tokenizer", "models/classifier"
+        model_path("embeddings"), model_path("tokenizer"), model_path("classifier")
     )
     model_initialized = True
 
