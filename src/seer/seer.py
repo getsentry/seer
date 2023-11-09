@@ -37,6 +37,8 @@ def model_path(subpath: str) -> str:
 
 
 model_initialized = False
+detector = None
+embeddings_model = None
 if not os.environ.get("PYTEST_CURRENT_TEST"):
     from seer.anomaly_detection.prophet_detector import ProphetDetector
     from seer.anomaly_detection.prophet_params import ProphetParams
