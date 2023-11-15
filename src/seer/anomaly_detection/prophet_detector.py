@@ -237,10 +237,10 @@ class ProphetDetector(Prophet):
         return results
 
     def _boxcox(self, y):
-            transformed, self.bc_lambda = stats.boxcox(y + 1)
-            if self.bc_lambda <= 0:
-                transformed = np.log(y + 1)
-            return transformed
+        transformed, self.bc_lambda = stats.boxcox(y + 1)
+        if self.bc_lambda <= 0:
+            transformed = np.log(y + 1)
+        return transformed
 
     def _inv_boxcox(self, y):
         if self.bc_lambda <= 0:
