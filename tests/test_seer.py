@@ -5,7 +5,7 @@ from unittest import mock
 import pandas as pd
 import pytest
 
-from seer.seer import aggregate_anomalies, app, process_output
+from seer.seer import app
 
 
 @pytest.fixture(autouse=True)
@@ -18,31 +18,6 @@ def mock_severity_score():
 
 
 class TestSeer(unittest.TestCase):
-    def test_aggregate_anomalies(self):
-        input_dataframe = pd.DataFrame(
-            {
-                "ds_time": [1644367729.564212, 1644367423.377069],
-                "score": [1, 2],
-                "y": [5.4, 5.5],
-                "yhat": [5.2, 5.3],
-            }
-        )
-        granularity = 300
-        expected_output = [
-            {
-                "start": 1644367729,
-                "end": 1644367723,
-                "confidence": "high",
-                "received": 10.9,
-                "expected": 10.5,
-                "id": 0,
-            },
-        ]
-
-        actual_output = aggregate_anomalies(input_dataframe, granularity)
-
-        assert actual_output == expected_output
-
     def test_empty_dataset(self):
         response = app.test_client().post(
             "/anomaly/predict",

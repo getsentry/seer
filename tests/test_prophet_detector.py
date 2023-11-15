@@ -372,3 +372,28 @@ class TestProphetDetector(unittest.TestCase):
         actual_output = self.prophet_detector._inv_boxcox(pd.Series(input_data))
 
         assert_array_almost_equal(expected_output, list(actual_output), decimal=3)
+
+    def test_aggregate_anomalies(self):
+        input_dataframe = pd.DataFrame(
+            {
+                "ds_time": [1644367729.564212, 1644367423.377069],
+                "score": [1, 2],
+                "y": [5.4, 5.5],
+                "yhat": [5.2, 5.3],
+            }
+        )
+        granularity = 300
+        expected_output = [
+            {
+                "start": 1644367729,
+                "end": 1644367723,
+                "confidence": "high",
+                "received": 10.9,
+                "expected": 10.5,
+                "id": 0,
+            },
+        ]
+
+        actual_output = self.prophet_detector.aggregate_anomalies(input_dataframe, granularity)
+
+        assert actual_output == expected_output
