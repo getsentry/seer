@@ -206,7 +206,7 @@ class ProphetDetector(Prophet):
         return df
 
 
-    def process_output(data, granularity):
+    def process_output(self, data, granularity):
         """
         Format data for frontend
 
