@@ -27,6 +27,7 @@ sentry_sdk.init(
     integrations=[FlaskIntegration()],
     traces_sampler=traces_sampler,
     profiles_sample_rate=1.0,
+    enable_tracing=True,
 )
 app = Flask(__name__)
 root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
@@ -59,53 +60,45 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
 
 @app.route("/issues/severity-score", methods=["POST"])
 def def_severity_endpoint():
-    try:
-        data = request.get_json()
-        if data.get("trigger_error") is not None:
-            raise Exception("oh no")
-        elif data.get("trigger_timeout") is not None:
-            time.sleep(0.5)
-        severity = embeddings_model.severity_score(data)
-        results = {"severity": str(severity)}
-        return results
-    except Exception as e:
-        app.logger.exception("Error processing request")
-        return {"Error": str(e)}, 500
+    data = request.get_json()
+    if data.get("trigger_error") is not None:
+        raise Exception("oh no")
+    elif data.get("trigger_timeout") is not None:
+        time.sleep(0.5)
+    severity = embeddings_model.severity_score(data)
+    results = {"severity": str(severity)}
+    return results
 
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
 def breakpoint_trends_endpoint():
-    try:
-        data = request.get_json()
-        txns_data = data["data"]
+    data = request.get_json()
+    txns_data = data["data"]
 
-        sort_function = data.get("sort", "")
-        allow_midpoint = data.get("allow_midpoint", "1") == "1"
-        validate_tail_hours = data.get("validate_tail_hours", 0)
+    sort_function = data.get("sort", "")
+    allow_midpoint = data.get("allow_midpoint", "1") == "1"
+    validate_tail_hours = data.get("validate_tail_hours", 0)
 
-        min_pct_change = float(data.get("trend_percentage()", 0.1))
-        min_change = float(data.get("min_change()", 0))
+    min_pct_change = float(data.get("trend_percentage()", 0.1))
+    min_change = float(data.get("min_change()", 0))
 
-        with sentry_sdk.start_span(
-            op="cusum.detection",
-            description="Get the breakpoint and t-value for every transaction",
-        ) as span:
-            trend_percentage_list = find_trends(
-                txns_data,
-                sort_function,
-                allow_midpoint,
-                min_pct_change,
-                min_change,
-                validate_tail_hours,
-            )
+    with sentry_sdk.start_span(
+        op="cusum.detection",
+        description="Get the breakpoint and t-value for every transaction",
+    ) as span:
+        trend_percentage_list = find_trends(
+            txns_data,
+            sort_function,
+            allow_midpoint,
+            min_pct_change,
+            min_change,
+            validate_tail_hours,
+        )
 
-        trends = {"data": [x[1] for x in trend_percentage_list]}
-        app.logger.debug("Trend results: %s", trends)
+    trends = {"data": [x[1] for x in trend_percentage_list]}
+    app.logger.debug("Trend results: %s", trends)
 
-        return trends
-    except Exception as e:
-        app.logger.exception("Error processing request")
-        return {"Error": str(e)}, 500
+    return trends
 
 
 @app.route("/anomaly/predict", methods=["POST"])
