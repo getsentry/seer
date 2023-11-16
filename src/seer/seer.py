@@ -65,7 +65,8 @@ def def_severity_endpoint():
             raise Exception("oh no")
         elif data.get("trigger_timeout") is not None:
             time.sleep(0.5)
-        severity = embeddings_model.severity_score(data)
+        with sentry_sdk.start_span(op="severity.inference", description="severity score inference") as span:
+            severity = embeddings_model.severity_score(data)
         results = {"severity": str(severity)}
         return results
     except Exception as e:
@@ -166,7 +167,7 @@ def predict():
         fcst = detector.scale_scores(fcst)
 
     with sentry_sdk.start_span(op="data.format", description="Format data for frontend") as span:
-        output = process_output(fcst, granularity)
+        output = detector.process_output(fcst, granularity)
 
     return output
 
@@ -181,94 +182,3 @@ def ready_check():
     if not model_initialized:
         return "Model not initialized", 503
     return "", 200
-
-
-def aggregate_anomalies(data, granularity):
-    """
-    Group consecutive anomalies together into single
-    records (with expanded start/end times)
-
-    Attributes:
-    data: the input dataframe (with anomalies added)
-    granularity: data granularity (in seconds)
-
-    Returns:
-    results: list of dictionaries containing combined anomalies
-        start: when anomaly started
-        end: when anomaly ended
-        confidence: anomaly confidence
-        received: actual count for metric
-        expected: expected count for metric (from yhat)
-        id: id/label for each anomaly
-    """
-    score_map = {1: "low", 2: "high"}
-    score_lookup = {v: k for k, v in score_map.items()}
-    anomalies = []
-    previous_time = None
-    anomaly_index = -1
-    for ds_time, score, y, yhat in data.itertuples(index=False):
-        if previous_time and ds_time <= previous_time + (granularity * 3):
-            anomalies[anomaly_index]["end"] = int(ds_time + granularity)
-            anomalies[anomaly_index]["received"] += round(y, 5)
-            anomalies[anomaly_index]["expected"] += round(yhat, 5)
-            anomalies[anomaly_index]["confidence"] = score_map[
-                max(score, score_lookup[anomalies[anomaly_index]["confidence"]])
-            ]
-        else:
-            anomaly_index += 1
-            anomalies.append(
-                {
-                    "start": int(ds_time),
-                    "end": int(ds_time + granularity),
-                    "confidence": score_map[score],
-                    "received": round(y, 5),
-                    "expected": round(yhat, 5),
-                    "id": anomaly_index,
-                }
-            )
-        previous_time = ds_time
-
-    return anomalies
-
-
-def process_output(data, granularity):
-    """
-    Format data for frontend
-
-    Attributes:
-    data: the input dataframe (with anomalies added)
-    granularity: data granularity (seconds)
-
-    Returns:
-    results: dictionary containing
-        y: input timeseries
-        yhat_upper: upper confidence bound
-        yhat_lower: lower confidence bound
-        anomalies: all detected anomalies
-    """
-
-    def convert_ts(ts, value_col):
-        """
-        Format a timeseries for the frontend
-        """
-        data = zip(
-            list(map(int, ts["ds"])),
-            [[{"count": round(x, 5)}] for x in list(ts[value_col])],
-        )
-        start = int(ts["ds"].iloc[0])
-        end = int(ts["ds"].iloc[-1])
-        return {"data": list(data), "start": start, "end": end}
-
-    data["ds"] = data["ds"].astype(np.int64) * 1e-9
-    anomalies_data = data[~data["anomalies"].isna()][["ds", "anomalies", "y", "yhat"]]
-    anomalies = []
-    if len(anomalies_data) > 0:
-        anomalies = aggregate_anomalies(anomalies_data, granularity)
-
-    results = {
-        "y": convert_ts(data, "y"),
-        "yhat_upper": convert_ts(data, "yhat_upper"),
-        "yhat_lower": convert_ts(data, "yhat_lower"),
-        "anomalies": anomalies,
-    }
-    return results
