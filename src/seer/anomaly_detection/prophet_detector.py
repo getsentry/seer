@@ -226,7 +226,7 @@ class ProphetDetector(Prophet):
         anomalies_data = data[~data["anomalies"].isna()][["ds", "anomalies", "y", "yhat"]]
         anomalies = []
         if len(anomalies_data) > 0:
-            anomalies = _aggregate_anomalies(anomalies_data, granularity)
+            anomalies = self._aggregate_anomalies(anomalies_data, granularity)
 
         results = {
             "y": _convert_ts(data, "y"),
@@ -248,52 +248,52 @@ class ProphetDetector(Prophet):
         return special.inv_boxcox(y, self.bc_lambda) - 1
     
 
-def _aggregate_anomalies(data, granularity):
-    """
-    Group consecutive anomalies together into single
-    records (with expanded start/end times)
+    def _aggregate_anomalies(self, data, granularity):
+        """
+        Group consecutive anomalies together into single
+        records (with expanded start/end times)
 
-    Attributes:
-    data: the input dataframe (with anomalies added)
-    granularity: data granularity (in seconds)
+        Attributes:
+        data: the input dataframe (with anomalies added)
+        granularity: data granularity (in seconds)
 
-    Returns:
-    results: list of dictionaries containing combined anomalies
-        start: when anomaly started
-        end: when anomaly ended
-        confidence: anomaly confidence
-        received: actual count for metric
-        expected: expected count for metric (from yhat)
-        id: id/label for each anomaly
-    """
-    score_map = {1: "low", 2: "high"}
-    score_lookup = {v: k for k, v in score_map.items()}
-    anomalies = []
-    previous_time = None
-    anomaly_index = -1
-    for ds_time, score, y, yhat in data.itertuples(index=False):
-        if previous_time and ds_time <= previous_time + (granularity * 3):
-            anomalies[anomaly_index]["end"] = int(ds_time + granularity)
-            anomalies[anomaly_index]["received"] += round(y, 5)
-            anomalies[anomaly_index]["expected"] += round(yhat, 5)
-            anomalies[anomaly_index]["confidence"] = score_map[
-                max(score, score_lookup[anomalies[anomaly_index]["confidence"]])
-            ]
-        else:
-            anomaly_index += 1
-            anomalies.append(
-                {
-                    "start": int(ds_time),
-                    "end": int(ds_time + granularity),
-                    "confidence": score_map[score],
-                    "received": round(y, 5),
-                    "expected": round(yhat, 5),
-                    "id": anomaly_index,
-                }
-            )
-        previous_time = ds_time
+        Returns:
+        results: list of dictionaries containing combined anomalies
+            start: when anomaly started
+            end: when anomaly ended
+            confidence: anomaly confidence
+            received: actual count for metric
+            expected: expected count for metric (from yhat)
+            id: id/label for each anomaly
+        """
+        score_map = {1: "low", 2: "high"}
+        score_lookup = {v: k for k, v in score_map.items()}
+        anomalies = []
+        previous_time = None
+        anomaly_index = -1
+        for ds_time, score, y, yhat in data.itertuples(index=False):
+            if previous_time and ds_time <= previous_time + (granularity * 3):
+                anomalies[anomaly_index]["end"] = int(ds_time + granularity)
+                anomalies[anomaly_index]["received"] += round(y, 5)
+                anomalies[anomaly_index]["expected"] += round(yhat, 5)
+                anomalies[anomaly_index]["confidence"] = score_map[
+                    max(score, score_lookup[anomalies[anomaly_index]["confidence"]])
+                ]
+            else:
+                anomaly_index += 1
+                anomalies.append(
+                    {
+                        "start": int(ds_time),
+                        "end": int(ds_time + granularity),
+                        "confidence": score_map[score],
+                        "received": round(y, 5),
+                        "expected": round(yhat, 5),
+                        "id": anomaly_index,
+                    }
+                )
+            previous_time = ds_time
 
-    return anomalies
+        return anomalies
 
 
 def _convert_ts(ts, value_col):
