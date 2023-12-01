@@ -53,11 +53,13 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     )
 
     detector = ProphetDetector(MODEL_PARAMS)
-    embeddings_model = SeverityInference(model_path("embeddings"), model_path("classifier"))
+    embeddings_model = SeverityInference(
+        model_path("issue_severity_v0/embeddings"), model_path("issue_severity_v0/classifier")
+    )
     model_initialized = True
 
 
-@app.route("/issues/severity-score", methods=["POST"])
+@app.route("/v0/issues/severity-score", methods=["POST"])
 def def_severity_endpoint():
     data = request.get_json()
     if data.get("trigger_error") is not None:

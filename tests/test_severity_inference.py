@@ -4,7 +4,9 @@ from seer.severity.severity_inference import SeverityInference
 
 
 class TestSeverityInference(unittest.TestCase):
-    severity_inference = SeverityInference("models/embeddings", "models/classifier")
+    severity_inference = SeverityInference(
+        "models/issue_severity_v0/embeddings", "models/issue_severity_v0/classifier"
+    )
 
     def test_high_severity_error(self):
         score = self.severity_inference.severity_score(

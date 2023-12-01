@@ -25,12 +25,15 @@ class SeverityInference:
             embeddings = self.get_embeddings(data.get("message")).reshape(-1)
         with sentry_sdk.start_span(op="model.severity", description="predict_proba"):
             has_stacktrace = data.get("has_stacktrace", 0)
-            log_level_error = 1 if data.get("log_level", "").lower() in ["error", "fatal"] else 0
-            handled = data.get("handled", 0)
+
+            handled = data.get("handled")
+            handled_true = 1 if handled is True else 0
+            handled_false = 1 if handled is False else 0
+            handled_unknown = 1 if handled is None else 0
 
             input_data = np.append(
                 embeddings.reshape(1, -1),
-                [[has_stacktrace, log_level_error, handled]],
+                [[has_stacktrace, handled_true, handled_false, handled_unknown]],
                 axis=1,
             )
 
