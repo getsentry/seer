@@ -43,6 +43,7 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     from seer.anomaly_detection.prophet_detector import ProphetDetector
     from seer.anomaly_detection.prophet_params import ProphetParams
     from seer.severity.severity_inference import SeverityInference
+    from seer.grouping.grouping import GroupingLookup
 
     MODEL_PARAMS = ProphetParams(
         interval_width=0.975,
@@ -56,7 +57,24 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     embeddings_model = SeverityInference(
         model_path("issue_severity_v0/embeddings"), model_path("issue_severity_v0/classifier")
     )
+    grouping_lookup = GroupingLookup(
+        model_path("issue_grouping_v0/model"),
+        model_path("issue_grouping_v0/embeddings_matrix.pt"),
+        model_path("issue_grouping_v0/index_mapping.pkl"),
+        model_path("issue_grouping_v0/data.pkl"),
+    )
     model_initialized = True
+
+
+@app.route("/v0/issues/grouping", methods=["POST"])
+def grouping_endpoint():
+    data = request.get_json()
+    stacktrace = data.get("stacktrace")
+    with sentry_sdk.start_span(
+        op="grouping.lookup", description="grouping lookup"
+    ) as span:
+        grouping_data = grouping_lookup.find_nearest_stacktrace(stacktrace)
+    return grouping_data
 
 
 @app.route("/v0/issues/severity-score", methods=["POST"])
