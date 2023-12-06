@@ -1,4 +1,3 @@
-import pandas as pd
 import torch
 from sentence_transformers import SentenceTransformer
 from torch.nn.functional import cosine_similarity
