@@ -60,7 +60,7 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
 
 
 @app.route("/v0/issues/severity-score", methods=["POST"])
-def def_severity_endpoint():
+def severity_endpoint():
     data = request.get_json()
     if data.get("trigger_error") is not None:
         raise Exception("oh no")
