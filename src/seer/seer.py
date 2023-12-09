@@ -3,6 +3,7 @@ import time
 
 import pandas as pd
 import sentry_sdk
+from sentry_sdk import start_transaction
 from flask import Flask, request
 from sentry_sdk.integrations.flask import FlaskIntegration
 
@@ -61,17 +62,15 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
 
 @app.route("/v0/issues/severity-score", methods=["POST"])
 def severity_endpoint():
-    data = request.get_json()
-    if data.get("trigger_error") is not None:
-        raise Exception("oh no")
-    elif data.get("trigger_timeout") is not None:
-        time.sleep(0.5)
-    with sentry_sdk.start_span(
-        op="severity.inference", description="severity score inference"
-    ) as span:
+    with start_transaction(op="endpoint", name="Severity Score Endpoint"):
+        data = request.get_json()
+        if data.get("trigger_error") is not None:
+            raise Exception("oh no")
+        elif data.get("trigger_timeout") is not None:
+            time.sleep(0.5)
         severity = embeddings_model.severity_score(data)
-    results = {"severity": str(severity)}
-    return results
+        results = {"severity": str(severity)}
+        return results
 
 
 @app.route("/trends/breakpoint-detector", methods=["POST"])
