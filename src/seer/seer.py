@@ -70,7 +70,7 @@ def severity_endpoint():
             time.sleep(0.5)
         severity = embeddings_model.severity_score(data)
         results = {"severity": str(severity)}
-        txn.set_tag("severity", severity)
+        txn.set_tag("severity", str(severity))
         return results
 
 
