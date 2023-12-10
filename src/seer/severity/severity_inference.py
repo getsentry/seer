@@ -35,4 +35,4 @@ class SeverityInference:
         )
 
         pred = self.classifier.predict_proba(input_data)[0][1]
-        return min(1.0, max(0.0, pred))
+        return round(min(1.0, max(0.0, pred)), 2)
