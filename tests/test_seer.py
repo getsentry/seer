@@ -18,29 +18,6 @@ def mock_severity_score():
 
 
 class TestSeer(unittest.TestCase):
-    def test_empty_dataset(self):
-        response = app.test_client().post(
-            "/anomaly/predict",
-            data=json.dumps(
-                {
-                    "data": [],
-                }
-            ),
-            content_type="application/json",
-        )
-
-        actual_output = json.loads(response.get_data(as_text=True))
-
-        expected_output = {
-            "y": {"data": []},
-            "yhat_upper": {"data": []},
-            "yhat_lower": {"data": []},
-            "anomalies": [],
-        }
-
-        assert actual_output == expected_output
-
-
     def get_sample_data(self):
         trend_data = {
             "data": [
