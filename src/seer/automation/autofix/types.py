@@ -2,6 +2,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
+from ..agent.agent import Usage
+
 
 class FileChange(BaseModel):
     change_type: Literal["edit", "delete"]
@@ -19,6 +21,7 @@ class PlanningOutput(BaseModel):
     title: str
     description: str
     plan: str
+    usage: Usage
 
 
 class AutofixOutput(PlanningOutput):
@@ -52,5 +55,6 @@ class SentryEvent(BaseModel):
 
 
 class IssueDetails(BaseModel):
+    id: str
     title: str
     events: list[SentryEvent]

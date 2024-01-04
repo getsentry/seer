@@ -1,18 +1,13 @@
 # Read the documents from the local directory, convert into nodes
 import difflib
-import json
 import logging
 import os
 import re
 from typing import List
-from xml.etree import ElementTree as ET
 
-import requests
 import torch
-from github.Comparison import Comparison
 from llama_index.bridge.pydantic import PrivateAttr
 from llama_index.embeddings.base import BaseEmbedding
-from llama_index.response.schema import RESPONSE_TYPE
 from sentence_transformers import SentenceTransformer
 
 from .types import FileChange
@@ -20,21 +15,6 @@ from .types import FileChange
 logger = logging.getLogger(__name__)
 
 sentry_auth_token = os.getenv("SENTRY_AUTH_TOKEN")
-
-
-def diff_to_str(diff: Comparison) -> str:
-    changes = ""
-    for file in diff.files:
-        if file.filename and file.patch:
-            changes += file.filename + "\n"
-            changes += file.patch
-            changes += "\n---\n"
-
-    return changes
-
-
-def get_issue_url(issue_id: str | int) -> str:
-    return f"https://sentry.io/organizations/sentry/issues/{issue_id}/"
 
 
 def compute_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:
@@ -54,54 +34,6 @@ def compute_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:
         text2 = re.sub(r"\s+", "", text2)
 
     return difflib.SequenceMatcher(None, text1, text2).ratio()
-
-
-def compute_code_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:
-    """
-    This function computes the similarity between two pieces of code.
-
-    Parameters:
-    text1 (str): The first piece of code.
-    text2 (str): The second piece of code.
-    ignore_whitespace (bool): If True, ignores whitespace when comparing the two pieces of code.
-
-    The function also handles ellipsis cases ('... ', '// ...', '# ...', '/* ... */') to ensure that they do not trigger on ...expansion in js code.
-    If an ellipsis is found and the similarity is less than 0.99, the line is skipped in the similarity computation.
-
-    Returns:
-    float: The similarity ratio between the two pieces of code.
-    """
-    ellipsis_cases = [
-        "... ",
-        "// ...",
-        "# ...",
-        "/* ... */",
-    ]  # make sure that it does not trigger on ...expansion in js code
-
-    lines1 = text1.split("\n")
-    lines2 = text2.split("\n")
-    total_similarity = 0
-    count = 0
-
-    ellipsis_found = False
-    for line1, line2 in zip(lines1, lines2):
-        similarity = compute_similarity(line1, line2, ignore_whitespace=ignore_whitespace)
-
-        if not ellipsis_found:
-            ellipsis_found = any(s in line1 for s in ellipsis_cases)
-
-        if ellipsis_found and similarity < 0.99:
-            continue
-
-        ellipsis_found = False
-
-        total_similarity += similarity
-        count += 1
-
-    if count == 0:
-        return 0
-    else:
-        return total_similarity / count
 
 
 def get_last_non_empty_line(text: str) -> str:
@@ -287,77 +219,4 @@ class SentenceTransformersEmbedding(BaseEmbedding):
         return batch_embeddings[0]
 
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        # pool = self._model
-
-        # batch_embeddings = self._model.encode_multi_process(texts, pool)
-
-        # self._model.stop_multi_process_pool(pool)
-
         return self._model.encode(texts)
-
-
-def get_details_for_issue(issue_id, organization_slug="sentry"):
-    url = f"https://sentry.io/api/0/organizations/{organization_slug}/issues/{issue_id}/"
-    headers = {"Authorization": f"Bearer {sentry_auth_token}"}
-
-    response = requests.get(url, headers=headers)
-    issue = response.json()
-
-    logger.debug(f"issue: {json.dumps(issue)}")
-
-    if "detail" in issue and issue["detail"] == "The requested resource does not exist":
-        raise Exception(f"Could not find issue with id {issue_id}")
-
-    err_msg = issue["title"]
-
-    url = f"https://sentry.io/api/0/organizations/{organization_slug}/issues/{issue_id}/events/latest/"
-
-    response = requests.get(url, headers=headers)
-    event = response.json()
-
-    stack_str = ""
-    for entry in event["entries"]:
-        if "data" not in entry:
-            continue
-        if "values" not in entry["data"]:
-            continue
-        for item in entry["data"]["values"]:
-            # stack_str += f"{item['type']}: {item['value']}\n"
-            if "stacktrace" not in item:
-                continue
-            frames = item["stacktrace"]["frames"][::-1]
-            for frame in frames[:4]:
-                stack_str += f" {frame['function']} in {frame['filename']} ({frame['lineNo']}:{frame['colNo']})\n"
-                for ctx in frame["context"]:
-                    is_suspect_line = ctx[0] == frame["lineNo"]
-                    stack_str += f"{ctx[1]}{'  <--' if is_suspect_line else ''}\n"
-
-                stack_str += "------\n"
-
-    return err_msg, stack_str
-
-
-def extract_actions(action_response: RESPONSE_TYPE, verbose=False):
-    response_str = action_response.response
-    thoughts_group = re.search(
-        r"<thoughts>(.*?)</thoughts>", response_str, re.MULTILINE | re.DOTALL
-    )
-    if thoughts_group:
-        response_str = response_str.replace(thoughts_group.group(0), "")
-
-    actions_match = re.search(r"<actions>(.*?)</actions>", response_str, re.MULTILINE | re.DOTALL)
-    if actions_match:
-        actions_str = actions_match.group(1)
-    else:
-        return None, None
-
-    if verbose:
-        print(actions_str)
-
-    try:
-        actions = ET.fromstring(f"<actions>{actions_str}</actions>")
-    except ET.ParseError:
-        print("Error parsing XML")
-        actions = None
-
-    return actions, actions_str

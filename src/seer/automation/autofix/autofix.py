@@ -1,10 +1,11 @@
+import logging
 import os
 import xml.etree.ElementTree as ET
 
 import torch
 from github import Auth, Github
 
-from ..agent.agent import GptAgent, Message
+from ..agent.agent import GptAgent, Message, Usage
 from .agent_context import AgentContext
 from .prompts import action_prompt, planning_prompt
 from .tools import BaseTools, CodeActionTools
@@ -12,6 +13,8 @@ from .types import AutofixInput, AutofixOutput, IssueDetails, PlanningOutput, Se
 
 REPO_NAME = "getsentry/sentry-mirror-suggested-fix"
 auth = Auth.Token(os.getenv("GITHUB_TOKEN"))
+
+logger = logging.getLogger(__name__)
 
 
 class Autofix:
@@ -33,7 +36,11 @@ class Autofix:
         index, documents, nodes = self.agent_context.get_data()
 
         planning_output = self._run_planning_agent(index, documents, nodes)
-        coding_output = self._run_coding_agent(
+        if planning_output is None:
+            logger.warning(f"Planning agent did not return a valid output")
+            return None
+
+        coding_output, coding_usage = self._run_coding_agent(
             self.agent_context.base_sha,
             planning_output,
             index,
@@ -41,14 +48,27 @@ class Autofix:
             nodes,
         )
 
-        return AutofixOutput(**planning_output, changes=coding_output.values())
+        autofix_output = AutofixOutput(
+            **planning_output.model_dump(),
+            changes=coding_output.values(),
+            usage=Usage(
+                prompt_tokens=planning_output.usage.prompt_tokens + coding_usage.prompt_tokens,
+                completion_tokens=planning_output.usage.completion_tokens
+                + coding_usage.completion_tokens,
+                total_tokens=planning_output.usage.total_tokens + coding_usage.total_tokens,
+            ),
+        )
+
+        self._create_pr(autofix_output)
+
+        return autofix_output
 
     def _create_pr(self, autofix_output: AutofixOutput):
         branch_ref = self.agent_context.create_branch_from_changes(
             autofix_output.changes, self.agent_context.base_sha
         )
 
-        self.agent_context.create_pr_from_branch(branch_ref)
+        self.agent_context.create_pr_from_branch(branch_ref, autofix_output, self.issue_details)
 
     def _run_planning_agent(self, index, documents, nodes) -> PlanningOutput:
         planning_agent_tools = BaseTools(index, documents)
@@ -77,11 +97,17 @@ class Autofix:
 
         parsed_output = ET.fromstring(f"<response>{planning_response}</response>")
 
-        title = parsed_output.find("title").text
-        description = parsed_output.find("description").text
-        plan = parsed_output.find("plan").text
+        try:
+            title = parsed_output.find("title").text
+            description = parsed_output.find("description").text
+            plan = parsed_output.find("plan").text
 
-        return PlanningOutput(title=title, description=description, plan=plan)
+            return PlanningOutput(
+                title=title, description=description, plan=plan, usage=planning_agent.usage
+            )
+        except AttributeError:
+            logger.warning(f"Planning response does not contain a title, description, or plan")
+            return None
 
     def _run_coding_agent(
         self,
@@ -109,7 +135,7 @@ class Autofix:
 
         action_agent.run(planning_output.plan)
 
-        return code_action_tools.file_changes
+        return code_action_tools.file_changes, action_agent.usage
 
 
 if __name__ == "__main__":
@@ -119,6 +145,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
     issue_details = IssueDetails(
+        id="4595888126",
         title="TypeError: 'int' object is not iterable",
         events=[
             SentryEvent(
@@ -132,3 +159,5 @@ if __name__ == "__main__":
     autofix = Autofix(issue_details, AutofixInput(additional_context=None))
 
     changes = autofix.run()
+
+    print(changes)

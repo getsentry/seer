@@ -25,7 +25,7 @@ from llama_index.readers import SimpleDirectoryReader
 from llama_index.schema import Document, Node
 from llama_index.tools import FunctionTool, RetrieverTool, ToolMetadata
 
-from .types import FileChange
+from .types import AutofixOutput, FileChange, IssueDetails
 from .utils import SentenceTransformersEmbedding, find_original_snippet
 
 logger = logging.getLogger(__name__)
@@ -245,7 +245,8 @@ Total tokens: **{prompt_tokens + completion_tokens} (${total_price:.3f})**"""
     def create_pr_from_branch(
         self,
         branch: GitRef,
-        issue_id: str,
+        autofix_output: AutofixOutput,
+        issue_details: IssueDetails,
     ):
         repo_name = "getsentry/suggested-fix-pr-demo"
 
@@ -261,14 +262,14 @@ Total tokens: **{prompt_tokens + completion_tokens} (${total_price:.3f})**"""
 {issue_link_template.format(issue_id=issue_id)}
 
 ### Stats:
-{self._get_stats_str(token_counter.prompt_llm_token_count, token_counter.completion_llm_token_count)}"""
+{self._get_stats_str(autofix_output.usage.prompt_tokens, autofix_output.usage.completion_tokens)}"""
 
         return self.repo.create_pull(
             repo_name=repo_name,
             title=title,
             body=description,
             base="master",
-            head=branch.commit.sha,
+            head=branch.object.sha,
         )
 
     def create_branch_from_changes(self, file_changes: List[FileChange], base_commit_sha) -> GitRef:
