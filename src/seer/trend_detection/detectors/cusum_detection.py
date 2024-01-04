@@ -27,8 +27,9 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from seer.trend_detection.consts import TimeSeriesChangePoint
 from scipy.stats import chi2
+
+from seer.trend_detection.consts import TimeSeriesChangePoint
 
 _log: logging.Logger = logging.getLogger("cusum_detection")
 
@@ -242,7 +243,7 @@ class CUSUMChangePoint(TimeSeriesChangePoint):
         return all(res)
 
 
-class CUSUMDetector():
+class CUSUMDetector:
     interest_window: Optional[Tuple[int, int]] = None
     magnitude_quantile: Optional[float] = None
     magnitude_ratio: Optional[float] = None
@@ -333,7 +334,6 @@ class CUSUMDetector():
         mu0 = np.mean(ts[: (changepoint + 1)])
         mu1 = np.mean(ts[(changepoint + 1) :])
 
-
         return CUSUMChangePointVal(
             changepoint=changepoint,
             mu0=mu0,
@@ -394,11 +394,10 @@ class CUSUMDetector():
         """
 
         return np.sum(
-            np.log(sigma1 / sigma0)
-            + 0.5 * (((x - mu1) / sigma1) ** 2 - ((x - mu0) / sigma0) ** 2)
+            np.log(sigma1 / sigma0) + 0.5 * (((x - mu1) / sigma1) ** 2 - ((x - mu0) / sigma0) ** 2)
         )
 
-    def _magnitude_compare(self, ts: np.ndarray, breakpoint)-> float:
+    def _magnitude_compare(self, ts: np.ndarray, breakpoint) -> float:
         """
         Compare daily magnitude to avoid daily seasonality false positives.
         """
@@ -421,7 +420,7 @@ class CUSUMDetector():
                 start_time = time[breakpoint_index] - pd.Timedelta(f"{i + 1}D")
                 end_time = time[breakpoint_index] - pd.Timedelta(f"{i}D")
 
-                #this shouldn't happen - but if start time is outside the time window then don't continue
+                # this shouldn't happen - but if start time is outside the time window then don't continue
                 if start_time < min(time):
                     continue
                 start_idx = time[time == start_time].index[0]
@@ -429,16 +428,15 @@ class CUSUMDetector():
 
                 hist_int = self._get_time_series_magnitude(ts[start_idx:end_idx])
 
-                #if the day has no data and 0 is the max then don't count this day towards the magnitude ratio
+                # if the day has no data and 0 is the max then don't count this day towards the magnitude ratio
                 if hist_int == 0:
                     before_breakpoint -= 1
 
                 mag_before_breakpoint += hist_int
-        #if there are no days before the breakpoint
+        # if there are no days before the breakpoint
         else:
             mag_before_breakpoint = self._get_time_series_magnitude(ts[:breakpoint_index])
             before_breakpoint = 1
-
 
         if after_breakpoint != 0:
             for i in range(after_breakpoint):
@@ -451,7 +449,7 @@ class CUSUMDetector():
                 if hist_int == 0:
                     after_breakpoint -= 1
                 mag_after_breakpoint += hist_int
-        #if there are no days after the breakpoint
+        # if there are no days after the breakpoint
         else:
             mag_before_breakpoint = self._get_time_series_magnitude(ts[breakpoint_index:])
             after_breakpoint = 1
@@ -459,7 +457,7 @@ class CUSUMDetector():
         avg_before_bp = mag_before_breakpoint / before_breakpoint
         avg_after_bp = mag_after_breakpoint / after_breakpoint
 
-        return avg_after_bp/avg_before_bp
+        return avg_after_bp / avg_before_bp
 
     def _get_time_series_magnitude(self, ts: np.ndarray) -> float:
         """
@@ -468,7 +466,7 @@ class CUSUMDetector():
         magnitude = np.quantile(ts, self.magnitude_quantile, interpolation="nearest")
         return magnitude
 
-    def detector(self, **kwargs: Any) -> Sequence[CUSUMChangePoint]:
+    def detector(self, **kwargs: Any) -> List[CUSUMChangePoint]:
         """
         Find the change point and calculate related statistics.
 
@@ -509,13 +507,9 @@ class CUSUMDetector():
         delta_std_ratio = kwargs.get("delta_std_ratio", defaultArgs.delta_std_ratio)
         min_abs_change = kwargs.get("min_abs_change", defaultArgs.min_abs_change)
         start_point = kwargs.get("start_point", defaultArgs.start_point)
-        change_directions = kwargs.get(
-            "change_directions", defaultArgs.change_directions
-        )
+        change_directions = kwargs.get("change_directions", defaultArgs.change_directions)
         interest_window = kwargs.get("interest_window", defaultArgs.interest_window)
-        magnitude_quantile = kwargs.get(
-            "magnitude_quantile", defaultArgs.magnitude_quantile
-        )
+        magnitude_quantile = kwargs.get("magnitude_quantile", defaultArgs.magnitude_quantile)
         magnitude_ratio = kwargs.get("magnitude_ratio", defaultArgs.magnitude_ratio)
         magnitude_comparable_day = kwargs.get(
             "magnitude_comparable_day", defaultArgs.magnitude_comparable_day
@@ -540,8 +534,7 @@ class CUSUMDetector():
         for change_direction in change_directions:
             if change_direction not in {"increase", "decrease"}:
                 raise ValueError(
-                    "Change direction must be 'increase' or 'decrease.' "
-                    f"Got {change_direction}"
+                    "Change direction must be 'increase' or 'decrease.' " f"Got {change_direction}"
                 )
 
             change_meta = self._get_change_point(
@@ -563,8 +556,10 @@ class CUSUMDetector():
                 if magnitude_quantile:
                     change_ts = ts_zero_filled
                     mag_change = (
-                            self._magnitude_compare(change_ts, change_meta.changetime) >= magnitude_ratio or
-                            self._magnitude_compare(change_ts, change_meta.changetime) <= 1 / magnitude_ratio
+                        self._magnitude_compare(change_ts, change_meta.changetime)
+                        >= magnitude_ratio
+                        or self._magnitude_compare(change_ts, change_meta.changetime)
+                        <= 1 / magnitude_ratio
                     )
                 else:
                     mag_change = True
@@ -581,16 +576,11 @@ class CUSUMDetector():
             if_significant = llr > chi2_ppf(1 - threshold, 2)
             if_significant_int = change_meta.llr_int > chi2_ppf(1 - threshold, 2)
             if change_direction == "increase":
-                larger_than_min_abs_change = (
-                    change_meta.mu0 + min_abs_change < change_meta.mu1
-                )
+                larger_than_min_abs_change = change_meta.mu0 + min_abs_change < change_meta.mu1
             else:
-                larger_than_min_abs_change = (
-                    change_meta.mu0 > change_meta.mu1 + min_abs_change
-                )
+                larger_than_min_abs_change = change_meta.mu0 > change_meta.mu1 + min_abs_change
             larger_than_std = (
-                np.abs(change_meta.delta)
-                > np.std(ts[: change_meta.changepoint]) * delta_std_ratio
+                np.abs(change_meta.delta) > np.std(ts[: change_meta.changepoint]) * delta_std_ratio
             )
 
             change_meta.regression_detected = (
@@ -641,4 +631,3 @@ class CUSUMDetector():
                 converted.append(change_point)
 
         return converted
-
