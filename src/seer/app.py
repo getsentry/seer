@@ -89,6 +89,13 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     return trends
 
 
+@app.route("/v0/automation/autofix", methods=["POST"])
+def suggested_fix_endpoint():
+    data = request.get_json()
+
+    return None
+
+
 @app.route("/health/live", methods=["GET"])
 def health_check():
     return "", 200
