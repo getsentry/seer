@@ -10,7 +10,7 @@ from .agent_context import AgentContext
 from .types import FileChange
 from .utils import find_original_snippet
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("autofix")
 
 
 class BaseTools:
@@ -136,14 +136,13 @@ class CodeActionTools(BaseTools):
         if document:
             self.index.delete(document.get_doc_id())
         else:
-            document = Document(
-                metadata={"file_path": file_path, "file_name": file_path.split("/")[-1]}
-            )
+            document = Document()
+            document.metadata = {"file_path": file_path, "file_name": file_path.split("/")[-1]}
 
         if contents is not None:
-            new_nodes = self.context.documents_to_nodes(
-                [Document(text=contents, metadata=document.metadata)]
-            )
+            new_doc = Document(text=contents)
+            new_doc.metadata = document.metadata
+            new_nodes = self.context._documents_to_nodes([new_doc])
             self.index.insert_nodes(new_nodes)
 
     def expand_document(self, input: str):

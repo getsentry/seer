@@ -12,9 +12,7 @@ from sentence_transformers import SentenceTransformer
 
 from .types import FileChange
 
-logger = logging.getLogger(__name__)
-
-sentry_auth_token = os.getenv("SENTRY_AUTH_TOKEN")
+logger = logging.getLogger("autofix")
 
 
 def compute_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:

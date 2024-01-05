@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .tools import FunctionTool
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("autofix")
 
 
 class Message(BaseModel):
@@ -42,7 +42,7 @@ class Usage(BaseModel):
 class LlmAgent(ABC):
     name: str
     tools: List[FunctionTool]
-    memory: List[ChatCompletionMessage]
+    memory: List[Message]
 
     openai_client = OpenAI()
     iterations: int = 0
@@ -51,7 +51,7 @@ class LlmAgent(ABC):
     def __init__(
         self,
         tools: List[FunctionTool] | None = None,
-        memory: List[ChatCompletionMessage] | None = None,
+        memory: List[Message] | None = None,
         name="Agent",
     ):
         self.tools = tools or []
@@ -105,7 +105,6 @@ class LlmAgent(ABC):
 
         return Message(
             role="tool",
-            tool_name=tool_call.function,
             content=tool_result,
             tool_call_id=tool_call.id,
         )
@@ -122,8 +121,8 @@ class GptAgent(LlmAgent):
 
         completion = self.openai_client.chat.completions.create(
             model=self.model,
-            messages=messages,
-            tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),
+            messages=messages,  # type: ignore
+            tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),  # type: ignore
         )
 
         response_message = completion.choices[0].message
@@ -145,8 +144,9 @@ class GptAgent(LlmAgent):
 
         self.iterations += 1
 
-        self.usage.completion_tokens += completion.usage.completion_tokens
-        self.usage.prompt_tokens += completion.usage.prompt_tokens
-        self.usage.total_tokens += completion.usage.total_tokens
+        if completion.usage:
+            self.usage.completion_tokens += completion.usage.completion_tokens
+            self.usage.prompt_tokens += completion.usage.prompt_tokens
+            self.usage.total_tokens += completion.usage.total_tokens
 
         return self.memory

@@ -8,9 +8,9 @@ from ..agent.agent import Usage
 class FileChange(BaseModel):
     change_type: Literal["edit", "delete"]
     path: str
-    original_contents: Optional[str]
-    contents: Optional[str]
-    description: Optional[str]
+    original_contents: Optional[str] = None
+    contents: Optional[str] = None
+    description: Optional[str] = None
 
 
 class AutofixInput(BaseModel):
@@ -24,8 +24,12 @@ class PlanningOutput(BaseModel):
     usage: Usage
 
 
-class AutofixOutput(PlanningOutput):
+class AutofixAgentsOutput(PlanningOutput):
     changes: list[FileChange]
+
+
+class AutofixOutput(PlanningOutput):
+    pr_url: str
 
 
 class SentryEvent(BaseModel):
