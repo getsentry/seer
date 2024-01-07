@@ -45,7 +45,7 @@ class TypedDictsGenerator:
         yield "}, total=False)"
 
     def get_annotation(
-        self, schema: Optional[Union[Reference, Schema]]
+        self, schema: Optional[Union[Reference, Schema, bool]]
     ) -> Generator[str, None, str]:
         if isinstance(schema, Schema):
             if schema.schema_format:
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     spec = construct_open_api_with_schema_class(spec)
     spec_dict = spec.model_dump(by_alias=True, exclude_none=True)
     # For good measure, corroborate the pydantic modeling against openapi_core
-    Spec.from_dict(spec_dict)
+    Spec.from_dict(spec_dict)  # type: ignore
 
     with open(os.path.join(root, "schemas", "seer_api.json"), "w") as file:
         file.write(json.dumps(spec_dict, indent=2))
