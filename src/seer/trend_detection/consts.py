@@ -7,16 +7,10 @@ algorithms.
 
 from __future__ import annotations
 
-import datetime
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Tuple
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from pandas.api.types import is_numeric_dtype
-from pandas.tseries.frequencies import to_offset
 
 FigSize = Tuple[int, int]
 

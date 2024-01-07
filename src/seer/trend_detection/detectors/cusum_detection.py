@@ -23,7 +23,7 @@ It has two main components:
 import functools
 import logging
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -183,7 +183,7 @@ class CUSUMChangePoint(TimeSeriesChangePoint):
             f"p_value: {self._p_value}, p_value_int: {self._p_value_int})"
         )
 
-    def __eq__(self, other: TimeSeriesChangePoint) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, CUSUMChangePoint):
             # don't attempt to compare against unrelated types
             raise NotImplementedError
@@ -204,43 +204,6 @@ class CUSUMChangePoint(TimeSeriesChangePoint):
             and self._p_value == other._p_value
             # and self._p_value_int == other._p_value_int
         )
-
-    def _almost_equal(self, x: float, y: float, round_int: int = 10) -> bool:
-        return (
-            x == y
-            or round(x, round_int) == round(y, round_int)
-            or round(abs((y - x) / x), round_int) == 0
-        )
-
-    def almost_equal(self, other: TimeSeriesChangePoint, round_int: int = 10) -> bool:
-        """
-        Compare if two CUSUMChangePoint objects are almost equal to each other.
-        """
-
-        if not isinstance(other, CUSUMChangePoint):
-            # don't attempt to compare against unrelated types
-            raise NotImplementedError
-
-        res = [
-            self._start_time == other._start_time,
-            self._end_time == other._end_time,
-            self._almost_equal(self._confidence, other._confidence, round_int),
-            self._direction == other._direction,
-            self._cp_index == other._cp_index,
-            # pyre-ignore
-            self._almost_equal(self._delta, other._delta, round_int),
-            self._regression_detected == other._regression_detected,
-            self._stable_changepoint == other._stable_changepoint,
-            # pyre-ignore
-            self._almost_equal(self._mu0, other._mu0, round_int),
-            # pyre-ignore
-            self._almost_equal(self._mu1, other._mu1, round_int),
-            self._almost_equal(self._llr, other._llr, round_int),
-            self._almost_equal(self._llr_int, other._llr_int, round_int),
-            self._almost_equal(self._p_value, other._p_value, round_int),
-        ]
-
-        return all(res)
 
 
 class CUSUMDetector:
@@ -263,7 +226,7 @@ class CUSUMDetector:
         self.data_zerofill = data_zerofilled
 
     def _get_change_point(
-        self, ts: np.ndarray, max_iter: int, start_point: int, change_direction: str
+        self, ts: np.ndarray, max_iter: int, start_point: int | None, change_direction: str
     ) -> CUSUMChangePointVal:
         """
         Find change point in the timeseries.
@@ -288,13 +251,13 @@ class CUSUMDetector:
         pre_cusum = np.cumsum(ts_int)
         cusum_range = np.arange(len(ts_int)) + 1
 
+        changepoint: int
         if start_point is None:
             cusum_ts = pre_cusum - cusum_range * np.mean(ts_int)
-            changepoint = min(changepoint_func(cusum_ts), len(ts_int) - 2)
+            changepoint = min(changepoint_func(cusum_ts), len(ts_int) - 2)  # type: ignore
         else:
             changepoint = start_point
 
-        mu0 = mu1 = None
         # iterate until the changepoint converage
         while n < max_iter:
             n += 1
@@ -306,7 +269,7 @@ class CUSUMDetector:
             next_changepoint = max(1, min(changepoint_func(cusum_ts), len(ts_int) - 2))
             if next_changepoint == changepoint:
                 break
-            changepoint = next_changepoint
+            changepoint = next_changepoint  # type: ignore
 
         if n == max_iter:
             _log.debug("Max iteration reached and no stable changepoint found.")
@@ -412,8 +375,8 @@ class CUSUMDetector:
         before_breakpoint = (time[breakpoint_index] - time[0]).days
         after_breakpoint = (time[len(time) - 1] - time[breakpoint_index]).days
 
-        mag_before_breakpoint = 0
-        mag_after_breakpoint = 0
+        mag_before_breakpoint = 0.0
+        mag_after_breakpoint = 0.0
 
         if before_breakpoint != 0:
             for i in range(before_breakpoint):
@@ -463,7 +426,7 @@ class CUSUMDetector:
         """
         Calculate the magnitude of a time series.
         """
-        magnitude = np.quantile(ts, self.magnitude_quantile, interpolation="nearest")
+        magnitude = np.quantile(ts, self.magnitude_quantile, interpolation="nearest")  # type: ignore
         return magnitude
 
     def detector(self, **kwargs: Any) -> List[CUSUMChangePoint]:

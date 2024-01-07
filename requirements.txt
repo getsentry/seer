@@ -24,7 +24,7 @@ MarkupSafe==2.1.3
 matplotlib==3.7.2
 mpmath==1.3.0
 networkx==3.1
-numpy==1.25.2
+numpy==1.26.1
 packaging==23.1
 pandas==2.0.3
 patsy==0.5.3
@@ -35,7 +35,7 @@ python-dateutil==2.8.2
 pytz==2021.3
 PyYAML==6.0.1
 regex==2023.8.8
-requests==2.27.1
+requests==2.31.0
 safetensors==0.3.2
 scikit-learn==1.3.0
 scipy==1.11.2
@@ -63,3 +63,14 @@ pytest==7.4.3
 pydantic==2.5.3
 mypy==1.8.0
 mypy-extensions==1.0.0
+openapi-core==0.18.2
+pandas-stubs==2.1.4.231227
+types-Pillow==10.1.0
+types-colorama==0.4.15.12
+types-pywin32==306.0.0.8
+types-setuptools==69.0.0.0
+types-tabulate==0.9.0.3
+types-tqdm==4.66.0.5
+types_pytz==2023.3.1.1
+types-openpyxl==3.1.0.32
+openapi-pydantic==0.4.0

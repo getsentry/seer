@@ -16,7 +16,7 @@ lines_between_sections = 1
 python_version = "3.11"
 mypy_path = []
 plugins = ["pydantic.mypy"]
-files = ["tests/", "src/"]
+files = ["src/"]
 
 # minimal strictness settings
 check_untyped_defs = true
@@ -28,7 +28,10 @@ warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
 module = [
-    # "unidiff.*",
+    "matplotlib.*",
+    "joblib.*",
+    "sentence_transformers.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
 

@@ -10,12 +10,13 @@ Trend Detection Logic:
 
 """
 import datetime
-from typing import List, Literal, Mapping, Tuple, TypedDict, Union
+from typing import Any, List, Literal, Mapping, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import scipy
 from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
 
@@ -32,6 +33,8 @@ class BreakpointTransaction(BaseModel):
     data: List[SnubaTSEntry]
     request_start: int
     request_end: int
+    data_start: int
+    data_end: int
 
 
 class BreakpointRequest(BaseModel):
@@ -196,13 +199,13 @@ def find_trends(
         entry = BreakpointEntry(
             project=txn_names[0],
             transaction=txn_names[1],
-            aggregate_range_1=mu0,
-            aggregate_range_2=mu1,
+            aggregate_range_1=float(mu0),
+            aggregate_range_2=float(mu1),
             unweighted_t_value=scipy_t_test.statistic,
             unweighted_p_value=round(scipy_t_test.pvalue, 10),
-            trend_percentage=trend_percentage,
-            absolute_percentage_change=abs(trend_percentage),
-            trend_difference=mu1 - mu0,
+            trend_percentage=float(trend_percentage),
+            absolute_percentage_change=abs(float(trend_percentage)),
+            trend_difference=float(mu1 - mu0),
             breakpoint=change_point,
             request_start=req_start,
             request_end=req_end,
@@ -247,7 +250,7 @@ def find_trends(
             and (trend_change_validation is None or abs(trend_change_validation) > min_change)
         ):
             entry.change = "improvement"
-            trend_percentage_list.append((trend_percentage, entry))
+            trend_percentage_list.append((float(trend_percentage), entry))
 
         # if most regressed - get only positively significant txns
         elif (
@@ -262,6 +265,6 @@ def find_trends(
             and (trend_change_validation is None or trend_change_validation > min_change)
         ):
             entry.change = "regression"
-            trend_percentage_list.append((trend_percentage, entry))
+            trend_percentage_list.append((float(trend_percentage), entry))
 
     return trend_percentage_list
