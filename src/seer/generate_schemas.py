@@ -27,6 +27,8 @@ class TypedDictsGenerator:
         return f"typing.{t}"
 
     def generate(self) -> List[str]:
+        assert self.spec.components
+        assert self.spec.components.schemas
         for schema_ref, schema in self.spec.components.schemas.items():
             self.lines.extend([*self.generate_schema(schema_ref, schema)])
             self.lines.append("")
@@ -53,9 +55,10 @@ class TypedDictsGenerator:
 
             if schema.const:
                 return self.typing(f"Literal[{repr(schema.const)}]")
-            if schema.oneOf or schema.anyOf:
+
+            if schema.anyOf:
                 parts = []
-                for part in schema.oneOf or schema.anyOf:
+                for part in schema.anyOf:
                     annotation = yield from self.get_annotation(part)
                     parts.append(annotation)
                 return f"{self.typing('Union')}[{', '.join(parts)}]"
