@@ -278,21 +278,18 @@ Total tokens: **{prompt_tokens + completion_tokens} (${total_price:.3f})**"""
         return stats_str
 
     def create_pr_from_branch(
-        self,
-        branch: GitRef,
-        autofix_output: AutofixAgentsOutput,
-        issue_details: IssueDetails,
+        self, branch: GitRef, autofix_output: AutofixAgentsOutput, issue_id: str
     ):
         title = f"""🤖 {autofix_output.title}"""
 
-        issue_link_template = "https://sentry.io/organizations/sentry/issues/{issue_id}/"
+        issue_link = f"https://sentry.io/organizations/sentry/issues/{issue_id}/"
 
         description = f"""👋 Hi there! This PR was automatically generated 🤖
 
 {autofix_output.description}
 
 ### Issue that triggered this PR:
-{issue_link_template.format(issue_id=issue_details.id)}
+{issue_link}
 
 ### Stats:
 {self._get_stats_str(autofix_output.usage.prompt_tokens, autofix_output.usage.completion_tokens)}"""

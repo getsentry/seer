@@ -82,3 +82,4 @@ types-PyYAML==6.0.12.1
 types-jsonschema==4.20.0.20240105
 types-requests==2.25.0
 openapi-pydantic==0.4.0
+celery==5.3.6

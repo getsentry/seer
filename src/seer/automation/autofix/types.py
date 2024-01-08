@@ -13,10 +13,6 @@ class FileChange(BaseModel):
     description: Optional[str] = None
 
 
-class AutofixInput(BaseModel):
-    additional_context: Optional[str]
-
-
 class PlanningOutput(BaseModel):
     title: str
     description: str
@@ -26,10 +22,6 @@ class PlanningOutput(BaseModel):
 
 class AutofixAgentsOutput(PlanningOutput):
     changes: list[FileChange]
-
-
-class AutofixOutput(PlanningOutput):
-    pr_url: str
 
 
 class SentryEvent(BaseModel):
@@ -62,3 +54,16 @@ class IssueDetails(BaseModel):
     id: str
     title: str
     events: list[SentryEvent]
+
+
+class AutofixRequest(BaseModel):
+    issue: IssueDetails
+    additional_context: Optional[str] = None
+
+
+class AutofixOutput(PlanningOutput):
+    pr_url: str
+
+
+class AutofixResponse(BaseModel):
+    fix: Optional[AutofixOutput]

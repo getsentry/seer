@@ -2,8 +2,13 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 
+import sentry_sdk
 import torch
 from github import Auth
+from llama_index.indices import VectorStoreIndex
+from llama_index.schema import Document
+
+from seer.celery import app as celery_app
 
 from ..agent.agent import GptAgent, Message, Usage
 from .agent_context import AgentContext
@@ -11,8 +16,9 @@ from .prompts import action_prompt, planning_prompt
 from .tools import BaseTools, CodeActionTools
 from .types import (
     AutofixAgentsOutput,
-    AutofixInput,
     AutofixOutput,
+    AutofixRequest,
+    AutofixResponse,
     IssueDetails,
     PlanningOutput,
     SentryEvent,
@@ -24,10 +30,28 @@ REPO_NAME = "sentry-mirror-suggested-fix"
 REPO_REF = "heads/master"
 
 
+@celery_app.task
+def run_autofix(data):
+    with sentry_sdk.start_span(
+        op="seer.automation.autofix",
+        description="Run autofix on an issue within celery task",
+    ) as span:
+        logger = logging.getLogger("autofix")
+        logger.addHandler(logging.FileHandler("./autofix.log"))
+        logger.addHandler(logging.StreamHandler())
+        logger.setLevel(logging.DEBUG)
+
+        autofix = Autofix(data)
+        autofix_output = autofix.run()
+
+        span.set_tag("autofix_success", autofix_output is not None)
+
+        return autofix.run()
+
+
 class Autofix:
-    def __init__(self, issue_details: IssueDetails, autofix_input: AutofixInput):
-        self.issue_details = issue_details
-        self.autofix_input = autofix_input
+    def __init__(self, request: AutofixRequest):
+        self.request = request
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         app_id = os.environ.get("GITHUB_APP_ID")
@@ -50,17 +74,13 @@ class Autofix:
     def run(self):
         index, documents, nodes = self.agent_context.get_data()
 
-        planning_output = self._run_planning_agent(index, documents, nodes)
+        planning_output = self._run_planning_agent(index, documents)
         if planning_output is None:
             logger.warning(f"Planning agent did not return a valid output")
-            return None
+            return AutofixResponse(fix=None)
 
         coding_output, coding_usage = self._run_coding_agent(
-            self.agent_context.base_sha,
-            planning_output,
-            index,
-            documents,
-            nodes,
+            self.agent_context.base_sha, planning_output, index, documents
         )
 
         model_dump = planning_output.model_dump()
@@ -80,7 +100,7 @@ class Autofix:
 
         self.agent_context.cleanup()
 
-        autofix_output = AutofixOutput(
+        output = AutofixOutput(
             title=planning_output.title,
             description=planning_output.description,
             plan=planning_output.plan,
@@ -88,7 +108,7 @@ class Autofix:
             pr_url=pr.html_url,
         )
 
-        return autofix_output
+        return AutofixResponse(fix=output)
 
     def _create_pr(self, combined_output: AutofixAgentsOutput):
         branch_ref = self.agent_context.create_branch_from_changes(
@@ -96,10 +116,10 @@ class Autofix:
         )
 
         return self.agent_context.create_pr_from_branch(
-            branch_ref, combined_output, self.issue_details
+            branch_ref, combined_output, self.request.issue.id
         )
 
-    def _run_planning_agent(self, index, documents, nodes) -> PlanningOutput | None:
+    def _run_planning_agent(self, index, documents) -> PlanningOutput | None:
         planning_agent_tools = BaseTools(index, documents)
 
         planning_agent = GptAgent(
@@ -108,17 +128,15 @@ class Autofix:
                 Message(
                     role="system",
                     content=planning_prompt.format(
-                        err_msg=self.issue_details.title,
-                        stack_str=self.issue_details.events[-1].build_stacktrace(),
+                        err_msg=self.request.issue.title,
+                        stack_str=self.request.issue.events[-1].build_stacktrace(),
                     ),
                 )
             ],
         )
 
         additional_context_str = (
-            (self.autofix_input.additional_context + "\n\n")
-            if self.autofix_input.additional_context
-            else ""
+            (self.request.additional_context + "\n\n") if self.request.additional_context else ""
         )
         planning_response = planning_agent.run(
             f"{additional_context_str}Note: instead of ./app, the correct directory is static/app/..."
@@ -152,9 +170,8 @@ class Autofix:
         self,
         base_sha: str,
         planning_output: PlanningOutput,
-        index,
-        documents,
-        nodes,
+        index: VectorStoreIndex,
+        documents: list[Document],
     ):
         code_action_tools = CodeActionTools(
             self.agent_context, index, documents, base_sha=base_sha, verbose=True
@@ -165,8 +182,8 @@ class Autofix:
                 Message(
                     role="system",
                     content=action_prompt.format(
-                        err_msg=self.issue_details.title,
-                        stack_str=self.issue_details.events[-1].build_stacktrace(),
+                        err_msg=self.request.issue.title,
+                        stack_str=self.request.issue.events[-1].build_stacktrace(),
                     ),
                 )
             ],

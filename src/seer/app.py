@@ -4,6 +4,8 @@ import time
 from typing import Any, Callable
 
 import sentry_sdk
+from automation.autofix.autofix import run_autofix
+from automation.autofix.types import AutofixRequest, AutofixResponse
 from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
@@ -89,34 +91,11 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     return trends
 
 
-@app.route("/v0/automation/autofix", methods=["POST"])
-def suggested_fix_endpoint():
-    from automation.autofix.autofix import Autofix
-    from automation.autofix.types import AutofixInput, IssueDetails, SentryEvent
+@json_api("/v0/automation/autofix")
+def autofix_endpoint(data: AutofixRequest):
+    task = run_autofix.delay(data)
 
-    data = request.get_json()
-
-    issue_details = IssueDetails(
-        id=data["id"],
-        title=data["title"],
-        events=[SentryEvent(entries=e["entries"]) for e in data["events"]],
-    )
-
-    autofix_input = AutofixInput(additional_context=data["additional_context"])
-
-    with sentry_sdk.start_span(
-        op="seer.automation.autofix",
-        description="Generate issue severity score",
-    ) as span:
-        autofix = Autofix(issue_details, autofix_input)
-        autofix_output = autofix.run()
-
-        span.set_tag("autofix_success", autofix_output is not None)
-
-    if autofix_output is None:
-        return "No fix found", 404
-
-    return autofix_output.model_dump()
+    return task.get(timeout=1800)  # 30 minute timeout
 
 
 @app.route("/health/live", methods=["GET"])
