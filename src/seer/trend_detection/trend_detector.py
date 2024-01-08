@@ -9,54 +9,127 @@ Trend Detection Logic:
 - If p-value > 0.01 and trend percentage > 5%, then the trend is surfaced
 
 """
-
-import pandas as pd
-import numpy as np
-import scipy
 import datetime
+from typing import Any, List, Literal, Mapping, Tuple, Union
 
-from seer.trend_detection.detectors.cusum_detection import CUSUMDetector
+import numpy as np
+import pandas as pd
+import scipy
+from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
+
+from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
+
+
+class SnubaMetadata(TypedDict):
+    count: float
+
+
+# timestamp,
+SnubaTSEntry = Tuple[int, Tuple[SnubaMetadata]]
+
+
+class BreakpointTransaction(BaseModel):
+    data: List[SnubaTSEntry]
+    request_start: int
+    request_end: int
+    data_start: int
+    data_end: int
+
+
+class BreakpointRequest(BaseModel):
+    data: Mapping[str, BreakpointTransaction]
+    sort: str = ""
+    allow_midpoint: str = "1"
+    validate_tail_hours: int = 0
+    trend_percentage: float = Field(default=0.1, alias="trend_percentage()")
+    min_change: float = Field(default=0.0, alias="min_change()")
+
+
+class BreakpointEntry(BaseModel):
+    project: str
+    # For legacy reasons, the group name is always
+    # transaction even when working with functions.
+    transaction: str
+    aggregate_range_1: float
+    aggregate_range_2: float
+    unweighted_t_value: float
+    unweighted_p_value: float
+    trend_percentage: float
+    absolute_percentage_change: float
+    trend_difference: float
+    breakpoint: int
+    request_start: int
+    request_end: int
+    data_start: int
+    data_end: int
+    change: Union[Literal["improvement"], Literal["regression"]]
+
+
+class BreakpointResponse(BaseModel):
+    data: List[BreakpointEntry]
+
+
+def find_changepoint(
+    change_points: List[CUSUMChangePoint],
+    timestamps: List[int],
+    req_start: int,
+    req_end: int,
+    allow_midpoint: bool,
+) -> int | None:
+    # if breakpoints are detected, get most recent changepoint
+    if change_points:
+        change_point = int(datetime.datetime.timestamp(change_points[-1].start_time))
+        change_index = timestamps.index(change_point)
+        if change_index > 5:
+            return change_point
+
+    # check the midpoint boolean - don't get midpoint of the request period if this boolean is false, midpoint should only be used for trends
+    if not allow_midpoint:
+        return None
+
+    return (req_start + req_end) // 2
 
 
 def find_trends(
-    txns_data,
-    sort_function,
-    allow_midpoint,
-    min_pct_change,
-    min_change,
-    validate_tail_hours,
+    txns_data: Mapping[str, BreakpointTransaction],
+    sort_function: str,
+    allow_midpoint: bool,
+    min_pct_change: float,
+    min_change: float,
+    validate_tail_hours: int,
     pval=0.01,
-):
-    trend_percentage_list = []
+) -> List[Tuple[float, BreakpointEntry]]:
+    trend_percentage_list: List[Tuple[float, BreakpointEntry]] = []
 
+    txn: BreakpointTransaction
     # defined outside for loop so error won't throw for empty data
-    transaction_list = txns_data.keys()
-
-    for txn in transaction_list:
+    for txn_name, txn in txns_data.items():
         # data without zero-filling
-        timestamps = []
-        metrics = []
+        timestamps: List[int] = []
+        metrics: List[float] = []
 
         # get all the non-zero data
-        ts_data = txns_data[txn]["data"]
+        ts_data = txn.data
+        ts_entry: SnubaTSEntry
 
-        for i in range(len(ts_data)):
-            metric = ts_data[i][1][0]["count"]
+        for timestamp, (metadata,) in txn.data:
+            metric = metadata["count"]
 
             if metric != 0:
-                timestamps.append(ts_data[i][0])
+                timestamps.append(timestamp)
                 metrics.append(metric)
 
-        # snuba query limit was hit, and we won't have complete data for this transaction so disregard this txn
+        # snuba query limit was hit, and we won't have complete data for this transaction so disregard this txn_name
         if None in metrics:
             continue
 
         # extract all zero filled data
-        timestamps_zero_filled = [ts_data[x][0] for x in range(len(ts_data))]
-        metrics_zero_filled = [ts_data[x][1][0]["count"] for x in range(len(ts_data))]
+        timestamps_zero_filled: List[int] = [ts_data[x][0] for x in range(len(ts_data))]
+        metrics_zero_filled: List[float] = [ts_data[x][1][0]["count"] for x in range(len(ts_data))]
 
-        req_start = int(txns_data[txn]["request_start"])
-        req_end = int(txns_data[txn]["request_end"])
+        req_start = txn.request_start
+        req_end = txn.request_end
 
         # don't include transaction if there are less than three datapoints in non zero data OR
         # don't include transaction if there is no more data within request time period
@@ -65,7 +138,7 @@ def find_trends(
 
         try:
             # grab the index of the request start time
-            req_start_index = next(i for i, v in enumerate(timestamps) if v > req_start)
+            next(i for i, v in enumerate(timestamps) if v > req_start)
         except StopIteration:
             # After removing the zerofilled entries, it's possible that all
             # timestamps fall before the request start. When this happens, there
@@ -73,12 +146,11 @@ def find_trends(
             continue
 
         # convert to pandas timestamps for magnitude compare method in cusum detection
-        timestamps_pandas = [
+        timestamps_pandas: List[pd.Timestamp] = [
             pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps
         ]
-        timestamps_zerofilled_pandas = [
-            pd.Timestamp(datetime.datetime.fromtimestamp(x))
-            for x in timestamps_zero_filled
+        timestamps_zerofilled_pandas: List[pd.Timestamp] = [
+            pd.Timestamp(datetime.datetime.fromtimestamp(x)) for x in timestamps_zero_filled
         ]
 
         timeseries = pd.DataFrame({"time": timestamps_pandas, "y": metrics})
@@ -88,27 +160,13 @@ def find_trends(
         )
 
         change_points = CUSUMDetector(timeseries, timeseries_zerofilled).detector()
-
-        # get number of breakpoints in second half of timeseries
-        num_breakpoints = len(change_points)
-
-        # sort change points by start time to get most recent one
         change_points.sort(key=lambda x: x.start_time)
 
-        # if breakpoints are detected, get most recent changepoint
-        if num_breakpoints != 0:
-            change_point = change_points[-1].start_time
-            # convert back to datetime timestamp
-            change_point = int(datetime.datetime.timestamp(change_point))
-            change_index = timestamps.index(change_point)
-
-        # if breakpoint is in the very beginning or no breakpoints are detected, use midpoint analysis instead
-        if num_breakpoints == 0 or change_index <= 5:
-            # check the midpoint boolean - don't get midpoint of the request period if this boolean is false, midpoint should only be used for trends
-            if not allow_midpoint:
-                continue
-
-            change_point = (req_start + req_end) // 2
+        change_point = find_changepoint(
+            change_points, timestamps, req_start, req_end, allow_midpoint
+        )
+        if change_point is None:
+            continue
 
         first_half = [
             metrics[i]
@@ -121,7 +179,7 @@ def find_trends(
             if timestamps[i] >= change_point and timestamps[i] <= req_end
         ]
 
-        # if either of the halves don't have any data to compare to then move on to the next txn
+        # if either of the halves don't have any data to compare to then move on to the next txn_name
         if len(first_half) == 0 or len(second_half) == 0:
             continue
 
@@ -136,23 +194,25 @@ def find_trends(
         else:
             trend_percentage = mu1 / mu0
 
-        txn_names = txn.split(",")
-        output_dict = {
-            "project": txn_names[0],
-            "transaction": txn_names[1],
-            "aggregate_range_1": mu0,
-            "aggregate_range_2": mu1,
-            "unweighted_t_value": scipy_t_test.statistic,
-            "unweighted_p_value": round(scipy_t_test.pvalue, 10),
-            "trend_percentage": trend_percentage,
-            "absolute_percentage_change": abs(trend_percentage),
-            "trend_difference": mu1 - mu0,
-            "breakpoint": change_point,
-            "request_start": req_start,
-            "request_end": req_end,
-            "data_start": int(txns_data[txn]["data_start"]),
-            "data_end": int(txns_data[txn]["data_end"]),
-        }
+        txn_names = txn_name.split(",")
+
+        entry = BreakpointEntry(
+            project=txn_names[0],
+            transaction=txn_names[1],
+            aggregate_range_1=float(mu0),
+            aggregate_range_2=float(mu1),
+            unweighted_t_value=scipy_t_test.statistic,
+            unweighted_p_value=round(scipy_t_test.pvalue, 10),
+            trend_percentage=float(trend_percentage),
+            absolute_percentage_change=abs(float(trend_percentage)),
+            trend_difference=float(mu1 - mu0),
+            breakpoint=change_point,
+            request_start=req_start,
+            request_end=req_end,
+            data_start=int(txn.data_start),
+            data_end=int(txn.data_end),
+            change="regression",
+        )
 
         # TREND LOGIC:
         #  1. p-value of t-test is less than passed in threshold (default = 0.01)
@@ -171,9 +231,7 @@ def find_trends(
 
             # Calculate the trend percentage and change for the last validate_tail_hours
             mu_validation = np.average(validation_data)
-            trend_percentage_validation = (
-                mu_validation / mu0 if mu0 != 0 else mu_validation
-            )
+            trend_percentage_validation = mu_validation / mu0 if mu0 != 0 else mu_validation
             trend_change_validation = mu_validation - mu0
         else:
             trend_percentage_validation = None
@@ -189,13 +247,10 @@ def find_trends(
                 trend_percentage_validation is None
                 or abs(trend_percentage_validation - 1) > min_pct_change
             )
-            and (
-                trend_change_validation is None
-                or abs(trend_change_validation) > min_change
-            )
+            and (trend_change_validation is None or abs(trend_change_validation) > min_change)
         ):
-            output_dict["change"] = "improvement"
-            trend_percentage_list.append((trend_percentage, output_dict))
+            entry.change = "improvement"
+            trend_percentage_list.append((float(trend_percentage), entry))
 
         # if most regressed - get only positively significant txns
         elif (
@@ -207,11 +262,9 @@ def find_trends(
                 trend_percentage_validation is None
                 or trend_percentage_validation - 1 > min_pct_change
             )
-            and (
-                trend_change_validation is None or trend_change_validation > min_change
-            )
+            and (trend_change_validation is None or trend_change_validation > min_change)
         ):
-            output_dict["change"] = "regression"
-            trend_percentage_list.append((trend_percentage, output_dict))
+            entry.change = "regression"
+            trend_percentage_list.append((float(trend_percentage), entry))
 
     return trend_percentage_list

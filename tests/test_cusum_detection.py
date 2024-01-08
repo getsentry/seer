@@ -202,8 +202,8 @@ class TestCusumDetector(unittest.TestCase):
             "data_start": 1681934400,
             "data_end": 1683144000,
         }
-        timestamps = [x[0] for x in trend_data["data"]]
-        metrics = [x[1][0]["count"] for x in trend_data["data"]]
+        timestamps = [x[0] for x in trend_data["data"]]  # type: ignore
+        metrics = [x[1][0]["count"] for x in trend_data["data"]]  # type: ignore
 
         input_data = pd.DataFrame({"time": timestamps, "y": metrics})
 

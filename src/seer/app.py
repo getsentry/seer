@@ -1,13 +1,15 @@
+import functools
 import os
 import time
+from typing import Any, Callable
 
-import pandas as pd
 import sentry_sdk
-from sentry_sdk import start_transaction
-from flask import Flask, request
+from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from seer.trend_detection.trend_detector import find_trends
+from seer.json_api import json_api, register_json_api_views
+from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
+from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
 
 def traces_sampler(sampling_context):
@@ -34,47 +36,39 @@ def model_path(subpath: str) -> str:
     return os.path.join(root, "models", subpath)
 
 
-model_initialized = False
-embeddings_model = None
-if not os.environ.get("PYTEST_CURRENT_TEST"):
-    from seer.severity.severity_inference import SeverityInference
-
-    embeddings_model = SeverityInference(
+@functools.cache
+def embeddings_model() -> SeverityInference:
+    return SeverityInference(
         model_path("issue_severity_v0/embeddings"), model_path("issue_severity_v0/classifier")
     )
-    model_initialized = True
 
 
-@app.route("/v0/issues/severity-score", methods=["POST"])
-def severity_endpoint():
-    data = request.get_json()
-    if data.get("trigger_error") is not None:
+@json_api("/v0/issues/severity-score")
+def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
+    if data.trigger_error:
         raise Exception("oh no")
-    elif data.get("trigger_timeout") is not None:
+    elif data.trigger_timeout:
         time.sleep(0.5)
-    
+
     with sentry_sdk.start_span(
         op="seer.severity",
         description="Generate issue severity score",
     ) as span:
-        severity = embeddings_model.severity_score(data)
-        span.set_tag("severity", str(severity))
-        
-    results = {"severity": str(severity)}
-    return results
+        response = embeddings_model().severity_score(data)
+        span.set_tag("severity", str(response.severity))
+    return response
 
 
-@app.route("/trends/breakpoint-detector", methods=["POST"])
-def breakpoint_trends_endpoint():
-    data = request.get_json()
-    txns_data = data["data"]
+@json_api("/trends/breakpoint-detector")
+def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
+    txns_data = data.data
 
-    sort_function = data.get("sort", "")
-    allow_midpoint = data.get("allow_midpoint", "1") == "1"
-    validate_tail_hours = data.get("validate_tail_hours", 0)
+    sort_function = data.sort
+    allow_midpoint = data.allow_midpoint == "1"
+    validate_tail_hours = data.validate_tail_hours
 
-    min_pct_change = float(data.get("trend_percentage()", 0.1))
-    min_change = float(data.get("min_change()", 0))
+    min_pct_change = data.trend_percentage
+    min_change = data.min_change
 
     with sentry_sdk.start_span(
         op="seer.breakpoint_detection",
@@ -89,7 +83,7 @@ def breakpoint_trends_endpoint():
             validate_tail_hours,
         )
 
-    trends = {"data": [x[1] for x in trend_percentage_list]}
+    trends = BreakpointResponse(data=[x[1] for x in trend_percentage_list])
     app.logger.debug("Trend results: %s", trends)
 
     return trends
@@ -102,6 +96,13 @@ def health_check():
 
 @app.route("/health/ready", methods=["GET"])
 def ready_check():
-    if not model_initialized:
-        return "Model not initialized", 503
     return "", 200
+
+
+register_json_api_views(app)
+
+
+def run(environ: dict, start_response: Callable) -> Any:
+    # Force preload
+    embeddings_model()
+    return app(environ, start_response)

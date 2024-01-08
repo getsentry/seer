@@ -7,15 +7,10 @@ algorithms.
 
 from __future__ import annotations
 
-import datetime
 import logging
-from typing import Any, cast, Dict, List, Optional, Tuple, Union
+from typing import Tuple
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype as is_datetime, is_numeric_dtype
-from pandas.tseries.frequencies import to_offset
 
 FigSize = Tuple[int, int]
 
@@ -76,10 +71,7 @@ class TimeSeriesChangePoint:
 
     def __hash__(self) -> int:
         # Allow subclasses to override __repr__ without affecting __hash__.
-        return hash("{self._start_time},{self._end_time},{self._confidence}")
+        return hash(f"{self._start_time},{self._end_time},{self._confidence}")
 
 
-
-__all__ = [
-    "TimeSeriesChangePoint"
-]
+__all__ = ["TimeSeriesChangePoint"]

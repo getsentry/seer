@@ -20,7 +20,6 @@ jobs:
 
     env:
       TEST: 1
-      PYTEST_CURRENT_TEST: true
 
     steps:
     - uses: actions/checkout@v3
@@ -41,6 +40,13 @@ jobs:
     - name: Build image
       run: |
         make image
+    - name: Check schema
+      run: |
+        make schemas
+        if ! git diff --quiet --ignore-submodules --cached; then
+          echo "Error: Schema changes detected, run make schemas and commit those!"
+          exit 1
+        fi
     - name: Test with pytest
       run: |
         make test

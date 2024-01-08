@@ -2,16 +2,15 @@ import json
 import unittest
 from unittest import mock
 
-import pandas as pd
 import pytest
 
-from seer.seer import app
+from seer.app import app
 
 
 @pytest.fixture(autouse=True)
 def mock_severity_score():
     # Create a mock instance with a dummy severity_score method
-    with mock.patch("seer.seer.SeverityInference") as mock_severity_inference:
+    with mock.patch("seer.app.SeverityInference") as mock_severity_inference:
         mock_instance = mock_severity_inference.return_value
         mock_instance.severity_score.return_value = [0, 1]
         yield
@@ -240,6 +239,8 @@ class TestSeer(unittest.TestCase):
             data=json.dumps(input_data),
             content_type="application/json",
         )
+
+        assert response.status_code == 200
 
         request_start = input_data["data"][
             "sentry,/api/0/organizations/{organization_slug}/issues/"
