@@ -107,7 +107,7 @@ def find_trends(
     for txn_name, txn in txns_data.items():
         # data without zero-filling
         timestamps: List[int] = []
-        metrics: List[int] = []
+        metrics: List[float] = []
 
         # get all the non-zero data
         ts_data = txn.data
@@ -126,7 +126,7 @@ def find_trends(
 
         # extract all zero filled data
         timestamps_zero_filled: List[int] = [ts_data[x][0] for x in range(len(ts_data))]
-        metrics_zero_filled: List[int] = [ts_data[x][1][0]["count"] for x in range(len(ts_data))]
+        metrics_zero_filled: List[float] = [ts_data[x][1][0]["count"] for x in range(len(ts_data))]
 
         req_start = txn.request_start
         req_end = txn.request_end
