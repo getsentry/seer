@@ -1,6 +1,5 @@
 import functools
 import os
-import sys
 import time
 from typing import Any, Callable
 

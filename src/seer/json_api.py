@@ -3,7 +3,7 @@ import inspect
 from typing import Any, Callable, List, Tuple, Type, TypeVar, get_type_hints
 
 from flask import Flask, request
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest
 
 _F = TypeVar("_F", bound=Callable[..., Any])
@@ -31,7 +31,11 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
             if not isinstance(data, dict):
                 raise BadRequest("Data is not an object")
 
-            result: BaseModel = implementation(request_annotation.model_validate(data, strict=True))
+            try:
+                result: BaseModel = implementation(request_annotation.model_validate(data))
+            except ValidationError as e:
+                raise BadRequest(str(e))
+
             return result.model_dump()
 
         functools.update_wrapper(wrapper, implementation)

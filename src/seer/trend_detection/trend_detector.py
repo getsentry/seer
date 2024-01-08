@@ -22,7 +22,7 @@ from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUS
 
 
 class SnubaMetadata(TypedDict):
-    count: int
+    count: float
 
 
 # timestamp,
