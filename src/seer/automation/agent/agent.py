@@ -9,7 +9,7 @@ from openai._types import NotGiven
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel
 
-from seer.automation.autofix.tools import FunctionTool
+from seer.automation.agent.tools import FunctionTool
 
 logger = logging.getLogger("autofix")
 
