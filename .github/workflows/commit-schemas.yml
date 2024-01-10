@@ -31,7 +31,7 @@ jobs:
         uses: getsentry/action-github-app-token@v2.0.0
         if: steps.diff.outputs.changes == 'true'
         with:
-          app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - name: Deploy schema to sentry-data-schemas
         if: steps.diff.outputs.changes == 'true'
