@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.types import AutofixRequest
-from seer.celery import app as celery_app
+from seer.celery_app import app as celery_app
 
 
 class TaskStatusRequest(BaseModel):
