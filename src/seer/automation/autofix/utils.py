@@ -1,7 +1,6 @@
 # Read the documents from the local directory, convert into nodes
 import difflib
 import logging
-import os
 import re
 from typing import List
 
@@ -9,8 +8,6 @@ import torch
 from llama_index.bridge.pydantic import PrivateAttr
 from llama_index.embeddings.base import BaseEmbedding
 from sentence_transformers import SentenceTransformer
-
-from .types import FileChange
 
 logger = logging.getLogger("autofix")
 
@@ -49,32 +46,6 @@ def get_last_non_empty_line(text: str) -> str:
         if line.strip() != "":
             return line
     return ""
-
-
-def get_diff(changes: list[FileChange]):
-    diffs = []
-    for change in changes:
-        if change.change_type == "edit":
-            diff = f"diff --git a/{change.path} b/{change.path}\n"
-            diff += f"--- a/{change.path}\n"
-            diff += f"+++ b/{change.path}\n"
-            original_lines = (
-                change.original_contents.split("\n") if change.original_contents else ""
-            )
-            new_lines = change.contents.split("\n")
-            diff_body = ""
-            for i, (orig_line, new_line) in enumerate(zip(original_lines, new_lines)):
-                if orig_line != new_line:
-                    diff_body += f"-{orig_line}\n+{new_line}\n"
-            diff += diff_body
-            diffs.append(diff)
-        elif change.change_type == "delete":
-            diff = f"diff --git a/{change.path} b/{change.path}\n"
-            diff += f"deleted file mode 100644\n"
-            diff += f"--- a/{change.path}\n"
-            diff += f"+++ /dev/null\n"
-            diffs.append(diff)
-    return "\n".join(diffs)
 
 
 def find_original_snippet(

@@ -4,13 +4,17 @@ import time
 from typing import Any, Callable
 
 import sentry_sdk
-from automation.autofix.autofix import run_autofix
-from automation.autofix.types import AutofixRequest, AutofixResponse
 from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
+from seer.automation.autofix.types import (
+    AutofixIdResponse,
+    AutofixRequest,
+    AutofixTaskResultResponse,
+)
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
+from seer.tasks import TaskStatusRequest, run_autofix
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
 
@@ -92,10 +96,20 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 
 
 @json_api("/v0/automation/autofix")
-def autofix_endpoint(data: AutofixRequest):
-    task = run_autofix.delay(data)
+def autofix_endpoint(data: AutofixRequest) -> AutofixIdResponse:
+    task = run_autofix.delay(data.model_dump())
 
-    return task.get(timeout=1800)  # 30 minute timeout
+    return AutofixIdResponse(id=task.id, state=task.state)
+
+
+@json_api("/v0/automation/autofix/result")
+def autofix_result_endpoint(data: TaskStatusRequest) -> AutofixTaskResultResponse:
+    result = run_autofix.AsyncResult(data.task_id)
+
+    if result.ready():
+        return AutofixTaskResultResponse(result=result.get(), status=result.state)
+
+    return AutofixTaskResultResponse(result=None, status=result.state)
 
 
 @app.route("/health/live", methods=["GET"])

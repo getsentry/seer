@@ -18,10 +18,12 @@ from llama_index.node_parser import CodeSplitter
 from llama_index.readers import SimpleDirectoryReader
 from llama_index.schema import BaseNode, Document
 
-from .types import AutofixAgentsOutput, FileChange, IssueDetails
-from .utils import SentenceTransformersEmbedding
+from seer.automation.autofix.types import AutofixAgentsOutput, FileChange
+from seer.automation.autofix.utils import SentenceTransformersEmbedding
 
 logger = logging.getLogger("autofix")
+
+CACHED_COMMIT_SHA = "db53ec4557fc8e52de8b27f35f977a34e8e73213"
 
 
 class AgentContext:
@@ -30,12 +32,16 @@ class AgentContext:
     github: Github
     repo: Repository
     base_sha: str
+    bucket = "sentry-ml"
 
     tmp_dir: str
     tmp_repo_path: str
 
     embed_model: SentenceTransformersEmbedding
-    persist_path: str | None
+
+    index: VectorStoreIndex
+    documents: list[Document]
+    nodes: list[BaseNode]
 
     def __init__(
         self,
@@ -44,7 +50,6 @@ class AgentContext:
         model: str,
         github_auth: Auth.AppAuth,
         gpu_device: torch.device,
-        persist_path: str | None = None,
         ref: str | None = None,
         base_sha: str | None = None,
         tmp_dir: str | None = None,
@@ -75,7 +80,8 @@ class AgentContext:
         logger.info(f"Using tmp dir {self.tmp_dir}")
 
         self.embed_model = SentenceTransformersEmbedding("thenlper/gte-small", device=gpu_device)
-        self.persist_path = persist_path
+
+        self._get_data()
 
     def _embed_and_index_nodes(self, nodes: list[BaseNode]) -> VectorStoreIndex:
         service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
@@ -90,7 +96,7 @@ class AgentContext:
             # "tsx": "tsx",
             "py": "python"
         }
-        documents_by_language = {}
+        documents_by_language: dict[str, list[Document]] = {}
 
         for document in documents:
             file_extension = document.metadata["file_name"].split(".")[-1]
@@ -105,7 +111,6 @@ class AgentContext:
                 )
                 documents_by_language.setdefault(language, []).append(document)
 
-        print(f"example filepath! {documents_by_language['python'][0].metadata['file_path'] }")
         nodes: List[BaseNode] = []
 
         for language, language_docs in documents_by_language.items():
@@ -185,31 +190,103 @@ class AgentContext:
         ).load_data()
         nodes = self._documents_to_nodes(documents)
 
+        return documents, nodes
+
+    def _get_commit_file_diffs(self) -> list[str]:
+        comparison = self.repo.compare(CACHED_COMMIT_SHA, self.base_sha)
+
+        filenames = [f.filename for f in comparison.files]
+
+        return filenames
+
+    def _get_data(self, cache_only=False):
+        documents, nodes = self._load_data_from_github()
+
+        # bucket = self.gcs.get_bucket(self.bucket) if self.bucket else None
+        # index_path = f"seer/autofix/{self.repo.owner.name}/{self.repo.name}/{self.base_sha}"
+        # index_dump_file = self.tmp_dir + "/index.joblib"
+
+        # if bucket and bucket.blob(index_path).exists():
+        #     logger.debug(f"Loading index from {index_path}")
+        #     blob = bucket.blob(index_path)
+        #     blob.download_to_filename(index_dump_file)
+        #     index: VectorStoreIndex = joblib.load(index_dump_file)
+        #     index._service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+
+        index_path = f"models/index_{CACHED_COMMIT_SHA}"
+
+        # if os.path.exists(index_path):
+        index: VectorStoreIndex = joblib.load(index_path)
+        index._service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+
+        # Update the documents that changed in the diff.
+        filenames = self._get_commit_file_diffs()
+
+        logger.debug(f"Updating index with {len(filenames)} files")
+
+        self.index = index
         self.documents = documents
         self.nodes = nodes
 
-        return documents, nodes
+        documents_to_update = [
+            document for document in documents if document.metadata["file_path"] in filenames
+        ]
 
-    def get_data(self, cache_only=False):
-        documents, nodes = self._load_data_from_github()
+        for document in documents_to_update:
+            self.index.delete(document.get_doc_id())
 
-        persist_path = os.path.join(self.persist_path, self.base_sha) if self.persist_path else None
-        if persist_path and os.path.exists(persist_path):
-            logger.debug(f"Loading index from {persist_path}")
-            index: VectorStoreIndex = joblib.load(persist_path)
-            index._service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+        new_nodes = self._documents_to_nodes(documents_to_update)
+        self.index.insert_nodes(new_nodes)
+
+        # else:
+        #     if cache_only:
+        #         raise Exception(f"Could not load index from {index_path}")
+        #     logger.debug("Creating index")
+        #     index = self._embed_and_index_nodes(nodes)
+
+        # if bucket and index_path:
+        #     blob = bucket.blob(index_path)
+
+        #     joblib.dump(index, index_dump_file)
+        #     blob.upload_from_filename(index_dump_file)
+        #     logger.debug(f"Saved index to {index_path}")
+
+    def _get_document(self, file_path: str):
+        for document in self.documents:
+            if file_path in document.metadata["file_path"]:
+                return document
+
+        return None
+
+    def _update_document(self, file_path: str, contents: str | None):
+        document = self._get_document(file_path)
+        if document:
+            # Delete operation
+            if contents is None:
+                self.index.delete(document.get_doc_id())
+                self.documents.remove(document)
+                # Also remove associated nodes
+                associated_nodes = [
+                    node for node in self.nodes if node.ref_doc_id == document.get_doc_id()
+                ]
+                for node in associated_nodes:
+                    self.nodes.remove(node)
+            # Update operation
+            else:
+                self.index.delete(document.get_doc_id())
+                new_doc = Document(text=contents)
+                new_doc.metadata = document.metadata
+                new_nodes = self._documents_to_nodes([new_doc])
+                self.index.insert_nodes(new_nodes)
+        # Create operation
         else:
-            if cache_only:
-                raise Exception(f"Could not load index from {persist_path}")
-            logger.debug("Creating index")
-            index = self._embed_and_index_nodes(nodes)
-
-            if persist_path:
-                os.makedirs(os.path.dirname(persist_path), exist_ok=True)
-                joblib.dump(index, persist_path)
-                logger.debug(f"Saved index to {persist_path}")
-
-        return index, documents, nodes
+            if contents is not None:
+                document = Document(text=contents)
+                document.metadata = {"file_path": file_path, "file_name": file_path.split("/")[-1]}
+                new_nodes = self._documents_to_nodes([document])
+                self.index.insert_nodes(new_nodes)
+                self.documents.append(document)
+                self.nodes.extend(new_nodes)
 
     def cleanup(self):
         shutil.rmtree(self.tmp_dir)

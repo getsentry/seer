@@ -1,30 +1,27 @@
 import logging
-from typing import Dict, List, Set
+from typing import Dict, Set
 
-from llama_index.indices import VectorStoreIndex
 from llama_index.retrievers import VectorIndexRetriever
-from llama_index.schema import Document, MetadataMode
+from llama_index.schema import MetadataMode
 
-from ..agent.tools import FunctionTool
-from .agent_context import AgentContext
-from .types import FileChange
-from .utils import find_original_snippet
+from seer.automation.agent.tools import FunctionTool
+from seer.automation.autofix.agent_context import AgentContext
+from seer.automation.autofix.types import FileChange
+from seer.automation.autofix.utils import find_original_snippet
 
 logger = logging.getLogger("autofix")
 
 
 class BaseTools:
-    index: VectorStoreIndex
-    documents: List[Document]
+    context: AgentContext
     retriever: VectorIndexRetriever
 
     retrieved_paths: Set[str]
     expanded_paths: Set[str]
 
-    def __init__(self, index: VectorStoreIndex, documents: List[Document]):
-        self.index = index
-        self.documents = documents
-        self.retriever = VectorIndexRetriever(index=index, similarity_top_k=4)
+    def __init__(self, context: AgentContext):
+        self.context = context
+        self.retriever = VectorIndexRetriever(index=self.context.index, similarity_top_k=4)
         self.retrieved_paths = set()
         self.expanded_paths = set()
 
@@ -42,7 +39,7 @@ class BaseTools:
         return content
 
     def _get_document(self, file_path: str):
-        for document in self.documents:
+        for document in self.context.documents:
             if file_path in document.metadata["file_path"]:
                 return document
 
@@ -106,12 +103,10 @@ class CodeActionTools(BaseTools):
     def __init__(
         self,
         context: AgentContext,
-        index: VectorStoreIndex,
-        documents: List[Document],
         base_sha: str,
         verbose: bool = False,
     ):
-        super().__init__(index=index, documents=documents)
+        super().__init__(context)
 
         self.context = context
         self.base_sha = base_sha
@@ -130,20 +125,6 @@ class CodeActionTools(BaseTools):
         logger.debug(f"Getting file contents from memory for file_path: {file_path}")
 
         return self.file_changes[file_path].contents
-
-    def _update_index(self, file_path: str, contents: str | None):
-        document = self._get_document(file_path)
-        if document:
-            self.index.delete(document.get_doc_id())
-        else:
-            document = Document()
-            document.metadata = {"file_path": file_path, "file_name": file_path.split("/")[-1]}
-
-        if contents is not None:
-            new_doc = Document(text=contents)
-            new_doc.metadata = document.metadata
-            new_nodes = self.context._documents_to_nodes([new_doc])
-            self.index.insert_nodes(new_nodes)
 
     def expand_document(self, input: str):
         if input in self.file_changes:
@@ -169,6 +150,7 @@ class CodeActionTools(BaseTools):
         logger.debug("Exact snippet:")
         logger.debug(f'"{reference_snippet}"')
 
+        original_snippet: str | None = None
         if reference_snippet in file_contents:
             original_snippet = reference_snippet
         else:
@@ -181,7 +163,7 @@ class CodeActionTools(BaseTools):
 
         new_contents = file_contents.replace(original_snippet, replacement_snippet)
 
-        self._update_index(file_path, new_contents)
+        self.context._update_document(file_path, new_contents)
 
         original_contents = file_contents
         if file_path in self.file_changes:
@@ -208,6 +190,7 @@ class CodeActionTools(BaseTools):
         if not file_contents:
             raise Exception("File not found.")
 
+        original_snippet: str | None = None
         if snippet in file_contents:
             original_snippet = snippet
         else:
@@ -223,7 +206,7 @@ class CodeActionTools(BaseTools):
 
         new_contents = file_contents.replace(original_snippet, "")
 
-        self._update_index(file_path, new_contents)
+        self.context._update_document(file_path, new_contents)
 
         original_contents = file_contents
         if file_path in self.file_changes:
@@ -267,7 +250,7 @@ class CodeActionTools(BaseTools):
 
         new_contents = file_contents.replace(original_snippet, original_snippet + "\n" + snippet)
 
-        self._update_index(file_path, new_contents)
+        self.context._update_document(file_path, new_contents)
 
         original_contents = file_contents
         if file_path in self.file_changes:
@@ -291,7 +274,7 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.create_file] Creating file {file_path} with snippet {snippet}"
         )
 
-        self._update_index(file_path, snippet)
+        self.context._update_document(file_path, snippet)
 
         self.file_changes[file_path] = FileChange(
             change_type="edit",
@@ -313,7 +296,7 @@ class CodeActionTools(BaseTools):
             change_type="delete", path=file_path, description=commit_message
         )
 
-        self._update_index(file_path, None)
+        self.context._update_document(file_path, None)
 
         return "success"
 

@@ -6,8 +6,8 @@ from typing import List, Literal, Optional
 import openai_multi_tool_use_parallel_patch  # import applies the patch
 from openai import OpenAI
 from openai._types import NotGiven
-from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageToolCall
-from pydantic import BaseModel, ConfigDict
+from openai.types.chat import ChatCompletionMessageToolCall
+from pydantic import BaseModel
 
 from .tools import FunctionTool
 
@@ -122,7 +122,7 @@ class GptAgent(LlmAgent):
         completion = self.openai_client.chat.completions.create(
             model=self.model,
             messages=messages,  # type: ignore
-            tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),  # type: ignore
+            tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),
         )
 
         response_message = completion.choices[0].message

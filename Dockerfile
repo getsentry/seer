@@ -4,8 +4,14 @@ FROM python:3.11
 ARG TEST
 ENV PYTHONUNBUFFERED True
 
+ARG PORT
+ENV PORT=$PORT
+
 ENV APP_HOME /app
 WORKDIR $APP_HOME
+
+# Install supervisord
+RUN apt-get update && apt-get install -y supervisor && rm -rf /var/lib/apt/lists/*
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
@@ -21,8 +27,10 @@ RUN pip install -r requirements.txt
 COPY src/ src/
 COPY pyproject.toml .
 
+# Copy the supervisord.conf file into the container
+COPY supervisord.conf /etc/supervisord.conf
+
 RUN pip install --default-timeout=120 -e .
 RUN mypy
 
-# The number of gunicorn workers is selected by ops based on k8s configuration.
-CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 src.seer.app:run
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

@@ -2,7 +2,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from ..agent.agent import Usage
+from seer.automation.agent.agent import Usage
 
 
 class FileChange(BaseModel):
@@ -58,7 +58,8 @@ class IssueDetails(BaseModel):
 
 class AutofixRequest(BaseModel):
     issue: IssueDetails
-    additional_context: Optional[str] = None
+    base_commit_sha: Optional[str]
+    additional_context: Optional[str]
 
 
 class AutofixOutput(PlanningOutput):
@@ -67,3 +68,13 @@ class AutofixOutput(PlanningOutput):
 
 class AutofixResponse(BaseModel):
     fix: Optional[AutofixOutput]
+
+
+class AutofixTaskResultResponse(BaseModel):
+    result: Optional[AutofixResponse]
+    status: str
+
+
+class AutofixIdResponse(BaseModel):
+    id: str
+    state: str

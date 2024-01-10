@@ -1,7 +1,18 @@
 services:
-  app:
-    build:
-      context: .
-    working_dir: /app
-    volumes:
-      - ./:/app
+    redis:
+        image: redis:latest
+        container_name: "redis_dev"
+    app:
+        build:
+            context: .
+        working_dir: /app
+        volumes:
+            - ./:/app
+        depends_on:
+            - redis
+        env_file:
+            - .env
+        environment:
+            - PORT=8900
+        ports:
+            - "8900:8900"
