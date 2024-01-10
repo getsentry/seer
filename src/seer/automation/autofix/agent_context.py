@@ -199,23 +199,11 @@ class AgentContext:
 
         return filenames
 
-    def _get_data(self, cache_only=False):
+    def _get_data(self):
         documents, nodes = self._load_data_from_github()
-
-        # bucket = self.gcs.get_bucket(self.bucket) if self.bucket else None
-        # index_path = f"seer/autofix/{self.repo.owner.name}/{self.repo.name}/{self.base_sha}"
-        # index_dump_file = self.tmp_dir + "/index.joblib"
-
-        # if bucket and bucket.blob(index_path).exists():
-        #     logger.debug(f"Loading index from {index_path}")
-        #     blob = bucket.blob(index_path)
-        #     blob.download_to_filename(index_dump_file)
-        #     index: VectorStoreIndex = joblib.load(index_dump_file)
-        #     index._service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
 
         index_path = f"models/index_{CACHED_COMMIT_SHA}"
 
-        # if os.path.exists(index_path):
         index: VectorStoreIndex = joblib.load(index_path)
         index._service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
 
@@ -237,19 +225,6 @@ class AgentContext:
 
         new_nodes = self._documents_to_nodes(documents_to_update)
         self.index.insert_nodes(new_nodes)
-
-        # else:
-        #     if cache_only:
-        #         raise Exception(f"Could not load index from {index_path}")
-        #     logger.debug("Creating index")
-        #     index = self._embed_and_index_nodes(nodes)
-
-        # if bucket and index_path:
-        #     blob = bucket.blob(index_path)
-
-        #     joblib.dump(index, index_dump_file)
-        #     blob.upload_from_filename(index_dump_file)
-        #     logger.debug(f"Saved index to {index_path}")
 
     def _get_document(self, file_path: str):
         for document in self.documents:
