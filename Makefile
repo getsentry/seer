@@ -41,7 +41,7 @@ mypy: # Runs mypy type checking
 .PHONY: schemas
 schemas: image # Generates json files
 	docker run --rm -v ./src/seer/schemas:/app/src/seer/schemas $(project_name):latest python src/seer/generate_schemas.py
-	git clone --depth 1 git@github.com:getsentry/sentry-data-schemas.git $(tmpdir)
+	git clone --depth 1 https://github.com/getsentry/sentry-data-schemas.git $(tmpdir)
 	docker run --rm -t \
 	  -v $(tmpdir):/sentry-data-schemas:ro \
 	  -v $$(pwd)/src/:/src:ro \
