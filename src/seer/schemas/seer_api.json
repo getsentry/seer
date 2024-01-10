@@ -328,7 +328,7 @@
       "SnubaMetadata": {
         "properties": {
           "count": {
-            "type": "integer",
+            "type": "number",
             "title": "Count"
           }
         },

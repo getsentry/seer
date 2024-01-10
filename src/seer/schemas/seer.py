@@ -89,7 +89,7 @@ SeverityResponse = typing_extensions.TypedDict(
 SnubaMetadata = typing_extensions.TypedDict(
     "SnubaMetadata",
     {
-        "count": int,
+        "count": float,
     },
     total=False,
 )
