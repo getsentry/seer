@@ -19,8 +19,6 @@ from seer.automation.autofix.types import (
 
 # TODO: Remove this when we stop locking it to a repo
 REPO_OWNER = "getsentry"
-REPO_NAME = "sentry-mirror-suggested-fix"
-REPO_REF = "heads/master"
 
 logger = logging.getLogger("autofix")
 logger.addHandler(logging.FileHandler("./autofix.log"))
@@ -42,9 +40,11 @@ class Autofix:
 
     def run(self):
         logger.info(f"Beginning autofix for issue {self.request.issue.id}")
+
+        github_repo_name = os.environ.get("GITHUB_REPO_NAME")
         self.context = AgentContext(
             repo_owner=REPO_OWNER,
-            repo_name=REPO_NAME,
+            repo_name=github_repo_name if github_repo_name else "sentry-mirror-suggested-fix",
             ref=None if self.request.base_commit_sha else "heads/master",
             base_sha=self.request.base_commit_sha,
             model="gpt-4-1106-preview",
