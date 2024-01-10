@@ -9,7 +9,7 @@ from openai._types import NotGiven
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel
 
-from .tools import FunctionTool
+from seer.automation.autofix.tools import FunctionTool
 
 logger = logging.getLogger("autofix")
 
@@ -44,7 +44,7 @@ class LlmAgent(ABC):
     tools: List[FunctionTool]
     memory: List[Message]
 
-    openai_client = OpenAI()
+    openai_client: OpenAI
     iterations: int = 0
     max_iterations: int = 48
 
@@ -58,6 +58,7 @@ class LlmAgent(ABC):
         self.memory = memory or []
         self.usage = Usage()
         self.name = name
+        self.openai_client = OpenAI()
 
     @abstractmethod
     def run_iteration(self):
