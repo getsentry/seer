@@ -1,4 +1,4 @@
-name: Co
+name: Commit schema updates
 
 on:
   push:
