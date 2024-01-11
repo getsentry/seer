@@ -52,18 +52,17 @@ retrospection_planning_prompt = """You are an exceptional principal engineer tas
 - Call the tools via the tool calling API before you output the plan.
 </guidelines>
 
-<hint>
-{comment}
-Note: instead of ./app, the correct directory is static/app/...
-</hint>
-
 <error_message>
 {err_msg}
 </error_message>
 
 <stack_trace>
 {stack_str}
-</stack_trace>"""
+</stack_trace>
+
+<hint>
+{comment}
+</hint>"""
 
 retrospection_coding_prompt = """You are an exceptional principal engineer tasked with critiquing code changes that was created by another engineer. Given the below plan and available tools, please critique the changes and provide feedback on how to improve the changes.
 
@@ -83,11 +82,6 @@ retrospection_coding_prompt = """You are an exceptional principal engineer taske
 - Output a <comments></comments> tag with clear instructions on how to improve the code according to your critique.
 </guidelines>
 
-<hint>
-{comment}
-Note: instead of ./app, the correct directory is static/app/...
-</hint>
-
 <error_message>
 {err_msg}
 </error_message>
@@ -98,10 +92,14 @@ Note: instead of ./app, the correct directory is static/app/...
 
 <plan>
 {plan}
-</plan>"""
+</plan>
+
+<hint>
+{comment}
+</hint>"""
 
 
-action_prompt = """You are an exceptional senior engineer that is tasked with writing code to accomplish a task. Given the below plan and available tools, convert the plan into code. The original error message and stack trace that caused the plan to be created is also provided to help you understand the context of the plan.
+coding_prompt = """You are an exceptional senior engineer that is tasked with writing code to accomplish a task. Given the below plan and available tools, convert the plan into code. The original error message and stack trace that caused the plan to be created is also provided to help you understand the context of the plan.
 You will need to execute every step of the plan for me and not miss a single one because I have no fingers and I can't type. Fully complete the task, this is my last resort. My grandma is terminally ill and if we ship this fix we will get a $20,000 bonus that will help pay for the medical bills. Please help me save my grandma.
 
 <guidelines>
@@ -121,4 +119,8 @@ You will need to execute every step of the plan for me and not miss a single one
 
 <stack_trace>
 {stack_str}
-</stack_trace>"""
+</stack_trace>
+
+<hint>
+{comment}
+</hint>"""

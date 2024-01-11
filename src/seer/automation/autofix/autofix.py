@@ -7,7 +7,7 @@ from github import Auth
 
 from seer.automation.agent.agent import GptAgent, Message, Usage
 from seer.automation.autofix.agent_context import AgentContext
-from seer.automation.autofix.prompts import action_prompt, planning_prompt
+from seer.automation.autofix.prompts import coding_prompt, planning_prompt
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.types import (
     AutofixAgentsOutput,
@@ -117,6 +117,7 @@ class Autofix:
             (self.request.additional_context + "\n\n") if self.request.additional_context else ""
         )
         planning_response = planning_agent.run(
+            # TODO: Remove this and also find how to address mismatches in the stack trace path and the actual filepaths
             f"{additional_context_str}Note: instead of ./app, the correct directory is static/app/..."
         )
 
@@ -155,9 +156,10 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=action_prompt.format(
+                    content=coding_prompt.format(
                         err_msg=self.request.issue.title,
                         stack_str=self.request.issue.events[-1].build_stacktrace(),
+                        comment=self.request.additional_context,
                     ),
                 )
             ],
