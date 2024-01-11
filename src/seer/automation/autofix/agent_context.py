@@ -120,7 +120,7 @@ class AgentContext:
                 language=language,
                 chunk_lines=16,  # lines per chunk
                 chunk_lines_overlap=4,  # lines overlap between chunks
-                max_chars=5096,  # max chars per chunk
+                max_chars=2048,  # max chars per chunk
             )
 
             nodes.extend(splitter.get_nodes_from_documents(language_docs, show_progress=False))

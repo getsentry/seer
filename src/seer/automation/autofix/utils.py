@@ -14,7 +14,9 @@ logger = logging.getLogger("autofix")
 
 def compute_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:
     """
-    This function computes the similarity between two pieces of text.
+    This function computes the similarity between two pieces of text using the difflib.SequenceMatcher class.
+
+    difflib.SequenceMatcher uses the Ratcliff/Obershelp algorithm it computes the doubled number of matching characters divided by the total number of characters in the two strings.
 
     Parameters:
     text1 (str): The first piece of text.
