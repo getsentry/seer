@@ -90,7 +90,9 @@ class Autofix:
 
     def _create_pr(self, combined_output: AutofixAgentsOutput):
         branch_ref = self.context.create_branch_from_changes(
-            file_changes=combined_output.changes, base_commit_sha=self.context.base_sha
+            pr_title=combined_output.title,
+            file_changes=combined_output.changes,
+            base_commit_sha=self.context.base_sha,
         )
 
         return self.context.create_pr_from_branch(

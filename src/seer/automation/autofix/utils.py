@@ -1,22 +1,28 @@
-# Read the documents from the local directory, convert into nodes
 import difflib
+import json
 import logging
+import os
+import random
 import re
 from typing import List
 
+import fsspec
+import numpy as np
 import torch
 from llama_index.bridge.pydantic import PrivateAttr
 from llama_index.embeddings.base import BaseEmbedding
+from llama_index.vector_stores import SimpleVectorStore
 from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger("autofix")
+VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
 
 
 def compute_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:
     """
     This function computes the similarity between two pieces of text using the difflib.SequenceMatcher class.
 
-    difflib.SequenceMatcher uses the Ratcliff/Obershelp algorithm it computes the doubled number of matching characters divided by the total number of characters in the two strings.
+    difflib.SequenceMatcher uses the Ratcliff/Obershelp algorithm: it computes the doubled number of matching characters divided by the total number of characters in the two strings.
 
     Parameters:
     text1 (str): The first piece of text.
@@ -151,6 +157,21 @@ def find_original_snippet(
     return final_file_snippet
 
 
+def sanitize_branch_name(title: str) -> str:
+    """
+    Remove all characters that are not valid in git branch names
+    and return a kebab-case branch name from the title.
+    """
+    sanitized = "".join(c for c in title if c in VALID_BRANCH_NAME_CHARS)
+    kebab_case = sanitized.replace(" ", "-").replace("_", "-").lower()
+    return kebab_case
+
+
+def generate_random_string(n=6) -> str:
+    """Generate a random n character string."""
+    return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
+
+
 class SentenceTransformersEmbedding(BaseEmbedding):
     _model: SentenceTransformer = PrivateAttr()
     _instruction: str = PrivateAttr()
@@ -191,3 +212,20 @@ class SentenceTransformersEmbedding(BaseEmbedding):
 
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
         return self._model.encode(texts)
+
+
+class MemoryVectorStore(SimpleVectorStore):
+    def persist(self, persist_path: str, fs: fsspec.AbstractFileSystem) -> None:
+        """Persist the SimpleVectorStore to a directory."""
+        fs = fs or self._fs
+        dirpath = os.path.dirname(persist_path)
+        if not fs.exists(dirpath):
+            fs.makedirs(dirpath)
+
+        def default_serializer(obj):
+            if obj.__class__.__name__ == "float32":
+                return float(obj)
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+        with fs.open(persist_path, "w") as f:
+            json.dump(self._data.to_dict(), f, default=default_serializer)

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import shutil
@@ -13,17 +14,24 @@ from github import Auth, Github, GithubIntegration
 from github.GitRef import GitRef
 from github.Repository import Repository
 from llama_index import ServiceContext
+from llama_index.data_structs.data_structs import IndexDict
 from llama_index.indices import VectorStoreIndex
 from llama_index.node_parser import CodeSplitter
 from llama_index.readers import SimpleDirectoryReader
 from llama_index.schema import BaseNode, Document
+from llama_index.storage import StorageContext
 
 from seer.automation.autofix.types import AutofixAgentsOutput, FileChange
-from seer.automation.autofix.utils import SentenceTransformersEmbedding
+from seer.automation.autofix.utils import (
+    MemoryVectorStore,
+    SentenceTransformersEmbedding,
+    generate_random_string,
+    sanitize_branch_name,
+)
 
 logger = logging.getLogger("autofix")
 
-CACHED_COMMIT_SHA = "db53ec4557fc8e52de8b27f35f977a34e8e73213"
+CACHED_COMMIT_SHA = "ac63e3750291a6795d31404030783358ef3ea1ac"
 
 
 class AgentContext:
@@ -202,10 +210,23 @@ class AgentContext:
     def _get_data(self):
         documents, nodes = self._load_data_from_github()
 
-        index_path = f"models/index_{CACHED_COMMIT_SHA}"
+        storage_path = f"models/autofix_storage_context/"
 
-        index: VectorStoreIndex = joblib.load(index_path)
-        index._service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+        service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+        storage_context = StorageContext.from_defaults(
+            vector_store=MemoryVectorStore(), persist_dir=storage_path
+        )
+        index_structs = storage_context.index_store.index_structs()
+        if len(index_structs) == 0:
+            raise Exception("No index structures found in storage context")
+        index_struct: IndexDict = index_structs[0]  # type: ignore
+
+        index = VectorStoreIndex(
+            index_struct=index_struct,
+            service_context=service_context,
+            storage_context=storage_context,
+            show_progress=True,
+        )
 
         # Update the documents that changed in the diff.
         filenames = self._get_commit_file_diffs()
@@ -300,8 +321,10 @@ class AgentContext:
 
             return f"Error: file with path {path} not found in {self.repo.name} on ref {ref}"
 
-    def create_branch_from_changes(self, file_changes: List[FileChange], base_commit_sha) -> GitRef:
-        new_branch_name = f"test-branch-{time.time()}"
+    def create_branch_from_changes(
+        self, pr_title: str, file_changes: List[FileChange], base_commit_sha
+    ) -> GitRef:
+        new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
         branch_ref = self._create_branch(new_branch_name, base_commit_sha=base_commit_sha)
 
         for change in file_changes:
