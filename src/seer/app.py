@@ -102,16 +102,6 @@ def autofix_endpoint(data: AutofixRequest) -> AutofixIdResponse:
     return AutofixIdResponse(id=task.id, state=task.state)
 
 
-@json_api("/v0/automation/autofix/result")
-def autofix_result_endpoint(data: TaskStatusRequest) -> AutofixTaskResultResponse:
-    result = run_autofix.AsyncResult(data.task_id)
-
-    if result.ready():
-        return AutofixTaskResultResponse(result=result.get(), status=result.state)
-
-    return AutofixTaskResultResponse(result=None, status=result.state)
-
-
 @app.route("/health/live", methods=["GET"])
 def health_check():
     return "", 200

@@ -11,41 +11,12 @@ AutofixIdResponse = typing_extensions.TypedDict(
     total=False,
 )
 
-AutofixOutput = typing_extensions.TypedDict(
-    "AutofixOutput",
-    {
-        "title": str,
-        "description": str,
-        "plan": str,
-        "usage": "Usage",
-        "pr_url": str,
-    },
-    total=False,
-)
-
 AutofixRequest = typing_extensions.TypedDict(
     "AutofixRequest",
     {
         "issue": "IssueDetails",
         "base_commit_sha": typing.Union[str, None],
         "additional_context": typing.Union[str, None],
-    },
-    total=False,
-)
-
-AutofixResponse = typing_extensions.TypedDict(
-    "AutofixResponse",
-    {
-        "fix": typing.Union["AutofixOutput", None],
-    },
-    total=False,
-)
-
-AutofixTaskResultResponse = typing_extensions.TypedDict(
-    "AutofixTaskResultResponse",
-    {
-        "result": typing.Union["AutofixResponse", None],
-        "status": str,
     },
     total=False,
 )
@@ -156,27 +127,6 @@ SnubaMetadata = typing_extensions.TypedDict(
     "SnubaMetadata",
     {
         "count": float,
-    },
-    total=False,
-)
-
-TaskStatusRequest = typing_extensions.TypedDict(
-    "TaskStatusRequest",
-    {
-        "task_id": str,
-    },
-    total=False,
-)
-
-Usage = typing_extensions.TypedDict(
-    "Usage",
-    {
-        # default: 0
-        "completion_tokens": int,
-        # default: 0
-        "prompt_tokens": int,
-        # default: 0
-        "total_tokens": int,
     },
     total=False,
 )

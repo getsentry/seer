@@ -96,35 +96,6 @@
         },
         "deprecated": false
       }
-    },
-    "/v0/automation/autofix/result": {
-      "post": {
-        "tags": [],
-        "operationId": "autofix_result_endpoint",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TaskStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AutofixTaskResultResponse"
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
     }
   },
   "components": {
@@ -146,38 +117,6 @@
           "state"
         ],
         "title": "AutofixIdResponse"
-      },
-      "AutofixOutput": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description"
-          },
-          "plan": {
-            "type": "string",
-            "title": "Plan"
-          },
-          "usage": {
-            "$ref": "#/components/schemas/Usage"
-          },
-          "pr_url": {
-            "type": "string",
-            "title": "Pr Url"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title",
-          "description",
-          "plan",
-          "usage",
-          "pr_url"
-        ],
-        "title": "AutofixOutput"
       },
       "AutofixRequest": {
         "properties": {
@@ -214,49 +153,6 @@
           "additional_context"
         ],
         "title": "AutofixRequest"
-      },
-      "AutofixResponse": {
-        "properties": {
-          "fix": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AutofixOutput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "fix"
-        ],
-        "title": "AutofixResponse"
-      },
-      "AutofixTaskResultResponse": {
-        "properties": {
-          "result": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AutofixResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "result",
-          "status"
-        ],
-        "title": "AutofixTaskResultResponse"
       },
       "BreakpointEntry": {
         "properties": {
@@ -566,40 +462,6 @@
           "count"
         ],
         "title": "SnubaMetadata"
-      },
-      "TaskStatusRequest": {
-        "properties": {
-          "task_id": {
-            "type": "string",
-            "title": "Task Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_id"
-        ],
-        "title": "TaskStatusRequest"
-      },
-      "Usage": {
-        "properties": {
-          "completion_tokens": {
-            "type": "integer",
-            "title": "Completion Tokens",
-            "default": 0
-          },
-          "prompt_tokens": {
-            "type": "integer",
-            "title": "Prompt Tokens",
-            "default": 0
-          },
-          "total_tokens": {
-            "type": "integer",
-            "title": "Total Tokens",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "title": "Usage"
       }
     }
   }
