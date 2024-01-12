@@ -1,9 +1,21 @@
 import numpy as np
-import pandas as pd
 import sentry_sdk
 import torch
 from joblib import load
+from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
+
+
+class SeverityRequest(BaseModel):
+    message: str = ""
+    has_stacktrace: int = 0
+    handled: bool = False
+    trigger_timeout: bool | None = None
+    trigger_error: bool | None = None
+
+
+class SeverityResponse(BaseModel):
+    severity: float = 0.0
 
 
 class SeverityInference:
@@ -15,18 +27,19 @@ class SeverityInference:
         )
         self.classifier = load(classifier_path)
 
-    def get_embeddings(self, text):
+    def get_embeddings(self, text) -> np.ndarray:
         """Generate embeddings for the given text using the pre-trained model."""
         return self.embeddings_model.encode(text, convert_to_numpy=True)
 
-    def severity_score(self, data):
+    def severity_score(self, data: SeverityRequest) -> SeverityResponse:
         """Predict the severity score for the given text using the pre-trained classifier."""
-        with sentry_sdk.start_span(op="model.severity", description="get_embeddings"):
-            embeddings = self.get_embeddings(data.get("message")).reshape(-1)
-        with sentry_sdk.start_span(op="model.severity", description="predict_proba"):
-            has_stacktrace = data.get("has_stacktrace", 0)
+        with sentry_sdk.start_span(op="severity.embeddings"):
+            embeddings = self.get_embeddings(data.message).reshape(-1)
 
-            handled = data.get("handled")
+        with sentry_sdk.start_span(op="severity.classification"):
+            has_stacktrace = data.has_stacktrace
+
+            handled = data.handled
             handled_true = 1 if handled is True else 0
             handled_false = 1 if handled is False else 0
             handled_unknown = 1 if handled is None else 0
@@ -38,4 +51,5 @@ class SeverityInference:
             )
 
             pred = self.classifier.predict_proba(input_data)[0][1]
-        return min(1.0, max(0.0, pred))
+
+        return SeverityResponse(severity=round(min(1.0, max(0.0, pred)), 2))

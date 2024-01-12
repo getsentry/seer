@@ -1,6 +1,6 @@
 import unittest
 
-from seer.severity.severity_inference import SeverityInference
+from seer.severity.severity_inference import SeverityInference, SeverityRequest
 
 
 class TestSeverityInference(unittest.TestCase):
@@ -10,22 +10,22 @@ class TestSeverityInference(unittest.TestCase):
 
     def test_high_severity_error(self):
         score = self.severity_inference.severity_score(
-            {"message": "TypeError: bad operand type for unary -: 'str'"}
-        )
+            SeverityRequest(message="TypeError: bad operand type for unary -: 'str'")
+        ).severity
 
         self.assertIsInstance(score, float)
         self.assertGreater(score, 0.5)
 
     def test_low_severity_error(self):
         score = self.severity_inference.severity_score(
-            {"message": "log: user enjoyed their experience"}
-        )
+            SeverityRequest(message="log: user enjoyed their experience")
+        ).severity
 
         self.assertIsInstance(score, float)
         self.assertLess(score, 0.5)
 
     def test_empty_input(self):
-        score = self.severity_inference.severity_score({"message": ""})
+        score = self.severity_inference.severity_score(SeverityRequest(message="")).severity
 
         self.assertIsInstance(score, float)
 
@@ -33,7 +33,9 @@ class TestSeverityInference(unittest.TestCase):
         test_messages = ["Test message 1", "Another test message", "Yet another test message"]
 
         for message in test_messages:
-            score = self.severity_inference.severity_score({"message": message})
+            score = self.severity_inference.severity_score(
+                SeverityRequest(message=message)
+            ).severity
 
             self.assertIsInstance(score, float)
             self.assertGreaterEqual(score, 0.0)

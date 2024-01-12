@@ -1,0 +1,343 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sentry Inference APIs",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "http://seer"
+    }
+  ],
+  "paths": {
+    "/v0/issues/severity-score": {
+      "post": {
+        "tags": [],
+        "operationId": "severity_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeverityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeverityResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/trends/breakpoint-detector": {
+      "post": {
+        "tags": [],
+        "operationId": "breakpoint_trends_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakpointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakpointResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BreakpointEntry": {
+        "properties": {
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "transaction": {
+            "type": "string",
+            "title": "Transaction"
+          },
+          "aggregate_range_1": {
+            "type": "number",
+            "title": "Aggregate Range 1"
+          },
+          "aggregate_range_2": {
+            "type": "number",
+            "title": "Aggregate Range 2"
+          },
+          "unweighted_t_value": {
+            "type": "number",
+            "title": "Unweighted T Value"
+          },
+          "unweighted_p_value": {
+            "type": "number",
+            "title": "Unweighted P Value"
+          },
+          "trend_percentage": {
+            "type": "number",
+            "title": "Trend Percentage"
+          },
+          "absolute_percentage_change": {
+            "type": "number",
+            "title": "Absolute Percentage Change"
+          },
+          "trend_difference": {
+            "type": "number",
+            "title": "Trend Difference"
+          },
+          "breakpoint": {
+            "type": "integer",
+            "title": "Breakpoint"
+          },
+          "request_start": {
+            "type": "integer",
+            "title": "Request Start"
+          },
+          "request_end": {
+            "type": "integer",
+            "title": "Request End"
+          },
+          "data_start": {
+            "type": "integer",
+            "title": "Data Start"
+          },
+          "data_end": {
+            "type": "integer",
+            "title": "Data End"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "const": "improvement"
+              },
+              {
+                "const": "regression"
+              }
+            ],
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project",
+          "transaction",
+          "aggregate_range_1",
+          "aggregate_range_2",
+          "unweighted_t_value",
+          "unweighted_p_value",
+          "trend_percentage",
+          "absolute_percentage_change",
+          "trend_difference",
+          "breakpoint",
+          "request_start",
+          "request_end",
+          "data_start",
+          "data_end",
+          "change"
+        ],
+        "title": "BreakpointEntry"
+      },
+      "BreakpointRequest": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BreakpointTransaction"
+            },
+            "type": "object",
+            "title": "Data"
+          },
+          "sort": {
+            "type": "string",
+            "title": "Sort",
+            "default": ""
+          },
+          "allow_midpoint": {
+            "type": "string",
+            "title": "Allow Midpoint",
+            "default": "1"
+          },
+          "validate_tail_hours": {
+            "type": "integer",
+            "title": "Validate Tail Hours",
+            "default": 0
+          },
+          "trend_percentage()": {
+            "type": "number",
+            "title": "Trend Percentage()",
+            "default": 0.1
+          },
+          "min_change()": {
+            "type": "number",
+            "title": "Min Change()",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BreakpointRequest"
+      },
+      "BreakpointResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/BreakpointEntry"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BreakpointResponse"
+      },
+      "BreakpointTransaction": {
+        "properties": {
+          "data": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/components/schemas/SnubaMetadata"
+                    }
+                  ],
+                  "type": "array",
+                  "maxItems": 1,
+                  "minItems": 1
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "request_start": {
+            "type": "integer",
+            "title": "Request Start"
+          },
+          "request_end": {
+            "type": "integer",
+            "title": "Request End"
+          },
+          "data_start": {
+            "type": "integer",
+            "title": "Data Start"
+          },
+          "data_end": {
+            "type": "integer",
+            "title": "Data End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "request_start",
+          "request_end",
+          "data_start",
+          "data_end"
+        ],
+        "title": "BreakpointTransaction"
+      },
+      "SeverityRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "has_stacktrace": {
+            "type": "integer",
+            "title": "Has Stacktrace",
+            "default": 0
+          },
+          "handled": {
+            "type": "boolean",
+            "title": "Handled",
+            "default": false
+          },
+          "trigger_timeout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Timeout"
+          },
+          "trigger_error": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Error"
+          }
+        },
+        "type": "object",
+        "title": "SeverityRequest"
+      },
+      "SeverityResponse": {
+        "properties": {
+          "severity": {
+            "type": "number",
+            "title": "Severity",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "title": "SeverityResponse"
+      },
+      "SnubaMetadata": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "title": "SnubaMetadata"
+      }
+    }
+  }
+}

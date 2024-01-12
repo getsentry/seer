@@ -1,5 +1,6 @@
 makefile:=$(lastword $(MAKEFILE_LIST))
 project_name:=$(shell basename $(shell dirname $(realpath $(makefile))))
+tmpdir:=$(shell mktemp -d)
 
 default: help
 
@@ -26,9 +27,22 @@ update: # Updates the project's docker-compose image.
 	docker-compose build
 
 .PHONY: run
-run: # Starts the webserver based on the current src on port 8900
+run: image # Starts the webserver based on the current src on port 8900
 	docker run --rm --env PORT=8900 $(project_name):latest
 
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
-	docker run --rm -v ./tests:/app/tests $(project_name):latest pytest
+	docker run --rm -v ./tests:/app/tests -v ./src:/app/src $(project_name):latest pytest
+
+.PHONY: mypy
+mypy: # Runs mypy type checking
+	docker run --rm -v ./tests:/app/tests -v ./src:/app/src $(project_name):latest mypy
+
+.PHONY: schemas
+schemas: image # Generates json files
+	docker run --rm -v ./src/seer/schemas:/app/src/seer/schemas $(project_name):latest python src/seer/generate_schemas.py
+	git clone --depth 1 https://github.com/getsentry/sentry-data-schemas.git $(tmpdir)
+	docker run --rm -t \
+	  -v $(tmpdir):/sentry-data-schemas:ro \
+	  -v $$(pwd)/src/:/src:ro \
+	  tufin/oasdiff breaking /sentry-data-schemas/seer/seer_api.json /src/seer/schemas/seer_api.json

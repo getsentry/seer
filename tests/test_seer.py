@@ -2,45 +2,21 @@ import json
 import unittest
 from unittest import mock
 
-import pandas as pd
 import pytest
 
-from seer.seer import app
+from seer.app import app
 
 
 @pytest.fixture(autouse=True)
 def mock_severity_score():
     # Create a mock instance with a dummy severity_score method
-    with mock.patch("seer.seer.SeverityInference") as mock_severity_inference:
+    with mock.patch("seer.app.SeverityInference") as mock_severity_inference:
         mock_instance = mock_severity_inference.return_value
         mock_instance.severity_score.return_value = [0, 1]
         yield
 
 
 class TestSeer(unittest.TestCase):
-    def test_empty_dataset(self):
-        response = app.test_client().post(
-            "/anomaly/predict",
-            data=json.dumps(
-                {
-                    "data": [],
-                }
-            ),
-            content_type="application/json",
-        )
-
-        actual_output = json.loads(response.get_data(as_text=True))
-
-        expected_output = {
-            "y": {"data": []},
-            "yhat_upper": {"data": []},
-            "yhat_lower": {"data": []},
-            "anomalies": [],
-        }
-
-        assert actual_output == expected_output
-
-
     def get_sample_data(self):
         trend_data = {
             "data": [
@@ -263,6 +239,8 @@ class TestSeer(unittest.TestCase):
             data=json.dumps(input_data),
             content_type="application/json",
         )
+
+        assert response.status_code == 200
 
         request_start = input_data["data"][
             "sentry,/api/0/organizations/{organization_slug}/issues/"

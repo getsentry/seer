@@ -19,8 +19,10 @@ RUN pip install -r requirements.txt
 
 # Copy source code
 COPY src/ src/
+COPY pyproject.toml .
 
 RUN pip install --default-timeout=120 -e .
+RUN mypy
 
 # The number of gunicorn workers is selected by ops based on k8s configuration.
-CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 src.seer.seer:app
+CMD exec gunicorn --bind :$PORT --worker-class sync --threads 1 --timeout 0 src.seer.app:run

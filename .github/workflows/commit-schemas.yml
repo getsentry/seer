@@ -1,0 +1,60 @@
+name: Commit schema updates
+
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for schema changes
+        id: diff
+        run: |
+          if [[ -n $(git diff src/seer/schemas) ]]; then
+            echo "changes=true" >> ${GITHUB_OUTPUT}
+          else
+            echo "changes=false" >> ${GITHUB_OUTPUT}
+          fi
+      - uses: actions/checkout@v4
+        if: steps.diff.outputs.changes == 'true'
+        with:
+          submodules: recursive
+      - name: Get auth token
+        id: token
+        uses: getsentry/action-github-app-token@v2.0.0
+        if: steps.diff.outputs.changes == 'true'
+        with:
+          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+          private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
+      - name: Deploy schema to sentry-data-schemas
+        if: steps.diff.outputs.changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          git config --global user.name "$(git log -1 --pretty=format:%an $GITHUB_SHA)"
+          git config --global user.email "$(git log -1 --pretty=format:%ae $GITHUB_SHA)"
+          git clone https://getsentry-bot:$GITHUB_TOKEN@github.com/getsentry/sentry-data-schemas
+          mkdir -p sentry-data-schemas/seer
+          cp src/seer/schemas/* sentry-data-schemas/seer
+          cd sentry-data-schemas
+          git add seer
+
+          git commit -m "getsentry/timeseries-analysis-service@$GITHUB_SHA"
+
+          for i in 1 2 3 4 5; do
+            echo "git push; Attempt $i"
+            if git push; then
+              exit 0
+            fi
+
+            git pull --rebase
+          done
+
+          echo "Failed to push"
+          exit 1
