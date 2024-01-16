@@ -101,7 +101,7 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 @json_api("/v0/issues/similar-issues")
 def grouping_endpoint(data: GroupingRequest) -> List[GroupingResponse]:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
-        grouping_results = grouping_lookup().find_nearest_neighbor(data)
+        grouping_results = grouping_lookup().get_nearest_neighbors(data)
     return grouping_results
 
 
