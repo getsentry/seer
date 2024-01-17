@@ -71,7 +71,7 @@
     "/v0/issues/similar-issues": {
       "post": {
         "tags": [],
-        "operationId": "grouping_endpoint",
+        "operationId": "similarity_endpoint",
         "requestBody": {
           "content": {
             "application/json": {
