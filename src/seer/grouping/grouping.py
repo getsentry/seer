@@ -1,7 +1,7 @@
 import pickle
 from typing import Any, Dict, List, Optional, Tuple
 
-import faiss
+import faiss  # type: ignore
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, validator
