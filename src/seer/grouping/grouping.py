@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import faiss
 import numpy as np
 import pandas as pd
-from deepsparse.sentence_transformers import DeepSparseSentenceTransformer
 from pydantic import BaseModel, validator
+from sentence_transformers import SentenceTransformer
 
 
 class GroupingRequest(BaseModel):
@@ -27,11 +27,15 @@ class GroupingRecord(BaseModel):
         return v
 
 
-class GroupingResult(BaseModel):
+class GroupingResponse(BaseModel):
     parent_group_id: Optional[int]
     stacktrace_similarity: float
     message_similarity: float = 1.0
     should_group: bool
+
+
+class SimilarityResponse(BaseModel):
+    responses: List[GroupingResponse]
 
 
 class GroupingLookup:
@@ -39,20 +43,21 @@ class GroupingLookup:
     Manages the grouping of similar stack traces using sentence embeddings.
 
     Attributes:
-        model (DeepSparseSentenceTransformer): The sentence transformer model for encoding text.
+        model (SentenceTransformer): The sentence transformer model for encoding text.
         data (pd.DataFrame): The dataset containing stacktrace embeddings.
         index (faiss.IndexFlat): The FAISS index for similarity search.
     """
 
     def __init__(self, model_path: str, data_path: str):
         """
-        Initializes the GroupingLookup with the model and preprocessed data.
+        Initializes the GroupingLookup with the model and preprocessed data. Generates
+        faiss index for similarity search.
 
         Args:
             model_path (str): Path to the sentence transformer model.
             data_path (str): Path to the preprocessed data with stacktrace embeddings.
         """
-        self.model = DeepSparseSentenceTransformer(model_path)
+        self.model = SentenceTransformer(model_path)
         with open(data_path, "rb") as file:
             self.data = pickle.load(file)
         embeddings = np.vstack(self.data["embeddings"].values).astype("float32")
@@ -62,7 +67,7 @@ class GroupingLookup:
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
-        Encodes a stacktrace into an embedding.
+        Encodes a stacktrace into an embedding and normalizes the result.
 
         Args:
             stacktrace (str): The stacktrace to encode.
@@ -70,7 +75,7 @@ class GroupingLookup:
         Returns:
             np.ndarray: The normalized embedding of the stacktrace.
         """
-        embedding = self.model.encode(stacktrace, show_progress_bar=False)
+        embedding = self.model.encode(stacktrace)
         embedding /= np.linalg.norm(embedding)
         return embedding
 
@@ -87,7 +92,7 @@ class GroupingLookup:
         self.data = pd.concat([self.data, pd.DataFrame([new_record.dict()])], ignore_index=True)
         self.index.add(np.array([new_record.embeddings], dtype="float32"))
 
-    def get_nearest_neighbors(self, issue: GroupingRequest) -> List[GroupingResult]:
+    def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
         Retrieves the k nearest neighbors for a stacktrace and determines if they should be grouped,
         ensuring that an issue is not grouped with itself.
@@ -97,14 +102,14 @@ class GroupingLookup:
                                      number of nearest neighbors to find (k)
 
         Returns:
-            List[GroupingResult]: A list of GroupingResult objects containing the nearest group IDs,
-                                  stacktrace similarity scores, message similarity scores, and grouping flags.
+            SimilarityResponse: A SimilarityResponse object containing a list of GroupingResponse objects with the nearest group IDs,
+                                stacktrace similarity scores, message similarity scores, and grouping flags.
         """
         embedding = self.encode_text(issue.stacktrace).astype("float32")
         embedding = np.expand_dims(embedding, axis=0)
         # Find one extra neighbor to account for the issue itself
         distances, indices = self.index.search(embedding, k=issue.k + 1)
-        results = []
+        similarity_response = SimilarityResponse(responses=[])
 
         for i in range(indices.shape[1]):
             group_id = self.data.iloc[indices[0][i]]["group_id"]
@@ -124,8 +129,8 @@ class GroupingLookup:
             else:
                 parent_group_id = group_id
 
-            results.append(
-                GroupingResult(
+            similarity_response.responses.append(
+                GroupingResponse(
                     parent_group_id=parent_group_id,
                     stacktrace_similarity=stacktrace_similarity_score,
                     message_similarity=1.0,
@@ -133,7 +138,7 @@ class GroupingLookup:
                 )
             )
 
-            if len(results) == issue.k:
+            if len(similarity_response.responses) == issue.k:
                 break
 
-        return results
+        return similarity_response

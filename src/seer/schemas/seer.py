@@ -62,6 +62,31 @@ BreakpointTransaction = typing_extensions.TypedDict(
     total=False,
 )
 
+GroupingRequest = typing_extensions.TypedDict(
+    "GroupingRequest",
+    {
+        "group_id": int,
+        "stacktrace": str,
+        # default: 1
+        "k": int,
+        # default: 0.99
+        "threshold": float,
+    },
+    total=False,
+)
+
+GroupingResponse = typing_extensions.TypedDict(
+    "GroupingResponse",
+    {
+        "parent_group_id": typing.Union[int, None],
+        "stacktrace_similarity": float,
+        # default: 1.0
+        "message_similarity": float,
+        "should_group": bool,
+    },
+    total=False,
+)
+
 SeverityRequest = typing_extensions.TypedDict(
     "SeverityRequest",
     {
@@ -82,6 +107,14 @@ SeverityResponse = typing_extensions.TypedDict(
     {
         # default: 0.0
         "severity": float,
+    },
+    total=False,
+)
+
+SimilarityResponse = typing_extensions.TypedDict(
+    "SimilarityResponse",
+    {
+        "responses": typing.List["GroupingResponse"],
     },
     total=False,
 )

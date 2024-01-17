@@ -7,7 +7,7 @@ import sentry_sdk
 from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from seer.grouping.grouping import GroupingLookup, GroupingRequest, GroupingResponse
+from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
@@ -99,10 +99,10 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 
 
 @json_api("/v0/issues/similar-issues")
-def grouping_endpoint(data: GroupingRequest) -> List[GroupingResponse]:
+def grouping_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
-        grouping_results = grouping_lookup().get_nearest_neighbors(data)
-    return grouping_results
+        similar_issues = grouping_lookup().get_nearest_neighbors(data)
+    return similar_issues
 
 
 @app.route("/health/live", methods=["GET"])
