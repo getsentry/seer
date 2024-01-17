@@ -1,12 +1,13 @@
 import functools
 import os
 import time
-from typing import Any, Callable
+from typing import Any, Callable, List
 
 import sentry_sdk
 from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
+from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
@@ -40,6 +41,14 @@ def model_path(subpath: str) -> str:
 def embeddings_model() -> SeverityInference:
     return SeverityInference(
         model_path("issue_severity_v0/embeddings"), model_path("issue_severity_v0/classifier")
+    )
+
+
+@functools.cache
+def grouping_lookup() -> GroupingLookup:
+    return GroupingLookup(
+        model_path=model_path("issue_grouping_v0/model"),
+        data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
 
@@ -89,6 +98,13 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     return trends
 
 
+@json_api("/v0/issues/similar-issues")
+def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
+    with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
+        similar_issues = grouping_lookup().get_nearest_neighbors(data)
+    return similar_issues
+
+
 @app.route("/health/live", methods=["GET"])
 def health_check():
     return "", 200
@@ -105,4 +121,5 @@ register_json_api_views(app)
 def run(environ: dict, start_response: Callable) -> Any:
     # Force preload
     embeddings_model()
+    grouping_lookup()
     return app(environ, start_response)
