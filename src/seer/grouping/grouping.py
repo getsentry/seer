@@ -1,23 +1,33 @@
+import difflib
 import pickle
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional
 
 import faiss  # type: ignore
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ValidationError, ValidationInfo, field_validator, validator
 from sentence_transformers import SentenceTransformer
 
 
 class GroupingRequest(BaseModel):
     group_id: int
     stacktrace: str
+    message: str
     k: int = 1
     threshold: float = 0.99
+
+    @field_validator("stacktrace", "message")
+    @classmethod
+    def check_field_is_not_empty(cls, v, info: ValidationInfo):
+        if not v:
+            raise ValueError(f"{info.field_name} must be provided and not empty.")
+        return v
 
 
 class GroupingRecord(BaseModel):
     group_id: int
     stacktrace: str
+    message: str
     embeddings: Any
 
     @validator("embeddings", pre=True, allow_reuse=True)
@@ -30,7 +40,7 @@ class GroupingRecord(BaseModel):
 class GroupingResponse(BaseModel):
     parent_group_id: Optional[int]
     stacktrace_similarity: float
-    message_similarity: float = 1.0
+    message_similarity: float
     should_group: bool
 
 
@@ -117,11 +127,19 @@ class GroupingLookup:
                 continue  # Skip if the found group is the same as the issue's group
 
             stacktrace_similarity_score = distances[0][i]
-            should_group = stacktrace_similarity_score >= issue.threshold
+            neighboring_message = self.data.iloc[indices[0][i]]["message"]
+            message_similarity_score = difflib.SequenceMatcher(
+                None, issue.message, neighboring_message
+            ).ratio()
+            should_group = (
+                stacktrace_similarity_score >= issue.threshold
+                and message_similarity_score >= issue.threshold
+            )
             if not should_group:
                 new_record = GroupingRecord(
                     group_id=issue.group_id,
                     embeddings=np.squeeze(embedding),
+                    message=issue.message,
                     stacktrace=issue.stacktrace,
                 )
                 self.add_new_record_to_index(new_record)
@@ -133,7 +151,7 @@ class GroupingLookup:
                 GroupingResponse(
                     parent_group_id=parent_group_id,
                     stacktrace_similarity=stacktrace_similarity_score,
-                    message_similarity=1.0,
+                    message_similarity=message_similarity_score,
                     should_group=should_group,
                 )
             )
