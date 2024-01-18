@@ -131,10 +131,7 @@ class GroupingLookup:
             message_similarity_score = difflib.SequenceMatcher(
                 None, issue.message, neighboring_message
             ).ratio()
-            should_group = (
-                stacktrace_similarity_score >= issue.threshold
-                and message_similarity_score >= issue.threshold
-            )
+            should_group = stacktrace_similarity_score >= issue.threshold
             if not should_group:
                 new_record = GroupingRecord(
                     group_id=issue.group_id,
