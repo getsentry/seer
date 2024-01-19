@@ -14,10 +14,10 @@ services:
         env_file:
             - .env
         environment:
-            - PORT=8900
+            - PORT=9091
             - GITHUB_REPO_NAME=sentry-mirror-suggested-fix
             - GITHUB_APP_ID=781978
             - SENTRY_BASE_URL=http://host.docker.internal:8000
             - CELERY_BROKER_URL=amqp://guest:guest@host.docker.internal:5672//
         ports:
-            - "9091:8900"
+            - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
