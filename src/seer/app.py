@@ -1,7 +1,7 @@
 import functools
 import os
 import time
-from typing import Any, Callable, List
+from typing import Any, Callable
 
 import sentry_sdk
 from flask import Flask

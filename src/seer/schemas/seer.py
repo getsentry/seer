@@ -67,6 +67,7 @@ GroupingRequest = typing_extensions.TypedDict(
     {
         "group_id": int,
         "stacktrace": str,
+        "message": str,
         # default: 1
         "k": int,
         # default: 0.99
@@ -80,7 +81,6 @@ GroupingResponse = typing_extensions.TypedDict(
     {
         "parent_group_id": typing.Union[int, None],
         "stacktrace_similarity": float,
-        # default: 1.0
         "message_similarity": float,
         "should_group": bool,
     },

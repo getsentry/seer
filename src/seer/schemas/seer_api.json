@@ -310,6 +310,10 @@
             "type": "string",
             "title": "Stacktrace"
           },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
           "k": {
             "type": "integer",
             "title": "K",
@@ -324,7 +328,8 @@
         "type": "object",
         "required": [
           "group_id",
-          "stacktrace"
+          "stacktrace",
+          "message"
         ],
         "title": "GroupingRequest"
       },
@@ -347,8 +352,7 @@
           },
           "message_similarity": {
             "type": "number",
-            "title": "Message Similarity",
-            "default": 1.0
+            "title": "Message Similarity"
           },
           "should_group": {
             "type": "boolean",
@@ -359,6 +363,7 @@
         "required": [
           "parent_group_id",
           "stacktrace_similarity",
+          "message_similarity",
           "should_group"
         ],
         "title": "GroupingResponse"
