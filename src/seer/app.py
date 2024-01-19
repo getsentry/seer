@@ -47,7 +47,7 @@ def embeddings_model() -> SeverityInference:
 @functools.cache
 def grouping_lookup() -> GroupingLookup:
     return GroupingLookup(
-        model_path=model_path("issue_grouping_v0/model"),
+        model_path=model_path("issue_grouping_v0/embeddings"),
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
