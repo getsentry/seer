@@ -4,9 +4,9 @@ from typing import Any
 import sentry_sdk
 from pydantic import BaseModel
 
+from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.types import AutofixRequest, AutofixResult
-from seer.celery_app import app as celery_app
 from seer.rpc import RPCClient
 
 

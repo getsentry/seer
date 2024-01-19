@@ -18,4 +18,4 @@ app.conf.task_queues = {
         "routing_key": "seer",
     },
 }
-app.autodiscover_tasks(["seer.tasks"])
+app.autodiscover_tasks(["celery_app.tasks"])
