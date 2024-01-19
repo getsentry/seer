@@ -132,21 +132,10 @@ class GroupingLookup:
                 None, issue.message, neighboring_message
             ).ratio()
             should_group = stacktrace_similarity_score >= issue.threshold
-            if not should_group:
-                new_record = GroupingRecord(
-                    group_id=issue.group_id,
-                    embeddings=np.squeeze(embedding),
-                    message=issue.message,
-                    stacktrace=issue.stacktrace,
-                )
-                self.add_new_record_to_index(new_record)
-                parent_group_id = None
-            else:
-                parent_group_id = group_id
 
             similarity_response.responses.append(
                 GroupingResponse(
-                    parent_group_id=parent_group_id,
+                    parent_group_id=group_id,
                     stacktrace_similarity=stacktrace_similarity_score,
                     message_similarity=message_similarity_score,
                     should_group=should_group,
@@ -155,5 +144,15 @@ class GroupingLookup:
 
             if len(similarity_response.responses) == issue.k:
                 break
+
+        nearest_neighbor = similarity_response.responses[0]
+        if not nearest_neighbor.should_group:
+            new_record = GroupingRecord(
+                group_id=issue.group_id,
+                embeddings=np.squeeze(embedding),
+                message=issue.message,
+                stacktrace=issue.stacktrace,
+            )
+            self.add_new_record_to_index(new_record)
 
         return similarity_response
