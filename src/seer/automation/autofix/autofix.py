@@ -13,7 +13,6 @@ from seer.automation.autofix.types import (
     AutofixAgentsOutput,
     AutofixOutput,
     AutofixRequest,
-    AutofixResponse,
     PlanningOutput,
 )
 
@@ -38,7 +37,7 @@ class Autofix:
 
         self.github_auth = Auth.AppAuth(app_id, private_key=private_key)
 
-    def run(self):
+    def run(self) -> AutofixOutput | None:
         logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
         github_repo_name = os.environ.get("GITHUB_REPO_NAME")
@@ -56,7 +55,7 @@ class Autofix:
         planning_output = self._run_planning_agent()
         if planning_output is None:
             logger.warning(f"Planning agent did not return a valid output")
-            return AutofixResponse(fix=None)
+            return None
 
         logger.info(f"Running coding for issue {self.request.issue.id}")
         coding_output, coding_usage = self._run_coding_agent(self.context.base_sha, planning_output)
@@ -84,9 +83,11 @@ class Autofix:
             plan=planning_output.plan,
             usage=planning_output.usage,
             pr_url=pr.html_url,
+            repo_name=self.context.repo.full_name,
+            pr_number=pr.number,
         )
 
-        return AutofixResponse(fix=output)
+        return output
 
     def _create_pr(self, combined_output: AutofixAgentsOutput):
         branch_ref = self.context.create_branch_from_changes(

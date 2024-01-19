@@ -215,7 +215,7 @@ class SentenceTransformersEmbedding(BaseEmbedding):
 
 
 class MemoryVectorStore(SimpleVectorStore):
-    def persist(self, persist_path: str, fs: fsspec.AbstractFileSystem) -> None:
+    def persist(self, persist_path: str, fs: fsspec.AbstractFileSystem | None = None) -> None:
         """Persist the SimpleVectorStore to a directory."""
         fs = fs or self._fs
         dirpath = os.path.dirname(persist_path)

@@ -64,17 +64,14 @@ class AutofixRequest(BaseModel):
 
 class AutofixOutput(PlanningOutput):
     pr_url: str
+    pr_number: int
+    repo_name: str
 
 
-class AutofixResponse(BaseModel):
-    fix: Optional[AutofixOutput]
+class AutofixResult(BaseModel):
+    issue_id: str
+    result: Optional[AutofixOutput]
 
 
-class AutofixTaskResultResponse(BaseModel):
-    result: Optional[AutofixResponse]
-    status: str
-
-
-class AutofixIdResponse(BaseModel):
-    id: str
-    state: str
+class AutofixEndpointResponse(BaseModel):
+    started: bool

@@ -7,11 +7,7 @@ import sentry_sdk
 from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from seer.automation.autofix.types import (
-    AutofixIdResponse,
-    AutofixRequest,
-    AutofixTaskResultResponse,
-)
+from seer.automation.autofix.types import AutofixEndpointResponse, AutofixRequest
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
 from seer.tasks import TaskStatusRequest, run_autofix
@@ -96,10 +92,10 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 
 
 @json_api("/v0/automation/autofix")
-def autofix_endpoint(data: AutofixRequest) -> AutofixIdResponse:
+def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     task = run_autofix.delay(data.model_dump())
 
-    return AutofixIdResponse(id=task.id, state=task.state)
+    return AutofixEndpointResponse(started=True)
 
 
 @app.route("/health/live", methods=["GET"])

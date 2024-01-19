@@ -1,18 +1,23 @@
 services:
-    redis:
-        image: redis:latest
-        container_name: "redis_dev"
+    rabbitmq:
+        image: rabbitmq:3.8-alpine
+        container_name: "rabbitmq_lightweight"
+        ports:
+            - "5672:5672"
+            - "15672:15672"
     app:
         build:
             context: .
         working_dir: /app
-        volumes:
-            - ./:/app
         depends_on:
-            - redis
+            - rabbitmq
         env_file:
             - .env
         environment:
             - PORT=8900
+            - GITHUB_REPO_NAME=sentry-mirror-suggested-fix
+            - GITHUB_APP_ID=781978
+            - SENTRY_BASE_URL=http://host.docker.internal:8000
+            - CELERY_BROKER_URL=amqp://guest:guest@host.docker.internal:5672//
         ports:
-            - "8900:8900"
+            - "9091:8900"
