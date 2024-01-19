@@ -9,6 +9,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 
 from celery_app.tasks import run_autofix
 from seer.automation.autofix.types import AutofixEndpointResponse, AutofixRequest
+from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
@@ -42,6 +43,14 @@ def model_path(subpath: str) -> str:
 def embeddings_model() -> SeverityInference:
     return SeverityInference(
         model_path("issue_severity_v0/embeddings"), model_path("issue_severity_v0/classifier")
+    )
+
+
+@functools.cache
+def grouping_lookup() -> GroupingLookup:
+    return GroupingLookup(
+        model_path=model_path("issue_grouping_v0/embeddings"),
+        data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
 
@@ -91,6 +100,13 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     return trends
 
 
+@json_api("/v0/issues/similar-issues")
+def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
+    with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
+        similar_issues = grouping_lookup().get_nearest_neighbors(data)
+    return similar_issues
+
+
 @json_api("/v0/automation/autofix")
 def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     run_autofix.delay(data.model_dump())
@@ -114,4 +130,5 @@ register_json_api_views(app)
 def run(environ: dict, start_response: Callable) -> Any:
     # Force preload
     embeddings_model()
+    grouping_lookup()
     return app(environ, start_response)

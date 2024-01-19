@@ -1,10 +1,13 @@
+import logging
 import os
 
 from celery import Celery
 
+logger = logging.getLogger(__name__)
+
 broker_url = os.environ.get("CELERY_BROKER_URL")
 if not broker_url:
-    raise RuntimeError("CELERY_BROKER_URL must be set")
+    logger.warning("CELERY_BROKER_URL not set")
 
 app = Celery("seer", broker=broker_url)
 app.conf.task_serializer = "json"

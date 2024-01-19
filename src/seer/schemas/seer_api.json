@@ -68,6 +68,35 @@
         "deprecated": false
       }
     },
+    "/v0/issues/similar-issues": {
+      "post": {
+        "tags": [],
+        "operationId": "similarity_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarityResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
     "/v0/automation/autofix": {
       "post": {
         "tags": [],
@@ -88,7 +117,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AutofixIdResponse"
+                  "$ref": "#/components/schemas/AutofixEndpointResponse"
                 }
               }
             }
@@ -100,23 +129,18 @@
   },
   "components": {
     "schemas": {
-      "AutofixIdResponse": {
+      "AutofixEndpointResponse": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "state": {
-            "type": "string",
-            "title": "State"
+          "started": {
+            "type": "boolean",
+            "title": "Started"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "state"
+          "started"
         ],
-        "title": "AutofixIdResponse"
+        "title": "AutofixEndpointResponse"
       },
       "AutofixRequest": {
         "properties": {
@@ -354,6 +378,74 @@
         ],
         "title": "BreakpointTransaction"
       },
+      "GroupingRequest": {
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id"
+          },
+          "stacktrace": {
+            "type": "string",
+            "title": "Stacktrace"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "k": {
+            "type": "integer",
+            "title": "K",
+            "default": 1
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold",
+            "default": 0.99
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_id",
+          "stacktrace",
+          "message"
+        ],
+        "title": "GroupingRequest"
+      },
+      "GroupingResponse": {
+        "properties": {
+          "parent_group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Group Id"
+          },
+          "stacktrace_similarity": {
+            "type": "number",
+            "title": "Stacktrace Similarity"
+          },
+          "message_similarity": {
+            "type": "number",
+            "title": "Message Similarity"
+          },
+          "should_group": {
+            "type": "boolean",
+            "title": "Should Group"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parent_group_id",
+          "stacktrace_similarity",
+          "message_similarity",
+          "should_group"
+        ],
+        "title": "GroupingResponse"
+      },
       "IssueDetails": {
         "properties": {
           "id": {
@@ -449,6 +541,22 @@
         },
         "type": "object",
         "title": "SeverityResponse"
+      },
+      "SimilarityResponse": {
+        "properties": {
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/GroupingResponse"
+            },
+            "type": "array",
+            "title": "Responses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "responses"
+        ],
+        "title": "SimilarityResponse"
       },
       "SnubaMetadata": {
         "properties": {
