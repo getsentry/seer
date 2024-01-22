@@ -27,7 +27,7 @@ class RPCClient:
         url_path = f"/api/0/internal/seer-rpc/{method}/"
         endpoint = f"{self.base_url}{url_path}"
         body_dict = {"args": kwargs}
-        body = json.dumps(body_dict)
+        body = json.dumps(body_dict, separators=(",", ":"))
         body_bytes = body.encode("utf-8")
         signature = self.generate_request_signature(url_path, body_bytes)
         headers = {
