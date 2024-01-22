@@ -71,6 +71,7 @@ class AutofixOutput(PlanningOutput):
 class AutofixResult(BaseModel):
     issue_id: str
     result: Optional[AutofixOutput]
+    status: Literal["SUCCESS", "NOFIX", "ERROR"]
 
 
 class AutofixEndpointResponse(BaseModel):
