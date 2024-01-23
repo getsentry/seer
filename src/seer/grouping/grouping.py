@@ -145,14 +145,15 @@ class GroupingLookup:
             if len(similarity_response.responses) == issue.k:
                 break
 
-        nearest_neighbor = similarity_response.responses[0]
-        if not nearest_neighbor.should_group:
-            new_record = GroupingRecord(
-                group_id=issue.group_id,
-                embeddings=np.squeeze(embedding),
-                message=issue.message,
-                stacktrace=issue.stacktrace,
-            )
-            self.add_new_record_to_index(new_record)
+        if similarity_response.responses:
+            nearest_neighbor = similarity_response.responses[0]
+            if not nearest_neighbor.should_group:
+                new_record = GroupingRecord(
+                    group_id=issue.group_id,
+                    embeddings=np.squeeze(embedding),
+                    message=issue.message,
+                    stacktrace=issue.stacktrace,
+                )
+                self.add_new_record_to_index(new_record)
 
         return similarity_response
