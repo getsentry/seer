@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any
 
@@ -8,6 +9,8 @@ from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.types import AutofixRequest, AutofixResult
 from seer.rpc import RPCClient
+
+logger = logging.getLogger("autofix")
 
 
 class TaskStatusRequest(BaseModel):
@@ -28,6 +31,7 @@ def run_autofix(data: dict[str, Any]) -> None:
             status = "SUCCESS" if autofix_output is not None else "NOFIX"
     except Exception as e:
         sentry_sdk.capture_exception(e)
+        logger.error(e)
 
         autofix_output = None
         status = "ERROR"
