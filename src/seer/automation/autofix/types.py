@@ -51,7 +51,7 @@ class SentryEvent(BaseModel):
 
 
 class IssueDetails(BaseModel):
-    id: str
+    id: int
     title: str
     events: list[SentryEvent]
 
@@ -69,7 +69,7 @@ class AutofixOutput(PlanningOutput):
 
 
 class AutofixResult(BaseModel):
-    issue_id: str
+    issue_id: int
     result: Optional[AutofixOutput]
     status: Literal["SUCCESS", "NOFIX", "ERROR"]
 

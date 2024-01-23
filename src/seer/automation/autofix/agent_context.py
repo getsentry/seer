@@ -353,7 +353,7 @@ Total tokens: **{prompt_tokens + completion_tokens} (${total_price:.3f})**"""
         return stats_str
 
     def create_pr_from_branch(
-        self, branch: GitRef, autofix_output: AutofixAgentsOutput, issue_id: str
+        self, branch: GitRef, autofix_output: AutofixAgentsOutput, issue_id: int | str
     ):
         title = f"""🤖 {autofix_output.title}"""
 
