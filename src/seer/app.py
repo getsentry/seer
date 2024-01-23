@@ -7,6 +7,8 @@ import sentry_sdk
 from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
+from celery_app.tasks import run_autofix
+from seer.automation.autofix.types import AutofixEndpointResponse, AutofixRequest
 from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
@@ -103,6 +105,13 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
+
+
+@json_api("/v0/automation/autofix")
+def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    run_autofix.delay(data.model_dump())
+
+    return AutofixEndpointResponse(started=True)
 
 
 @app.route("/health/live", methods=["GET"])

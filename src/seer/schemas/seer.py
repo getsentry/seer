@@ -2,6 +2,24 @@ import typing
 
 import typing_extensions
 
+AutofixEndpointResponse = typing_extensions.TypedDict(
+    "AutofixEndpointResponse",
+    {
+        "started": bool,
+    },
+    total=False,
+)
+
+AutofixRequest = typing_extensions.TypedDict(
+    "AutofixRequest",
+    {
+        "issue": "IssueDetails",
+        "base_commit_sha": typing.Union[str, None],
+        "additional_context": typing.Union[str, None],
+    },
+    total=False,
+)
+
 BreakpointEntry = typing_extensions.TypedDict(
     "BreakpointEntry",
     {
@@ -83,6 +101,24 @@ GroupingResponse = typing_extensions.TypedDict(
         "stacktrace_similarity": float,
         "message_similarity": float,
         "should_group": bool,
+    },
+    total=False,
+)
+
+IssueDetails = typing_extensions.TypedDict(
+    "IssueDetails",
+    {
+        "id": str,
+        "title": str,
+        "events": typing.List["SentryEvent"],
+    },
+    total=False,
+)
+
+SentryEvent = typing_extensions.TypedDict(
+    "SentryEvent",
+    {
+        "entries": typing.List[typing.Mapping[str, typing.Any]],
     },
     total=False,
 )

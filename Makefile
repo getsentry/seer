@@ -26,9 +26,13 @@ shell: # Opens a bash shell in the context of the project
 update: # Updates the project's docker-compose image.
 	docker-compose build
 
+.PHONY: dev
+dev: # Starts the webserver based on the current src on port 9091
+	docker-compose up --build
+
 .PHONY: run
-run: image # Starts the webserver based on the current src on port 8900
-	docker run --rm --env PORT=8900 $(project_name):latest
+run: image # Starts the webserver based on the current src on port 9091
+	docker run --rm --env PORT=9091 $(project_name):latest
 
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
