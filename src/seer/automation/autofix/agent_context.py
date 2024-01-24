@@ -270,8 +270,8 @@ class AgentContext:
             self.index.delete(document.get_doc_id())
 
         with sentry_sdk.start_span(
-            op="seer.automation.autofix",
-            description="Run autofix on an issue within celery task",
+            op="seer.automation.autofix.indexing",
+            description="Indexing the diff between the cached commit and the requested commit",
         ) as span:
             new_nodes = self._documents_to_nodes(documents_to_update)
             self.index.insert_nodes(new_nodes)
