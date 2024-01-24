@@ -33,7 +33,8 @@ module = [
     "sentence_transformers.*",
     "scipy.*",
     "openai_multi_tool_use_parallel_patch",
-    "fsspec"
+    "fsspec",
+    "unidiff"
 ]
 ignore_missing_imports = true
 
