@@ -240,24 +240,28 @@ class AgentContext:
 
         storage_path = os.path.join("./", "models/autofix_storage_context/")
 
-        service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
-        memory_vector_store = MemoryVectorStore().from_persist_dir(storage_path)
-        storage_context = StorageContext.from_defaults(
-            vector_store=memory_vector_store,
-            persist_dir=storage_path,
-        )
-        index_structs = storage_context.index_store.index_structs()
+        with sentry_sdk.start_span(
+            op="seer.automation.autofix.index_loading",
+            description="Loading the vector store index from local filesystem",
+        ) as span:
+            service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+            memory_vector_store = MemoryVectorStore().from_persist_dir(storage_path)
+            storage_context = StorageContext.from_defaults(
+                vector_store=memory_vector_store,
+                persist_dir=storage_path,
+            )
+            index_structs = storage_context.index_store.index_structs()
 
-        if len(index_structs) == 0:
-            raise Exception("No index structures found in storage context")
-        index_struct: IndexDict = index_structs[0]  # type: ignore
+            if len(index_structs) == 0:
+                raise Exception("No index structures found in storage context")
+            index_struct: IndexDict = index_structs[0]  # type: ignore
 
-        index = VectorStoreIndex(
-            index_struct=index_struct,
-            service_context=service_context,
-            storage_context=storage_context,
-            show_progress=True,
-        )
+            index = VectorStoreIndex(
+                index_struct=index_struct,
+                service_context=service_context,
+                storage_context=storage_context,
+                show_progress=True,
+            )
 
         logger.debug(f"Loaded index from storage context '{storage_path}'.")
 
