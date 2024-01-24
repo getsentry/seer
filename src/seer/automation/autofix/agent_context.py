@@ -210,7 +210,6 @@ class AgentContext:
         # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
         # This has to be done because the files list inside the comparison object is limited to only 300 files.
         # We get the entire diff from the diff object returned from the `diff_url`
-        # Pinged this github issue in hopes that the library will implement it: https://github.com/PyGithub/PyGithub/issues/2027
         headers = {
             "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
             "User-Agent": requester._Requester__userAgent,  # type: ignore
