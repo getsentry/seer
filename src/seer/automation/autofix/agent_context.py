@@ -9,6 +9,7 @@ from typing import List
 
 import joblib
 import requests
+import sentry_sdk
 import torch
 from github import Auth, Github, GithubIntegration
 from github.GitRef import GitRef
@@ -20,6 +21,7 @@ from llama_index.node_parser import CodeSplitter
 from llama_index.readers import SimpleDirectoryReader
 from llama_index.schema import BaseNode, Document
 from llama_index.storage import StorageContext
+from unidiff import PatchSet
 
 from seer.automation.autofix.types import AutofixAgentsOutput, FileChange
 from seer.automation.autofix.utils import (
@@ -200,12 +202,29 @@ class AgentContext:
 
         return documents, nodes
 
-    def _get_commit_file_diffs(self) -> list[str]:
+    def _get_commit_file_diffs(self) -> tuple[list[str], list[str]]:
         comparison = self.repo.compare(CACHED_COMMIT_SHA, self.base_sha)
 
-        filenames = [f.filename for f in comparison.files]
+        requester = self.repo._requester
 
-        return filenames
+        # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
+        # This has to be done because the files list inside the comparison object is limited to only 300 files.
+        # We get the entire diff from the diff object returned from the `diff_url`
+        headers = {
+            "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
+            "User-Agent": requester._Requester__userAgent,  # type: ignore
+        }
+        data = requests.get(comparison.diff_url, headers=headers).content
+
+        patch_set = PatchSet(data.decode("utf-8"))
+
+        added_files = [patch.path for patch in patch_set.added_files]
+        modified_files = [patch.path for patch in patch_set.modified_files]
+        removed_files = [patch.path for patch in patch_set.removed_files]
+
+        changed_files = list(set(added_files + modified_files))
+
+        return changed_files, removed_files
 
     def _get_data(self):
         documents, nodes = self._load_data_from_github()
@@ -229,23 +248,35 @@ class AgentContext:
         )
 
         # Update the documents that changed in the diff.
-        filenames = self._get_commit_file_diffs()
+        changed_files, deleted_files = self._get_commit_file_diffs()
 
-        logger.debug(f"Updating index with {len(filenames)} files")
+        logger.debug(
+            f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
+        )
 
         self.index = index
         self.documents = documents
         self.nodes = nodes
 
         documents_to_update = [
-            document for document in documents if document.metadata["file_path"] in filenames
+            document for document in documents if document.metadata["file_path"] in changed_files
+        ]
+        documents_to_delete = [
+            document for document in documents if document.metadata["file_path"] in deleted_files
         ]
 
-        for document in documents_to_update:
+        for document in documents_to_update + documents_to_delete:
             self.index.delete(document.get_doc_id())
 
-        new_nodes = self._documents_to_nodes(documents_to_update)
-        self.index.insert_nodes(new_nodes)
+        with sentry_sdk.start_span(
+            op="seer.automation.autofix.indexing",
+            description="Indexing the diff between the cached commit and the requested commit",
+        ) as span:
+            new_nodes = self._documents_to_nodes(documents_to_update)
+            self.index.insert_nodes(new_nodes)
+
+            span.set_tag("num_documents", len(documents_to_update))
+            span.set_tag("num_nodes", len(new_nodes))
 
     def _get_document(self, file_path: str):
         for document in self.documents:
