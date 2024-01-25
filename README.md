@@ -12,6 +12,14 @@ Recommended to use `pyenv` or similar python environment manager so as to be abl
 
 Set the environment variables that are in `.env.example` with the actual values, save this as `.env` in the root of the project.
 
+### Model Artifacts
+
+You will need model artifacts to run inference in seer (duh!), get them from gcs by:
+
+```bash
+gsutil cp -r gs://tmp_tillman/models ./models
+```
+
 ### Running
 
 To run for development locally in one ago including building the docker image and rabbitmq container:
