@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -86,6 +87,7 @@ class AgentContext:
             )
         self.tmp_dir = tmp_dir
         self.tmp_repo_path = os.path.join(self.tmp_dir, f"repo")
+        self.cached_commit_json_path = os.path.join("./", "models/autofix_cached_commit.json")
 
         logger.info(f"Using tmp dir {self.tmp_dir}")
 
@@ -194,6 +196,7 @@ class AgentContext:
             logger.error(f"Failed to delete tar file: {e}")
 
     def _load_data_from_github(self):
+        logger.debug(f"Loading data from github for {self.repo.name} on ref {self.base_sha}")
         self._load_repo_to_tmp_dir()
         documents = SimpleDirectoryReader(
             self.tmp_repo_path, required_exts=[".py"], recursive=True
@@ -203,7 +206,11 @@ class AgentContext:
         return documents, nodes
 
     def _get_commit_file_diffs(self) -> tuple[list[str], list[str]]:
-        comparison = self.repo.compare(CACHED_COMMIT_SHA, self.base_sha)
+        with open(self.cached_commit_json_path, "r") as file:
+            cached_commit_data = json.load(file)
+        cached_commit_sha = cached_commit_data.get("sha")
+
+        comparison = self.repo.compare(cached_commit_sha, self.base_sha)
 
         requester = self.repo._requester
 
@@ -229,23 +236,34 @@ class AgentContext:
     def _get_data(self):
         documents, nodes = self._load_data_from_github()
 
-        storage_path = f"models/autofix_storage_context/"
+        logger.debug(f"Loading index from storage context")
 
-        service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
-        storage_context = StorageContext.from_defaults(
-            vector_store=MemoryVectorStore(), persist_dir=storage_path
-        )
-        index_structs = storage_context.index_store.index_structs()
-        if len(index_structs) == 0:
-            raise Exception("No index structures found in storage context")
-        index_struct: IndexDict = index_structs[0]  # type: ignore
+        storage_path = os.path.join("./", "models/autofix_storage_context/")
 
-        index = VectorStoreIndex(
-            index_struct=index_struct,
-            service_context=service_context,
-            storage_context=storage_context,
-            show_progress=True,
-        )
+        with sentry_sdk.start_span(
+            op="seer.automation.autofix.index_loading",
+            description="Loading the vector store index from local filesystem",
+        ) as span:
+            service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+            memory_vector_store = MemoryVectorStore().from_persist_dir(storage_path)
+            storage_context = StorageContext.from_defaults(
+                vector_store=memory_vector_store,
+                persist_dir=storage_path,
+            )
+            index_structs = storage_context.index_store.index_structs()
+
+            if len(index_structs) == 0:
+                raise Exception("No index structures found in storage context")
+            index_struct: IndexDict = index_structs[0]  # type: ignore
+
+            index = VectorStoreIndex(
+                index_struct=index_struct,
+                service_context=service_context,
+                storage_context=storage_context,
+                show_progress=True,
+            )
+
+        logger.debug(f"Loaded index from storage context '{storage_path}'.")
 
         # Update the documents that changed in the diff.
         changed_files, deleted_files = self._get_commit_file_diffs()
@@ -277,6 +295,17 @@ class AgentContext:
 
             span.set_tag("num_documents", len(documents_to_update))
             span.set_tag("num_nodes", len(new_nodes))
+
+        storage_context.persist(persist_dir=storage_path)
+        memory_vector_store.persist(persist_path=os.path.join(storage_path, "vector_store.json"))
+
+        try:
+            os.remove(os.path.join(storage_path, "default__vector_store.json"))
+        except OSError as e:
+            logger.error(f"Failed to delete default vector store file: {e}")
+
+        with open(self.cached_commit_json_path, "w") as sha_file:
+            json.dump({"sha": self.base_sha}, sha_file)
 
     def _get_document(self, file_path: str):
         for document in self.documents:
