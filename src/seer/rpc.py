@@ -1,12 +1,32 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
+from abc import ABC, abstractmethod
 
 import requests
 
+logger = logging.getLogger(__name__)
 
-class RPCClient:
+
+class RpcClient(ABC):
+    @abstractmethod
+    def call(self, method: str, **kwargs):
+        pass
+
+
+class DummyRpcClient(RpcClient):
+    def __init__(self, should_log: bool = False):
+        self.should_log = should_log
+
+    def call(self, method: str, **kwargs):
+        if self.should_log:
+            print(f"Calling {method} with {kwargs}")
+        return None
+
+
+class SentryRpcClient(RpcClient):
     shared_secret: str
 
     def __init__(self, base_url: str):
@@ -16,7 +36,7 @@ class RPCClient:
             raise RuntimeError("RPC_SHARED_SECRET must be set")
         self.shared_secret = shared_secret
 
-    def generate_request_signature(self, url_path: str, body: bytes) -> str:
+    def _generate_request_signature(self, url_path: str, body: bytes) -> str:
         signature_input = b"%s:%s" % (url_path.encode("utf8"), body)
         signature = hmac.new(
             self.shared_secret.encode("utf-8"), signature_input, hashlib.sha256
@@ -29,7 +49,7 @@ class RPCClient:
         body_dict = {"args": kwargs}
         body = json.dumps(body_dict, separators=(",", ":"))
         body_bytes = body.encode("utf-8")
-        signature = self.generate_request_signature(url_path, body_bytes)
+        signature = self._generate_request_signature(url_path, body_bytes)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Rpcsignature {signature}",

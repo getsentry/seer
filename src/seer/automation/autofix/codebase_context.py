@@ -1,11 +1,9 @@
-import hashlib
 import json
 import logging
 import os
 import shutil
 import tarfile
 import tempfile
-import textwrap
 from typing import List
 
 import requests
@@ -13,7 +11,6 @@ import sentry_sdk
 import torch
 from filelock import SoftFileLock
 from github import Auth, Github, GithubIntegration
-from github.GitRef import GitRef
 from github.Repository import Repository
 from llama_index import ServiceContext
 from llama_index.data_structs.data_structs import IndexDict
@@ -24,24 +21,22 @@ from llama_index.schema import BaseNode, Document
 from llama_index.storage import StorageContext
 from unidiff import PatchSet
 
-from seer.automation.autofix.types import AutofixAgentsOutput, FileChange
+from seer.automation.agent.types import Usage
+from seer.automation.autofix.repo_client import get_github_auth
 from seer.automation.autofix.utils import (
     MemoryVectorStore,
     SentenceTransformersEmbedding,
-    generate_random_string,
-    sanitize_branch_name,
+    get_torch_device,
 )
 
 logger = logging.getLogger("autofix")
 
 
-class AgentContext:
-    model: str
-
+class CodebaseContext:
+    github_auth: Auth.Token | Auth.AppInstallationAuth
     github: Github
     repo: Repository
     base_sha: str
-    bucket = "sentry-ml"
 
     tmp_dir: str
     tmp_repo_path: str
@@ -52,42 +47,21 @@ class AgentContext:
     documents: list[Document]
     nodes: list[BaseNode]
 
-    def __init__(
-        self,
-        repo_owner: str,
-        repo_name: str,
-        model: str,
-        github_auth: Auth.AppAuth,
-        gpu_device: torch.device,
-        ref: str | None = None,
-        base_sha: str | None = None,
-        tmp_dir: str | None = None,
-    ):
-        self.model = model
-
-        gi = GithubIntegration(auth=github_auth)
-        installation = gi.get_repo_installation(repo_owner, repo_name)
-        app_auth = github_auth.get_installation_auth(installation.id)
-
-        self.github = Github(auth=app_auth)
+    def __init__(self, repo_owner: str, repo_name: str, base_sha: str):
+        self.github = Github(auth=get_github_auth(repo_owner, repo_name))
         self.repo = self.github.get_repo(repo_owner + "/" + repo_name)
 
-        if base_sha:
-            self.base_sha = base_sha
-        else:
-            if ref is None:
-                raise ValueError("ref cannot be None if base_sha is not provided")
-            self.base_sha = self.repo.get_git_ref(ref).object.sha
+        self.base_sha = base_sha
 
-        if tmp_dir is None:
-            tmp_dir = tempfile.mkdtemp(prefix=f"{repo_owner}-{repo_name}_{self.base_sha}")
-        self.tmp_dir = tmp_dir
+        self.tmp_dir = tempfile.mkdtemp(prefix=f"{repo_owner}-{repo_name}_{self.base_sha}")
         self.tmp_repo_path = os.path.join(self.tmp_dir, f"repo")
         self.cached_commit_json_path = os.path.join("./", "models/autofix_cached_commit.json")
 
         logger.info(f"Using tmp dir {self.tmp_dir}")
 
-        self.embed_model = SentenceTransformersEmbedding("thenlper/gte-small", device=gpu_device)
+        self.embed_model = SentenceTransformersEmbedding(
+            "thenlper/gte-small", device=get_torch_device()
+        )
 
         self._get_data()
 
@@ -379,32 +353,6 @@ class AgentContext:
                 self.documents.append(document)
                 self.nodes.extend(new_nodes)
 
-    def cleanup(self):
-        if os.path.exists(self.tmp_dir):
-            shutil.rmtree(self.tmp_dir)
-            logger.info(f"Deleted tmp dir {self.tmp_dir}")
-        else:
-            logger.info(f"Tmp dir {self.tmp_dir} already removed")
-
-    def _create_branch(self, branch_name, base_branch=None, base_commit_sha: str | None = None):
-        base_sha = base_commit_sha
-        if base_branch:
-            base_sha = self.repo.get_branch(base_branch).commit.sha
-
-        if not base_sha:
-            raise ValueError("base_sha cannot be None")
-
-        ref = self.repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
-        return ref
-
-    def commit_file_change(self, path, message, content, branch):
-        contents = self.repo.get_contents(path, ref=branch)
-
-        if isinstance(contents, list):
-            raise Exception(f"Expected a single ContentFile but got a list for path {path}")
-
-        self.repo.update_file(path, message, content, contents.sha, branch=branch)
-
     def get_file_contents(self, path, ref):
         logger.debug(f"Getting file contents for {path} in {self.repo.name} on ref {ref}")
         try:
@@ -419,73 +367,9 @@ class AgentContext:
 
             return f"Error: file with path {path} not found in {self.repo.name} on ref {ref}"
 
-    def create_branch_from_changes(
-        self, pr_title: str, file_changes: List[FileChange], base_commit_sha
-    ) -> GitRef | None:
-        new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
-        branch_ref = self._create_branch(new_branch_name, base_commit_sha=base_commit_sha)
-
-        for change in file_changes:
-            try:
-                self.commit_file_change(
-                    change.path, change.description, change.contents, new_branch_name
-                )
-            except Exception as e:
-                logger.error(f"Error committing file change: {e}")
-
-        # Check that the changes were made
-        comparison = self.repo.compare(base_commit_sha, branch_ref.object.sha)
-        if comparison.ahead_by < 1:
-            # Remove the branch if there are no changes
-            self.repo.get_git_ref(branch_ref.ref).delete()
-            sentry_sdk.capture_message(
-                f"Failed to create branch from changes. Comparison is ahead by {comparison.ahead_by}"
-            )
-            return None
-
-        return branch_ref
-
-    def _get_stats_str(self, prompt_tokens: int, completion_tokens: int):
-        gpt4turbo_prompt_price_per_token = 0.01 / 1000
-        gpt4turbo_completion_price_per_token = 0.03 / 1000
-
-        prompt_price = prompt_tokens * gpt4turbo_prompt_price_per_token
-        completion_price = completion_tokens * gpt4turbo_completion_price_per_token
-        total_price = prompt_price + completion_price
-
-        stats_str = textwrap.dedent(
-            f"""\
-            Model: {self.model}
-            Prompt tokens: **{prompt_tokens}**
-            Completion tokens: **{completion_tokens}**
-            Total tokens: **{prompt_tokens + completion_tokens}**"""
-        )
-
-        return stats_str
-
-    def create_pr_from_branch(
-        self, branch: GitRef, autofix_output: AutofixAgentsOutput, issue_id: int | str
-    ):
-        title = f"""🤖 {autofix_output.title}"""
-
-        issue_link = f"https://sentry.io/organizations/sentry/issues/{issue_id}/"
-
-        description = textwrap.dedent(
-            f"""\
-            👋 Hi there! This PR was automatically generated 🤖
-
-            {autofix_output.description}
-
-            ### Issue that triggered this PR:
-            {issue_link}
-
-            ### Stats:
-            {self._get_stats_str(autofix_output.usage.prompt_tokens, autofix_output.usage.completion_tokens)}"""
-        )
-
-        return self.repo.create_pull(
-            title=title,
-            body=description,
-            base="master",
-            head=branch.ref,
-        )
+    def cleanup(self):
+        if os.path.exists(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir)
+            logger.info(f"Deleted tmp dir {self.tmp_dir}")
+        else:
+            logger.info(f"Tmp dir {self.tmp_dir} already removed")

@@ -15,8 +15,6 @@ services:
             - .env
         environment:
             - PORT=9091
-            - GITHUB_REPO_NAME=sentry-mirror-suggested-fix
-            - GITHUB_APP_ID=781978
             - SENTRY_BASE_URL=http://host.docker.internal:8000
             - CELERY_BROKER_URL=amqp://guest:guest@host.docker.internal:5672//
             - CELERY_WORKER_ENABLE=true # Enable celery worker

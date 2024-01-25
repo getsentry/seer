@@ -1,123 +1,195 @@
+import json
 import logging
-import os
+import textwrap
 import xml.etree.ElementTree as ET
 
-import torch
-from github import Auth
+import sentry_sdk
+from llama_index.schema import MetadataMode, NodeWithScore
 
 from seer.automation.agent.agent import GptAgent, Message, Usage
-from seer.automation.autofix.agent_context import AgentContext
-from seer.automation.autofix.prompts import coding_prompt, planning_prompt
+from seer.automation.agent.singleturn import LlmClient
+from seer.automation.autofix.codebase_context import CodebaseContext
+from seer.automation.autofix.prompts import (
+    ExecutionPrompts,
+    PlanningPrompts,
+    ProblemDiscoveryPrompt,
+)
+from seer.automation.autofix.repo_client import RepoClient
+from seer.automation.autofix.rpc_wrapper import AutofixRpcWrapper
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.types import (
-    AutofixAgentsOutput,
     AutofixOutput,
     AutofixRequest,
+    FileChange,
+    PlanningInput,
     PlanningOutput,
+    PlanStep,
+    ProblemDiscoveryOutput,
+    ProblemDiscoveryRequest,
+    ProblemDiscoveryResult,
 )
-
-# TODO: Remove this when we stop locking it to a repo
-REPO_OWNER = "getsentry"
+from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
+from seer.rpc import RpcClient
 
 logger = logging.getLogger("autofix")
 
 
 class Autofix:
-    def __init__(self, request: AutofixRequest):
+    def __init__(self, request: AutofixRequest, rpc_client: RpcClient):
         self.request = request
-        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.usage = Usage()
+        self.rpc_wrapper = AutofixRpcWrapper(rpc_client, self.request.issue.id)
 
-        app_id = os.environ.get("GITHUB_APP_ID")
-        private_key = os.environ.get("GITHUB_PRIVATE_KEY")
+    def run(self) -> None:
+        try:
+            logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-        if app_id is None or private_key is None:
-            raise ValueError("GITHUB_APP_ID or GITHUB_PRIVATE_KEY is not set")
+            self.rpc_wrapper.send_initial_steps()
 
-        self.github_auth = Auth.AppAuth(app_id, private_key=private_key)
+            problem_discovery_output = self.run_problem_discovery_agent()
 
-    def run(self) -> AutofixOutput | None:
-        logger.info(f"Beginning autofix for issue {self.request.issue.id}")
+            if not problem_discovery_output:
+                logger.warning(f"Problem discovery agent did not return a valid response")
+                return
 
-        github_repo_name = os.environ.get("GITHUB_REPO_NAME")
-        self.context = AgentContext(
-            repo_owner=REPO_OWNER,
-            repo_name=github_repo_name if github_repo_name else "sentry-mirror-suggested-fix",
-            ref=None if self.request.base_commit_sha else "heads/master",
-            base_sha=self.request.base_commit_sha,
-            model="gpt-4-1106-preview",
-            github_auth=self.github_auth,
-            gpu_device=self.device,
-        )
+            problem_discovery_payload = ProblemDiscoveryResult(
+                status="CONTINUE"
+                if problem_discovery_output.actionability_score >= 0.6
+                else "CANCELLED",
+                description=problem_discovery_output.description,
+                reasoning=problem_discovery_output.reasoning,
+            )
 
-        logger.info(f"Running planning for issue {self.request.issue.id}")
-        planning_output = self._run_planning_agent()
-        if planning_output is None:
-            logger.warning(f"Planning agent did not return a valid output")
-            return None
+            self.rpc_wrapper.send_problem_discovery_result(problem_discovery_payload)
 
-        logger.info(f"Running coding for issue {self.request.issue.id}")
-        coding_output, coding_usage = self._run_coding_agent(self.context.base_sha, planning_output)
+            if problem_discovery_payload.status == "CANCELLED":
+                logger.info(f"Problem is not actionable")
+                return
 
-        model_dump = planning_output.model_dump()
-        model_dump.pop("usage", None)  # Remove the existing usage key if present
-        combined_output = AutofixAgentsOutput(
-            **model_dump,
-            changes=list(coding_output.values()),
-            usage=Usage(
-                prompt_tokens=planning_output.usage.prompt_tokens + coding_usage.prompt_tokens,
-                completion_tokens=planning_output.usage.completion_tokens
-                + coding_usage.completion_tokens,
-                total_tokens=planning_output.usage.total_tokens + coding_usage.total_tokens,
-            ),
-        )
+            try:
+                codebase_context = CodebaseContext(
+                    "getsentry", "sentry", self.request.base_commit_sha
+                )
+                self.rpc_wrapper.send_codebase_indexing_result("COMPLETED")
+            except Exception as e:
+                logger.error(f"Failed to index codebase: {e}")
+                sentry_sdk.capture_exception(e)
+                self.rpc_wrapper.send_codebase_indexing_result("ERROR")
+                return
 
-        pr = self._create_pr(combined_output)
+            try:
+                planning_output = self.run_planning_agent(
+                    PlanningInput(problem=problem_discovery_output), codebase_context
+                )
 
-        if pr is None:
-            return None
+                if not planning_output:
+                    logger.warning(f"Planning agent did not return a valid response")
+                    self.rpc_wrapper.send_planning_result(None)
+                    return
 
-        self.context.cleanup()
+                self.rpc_wrapper.send_planning_result(planning_output)
 
-        output = AutofixOutput(
-            title=planning_output.title,
-            description=planning_output.description,
-            plan=planning_output.plan,
-            usage=planning_output.usage,
-            pr_url=pr.html_url,
-            repo_name=self.context.repo.full_name,
-            pr_number=pr.number,
-        )
+                logger.info(
+                    f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
+                )
+            except Exception as e:
+                logger.error(f"Failed to plan: {e}")
+                sentry_sdk.capture_exception(e)
+                self.rpc_wrapper.send_planning_result(None)
+                return
 
-        return output
+            file_changes: list[FileChange] = []
+            for i, step in enumerate(planning_output.steps):
+                self.rpc_wrapper.send_execution_step_start(step.id)
 
-    def _create_pr(self, combined_output: AutofixAgentsOutput):
-        if len(combined_output.changes) == 0:
-            logger.warning(f"No changes were generated by the coding agent")
-            return None
+                logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
+                file_changes = self.run_execution_agent(step, codebase_context, file_changes)
 
-        branch_ref = self.context.create_branch_from_changes(
-            pr_title=combined_output.title,
-            file_changes=combined_output.changes,
-            base_commit_sha=self.context.base_sha,
+                self.rpc_wrapper.send_execution_step_result(step.id, "COMPLETED")
+
+            pr = self._create_pr(planning_output.title, planning_output.description, file_changes)
+
+            if pr is None:
+                return
+
+            self.rpc_wrapper.send_autofix_complete(
+                AutofixOutput(
+                    title=planning_output.title,
+                    description=planning_output.description,
+                    pr_url=pr.html_url,
+                    repo_name="getsentry/sentry",
+                    pr_number=pr.number,
+                    usage=self.usage,
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to complete autofix: {e}")
+            sentry_sdk.capture_exception(e)
+
+            self.rpc_wrapper.mark_running_steps_errored()
+            self.rpc_wrapper.send_autofix_complete(None)
+
+    def _create_pr(self, title: str, description: str, changes: list[FileChange]):
+        repo_client = RepoClient("getsentry", "sentry")
+        branch_ref = repo_client.create_branch_from_changes(
+            pr_title=title,
+            file_changes=changes,
+            base_commit_sha=self.request.base_commit_sha,
         )
 
         if branch_ref is None:
             logger.warning(f"Failed to create branch from changes")
             return None
 
-        return self.context.create_pr_from_branch(
-            branch_ref, combined_output, self.request.issue.id
+        return repo_client.create_pr_from_branch(
+            branch_ref, title, description, self.request.issue.id, self.usage
         )
 
-    def _run_planning_agent(self) -> PlanningOutput | None:
-        planning_agent_tools = BaseTools(self.context)
+    def _parse_problem_discovery_response(self, response: str) -> ProblemDiscoveryOutput | None:
+        try:
+            problem_el = ET.fromstring(
+                f"<response>{escape_multi_xml(response, ['description', 'reasoning', 'actionability_score'])}</response>"
+            ).find("problem")
 
-        planning_agent = GptAgent(
-            tools=planning_agent_tools.get_tools(),
+            if problem_el is None:
+                logger.warning(f"Problem discovery response does not contain a problem: {response}")
+                return None
+
+            description = extract_xml_element_text(problem_el, "description")
+
+            reasoning = extract_xml_element_text(problem_el, "reasoning")
+
+            actionability_score = float(
+                extract_xml_element_text(problem_el, "actionability_score") or 0.0
+            )
+
+            if description is None or reasoning is None:
+                logger.warning(
+                    f"Problem discovery response does not contain a description, reasoning, or actionability score: {response}"
+                )
+                return None
+
+            output = ProblemDiscoveryOutput(
+                description=description,
+                reasoning=reasoning,
+                actionability_score=actionability_score,
+            )
+
+            return output
+        except ET.ParseError as e:
+            logger.warning(f"Problem discovery response is not valid XML: {e}")
+
+        return None
+
+    def run_problem_discovery_agent(
+        self, request: ProblemDiscoveryRequest | None = None
+    ) -> ProblemDiscoveryOutput | None:
+        problem_discovery_agent = GptAgent(
+            name="problem-discovery",
             memory=[
                 Message(
                     role="system",
-                    content=planning_prompt.format(
+                    content=ProblemDiscoveryPrompt.format_system_msg(
                         err_msg=self.request.issue.title,
                         stack_str=self.request.issue.events[-1].build_stacktrace(),
                     ),
@@ -125,58 +197,186 @@ class Autofix:
             ],
         )
 
-        additional_context_str = (
-            (self.request.additional_context + "\n\n") if self.request.additional_context else ""
-        )
-        planning_response = planning_agent.run(
-            # TODO: Remove this and also find how to address mismatches in the stack trace path and the actual filepaths
-            f"{additional_context_str}Note: instead of ./app, the correct directory is static/app/..."
-        )
+        if request:
+            # message = ProblemDiscoveryPrompt.format_feedback_msg(
+            #     request.message, request.previous_output
+            # )
+            raise NotImplementedError("Problem discovery feedback not implemented yet.")
+        else:
+            message = ProblemDiscoveryPrompt.format_default_msg(
+                additional_context=self.request.additional_context
+            )
 
-        parsed_output = ET.fromstring(f"<response>{planning_response}</response>")
+        problem_discovery_response = problem_discovery_agent.run(message)
+
+        self.usage.add(problem_discovery_agent.usage)
+
+        if problem_discovery_response is None:
+            logger.warning(f"Problem discovery agent did not return a valid response")
+            return None
+
+        return self._parse_problem_discovery_response(problem_discovery_response)
+
+    def _parse_planning_output(self, response: str) -> PlanningOutput | None:
+        parsed_output = ET.fromstring(
+            f'<response>{escape_multi_xml(response, ["title", "description", "step"])}</response>'
+        )
 
         try:
-            title_element = parsed_output.find("title")
-            description_element = parsed_output.find("description")
-            plan_element = parsed_output.find("plan")
+            title_element = parsed_output.find(".//*title")
+            description_element = parsed_output.find(".//*description")
+            steps_element = parsed_output.find(".//*steps")
 
-            title = title_element.text if title_element is not None else None
-            description = description_element.text if description_element is not None else None
-            plan = plan_element.text if plan_element is not None else None
+            if steps_element is None:
+                logger.warning(f"Planning response does not contain steps element: {response}")
+                return None
 
-            if title is None or description is None or plan is None:
+            step_elements = steps_element.findall("step")
+
+            if len(step_elements) == 0:
+                logger.warning(f"Planning response does not contain any steps: {response}")
+                return None
+
+            steps = [
+                PlanStep(
+                    id=i,
+                    title=step_element.attrib["title"],
+                    text=textwrap.dedent(step_element.text or ""),
+                )
+                for i, step_element in enumerate(step_elements)
+            ]
+
+            title = textwrap.dedent(title_element.text or "") if title_element is not None else None
+            description = (
+                textwrap.dedent(description_element.text or "")
+                if description_element is not None
+                else None
+            )
+
+            if title is None or description is None:
                 logger.warning(
-                    f"Planning response does not contain a title, description, or plan: {planning_response}"
+                    f"Planning response does not contain a title, description, or plan: {response}"
                 )
                 return None
 
-            return PlanningOutput(
-                title=title, description=description, plan=plan, usage=planning_agent.usage
-            )
+            return PlanningOutput(title=title, description=description, steps=steps)
         except AttributeError as e:
             logger.warning(f"Planning response does not contain a title, description, or plan: {e}")
             return None
 
-    def _run_coding_agent(self, base_sha: str, planning_output: PlanningOutput):
-        code_action_tools = CodeActionTools(
-            self.context,
-            base_sha=base_sha,
-            verbose=True,
-        )
-        action_agent = GptAgent(
-            tools=code_action_tools.get_tools(),
+    def run_planning_agent(
+        self, input: PlanningInput, codebase_context: CodebaseContext
+    ) -> PlanningOutput | None:
+        assert (
+            input.message or input.previous_output or input.problem
+        ), "PlanningInput requires at least one of the fields: 'message', 'previous_output', or 'problem'."
+
+        planning_agent_tools = BaseTools(codebase_context)
+
+        planning_agent = GptAgent(
+            name="planner",
+            tools=planning_agent_tools.get_tools(),
             memory=[
                 Message(
                     role="system",
-                    content=coding_prompt.format(
+                    content=PlanningPrompts.format_system_msg(
                         err_msg=self.request.issue.title,
                         stack_str=self.request.issue.events[-1].build_stacktrace(),
-                        comment=self.request.additional_context,
                     ),
                 )
             ],
         )
 
-        action_agent.run(planning_output.plan)
+        if input.message:
+            message = ""
+        elif input.problem:
+            # TODO: Remove this and also find how to address mismatches in the stack trace path and the actual filepaths
+            message = PlanningPrompts.format_default_msg(
+                problem=input.problem,
+                additional_context=f"{self.request.additional_context or ''}Note: instead of ./app, the correct directory is static/app/...",
+            )
+        else:
+            raise ValueError(
+                "PlanningInput requires at least one of the fields: 'message' or 'problem'."
+            )
 
-        return code_action_tools.file_changes, action_agent.usage
+        planning_response = planning_agent.run(message)
+
+        self.usage.add(planning_agent.usage)
+
+        if planning_response is None:
+            logger.warning(f"Planning agent did not return a valid response")
+            return None
+
+        return self._parse_planning_output(planning_response)
+
+    def _get_plan_step_context(self, plan_item: PlanStep, codebase_context: CodebaseContext):
+        logger.debug(f"Getting context for plan item: {plan_item}")
+
+        # Identify good search queries for the plan item
+        resp: tuple[list[str], Usage] = LlmClient().completion_with_parser(
+            model="gpt-4-0125-preview",
+            messages=[
+                Message(role="system", content=PlanningPrompts.format_plan_item_query_system_msg()),
+                Message(
+                    role="user",
+                    content=PlanningPrompts.format_plan_item_query_default_msg(plan_item=plan_item),
+                ),
+            ],
+            parser=lambda x: json.loads(x),
+        )
+        queries: list[str] = resp[0]
+
+        logger.debug(f"Search queries: {queries}")
+
+        context_dump = ""
+        unique_nodes: dict[str, NodeWithScore] = {}
+        for query in queries:
+            retrieved_nodes = codebase_context.index.as_retriever(top_k=2).retrieve(query)
+            for node in retrieved_nodes:
+                unique_nodes[node.node_id] = node
+        nodes = list(unique_nodes.values())
+
+        logger.debug(f"Retrieved unique nodes: {nodes}")
+
+        for node in nodes:
+            context_dump += (
+                f"[{node.node.get_metadata_str(MetadataMode.LLM)}]\n\n{node.get_content()}\n-----\n"
+            )
+
+        return context_dump
+
+    def run_execution_agent(
+        self,
+        plan_item: PlanStep,
+        codebase_context: CodebaseContext,
+        file_changes: list[FileChange] = [],
+    ):
+        # TODO: make this more robust
+        try:
+            context_dump = self._get_plan_step_context(plan_item, codebase_context)
+        except Exception as e:
+            logger.error(f"Failed to get context for plan item: {e}")
+            sentry_sdk.capture_exception(e)
+            context_dump = ""
+
+        code_action_tools = CodeActionTools(
+            codebase_context,
+            base_sha=codebase_context.base_sha,
+            verbose=True,
+        )
+        code_action_tools.file_changes = file_changes
+        execution_agent = GptAgent(
+            name="executor",
+            tools=code_action_tools.get_tools(),
+            memory=[
+                Message(role="system", content=ExecutionPrompts.format_system_msg(context_dump))
+            ],
+            stop_message="<DONE>",
+        )
+
+        execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
+
+        self.usage.add(execution_agent.usage)
+
+        return code_action_tools.file_changes
