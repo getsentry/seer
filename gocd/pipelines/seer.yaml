@@ -52,3 +52,9 @@ pipelines:
                                     --label-selector="service=seer" \
                                     --image="us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
                                     --container-name="seer"
+                              - script: |
+                                    /devinfra/scripts/k8s/k8stunnel \
+                                    && /devinfra/scripts/k8s/k8s-deploy.py \
+                                    --label-selector="service=seer-autofix" \
+                                    --image="us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
+                                    --container-name="seer-autofix"
