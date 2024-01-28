@@ -1,7 +1,9 @@
 import logging
 import os
 
-from celery import Celery
+import sentry_sdk
+from celery import Celery, signals
+from sentry_sdk.integrations.celery import CeleryIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -22,3 +24,14 @@ app.conf.task_queues = {
     },
 }
 app.autodiscover_tasks(["celery_app.tasks"])
+
+
+@signals.celeryd_init.connect
+def init_sentry(**_kwargs):
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN"),
+        integrations=[CeleryIntegration(propagate_traces=True)],
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+        enable_tracing=True,
+    )
