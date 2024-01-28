@@ -395,6 +395,15 @@ class AgentContext:
             except Exception as e:
                 logger.error(f"Error committing file change: {e}")
 
+        # Check that the changes were made
+        comparison = self.repo.compare(base_commit_sha, branch_ref.object.sha)
+        if comparison.ahead_by < 1:
+            # Remove the branch if there are no changes
+            self.repo.get_git_ref(branch_ref.ref).delete()
+            raise Exception(
+                f"Failed to create branch from changes. Comparison is ahead by {comparison.ahead_by}"
+            )
+
         return branch_ref
 
     def _get_stats_str(self, prompt_tokens: int, completion_tokens: int):
