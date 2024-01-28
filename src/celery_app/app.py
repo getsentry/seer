@@ -28,7 +28,6 @@ app.autodiscover_tasks(["celery_app.tasks"])
 
 @signals.celeryd_init.connect
 def init_sentry(**_kwargs):
-    print("init_sentry DONE")
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
         integrations=[CeleryIntegration(propagate_traces=True)],
