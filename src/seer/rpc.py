@@ -36,4 +36,8 @@ class RPCClient:
         }
         response = requests.post(endpoint, headers=headers, json=body_dict)
         response.raise_for_status()
-        return response.json()
+
+        if response.headers.get("Content-Type") == "application/json":
+            return response.json()
+        else:
+            return None
