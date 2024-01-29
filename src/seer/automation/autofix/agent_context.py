@@ -383,7 +383,7 @@ class AgentContext:
 
     def create_branch_from_changes(
         self, pr_title: str, file_changes: List[FileChange], base_commit_sha
-    ) -> GitRef:
+    ) -> GitRef | None:
         new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
         branch_ref = self._create_branch(new_branch_name, base_commit_sha=base_commit_sha)
 
@@ -400,9 +400,10 @@ class AgentContext:
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
             self.repo.get_git_ref(branch_ref.ref).delete()
-            raise Exception(
+            sentry_sdk.capture_message(
                 f"Failed to create branch from changes. Comparison is ahead by {comparison.ahead_by}"
             )
+            return None
 
         return branch_ref
 

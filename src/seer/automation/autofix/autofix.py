@@ -103,6 +103,10 @@ class Autofix:
             base_commit_sha=self.context.base_sha,
         )
 
+        if branch_ref is None:
+            logger.warning(f"Failed to create branch from changes")
+            return None
+
         return self.context.create_pr_from_branch(
             branch_ref, combined_output, self.request.issue.id
         )
