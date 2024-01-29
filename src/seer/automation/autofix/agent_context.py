@@ -5,7 +5,6 @@ import os
 import shutil
 import tarfile
 import tempfile
-from random import randint
 from typing import List
 
 import requests
@@ -80,10 +79,7 @@ class AgentContext:
             self.base_sha = self.repo.get_git_ref(ref).object.sha
 
         if tmp_dir is None:
-            tmp_dir = os.path.join(
-                tempfile.gettempdir(),
-                f"{repo_owner}-{repo_name}_{self.base_sha}_{randint(0, 100000)}",
-            )
+            tmp_dir = tempfile.mkdtemp(prefix=f"{repo_owner}-{repo_name}_{self.base_sha}")
         self.tmp_dir = tmp_dir
         self.tmp_repo_path = os.path.join(self.tmp_dir, f"repo")
         self.cached_commit_json_path = os.path.join("./", "models/autofix_cached_commit.json")
