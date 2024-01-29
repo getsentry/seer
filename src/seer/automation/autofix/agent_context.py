@@ -240,14 +240,12 @@ class AgentContext:
             storage_dir = os.path.join("./", "models/autofix_storage_context/")
             lock_path = os.path.join(storage_dir, "lock")
 
-            with sentry_sdk.start_span(
-                op="seer.automation.autofix.index_loading",
-                description="Loading the vector store index from local filesystem",
-            ) as span:
-                with SoftFileLock(
-                    os.path.join(lock_path), timeout=60 * 60
-                ):  # 1 hour max lock timeout
-                    logger.debug(f"Acquired read lock for {storage_dir}")
+            with SoftFileLock(os.path.join(lock_path), timeout=60 * 60):  # 1 hour max lock timeout
+                logger.debug(f"Acquired lock for {storage_dir}")
+                with sentry_sdk.start_span(
+                    op="seer.automation.autofix.index_loading",
+                    description="Loading the vector store index from local filesystem",
+                ) as span:
                     with open(self.cached_commit_json_path, "r") as file:
                         cached_commit_data = json.load(file)
                     cached_commit_sha = cached_commit_data.get("sha")
@@ -271,53 +269,47 @@ class AgentContext:
                         show_progress=True,
                     )
 
-                    logger.debug(f"Released read lock for {storage_dir}")
+                logger.debug(f"Loaded index from storage context '{storage_dir}'.")
 
-            logger.debug(f"Loaded index from storage context '{storage_dir}'.")
+                # Update the documents that changed in the diff.
+                changed_files, deleted_files = self._get_commit_file_diffs(cached_commit_sha)
 
-            # Update the documents that changed in the diff.
-            changed_files, deleted_files = self._get_commit_file_diffs(cached_commit_sha)
+                logger.debug(
+                    f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
+                )
 
-            logger.debug(
-                f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
-            )
+                self.index = index
+                self.documents = documents
+                self.nodes = nodes
 
-            self.index = index
-            self.documents = documents
-            self.nodes = nodes
+                documents_to_update = [
+                    document
+                    for document in documents
+                    if document.metadata["file_path"] in changed_files
+                ]
+                documents_to_delete = [
+                    document
+                    for document in documents
+                    if document.metadata["file_path"] in deleted_files
+                ]
 
-            documents_to_update = [
-                document
-                for document in documents
-                if document.metadata["file_path"] in changed_files
-            ]
-            documents_to_delete = [
-                document
-                for document in documents
-                if document.metadata["file_path"] in deleted_files
-            ]
+                for document in documents_to_update + documents_to_delete:
+                    self.index.delete(document.get_doc_id())
 
-            for document in documents_to_update + documents_to_delete:
-                self.index.delete(document.get_doc_id())
+                with sentry_sdk.start_span(
+                    op="seer.automation.autofix.indexing",
+                    description="Indexing the diff between the cached commit and the requested commit",
+                ) as span:
+                    new_nodes = self._documents_to_nodes(documents_to_update)
+                    self.index.insert_nodes(new_nodes)
 
-            with sentry_sdk.start_span(
-                op="seer.automation.autofix.indexing",
-                description="Indexing the diff between the cached commit and the requested commit",
-            ) as span:
-                new_nodes = self._documents_to_nodes(documents_to_update)
-                self.index.insert_nodes(new_nodes)
+                    span.set_tag("num_documents", len(documents_to_update))
+                    span.set_tag("num_nodes", len(new_nodes))
 
-                span.set_tag("num_documents", len(documents_to_update))
-                span.set_tag("num_nodes", len(new_nodes))
+                commit_is_newer = self.repo.compare(cached_commit_sha, self.base_sha).ahead_by > 0
 
-            commit_is_newer = self.repo.compare(cached_commit_sha, self.base_sha).ahead_by > 0
-
-            if commit_is_newer:
-                # Save only when the commit is newer
-                with SoftFileLock(
-                    os.path.join(lock_path), timeout=60 * 60
-                ):  # 1 hour max lock timeout
-                    logger.debug(f"Acquired write lock for {storage_dir}")
+                if commit_is_newer:
+                    # Save only when the commit is newer
                     storage_context.persist(persist_dir=storage_dir)
                     memory_vector_store.persist(
                         persist_path=os.path.join(storage_dir, "vector_store.json")
@@ -331,7 +323,7 @@ class AgentContext:
                     with open(self.cached_commit_json_path, "w") as sha_file:
                         json.dump({"sha": self.base_sha}, sha_file)
 
-                    logger.debug(f"Released write lock for {storage_dir}")
+                logger.debug(f"Released lock for {storage_dir}")
 
         finally:
             # Always cleanup the tmp dir
