@@ -11,6 +11,9 @@ broker_url = os.environ.get("CELERY_BROKER_URL")
 if not broker_url:
     logger.warning("CELERY_BROKER_URL not set")
 
+autofix_logger = logging.getLogger("autofix")
+autofix_logger.setLevel(logging.DEBUG)  # log level debug only for the autofix logger
+
 app = Celery("seer", broker=broker_url)
 app.conf.task_serializer = "json"
 app.conf.result_serializer = "json"

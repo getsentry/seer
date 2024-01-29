@@ -5,13 +5,12 @@ import os
 import shutil
 import tarfile
 import tempfile
-import time
 from typing import List
 
-import joblib
 import requests
 import sentry_sdk
 import torch
+from filelock import SoftFileLock
 from github import Auth, Github, GithubIntegration
 from github.GitRef import GitRef
 from github.Repository import Repository
@@ -33,8 +32,6 @@ from seer.automation.autofix.utils import (
 )
 
 logger = logging.getLogger("autofix")
-
-CACHED_COMMIT_SHA = "ac63e3750291a6795d31404030783358ef3ea1ac"
 
 
 class AgentContext:
@@ -82,9 +79,7 @@ class AgentContext:
             self.base_sha = self.repo.get_git_ref(ref).object.sha
 
         if tmp_dir is None:
-            tmp_dir = os.path.join(
-                tempfile.gettempdir(), f"{repo_owner}-{repo_name}_{self.base_sha}"
-            )
+            tmp_dir = tempfile.mkdtemp(prefix=f"{repo_owner}-{repo_name}_{self.base_sha}")
         self.tmp_dir = tmp_dir
         self.tmp_repo_path = os.path.join(self.tmp_dir, f"repo")
         self.cached_commit_json_path = os.path.join("./", "models/autofix_cached_commit.json")
@@ -205,12 +200,8 @@ class AgentContext:
 
         return documents, nodes
 
-    def _get_commit_file_diffs(self) -> tuple[list[str], list[str]]:
-        with open(self.cached_commit_json_path, "r") as file:
-            cached_commit_data = json.load(file)
-        cached_commit_sha = cached_commit_data.get("sha")
-
-        comparison = self.repo.compare(cached_commit_sha, self.base_sha)
+    def _get_commit_file_diffs(self, prev_sha: str) -> tuple[list[str], list[str]]:
+        comparison = self.repo.compare(prev_sha, self.base_sha)
 
         requester = self.repo._requester
 
@@ -234,78 +225,104 @@ class AgentContext:
         return changed_files, removed_files
 
     def _get_data(self):
-        documents, nodes = self._load_data_from_github()
-
-        logger.debug(f"Loading index from storage context")
-
-        storage_path = os.path.join("./", "models/autofix_storage_context/")
-
-        with sentry_sdk.start_span(
-            op="seer.automation.autofix.index_loading",
-            description="Loading the vector store index from local filesystem",
-        ) as span:
-            service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
-            memory_vector_store = MemoryVectorStore().from_persist_dir(storage_path)
-            storage_context = StorageContext.from_defaults(
-                vector_store=memory_vector_store,
-                persist_dir=storage_path,
-            )
-            index_structs = storage_context.index_store.index_structs()
-
-            if len(index_structs) == 0:
-                raise Exception("No index structures found in storage context")
-            index_struct: IndexDict = index_structs[0]  # type: ignore
-
-            index = VectorStoreIndex(
-                index_struct=index_struct,
-                service_context=service_context,
-                storage_context=storage_context,
-                show_progress=True,
-            )
-
-        logger.debug(f"Loaded index from storage context '{storage_path}'.")
-
-        # Update the documents that changed in the diff.
-        changed_files, deleted_files = self._get_commit_file_diffs()
-
-        logger.debug(
-            f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
-        )
-
-        self.index = index
-        self.documents = documents
-        self.nodes = nodes
-
-        documents_to_update = [
-            document for document in documents if document.metadata["file_path"] in changed_files
-        ]
-        documents_to_delete = [
-            document for document in documents if document.metadata["file_path"] in deleted_files
-        ]
-
-        for document in documents_to_update + documents_to_delete:
-            self.index.delete(document.get_doc_id())
-
-        with sentry_sdk.start_span(
-            op="seer.automation.autofix.indexing",
-            description="Indexing the diff between the cached commit and the requested commit",
-        ) as span:
-            new_nodes = self._documents_to_nodes(documents_to_update)
-            self.index.insert_nodes(new_nodes)
-
-            span.set_tag("num_documents", len(documents_to_update))
-            span.set_tag("num_nodes", len(new_nodes))
-
-        storage_context.persist(persist_dir=storage_path)
-        memory_vector_store.persist(persist_path=os.path.join(storage_path, "vector_store.json"))
-
+        # The files will be locked for the entire process of loading data; that means only one worker at a time can go through the data loading process which is a bottleneck.
+        # However, this should be a temporary compromise during PoC stage to ensure that only the latest commit's embeddings are stored.
         try:
-            os.remove(os.path.join(storage_path, "default__vector_store.json"))
-        except OSError as e:
-            logger.error(f"Failed to delete default vector store file: {e}")
+            documents, nodes = self._load_data_from_github()
 
-        with open(self.cached_commit_json_path, "w") as sha_file:
-            json.dump({"sha": self.base_sha}, sha_file)
+            logger.debug(f"Loading index from storage context")
+
+            storage_dir = os.path.join("./", "models/autofix_storage_context/")
+            lock_path = os.path.join(storage_dir, "lock")
+
+            with SoftFileLock(os.path.join(lock_path), timeout=60 * 60):  # 1 hour max lock timeout
+                logger.debug(f"Acquired lock for {storage_dir}")
+                with sentry_sdk.start_span(
+                    op="seer.automation.autofix.index_loading",
+                    description="Loading the vector store index from local filesystem",
+                ) as span:
+                    with open(self.cached_commit_json_path, "r") as file:
+                        cached_commit_data = json.load(file)
+                    cached_commit_sha = cached_commit_data.get("sha")
+
+                    service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
+                    memory_vector_store = MemoryVectorStore().from_persist_dir(storage_dir)
+                    storage_context = StorageContext.from_defaults(
+                        vector_store=memory_vector_store,
+                        persist_dir=storage_dir,
+                    )
+                    index_structs = storage_context.index_store.index_structs()
+
+                    if len(index_structs) == 0:
+                        raise Exception("No index structures found in storage context")
+                    index_struct: IndexDict = index_structs[0]  # type: ignore
+
+                    index = VectorStoreIndex(
+                        index_struct=index_struct,
+                        service_context=service_context,
+                        storage_context=storage_context,
+                        show_progress=True,
+                    )
+
+                logger.debug(f"Loaded index from storage context '{storage_dir}'.")
+
+                # Update the documents that changed in the diff.
+                changed_files, deleted_files = self._get_commit_file_diffs(cached_commit_sha)
+
+                logger.debug(
+                    f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
+                )
+
+                self.index = index
+                self.documents = documents
+                self.nodes = nodes
+
+                documents_to_update = [
+                    document
+                    for document in documents
+                    if document.metadata["file_path"] in changed_files
+                ]
+                documents_to_delete = [
+                    document
+                    for document in documents
+                    if document.metadata["file_path"] in deleted_files
+                ]
+
+                for document in documents_to_update + documents_to_delete:
+                    self.index.delete(document.get_doc_id())
+
+                with sentry_sdk.start_span(
+                    op="seer.automation.autofix.indexing",
+                    description="Indexing the diff between the cached commit and the requested commit",
+                ) as span:
+                    new_nodes = self._documents_to_nodes(documents_to_update)
+                    self.index.insert_nodes(new_nodes)
+
+                    span.set_tag("num_documents", len(documents_to_update))
+                    span.set_tag("num_nodes", len(new_nodes))
+
+                commit_is_newer = self.repo.compare(cached_commit_sha, self.base_sha).ahead_by > 0
+
+                if commit_is_newer:
+                    # Save only when the commit is newer
+                    storage_context.persist(persist_dir=storage_dir)
+                    memory_vector_store.persist(
+                        persist_path=os.path.join(storage_dir, "vector_store.json")
+                    )
+
+                    try:
+                        os.remove(os.path.join(storage_dir, "default__vector_store.json"))
+                    except OSError as e:
+                        logger.error(f"Failed to delete default vector store file: {e}")
+
+                    with open(self.cached_commit_json_path, "w") as sha_file:
+                        json.dump({"sha": self.base_sha}, sha_file)
+
+                logger.debug(f"Released lock for {storage_dir}")
+
+        finally:
+            # Always cleanup the tmp dir
+            self.cleanup()
 
     def _get_document(self, file_path: str):
         for document in self.documents:
@@ -345,8 +362,11 @@ class AgentContext:
                 self.nodes.extend(new_nodes)
 
     def cleanup(self):
-        shutil.rmtree(self.tmp_dir)
-        logger.info(f"Deleted tmp dir {self.tmp_dir}")
+        if os.path.exists(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir)
+            logger.info(f"Deleted tmp dir {self.tmp_dir}")
+        else:
+            logger.info(f"Tmp dir {self.tmp_dir} already removed")
 
     def _create_branch(self, branch_name, base_branch=None, base_commit_sha: str | None = None):
         base_sha = base_commit_sha
