@@ -5,6 +5,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+import textwrap
 from typing import List
 
 import requests
@@ -435,10 +436,13 @@ class AgentContext:
         completion_price = completion_tokens * gpt4turbo_completion_price_per_token
         total_price = prompt_price + completion_price
 
-        stats_str = f"""Model: {self.model}
-Prompt tokens: **{prompt_tokens} (${prompt_price:.3f})**
-Completion tokens: **{completion_tokens} (${completion_price:.3f})**
-Total tokens: **{prompt_tokens + completion_tokens} (${total_price:.3f})**"""
+        stats_str = textwrap.dedent(
+            f"""\
+            Model: {self.model}
+            Prompt tokens: **{prompt_tokens}**
+            Completion tokens: **{completion_tokens}**
+            Total tokens: **{prompt_tokens + completion_tokens}**"""
+        )
 
         return stats_str
 
@@ -449,15 +453,18 @@ Total tokens: **{prompt_tokens + completion_tokens} (${total_price:.3f})**"""
 
         issue_link = f"https://sentry.io/organizations/sentry/issues/{issue_id}/"
 
-        description = f"""👋 Hi there! This PR was automatically generated 🤖
+        description = textwrap.dedent(
+            f"""\
+            👋 Hi there! This PR was automatically generated 🤖
 
-{autofix_output.description}
+            {autofix_output.description}
 
-### Issue that triggered this PR:
-{issue_link}
+            ### Issue that triggered this PR:
+            {issue_link}
 
-### Stats:
-{self._get_stats_str(autofix_output.usage.prompt_tokens, autofix_output.usage.completion_tokens)}"""
+            ### Stats:
+            {self._get_stats_str(autofix_output.usage.prompt_tokens, autofix_output.usage.completion_tokens)}"""
+        )
 
         return self.repo.create_pull(
             title=title,
