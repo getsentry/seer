@@ -229,9 +229,8 @@ class AgentContext:
         return changed_files, removed_files
 
     def _get_data(self):
-        # Because we acquire separate read and write locks with the embedding step in between; there is a chance that
-        # we may be embedding the same diff twice. But this should be a rare case and otherwise we would be blocking multiple
-        # requests from running in parallel if we acquire a lock for the entire process of reading and writing the index.
+        # The files will be locked for the entire process of loading data; that means only one worker at a time can go through the data loading process which is a bottleneck.
+        # However, this should be a temporary compromise during PoC stage to ensure that only the latest commit's embeddings are stored.
         try:
             documents, nodes = self._load_data_from_github()
 
