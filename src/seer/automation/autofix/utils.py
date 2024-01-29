@@ -188,7 +188,7 @@ class SentenceTransformersEmbedding(BaseEmbedding):
                 device = torch.device("mps")
             else:
                 device = torch.device("cpu")
-        print("device", device)
+
         self._model = SentenceTransformer(model_name).to(device)
 
         super().__init__()

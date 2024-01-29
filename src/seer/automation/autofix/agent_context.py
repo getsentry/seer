@@ -122,8 +122,6 @@ class AgentContext:
         nodes: List[BaseNode] = []
 
         for language, language_docs in documents_by_language.items():
-            logger.debug(f"{language}: {len(language_docs)}")
-
             splitter = CodeSplitter(
                 language=language,
                 chunk_lines=16,  # lines per chunk
@@ -131,7 +129,13 @@ class AgentContext:
                 max_chars=2048,  # max chars per chunk
             )
 
-            nodes.extend(splitter.get_nodes_from_documents(language_docs, show_progress=False))
+            language_nodes = splitter.get_nodes_from_documents(language_docs, show_progress=False)
+
+            logger.debug(
+                f"Docs/nodes for {language}: {len(language_docs)} documents split into {len(language_nodes)} nodes"
+            )
+
+            nodes.extend(language_nodes)
 
         return nodes
 
@@ -202,13 +206,20 @@ class AgentContext:
         return documents, nodes
 
     def _get_commit_file_diffs(self, prev_sha: str) -> tuple[list[str], list[str]]:
+        """
+        Returns the list of files to change and files to delete in the diff in order to turn a commit into another.
+        """
         comparison = self.repo.compare(prev_sha, self.base_sha)
 
-        requester = self.repo._requester
+        # Support reverse diffs, because the api would return an empty list of files if the comparison is behind
+        is_behind = comparison.status == "behind"
+        if is_behind:
+            comparison = self.repo.compare(self.base_sha, prev_sha)
 
         # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
         # This has to be done because the files list inside the comparison object is limited to only 300 files.
         # We get the entire diff from the diff object returned from the `diff_url`
+        requester = self.repo._requester
         headers = {
             "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
             "User-Agent": requester._Requester__userAgent,  # type: ignore
@@ -221,7 +232,12 @@ class AgentContext:
         modified_files = [patch.path for patch in patch_set.modified_files]
         removed_files = [patch.path for patch in patch_set.removed_files]
 
-        changed_files = list(set(added_files + modified_files))
+        if is_behind:
+            # If the comparison is behind, the added files are actually the removed files
+            changed_files = list(set(modified_files + removed_files))
+            removed_files = added_files
+        else:
+            changed_files = list(set(added_files + modified_files))
 
         return changed_files, removed_files
 
@@ -262,7 +278,7 @@ class AgentContext:
                         index_struct=index_struct,
                         service_context=service_context,
                         storage_context=storage_context,
-                        show_progress=True,
+                        show_progress=False,
                     )
 
                 logger.debug(f"Loaded index from storage context '{storage_dir}'.")
@@ -296,6 +312,7 @@ class AgentContext:
                     op="seer.automation.autofix.indexing",
                     description="Indexing the diff between the cached commit and the requested commit",
                 ) as span:
+                    logger.debug(f"Begin index update...")
                     new_nodes = self._documents_to_nodes(documents_to_update)
                     self.index.insert_nodes(new_nodes)
 
@@ -337,7 +354,7 @@ class AgentContext:
         if document:
             # Delete operation
             if contents is None:
-                self.index.delete(document.get_doc_id())
+                self.index.delete_ref_doc(document.get_doc_id())
                 self.documents.remove(document)
                 # Also remove associated nodes
                 associated_nodes = [
@@ -347,7 +364,7 @@ class AgentContext:
                     self.nodes.remove(node)
             # Update operation
             else:
-                self.index.delete(document.get_doc_id())
+                self.index.delete_ref_doc(document.get_doc_id())
                 new_doc = Document(text=contents)
                 new_doc.metadata = document.metadata
                 new_nodes = self._documents_to_nodes([new_doc])
