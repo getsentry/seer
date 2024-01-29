@@ -20,8 +20,6 @@ from seer.automation.autofix.types import (
 REPO_OWNER = "getsentry"
 
 logger = logging.getLogger("autofix")
-logger.addHandler(logging.FileHandler("./autofix.log"))
-logger.addHandler(logging.StreamHandler())
 
 
 class Autofix:
