@@ -9,13 +9,13 @@ from llama_index.schema import MetadataMode, NodeWithScore
 from seer.automation.agent.agent import GptAgent, Message, Usage
 from seer.automation.agent.singleturn import LlmClient
 from seer.automation.autofix.codebase_context import CodebaseContext
+from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.prompts import (
     ExecutionPrompts,
     PlanningPrompts,
     ProblemDiscoveryPrompt,
 )
 from seer.automation.autofix.repo_client import RepoClient
-from seer.automation.autofix.rpc_wrapper import AutofixRpcWrapper
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.types import (
     AutofixOutput,
@@ -38,13 +38,13 @@ class Autofix:
     def __init__(self, request: AutofixRequest, rpc_client: RpcClient):
         self.request = request
         self.usage = Usage()
-        self.rpc_wrapper = AutofixRpcWrapper(rpc_client, self.request.issue.id)
+        self.event_manager = AutofixEventManager(rpc_client, self.request.issue.id)
 
     def run(self) -> None:
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-            self.rpc_wrapper.send_initial_steps()
+            self.event_manager.send_initial_steps()
 
             problem_discovery_output = self.run_problem_discovery_agent()
 
@@ -60,7 +60,7 @@ class Autofix:
                 reasoning=problem_discovery_output.reasoning,
             )
 
-            self.rpc_wrapper.send_problem_discovery_result(problem_discovery_payload)
+            self.event_manager.send_problem_discovery_result(problem_discovery_payload)
 
             if problem_discovery_payload.status == "CANCELLED":
                 logger.info(f"Problem is not actionable")
@@ -70,11 +70,11 @@ class Autofix:
                 codebase_context = CodebaseContext(
                     "getsentry", "sentry", self.request.base_commit_sha
                 )
-                self.rpc_wrapper.send_codebase_indexing_result("COMPLETED")
+                self.event_manager.send_codebase_indexing_result("COMPLETED")
             except Exception as e:
                 logger.error(f"Failed to index codebase: {e}")
                 sentry_sdk.capture_exception(e)
-                self.rpc_wrapper.send_codebase_indexing_result("ERROR")
+                self.event_manager.send_codebase_indexing_result("ERROR")
                 return
 
             try:
@@ -84,10 +84,10 @@ class Autofix:
 
                 if not planning_output:
                     logger.warning(f"Planning agent did not return a valid response")
-                    self.rpc_wrapper.send_planning_result(None)
+                    self.event_manager.send_planning_result(None)
                     return
 
-                self.rpc_wrapper.send_planning_result(planning_output)
+                self.event_manager.send_planning_result(planning_output)
 
                 logger.info(
                     f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
@@ -95,24 +95,24 @@ class Autofix:
             except Exception as e:
                 logger.error(f"Failed to plan: {e}")
                 sentry_sdk.capture_exception(e)
-                self.rpc_wrapper.send_planning_result(None)
+                self.event_manager.send_planning_result(None)
                 return
 
             file_changes: list[FileChange] = []
             for i, step in enumerate(planning_output.steps):
-                self.rpc_wrapper.send_execution_step_start(step.id)
+                self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
                 file_changes = self.run_execution_agent(step, codebase_context, file_changes)
 
-                self.rpc_wrapper.send_execution_step_result(step.id, "COMPLETED")
+                self.event_manager.send_execution_step_result(step.id, "COMPLETED")
 
             pr = self._create_pr(planning_output.title, planning_output.description, file_changes)
 
             if pr is None:
                 return
 
-            self.rpc_wrapper.send_autofix_complete(
+            self.event_manager.send_autofix_complete(
                 AutofixOutput(
                     title=planning_output.title,
                     description=planning_output.description,
@@ -126,8 +126,8 @@ class Autofix:
             logger.error(f"Failed to complete autofix: {e}")
             sentry_sdk.capture_exception(e)
 
-            self.rpc_wrapper.mark_running_steps_errored()
-            self.rpc_wrapper.send_autofix_complete(None)
+            self.event_manager.mark_running_steps_errored()
+            self.event_manager.send_autofix_complete(None)
 
     def _create_pr(self, title: str, description: str, changes: list[FileChange]):
         repo_client = RepoClient("getsentry", "sentry")

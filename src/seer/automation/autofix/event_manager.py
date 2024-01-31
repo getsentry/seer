@@ -20,7 +20,7 @@ class Step(BaseModel):
     status: Status
 
 
-class AutofixRpcWrapper:
+class AutofixEventManager:
     steps: list[Step] = []
 
     def __init__(self, rpc_client: RpcClient, issue_id: int):
