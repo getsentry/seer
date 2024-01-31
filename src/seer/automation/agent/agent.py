@@ -57,15 +57,20 @@ class LlmAgent(ABC):
             self.iterations == 0
             or (
                 not (
-                    self.memory[-1].role in ["assistant", "model"]
+                    self.memory[-1].role
+                    in ["assistant", "model"]  # Will never end on a message not from the assistant
                     and (
-                        self.memory[-1].content and (self.stop_message in self.memory[-1].content)
+                        self.memory[-1].content
+                        and (
+                            self.stop_message in self.memory[-1].content
+                        )  # If stop message is defined; will end if the assistant response contains the stop message
                         if self.stop_message
-                        else self.memory[-1].content is not None
+                        else self.memory[-1].content
+                        is not None  # If a stop message is not defined; will end on any non-empty assistant response (OpenAI tool call does not output a message!)
                     )
                 )
             )
-            and self.iterations < self.max_iterations
+            and self.iterations < self.max_iterations  # Went above max iterations
         ):
             # runs until the assistant sends a message with no more tool calls.
             self.run_iteration()
