@@ -146,7 +146,7 @@ class RepoClient:
             #### The issue that triggered this PR:
             {issue_link}
 
-            ### 📣 Instructions for the reviewer:
+            ### 📣 Instructions for the reviewer which is you, yes **you**:
             - **If these changes were incorrect, please close this PR and comment explaining why.**
             - **If these changes were incomplete, please continue working on this PR then merge it.**
             - **If you are feeling confident in my changes, please merge this PR.**
