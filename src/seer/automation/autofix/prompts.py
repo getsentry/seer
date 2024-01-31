@@ -1,8 +1,7 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.types import PlanningOutput, PlanStep, ProblemDiscoveryOutput
-from seer.automation.autofix.utils import problem_discovery_output_to_str
+from seer.automation.autofix.types import PlanStep, ProblemDiscoveryOutput
 
 
 def format_additional_context(additional_context: str):
@@ -32,7 +31,7 @@ class ProblemDiscoveryPrompt:
     #         f"""\
     #         On a previous run, the following issues were found:
 
-    #         {problem_discovery_output_to_str(previous_output)}
+    #         {problem.description}
 
     #         However, we received feedback:
 
@@ -109,7 +108,7 @@ class PlanningPrompts:
             f"""\
             The problem has been identified as:
 
-            {problem_discovery_output_to_str(problem)}
+            {problem.description}
             {additional_context_str}
 
             Please generate the plan that fixes the above problems."""
@@ -131,7 +130,7 @@ class PlanningPrompts:
     #         f"""\
     #         The problem has been identified as:
 
-    #         {problem_discovery_output_to_str(problem)}
+    #         {problem.description}
 
     #         Previously a plan was generated:
 

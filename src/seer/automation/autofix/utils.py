@@ -262,46 +262,6 @@ def escape_multi_xml(s: str, tags: List[str]) -> str:
     return s
 
 
-def problem_discovery_output_to_str(output: ProblemDiscoveryOutput) -> str:
-    """
-    Convert the ProblemDiscoveryOutput to an XML string representation.
-
-    Args:
-        output (ProblemDiscoveryOutput): The output object to convert.
-
-    Returns:
-        str: The XML string representation of the problems and associated code snippets.
-    """
-    # root = ET.Element("problem")
-    # for problem in output.problems:
-    #     problem_element = ET.SubElement(root, "problem")
-    #     description_element = ET.SubElement(problem_element, "description")
-    #     description_element.text = problem.description
-    #     for snippet in problem.code_snippets:
-    #         snippet_element = ET.SubElement(problem_element, "code_snippet")
-    #         snippet_element.text = snippet.code
-    #         snippet_element.attrib["filename"] = snippet.filename
-    #         if snippet.description:
-    #             snippet_element.attrib["description"] = snippet.description
-
-    # # Convert the ElementTree to a string and then parse it with minidom
-    # rough_string = ET.tostring(root, encoding="unicode")
-    # parsed = minidom.parseString(rough_string)
-
-    # # Return a pretty-printed version with tabs as indentation
-    # pretty = parsed.toprettyxml(indent="\t", encoding=None)[23:]
-
-    # return (
-    #     pretty.replace("&quot;", '"')
-    #     .replace("&lt;", "<")
-    #     .replace("&gt;", ">")
-    #     .replace("&amp;", "&")
-    #     .replace("&apos;", "'")
-    # )
-
-    return output.description
-
-
 def get_torch_device():
     if torch.cuda.is_available():
         return torch.device("cuda")
