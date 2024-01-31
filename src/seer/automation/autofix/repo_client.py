@@ -153,7 +153,7 @@ class RepoClient:
 
             This will greatly help us improve the autofix system. Thank you! 🙏
 
-            If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#discuss-ai](https://sentry.slack.com/archives/C04SUT3KUV8)
+            If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#proj-suggested-fix](https://sentry.slack.com/archives/C06904P7Z6E)
 
             ### 🤓 Stats for the nerds:
             {stats}"""
