@@ -2,7 +2,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from seer.automation.agent.agent import Usage
+from seer.automation.agent.types import Usage
 
 
 class FileChange(BaseModel):
@@ -42,12 +42,6 @@ class PlanningOutput(BaseModel):
     title: str
     description: str
     steps: list[PlanStep]
-
-
-class ProblemDiscoveryCodeSnippet(BaseModel):
-    code: str
-    filename: str
-    description: Optional[str]
 
 
 class ProblemDiscoveryOutput(BaseModel):

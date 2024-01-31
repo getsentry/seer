@@ -6,8 +6,9 @@ import xml.etree.ElementTree as ET
 import sentry_sdk
 from llama_index.schema import MetadataMode, NodeWithScore
 
-from seer.automation.agent.agent import GptAgent, Message, Usage
+from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.singleturn import LlmClient
+from seer.automation.agent.types import Message, Usage
 from seer.automation.autofix.codebase_context import CodebaseContext
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.prompts import (

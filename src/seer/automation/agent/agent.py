@@ -1,6 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+from typing import Any
 
 import openai_multi_tool_use_parallel_patch  # import applies the patch
 from openai import OpenAI
@@ -95,7 +96,7 @@ class LlmAgent(ABC):
 class GptAgent(LlmAgent):
     model: str = "gpt-4-0125-preview"
 
-    chat_completion_kwargs = {}
+    chat_completion_kwargs: dict[str, Any] = {}
 
     def __init__(
         self,

@@ -25,6 +25,7 @@ def get_github_auth(repo_owner: str, repo_name: str):
             "Need either GITHUB_TOKEN or (GITHUB_APP_ID and GITHUB_PRIVATE_KEY) to be set."
         )
 
+    github_auth: Auth.Token | Auth.AppInstallationAuth
     if github_token is not None:
         github_auth = Auth.Token(github_token)
     else:
