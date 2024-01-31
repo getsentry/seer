@@ -100,7 +100,7 @@ class RepoClient:
 
         # Check that the changes were made
         comparison = self.repo.compare(base_commit_sha, branch_ref.object.sha)
-        print(comparison)
+
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
             self.repo.get_git_ref(branch_ref.ref).delete()
@@ -112,13 +112,6 @@ class RepoClient:
         return branch_ref
 
     def _get_stats_str(self, prompt_tokens: int, completion_tokens: int):
-        gpt4turbo_prompt_price_per_token = 0.01 / 1000
-        gpt4turbo_completion_price_per_token = 0.03 / 1000
-
-        prompt_price = prompt_tokens * gpt4turbo_prompt_price_per_token
-        completion_price = completion_tokens * gpt4turbo_completion_price_per_token
-        total_price = prompt_price + completion_price
-
         stats_str = textwrap.dedent(
             f"""\
             Prompt tokens: **{prompt_tokens}**
