@@ -5,16 +5,19 @@ import os
 import random
 import re
 from typing import List
+from xml.etree import ElementTree as ET
 
 import fsspec
-import numpy as np
 import torch
 from llama_index.bridge.pydantic import PrivateAttr
 from llama_index.embeddings.base import BaseEmbedding
 from llama_index.vector_stores import SimpleVectorStore
 from sentence_transformers import SentenceTransformer
 
+from seer.automation.autofix.types import ProblemDiscoveryOutput
+
 logger = logging.getLogger("autofix")
+
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
 
 
@@ -162,9 +165,9 @@ def sanitize_branch_name(title: str) -> str:
     Remove all characters that are not valid in git branch names
     and return a kebab-case branch name from the title.
     """
-    sanitized = "".join(c for c in title if c in VALID_BRANCH_NAME_CHARS)
-    kebab_case = sanitized.replace(" ", "-").replace("_", "-").lower()
-    return kebab_case
+    kebab_case = title.replace(" ", "-").replace("_", "-").lower()
+    sanitized = "".join(c for c in kebab_case if c in VALID_BRANCH_NAME_CHARS)
+    return sanitized
 
 
 def generate_random_string(n=6) -> str:
@@ -231,3 +234,56 @@ class MemoryVectorStore(SimpleVectorStore):
 
         with fs.open(persist_path, "w") as f:
             json.dump(self._data.to_dict(), f, default=default_serializer)
+
+
+def escape_xml_chars(s: str) -> str:
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def escape_xml(s: str, tag: str) -> str:
+    match = re.search(rf"<{tag}(\s+[^>]*)?>((.|\n)*?)</{tag}>", s, re.DOTALL)
+
+    if match:
+        return s.replace(match.group(2), escape_xml_chars(match.group(2)))
+
+    return s
+
+
+def escape_multi_xml(s: str, tags: List[str]) -> str:
+    for tag in tags:
+        s = escape_xml(s, tag)
+
+    return s
+
+
+def get_torch_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
+    """
+    Extract the text from an XML element with the given tag.
+
+    Args:
+        element (ET.Element): The XML element to extract the text from.
+        tag (str): The tag of the XML element to extract the text from.
+
+    Returns:
+        str: The text of the XML element with the given tag.
+    """
+    el = element.find(tag)
+
+    if el is not None:
+        return (el.text or "").strip()
+
+    return None

@@ -1,11 +1,12 @@
 import logging
+import textwrap
 from typing import Dict, Set
 
 from llama_index.retrievers import VectorIndexRetriever
 from llama_index.schema import MetadataMode
 
 from seer.automation.agent.tools import FunctionTool
-from seer.automation.autofix.agent_context import AgentContext
+from seer.automation.autofix.codebase_context import CodebaseContext
 from seer.automation.autofix.types import FileChange
 from seer.automation.autofix.utils import find_original_snippet
 
@@ -13,13 +14,13 @@ logger = logging.getLogger("autofix")
 
 
 class BaseTools:
-    context: AgentContext
+    context: CodebaseContext
     retriever: VectorIndexRetriever
 
     retrieved_paths: Set[str]
     expanded_paths: Set[str]
 
-    def __init__(self, context: AgentContext):
+    def __init__(self, context: CodebaseContext):
         self.context = context
         self.retriever = VectorIndexRetriever(index=self.context.index, similarity_top_k=4)
         self.retrieved_paths = set()
@@ -33,8 +34,6 @@ class BaseTools:
             self.retrieved_paths.add(node.metadata["file_path"])
 
             node_copy = node.copy()
-            # node_copy.text_template = "{metadata_str}\n{content}"
-            # node_copy.metadata_template = "{key} = {value}"
             content += node_copy.get_content(MetadataMode.LLM) + "\n\n"
         return content
 
@@ -58,17 +57,20 @@ class BaseTools:
         return [
             FunctionTool(
                 name="codebase_search",
-                description="""Search for code snippets.
-- You can search for code using either a code snippet or the path.
-- The codebase is large, so you will need to be very specific with your query.
-- If the path contains relative paths such as ../, you will need to remove them.
-- If "code" in "file" search does not work, try searching just the code snippet.
+                description=textwrap.dedent(
+                    """\
+                    Search for code snippets.
+                    - You can search for code using either a code snippet or the path.
+                    - The codebase is large, so you will need to be very specific with your query.
+                    - If the path contains relative paths such as ../, you will need to remove them.
+                    - If "code" in "file" search does not work, try searching just the code snippet.
 
-Example Queries:
-- Search for a code snippet: "foo"
-- Search for a file: "sentry/data/issueTypeConfig/index.tsx"
-- Search for a function: "getIssueTypeConfig("
-""",
+                    Example Queries:
+                    - Search for a code snippet: "foo"
+                    - Search for a file: "sentry/data/issueTypeConfig/index.tsx"
+                    - Search for a function: "getIssueTypeConfig("
+                    """
+                ),
                 parameters=[
                     {
                         "name": "query",
@@ -94,15 +96,15 @@ Example Queries:
 
 
 class CodeActionTools(BaseTools):
-    context: AgentContext
+    context: CodebaseContext
     base_sha: str
-    file_changes: Dict[str, FileChange]
+    file_changes: list[FileChange]
 
     _snippet_matching_threshold = 0.9
 
     def __init__(
         self,
-        context: AgentContext,
+        context: CodebaseContext,
         base_sha: str,
         verbose: bool = False,
     ):
@@ -111,26 +113,22 @@ class CodeActionTools(BaseTools):
         self.context = context
         self.base_sha = base_sha
         self.verbose = verbose
-        self.file_changes = {}
+        self.file_changes = []
 
     def _get_latest_file_contents(self, file_path: str):
-        if file_path not in self.file_changes:
-            logger.debug(
-                f"Getting file contents from Github for file_path: {file_path} from sha {self.base_sha}"
-            )
-            contents = self.context.get_file_contents(file_path, self.base_sha)
+        logger.debug(
+            f"Getting file contents from Github for file_path: {file_path} from sha {self.base_sha}"
+        )
+        contents = self.context.get_file_contents(file_path, self.base_sha)
 
-            return contents
+        changes = list(filter(lambda x: x.path == file_path, self.file_changes))
+        if changes:
+            for change in changes:
+                contents = change.apply(contents)
 
-        logger.debug(f"Getting file contents from memory for file_path: {file_path}")
+            logger.debug(f"Applied {len(changes)} changes to file {file_path}.")
 
-        return self.file_changes[file_path].contents
-
-    def expand_document(self, input: str):
-        if input in self.file_changes:
-            return self.file_changes[input].contents
-
-        return super().expand_document(input)
+        return contents
 
     def replace_snippet_with(
         self, file_path: str, reference_snippet: str, replacement_snippet: str, commit_message: str
@@ -165,16 +163,14 @@ class CodeActionTools(BaseTools):
 
         self.context._update_document(file_path, new_contents)
 
-        original_contents = file_contents
-        if file_path in self.file_changes:
-            original_contents = self.file_changes[file_path].original_contents
-
-        self.file_changes[file_path] = FileChange(
-            change_type="edit",
-            path=file_path,
-            contents=new_contents,
-            description=commit_message,
-            original_contents=original_contents,
+        self.file_changes.append(
+            FileChange(
+                change_type="edit",
+                path=file_path,
+                reference_snippet=original_snippet,
+                new_snippet=replacement_snippet,
+                description=commit_message,
+            )
         )
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
@@ -208,63 +204,61 @@ class CodeActionTools(BaseTools):
 
         self.context._update_document(file_path, new_contents)
 
-        original_contents = file_contents
-        if file_path in self.file_changes:
-            original_contents = self.file_changes[file_path].original_contents
-
-        self.file_changes[file_path] = FileChange(
-            change_type="edit",
-            path=file_path,
-            contents=new_contents,
-            description=commit_message,
-            original_contents=original_contents,
+        self.file_changes.append(
+            FileChange(
+                change_type="delete",
+                path=file_path,
+                description=commit_message,
+                reference_snippet=original_snippet,
+                new_snippet="",
+            )
         )
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
-    def insert_snippet(
-        self, file_path: str, reference_snippet: str, snippet: str, commit_message: str
-    ):
-        """
-        Inserts a snippet after the reference snippet.
-        """
+    # def insert_snippet(
+    #     self, file_path: str, reference_snippet: str, snippet: str, commit_message: str
+    # ):
+    #     """
+    #     Inserts a snippet after the reference snippet.
+    #     """
 
-        logger.debug(
-            f"[CodeActionTools.insert_snippet] Inserting snippet {snippet} after {reference_snippet} in {file_path}"
-        )
+    #     logger.debug(
+    #         f"[CodeActionTools.insert_snippet] Inserting snippet {snippet} after {reference_snippet} in {file_path}"
+    #     )
 
-        file_contents = self._get_latest_file_contents(file_path)
+    #     file_contents = self._get_latest_file_contents(file_path)
 
-        if not file_contents:
-            raise Exception("File not found.")
+    #     if not file_contents:
+    #         raise Exception("File not found.")
 
-        original_snippet = find_original_snippet(
-            reference_snippet, file_contents, threshold=self._snippet_matching_threshold
-        )
+    #     original_snippet = find_original_snippet(
+    #         reference_snippet, file_contents, threshold=self._snippet_matching_threshold
+    #     )
 
-        logger.debug("Exact reference snippet:")
-        logger.debug(f'"{reference_snippet}"')
+    #     logger.debug("Exact reference snippet:")
+    #     logger.debug(f'"{reference_snippet}"')
 
-        if not original_snippet:
-            raise Exception("Reference snippet not found. Try again with an exact match.")
+    #     if not original_snippet:
+    #         raise Exception("Reference snippet not found. Try again with an exact match.")
 
-        new_contents = file_contents.replace(original_snippet, original_snippet + "\n" + snippet)
+    #     new_contents = file_contents.replace(original_snippet, original_snippet + "\n" + snippet)
 
-        self.context._update_document(file_path, new_contents)
+    #     self.context._update_document(file_path, new_contents)
 
-        original_contents = file_contents
-        if file_path in self.file_changes:
-            original_contents = self.file_changes[file_path].original_contents
+    #     original_contents = file_contents
+    #     if file_path in self.file_changes:
+    #         original_contents = self.file_changes[file_path].original_contents
 
-        self.file_changes[file_path] = FileChange(
-            change_type="edit",
-            path=file_path,
-            contents=new_contents,
-            description=commit_message,
-            original_contents=original_contents,
-        )
+    #     self.file_changes[file_path] = FileChange(
+    #         change_type="edit",
+    #         path=file_path,
+    #         contents=new_contents,
+    #         description=commit_message,
+    #         original_contents=original_contents,
+    #     )
 
-        return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
+    #     return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
     def create_file(self, file_path: str, snippet: str, commit_message: str):
         """
@@ -276,12 +270,13 @@ class CodeActionTools(BaseTools):
 
         self.context._update_document(file_path, snippet)
 
-        self.file_changes[file_path] = FileChange(
-            change_type="edit",
-            path=file_path,
-            contents=snippet,
-            description=commit_message,
-            original_contents=None,
+        self.file_changes.append(
+            FileChange(
+                change_type="create",
+                path=file_path,
+                new_snippet=snippet,
+                description=commit_message,
+            )
         )
 
         return "success"
@@ -292,8 +287,8 @@ class CodeActionTools(BaseTools):
         """
         logger.debug(f"[CodeActionTools.delete_file] Deleting file {file_path}")
 
-        self.file_changes[file_path] = FileChange(
-            change_type="delete", path=file_path, description=commit_message
+        self.file_changes.append(
+            FileChange(change_type="delete", path=file_path, description=commit_message)
         )
 
         self.context._update_document(file_path, None)
@@ -307,11 +302,14 @@ class CodeActionTools(BaseTools):
         return super().get_tools() + [
             FunctionTool(
                 name="replace_snippet_with",
-                description="""Replaces a snippet in a file with the provided replacement.
-- The snippet must be an exact match.
-- The replacement can be any string.
-- The reference snippet must be an entire line, not just a substring of a line.
-- Indentation and spacing must be included in the replacement snippet.""",
+                description=textwrap.dedent(
+                    """\
+                    Replaces a snippet in a file with the provided replacement.
+                    - The snippet must be an exact match.
+                    - The replacement can be any string.
+                    - The reference snippet must be an entire line, not just a substring of a line. It should also include the indentation and spacing.
+                    - Indentation and spacing must be included in the replacement snippet."""
+                ),
                 parameters=[
                     {
                         "name": "file_path",
@@ -338,8 +336,11 @@ class CodeActionTools(BaseTools):
             ),
             FunctionTool(
                 name="delete_snippet",
-                description="""Deletes a snippet in a file.
-- The snippet must be an exact match.""",
+                description=textwrap.dedent(
+                    """\
+                    Deletes a snippet in a file.
+                    - The snippet must be an exact match."""
+                ),
                 parameters=[
                     {
                         "name": "file_path",
@@ -359,36 +360,35 @@ class CodeActionTools(BaseTools):
                 ],
                 fn=self.delete_snippet,
             ),
-            FunctionTool(
-                name="insert_snippet",
-                description="""Inserts a snippet on a new line directly after reference snippet in a file.
-- The snippet must be an exact match.
-- The reference snippet must be an exact match.
-- Indentation and spacing must be included in the snippet to insert.""",
-                parameters=[
-                    {
-                        "name": "file_path",
-                        "type": "string",
-                        "description": "The file path to modify.",
-                    },
-                    {
-                        "name": "reference_snippet",
-                        "type": "string",
-                        "description": "The reference snippet to insert after.",
-                    },
-                    {
-                        "name": "snippet",
-                        "type": "string",
-                        "description": "The snippet to insert. This snippet will be on a new line after the reference snippet.",
-                    },
-                    {
-                        "name": "commit_message",
-                        "type": "string",
-                        "description": "The commit message to use.",
-                    },
-                ],
-                fn=self.insert_snippet,
-            ),
+            #             FunctionTool(
+            #                 name="insert_snippet",
+            #                 description="""Inserts a snippet on a new line directly after reference snippet in a file.
+            # - The reference snippet must be an exact match.
+            # - Indentation and spacing must be included in the snippet to insert.""",
+            #                 parameters=[
+            #                     {
+            #                         "name": "file_path",
+            #                         "type": "string",
+            #                         "description": "The file path to modify.",
+            #                     },
+            #                     {
+            #                         "name": "reference_snippet",
+            #                         "type": "string",
+            #                         "description": "The reference snippet to insert after.",
+            #                     },
+            #                     {
+            #                         "name": "snippet",
+            #                         "type": "string",
+            #                         "description": "The snippet to insert. This snippet will be on a new line after the reference snippet.",
+            #                     },
+            #                     {
+            #                         "name": "commit_message",
+            #                         "type": "string",
+            #                         "description": "The commit message to use.",
+            #                     },
+            #                 ],
+            #                 fn=self.insert_snippet,
+            #             ),
             FunctionTool(
                 name="create_file",
                 description="""Creates a file with the provided snippet.""",
