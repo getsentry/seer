@@ -88,4 +88,3 @@ redis==5.0.1
 # deepsparse-nightly==1.7.0.20240103 TODO - fix pydantic conflict
 faiss-cpu==1.7.4
 unidiff==0.7.5
-lxml==5.1.0
