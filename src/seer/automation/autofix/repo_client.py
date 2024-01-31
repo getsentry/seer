@@ -9,7 +9,7 @@ from github.GitRef import GitRef
 from github.Repository import Repository
 
 from seer.automation.agent.types import Usage
-from seer.automation.autofix.types import FileChange
+from seer.automation.autofix.types import FileChange, PlanStep
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 
 logger = logging.getLogger("autofix")
@@ -122,7 +122,13 @@ class RepoClient:
         return stats_str
 
     def create_pr_from_branch(
-        self, branch: GitRef, title: str, description: str, issue_id: int | str, usage: Usage
+        self,
+        branch: GitRef,
+        title: str,
+        description: str,
+        steps: list[PlanStep],
+        issue_id: int | str,
+        usage: Usage,
     ):
         title = f"""🤖 {title}"""
 
@@ -134,14 +140,27 @@ class RepoClient:
 
             {description}
 
-            ### Issue that triggered this PR:
+            #### The steps that were performed:
+            {steps}
+
+            #### The issue that triggered this PR:
             {issue_link}
 
-            ### Stats:
+            ### 📣 Instructions for the reviewer:
+            - **If these changes were incorrect, please close this PR and comment explaining why.**
+            - **If these changes were incomplete, please continue working on this PR then merge it.**
+            - **If you are feeling confident in my changes, please merge this PR.**
+
+            This will greatly help us improve the autofix system. Thank you! 🙏
+
+            If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai)
+
+            ### 🤓 Stats for the nerds:
             {stats}"""
         ).format(
             description=description,
             issue_link=issue_link,
+            steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
             stats=self._get_stats_str(usage.prompt_tokens, usage.completion_tokens),
         )
 
