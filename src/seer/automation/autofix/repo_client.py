@@ -9,7 +9,7 @@ from github.GitRef import GitRef
 from github.Repository import Repository
 
 from seer.automation.agent.types import Usage
-from seer.automation.autofix.types import FileChange
+from seer.automation.autofix.types import FileChange, PlanStep
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 
 logger = logging.getLogger("autofix")
@@ -100,7 +100,7 @@ class RepoClient:
 
         # Check that the changes were made
         comparison = self.repo.compare(base_commit_sha, branch_ref.object.sha)
-        print(comparison)
+
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
             self.repo.get_git_ref(branch_ref.ref).delete()
@@ -112,13 +112,6 @@ class RepoClient:
         return branch_ref
 
     def _get_stats_str(self, prompt_tokens: int, completion_tokens: int):
-        gpt4turbo_prompt_price_per_token = 0.01 / 1000
-        gpt4turbo_completion_price_per_token = 0.03 / 1000
-
-        prompt_price = prompt_tokens * gpt4turbo_prompt_price_per_token
-        completion_price = completion_tokens * gpt4turbo_completion_price_per_token
-        total_price = prompt_price + completion_price
-
         stats_str = textwrap.dedent(
             f"""\
             Prompt tokens: **{prompt_tokens}**
@@ -129,7 +122,13 @@ class RepoClient:
         return stats_str
 
     def create_pr_from_branch(
-        self, branch: GitRef, title: str, description: str, issue_id: int | str, usage: Usage
+        self,
+        branch: GitRef,
+        title: str,
+        description: str,
+        steps: list[PlanStep],
+        issue_id: int | str,
+        usage: Usage,
     ):
         title = f"""🤖 {title}"""
 
@@ -141,14 +140,27 @@ class RepoClient:
 
             {description}
 
-            ### Issue that triggered this PR:
+            #### The steps that were performed:
+            {steps}
+
+            #### The issue that triggered this PR:
             {issue_link}
 
-            ### Stats:
+            ### 📣 Instructions for the reviewer which is you, yes **you**:
+            - **If these changes were incorrect, please close this PR and comment explaining why.**
+            - **If these changes were incomplete, please continue working on this PR then merge it.**
+            - **If you are feeling confident in my changes, please merge this PR.**
+
+            This will greatly help us improve the autofix system. Thank you! 🙏
+
+            If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#proj-suggested-fix](https://sentry.slack.com/archives/C06904P7Z6E)
+
+            ### 🤓 Stats for the nerds:
             {stats}"""
         ).format(
             description=description,
             issue_link=issue_link,
+            steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
             stats=self._get_stats_str(usage.prompt_tokens, usage.completion_tokens),
         )
 
