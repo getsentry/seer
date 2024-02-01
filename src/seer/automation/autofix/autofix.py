@@ -108,7 +108,12 @@ class Autofix:
 
                 self.event_manager.send_execution_step_result(step.id, "COMPLETED")
 
-            pr = self._create_pr(planning_output.title, planning_output.description, file_changes)
+            pr = self._create_pr(
+                planning_output.title,
+                planning_output.description,
+                planning_output.steps,
+                file_changes,
+            )
 
             if pr is None:
                 return
@@ -130,7 +135,9 @@ class Autofix:
             self.event_manager.mark_running_steps_errored()
             self.event_manager.send_autofix_complete(None)
 
-    def _create_pr(self, title: str, description: str, changes: list[FileChange]):
+    def _create_pr(
+        self, title: str, description: str, steps: list[PlanStep], changes: list[FileChange]
+    ):
         repo_client = RepoClient("getsentry", "sentry")
         branch_ref = repo_client.create_branch_from_changes(
             pr_title=title,
@@ -143,7 +150,7 @@ class Autofix:
             return None
 
         return repo_client.create_pr_from_branch(
-            branch_ref, title, description, self.request.issue.id, self.usage
+            branch_ref, title, description, steps, self.request.issue.id, self.usage
         )
 
     def _parse_problem_discovery_response(self, response: str) -> ProblemDiscoveryOutput | None:
