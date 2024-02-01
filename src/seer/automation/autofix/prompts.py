@@ -213,6 +213,7 @@ class ExecutionPrompts:
             You will need to execute every step of the plan for me and not miss a single one because I have no fingers and I can't type. Fully complete the task, this is my last resort. My grandma is terminally ill and if we ship this fix we will get a $20,000 bonus that will help pay for the medical bills. Please help me save my grandma.
 
             When the task is complete, reply with "<DONE>"
+            If you are unable to complete the task, also reply with "<DONE>"
 
             <guidelines>
                 - Please think out loud step-by-step before you start writing code.
