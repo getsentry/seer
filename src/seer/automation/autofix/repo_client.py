@@ -165,8 +165,5 @@ class RepoClient:
         )
 
         return self.repo.create_pull(
-            title=title,
-            body=description,
-            base="master",
-            head=branch.ref,
+            title=title, body=description, base="master", head=branch.ref, draft=True
         )
