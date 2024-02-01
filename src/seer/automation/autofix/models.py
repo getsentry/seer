@@ -14,15 +14,17 @@ class FileChange(BaseModel):
 
     def apply(self, file_contents: str | None) -> str | None:
         if self.change_type == "create":
-            assert file_contents is None
-            assert self.new_snippet is not None
+            assert file_contents is None, "Cannot create a file that already exists."
+            assert self.new_snippet is not None, "New snippet must be provided for creating a file."
             return self.new_snippet
 
         assert file_contents is not None
 
         if self.change_type == "edit":
-            assert self.new_snippet is not None
-            assert self.reference_snippet is not None
+            assert self.new_snippet is not None, "New snippet must be provided for editing a file."
+            assert (
+                self.reference_snippet is not None
+            ), "Reference snippet must be provided for editing a file."
             return file_contents.replace(self.reference_snippet, self.new_snippet)
 
         # Delete
@@ -123,8 +125,14 @@ class IssueDetails(BaseModel):
 
 
 class AutofixRequest(BaseModel):
+    organization_id: int
+    project_id: int
+    repo_provider: Literal["github"]
+    repo_owner: str
+    repo_name: str
+    base_commit_sha: Optional[str] = None
+
     issue: IssueDetails
-    base_commit_sha: str
     additional_context: Optional[str] = None
 
 

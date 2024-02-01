@@ -4,13 +4,12 @@ import textwrap
 import xml.etree.ElementTree as ET
 
 import sentry_sdk
-from llama_index.schema import MetadataMode, NodeWithScore
 
+from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.singleturn import LlmClient
 from seer.automation.agent.types import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.codebase_context import CodebaseContext
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixOutput,
@@ -29,10 +28,11 @@ from seer.automation.autofix.prompts import (
     PlanningPrompts,
     ProblemDiscoveryPrompt,
 )
-from seer.automation.autofix.repo_client import RepoClient
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
-from seer.rpc import RpcClient
+from seer.automation.codebase.models import DocumentChunkWithEmbedding
+from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.tasks import update_codebase_index
 
 logger = logging.getLogger("autofix")
 
@@ -43,13 +43,17 @@ class Autofix:
     def __init__(
         self,
         request: AutofixRequest,
-        rpc_client: RpcClient,
+        event_manager: AutofixEventManager,
     ):
         self.request = request
         self.usage = Usage()
-        self.event_manager = AutofixEventManager(rpc_client, self.request.issue.id)
-        self.autofix_context = AutofixContext(
-            RepoClient("getsentry", "sentry"), self.request.base_commit_sha
+        self.event_manager = event_manager
+
+        repo_client = RepoClient(request.repo_provider, request.repo_owner, request.repo_name)
+        self.context = AutofixContext(
+            request.organization_id,
+            request.project_id,
+            repo_client,
         )
 
     def run(self) -> None:
@@ -74,9 +78,11 @@ class Autofix:
                 return
 
             problem_discovery_payload = ProblemDiscoveryResult(
-                status="CONTINUE"
-                if problem_discovery_output.actionability_score >= 0.6
-                else "CANCELLED",
+                status=(
+                    "CONTINUE"
+                    if problem_discovery_output.actionability_score >= 0.6
+                    else "CANCELLED"
+                ),
                 description=problem_discovery_output.description,
                 reasoning=problem_discovery_output.reasoning,
             )
@@ -87,31 +93,68 @@ class Autofix:
                 logger.info(f"Problem is not actionable")
                 return
 
-            try:
-                self.autofix_context.load_codebase()
-
-                if not self.autofix_context.codebase_context:
-                    logger.warning(f"Failed to load codebase context")
-                    self.event_manager.send_codebase_indexing_result("ERROR")
-                    return
-
-                # Below is the short circuit logic to skip embedding the codebase context if the stacktrace
-                # does not contain any files that need to be re-indexed
-                needs_indexing = self.autofix_context.diff_contains_stacktrace_files(
-                    self.stacktrace
+            if self.context.codebase.repo_info is None:
+                logger.info(
+                    f"Creating codebase index for repo {self.context.codebase.repo_client.repo_name}"
                 )
-                if needs_indexing:
-                    logger.debug(f"Updating codebase index")
-                    self.autofix_context.codebase_context.update_codebase_index()
-                else:
-                    logger.debug(f"Codebase does not need to be indexed")
-
+                self.event_manager.send_codebase_creation_message()
+                self.context.codebase.create()
                 self.event_manager.send_codebase_indexing_result("COMPLETED")
-            except Exception as e:
-                logger.error(f"Failed to index codebase: {e}")
-                sentry_sdk.capture_exception(e)
-                self.event_manager.send_codebase_indexing_result("ERROR")
+                logger.info(
+                    f"Codebase index created for repo {self.context.codebase.repo_client.repo_name}"
+                )
+            else:
+                if self.context.codebase.is_behind():
+                    if self.context.diff_contains_stacktrace_files(self.stacktrace):
+                        logger.debug(f"Waiting for codebase index update")
+                        self.event_manager.send_codebase_indexing_message()
+                        self.context.codebase.update()
+                        self.event_manager.send_codebase_indexing_result("COMPLETED")
+                        logger.debug(f"Codebase index updated")
+                    else:
+                        update_codebase_index.apply_async(
+                            (
+                                UpdateCodebaseTaskRequest(
+                                    repo_id=self.context.codebase.repo_info.id
+                                ).model_dump(),
+                            ),
+                            countdown=3 * 60,
+                        )  # 3 minutes
+                        logger.info(f"Codebase indexing scheduled for later")
+                        self.event_manager.send_codebase_creation_skip()
+                else:
+                    logger.debug(f"Codebase is up to date")
+                    self.event_manager.send_codebase_creation_skip()
+
+            if not self.context.codebase.repo_info:
+                logger.warning(f"Failed to create codebase index")
+                sentry_sdk.capture_message(
+                    f"Failed to create codebase index for repo {self.context.codebase.repo_client.repo_name}"
+                )
+                self.event_manager.mark_running_steps_errored()
+                self.event_manager.send_autofix_complete(None)
                 return
+
+            if self.context.codebase.is_behind():
+                if self.context.diff_contains_stacktrace_files(self.stacktrace):
+                    logger.debug(f"Waiting for codebase index update")
+                    self.context.codebase.update()
+                    self.event_manager.send_codebase_indexing_result("COMPLETED")
+                    logger.debug(f"Codebase index updated")
+                else:
+                    update_codebase_index.apply_async(
+                        (
+                            UpdateCodebaseTaskRequest(
+                                repo_id=self.context.codebase.repo_info.id
+                            ).model_dump(),
+                        ),
+                        countdown=3 * 60,
+                    )  # 3 minutes
+                    logger.info(f"Codebase indexing scheduled for later")
+                    self.event_manager.send_codebase_indexing_result("CANCELLED")
+            else:
+                logger.debug(f"Codebase is up to date")
+                self.event_manager.send_codebase_indexing_result("CANCELLED")
 
             try:
                 planning_output = self.run_planning_agent(
@@ -134,20 +177,16 @@ class Autofix:
                 self.event_manager.send_planning_result(None)
                 return
 
-            file_changes: list[FileChange] = []
             for i, step in enumerate(planning_output.steps):
                 self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
-                file_changes = self.run_execution_agent(step, file_changes)
+                self.run_execution_agent(step)
 
                 self.event_manager.send_execution_step_result(step.id, "COMPLETED")
 
             pr = self._create_pr(
-                planning_output.title,
-                planning_output.description,
-                planning_output.steps,
-                file_changes,
+                planning_output.title, planning_output.description, planning_output.steps
             )
 
             if pr is None:
@@ -158,8 +197,8 @@ class Autofix:
                     title=planning_output.title,
                     description=planning_output.description,
                     pr_url=pr.html_url,
-                    repo_name="getsentry/sentry",
-                    pr_number=pr.number,
+                    repo_name=self.context.codebase.repo_client.repo_name,
+                    pr_number=pr.id,
                     usage=self.usage,
                 )
             )
@@ -169,22 +208,20 @@ class Autofix:
 
             self.event_manager.mark_running_steps_errored()
             self.event_manager.send_autofix_complete(None)
+        finally:
+            self.context.codebase.cleanup()
+            logger.info(f"Autofix complete for issue {self.request.issue.id}")
 
-    def _create_pr(
-        self, title: str, description: str, steps: list[PlanStep], changes: list[FileChange]
-    ):
-        repo_client = RepoClient("getsentry", "sentry")
-        branch_ref = repo_client.create_branch_from_changes(
-            pr_title=title,
-            file_changes=changes,
-            base_commit_sha=self.request.base_commit_sha,
+    def _create_pr(self, title: str, description: str, steps: list[PlanStep]):
+        branch_ref = self.context.codebase.repo_client.create_branch_from_changes(
+            pr_title=title, file_changes=self.context.codebase.file_changes
         )
 
         if branch_ref is None:
             logger.warning(f"Failed to create branch from changes")
             return None
 
-        return repo_client.create_pr_from_branch(
+        return self.context.codebase.repo_client.create_pr_from_branch(
             branch_ref, title, description, steps, self.request.issue.id, self.usage
         )
 
@@ -312,11 +349,7 @@ class Autofix:
             input.message or input.previous_output or input.problem
         ), "PlanningInput requires at least one of the fields: 'message', 'previous_output', or 'problem'."
 
-        assert (
-            self.autofix_context.codebase_context is not None
-        ), "Planning agent needs a codebase context to run."
-
-        planning_agent_tools = BaseTools(self.autofix_context.codebase_context)
+        planning_agent_tools = BaseTools(self.context.codebase)
 
         planning_agent = GptAgent(
             name="planner",
@@ -355,7 +388,7 @@ class Autofix:
 
         return self._parse_planning_output(planning_response)
 
-    def _get_plan_step_context(self, plan_item: PlanStep, codebase_context: CodebaseContext):
+    def _get_plan_step_context(self, plan_item: PlanStep):
         logger.debug(f"Getting context for plan item: {plan_item}")
 
         # Identify good search queries for the plan item
@@ -375,45 +408,35 @@ class Autofix:
         logger.debug(f"Search queries: {queries}")
 
         context_dump = ""
-        unique_nodes: dict[str, NodeWithScore] = {}
+        unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
         for query in queries:
-            retrieved_nodes = codebase_context.index.as_retriever(top_k=2).retrieve(query)
-            for node in retrieved_nodes:
-                unique_nodes[node.node_id] = node
-        nodes = list(unique_nodes.values())
+            retrived_chunks = self.context.codebase.query(query, 2)
+            for chunk in retrived_chunks:
+                unique_chunks[chunk.hash] = chunk
+        chunks = list(unique_chunks.values())
 
-        logger.debug(f"Retrieved unique nodes: {nodes}")
+        logger.debug(f"Retrieved {len(chunks)} unique chunks.")
 
-        for node in nodes:
-            context_dump += (
-                f"[{node.node.get_metadata_str(MetadataMode.LLM)}]\n\n{node.get_content()}\n-----\n"
-            )
+        for chunk in chunks:
+            context_dump += f"\n\n{chunk.get_dump_for_llm()}"
 
         return context_dump
 
-    def run_execution_agent(
-        self,
-        plan_item: PlanStep,
-        file_changes: list[FileChange] = [],
-    ):
-        assert (
-            self.autofix_context.codebase_context is not None
-        ), "Execution agent needs a codebase context to run."
-
+    def run_execution_agent(self, plan_item: PlanStep):
         # TODO: make this more robust
         try:
-            context_dump = self._get_plan_step_context(
-                plan_item, self.autofix_context.codebase_context
-            )
+            context_dump = self._get_plan_step_context(plan_item)
         except Exception as e:
             logger.error(f"Failed to get context for plan item: {e}")
             sentry_sdk.capture_exception(e)
             context_dump = ""
 
+        context_dump = ""
+
         code_action_tools = CodeActionTools(
-            self.autofix_context.codebase_context,
+            self.context.codebase,
         )
-        code_action_tools.file_changes = file_changes
+
         execution_agent = GptAgent(
             name="executor",
             tools=code_action_tools.get_tools(),
@@ -426,5 +449,3 @@ class Autofix:
         execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
 
         self.usage.add(execution_agent.usage)
-
-        return code_action_tools.file_changes

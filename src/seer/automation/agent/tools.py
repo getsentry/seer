@@ -1,6 +1,9 @@
+import logging
 from typing import Callable, Dict, List
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class FunctionTool(BaseModel):
@@ -14,6 +17,7 @@ class FunctionTool(BaseModel):
         try:
             return self.fn(**kwargs)
         except Exception as e:
+            logger.exception(e)
             return f"Error: {e}"
 
     def to_dict(self):

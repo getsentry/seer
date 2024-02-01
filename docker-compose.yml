@@ -21,9 +21,9 @@ services:
             context: .
         working_dir: /app
         volumes:
-            -   ./src:/app/src
-            -   ./tests:/app/tests
-            -   ./models:/app/models
+            - ./src:/app/src
+            - ./tests:/app/tests
+            - ./models:/app/models
         depends_on:
             - rabbitmq
             - db
@@ -37,6 +37,5 @@ services:
             - DATABASE_URL=postgresql+psycopg://root:seer@db/seer
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
-
 volumes:
     pgdata:

@@ -4,7 +4,8 @@ from typing import Collection
 import sqlalchemy
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import JSON, DateTime, Integer, String, delete
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -93,3 +94,27 @@ class ProcessRequest(Base):
         return delete(type(self)).where(
             type(self).scheduled_from <= self.scheduled_from and type(self).name == self.name
         )
+
+
+class RepoInfo(Base):
+    __tablename__ = "repositories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization: Mapped[int] = mapped_column(Integer, nullable=False)
+    project: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    external_slug: Mapped[str] = mapped_column(String, nullable=False)
+    sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
+
+
+class DbDocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repository_id: Mapped[int] = mapped_column(Integer, ForeignKey(RepoInfo.id), nullable=False)
+    path: Mapped[str] = mapped_column(String, nullable=False)
+    index: Mapped[int] = mapped_column(Integer, nullable=False)
+    hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_line_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[Vector] = mapped_column(Vector(3), nullable=False)
+    for_run_id: Mapped[str] = mapped_column(String(36), nullable=True)

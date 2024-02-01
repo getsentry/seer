@@ -69,36 +69,74 @@ class AutofixEventManager:
             problem_discovery_step,
         ]
 
-        if result.status == "CONTINUE":
-            self.steps.extend(
-                [
-                    Step(
-                        id="codebase_indexing",
-                        index=1,
-                        title="Codebase Indexing",
-                        status="PROCESSING",
-                    ),
-                    Step(
-                        id="plan",
-                        index=2,
-                        title="Execution Plan",
-                        status="PENDING",
-                    ),
-                ]
-            )
-
         self._send_steps_update("PROCESSING" if result.status == "CONTINUE" else "COMPLETED")
         logger.debug(f"Sent problem discovery result: {result}")
 
-    def send_codebase_indexing_result(self, status: Literal["COMPLETED", "ERROR"]):
+    def send_codebase_creation_message(self):
+        self.steps.extend(
+            [
+                Step(
+                    id="codebase_indexing",
+                    index=1,
+                    title="Codebase Indexing",
+                    description="This will take longer than usual because this is the first time you've run Autofix on this codebase.",
+                    status="PROCESSING",
+                ),
+                Step(
+                    id="plan",
+                    index=2,
+                    title="Execution Plan",
+                    status="PENDING",
+                ),
+            ]
+        )
+
+        self._send_steps_update("PROCESSING")
+
+    def send_codebase_indexing_message(self):
+        self.steps.extend(
+            [
+                Step(
+                    id="codebase_indexing",
+                    index=1,
+                    title="Codebase Indexing",
+                    status="PROCESSING",
+                ),
+                Step(
+                    id="plan",
+                    index=2,
+                    title="Execution Plan",
+                    status="PENDING",
+                ),
+            ]
+        )
+
+        self._send_steps_update("PROCESSING")
+
+    def send_codebase_creation_skip(self):
+        self.steps.extend(
+            [
+                Step(
+                    id="plan",
+                    index=1,
+                    title="Execution Plan",
+                    status="PENDING",
+                ),
+            ]
+        )
+
+        self._send_steps_update("PROCESSING")
+
+    def send_codebase_indexing_result(self, status: Literal["COMPLETED", "ERROR", "CANCELLED"]):
         # Update the status of step 2 to COMPLETED and step 3 to PROCESSING
         for step in self.steps:
             if step.id == "codebase_indexing":
                 step.status = status
+                step.description = None
             elif step.id == "plan":
-                step.status = "PROCESSING" if status == "COMPLETED" else "CANCELLED"
+                step.status = "PROCESSING" if status != "ERROR" else "CANCELLED"
 
-        self._send_steps_update("PROCESSING" if status == "COMPLETED" else "ERROR")
+        self._send_steps_update("PROCESSING" if status != "ERROR" else "ERROR")
         logger.debug(f"Sent codebase indexing result: {status}")
 
     def send_planning_result(self, result: PlanningOutput | None):

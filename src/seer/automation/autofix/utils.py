@@ -9,9 +9,6 @@ from xml.etree import ElementTree as ET
 
 import fsspec
 import torch
-from llama_index.bridge.pydantic import PrivateAttr
-from llama_index.embeddings.base import BaseEmbedding
-from llama_index.vector_stores import SimpleVectorStore
 from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger("autofix")
@@ -171,67 +168,6 @@ def sanitize_branch_name(title: str) -> str:
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
     return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
-
-
-class SentenceTransformersEmbedding(BaseEmbedding):
-    _model: SentenceTransformer = PrivateAttr()
-    _instruction: str = PrivateAttr()
-
-    def __init__(
-        self,
-        model_name: str = "thenlper/gte-small",
-        device: torch.device | None = None,
-    ) -> None:
-        if device is None:
-            if torch.cuda.is_available():
-                device = torch.device("cuda")
-            elif torch.backends.mps.is_available():
-                device = torch.device("mps")
-            else:
-                device = torch.device("cpu")
-
-        self._model = SentenceTransformer(model_name).to(device)
-
-        super().__init__()
-
-    @classmethod
-    def class_name(cls) -> str:
-        return "instructor"
-
-    async def _aget_query_embedding(self, query: str) -> List[float]:
-        return self._get_query_embedding(query)
-
-    async def _aget_text_embedding(self, text: str) -> List[float]:
-        return self._get_text_embedding(text)
-
-    def _get_query_embedding(self, query: str) -> List[float]:
-        return self._get_text_embedding(query)
-
-    def _get_text_embedding(self, text: str) -> List[float]:
-        batch_embeddings = self._model.encode([text])
-        return batch_embeddings[0]
-
-    def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        return self._model.encode(texts)
-
-
-class MemoryVectorStore(SimpleVectorStore):
-    def persist(self, persist_path: str = "", fs: fsspec.AbstractFileSystem | None = None) -> None:
-        """Persist the SimpleVectorStore to a directory."""
-        fs = fs or self._fs
-        if persist_path == "":
-            raise ValueError("persist_path must be set")
-        dirpath = os.path.dirname(persist_path)
-        if not fs.exists(dirpath):
-            fs.makedirs(dirpath)
-
-        def default_serializer(obj):
-            if obj.__class__.__name__ == "float32":
-                return float(obj)
-            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
-
-        with fs.open(persist_path, "w") as f:
-            json.dump(self._data.to_dict(), f, default=default_serializer)
 
 
 def escape_xml_chars(s: str) -> str:

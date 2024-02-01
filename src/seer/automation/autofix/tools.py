@@ -1,54 +1,34 @@
 import logging
 import textwrap
-from typing import Dict, Set
-
-from llama_index.retrievers import VectorIndexRetriever
-from llama_index.schema import MetadataMode
 
 from seer.automation.agent.tools import FunctionTool
-from seer.automation.autofix.codebase_context import CodebaseContext
 from seer.automation.autofix.models import FileChange
 from seer.automation.autofix.utils import find_original_snippet
+from seer.automation.codebase.codebase_index import CodebaseIndex
 
 logger = logging.getLogger("autofix")
 
 
 class BaseTools:
-    context: CodebaseContext
-    retriever: VectorIndexRetriever
+    codebase: CodebaseIndex
 
-    retrieved_paths: Set[str]
-    expanded_paths: Set[str]
-
-    def __init__(self, context: CodebaseContext):
-        self.context = context
-        self.retriever = VectorIndexRetriever(index=self.context.index, similarity_top_k=4)
+    def __init__(self, codebase: CodebaseIndex):
+        self.codebase = codebase
         self.retrieved_paths = set()
         self.expanded_paths = set()
 
     def codebase_retriever(self, query: str):
-        nodes = self.retriever.retrieve(query)
+        chunks = self.codebase.query(query, top_k=8)
 
         content = ""
-        for node in nodes:
-            self.retrieved_paths.add(node.metadata["file_path"])
-
-            node_copy = node.copy()
-            content += node_copy.get_content(MetadataMode.LLM) + "\n\n"
+        for chunk in chunks:
+            content += chunk.get_dump_for_llm() + "\n\n"
         return content
 
-    def _get_document(self, file_path: str):
-        for document in self.context.documents:
-            if file_path in document.metadata["file_path"]:
-                return document
-
-        return None
-
     def expand_document(self, input: str):
-        document = self._get_document(input)
+        document = self.codebase.get_document(input)
 
         if document:
-            self.expanded_paths.add(document.metadata["file_path"])
             return document.text
 
         return "<document with the provided path not found>"
@@ -96,36 +76,12 @@ class BaseTools:
 
 
 class CodeActionTools(BaseTools):
-    codebase_context: CodebaseContext
-    file_changes: list[FileChange]
-
     _snippet_matching_threshold = 0.9
 
-    def __init__(
-        self,
-        codebase_context: CodebaseContext,
-        verbose: bool = False,
-    ):
-        super().__init__(codebase_context)
+    def __init__(self, codebase: CodebaseIndex):
+        super().__init__(codebase)
 
-        self.codebase_context = codebase_context
-        self.verbose = verbose
         self.file_changes = []
-
-    def _get_latest_file_contents(self, file_path: str):
-        logger.debug(
-            f"Getting file contents from Github for file_path: {file_path} from sha {self.codebase_context}"
-        )
-        contents = self.context.get_file_contents(file_path, self.codebase_context.base_sha)
-
-        changes = list(filter(lambda x: x.path == file_path, self.file_changes))
-        if changes:
-            for change in changes:
-                contents = change.apply(contents)
-
-            logger.debug(f"Applied {len(changes)} changes to file {file_path}.")
-
-        return contents
 
     def replace_snippet_with(
         self, file_path: str, reference_snippet: str, replacement_snippet: str, commit_message: str
@@ -137,40 +93,35 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.replace_snippet_with] Replacing snippet {reference_snippet} with {replacement_snippet} in {file_path}"
         )
 
-        file_contents = self._get_latest_file_contents(file_path)
+        document = self.codebase.get_document(file_path)
 
-        if not file_contents:
-            raise Exception("File not found.")
+        if not document:
+            raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         logger.debug("Exact snippet:")
         logger.debug(f'"{reference_snippet}"')
 
         original_snippet: str | None = None
-        if reference_snippet in file_contents:
+        if reference_snippet in document.text:
             original_snippet = reference_snippet
         else:
             original_snippet = find_original_snippet(
-                reference_snippet, file_contents, threshold=self._snippet_matching_threshold
+                reference_snippet, document.text, threshold=self._snippet_matching_threshold
             )
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
 
-        new_contents = file_contents.replace(original_snippet, replacement_snippet)
-
-        self.context._update_document(file_path, new_contents)
-
-        self.file_changes.append(
-            FileChange(
-                change_type="edit",
-                path=file_path,
-                reference_snippet=original_snippet,
-                new_snippet=replacement_snippet,
-                description=commit_message,
-            )
+        file_change = FileChange(
+            change_type="edit",
+            path=file_path,
+            reference_snippet=original_snippet,
+            new_snippet=replacement_snippet,
+            description=commit_message,
         )
+        self.codebase.store_file_change(file_change)
 
-        return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
+        return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
     def delete_snippet(self, file_path: str, snippet: str, commit_message: str):
         """
@@ -178,17 +129,17 @@ class CodeActionTools(BaseTools):
         """
         logger.debug(f"[CodeActionTools.delete_snippet] Deleting snippet {snippet} in {file_path}")
 
-        file_contents = self._get_latest_file_contents(file_path)
+        document = self.codebase.get_document(file_path)
 
-        if not file_contents:
-            raise Exception("File not found.")
+        if not document:
+            raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         original_snippet: str | None = None
-        if snippet in file_contents:
+        if snippet in document.text:
             original_snippet = snippet
         else:
             original_snippet = find_original_snippet(
-                snippet, file_contents, threshold=self._snippet_matching_threshold
+                snippet, document.text, threshold=self._snippet_matching_threshold
             )
 
         logger.debug("Exact snippet:")
@@ -197,21 +148,17 @@ class CodeActionTools(BaseTools):
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
 
-        new_contents = file_contents.replace(original_snippet, "")
-
-        self.context._update_document(file_path, new_contents)
-
-        self.file_changes.append(
-            FileChange(
-                change_type="delete",
-                path=file_path,
-                description=commit_message,
-                reference_snippet=original_snippet,
-                new_snippet="",
-            )
+        file_change = FileChange(
+            change_type="delete",
+            path=file_path,
+            description=commit_message,
+            reference_snippet=original_snippet,
+            new_snippet="",
         )
 
-        return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
+        self.codebase.store_file_change(file_change)
+
+        return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
     # def insert_snippet(
     #     self, file_path: str, reference_snippet: str, snippet: str, commit_message: str
@@ -265,16 +212,18 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.create_file] Creating file {file_path} with snippet {snippet}"
         )
 
-        self.context._update_document(file_path, snippet)
+        document = self.codebase.get_document(file_path)
 
-        self.file_changes.append(
-            FileChange(
-                change_type="create",
-                path=file_path,
-                new_snippet=snippet,
-                description=commit_message,
-            )
+        if document:
+            raise FileExistsError(f"File `{file_path}` already exists.")
+
+        file_change = FileChange(
+            change_type="create",
+            path=file_path,
+            new_snippet=snippet,
+            description=commit_message,
         )
+        self.codebase.store_file_change(file_change)
 
         return "success"
 
@@ -284,11 +233,8 @@ class CodeActionTools(BaseTools):
         """
         logger.debug(f"[CodeActionTools.delete_file] Deleting file {file_path}")
 
-        self.file_changes.append(
-            FileChange(change_type="delete", path=file_path, description=commit_message)
-        )
-
-        self.context._update_document(file_path, None)
+        file_change = FileChange(change_type="delete", path=file_path, description=commit_message)
+        self.codebase.store_file_change(file_change)
 
         return "success"
 

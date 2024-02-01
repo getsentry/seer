@@ -89,7 +89,7 @@ class LlmAgent(ABC):
 
         tool_result = tool.call(**tool_call.args)
 
-        # logger.debug(f"Tool {tool_call.function} returned \n{tool_result}")
+        logger.debug(f"Tool {tool_call.function} returned \n{tool_result}")
 
         return Message(
             role="tool",
