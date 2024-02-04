@@ -10,15 +10,9 @@ from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.singleturn import LlmClient
 from seer.automation.agent.types import Message, Usage
 from seer.automation.autofix.codebase_context import CodebaseContext
+from seer.automation.autofix.context_manager import ContextManager
 from seer.automation.autofix.event_manager import AutofixEventManager
-from seer.automation.autofix.prompts import (
-    ExecutionPrompts,
-    PlanningPrompts,
-    ProblemDiscoveryPrompt,
-)
-from seer.automation.autofix.repo_client import RepoClient
-from seer.automation.autofix.tools import BaseTools, CodeActionTools
-from seer.automation.autofix.types import (
+from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
     FileChange,
@@ -28,7 +22,15 @@ from seer.automation.autofix.types import (
     ProblemDiscoveryOutput,
     ProblemDiscoveryRequest,
     ProblemDiscoveryResult,
+    Stacktrace,
 )
+from seer.automation.autofix.prompts import (
+    ExecutionPrompts,
+    PlanningPrompts,
+    ProblemDiscoveryPrompt,
+)
+from seer.automation.autofix.repo_client import RepoClient
+from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
 from seer.rpc import RpcClient
 
@@ -36,14 +38,31 @@ logger = logging.getLogger("autofix")
 
 
 class Autofix:
-    def __init__(self, request: AutofixRequest, rpc_client: RpcClient):
+    stacktrace: Stacktrace
+
+    def __init__(
+        self,
+        request: AutofixRequest,
+        rpc_client: RpcClient,
+    ):
         self.request = request
         self.usage = Usage()
         self.event_manager = AutofixEventManager(rpc_client, self.request.issue.id)
+        self.context_manager = ContextManager(
+            RepoClient("getsentry", "sentry"), self.request.base_commit_sha
+        )
 
     def run(self) -> None:
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
+
+            stacktrace = self.request.issue.events[-1].get_stacktrace()
+            if not stacktrace:
+                logger.warning(f"No stacktrace found for issue {self.request.issue.id}")
+
+                self.event_manager.send_no_stacktrace_error()
+                return
+            self.stacktrace = stacktrace
 
             self.event_manager.send_initial_steps()
 
@@ -68,9 +87,23 @@ class Autofix:
                 return
 
             try:
-                codebase_context = CodebaseContext(
-                    "getsentry", "sentry", self.request.base_commit_sha
+                self.context_manager.load_codebase()
+
+                # Below is the short circuit logic to skip embedding the codebase context if the stacktrace
+                # does not contain any files that need to be re-indexed
+                needs_indexing = self.context_manager.diff_contains_stacktrace_files(
+                    self.stacktrace
                 )
+                if needs_indexing:
+                    assert (
+                        self.context_manager.codebase_context is not None
+                    ), "Codebase context is not loaded"
+
+                    logger.debug(f"Updating codebase index")
+                    self.context_manager.codebase_context.update_codebase_index()
+                else:
+                    logger.debug(f"Codebase does not need to be indexed")
+
                 self.event_manager.send_codebase_indexing_result("COMPLETED")
             except Exception as e:
                 logger.error(f"Failed to index codebase: {e}")
@@ -80,7 +113,7 @@ class Autofix:
 
             try:
                 planning_output = self.run_planning_agent(
-                    PlanningInput(problem=problem_discovery_output), codebase_context
+                    PlanningInput(problem=problem_discovery_output)
                 )
 
                 if not planning_output:
@@ -104,7 +137,7 @@ class Autofix:
                 self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
-                file_changes = self.run_execution_agent(step, codebase_context, file_changes)
+                file_changes = self.run_execution_agent(step, file_changes)
 
                 self.event_manager.send_execution_step_result(step.id, "COMPLETED")
 
@@ -199,7 +232,7 @@ class Autofix:
                     role="system",
                     content=ProblemDiscoveryPrompt.format_system_msg(
                         err_msg=self.request.issue.title,
-                        stack_str=self.request.issue.events[-1].build_stacktrace(),
+                        stack_str=self.stacktrace.to_str(),
                     ),
                 )
             ],
@@ -272,14 +305,16 @@ class Autofix:
             logger.warning(f"Planning response does not contain a title, description, or plan: {e}")
             return None
 
-    def run_planning_agent(
-        self, input: PlanningInput, codebase_context: CodebaseContext
-    ) -> PlanningOutput | None:
+    def run_planning_agent(self, input: PlanningInput) -> PlanningOutput | None:
         assert (
             input.message or input.previous_output or input.problem
         ), "PlanningInput requires at least one of the fields: 'message', 'previous_output', or 'problem'."
 
-        planning_agent_tools = BaseTools(codebase_context)
+        assert (
+            self.context_manager.codebase_context is not None
+        ), "Planning agent needs a codebase context to run."
+
+        planning_agent_tools = BaseTools(self.context_manager.codebase_context)
 
         planning_agent = GptAgent(
             name="planner",
@@ -289,7 +324,7 @@ class Autofix:
                     role="system",
                     content=PlanningPrompts.format_system_msg(
                         err_msg=self.request.issue.title,
-                        stack_str=self.request.issue.events[-1].build_stacktrace(),
+                        stack_str=self.stacktrace.to_str(),
                     ),
                 )
             ],
@@ -357,21 +392,24 @@ class Autofix:
     def run_execution_agent(
         self,
         plan_item: PlanStep,
-        codebase_context: CodebaseContext,
         file_changes: list[FileChange] = [],
     ):
+        assert (
+            self.context_manager.codebase_context is not None
+        ), "Execution agent needs a codebase context to run."
+
         # TODO: make this more robust
         try:
-            context_dump = self._get_plan_step_context(plan_item, codebase_context)
+            context_dump = self._get_plan_step_context(
+                plan_item, self.context_manager.codebase_context
+            )
         except Exception as e:
             logger.error(f"Failed to get context for plan item: {e}")
             sentry_sdk.capture_exception(e)
             context_dump = ""
 
         code_action_tools = CodeActionTools(
-            codebase_context,
-            base_sha=codebase_context.base_sha,
-            verbose=True,
+            self.context_manager.codebase_context,
         )
         code_action_tools.file_changes = file_changes
         execution_agent = GptAgent(

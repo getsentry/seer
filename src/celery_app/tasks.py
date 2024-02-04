@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix import Autofix
-from seer.automation.autofix.types import AutofixRequest
+from seer.automation.autofix.models import AutofixRequest
 from seer.rpc import SentryRpcClient
 
 logger = logging.getLogger("autofix")

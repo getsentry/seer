@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from seer.automation.autofix.types import AutofixOutput, PlanningOutput, ProblemDiscoveryResult
+from seer.automation.autofix.models import AutofixOutput, PlanningOutput, ProblemDiscoveryResult
 from seer.rpc import RpcClient
 
 Status = Literal["COMPLETED", "ERROR", "PENDING", "PROCESSING", "CANCELLED"]
@@ -34,6 +34,19 @@ class AutofixEventManager:
             status=status,
             steps=[step.model_dump() for step in self.steps],
         )
+
+    def send_no_stacktrace_error(self):
+        self.steps = [
+            Step(
+                id="problem_discovery",
+                index=0,
+                title="Preliminary Assessment",
+                status="ERROR",
+                description="Error: Cannot fix issues without a stacktrace.",
+            )
+        ]
+
+        self._send_steps_update("ERROR")
 
     def send_initial_steps(self):
         self.steps = [
