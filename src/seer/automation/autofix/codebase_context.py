@@ -3,7 +3,6 @@ import logging
 import os
 import shutil
 import tarfile
-import tempfile
 from typing import List
 
 import requests
@@ -44,13 +43,11 @@ class CodebaseContext:
     documents: list[Document]
     nodes: list[BaseNode]
 
-    def __init__(self, repo_client: RepoClient, base_sha: str):
+    def __init__(self, repo_client: RepoClient, base_sha: str, tmp_dir: str):
         self.repo_client = repo_client
         self.base_sha = base_sha
 
-        self.tmp_dir = tempfile.mkdtemp(
-            prefix=f"{repo_client.repo_owner}-{repo_client.repo_name}_{self.base_sha}"
-        )
+        self.tmp_dir = tmp_dir
         self.tmp_repo_path = os.path.join(self.tmp_dir, f"repo")
 
         logger.info(f"Using tmp dir {self.tmp_dir}")
