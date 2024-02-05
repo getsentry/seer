@@ -3,15 +3,11 @@ import logging
 import os
 import shutil
 import tarfile
-import tempfile
 from typing import List
 
 import requests
 import sentry_sdk
-import torch
-from filelock import SoftFileLock
-from github import Auth, Github, GithubIntegration
-from github.Repository import Repository
+from filelock import SoftFileLock, Timeout
 from llama_index import ServiceContext
 from llama_index.data_structs.data_structs import IndexDict
 from llama_index.indices import VectorStoreIndex
@@ -19,10 +15,8 @@ from llama_index.node_parser import CodeSplitter
 from llama_index.readers import SimpleDirectoryReader
 from llama_index.schema import BaseNode, Document
 from llama_index.storage import StorageContext
-from unidiff import PatchSet
 
-from seer.automation.agent.types import Usage
-from seer.automation.autofix.repo_client import get_github_auth
+from seer.automation.autofix.repo_client import RepoClient
 from seer.automation.autofix.utils import (
     MemoryVectorStore,
     SentenceTransformersEmbedding,
@@ -31,11 +25,13 @@ from seer.automation.autofix.utils import (
 
 logger = logging.getLogger("autofix")
 
+CACHED_COMMIT_JSON_PATH = os.path.join("./", "models/autofix_cached_commit.json")
+STORAGE_DIR = os.path.join("./", "models/autofix_storage_context/")
+LOCK_PATH = os.path.join(STORAGE_DIR, "lock")
+
 
 class CodebaseContext:
-    github_auth: Auth.Token | Auth.AppInstallationAuth
-    github: Github
-    repo: Repository
+    repo_client: RepoClient
     base_sha: str
 
     tmp_dir: str
@@ -47,15 +43,12 @@ class CodebaseContext:
     documents: list[Document]
     nodes: list[BaseNode]
 
-    def __init__(self, repo_owner: str, repo_name: str, base_sha: str):
-        self.github = Github(auth=get_github_auth(repo_owner, repo_name))
-        self.repo = self.github.get_repo(repo_owner + "/" + repo_name)
-
+    def __init__(self, repo_client: RepoClient, base_sha: str, tmp_dir: str):
+        self.repo_client = repo_client
         self.base_sha = base_sha
 
-        self.tmp_dir = tempfile.mkdtemp(prefix=f"{repo_owner}-{repo_name}_{self.base_sha}")
+        self.tmp_dir = tmp_dir
         self.tmp_repo_path = os.path.join(self.tmp_dir, f"repo")
-        self.cached_commit_json_path = os.path.join("./", "models/autofix_cached_commit.json")
 
         logger.info(f"Using tmp dir {self.tmp_dir}")
 
@@ -64,6 +57,25 @@ class CodebaseContext:
         )
 
         self._get_data()
+
+    @staticmethod
+    def get_cached_commit_sha() -> str | None:
+        try:
+            with open(CACHED_COMMIT_JSON_PATH, "r") as file:
+                cached_commit_data = json.load(file)
+                cached_commit_sha = cached_commit_data.get("sha")
+                return cached_commit_sha
+        except IOError:
+            logger.error(f"Failed to read cached commit file: {CACHED_COMMIT_JSON_PATH}")
+            return None
+
+    @staticmethod
+    def set_cached_commit_sha(sha: str):
+        try:
+            with open(CACHED_COMMIT_JSON_PATH, "w") as sha_file:
+                json.dump({"sha": sha}, sha_file)
+        except IOError:
+            logger.error(f"Failed to write cached commit file: {CACHED_COMMIT_JSON_PATH}")
 
     def _embed_and_index_nodes(self, nodes: list[BaseNode]) -> VectorStoreIndex:
         service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
@@ -122,7 +134,7 @@ class CodebaseContext:
             for name in dirs:
                 os.rmdir(os.path.join(root, name))
 
-        tarball_url = self.repo.get_archive_link("tarball", ref=self.base_sha)
+        tarball_url = self.repo_client.repo.get_archive_link("tarball", ref=self.base_sha)
 
         response = requests.get(tarball_url, stream=True)
         if response.status_code == 200:
@@ -170,7 +182,9 @@ class CodebaseContext:
             logger.error(f"Failed to delete tar file: {e}")
 
     def _load_data_from_github(self):
-        logger.debug(f"Loading data from github for {self.repo.name} on ref {self.base_sha}")
+        logger.debug(
+            f"Loading data from github for {self.repo_client.repo.full_name} on ref {self.base_sha}"
+        )
         self._load_repo_to_tmp_dir()
         documents = SimpleDirectoryReader(
             self.tmp_repo_path, required_exts=[".py"], recursive=True
@@ -178,42 +192,6 @@ class CodebaseContext:
         nodes = self._documents_to_nodes(documents)
 
         return documents, nodes
-
-    def _get_commit_file_diffs(self, prev_sha: str) -> tuple[list[str], list[str]]:
-        """
-        Returns the list of files to change and files to delete in the diff in order to turn a commit into another.
-        """
-        comparison = self.repo.compare(prev_sha, self.base_sha)
-
-        # Support reverse diffs, because the api would return an empty list of files if the comparison is behind
-        is_behind = comparison.status == "behind"
-        if is_behind:
-            comparison = self.repo.compare(self.base_sha, prev_sha)
-
-        # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
-        # This has to be done because the files list inside the comparison object is limited to only 300 files.
-        # We get the entire diff from the diff object returned from the `diff_url`
-        requester = self.repo._requester
-        headers = {
-            "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
-            "User-Agent": requester._Requester__userAgent,  # type: ignore
-        }
-        data = requests.get(comparison.diff_url, headers=headers).content
-
-        patch_set = PatchSet(data.decode("utf-8"))
-
-        added_files = [patch.path for patch in patch_set.added_files]
-        modified_files = [patch.path for patch in patch_set.modified_files]
-        removed_files = [patch.path for patch in patch_set.removed_files]
-
-        if is_behind:
-            # If the comparison is behind, the added files are actually the removed files
-            changed_files = list(set(modified_files + removed_files))
-            removed_files = added_files
-        else:
-            changed_files = list(set(added_files + modified_files))
-
-        return changed_files, removed_files
 
     def _get_data(self):
         # The files will be locked for the entire process of loading data; that means only one worker at a time can go through the data loading process which is a bottleneck.
@@ -223,24 +201,23 @@ class CodebaseContext:
 
             logger.debug(f"Loading index from storage context")
 
-            storage_dir = os.path.join("./", "models/autofix_storage_context/")
-            lock_path = os.path.join(storage_dir, "lock")
-
-            with SoftFileLock(os.path.join(lock_path), timeout=60 * 60):  # 1 hour max lock timeout
-                logger.debug(f"Acquired lock for {storage_dir}")
+            with SoftFileLock(
+                os.path.join(LOCK_PATH), timeout=60 * 60
+            ):  # 1 hour max read lock timeout
+                logger.debug(f"Acquired lock for {STORAGE_DIR}")
                 with sentry_sdk.start_span(
                     op="seer.automation.autofix.index_loading",
                     description="Loading the vector store index from local filesystem",
                 ) as span:
-                    with open(self.cached_commit_json_path, "r") as file:
-                        cached_commit_data = json.load(file)
-                    cached_commit_sha = cached_commit_data.get("sha")
+                    cached_commit_sha = self.get_cached_commit_sha()
+
+                    assert cached_commit_sha is not None, "Cached commit SHA not found"
 
                     service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
-                    memory_vector_store = MemoryVectorStore().from_persist_dir(storage_dir)
+                    memory_vector_store = MemoryVectorStore().from_persist_dir(STORAGE_DIR)
                     storage_context = StorageContext.from_defaults(
                         vector_store=memory_vector_store,
-                        persist_dir=storage_dir,
+                        persist_dir=STORAGE_DIR,
                     )
                     index_structs = storage_context.index_store.index_structs()
 
@@ -255,66 +232,84 @@ class CodebaseContext:
                         show_progress=False,
                     )
 
-                logger.debug(f"Loaded index from storage context '{storage_dir}'.")
-
-                # Update the documents that changed in the diff.
-                changed_files, deleted_files = self._get_commit_file_diffs(cached_commit_sha)
-
-                logger.debug(
-                    f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
-                )
-
                 self.index = index
                 self.documents = documents
                 self.nodes = nodes
 
-                documents_to_update = [
-                    document
-                    for document in documents
-                    if document.metadata["file_path"] in changed_files
-                ]
-                documents_to_delete = [
-                    document
-                    for document in documents
-                    if document.metadata["file_path"] in deleted_files
-                ]
+                logger.debug(f"Loaded index from storage context '{STORAGE_DIR}'.")
 
-                for document in documents_to_update + documents_to_delete:
-                    self.index.delete(document.get_doc_id())
-
-                with sentry_sdk.start_span(
-                    op="seer.automation.autofix.indexing",
-                    description="Indexing the diff between the cached commit and the requested commit",
-                ) as span:
-                    logger.debug(f"Begin index update...")
-                    new_nodes = self._documents_to_nodes(documents_to_update)
-                    self.index.insert_nodes(new_nodes)
-
-                    span.set_tag("num_documents", len(documents_to_update))
-                    span.set_tag("num_nodes", len(new_nodes))
-
-                commit_is_newer = self.repo.compare(cached_commit_sha, self.base_sha).ahead_by > 0
-
-                if commit_is_newer:
-                    # Save only when the commit is newer
-                    storage_context.persist(persist_dir=storage_dir)
-                    memory_vector_store.persist(
-                        persist_path=os.path.join(storage_dir, "vector_store.json")
-                    )
-
-                    try:
-                        os.remove(os.path.join(storage_dir, "default__vector_store.json"))
-                    except OSError as e:
-                        logger.error(f"Failed to delete default vector store file: {e}")
-
-                    with open(self.cached_commit_json_path, "w") as sha_file:
-                        json.dump({"sha": self.base_sha}, sha_file)
-
-                logger.debug(f"Released lock for {storage_dir}")
+            logger.debug(f"Released lock for {STORAGE_DIR}")
 
         finally:
             # Always cleanup the tmp dir
             self.cleanup()
+
+    def update_codebase_index(self):
+        cached_commit_sha = self.get_cached_commit_sha()
+
+        assert cached_commit_sha is not None, "Cached commit SHA not found"
+
+        changed_files, deleted_files = self.repo_client.get_commit_file_diffs(
+            cached_commit_sha, self.base_sha
+        )
+
+        logger.debug(
+            f"Updating index with {len(changed_files)} changed files and {len(deleted_files)} deleted files"
+        )
+
+        documents_to_update = [
+            document
+            for document in self.documents
+            if document.metadata["file_path"] in changed_files
+        ]
+        documents_to_delete = [
+            document
+            for document in self.documents
+            if document.metadata["file_path"] in deleted_files
+        ]
+
+        for document in documents_to_update + documents_to_delete:
+            self.index.delete(document.get_doc_id())
+
+        with sentry_sdk.start_span(
+            op="seer.automation.autofix.indexing",
+            description="Indexing the diff between the cached commit and the requested commit",
+        ) as span:
+            logger.debug(f"Begin index update...")
+            new_nodes = self._documents_to_nodes(documents_to_update)
+            self.index.insert_nodes(new_nodes)
+
+            span.set_tag("num_documents", len(documents_to_update))
+            span.set_tag("num_nodes", len(new_nodes))
+
+        commit_is_newer = (
+            self.repo_client.repo.compare(cached_commit_sha, self.base_sha).ahead_by > 0
+        )
+
+        if commit_is_newer:
+            # Save only when the commit is newer
+            logger.debug(f"Saving index to storage context")
+            try:
+                with SoftFileLock(
+                    os.path.join(LOCK_PATH), timeout=60 * 15
+                ):  # 15 minute max write lock timeout
+                    logger.debug(f"Acquired lock for {STORAGE_DIR}")
+                    self.index.storage_context.persist(persist_dir=STORAGE_DIR)
+                    self.index.vector_store.persist(
+                        persist_path=os.path.join(STORAGE_DIR, "vector_store.json")
+                    )
+
+                    try:
+                        os.remove(os.path.join(STORAGE_DIR, "default__vector_store.json"))
+                    except OSError as e:
+                        logger.error(f"Failed to delete default vector store file: {e}")
+
+                    self.set_cached_commit_sha(self.base_sha)
+                logger.debug(f"Released lock for {STORAGE_DIR}")
+            except Timeout:
+                logger.warning(
+                    f"Timed out waiting for lock to save {STORAGE_DIR}, skipping save..."
+                )
 
     def _get_document(self, file_path: str):
         for document in self.documents:
@@ -354,9 +349,11 @@ class CodebaseContext:
                 self.nodes.extend(new_nodes)
 
     def get_file_contents(self, path, ref):
-        logger.debug(f"Getting file contents for {path} in {self.repo.name} on ref {ref}")
+        logger.debug(
+            f"Getting file contents for {path} in {self.repo_client.repo.full_name} on ref {ref}"
+        )
         try:
-            contents = self.repo.get_contents(path, ref=ref)
+            contents = self.repo_client.repo.get_contents(path, ref=ref)
 
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
@@ -365,7 +362,7 @@ class CodebaseContext:
         except Exception as e:
             logger.error(f"Error getting file contents: {e}")
 
-            return f"Error: file with path {path} not found in {self.repo.name} on ref {ref}"
+            return f"Error: file with path {path} not found in {self.repo_client.repo.full_name} on ref {ref}"
 
     def cleanup(self):
         if os.path.exists(self.tmp_dir):

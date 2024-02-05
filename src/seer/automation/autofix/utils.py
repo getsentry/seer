@@ -14,8 +14,6 @@ from llama_index.embeddings.base import BaseEmbedding
 from llama_index.vector_stores import SimpleVectorStore
 from sentence_transformers import SentenceTransformer
 
-from seer.automation.autofix.types import ProblemDiscoveryOutput
-
 logger = logging.getLogger("autofix")
 
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"

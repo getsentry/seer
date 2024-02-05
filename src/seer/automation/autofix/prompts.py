@@ -1,7 +1,7 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.types import PlanStep, ProblemDiscoveryOutput
+from seer.automation.autofix.models import PlanStep, ProblemDiscoveryOutput
 
 
 def format_additional_context(additional_context: str):

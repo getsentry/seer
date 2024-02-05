@@ -7,7 +7,7 @@ from llama_index.schema import MetadataMode
 
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.codebase_context import CodebaseContext
-from seer.automation.autofix.types import FileChange
+from seer.automation.autofix.models import FileChange
 from seer.automation.autofix.utils import find_original_snippet
 
 logger = logging.getLogger("autofix")
@@ -96,30 +96,27 @@ class BaseTools:
 
 
 class CodeActionTools(BaseTools):
-    context: CodebaseContext
-    base_sha: str
+    codebase_context: CodebaseContext
     file_changes: list[FileChange]
 
     _snippet_matching_threshold = 0.9
 
     def __init__(
         self,
-        context: CodebaseContext,
-        base_sha: str,
+        codebase_context: CodebaseContext,
         verbose: bool = False,
     ):
-        super().__init__(context)
+        super().__init__(codebase_context)
 
-        self.context = context
-        self.base_sha = base_sha
+        self.codebase_context = codebase_context
         self.verbose = verbose
         self.file_changes = []
 
     def _get_latest_file_contents(self, file_path: str):
         logger.debug(
-            f"Getting file contents from Github for file_path: {file_path} from sha {self.base_sha}"
+            f"Getting file contents from Github for file_path: {file_path} from sha {self.codebase_context}"
         )
-        contents = self.context.get_file_contents(file_path, self.base_sha)
+        contents = self.context.get_file_contents(file_path, self.codebase_context)
 
         changes = list(filter(lambda x: x.path == file_path, self.file_changes))
         if changes:

@@ -3,13 +3,15 @@ import os
 import textwrap
 from typing import List
 
+import requests
 import sentry_sdk
 from github import Auth, Github, GithubIntegration
 from github.GitRef import GitRef
 from github.Repository import Repository
+from unidiff import PatchSet
 
 from seer.automation.agent.types import Usage
-from seer.automation.autofix.types import FileChange, PlanStep
+from seer.automation.autofix.models import FileChange, PlanStep
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 
 logger = logging.getLogger("autofix")
@@ -51,6 +53,45 @@ class RepoClient:
     ):
         self.github = Github(auth=get_github_auth(repo_owner, repo_name))
         self.repo = self.github.get_repo(repo_owner + "/" + repo_name)
+
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+
+    def get_commit_file_diffs(self, prev_sha: str, next_sha: str) -> tuple[list[str], list[str]]:
+        """
+        Returns the list of files to change and files to delete in the diff in order to turn a commit into another.
+        """
+        comparison = self.repo.compare(prev_sha, next_sha)
+
+        # Support reverse diffs, because the api would return an empty list of files if the comparison is behind
+        is_behind = comparison.status == "behind"
+        if is_behind:
+            comparison = self.repo.compare(next_sha, prev_sha)
+
+        # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
+        # This has to be done because the files list inside the comparison object is limited to only 300 files.
+        # We get the entire diff from the diff object returned from the `diff_url`
+        requester = self.repo._requester
+        headers = {
+            "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
+            "User-Agent": requester._Requester__userAgent,  # type: ignore
+        }
+        data = requests.get(comparison.diff_url, headers=headers).content
+
+        patch_set = PatchSet(data.decode("utf-8"))
+
+        added_files = [patch.path for patch in patch_set.added_files]
+        modified_files = [patch.path for patch in patch_set.modified_files]
+        removed_files = [patch.path for patch in patch_set.removed_files]
+
+        if is_behind:
+            # If the comparison is behind, the added files are actually the removed files
+            changed_files = list(set(modified_files + removed_files))
+            removed_files = added_files
+        else:
+            changed_files = list(set(added_files + modified_files))
+
+        return changed_files, removed_files
 
     def _create_branch(self, branch_name, base_branch=None, base_commit_sha: str | None = None):
         base_sha = base_commit_sha

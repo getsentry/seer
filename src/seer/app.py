@@ -8,7 +8,7 @@ from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from celery_app.tasks import run_autofix
-from seer.automation.autofix.types import AutofixEndpointResponse, AutofixRequest
+from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
 from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse

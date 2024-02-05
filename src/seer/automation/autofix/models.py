@@ -67,30 +67,53 @@ class PlanningInput(BaseModel):
     problem: Optional[ProblemDiscoveryOutput] = None
 
 
+class StacktraceFrame(BaseModel):
+    function: str
+    filename: str
+    line_no: int
+    col_no: Optional[int]
+    context: list[tuple[int, str]]
+
+
+class Stacktrace(BaseModel):
+    frames: list[StacktraceFrame]
+
+    def to_str(self, max_frames: int = 4):
+        stack_str = ""
+        for frame in self.frames[:max_frames]:
+            stack_str += f" {frame.function} in {frame.filename} ({frame.line_no}:{frame.col_no})\n"
+            for ctx in frame.context:
+                is_suspect_line = ctx[0] == frame.line_no
+                stack_str += f"{ctx[1]}{'  <--' if is_suspect_line else ''}\n"
+            stack_str += "------\n"
+        return stack_str
+
+
 class SentryEvent(BaseModel):
     entries: list[dict]
 
-    def build_stacktrace(self):
-        stack_str = ""
-        for entry in self.entries:
-            if "data" not in entry:
-                continue
-            if "values" not in entry["data"]:
-                continue
-            for item in entry["data"]["values"]:
-                # stack_str += f"{item['type']}: {item['value']}\n"
-                if "stacktrace" not in item:
-                    continue
-                frames = item["stacktrace"]["frames"][::-1]
-                for frame in frames[:4]:
-                    stack_str += f" {frame['function']} in {frame['filename']} ({frame['lineNo']}:{frame['colNo']})\n"
-                    for ctx in frame["context"]:
-                        is_suspect_line = ctx[0] == frame["lineNo"]
-                        stack_str += f"{ctx[1]}{'  <--' if is_suspect_line else ''}\n"
+    def get_stacktrace(self):
+        exception_entry = next(
+            (entry for entry in self.entries if entry["type"] == "exception"),
+            None,
+        )
 
-                    stack_str += "------\n"
+        if exception_entry is None:
+            return None
 
-        return stack_str
+        frames: list[StacktraceFrame] = []
+        for frame in exception_entry["data"]["values"][0]["stacktrace"]["frames"]:
+            frames.append(
+                StacktraceFrame(
+                    function=frame["function"],
+                    filename=frame["filename"],
+                    line_no=frame["lineNo"],
+                    col_no=frame["colNo"],
+                    context=frame["context"],
+                )
+            )
+
+        return Stacktrace(frames=frames)
 
 
 class IssueDetails(BaseModel):
