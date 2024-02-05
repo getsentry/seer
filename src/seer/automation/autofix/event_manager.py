@@ -68,7 +68,7 @@ class AutofixEventManager:
                     Step(
                         id="plan",
                         index=2,
-                        title="Generate Execution Plan",
+                        title="Execution Plan",
                         status="PENDING",
                     ),
                 ]
