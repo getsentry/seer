@@ -56,7 +56,8 @@ class Autofix:
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-            stacktrace = self.request.issue.events[-1].get_stacktrace()
+            events = self.request.issue.events
+            stacktrace = events[-1].get_stacktrace() if events else None
             if not stacktrace:
                 logger.warning(f"No stacktrace found for issue {self.request.issue.id}")
 
