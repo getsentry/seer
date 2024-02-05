@@ -116,7 +116,7 @@ class CodeActionTools(BaseTools):
         logger.debug(
             f"Getting file contents from Github for file_path: {file_path} from sha {self.codebase_context}"
         )
-        contents = self.context.get_file_contents(file_path, self.codebase_context)
+        contents = self.context.get_file_contents(file_path, self.codebase_context.base_sha)
 
         changes = list(filter(lambda x: x.path == file_path, self.file_changes))
         if changes:
