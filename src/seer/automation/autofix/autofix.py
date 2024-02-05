@@ -90,16 +90,17 @@ class Autofix:
             try:
                 self.autofix_context.load_codebase()
 
+                if not self.autofix_context.codebase_context:
+                    logger.warning(f"Failed to load codebase context")
+                    self.event_manager.send_codebase_indexing_result("ERROR")
+                    return
+
                 # Below is the short circuit logic to skip embedding the codebase context if the stacktrace
                 # does not contain any files that need to be re-indexed
                 needs_indexing = self.autofix_context.diff_contains_stacktrace_files(
                     self.stacktrace
                 )
                 if needs_indexing:
-                    assert (
-                        self.autofix_context.codebase_context is not None
-                    ), "Codebase context is not loaded"
-
                     logger.debug(f"Updating codebase index")
                     self.autofix_context.codebase_context.update_codebase_index()
                 else:
