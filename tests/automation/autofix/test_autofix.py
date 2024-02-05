@@ -15,7 +15,7 @@ from seer.automation.autofix.models import (
 class TestAutoFixRunFlow(unittest.TestCase):
     @patch("seer.automation.autofix.autofix.AutofixEventManager")
     @patch("seer.automation.autofix.autofix.RepoClient")
-    @patch("seer.automation.autofix.autofix.ContextManager")
+    @patch("seer.automation.autofix.autofix.AutofixContext")
     def test_problem_discovery_short_circuit(
         self,
         mock_context_manager,
@@ -77,11 +77,11 @@ class TestAutoFixRunFlow(unittest.TestCase):
                 reasoning="",
             )
         )
-        autofix.context_manager.load_codebase.assert_not_called()
+        autofix.autofix_context.load_codebase.assert_not_called()
 
     @patch("seer.automation.autofix.autofix.AutofixEventManager")
     @patch("seer.automation.autofix.autofix.RepoClient")
-    @patch("seer.automation.autofix.autofix.ContextManager")
+    @patch("seer.automation.autofix.autofix.AutofixContext")
     def test_stacktrace_files_short_circuit(
         self,
         mock_context_manager,
@@ -126,8 +126,8 @@ class TestAutoFixRunFlow(unittest.TestCase):
             rpc_client=MagicMock(),
         )
 
-        autofix.context_manager.diff_contains_stacktrace_files = MagicMock()
-        autofix.context_manager.diff_contains_stacktrace_files.return_value = False
+        autofix.autofix_context.diff_contains_stacktrace_files = MagicMock()
+        autofix.autofix_context.diff_contains_stacktrace_files.return_value = False
         autofix.run_problem_discovery_agent = MagicMock()
         autofix.run_problem_discovery_agent.return_value = ProblemDiscoveryOutput(
             actionability_score=1.0,
@@ -148,17 +148,17 @@ class TestAutoFixRunFlow(unittest.TestCase):
                 reasoning="",
             )
         )
-        autofix.context_manager.load_codebase.assert_called_once()
+        autofix.autofix_context.load_codebase.assert_called_once()
 
-        assert autofix.context_manager.codebase_context is not None
-        autofix.context_manager.codebase_context.update_codebase_index.assert_not_called()
+        assert autofix.autofix_context.codebase_context is not None
+        autofix.autofix_context.codebase_context.update_codebase_index.assert_not_called()
 
         autofix.run_planning_agent.assert_called_once()
         autofix.run_execution_agent.assert_not_called()
 
     @patch("seer.automation.autofix.autofix.AutofixEventManager")
     @patch("seer.automation.autofix.autofix.RepoClient")
-    @patch("seer.automation.autofix.autofix.ContextManager")
+    @patch("seer.automation.autofix.autofix.AutofixContext")
     def test_stacktrace_not_short_circuit(
         self,
         mock_context_manager,
@@ -203,8 +203,8 @@ class TestAutoFixRunFlow(unittest.TestCase):
             rpc_client=MagicMock(),
         )
 
-        autofix.context_manager.diff_contains_stacktrace_files = MagicMock()
-        autofix.context_manager.diff_contains_stacktrace_files.return_value = True
+        autofix.autofix_context.diff_contains_stacktrace_files = MagicMock()
+        autofix.autofix_context.diff_contains_stacktrace_files.return_value = True
         autofix.run_problem_discovery_agent = MagicMock()
         autofix.run_problem_discovery_agent.return_value = ProblemDiscoveryOutput(
             actionability_score=1.0,
@@ -225,10 +225,10 @@ class TestAutoFixRunFlow(unittest.TestCase):
                 reasoning="",
             )
         )
-        autofix.context_manager.load_codebase.assert_called_once()
+        autofix.autofix_context.load_codebase.assert_called_once()
 
-        assert autofix.context_manager.codebase_context is not None
-        autofix.context_manager.codebase_context.update_codebase_index.assert_called_once()
+        assert autofix.autofix_context.codebase_context is not None
+        autofix.autofix_context.codebase_context.update_codebase_index.assert_called_once()
 
         autofix.run_planning_agent.assert_called_once()
         autofix.run_execution_agent.assert_not_called()

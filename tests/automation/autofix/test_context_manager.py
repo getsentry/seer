@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from seer.automation.autofix.context_manager import ContextManager
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import Stacktrace, StacktraceFrame
 
 
@@ -11,7 +11,7 @@ class TestContextManager(unittest.TestCase):
         self.repo_name = "automation"
         self.base_sha = "abc123"
         self.mock_repo_client = MagicMock()
-        self.context_manager = ContextManager(self.mock_repo_client, self.base_sha)
+        self.autofix_context = AutofixContext(self.mock_repo_client, self.base_sha)
 
     def test_diff_contains_stacktrace_files_with_intersection(self):
         # Mock the get_commit_file_diffs method to return changed and removed files
@@ -28,7 +28,7 @@ class TestContextManager(unittest.TestCase):
             ]
         )
         # Check if the diff contains stacktrace files
-        self.assertTrue(self.context_manager.diff_contains_stacktrace_files(stacktrace))
+        self.assertTrue(self.autofix_context.diff_contains_stacktrace_files(stacktrace))
 
     def test_diff_contains_stacktrace_files_without_intersection(self):
         # Mock the get_commit_file_diffs method to return changed and removed files
@@ -45,7 +45,7 @@ class TestContextManager(unittest.TestCase):
             ]
         )
         # Check if the diff contains stacktrace files
-        self.assertFalse(self.context_manager.diff_contains_stacktrace_files(stacktrace))
+        self.assertFalse(self.autofix_context.diff_contains_stacktrace_files(stacktrace))
 
     def test_diff_contains_stacktrace_files_with_removed_file(self):
         # Mock the get_commit_file_diffs method to return changed and removed files
@@ -62,7 +62,7 @@ class TestContextManager(unittest.TestCase):
             ]
         )
         # Check if the diff contains stacktrace files
-        self.assertTrue(self.context_manager.diff_contains_stacktrace_files(stacktrace))
+        self.assertTrue(self.autofix_context.diff_contains_stacktrace_files(stacktrace))
 
     def test_diff_contains_stacktrace_files_raises_file_not_found(self):
         # Mock the get_commit_file_diffs method to raise FileNotFoundError
@@ -77,7 +77,7 @@ class TestContextManager(unittest.TestCase):
         )
         # Check if the diff contains stacktrace files raises FileNotFoundError
         with self.assertRaises(FileNotFoundError):
-            self.context_manager.diff_contains_stacktrace_files(stacktrace)
+            self.autofix_context.diff_contains_stacktrace_files(stacktrace)
 
 
 if __name__ == "__main__":

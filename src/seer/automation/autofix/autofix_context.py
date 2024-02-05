@@ -3,7 +3,7 @@ from seer.automation.autofix.models import Stacktrace
 from seer.automation.autofix.repo_client import RepoClient
 
 
-class ContextManager:
+class AutofixContext:
     codebase_context: CodebaseContext | None = None
     repo_client: RepoClient
 

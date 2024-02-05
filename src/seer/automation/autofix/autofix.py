@@ -9,8 +9,8 @@ from llama_index.schema import MetadataMode, NodeWithScore
 from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.singleturn import LlmClient
 from seer.automation.agent.types import Message, Usage
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.codebase_context import CodebaseContext
-from seer.automation.autofix.context_manager import ContextManager
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixOutput,
@@ -48,7 +48,7 @@ class Autofix:
         self.request = request
         self.usage = Usage()
         self.event_manager = AutofixEventManager(rpc_client, self.request.issue.id)
-        self.context_manager = ContextManager(
+        self.autofix_context = AutofixContext(
             RepoClient("getsentry", "sentry"), self.request.base_commit_sha
         )
 
@@ -87,20 +87,20 @@ class Autofix:
                 return
 
             try:
-                self.context_manager.load_codebase()
+                self.autofix_context.load_codebase()
 
                 # Below is the short circuit logic to skip embedding the codebase context if the stacktrace
                 # does not contain any files that need to be re-indexed
-                needs_indexing = self.context_manager.diff_contains_stacktrace_files(
+                needs_indexing = self.autofix_context.diff_contains_stacktrace_files(
                     self.stacktrace
                 )
                 if needs_indexing:
                     assert (
-                        self.context_manager.codebase_context is not None
+                        self.autofix_context.codebase_context is not None
                     ), "Codebase context is not loaded"
 
                     logger.debug(f"Updating codebase index")
-                    self.context_manager.codebase_context.update_codebase_index()
+                    self.autofix_context.codebase_context.update_codebase_index()
                 else:
                     logger.debug(f"Codebase does not need to be indexed")
 
@@ -311,10 +311,10 @@ class Autofix:
         ), "PlanningInput requires at least one of the fields: 'message', 'previous_output', or 'problem'."
 
         assert (
-            self.context_manager.codebase_context is not None
+            self.autofix_context.codebase_context is not None
         ), "Planning agent needs a codebase context to run."
 
-        planning_agent_tools = BaseTools(self.context_manager.codebase_context)
+        planning_agent_tools = BaseTools(self.autofix_context.codebase_context)
 
         planning_agent = GptAgent(
             name="planner",
@@ -395,13 +395,13 @@ class Autofix:
         file_changes: list[FileChange] = [],
     ):
         assert (
-            self.context_manager.codebase_context is not None
+            self.autofix_context.codebase_context is not None
         ), "Execution agent needs a codebase context to run."
 
         # TODO: make this more robust
         try:
             context_dump = self._get_plan_step_context(
-                plan_item, self.context_manager.codebase_context
+                plan_item, self.autofix_context.codebase_context
             )
         except Exception as e:
             logger.error(f"Failed to get context for plan item: {e}")
@@ -409,7 +409,7 @@ class Autofix:
             context_dump = ""
 
         code_action_tools = CodeActionTools(
-            self.context_manager.codebase_context,
+            self.autofix_context.codebase_context,
         )
         code_action_tools.file_changes = file_changes
         execution_agent = GptAgent(
