@@ -63,17 +63,22 @@ class CodebaseContext:
 
     @staticmethod
     def get_cached_commit_sha() -> str | None:
-        cached_commit_sha = None
-        with open(CACHED_COMMIT_JSON_PATH, "r") as file:
-            cached_commit_data = json.load(file)
-            cached_commit_sha = cached_commit_data.get("sha")
-
-        return cached_commit_sha
+        try:
+            with open(CACHED_COMMIT_JSON_PATH, "r") as file:
+                cached_commit_data = json.load(file)
+                cached_commit_sha = cached_commit_data.get("sha")
+                return cached_commit_sha
+        except IOError:
+            logger.error(f"Failed to read cached commit file: {CACHED_COMMIT_JSON_PATH}")
+            return None
 
     @staticmethod
     def set_cached_commit_sha(sha: str):
-        with open(CACHED_COMMIT_JSON_PATH, "w") as sha_file:
-            json.dump({"sha": sha}, sha_file)
+        try:
+            with open(CACHED_COMMIT_JSON_PATH, "w") as sha_file:
+                json.dump({"sha": sha}, sha_file)
+        except IOError:
+            logger.error(f"Failed to write cached commit file: {CACHED_COMMIT_JSON_PATH}")
 
     def _embed_and_index_nodes(self, nodes: list[BaseNode]) -> VectorStoreIndex:
         service_context = ServiceContext.from_defaults(embed_model=self.embed_model)
