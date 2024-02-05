@@ -348,7 +348,7 @@ class CodebaseContext:
                 self.documents.append(document)
                 self.nodes.extend(new_nodes)
 
-    def get_file_contents(self, path, ref):
+    def get_file_contents(self, path: str, ref: str):
         logger.debug(
             f"Getting file contents for {path} in {self.repo_client.repo.full_name} on ref {ref}"
         )
