@@ -69,7 +69,7 @@ class GroupingLookup:
             model_path (str): Path to the sentence transformer model.
             data_path (str): Path to the preprocessed data with stacktrace embeddings.
         """
-        self.model = SentenceTransformer(model_path)
+        self.model = SentenceTransformer(model_path, trust_remote_code=True)
         with open(data_path, "rb") as file:
             self.data = pickle.load(file)
         self.indexes = self.create_indexes()

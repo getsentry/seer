@@ -49,7 +49,7 @@ def embeddings_model() -> SeverityInference:
 @functools.cache
 def grouping_lookup() -> GroupingLookup:
     return GroupingLookup(
-        model_path=model_path("issue_grouping_v0/embeddings"),
+        model_path="jinaai/jina-embeddings-v2-base-code",  # TODO: local .onnx model path
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
