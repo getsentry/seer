@@ -148,14 +148,7 @@
             "$ref": "#/components/schemas/IssueDetails"
           },
           "base_commit_sha": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Base Commit Sha"
           },
           "additional_context": {
@@ -173,8 +166,7 @@
         "type": "object",
         "required": [
           "issue",
-          "base_commit_sha",
-          "additional_context"
+          "base_commit_sha"
         ],
         "title": "AutofixRequest"
       },
@@ -384,6 +376,10 @@
             "type": "integer",
             "title": "Group Id"
           },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
           "stacktrace": {
             "type": "string",
             "title": "Stacktrace"
@@ -406,6 +402,7 @@
         "type": "object",
         "required": [
           "group_id",
+          "project_id",
           "stacktrace",
           "message"
         ],
@@ -449,7 +446,7 @@
       "IssueDetails": {
         "properties": {
           "id": {
-            "type": "string",
+            "type": "integer",
             "title": "Id"
           },
           "title": {

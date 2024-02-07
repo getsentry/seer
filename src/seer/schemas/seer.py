@@ -14,7 +14,7 @@ AutofixRequest = typing_extensions.TypedDict(
     "AutofixRequest",
     {
         "issue": "IssueDetails",
-        "base_commit_sha": typing.Union[str, None],
+        "base_commit_sha": str,
         "additional_context": typing.Union[str, None],
     },
     total=False,
@@ -84,6 +84,7 @@ GroupingRequest = typing_extensions.TypedDict(
     "GroupingRequest",
     {
         "group_id": int,
+        "project_id": int,
         "stacktrace": str,
         "message": str,
         # default: 1
@@ -108,7 +109,7 @@ GroupingResponse = typing_extensions.TypedDict(
 IssueDetails = typing_extensions.TypedDict(
     "IssueDetails",
     {
-        "id": str,
+        "id": int,
         "title": str,
         "events": typing.List["SentryEvent"],
     },
