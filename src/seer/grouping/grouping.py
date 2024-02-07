@@ -102,7 +102,7 @@ class GroupingLookup:
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
-        Encodes a stacktrace into an embedding and normalizes the result.
+        Adds a new stacktrace embedding to the index for the specific project and updates the dataset.
 
         Args:
             stacktrace (str): The stacktrace to encode.
@@ -125,7 +125,9 @@ class GroupingLookup:
             None
         """
         self.data = pd.concat([self.data, pd.DataFrame([new_record.dict()])], ignore_index=True)
-        self.index.add(np.array([new_record.embeddings], dtype="float32"))
+        project_index = self.indexes[new_record.project_id]
+        project_index.add(np.array([new_record.embeddings], dtype="float32"))
+        self.indexes[new_record.project_id] = project_index
 
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
@@ -147,7 +149,7 @@ class GroupingLookup:
         embedding = self.encode_text(issue.stacktrace).astype("float32")
         embedding = np.expand_dims(embedding, axis=0)
         # Find one extra neighbor to account for the issue itself
-        distances, indices = self.index.search(embedding, k=issue.k + 1)
+        distances, indices = index.search(embedding, k=issue.k + 1)
         similarity_response = SimilarityResponse(responses=[])
 
         for i in range(indices.shape[1]):
@@ -179,6 +181,7 @@ class GroupingLookup:
             if not nearest_neighbor.should_group:
                 new_record = GroupingRecord(
                     group_id=issue.group_id,
+                    project_id=issue.project_id,
                     embeddings=np.squeeze(embedding),
                     message=issue.message,
                     stacktrace=issue.stacktrace,
