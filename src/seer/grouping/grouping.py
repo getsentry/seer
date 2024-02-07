@@ -1,16 +1,17 @@
 import difflib
 import pickle
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import faiss  # type: ignore
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ValidationError, ValidationInfo, field_validator, validator
+from pydantic import BaseModel, ValidationInfo, field_validator, validator
 from sentence_transformers import SentenceTransformer
 
 
 class GroupingRequest(BaseModel):
     group_id: int
+    project_id: int
     stacktrace: str
     message: str
     k: int = 1
@@ -26,6 +27,7 @@ class GroupingRequest(BaseModel):
 
 class GroupingRecord(BaseModel):
     group_id: int
+    project_id: int
     stacktrace: str
     message: str
     embeddings: Any
@@ -60,8 +62,8 @@ class GroupingLookup:
 
     def __init__(self, model_path: str, data_path: str):
         """
-        Initializes the GroupingLookup with the model and preprocessed data. Generates
-        faiss index for similarity search.
+        Initializes the GroupingLookup with the model and preprocessed data. Creates
+        FAISS indexes for similarity search for each unique project ID in the dataset.
 
         Args:
             model_path (str): Path to the sentence transformer model.
@@ -70,10 +72,33 @@ class GroupingLookup:
         self.model = SentenceTransformer(model_path)
         with open(data_path, "rb") as file:
             self.data = pickle.load(file)
-        embeddings = np.vstack(self.data["embeddings"].values).astype("float32")
-        faiss.normalize_L2(embeddings)
-        self.index = faiss.IndexFlatIP(embeddings.shape[1])
-        self.index.add(embeddings)
+        self.indexes = self.create_indexes()
+
+    def create_indexes(self) -> Dict[int, faiss.IndexFlatIP]:
+        """
+        Creates FAISS indexes for each unique project ID in the provided dataset.
+
+        This method iterates over each unique project ID in the dataset, extracts the corresponding
+        embeddings, and creates a FAISS index for each project. The indexes are stored in a dictionary
+        with the project IDs as keys.
+
+        Args:
+            data (pd.DataFrame): The dataset containing stacktrace embeddings and project IDs.
+
+        Returns:
+            dict: A dictionary of FAISS indexes with project IDs as keys.
+        """
+        indexes = {}
+        for project_id in self.data["project_id"].unique():
+            project_embeddings = self.data[self.data["project_id"] == project_id][
+                "embeddings"
+            ].values
+            embeddings_matrix = np.vstack(project_embeddings).astype("float32")
+            faiss.normalize_L2(embeddings_matrix)
+            index = faiss.IndexFlatIP(embeddings_matrix.shape[1])
+            index.add(embeddings_matrix)
+            indexes[project_id] = index
+        return indexes
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
@@ -104,7 +129,7 @@ class GroupingLookup:
 
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
-        Retrieves the k nearest neighbors for a stacktrace and determines if they should be grouped,
+        Retrieves the k nearest neighbors for a stacktrace within the same project and determines if they should be grouped,
         ensuring that an issue is not grouped with itself.
 
         Args:
@@ -115,6 +140,10 @@ class GroupingLookup:
             SimilarityResponse: A SimilarityResponse object containing a list of GroupingResponse objects with the nearest group IDs,
                                 stacktrace similarity scores, message similarity scores, and grouping flags.
         """
+        # Get the project data and index for the issue's project
+        project_data = self.data[self.data["project_id"] == issue.project_id]
+        index = self.indexes[issue.project_id]
+
         embedding = self.encode_text(issue.stacktrace).astype("float32")
         embedding = np.expand_dims(embedding, axis=0)
         # Find one extra neighbor to account for the issue itself
