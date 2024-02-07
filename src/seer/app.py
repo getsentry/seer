@@ -48,6 +48,8 @@ def embeddings_model() -> SeverityInference:
 
 @functools.cache
 def grouping_lookup() -> GroupingLookup:
+    if os.environ.get("GROUPING_ENABLED") != "true":
+        raise ValueError("Grouping is not enabled")
     return GroupingLookup(
         model_path="jinaai/jina-embeddings-v2-base-code",  # TODO: local .onnx model path
         data_path=model_path("issue_grouping_v0/data.pkl"),
@@ -130,5 +132,6 @@ register_json_api_views(app)
 def run(environ: dict, start_response: Callable) -> Any:
     # Force preload
     embeddings_model()
-    grouping_lookup()
+    if os.environ.get("GROUPING_ENABLED") == "true":
+        grouping_lookup()
     return app(environ, start_response)
