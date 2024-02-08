@@ -30,7 +30,7 @@ class LlmClient:
         self,
         model: str,
         messages: list[Message],
-        parser: Callable[[str], Any],
+        parser=safe_json_loads,
         **chat_completion_kwargs,
     ):
         response_message, usage = self.completion(model, messages, **chat_completion_kwargs)
