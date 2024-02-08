@@ -26,7 +26,12 @@ class LlmClient:
 
         return response_message, usage
 
-    def completion_with_parser(
+    def safe_json_loads(s: str):
+    if not s.strip():
+        return {}  # Return an empty dictionary if the string is empty or contains only whitespace
+    return json.loads(s)
+
+def completion_with_parser(
         self,
         model: str,
         messages: list[Message],
