@@ -17,6 +17,7 @@ from llama_index.schema import BaseNode, Document
 from llama_index.storage import StorageContext
 
 from seer.automation.autofix.repo_client import RepoClient
+from github import UnknownObjectException
 from seer.automation.autofix.utils import (
     MemoryVectorStore,
     SentenceTransformersEmbedding,
