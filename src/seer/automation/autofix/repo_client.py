@@ -8,6 +8,7 @@ import sentry_sdk
 from github import Auth, Github, GithubIntegration
 from github.GitRef import GitRef
 from github.Repository import Repository
+from github import UnknownObjectException
 from unidiff import PatchSet
 
 from seer.automation.agent.types import Usage
