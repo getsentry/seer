@@ -6,6 +6,7 @@ from typing import List
 import requests
 import sentry_sdk
 from github import Auth, Github, GithubIntegration
+from github import UnknownObjectException
 from github.GitRef import GitRef
 from github.Repository import Repository
 from unidiff import PatchSet
@@ -144,7 +145,10 @@ class RepoClient:
 
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
-            self.repo.get_git_ref(branch_ref.ref).delete()
+            try:
+                self.repo.get_git_ref(branch_ref.ref).delete()
+            except UnknownObjectException:
+                logger.warning("Attempted to delete a branch or reference that does not exist.")
             sentry_sdk.capture_message(
                 f"Failed to create branch from changes. Comparison is ahead by {comparison.ahead_by}"
             )
