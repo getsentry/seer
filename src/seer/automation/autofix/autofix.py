@@ -359,6 +359,11 @@ class Autofix:
         logger.debug(f"Getting context for plan item: {plan_item}")
 
         # Identify good search queries for the plan item
+        # Validate JSON string before parsing
+        if not plan_item.text.strip():
+            logger.warning('Plan item text is empty, returning default dictionary.')
+            return {}
+
         resp: tuple[list[str], Usage] = LlmClient().completion_with_parser(
             model="gpt-4-0125-preview",
             messages=[
