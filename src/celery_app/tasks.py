@@ -26,7 +26,7 @@ def run_autofix(data: dict[str, Any]) -> None:
     client = SentryRpcClient(base_url)
 
     with sentry_sdk.start_span(
-        op="seer.automation.autofix",
+        op="seer.automation.just_a_test",
         description="Run autofix on an issue within celery task",
     ):
         request = AutofixRequest(**data)
