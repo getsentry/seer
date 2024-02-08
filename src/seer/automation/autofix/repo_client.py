@@ -6,6 +6,7 @@ from typing import List
 import requests
 import sentry_sdk
 from github import Auth, Github, GithubIntegration
+from github import UnknownObjectException
 from github.GitRef import GitRef
 from github.Repository import Repository
 from unidiff import PatchSet
