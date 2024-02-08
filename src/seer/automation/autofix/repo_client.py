@@ -144,7 +144,11 @@ class RepoClient:
 
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
-            self.repo.get_git_ref(branch_ref.ref).delete()
+            try:
+                self.repo.get_git_ref(branch_ref.ref).delete()
+            except UnknownObjectException:
+                logger.info("Attempted to delete a non-existent git reference.")
+                return None
             sentry_sdk.capture_message(
                 f"Failed to create branch from changes. Comparison is ahead by {comparison.ahead_by}"
             )
