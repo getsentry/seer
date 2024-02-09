@@ -39,7 +39,7 @@ jobs:
         gcloud storage cp -r gs://tmp_tillman/models ./
     - name: Build image
       run: |
-        make image
+        make update
     - name: Check schema
       run: |
         make schemas

@@ -9,6 +9,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 
 from celery_app.tasks import run_autofix
 from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
+from seer.db import Session, db, migrate
 from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
@@ -32,6 +33,11 @@ sentry_sdk.init(
     enable_tracing=True,
 )
 app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
+
+db.init_app(app)
+migrate.init_app(app, db)
+
 root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
 
 
@@ -130,7 +136,9 @@ register_json_api_views(app)
 
 
 def run(environ: dict, start_response: Callable) -> Any:
-    # Force preload
+    with app.app_context():
+        Session.configure(bind=db.engine)
+
     embeddings_model()
     if os.environ.get("GROUPING_ENABLED") == "true":
         grouping_lookup()

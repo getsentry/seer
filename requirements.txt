@@ -7,7 +7,7 @@ cycler==0.11.0
 Cython==3.0.2
 ephem==4.1.4
 filelock==3.12.2
-Flask==2.1.1
+Flask==2.2.5
 fonttools==4.42.1
 fsspec==2023.6.0
 gunicorn==20.1.0
@@ -88,3 +88,9 @@ redis==5.0.1
 faiss-cpu==1.7.4
 unidiff==0.7.5
 transformers==4.37.2
+psycopg==3.1.18
+pgvector==0.2.4
+sqlalchemy==2.0.25
+Flask-Migrate==4.0.5
+Flask-SQLAlchemy==3.1.1
+types-Flask-Migrate==4.0.0.20240205
