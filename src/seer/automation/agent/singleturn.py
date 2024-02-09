@@ -36,4 +36,8 @@ class LlmClient:
         **chat_completion_kwargs,
     ):
         response_message, usage = self.completion(model, messages, **chat_completion_kwargs)
-        return parser(response_message), usage
+        if response_message.strip():
+            return parser(response_message), usage
+        else:
+            logging.error('Empty response received, cannot parse as JSON.');
+            return {}, usage
