@@ -42,6 +42,21 @@ pipelines:
                                     "us.gcr.io/sentryio/seer"
             - deploy:
                   jobs:
+                    run-migrations:
+                      tasks:
+                        - script: |
+                            echo "running flask db upgrade" \
+                            && /devinfra/scripts/k8s/k8stunnel \
+                            && /devinfra/scripts/k8s/k8s-spawn-job.py \
+                            --container-name="seer" \
+                            --label-selector="service=seer" \
+                            "seer-run-migrations" \
+                            "us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
+                            -- \
+                            flask \
+                            db \
+                            upgrade
+
                       deploy:
                           timeout: 1200
                           elastic_profile_id: timeseries-analysis-service

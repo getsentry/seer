@@ -5,12 +5,28 @@ services:
         ports:
             - "5672:5672"
             - "15672:15672"
+    db:
+        image: pgvector/pgvector:pg14
+        restart: always
+        environment:
+            POSTGRES_USER: root
+            POSTGRES_PASSWORD: seer
+            POSTGRES_DB: seer
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        ports:
+            - "5433:5432"
     app:
         build:
             context: .
         working_dir: /app
+        volumes:
+            -   ./src:/app/src
+            -   ./tests:/app/tests
+            -   ./models:/app/models
         depends_on:
             - rabbitmq
+            - db
         env_file:
             - .env
         environment:
@@ -18,5 +34,9 @@ services:
             - SENTRY_BASE_URL=http://host.docker.internal:8000
             - CELERY_BROKER_URL=amqp://guest:guest@host.docker.internal:5672//
             - CELERY_WORKER_ENABLE=true # Enable celery worker
+            - DATABASE_URL=postgresql+psycopg://root:seer@db/seer
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
+
+volumes:
+    pgdata:

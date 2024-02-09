@@ -36,4 +36,6 @@ COPY supervisord.conf /etc/supervisord.conf
 RUN pip install --default-timeout=120 -e .
 RUN mypy
 
+ENV FLASK_APP=src.seer.app
+
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
