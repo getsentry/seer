@@ -33,7 +33,9 @@ sentry_sdk.init(
     enable_tracing=True,
 )
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL", "postgresql+psycopg://postgres:@127.0.0.1:6432/seer"
+)
 
 db.init_app(app)
 migrate.init_app(app, db)
