@@ -52,4 +52,4 @@ migration: .env
 	docker-compose run app flask db migrate -m 'Migration'
 
 .env:
-	cp .env.template .env
+	cp .env.example .env
