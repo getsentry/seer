@@ -374,6 +374,10 @@ class Autofix:
 
         logger.debug(f"Search queries: {queries}")
 
+        # Validate input string is not empty before parsing
+        if not plan_item.text.strip():
+            logger.error('Received an empty string, expected JSON format.')
+            return {}
         context_dump = ""
         unique_nodes: dict[str, NodeWithScore] = {}
         for query in queries:
@@ -408,7 +412,11 @@ class Autofix:
         except Exception as e:
             logger.error(f"Failed to get context for plan item: {e}")
             sentry_sdk.capture_exception(e)
-            context_dump = ""
+            # Validate input string is not empty before parsing
+        if not plan_item.text.strip():
+            logger.error('Received an empty string, expected JSON format.')
+            return {}
+        context_dump = ""
 
         code_action_tools = CodeActionTools(
             self.autofix_context.codebase_context,
