@@ -36,6 +36,7 @@ class ProcessRequest(Base):
     for is the same as when the work was acquired.
     """
 
+    __tablename__ = "process_request"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True, nullable=False)
     scheduled_for: Mapped[datetime.datetime] = mapped_column(
