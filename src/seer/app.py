@@ -57,7 +57,7 @@ def grouping_lookup() -> GroupingLookup:
     if os.environ.get("GROUPING_ENABLED") != "true":
         raise ValueError("Grouping is not enabled")
     return GroupingLookup(
-        model_path=model_path("issue_grouping_v0/embeddings"),  # TODO: local .onnx model path
+        model_path=model_path("issue_grouping_v0/embeddings"),
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
