@@ -8,8 +8,8 @@ from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
-from seer.db import Session, db, migrate
 from seer.automation.autofix.tasks import run_autofix
+from seer.db import Session, db, migrate
 from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
