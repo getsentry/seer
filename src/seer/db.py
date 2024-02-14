@@ -8,14 +8,15 @@ from sqlalchemy import JSON, DateTime, Integer, String, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-# Initialized in src/app.run
-db: SQLAlchemy = SQLAlchemy()
-migrate = Migrate(directory="src/migrations")
-Session = sessionmaker()
-
 
 class Base(DeclarativeBase):
     pass
+
+
+# Initialized in src/app.run
+db: SQLAlchemy = SQLAlchemy(model_class=Base)
+migrate = Migrate(directory="src/migrations")
+Session = sessionmaker()
 
 
 class ProcessRequest(Base):
