@@ -368,7 +368,7 @@ class Autofix:
                     content=PlanningPrompts.format_plan_item_query_default_msg(plan_item=plan_item),
                 ),
             ],
-            parser=lambda x: json.loads(x),
+            parser=lambda x: json.loads(x) if x.strip() else {},
         )
         queries: list[str] = resp[0]
 
