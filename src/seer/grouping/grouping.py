@@ -69,7 +69,7 @@ class GroupingLookup:
             model_path (str): Path to the sentence transformer model.
             data_path (str): Path to the preprocessed data with stacktrace embeddings.
         """
-        self.model = SentenceTransformer(model_path)
+        self.model = SentenceTransformer(model_path, trust_remote_code=True)
         with open(data_path, "rb") as file:
             self.data = pickle.load(file)
         self.indexes = self.create_indexes()
@@ -124,9 +124,10 @@ class GroupingLookup:
         Returns:
             None
         """
+        new_embedding_normalized = new_record.embeddings / np.linalg.norm(new_record.embeddings)
         self.data = pd.concat([self.data, pd.DataFrame([new_record.dict()])], ignore_index=True)
         project_index = self.indexes[new_record.project_id]
-        project_index.add(np.array([new_record.embeddings], dtype="float32"))
+        project_index.add(np.array([new_embedding_normalized], dtype="float32"))
         self.indexes[new_record.project_id] = project_index
 
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
@@ -153,12 +154,12 @@ class GroupingLookup:
         similarity_response = SimilarityResponse(responses=[])
 
         for i in range(indices.shape[1]):
-            group_id = self.data.iloc[indices[0][i]]["group_id"]
+            group_id = project_data.iloc[indices[0][i]]["group_id"]
             if group_id == issue.group_id:
                 continue  # Skip if the found group is the same as the issue's group
 
             stacktrace_similarity_score = distances[0][i]
-            neighboring_message = self.data.iloc[indices[0][i]]["message"]
+            neighboring_message = project_data.iloc[indices[0][i]]["message"]
             message_similarity_score = difflib.SequenceMatcher(
                 None, issue.message, neighboring_message
             ).ratio()
