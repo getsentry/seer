@@ -14,7 +14,7 @@ Set the environment variables that are in `.env.example` with the actual values,
 
 ### Model Artifacts
 
-You will need model artifacts to run inference in seer (duh!), get them from gcs by:
+You will need model artifacts to run inference in seer, get them from gcs by:
 
 ```bash
 gsutil cp -r gs://tmp_tillman/models ./models
