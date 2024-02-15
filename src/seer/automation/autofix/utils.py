@@ -196,14 +196,6 @@ def escape_multi_xml(s: str, tags: List[str]) -> str:
     return s
 
 
-def get_torch_device():
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
-
-
 def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
     """
     Extract the text from an XML element with the given tag.

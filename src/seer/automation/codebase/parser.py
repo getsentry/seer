@@ -7,10 +7,9 @@ import numpy as np
 import tree_sitter_languages
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
-from sentence_transformers.util import cos_sim
 from tree_sitter import Node
 
-from seer.automation.codebase.models import Document, DocumentChunkWithEmbedding
+from seer.automation.codebase.models import Document, DocumentChunk
 
 logger = logging.getLogger("autofix")
 
@@ -117,17 +116,6 @@ class TempChunk(BaseModel):
         )
 
 
-class TempChunkWithEmbedding(TempChunk):
-    embedding: np.ndarray
-    embeddings_are_meaned: bool = False
-
-    def __add__(self, other: "TempChunkWithEmbedding"):
-        return TempChunkWithEmbedding(
-            **super().__add__(other).model_dump(),
-            embedding=np.mean([self.embedding, other.embedding], axis=0),
-        )
-
-
 class DocumentParser:
     def __init__(self, embedding_model: SentenceTransformer, language: str = "python"):
         self.parser = tree_sitter_languages.get_parser(language)
@@ -151,7 +139,7 @@ class DocumentParser:
         parent_declarations: list[ParentDeclaration] = [],
         root_node: Node | None = None,
         last_end_byte=0,
-    ) -> list[TempChunkWithEmbedding]:
+    ) -> list[TempChunk]:
         """
         This function takes a list of nodes and chunks them by start-end points that are touching.
         Touching nodes are those where the end point of one node is adjacent to the start point of the next node.
@@ -167,7 +155,7 @@ class DocumentParser:
         root_node = root_node or node
 
         # Initialize the first chunk
-        chunks: list[TempChunk | TempChunkWithEmbedding] = []
+        chunks: list[TempChunk] = []
         chunk_token_count = 0
 
         parent_declarations = parent_declarations.copy()
@@ -197,23 +185,18 @@ class DocumentParser:
                 )
 
                 if len(children_with_embeddings) > 0:
-                    # We only merge neighboring chunks within the same "context"
-                    merged_child_chunks = self.merge_neighbor_chunks(
-                        root_node, children_with_embeddings
-                    )
-
                     # This case is for when the first chunk of the children is touching the last chunk of the current chunks
                     # Usually when the definition of the parent is split from its children
                     # This combines the first logical chunk with its parent definition line.
-                    if len(chunks) > 0 and is_touching_last(merged_child_chunks[0].nodes[0]):
-                        merged_chunk = chunks[-1] + merged_child_chunks[0]
+                    if len(chunks) > 0 and is_touching_last(children_with_embeddings[0].nodes[0]):
+                        merged_chunk = chunks[-1] + children_with_embeddings[0]
 
                         # This forces the merged chunk to be re-embedded
                         chunks[-1] = TempChunk(**merged_chunk.model_dump())
-                        if len(merged_child_chunks) > 1:
-                            chunks.extend(merged_child_chunks[1:])
+                        if len(children_with_embeddings) > 1:
+                            chunks.extend(children_with_embeddings[1:])
                     else:
-                        chunks.extend(merged_child_chunks)
+                        chunks.extend(children_with_embeddings)
 
                     chunk_token_count = self._get_chunk_tokens(chunks[-1], root_node)
                     last_end_byte = chunks[-1].nodes[-1].end_byte
@@ -235,7 +218,6 @@ class DocumentParser:
             chunk_token_count = token_count
             last_end_byte = children[i].end_byte
 
-        chunks_with_embeddings = []
         for chunk in chunks:
             # Filter out the declarations that are already in the chunk
             chunk.parent_declarations = [
@@ -243,60 +225,6 @@ class DocumentParser:
                 for d in chunk.parent_declarations
                 if not set(d.declaration_nodes).intersection(chunk.nodes)
             ]
-
-            # Embed any remaining chunks
-            if isinstance(chunk, TempChunkWithEmbedding):
-                chunks_with_embeddings.append(chunk)
-            else:
-                chunks_with_embeddings.append(
-                    TempChunkWithEmbedding(
-                        **chunk.model_dump(), embedding=self._get_chunk_embedding(chunk, root_node)
-                    )
-                )
-
-        return chunks_with_embeddings
-
-    def _encode(self, text: str) -> np.ndarray:
-        return self.embedding_model.encode(text, convert_to_numpy=True, show_progress_bar=False)  # type: ignore
-
-    def _get_chunk_embedding(self, chunk: TempChunk, root: Node) -> np.ndarray:
-        chunk_text = chunk.get_dump_for_embedding(root)
-
-        return self._encode(chunk_text)
-
-    def merge_neighbor_chunks(
-        self, root: Node, chunks: list[TempChunkWithEmbedding], similarity_threshold: float = 0.7
-    ) -> list[TempChunkWithEmbedding]:
-        """
-        Merges neighboring chunks in a top-down manner based on their cosine similarity.
-        """
-        chunks = chunks.copy()
-
-        i = 0
-        while i < len(chunks) - 1:
-            current_chunk_embeddings = chunks[i].embedding
-            next_chunk_embeddings = chunks[i + 1].embedding
-
-            similarity = cos_sim(current_chunk_embeddings, next_chunk_embeddings)[0][0].item()  # type: ignore
-
-            new_chunk = chunks[i] + chunks[i + 1]
-            if (
-                similarity > similarity_threshold
-                and self._get_chunk_tokens(new_chunk, root) < self.max_tokens
-            ):
-                # We re-embed the new merged chunk so the next iteration computes similarity with the whole chunk list
-                # chunks_with_embeddings[i] = (new_chunk, get_embedding(new_chunk, root), False)
-                new_chunk.embeddings_are_meaned = True
-                chunks[i] = new_chunk
-                del chunks[i + 1]
-            else:
-                i += 1
-
-        # Re-embed chunks that were merged and meaned
-        for chunk in chunks:
-            if chunk.embeddings_are_meaned:
-                chunk.embedding = self._get_chunk_embedding(chunk, root)
-                chunk.embeddings_are_meaned = False
 
         return chunks
 
@@ -374,12 +302,12 @@ class DocumentParser:
                 )
         return None
 
-    def _chunk_document(self, document: Document) -> list[DocumentChunkWithEmbedding]:
+    def _chunk_document(self, document: Document) -> list[DocumentChunk]:
         tree = self.parser.parse(bytes(document.text, "utf-8"))
 
         chunked_documents = self._chunk_nodes_by_whitespace(tree.root_node)
 
-        chunks: list[DocumentChunkWithEmbedding] = []
+        chunks: list[DocumentChunk] = []
         last_line = 1
 
         for i, tmp_chunk in enumerate(chunked_documents):
@@ -387,16 +315,16 @@ class DocumentParser:
             chunk_text = tmp_chunk.get_content(tree.root_node).strip("\n")
             embedding_dump = tmp_chunk.get_dump_for_embedding(tree.root_node)
 
-            chunk = DocumentChunkWithEmbedding(
+            chunk = DocumentChunk(
                 index=i,
                 first_line_number=last_line,
                 context=context_text,
                 content=chunk_text,
                 path=document.path,
-                # Hash dump should be unique to the entire codebase
+                # Hash should be unique to the file, it is used in comparing which chunks changed
                 hash=self._generate_sha256_hash(f"[{document.path}][{i}]\n{embedding_dump}"),
                 token_count=self._get_str_token_count(embedding_dump),
-                embedding=tmp_chunk.embedding,
+                repo_id=document.repo_id,
             )
 
             last_line += len(chunk_text.split("\n"))
@@ -408,7 +336,7 @@ class DocumentParser:
     def _generate_sha256_hash(self, text: str):
         return hashlib.sha256(text.encode("utf-8"), usedforsecurity=False).hexdigest()
 
-    def process_document(self, document: Document) -> list[DocumentChunkWithEmbedding]:
+    def process_document(self, document: Document) -> list[DocumentChunk]:
         """
         Process a document by chunking it into smaller pieces and extracting metadata about each chunk.
         """
@@ -418,7 +346,7 @@ class DocumentParser:
 
         return chunks
 
-    def process_documents(self, documents: list[Document]) -> list[DocumentChunkWithEmbedding]:
+    def process_documents(self, documents: list[Document]) -> list[DocumentChunk]:
         """
         Process a list of documents by chunking them into smaller pieces and extracting metadata about each chunk.
         """

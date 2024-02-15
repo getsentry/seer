@@ -21,6 +21,8 @@ from seer.automation.autofix.models import (
     ProblemDiscoveryOutput,
     ProblemDiscoveryRequest,
     ProblemDiscoveryResult,
+    PullRequestResult,
+    RepoDefinition,
     Stacktrace,
 )
 from seer.automation.autofix.prompts import (
@@ -49,11 +51,10 @@ class Autofix:
         self.usage = Usage()
         self.event_manager = event_manager
 
-        repo_client = RepoClient(request.repo_provider, request.repo_owner, request.repo_name)
         self.context = AutofixContext(
             request.organization_id,
             request.project_id,
-            repo_client,
+            request.repos,
         )
 
     def run(self) -> None:
@@ -93,31 +94,25 @@ class Autofix:
                 logger.info(f"Problem is not actionable")
                 return
 
-            if self.context.codebase.repo_info is None:
-                logger.info(
-                    f"Creating codebase index for repo {self.context.codebase.repo_client.repo_name}"
-                )
-                self.event_manager.send_codebase_creation_message()
-                self.context.codebase.create()
-                self.event_manager.send_codebase_indexing_result("COMPLETED")
-                logger.info(
-                    f"Codebase index created for repo {self.context.codebase.repo_client.repo_name}"
-                )
-            else:
-                if self.context.codebase.is_behind():
-                    if self.context.diff_contains_stacktrace_files(self.stacktrace):
+            for repo in self.request.repos:
+                if not self.context.has_codebase_index(repo):
+                    logger.info(f"Creating codebase index for repo {repo.repo_name}")
+                    self.event_manager.send_codebase_creation_message()
+                    self.context.create_codebase_index(repo)
+                    self.event_manager.send_codebase_indexing_result("COMPLETED")
+                    logger.info(f"Codebase index created for repo {repo.repo_name}")
+
+            for repo_id, codebase in self.context.codebases.items():
+                if codebase.is_behind():
+                    if self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace):
                         logger.debug(f"Waiting for codebase index update")
                         self.event_manager.send_codebase_indexing_message()
-                        self.context.codebase.update()
+                        codebase.update()
                         self.event_manager.send_codebase_indexing_result("COMPLETED")
                         logger.debug(f"Codebase index updated")
                     else:
                         update_codebase_index.apply_async(
-                            (
-                                UpdateCodebaseTaskRequest(
-                                    repo_id=self.context.codebase.repo_info.id
-                                ).model_dump(),
-                            ),
+                            (UpdateCodebaseTaskRequest(repo_id=repo_id).model_dump(),),
                             countdown=3 * 60,
                         )  # 3 minutes
                         logger.info(f"Codebase indexing scheduled for later")
@@ -126,35 +121,16 @@ class Autofix:
                     logger.debug(f"Codebase is up to date")
                     self.event_manager.send_codebase_creation_skip()
 
-            if not self.context.codebase.repo_info:
-                logger.warning(f"Failed to create codebase index")
+            if not self.context.codebases:
+                logger.warning(f"No codebase indexes")
                 sentry_sdk.capture_message(
-                    f"Failed to create codebase index for repo {self.context.codebase.repo_client.repo_name}"
+                    f"No codebases found for organization {self.request.organization_id} and project {self.request.project_id}'s repos: {', '.join([repo.repo_name for repo in self.request.repos])}"
                 )
                 self.event_manager.mark_running_steps_errored()
                 self.event_manager.send_autofix_complete(None)
                 return
 
-            if self.context.codebase.is_behind():
-                if self.context.diff_contains_stacktrace_files(self.stacktrace):
-                    logger.debug(f"Waiting for codebase index update")
-                    self.context.codebase.update()
-                    self.event_manager.send_codebase_indexing_result("COMPLETED")
-                    logger.debug(f"Codebase index updated")
-                else:
-                    update_codebase_index.apply_async(
-                        (
-                            UpdateCodebaseTaskRequest(
-                                repo_id=self.context.codebase.repo_info.id
-                            ).model_dump(),
-                        ),
-                        countdown=3 * 60,
-                    )  # 3 minutes
-                    logger.info(f"Codebase indexing scheduled for later")
-                    self.event_manager.send_codebase_indexing_result("CANCELLED")
-            else:
-                logger.debug(f"Codebase is up to date")
-                self.event_manager.send_codebase_indexing_result("CANCELLED")
+            self.context.annotate_stacktrace_with_repo(self.stacktrace)
 
             try:
                 planning_output = self.run_planning_agent(
@@ -185,45 +161,62 @@ class Autofix:
 
                 self.event_manager.send_execution_step_result(step.id, "COMPLETED")
 
-            pr = self._create_pr(
-                planning_output.title, planning_output.description, planning_output.steps
-            )
+            # prs = self._create_prs(
+            #     planning_output.title, planning_output.description, planning_output.steps
+            # )
 
-            if pr is None:
-                return
-
-            self.event_manager.send_autofix_complete(
-                AutofixOutput(
-                    title=planning_output.title,
-                    description=planning_output.description,
-                    pr_url=pr.html_url,
-                    repo_name=self.context.codebase.repo_client.repo_name,
-                    pr_number=pr.id,
-                    usage=self.usage,
-                )
-            )
+            # if prs:
+            #     pr = prs[0]
+            #     self.event_manager.send_autofix_complete(
+            #         AutofixOutput(
+            #             title=planning_output.title,
+            #             description=planning_output.description,
+            #             pr_url=pr.pr_url,
+            #             repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
+            #             pr_number=pr.pr_number,
+            #             usage=self.usage,
+            #         )
+            #     )
         except Exception as e:
-            logger.error(f"Failed to complete autofix: {e}")
+            logger.error(f"Failed to complete autofix")
+            logger.exception(e)
             sentry_sdk.capture_exception(e)
 
             self.event_manager.mark_running_steps_errored()
             self.event_manager.send_autofix_complete(None)
         finally:
-            self.context.codebase.cleanup()
+            self.context.cleanup()
             logger.info(f"Autofix complete for issue {self.request.issue.id}")
 
-    def _create_pr(self, title: str, description: str, steps: list[PlanStep]):
-        branch_ref = self.context.codebase.repo_client.create_branch_from_changes(
-            pr_title=title, file_changes=self.context.codebase.file_changes
-        )
+    def _create_prs(self, title: str, description: str, steps: list[PlanStep]):
+        prs: list[PullRequestResult] = []
+        for codebase in self.context.codebases.values():
+            if codebase.file_changes:
+                branch_ref = codebase.repo_client.create_branch_from_changes(
+                    pr_title=title, file_changes=codebase.file_changes
+                )
 
-        if branch_ref is None:
-            logger.warning(f"Failed to create branch from changes")
-            return None
+                if branch_ref is None:
+                    logger.warning(f"Failed to create branch from changes")
+                    return None
 
-        return self.context.codebase.repo_client.create_pr_from_branch(
-            branch_ref, title, description, steps, self.request.issue.id, self.usage
-        )
+                pr = codebase.repo_client.create_pr_from_branch(
+                    branch_ref, title, description, steps, self.request.issue.id, self.usage
+                )
+
+                prs.append(
+                    PullRequestResult(
+                        pr_number=pr.number,
+                        pr_url=pr.html_url,
+                        repo=RepoDefinition(
+                            repo_provider=codebase.repo_client.provider,  # type: ignore
+                            repo_owner=codebase.repo_client.repo_owner,
+                            repo_name=codebase.repo_client.repo_name,
+                        ),
+                    )
+                )
+
+        return prs
 
     def _parse_problem_discovery_response(self, response: str) -> ProblemDiscoveryOutput | None:
         try:
@@ -349,7 +342,7 @@ class Autofix:
             input.message or input.previous_output or input.problem
         ), "PlanningInput requires at least one of the fields: 'message', 'previous_output', or 'problem'."
 
-        planning_agent_tools = BaseTools(self.context.codebase)
+        planning_agent_tools = BaseTools(self.context.codebases)
 
         planning_agent = GptAgent(
             name="planner",
@@ -410,7 +403,7 @@ class Autofix:
         context_dump = ""
         unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
         for query in queries:
-            retrived_chunks = self.context.codebase.query(query, 2)
+            retrived_chunks = self.context.query(query, top_k=2)
             for chunk in retrived_chunks:
                 unique_chunks[chunk.hash] = chunk
         chunks = list(unique_chunks.values())
@@ -434,7 +427,7 @@ class Autofix:
         context_dump = ""
 
         code_action_tools = CodeActionTools(
-            self.context.codebase,
+            self.context.codebases,
         )
 
         execution_agent = GptAgent(

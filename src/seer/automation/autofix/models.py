@@ -75,6 +75,7 @@ class StacktraceFrame(BaseModel):
     line_no: int
     col_no: Optional[int]
     context: list[tuple[int, str]]
+    repo_name: Optional[str] = None
 
 
 class Stacktrace(BaseModel):
@@ -83,7 +84,9 @@ class Stacktrace(BaseModel):
     def to_str(self, max_frames: int = 4):
         stack_str = ""
         for frame in self.frames[:max_frames]:
-            stack_str += f" {frame.function} in {frame.filename} ({frame.line_no}:{frame.col_no})\n"
+            col_no_str = f":{frame.col_no}" if frame.col_no is not None else ""
+            repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} ({frame.line_no}{col_no_str})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <--' if is_suspect_line else ''}\n"
@@ -124,12 +127,16 @@ class IssueDetails(BaseModel):
     events: list[SentryEvent]
 
 
-class AutofixRequest(BaseModel):
-    organization_id: int
-    project_id: int
+class RepoDefinition(BaseModel):
     repo_provider: Literal["github"]
     repo_owner: str
     repo_name: str
+
+
+class AutofixRequest(BaseModel):
+    organization_id: int
+    project_id: int
+    repos: list[RepoDefinition]
     base_commit_sha: Optional[str] = None
 
     issue: IssueDetails
@@ -147,3 +154,9 @@ class AutofixOutput(BaseModel):
 
 class AutofixEndpointResponse(BaseModel):
     started: bool
+
+
+class PullRequestResult(BaseModel):
+    pr_number: int
+    pr_url: str
+    repo: RepoDefinition

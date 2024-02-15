@@ -10,23 +10,41 @@ logger = logging.getLogger("autofix")
 
 
 class BaseTools:
-    codebase: CodebaseIndex
+    codebases: dict[int, CodebaseIndex]
 
-    def __init__(self, codebase: CodebaseIndex):
-        self.codebase = codebase
+    def __init__(self, codebases: dict[int, CodebaseIndex]):
+        self.codebases = codebases
         self.retrieved_paths = set()
         self.expanded_paths = set()
 
     def codebase_retriever(self, query: str):
-        chunks = self.codebase.query(query, top_k=8)
+        chunks = []
+        for codebase in self.codebases.values():
+            chunks.extend(codebase.query(query, top_k=8))
+
+        # TODO: Implement reranking
 
         content = ""
         for chunk in chunks:
             content += chunk.get_dump_for_llm() + "\n\n"
         return content
 
+    def _get_document(self, path: str):
+        document = None
+        codebase = None
+        for codebase in self.codebases.values():
+            document = codebase.get_document(path)
+            if document:
+                continue
+
+        return codebase, document
+
     def expand_document(self, input: str):
-        document = self.codebase.get_document(input)
+        document = None
+        for codebase in self.codebases.values():
+            document = codebase.get_document(input)
+            if document:
+                continue
 
         if document:
             return document.text
@@ -78,8 +96,8 @@ class BaseTools:
 class CodeActionTools(BaseTools):
     _snippet_matching_threshold = 0.9
 
-    def __init__(self, codebase: CodebaseIndex):
-        super().__init__(codebase)
+    def __init__(self, codebases: dict[int, CodebaseIndex]):
+        super().__init__(codebases)
 
         self.file_changes = []
 
@@ -93,9 +111,9 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.replace_snippet_with] Replacing snippet {reference_snippet} with {replacement_snippet} in {file_path}"
         )
 
-        document = self.codebase.get_document(file_path)
+        codebase, document = self._get_document(file_path)
 
-        if not document:
+        if not document or not codebase:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         logger.debug("Exact snippet:")
@@ -119,7 +137,7 @@ class CodeActionTools(BaseTools):
             new_snippet=replacement_snippet,
             description=commit_message,
         )
-        self.codebase.store_file_change(file_change)
+        codebase.store_file_change(file_change)
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
@@ -129,9 +147,9 @@ class CodeActionTools(BaseTools):
         """
         logger.debug(f"[CodeActionTools.delete_snippet] Deleting snippet {snippet} in {file_path}")
 
-        document = self.codebase.get_document(file_path)
+        codebase, document = self._get_document(file_path)
 
-        if not document:
+        if not (document and codebase):
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         original_snippet: str | None = None
@@ -156,7 +174,7 @@ class CodeActionTools(BaseTools):
             new_snippet="",
         )
 
-        self.codebase.store_file_change(file_change)
+        codebase.store_file_change(file_change)
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
@@ -212,9 +230,9 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.create_file] Creating file {file_path} with snippet {snippet}"
         )
 
-        document = self.codebase.get_document(file_path)
+        codebase, document = self._get_document(file_path)
 
-        if document:
+        if not document or not codebase:
             raise FileExistsError(f"File `{file_path}` already exists.")
 
         file_change = FileChange(
@@ -223,7 +241,7 @@ class CodeActionTools(BaseTools):
             new_snippet=snippet,
             description=commit_message,
         )
-        self.codebase.store_file_change(file_change)
+        codebase.store_file_change(file_change)
 
         return "success"
 
@@ -233,8 +251,13 @@ class CodeActionTools(BaseTools):
         """
         logger.debug(f"[CodeActionTools.delete_file] Deleting file {file_path}")
 
+        codebase, document = self._get_document(file_path)
+
+        if not document or not codebase:
+            raise FileNotFoundError(f"File `{file_path}` not found.")
+
         file_change = FileChange(change_type="delete", path=file_path, description=commit_message)
-        self.codebase.store_file_change(file_change)
+        codebase.store_file_change(file_change)
 
         return "success"
 

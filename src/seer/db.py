@@ -96,7 +96,7 @@ class ProcessRequest(Base):
         )
 
 
-class RepoInfo(Base):
+class DbRepositoryInfo(Base):
     __tablename__ = "repositories"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     organization: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -110,11 +110,11 @@ class RepoInfo(Base):
 class DbDocumentChunk(Base):
     __tablename__ = "document_chunks"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    repository_id: Mapped[int] = mapped_column(Integer, ForeignKey(RepoInfo.id), nullable=False)
+    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     index: Mapped[int] = mapped_column(Integer, nullable=False)
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     first_line_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding: Mapped[Vector] = mapped_column(Vector(3), nullable=False)
+    embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     for_run_id: Mapped[str] = mapped_column(String(36), nullable=True)

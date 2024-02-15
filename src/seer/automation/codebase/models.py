@@ -4,12 +4,13 @@ from typing import Optional
 import numpy as np
 from pydantic import BaseModel
 
-from seer.db import DbDocumentChunk
+from seer.db import DbDocumentChunk, DbRepositoryInfo
 
 
 class Document(BaseModel):
     path: str
     text: str
+    repo_id: int
 
 
 class DocumentChunk(BaseModel):
@@ -21,6 +22,7 @@ class DocumentChunk(BaseModel):
     index: int
     first_line_number: int
     token_count: int
+    repo_id: int
 
     def get_dump_for_embedding(self):
         return """{context}{content}""".format(
@@ -51,10 +53,10 @@ class DocumentChunk(BaseModel):
 class DocumentChunkWithEmbedding(DocumentChunk):
     embedding: np.ndarray
 
-    def to_db_model(self, repo_id: int) -> DbDocumentChunk:
+    def to_db_model(self) -> DbDocumentChunk:
         return DbDocumentChunk(
             id=self.id,
-            repository_id=repo_id,
+            repo_id=self.repo_id,
             path=self.path,
             index=self.index,
             hash=self.hash,
@@ -78,6 +80,13 @@ class RepositoryInfo(BaseModel):
     external_slug: str
     sha: str
 
-
-class UninitializedRepoInfo(RepositoryInfo):
-    id: None = None
+    @classmethod
+    def from_db(cls, db_repo: DbRepositoryInfo) -> "RepositoryInfo":
+        return cls(
+            id=db_repo.id,
+            organization=db_repo.organization,
+            project=db_repo.project,
+            provider=db_repo.provider,
+            external_slug=db_repo.external_slug,
+            sha=db_repo.sha,
+        )

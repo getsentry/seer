@@ -1,17 +1,24 @@
+import functools
 import logging
 import os
 import uuid
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
-from seer.automation.autofix.models import FileChange
-from seer.automation.autofix.utils import get_torch_device
-from seer.automation.codebase.models import Document, DocumentChunkWithEmbedding
+from seer.automation.autofix.models import FileChange, RepoDefinition
+from seer.automation.codebase.models import (
+    Document,
+    DocumentChunk,
+    DocumentChunkWithEmbedding,
+    RepositoryInfo,
+)
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir, read_directory, read_specific_files
-from seer.db import DbDocumentChunk, RepoInfo, Session
+from seer.automation.utils import get_embedding_model
+from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
 from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger("autofix")
@@ -23,89 +30,117 @@ class CodebaseIndex:
     # ).to(get_torch_device())
 
     def __init__(
-        self, organization: int, project: int, repo_client: RepoClient, repo_info: RepoInfo | None
+        self,
+        organization: int,
+        project: int,
+        repo_client: RepoClient,
+        repo_info: RepositoryInfo,
+        run_id: uuid.UUID,
     ):
         self.repo_client = repo_client
         self.organization = organization
         self.project = project
         self.repo_info = repo_info
-        self.run_id = uuid.uuid4()
         self.file_changes: list[FileChange] = []
-        self.embedding_model = SentenceTransformer(
-            os.path.join("./", "models", "issue_grouping_v0/embeddings")
-        ).to(get_torch_device())
+        self.run_id = run_id
 
         logger.info(
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
         )
 
-    @classmethod
-    def from_repo_client(cls, organization: int, project: int, repo_client: RepoClient):
-        repo_info = (
+    @staticmethod
+    def has_repo_been_indexed(organization: int, project: int, repo: RepoDefinition):
+        return (
             Session()
-            .query(RepoInfo)
+            .query(DbRepositoryInfo)
             .filter(
-                RepoInfo.organization == organization,
-                RepoInfo.project == project,
-                RepoInfo.provider == repo_client.provider,
-                RepoInfo.external_slug == repo_client.repo.full_name,
+                DbRepositoryInfo.organization == organization,
+                DbRepositoryInfo.project == project,
+                DbRepositoryInfo.provider == repo.repo_provider,
+                DbRepositoryInfo.external_slug == f"{repo.repo_owner}/{repo.repo_name}",
+            )
+            .count()
+            > 0
+        )
+
+    @classmethod
+    def from_repo_definition(
+        cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID
+    ):
+        db_repo_info = (
+            Session()
+            .query(DbRepositoryInfo)
+            .filter(
+                DbRepositoryInfo.organization == organization,
+                DbRepositoryInfo.project == project,
+                DbRepositoryInfo.provider == repo.repo_provider,
+                DbRepositoryInfo.external_slug == f"{repo.repo_owner}/{repo.repo_name}",
             )
             .one_or_none()
         )
-        return cls(
-            organization,
-            project,
-            repo_client,
-            repo_info,
-        )
+        if db_repo_info:
+            repo_info = RepositoryInfo.from_db(db_repo_info)
+            repo_client = RepoClient(repo.repo_provider, repo.repo_owner, repo.repo_name)
+            return cls(organization, project, repo_client, repo_info, run_id)
+
+        return None
 
     @classmethod
     def from_repo_id(cls, repo_id: int):
-        repo_info = Session().get(RepoInfo, repo_id)
+        db_repo_info = Session().get(DbRepositoryInfo, repo_id)
 
-        if repo_info:
-            repo_owner, repo_name = repo_info.external_slug.split("/")
+        if db_repo_info:
+            repo_info = RepositoryInfo.from_db(db_repo_info)
+            repo_owner, repo_name = db_repo_info.external_slug.split("/")
 
             return cls(
                 repo_info.organization,
                 repo_info.project,
                 RepoClient(repo_info.provider, repo_owner, repo_name),
                 repo_info,
+                run_id=uuid.uuid4(),
             )
 
         raise ValueError(f"Repository with id {repo_id} not found")
 
-    def create(self):
-        head_sha = self.repo_client.get_default_branch_head_sha()
-        tmp_dir, tmp_repo_dir = self.repo_client.load_repo_to_tmp_dir(head_sha)
+    @classmethod
+    def create(cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID):
+        repo_client = RepoClient(repo.repo_provider, repo.repo_owner, repo.repo_name)
+
+        head_sha = repo_client.get_default_branch_head_sha()
+        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
         try:
-            documents = read_directory(tmp_repo_dir, [".py"])
-
-            logger.debug(f"Read {len(documents)} documents")
-
-            doc_parser = DocumentParser(self.embedding_model)
-            chunks = doc_parser.process_documents(documents)
-            logger.debug(f"Processed {len(chunks)} chunks")
-
             with Session() as session:
-                repo_info = RepoInfo(
-                    organization=self.organization,
-                    project=self.project,
-                    provider=self.repo_client.provider,
-                    external_slug=self.repo_client.repo.full_name,
+                db_repo_info = DbRepositoryInfo(
+                    organization=organization,
+                    project=project,
+                    provider=repo_client.provider,
+                    external_slug=repo_client.repo.full_name,
                     sha=head_sha,
                 )
-                session.add(repo_info)
+                session.add(db_repo_info)
                 session.flush()
-                logger.debug(f"Inserted repository info with id {repo_info.id}")
-                self.repo_info = repo_info
+                logger.debug(f"Inserted repository info with id {db_repo_info.id}")
 
-                db_chunks = [chunk.to_db_model(repo_info.id) for chunk in chunks]
+                documents = read_directory(tmp_repo_dir, [".py"], repo_id=db_repo_info.id)
+
+                logger.debug(f"Read {len(documents)} documents")
+
+                doc_parser = DocumentParser(get_embedding_model())
+                chunks = doc_parser.process_documents(documents)
+                embedded_chunks = cls._embed_chunks(chunks)
+                logger.debug(f"Processed {len(chunks)} chunks")
+
+                repo_info = RepositoryInfo.from_db(db_repo_info)
+
+                db_chunks = [chunk.to_db_model() for chunk in embedded_chunks]
                 session.add_all(db_chunks)
                 session.commit()
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
+
+            return cls(organization, project, repo_client, repo_info, run_id)
         finally:
             cleanup_dir(tmp_dir)
 
@@ -132,33 +167,62 @@ class CodebaseIndex:
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
         try:
-            documents = read_specific_files(tmp_repo_dir, changed_files)
+            documents = read_specific_files(tmp_repo_dir, changed_files, repo_id=self.repo_info.id)
 
-            doc_parser = DocumentParser(self.embedding_model)
+            doc_parser = DocumentParser(get_embedding_model())
             chunks = doc_parser.process_documents(documents)
+            embedded_chunks = self._embed_chunks(chunks)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
-                db_chunks = [chunk.to_db_model(self.repo_info.id) for chunk in chunks]
+                db_chunks = [chunk.to_db_model() for chunk in embedded_chunks]
                 session.add_all(db_chunks)
 
                 if removed_files:
                     session.query(DbDocumentChunk).filter(
-                        DbDocumentChunk.repository_id == self.repo_info.id,
+                        DbDocumentChunk.repo_id == self.repo_info.id,
                         DbDocumentChunk.path.in_(removed_files),
                     ).delete(synchronize_session=False)
 
                 self.repo_info.sha = head_sha
-                repo_info = session.get(RepoInfo, self.repo_info.id)
-                if repo_info is None:
+                db_repo_info = session.get(DbRepositoryInfo, self.repo_info.id)
+                if db_repo_info is None:
                     raise ValueError(f"Repository info with id {self.repo_info.id} not found")
-                repo_info.sha = head_sha
+                db_repo_info.sha = head_sha
 
                 session.commit()
 
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
             cleanup_dir(tmp_dir)
+
+    @classmethod
+    def _embed_chunks(cls, chunks: list[DocumentChunk]) -> list[DocumentChunkWithEmbedding]:
+        logger.debug(f"Embedding {len(chunks)} chunks...")
+        embeddings = []
+
+        with tqdm(total=len(chunks)) as pbar:
+            for i in range(0, len(chunks), superchunk_size := 128):
+                batch_embeddings: np.ndarray = get_embedding_model().encode(
+                    [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
+                    batch_size=16,
+                    show_progress_bar=True,
+                )  # type: ignore
+                embeddings.extend(batch_embeddings)
+                pbar.update(superchunk_size)
+        embeddings = np.array(embeddings)
+        logger.debug(f"Embedded {len(chunks)} chunks")
+
+        embedded_chunks = []
+        for i, chunk in enumerate(chunks):
+            embedded_chunks.append(
+                DocumentChunkWithEmbedding(
+                    **chunk.model_dump(),
+                    embedding=embeddings[i],
+                )
+            )
+
+        return embedded_chunks
 
     def is_behind(self):
         if not self.repo_info:
@@ -171,14 +235,14 @@ class CodebaseIndex:
     def query(self, query: str, top_k: int = 4):
         assert self.repo_info is not None, "Repository info is not set"
 
-        embedding = self.embedding_model.encode(query, show_progress_bar=False)
+        embedding = get_embedding_model().encode(query, show_progress_bar=False)
 
         with Session() as session:
             db_chunks = (
                 session.query(DbDocumentChunk)
                 .filter(
-                    DbDocumentChunk.repository_id == self.repo_info.id,
-                    (DbDocumentChunk.for_run_id == self.run_id)
+                    DbDocumentChunk.repo_id == self.repo_info.id,
+                    (DbDocumentChunk.for_run_id == str(self.run_id))
                     | (DbDocumentChunk.for_run_id.is_(None)),
                 )
                 .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
@@ -200,7 +264,7 @@ class CodebaseIndex:
         if document_content is None:
             return None
 
-        document = Document(path=path, text=document_content)
+        document = Document(path=path, text=document_content, repo_id=self.repo_info.id)
 
         content = document_content
         if not ignore_local_changes:
@@ -240,17 +304,18 @@ class CodebaseIndex:
         with Session() as session:
             # Delete the entire document from the temporary chunks if it exists
             session.query(DbDocumentChunk).filter(
-                DbDocumentChunk.repository_id == self.repo_info.id,
+                DbDocumentChunk.repo_id == self.repo_info.id,
                 DbDocumentChunk.path == document.path,
                 DbDocumentChunk.for_run_id == str(self.run_id),
             ).delete(synchronize_session=False)
 
-            doc_parser = DocumentParser(self.embedding_model)
+            doc_parser = DocumentParser(get_embedding_model())
             chunks = doc_parser.process_document(document)
+            embedded_chunks = self._embed_chunks(chunks)
 
             db_chunks = []
-            for chunk in chunks:
-                db_chunk = chunk.to_db_model(self.repo_info.id)
+            for chunk in embedded_chunks:
+                db_chunk = chunk.to_db_model()
                 db_chunk.for_run_id = str(self.run_id)
             session.add_all(db_chunks)
             session.commit()
@@ -273,7 +338,7 @@ class CodebaseIndex:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
-        doc_parser = DocumentParser(self.embedding_model)
+        doc_parser = DocumentParser(get_embedding_model())
 
         matched_chunks: list[DocumentChunkWithEmbedding] = []
         for chunk in chunks:
@@ -284,7 +349,9 @@ class CodebaseIndex:
                 # TODO: How to handle this?
                 continue
 
-            doc_chunks = doc_parser.process_document(Document(path=chunk.path, text=content))
+            doc_chunks = doc_parser.process_document(
+                Document(path=chunk.path, text=content, repo_id=self.repo_info.id)
+            )
             matched_chunk = next((c for c in doc_chunks if c.hash == chunk.hash), None)
 
             if matched_chunk is None:
@@ -302,6 +369,7 @@ class CodebaseIndex:
                     embedding=np.array(chunk.embedding),
                     content=matched_chunk.content,
                     context=matched_chunk.context,
+                    repo_id=chunk.repo_id,
                 )
             )
 

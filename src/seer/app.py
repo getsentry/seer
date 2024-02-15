@@ -117,6 +117,7 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
 
 @json_api("/v0/automation/autofix")
 def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    print("autofix run", data)
     run_autofix.delay(data.model_dump())
 
     return AutofixEndpointResponse(started=True)
