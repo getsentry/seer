@@ -181,7 +181,7 @@ class Autofix:
         )
 
         if branch_ref is None:
-            logger.warning(f"Failed to create branch from changes")
+            logger.warning(f"Failed to create branch from changes due to invalid base commit SHA.")
             return None
 
         return repo_client.create_pr_from_branch(
