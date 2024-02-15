@@ -130,6 +130,10 @@ class RepoClient:
         self, pr_title: str, file_changes: list[FileChange], base_commit_sha: str
     ) -> GitRef | None:
         new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+                # Validate base commit existence to ensure the base_commit_sha exists in the repository
+        if not self.repo.get_commit(base_commit_sha):
+            logger.error(f"Base commit SHA {base_commit_sha} does not exist in the repository.")
+            return None
         branch_ref = self._create_branch(new_branch_name, base_commit_sha=base_commit_sha)
 
         for change in file_changes:
