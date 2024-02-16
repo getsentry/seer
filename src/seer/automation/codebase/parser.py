@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 from tree_sitter import Node
 
 from seer.automation.codebase.models import Document, DocumentChunk
+from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger("autofix")
 
@@ -116,8 +117,7 @@ class TempChunk(BaseModel):
 
 
 class DocumentParser:
-    def __init__(self, embedding_model: SentenceTransformer, language: str = "python"):
-        self.parser = tree_sitter_languages.get_parser(language)
+    def __init__(self, embedding_model: SentenceTransformer):
         self.embedding_model = embedding_model
         self.max_tokens = int(self.embedding_model.get_max_seq_length())  # type: ignore
         self.break_chunks_at = 512
@@ -309,8 +309,12 @@ class DocumentParser:
                 )
         return None
 
+    @class_method_lru_cache(maxsize=16)
+    def _get_parser(self, language: str):
+        return tree_sitter_languages.get_parser(language)
+
     def _chunk_document(self, document: Document) -> list[DocumentChunk]:
-        tree = self.parser.parse(bytes(document.text, "utf-8"))
+        tree = self._get_parser(document.language).parse(bytes(document.text, "utf-8"))
 
         chunked_documents = self._chunk_nodes_by_whitespace(tree.root_node, document.language)
 

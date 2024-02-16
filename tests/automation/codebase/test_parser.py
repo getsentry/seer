@@ -14,16 +14,7 @@ class TestDocumentParser(unittest.TestCase):
         self.mock_embedding_model = MagicMock(spec=SentenceTransformer)
         self.mock_parser = MagicMock(spec=Parser)
         self.mock_parser.parse.return_value.root_node = MagicMock(spec=Node)
-        self.document_parser = DocumentParser(
-            embedding_model=self.mock_embedding_model, language="python"
-        )
-        self.document_parser.parser = self.mock_parser
-
-    def test_document_parser_initialization(self):
-        # Test initialization of DocumentParser
-        self.assertEqual(self.document_parser.language, "python")
-        self.assertIsNotNone(self.document_parser.embedding_model)
-        self.assertIsNotNone(self.document_parser.parser)
+        self.document_parser = DocumentParser(embedding_model=self.mock_embedding_model)
 
     def test_document_parser_process_document(self):
         # Test processing of a single document
