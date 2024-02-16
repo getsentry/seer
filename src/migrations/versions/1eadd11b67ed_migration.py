@@ -1,8 +1,8 @@
 """Migration
 
-Revision ID: 95224c23dc7a
+Revision ID: 1eadd11b67ed
 Revises: 0226c3793a61
-Create Date: 2024-02-14 23:18:29.566293
+Create Date: 2024-02-16 22:47:47.653058
 
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 from pgvector.sqlalchemy import Vector
 
 # revision identifiers, used by Alembic.
-revision = "95224c23dc7a"
+revision = "1eadd11b67ed"
 down_revision = "0226c3793a61"
 branch_labels = None
 depends_on = None
@@ -37,10 +37,12 @@ def upgrade():
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("repo_id", sa.Integer(), nullable=False),
         sa.Column("path", sa.String(), nullable=False),
+        sa.Column("language", sa.String(), nullable=False),
         sa.Column("index", sa.Integer(), nullable=False),
         sa.Column("hash", sa.String(length=64), nullable=False),
         sa.Column("token_count", sa.Integer(), nullable=False),
         sa.Column("first_line_number", sa.Integer(), nullable=False),
+        sa.Column("last_line_number", sa.Integer(), nullable=False),
         sa.Column("embedding", Vector(dim=768), nullable=False),
         sa.Column("for_run_id", sa.String(length=36), nullable=True),
         sa.ForeignKeyConstraint(
