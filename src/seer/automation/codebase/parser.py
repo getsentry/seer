@@ -118,7 +118,6 @@ class TempChunk(BaseModel):
 class DocumentParser:
     def __init__(self, embedding_model: SentenceTransformer, language: str = "python"):
         self.parser = tree_sitter_languages.get_parser(language)
-        self.language = language
         self.embedding_model = embedding_model
         self.max_tokens = int(self.embedding_model.get_max_seq_length())  # type: ignore
         self.break_chunks_at = 512
@@ -135,6 +134,7 @@ class DocumentParser:
     def _chunk_nodes_by_whitespace(
         self,
         node: Node,
+        language: str,
         parent_declarations: list[ParentDeclaration] = [],
         root_node: Node | None = None,
         last_end_byte=0,
@@ -173,14 +173,15 @@ class DocumentParser:
             if token_count > self.break_chunks_at:
                 # Recursively chunk the children if the current node is too big or should be chunked
                 parent_declarations_for_children = parent_declarations.copy()
-                is_parent_declaration = self._node_is_a_declaration(children[i])
+                is_parent_declaration = self._node_is_a_declaration(children[i], language)
                 if is_parent_declaration:
-                    declaration = self._extract_declaration(children[i], root_node)
+                    declaration = self._extract_declaration(children[i], root_node, language)
                     if declaration:
                         parent_declarations_for_children.append(declaration)
 
                 children_with_embeddings = self._chunk_nodes_by_whitespace(
                     children[i],
+                    language,
                     parent_declarations=parent_declarations_for_children,
                     root_node=root_node,
                     last_end_byte=last_end_byte,
@@ -232,12 +233,12 @@ class DocumentParser:
 
         return chunks
 
-    def _node_is_a_declaration(self, node: Node) -> bool:
-        if self.language == "python":
+    def _node_is_a_declaration(self, node: Node, language: str) -> bool:
+        if language == "python":
             return node.type.endswith("_definition") or any(
                 [child.type == "block" for child in node.children]
             )  # is a definition type node or has an immediate block child
-        if self.language in ["javascript", "typescript", "jsx", "tsx"]:
+        if language in ["javascript", "typescript", "jsx", "tsx"]:
             return node.type in [
                 "class_declaration",
                 "method_definition",
@@ -248,8 +249,10 @@ class DocumentParser:
             )  # is a definition type node or has an immediate block child
         return False
 
-    def _extract_declaration(self, node: Node, root_node: Node) -> ParentDeclaration | None:
-        if self.language == "python":
+    def _extract_declaration(
+        self, node: Node, root_node: Node, language: str
+    ) -> ParentDeclaration | None:
+        if language == "python":
             result = index_with_node_type(":", node, recursive=False)
             if result is None:
                 # Handle the case where there is no colon
@@ -272,7 +275,7 @@ class DocumentParser:
                 declaration_nodes=node.children[: index_of_colon + 1],
             )
 
-        if self.language in ["javascript", "typescript", "jsx", "tsx"]:
+        if language in ["javascript", "typescript", "jsx", "tsx"]:
             child = first_child_with_type(set(("class_body", "statement_block")), node)
             if child is None:
                 return None
@@ -309,7 +312,7 @@ class DocumentParser:
     def _chunk_document(self, document: Document) -> list[DocumentChunk]:
         tree = self.parser.parse(bytes(document.text, "utf-8"))
 
-        chunked_documents = self._chunk_nodes_by_whitespace(tree.root_node)
+        chunked_documents = self._chunk_nodes_by_whitespace(tree.root_node, document.language)
 
         chunks: list[DocumentChunk] = []
         last_line = 1
@@ -330,6 +333,7 @@ class DocumentParser:
                 hash=self._generate_sha256_hash(f"[{document.path}][{i}]\n{embedding_dump}"),
                 token_count=self._get_str_token_count(embedding_dump),
                 repo_id=document.repo_id,
+                language=document.language,
             )
 
             last_line += len(chunk_text.split("\n"))

@@ -16,6 +16,8 @@ from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import (
     cleanup_dir,
+    get_language_from_path,
+    group_documents_by_language,
     potential_frame_match,
     read_directory,
     read_specific_files,
@@ -122,9 +124,12 @@ class CodebaseIndex:
                 session.flush()
                 logger.debug(f"Inserted repository info with id {db_repo_info.id}")
 
-                documents = read_directory(tmp_repo_dir, [".py"], repo_id=db_repo_info.id)
+                documents = read_directory(tmp_repo_dir, repo_id=db_repo_info.id)
 
-                logger.debug(f"Read {len(documents)} documents")
+                logger.debug(f"Read {len(documents)} documents:")
+                documents_by_language = group_documents_by_language(documents)
+                for language, docs in documents_by_language.items():
+                    logger.debug(f"  {language}: {len(docs)}")
 
                 doc_parser = DocumentParser(get_embedding_model())
                 chunks = doc_parser.process_documents(documents)
@@ -263,7 +268,15 @@ class CodebaseIndex:
         if document_content is None:
             return None
 
-        document = Document(path=path, text=document_content, repo_id=self.repo_info.id)
+        language = get_language_from_path(path)
+
+        if language is None:
+            logger.warning(f"Unsupported language for {path}")
+            return None
+
+        document = Document(
+            path=path, text=document_content, repo_id=self.repo_info.id, language=language
+        )
 
         content = document_content
         if not ignore_local_changes:
@@ -366,7 +379,12 @@ class CodebaseIndex:
                 continue
 
             doc_chunks = doc_parser.process_document(
-                Document(path=chunk.path, text=content, repo_id=self.repo_info.id)
+                Document(
+                    path=chunk.path,
+                    text=content,
+                    repo_id=self.repo_info.id,
+                    language=chunk.language,
+                )
             )
             matched_chunk = next((c for c in doc_chunks if c.hash == chunk.hash), None)
 
@@ -387,6 +405,7 @@ class CodebaseIndex:
                     content=matched_chunk.content,
                     context=matched_chunk.context,
                     repo_id=chunk.repo_id,
+                    language=chunk.language,
                 )
             )
 

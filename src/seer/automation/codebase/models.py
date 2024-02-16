@@ -11,12 +11,14 @@ class Document(BaseModel):
     path: str
     text: str
     repo_id: int
+    language: str
 
 
 class DocumentChunk(BaseModel):
     id: Optional[int] = None
     content: str
     context: Optional[str]
+    language: str
     hash: str
     path: str
     index: int
@@ -76,6 +78,7 @@ class DocumentChunkWithEmbedding(DocumentChunk):
             first_line_number=self.first_line_number,
             last_line_number=self.last_line_number,
             embedding=self.embedding,
+            language=self.language,
         )
 
     class Config:

@@ -112,6 +112,7 @@ class DbDocumentChunk(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
+    language: Mapped[str] = mapped_column(String, nullable=False)
     index: Mapped[int] = mapped_column(Integer, nullable=False)
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
