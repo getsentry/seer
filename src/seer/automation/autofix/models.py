@@ -138,6 +138,12 @@ class RepoDefinition(BaseModel):
     repo_name: str
 
 
+class OldAutofixRequest(BaseModel):
+    issue: IssueDetails
+    base_commit_sha: str
+    additional_context: Optional[str] = None
+
+
 class AutofixRequest(BaseModel):
     organization_id: int
     project_id: int
