@@ -14,7 +14,7 @@ from seer.rpc import DummyRpcClient, SentryRpcClient
 logger = logging.getLogger("autofix")
 
 
-@celery_app.task(time_limit=60 * 60)  # 1 hour task timeout
+@celery_app.task(time_limit=60 * 60 * 5)  # 5 hour task timeout
 def run_autofix(data: dict[str, Any]) -> None:
     base_url = os.environ.get("SENTRY_BASE_URL")
     if not base_url:

@@ -10,7 +10,7 @@ from seer.automation.codebase.codebase_index import CodebaseIndex
 logger = logging.getLogger("autofix")
 
 
-@celery_app.task(time_limit=60 * 15)  # 15 minute task timeout
+@celery_app.task(time_limit=60 * 60)  # 1h task timeout
 def update_codebase_index(data: dict[str, Any]) -> None:
     request = UpdateCodebaseTaskRequest(**data)
     logger.info("Updating codebase index for repo: %s", request.repo_id)
