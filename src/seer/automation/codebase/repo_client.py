@@ -192,6 +192,21 @@ class RepoClient:
 
             return None
 
+    def get_valid_file_paths(self, sha: str) -> set[str]:
+        tree = self.repo.get_git_tree(sha, recursive=True)
+
+        if tree.raw_data["truncated"]:
+            sentry_sdk.capture_message(
+                f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
+            )
+
+        valid_file_paths: set[str] = set()
+
+        for file in tree.tree:
+            valid_file_paths.add(file.path)
+
+        return valid_file_paths
+
     def _create_branch(self, branch_name):
         ref = self.repo.create_git_ref(
             ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()

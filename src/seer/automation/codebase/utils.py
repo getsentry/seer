@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 
+from seer.automation.autofix.models import StacktraceFrame
 from seer.automation.codebase.models import Document
 
 logger = logging.getLogger(__name__)
@@ -58,3 +59,21 @@ def cleanup_dir(directory: str):
         logger.info(f"Cleaned up directory: {directory}")
     else:
         logger.info(f"Directory {directory} already cleaned!")
+
+
+def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:
+    """Determine if the frame filename represents a source code file."""
+    match = False
+
+    src_split = src_file.split("/")[::-1]
+    frame_split = frame.filename.split("/")[::-1]
+
+    if len(src_split) > 1 and len(frame_split) > 1 and len(src_split) >= len(frame_split):
+        for i in range(len(frame_split)):
+            if src_split[i] == frame_split[i]:
+                match = True
+            else:
+                match = False
+                break
+
+    return match

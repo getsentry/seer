@@ -1,11 +1,11 @@
 import uuid
 
-from sentence_transformers.util import cos_sim
-
 from seer.automation.autofix.models import RepoDefinition, Stacktrace
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import DocumentChunkWithEmbedding
-from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.models import (
+    DocumentChunkWithEmbedding,
+    DocumentChunkWithEmbeddingAndId,
+)
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
 
@@ -49,8 +49,20 @@ class AutofixContext:
 
         return codebase
 
-    def query(self, query: str, top_k: int = 8):
-        repo_ids = list(self.codebases.keys())
+    def query(
+        self, query: str, repo_name: str | None = None, repo_id: int | None = None, top_k: int = 8
+    ):
+        if repo_name:
+            repo_id = next(
+                (
+                    repo_id
+                    for repo_id, codebase in self.codebases.items()
+                    if codebase.repo_info.external_slug == repo_name
+                ),
+                None,
+            )
+
+        repo_ids = [repo_id] if repo_id is not None else list(self.codebases.keys())
 
         embedding = get_embedding_model().encode(query)
 
@@ -71,16 +83,41 @@ class AutofixContext:
             for db_chunk in db_chunks:
                 chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
 
-            populated_chunks = []
-            for repo_id, db_chunks in chunks_by_repo_id.items():
-                codebase = self.get_codebase(repo_id)
+            populated_chunks: list[DocumentChunkWithEmbeddingAndId] = []
+            for _repo_id, db_chunks in chunks_by_repo_id.items():
+                codebase = self.get_codebase(_repo_id)
                 populated_chunks.extend(codebase._populate_chunks(db_chunks))
 
             # Re-sort populated_chunks based on their original order in db_chunks
             db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
             populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
 
+        print("populated_chunks", populated_chunks)
+
         return populated_chunks
+
+    def get_document_and_codebase(
+        self, path: str, repo_name: str | None = None, repo_id: int | None = None
+    ):
+        if repo_name:
+            repo_id = next(
+                (
+                    repo_id
+                    for repo_id, codebase in self.codebases.items()
+                    if codebase.repo_info.external_slug == repo_name
+                ),
+                None,
+            )
+        if repo_id:
+            codebase = self.get_codebase(repo_id)
+            return codebase, codebase.get_document(path)
+
+        for codebase in self.codebases.values():
+            document = codebase.get_document(path)
+            if document:
+                return codebase, document
+
+        return None, None
 
     def diff_contains_stacktrace_files(self, repo_id: int, stacktrace: Stacktrace) -> bool:
         codebase = self.get_codebase(repo_id)
@@ -93,12 +130,12 @@ class AutofixContext:
 
         return bool(change_files.intersection(stacktrace_files))
 
-    def annotate_stacktrace_with_repo(self, stacktrace: Stacktrace):
-        for frame in stacktrace.frames:
-            for codebase in self.codebases.values():
-                document = codebase.get_document(frame.filename)
-                if document:
-                    frame.repo_name = codebase.repo_info.external_slug
+    def process_stacktrace(self, stacktrace: Stacktrace):
+        """
+        Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
+        """
+        for codebase in self.codebases.values():
+            codebase.process_stacktrace(stacktrace)
 
     def cleanup(self):
         for codebase in self.codebases.values():

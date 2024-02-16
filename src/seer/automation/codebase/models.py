@@ -21,6 +21,7 @@ class DocumentChunk(BaseModel):
     path: str
     index: int
     first_line_number: int
+    last_line_number: int
     token_count: int
     repo_id: int
 
@@ -30,8 +31,19 @@ class DocumentChunk(BaseModel):
             content=self.content,
         )
 
-    def get_dump_for_llm(self):
-        return self.__str__()
+    def get_dump_for_llm(self, repo_name: str):
+        return textwrap.dedent(
+            """\
+            [Lines {first_line_number}-{last_line_number} in "{path}" in repo "{repo_name}"]
+            {context}{content}"""
+        ).format(
+            path=self.path,
+            first_line_number=self.first_line_number,
+            last_line_number=self.last_line_number,
+            repo_name=repo_name,
+            context=self.context if self.context else "",
+            content=self.content,
+        )
 
     def __str__(self):
         return textwrap.dedent(
@@ -41,7 +53,7 @@ class DocumentChunk(BaseModel):
         ).format(
             path=self.path,
             first_line_number=self.first_line_number,
-            last_line_number=self.first_line_number + len(self.content.split("\n")),
+            last_line_number=self.last_line_number,
             context=self.context if self.context else "",
             content=self.content,
         )
@@ -62,6 +74,7 @@ class DocumentChunkWithEmbedding(DocumentChunk):
             hash=self.hash,
             token_count=self.token_count,
             first_line_number=self.first_line_number,
+            last_line_number=self.last_line_number,
             embedding=self.embedding,
         )
 
@@ -70,6 +83,10 @@ class DocumentChunkWithEmbedding(DocumentChunk):
         json_encoders = {
             np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
         }
+
+
+class DocumentChunkWithEmbeddingAndId(DocumentChunkWithEmbedding):
+    id: int
 
 
 class RepositoryInfo(BaseModel):

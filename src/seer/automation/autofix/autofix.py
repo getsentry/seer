@@ -14,7 +14,6 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
-    FileChange,
     PlanningInput,
     PlanningOutput,
     PlanStep,
@@ -33,7 +32,6 @@ from seer.automation.autofix.prompts import (
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
 from seer.automation.codebase.models import DocumentChunkWithEmbedding
-from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.tasks import update_codebase_index
 
 logger = logging.getLogger("autofix")
@@ -98,17 +96,27 @@ class Autofix:
                 if not self.context.has_codebase_index(repo):
                     logger.info(f"Creating codebase index for repo {repo.repo_name}")
                     self.event_manager.send_codebase_creation_message()
-                    self.context.create_codebase_index(repo)
-                    self.event_manager.send_codebase_indexing_result("COMPLETED")
+                    with sentry_sdk.start_span(
+                        op="seer.automation.autofix.codebase_index.create",
+                        description="Create codebase index",
+                    ) as span:
+                        span.set_tag("repo", repo.repo_name)
+                        self.context.create_codebase_index(repo)
                     logger.info(f"Codebase index created for repo {repo.repo_name}")
 
             for repo_id, codebase in self.context.codebases.items():
                 if codebase.is_behind():
                     if self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace):
-                        logger.debug(f"Waiting for codebase index update")
+                        logger.debug(
+                            f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
+                        )
                         self.event_manager.send_codebase_indexing_message()
-                        codebase.update()
-                        self.event_manager.send_codebase_indexing_result("COMPLETED")
+                        with sentry_sdk.start_span(
+                            op="seer.automation.autofix.codebase_index.update",
+                            description="Update codebase index",
+                        ) as span:
+                            span.set_tag("repo", codebase.repo_info.external_slug)
+                            codebase.update()
                         logger.debug(f"Codebase index updated")
                     else:
                         update_codebase_index.apply_async(
@@ -116,10 +124,8 @@ class Autofix:
                             countdown=3 * 60,
                         )  # 3 minutes
                         logger.info(f"Codebase indexing scheduled for later")
-                        self.event_manager.send_codebase_creation_skip()
                 else:
                     logger.debug(f"Codebase is up to date")
-                    self.event_manager.send_codebase_creation_skip()
 
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
@@ -130,7 +136,9 @@ class Autofix:
                 self.event_manager.send_autofix_complete(None)
                 return
 
-            self.context.annotate_stacktrace_with_repo(self.stacktrace)
+            self.event_manager.send_codebase_indexing_result("COMPLETED")
+
+            self.context.process_stacktrace(self.stacktrace)
 
             try:
                 planning_output = self.run_planning_agent(
@@ -161,22 +169,28 @@ class Autofix:
 
                 self.event_manager.send_execution_step_result(step.id, "COMPLETED")
 
-            # prs = self._create_prs(
-            #     planning_output.title, planning_output.description, planning_output.steps
-            # )
+            logger.debug(
+                "File changes:",
+                [codebase.file_changes for codebase in self.context.codebases.values()],
+            )
 
-            # if prs:
-            #     pr = prs[0]
-            #     self.event_manager.send_autofix_complete(
-            #         AutofixOutput(
-            #             title=planning_output.title,
-            #             description=planning_output.description,
-            #             pr_url=pr.pr_url,
-            #             repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
-            #             pr_number=pr.pr_number,
-            #             usage=self.usage,
-            #         )
-            #     )
+            prs = self._create_prs(
+                planning_output.title, planning_output.description, planning_output.steps
+            )
+
+            if prs:
+                # TODO: Support more than 1 PR...
+                pr = prs[0]
+                self.event_manager.send_autofix_complete(
+                    AutofixOutput(
+                        title=planning_output.title,
+                        description=planning_output.description,
+                        pr_url=pr.pr_url,
+                        repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
+                        pr_number=pr.pr_number,
+                        usage=self.usage,
+                    )
+                )
         except Exception as e:
             logger.error(f"Failed to complete autofix")
             logger.exception(e)
@@ -215,6 +229,9 @@ class Autofix:
                         ),
                     )
                 )
+
+                # TODO: Support more than 1 PR
+                return prs
 
         return prs
 
@@ -342,7 +359,7 @@ class Autofix:
             input.message or input.previous_output or input.problem
         ), "PlanningInput requires at least one of the fields: 'message', 'previous_output', or 'problem'."
 
-        planning_agent_tools = BaseTools(self.context.codebases)
+        planning_agent_tools = BaseTools(self.context)
 
         planning_agent = GptAgent(
             name="planner",
@@ -364,7 +381,7 @@ class Autofix:
             # TODO: Remove this and also find how to address mismatches in the stack trace path and the actual filepaths
             message = PlanningPrompts.format_default_msg(
                 problem=input.problem,
-                additional_context=f"{self.request.additional_context or ''}Note: instead of ./app, the correct directory is static/app/...",
+                additional_context=self.request.additional_context or "",
             )
         else:
             raise ValueError(
@@ -411,7 +428,7 @@ class Autofix:
         logger.debug(f"Retrieved {len(chunks)} unique chunks.")
 
         for chunk in chunks:
-            context_dump += f"\n\n{chunk.get_dump_for_llm()}"
+            context_dump += f"\n\n{chunk.get_dump_for_llm(self.context.get_codebase(chunk.repo_id).repo_info.external_slug)}"
 
         return context_dump
 
@@ -427,14 +444,21 @@ class Autofix:
         context_dump = ""
 
         code_action_tools = CodeActionTools(
-            self.context.codebases,
+            self.context,
         )
 
         execution_agent = GptAgent(
             name="executor",
             tools=code_action_tools.get_tools(),
             memory=[
-                Message(role="system", content=ExecutionPrompts.format_system_msg(context_dump))
+                Message(
+                    role="system",
+                    content=ExecutionPrompts.format_system_msg(
+                        context_dump,
+                        error_message=self.request.issue.title,
+                        stack_trace=self.stacktrace.to_str(),
+                    ),
+                ),
             ],
             stop_message="<DONE>",
         )

@@ -93,3 +93,5 @@ sqlalchemy==2.0.25
 Flask-Migrate==4.0.5
 Flask-SQLAlchemy==3.1.1
 types-Flask-Migrate==4.0.0.20240205
+tensorflow==2.15.0
+guesslang @ git+https://github.com/AndydeCleyre/guesslang.git@tensorflow-looser

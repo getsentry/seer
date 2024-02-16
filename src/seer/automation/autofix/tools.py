@@ -2,6 +2,7 @@ import logging
 import textwrap
 
 from seer.automation.agent.tools import FunctionTool
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import FileChange
 from seer.automation.autofix.utils import find_original_snippet
 from seer.automation.codebase.codebase_index import CodebaseIndex
@@ -10,41 +11,28 @@ logger = logging.getLogger("autofix")
 
 
 class BaseTools:
-    codebases: dict[int, CodebaseIndex]
+    context: AutofixContext
 
-    def __init__(self, codebases: dict[int, CodebaseIndex]):
-        self.codebases = codebases
+    def __init__(self, context: AutofixContext):
+        self.context = context
         self.retrieved_paths = set()
         self.expanded_paths = set()
 
-    def codebase_retriever(self, query: str):
-        chunks = []
-        for codebase in self.codebases.values():
-            chunks.extend(codebase.query(query, top_k=8))
-
-        # TODO: Implement reranking
+    def codebase_retriever(self, query: str, repo_name: str | None):
+        chunks = self.context.query(query, repo_name=repo_name)
 
         content = ""
         for chunk in chunks:
-            content += chunk.get_dump_for_llm() + "\n\n"
+            content += (
+                chunk.get_dump_for_llm(
+                    self.context.get_codebase(chunk.repo_id).repo_info.external_slug
+                )
+                + "\n\n"
+            )
         return content
 
-    def _get_document(self, path: str):
-        document = None
-        codebase = None
-        for codebase in self.codebases.values():
-            document = codebase.get_document(path)
-            if document:
-                continue
-
-        return codebase, document
-
-    def expand_document(self, input: str):
-        document = None
-        for codebase in self.codebases.values():
-            document = codebase.get_document(input)
-            if document:
-                continue
+    def expand_document(self, input: str, repo_name: str | None = None):
+        _, document = self.context.get_document_and_codebase(input, repo_name=repo_name)
 
         if document:
             return document.text
@@ -74,7 +62,12 @@ class BaseTools:
                         "name": "query",
                         "type": "string",
                         "description": "The query to search for.",
-                    }
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
                 ],
                 fn=self.codebase_retriever,
             ),
@@ -87,7 +80,12 @@ class BaseTools:
                         "name": "input",
                         "type": "string",
                         "description": "The document path to expand.",
-                    }
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
                 ],
             ),
         ]
@@ -96,22 +94,27 @@ class BaseTools:
 class CodeActionTools(BaseTools):
     _snippet_matching_threshold = 0.9
 
-    def __init__(self, codebases: dict[int, CodebaseIndex]):
-        super().__init__(codebases)
+    def __init__(self, context: AutofixContext):
+        super().__init__(context)
 
         self.file_changes = []
 
     def replace_snippet_with(
-        self, file_path: str, reference_snippet: str, replacement_snippet: str, commit_message: str
+        self,
+        file_path: str,
+        repo_name: str,
+        reference_snippet: str,
+        replacement_snippet: str,
+        commit_message: str,
     ):
         """
         Replaces a snippet with the provided replacement.
         """
         logger.debug(
-            f"[CodeActionTools.replace_snippet_with] Replacing snippet {reference_snippet} with {replacement_snippet} in {file_path}"
+            f"[CodeActionTools.replace_snippet_with] Replacing snippet {reference_snippet} with {replacement_snippet} in {file_path} in repo {repo_name}"
         )
 
-        codebase, document = self._get_document(file_path)
+        codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
 
         if not document or not codebase:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
@@ -141,13 +144,15 @@ class CodeActionTools(BaseTools):
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
-    def delete_snippet(self, file_path: str, snippet: str, commit_message: str):
+    def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
         Deletes a snippet.
         """
-        logger.debug(f"[CodeActionTools.delete_snippet] Deleting snippet {snippet} in {file_path}")
+        logger.debug(
+            f"[CodeActionTools.delete_snippet] Deleting snippet {snippet} in {file_path} in repo {repo_name}"
+        )
 
-        codebase, document = self._get_document(file_path)
+        codebase, document = self.context.get_document_and_codebase(file_path)
 
         if not (document and codebase):
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
@@ -222,15 +227,15 @@ class CodeActionTools(BaseTools):
 
     #     return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
-    def create_file(self, file_path: str, snippet: str, commit_message: str):
+    def create_file(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
         Creates a file with the provided snippet.
         """
         logger.debug(
-            f"[CodeActionTools.create_file] Creating file {file_path} with snippet {snippet}"
+            f"[CodeActionTools.create_file] Creating file {file_path} with snippet {snippet} in {repo_name}"
         )
 
-        codebase, document = self._get_document(file_path)
+        codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
 
         if not document or not codebase:
             raise FileExistsError(f"File `{file_path}` already exists.")
@@ -245,13 +250,13 @@ class CodeActionTools(BaseTools):
 
         return "success"
 
-    def delete_file(self, file_path: str, commit_message: str):
+    def delete_file(self, file_path: str, repo_name: str, commit_message: str):
         """
         Deletes a file.
         """
-        logger.debug(f"[CodeActionTools.delete_file] Deleting file {file_path}")
+        logger.debug(f"[CodeActionTools.delete_file] Deleting file {file_path} in {repo_name}")
 
-        codebase, document = self._get_document(file_path)
+        codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
 
         if not document or not codebase:
             raise FileNotFoundError(f"File `{file_path}` not found.")
@@ -283,6 +288,11 @@ class CodeActionTools(BaseTools):
                         "description": "The file path to modify.",
                     },
                     {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "The name of the repository to modify.",
+                    },
+                    {
                         "name": "reference_snippet",
                         "type": "string",
                         "description": "The snippet to replace.",
@@ -312,6 +322,11 @@ class CodeActionTools(BaseTools):
                         "name": "file_path",
                         "type": "string",
                         "description": "The file path to modify.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "The name of the repository to modify.",
                     },
                     {
                         "name": "snippet",
@@ -365,6 +380,11 @@ class CodeActionTools(BaseTools):
                         "description": "The file path to create.",
                     },
                     {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "The name of the repository to modify.",
+                    },
+                    {
                         "name": "snippet",
                         "type": "string",
                         "description": "The snippet to insert.",
@@ -385,6 +405,11 @@ class CodeActionTools(BaseTools):
                         "name": "file_path",
                         "type": "string",
                         "description": "The file path to delete.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "The name of the repository to modify.",
                     },
                     {
                         "name": "commit_message",

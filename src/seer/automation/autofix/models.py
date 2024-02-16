@@ -72,10 +72,13 @@ class PlanningInput(BaseModel):
 class StacktraceFrame(BaseModel):
     function: str
     filename: str
+    abs_path: str
     line_no: int
     col_no: Optional[int]
     context: list[tuple[int, str]]
     repo_name: Optional[str] = None
+    repo_id: Optional[int] = None
+    in_app: bool = False
 
 
 class Stacktrace(BaseModel):
@@ -86,10 +89,10 @@ class Stacktrace(BaseModel):
         for frame in self.frames[:max_frames]:
             col_no_str = f":{frame.col_no}" if frame.col_no is not None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} ({frame.line_no}{col_no_str})\n"
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} [Line {frame.line_no}{col_no_str}] ({'In app' if frame.in_app else 'Not in app'})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
-                stack_str += f"{ctx[1]}{'  <--' if is_suspect_line else ''}\n"
+                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
             stack_str += "------\n"
         return stack_str
 
@@ -113,8 +116,10 @@ class SentryEvent(BaseModel):
                     function=frame["function"],
                     filename=frame["filename"],
                     line_no=frame["lineNo"],
+                    abs_path=frame["absPath"],
                     col_no=frame["colNo"],
                     context=frame["context"],
+                    in_app=frame["inApp"],
                 )
             )
 

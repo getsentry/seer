@@ -3,7 +3,6 @@ import logging
 import textwrap
 import time
 
-import numpy as np
 import tree_sitter_languages
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
@@ -127,8 +126,8 @@ class DocumentParser:
     def _get_str_token_count(self, text: str) -> int:
         return len(self.embedding_model.tokenize([text])["input_ids"][0])
 
-    def _get_node_token_count(self, node: Node) -> int:
-        return self._get_str_token_count(node.text.decode("utf-8"))
+    def _get_node_token_count(self, node: Node, last_end_byte: int, root: Node) -> int:
+        return self._get_str_token_count(root.text[last_end_byte : node.end_byte].decode("utf-8"))
 
     def _get_chunk_tokens(self, chunk: TempChunk, root: Node) -> int:
         return self._get_str_token_count(chunk.get_dump_for_embedding(root))
@@ -166,8 +165,11 @@ class DocumentParser:
             return len([c for c in spacing_text if c == "\n"]) < 2
 
         for i in range(len(children)):
-            # Check if the current node touches the previous node
-            token_count = self._get_node_token_count(children[i])
+            potential_chunk = TempChunk(
+                nodes=[children[i]], parent_declarations=parent_declarations
+            )
+            token_count = self._get_chunk_tokens(potential_chunk, root_node)
+
             if token_count > self.break_chunks_at:
                 # Recursively chunk the children if the current node is too big or should be chunked
                 parent_declarations_for_children = parent_declarations.copy()
@@ -203,18 +205,20 @@ class DocumentParser:
                 continue
 
             if len(chunks) > 0:
+                # The node_token_count doesn't include the parent declaration etc
+                node_token_count = self._get_node_token_count(children[i], last_end_byte, root_node)
                 if (
                     is_touching_last(children[i])
-                    and chunk_token_count + token_count < self.max_tokens
+                    and chunk_token_count + node_token_count < self.max_tokens
                 ):
                     # If it touches, add it to the current chunk
                     chunks[-1].nodes.append(children[i])
-                    chunk_token_count += token_count
+                    chunk_token_count += node_token_count
 
                     last_end_byte = children[i].end_byte
                     continue
 
-            chunks.append(TempChunk(nodes=[children[i]], parent_declarations=parent_declarations))
+            chunks.append(potential_chunk)
             chunk_token_count = token_count
             last_end_byte = children[i].end_byte
 
@@ -312,14 +316,15 @@ class DocumentParser:
 
         for i, tmp_chunk in enumerate(chunked_documents):
             context_text = tmp_chunk.get_context(tree.root_node)
-            chunk_text = tmp_chunk.get_content(tree.root_node).strip("\n")
+            chunk_text = tmp_chunk.get_content(tree.root_node)
             embedding_dump = tmp_chunk.get_dump_for_embedding(tree.root_node)
 
             chunk = DocumentChunk(
                 index=i,
                 first_line_number=last_line,
+                last_line_number=last_line + len(chunk_text),
                 context=context_text,
-                content=chunk_text,
+                content=chunk_text.strip("\n"),
                 path=document.path,
                 # Hash should be unique to the file, it is used in comparing which chunks changed
                 hash=self._generate_sha256_hash(f"[{document.path}][{i}]\n{embedding_dump}"),

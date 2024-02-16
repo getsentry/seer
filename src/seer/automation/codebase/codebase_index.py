@@ -1,22 +1,25 @@
-import functools
 import logging
-import os
 import uuid
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
-from seer.automation.autofix.models import FileChange, RepoDefinition
+from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
 from seer.automation.codebase.models import (
     Document,
     DocumentChunk,
     DocumentChunkWithEmbedding,
+    DocumentChunkWithEmbeddingAndId,
     RepositoryInfo,
 )
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.utils import cleanup_dir, read_directory, read_specific_files
+from seer.automation.codebase.utils import (
+    cleanup_dir,
+    potential_frame_match,
+    read_directory,
+    read_specific_files,
+)
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
 from seer.utils import class_method_lru_cache
@@ -25,10 +28,6 @@ logger = logging.getLogger("autofix")
 
 
 class CodebaseIndex:
-    # embedding_model = SentenceTransformer(
-    #     os.path.join("./", "models", "issue_grouping_v0/embeddings"), trust_remote_code=True
-    # ).to(get_torch_device())
-
     def __init__(
         self,
         organization: int,
@@ -205,7 +204,7 @@ class CodebaseIndex:
             for i in range(0, len(chunks), superchunk_size := 128):
                 batch_embeddings: np.ndarray = get_embedding_model().encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=16,
+                    batch_size=4,
                     show_progress_bar=True,
                 )  # type: ignore
                 embeddings.extend(batch_embeddings)
@@ -334,13 +333,30 @@ class CodebaseIndex:
 
         logger.info(f"Cleaned up temporary data for run_id {self.run_id}")
 
-    def _populate_chunks(self, chunks: list[DbDocumentChunk]) -> list[DocumentChunkWithEmbedding]:
+    def process_stacktrace(self, stacktrace: Stacktrace):
+        valid_file_paths = self.repo_client.get_valid_file_paths(self.repo_info.sha)
+        for frame in stacktrace.frames:
+            if frame.in_app and frame.repo_id is None:
+                if frame.filename in valid_file_paths:
+                    frame.repo_id = self.repo_info.id
+                    frame.repo_name = self.repo_info.external_slug
+                else:
+                    for valid_path in valid_file_paths:
+                        if potential_frame_match(valid_path, frame):
+                            frame.repo_id = self.repo_info.id
+                            frame.repo_name = self.repo_info.external_slug
+                            frame.filename = valid_path
+                            break
+
+    def _populate_chunks(
+        self, chunks: list[DbDocumentChunk]
+    ) -> list[DocumentChunkWithEmbeddingAndId]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(get_embedding_model())
 
-        matched_chunks: list[DocumentChunkWithEmbedding] = []
+        matched_chunks: list[DocumentChunkWithEmbeddingAndId] = []
         for chunk in chunks:
             content = self._get_file_content_with_cache(chunk.path, self.repo_info.sha)
 
@@ -359,13 +375,14 @@ class CodebaseIndex:
                 continue
 
             matched_chunks.append(
-                DocumentChunkWithEmbedding(
+                DocumentChunkWithEmbeddingAndId(
                     id=chunk.id,
                     path=chunk.path,
                     index=chunk.index,
                     hash=chunk.hash,
                     token_count=chunk.token_count,
                     first_line_number=chunk.first_line_number,
+                    last_line_number=chunk.last_line_number,
                     embedding=np.array(chunk.embedding),
                     content=matched_chunk.content,
                     context=matched_chunk.context,
