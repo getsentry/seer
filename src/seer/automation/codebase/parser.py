@@ -119,7 +119,7 @@ class TempChunk(BaseModel):
 class DocumentParser:
     def __init__(self, embedding_model: SentenceTransformer):
         self.embedding_model = embedding_model
-        self.max_tokens = int(self.embedding_model.get_max_seq_length())  # type: ignore
+        self.max_tokens = int(self.embedding_model.get_max_seq_length())
         self.break_chunks_at = 512
 
     def _get_str_token_count(self, text: str) -> int:

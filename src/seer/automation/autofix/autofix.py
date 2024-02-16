@@ -223,7 +223,7 @@ class Autofix:
                         pr_number=pr.number,
                         pr_url=pr.html_url,
                         repo=RepoDefinition(
-                            repo_provider=codebase.repo_client.provider,  # type: ignore
+                            repo_provider=codebase.repo_client.provider,
                             repo_owner=codebase.repo_client.repo_owner,
                             repo_name=codebase.repo_client.repo_name,
                         ),

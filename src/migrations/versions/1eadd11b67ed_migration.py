@@ -8,7 +8,7 @@ Create Date: 2024-02-16 22:47:47.653058
 
 import sqlalchemy as sa
 from alembic import op
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector  # type: ignore
 
 # revision identifiers, used by Alembic.
 revision = "1eadd11b67ed"

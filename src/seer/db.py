@@ -4,7 +4,7 @@ from typing import Collection
 import sqlalchemy
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector  # type: ignore
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker

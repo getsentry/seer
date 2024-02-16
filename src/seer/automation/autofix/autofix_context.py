@@ -79,7 +79,7 @@ class AutofixContext:
                 .all()
             )
 
-            chunks_by_repo_id = {}
+            chunks_by_repo_id: dict[int, list[DbDocumentChunk]] = {}
             for db_chunk in db_chunks:
                 chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
 

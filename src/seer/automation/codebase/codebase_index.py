@@ -203,7 +203,7 @@ class CodebaseIndex:
     @classmethod
     def _embed_chunks(cls, chunks: list[DocumentChunk]) -> list[DocumentChunkWithEmbedding]:
         logger.debug(f"Embedding {len(chunks)} chunks...")
-        embeddings = []
+        embeddings_list: list[np.ndarray] = []
 
         with tqdm(total=len(chunks)) as pbar:
             for i in range(0, len(chunks), superchunk_size := 128):
@@ -211,10 +211,10 @@ class CodebaseIndex:
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
                     batch_size=4,
                     show_progress_bar=True,
-                )  # type: ignore
-                embeddings.extend(batch_embeddings)
+                )
+                embeddings_list.extend(batch_embeddings)
                 pbar.update(superchunk_size)
-        embeddings = np.array(embeddings)
+        embeddings = np.array(embeddings_list)
         logger.debug(f"Embedded {len(chunks)} chunks")
 
         embedded_chunks = []
@@ -325,7 +325,7 @@ class CodebaseIndex:
             chunks = doc_parser.process_document(document)
             embedded_chunks = self._embed_chunks(chunks)
 
-            db_chunks = []
+            db_chunks: list[DbDocumentChunk] = []
             for chunk in embedded_chunks:
                 db_chunk = chunk.to_db_model()
                 db_chunk.for_run_id = str(self.run_id)

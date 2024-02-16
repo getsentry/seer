@@ -15,8 +15,6 @@ class BaseTools:
 
     def __init__(self, context: AutofixContext):
         self.context = context
-        self.retrieved_paths = set()
-        self.expanded_paths = set()
 
     def codebase_retriever(self, query: str, repo_name: str | None):
         chunks = self.context.query(query, repo_name=repo_name)
@@ -93,11 +91,6 @@ class BaseTools:
 
 class CodeActionTools(BaseTools):
     _snippet_matching_threshold = 0.9
-
-    def __init__(self, context: AutofixContext):
-        super().__init__(context)
-
-        self.file_changes = []
 
     def replace_snippet_with(
         self,
