@@ -146,7 +146,9 @@ class RepoClient:
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
             try:
-                self.repo.get_git_ref(branch_ref.ref).delete()
+                git_ref = self.repo.get_git_ref(branch_ref.ref)
+            if git_ref:
+                git_ref.delete()
             except UnknownObjectException as e:
                 logger.error(f"Failed to delete branch or reference due to: {e}")
                 # Continue execution even if branch/reference deletion fails
