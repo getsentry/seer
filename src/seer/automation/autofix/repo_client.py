@@ -259,5 +259,3 @@ class RepoClient:
         except Exception as e:
             logger.error("Failed to create pull request: {}".format(e))
             return None
-
-        )
