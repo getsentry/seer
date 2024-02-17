@@ -100,6 +100,11 @@ class RepoClient:
             base_sha = self.repo.get_branch(base_branch).commit.sha
 
         if not base_sha:
+            logger.error('Base SHA cannot be None')
+            raise ValueError('Base SHA cannot be None')
+            base_sha = self.repo.get_branch(base_branch).commit.sha
+
+        if not base_sha:
             raise ValueError("base_sha cannot be None")
 
         ref = self.repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
