@@ -138,7 +138,13 @@ class RepoClient:
         branch_ref = self._create_branch(new_branch_name, base_commit_sha=base_commit_sha)
 
         for change in file_changes:
-            try:
+                    try:
+            return self.repo.create_pull(
+                title=title, body=description, base="master", head=branch.ref, draft=True
+            )
+        except Exception as e:
+            logger.error("Failed to create pull request: {}".format(e))
+            return None
                 self._commit_file_change(change, branch_ref.ref)
             except Exception as e:
                 logger.error(f"Error committing file change: {e}")
@@ -150,8 +156,20 @@ class RepoClient:
 
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
-            try:
                     try:
+            return self.repo.create_pull(
+                title=title, body=description, base="master", head=branch.ref, draft=True
+            )
+        except Exception as e:
+            logger.error("Failed to create pull request: {}".format(e))
+            return None
+                            try:
+            return self.repo.create_pull(
+                title=title, body=description, base="master", head=branch.ref, draft=True
+            )
+        except Exception as e:
+            logger.error("Failed to create pull request: {}".format(e))
+            return None
                         self.repo.get_git_ref(branch_ref.ref).delete()
                     except UnknownObjectException:
                         logger.warning("Attempted to delete a branch or reference that does not exist.")
@@ -217,7 +235,13 @@ class RepoClient:
             stats=self._get_stats_str(usage.prompt_tokens, usage.completion_tokens),
         )
 
-                try:
+                        try:
+            return self.repo.create_pull(
+                title=title, body=description, base="master", head=branch.ref, draft=True
+            )
+        except Exception as e:
+            logger.error("Failed to create pull request: {}".format(e))
+            return None
             return self.repo.create_pull(
             title=title, body=description, base="master", head=branch.ref, draft=True
         )
