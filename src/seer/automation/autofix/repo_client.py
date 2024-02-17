@@ -217,6 +217,7 @@ class RepoClient:
             stats=self._get_stats_str(usage.prompt_tokens, usage.completion_tokens),
         )
 
-        return self.repo.create_pull(
+                try:
+            return self.repo.create_pull(
             title=title, body=description, base="master", head=branch.ref, draft=True
         )
