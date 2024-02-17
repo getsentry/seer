@@ -259,17 +259,5 @@ class RepoClient:
         except Exception as e:
             logger.error("Failed to create pull request: {}".format(e))
             return None
-                title=title, body=description, base="master", head=branch.ref, draft=True
-            )
-        except Exception as e:
-            logger.error("Failed to create pull request: {}".format(e))
-            return None
-        try:
-            return self.repo.create_pull(
-                title=title, body=description, base="master", head=branch.ref, draft=True
-            )
-        except Exception as e:
-            logger.error("Failed to create pull request: {}".format(e))
-            return None
-            title=title, body=description, base="master", head=branch.ref, draft=True
+
         )
