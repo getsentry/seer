@@ -329,7 +329,7 @@ class DocumentParser:
             chunk = DocumentChunk(
                 index=i,
                 first_line_number=last_line,
-                last_line_number=last_line + len(chunk_text),
+                last_line_number=last_line + len(chunk_text.split("\n")) - 1,
                 context=context_text,
                 content=chunk_text.strip("\n"),
                 path=document.path,
