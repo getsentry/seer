@@ -70,11 +70,11 @@ class ProblemDiscoveryPrompt:
             </output_guide>
 
             <error_message>
-                {err_msg}
+            {err_msg}
             </error_message>
 
             <stack_trace>
-                {stack_str}
+            {stack_str}
             </stack_trace>"""
         ).format(err_msg=err_msg, stack_str=stack_str)
 
@@ -187,11 +187,11 @@ class PlanningPrompts:
             </output_guide>
 
             <error_message>
-                {err_msg}
+            {err_msg}
             </error_message>
 
             <stack_trace>
-                {stack_str}
+            {stack_str}
             </stack_trace>"""
         ).format(err_msg=err_msg, stack_str=stack_str)
 
@@ -204,7 +204,26 @@ class ExecutionPrompts:
         return plan_item.text
 
     @staticmethod
-    def format_system_msg(context_dump: str):
+    def format_system_msg(context_dump: str, error_message: str | None, stack_trace: str | None):
+        issue_str = (
+            textwrap.dedent(
+                """\
+                <issue>
+                    <error_message>
+                {error_message}
+                    </error_message>
+                    <stack_trace>
+                {stack_trace}
+                    </stack_trace>
+                </issue>"""
+            ).format(
+                error_message=textwrap.indent(error_message, "        "),
+                stack_trace=textwrap.indent(stack_trace, "        "),
+            )
+            if error_message and stack_trace
+            else ""
+        )
+
         return textwrap.dedent(
             """\
             {context_dump}
@@ -224,5 +243,5 @@ class ExecutionPrompts:
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Do not just add a comment or leave a TODO, you must write functional code.
                 - If needed, you can create unit tests by searching through the codebase for existing unit tests.
-            </guidelines>"""
-        ).format(context_dump=context_dump)
+            </guidelines>{issue_str}"""
+        ).format(context_dump=context_dump, issue_str=issue_str)

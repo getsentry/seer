@@ -5,6 +5,10 @@ from pydantic import BaseModel
 from seer.automation.agent.types import Usage
 
 
+class FileChangeError(Exception):
+    pass
+
+
 class FileChange(BaseModel):
     change_type: Literal["create", "edit", "delete"]
     path: str
@@ -14,15 +18,20 @@ class FileChange(BaseModel):
 
     def apply(self, file_contents: str | None) -> str | None:
         if self.change_type == "create":
-            assert file_contents is None
-            assert self.new_snippet is not None
+            if file_contents is not None:
+                raise FileChangeError("Cannot create a file that already exists.")
+            if self.new_snippet is None:
+                raise FileChangeError("New snippet must be provided for creating a file.")
             return self.new_snippet
 
-        assert file_contents is not None
+        if file_contents is None:
+            raise FileChangeError("File contents must be provided for non-create operations.")
 
         if self.change_type == "edit":
-            assert self.new_snippet is not None
-            assert self.reference_snippet is not None
+            if self.new_snippet is None:
+                raise FileChangeError("New snippet must be provided for editing a file.")
+            if self.reference_snippet is None:
+                raise FileChangeError("Reference snippet must be provided for editing a file.")
             return file_contents.replace(self.reference_snippet, self.new_snippet)
 
         # Delete
@@ -70,9 +79,13 @@ class PlanningInput(BaseModel):
 class StacktraceFrame(BaseModel):
     function: str
     filename: str
+    abs_path: str
     line_no: int
     col_no: Optional[int]
     context: list[tuple[int, str]]
+    repo_name: Optional[str] = None
+    repo_id: Optional[int] = None
+    in_app: bool = False
 
 
 class Stacktrace(BaseModel):
@@ -81,10 +94,12 @@ class Stacktrace(BaseModel):
     def to_str(self, max_frames: int = 4):
         stack_str = ""
         for frame in self.frames[:max_frames]:
-            stack_str += f" {frame.function} in {frame.filename} ({frame.line_no}:{frame.col_no})\n"
+            col_no_str = f":{frame.col_no}" if frame.col_no is not None else ""
+            repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} [Line {frame.line_no}{col_no_str}] ({'In app' if frame.in_app else 'Not in app'})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
-                stack_str += f"{ctx[1]}{'  <--' if is_suspect_line else ''}\n"
+                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
             stack_str += "------\n"
         return stack_str
 
@@ -108,8 +123,10 @@ class SentryEvent(BaseModel):
                     function=frame["function"],
                     filename=frame["filename"],
                     line_no=frame["lineNo"],
+                    abs_path=frame["absPath"],
                     col_no=frame["colNo"],
                     context=frame["context"],
+                    in_app=frame["inApp"],
                 )
             )
 
@@ -122,9 +139,25 @@ class IssueDetails(BaseModel):
     events: list[SentryEvent]
 
 
-class AutofixRequest(BaseModel):
+class RepoDefinition(BaseModel):
+    repo_provider: Literal["github"]
+    repo_owner: str
+    repo_name: str
+
+
+class OldAutofixRequest(BaseModel):
     issue: IssueDetails
     base_commit_sha: str
+    additional_context: Optional[str] = None
+
+
+class AutofixRequest(BaseModel):
+    organization_id: int
+    project_id: int
+    repos: list[RepoDefinition]
+    base_commit_sha: Optional[str] = None
+
+    issue: IssueDetails
     additional_context: Optional[str] = None
 
 
@@ -139,3 +172,9 @@ class AutofixOutput(BaseModel):
 
 class AutofixEndpointResponse(BaseModel):
     started: bool
+
+
+class PullRequestResult(BaseModel):
+    pr_number: int
+    pr_url: str
+    repo: RepoDefinition
