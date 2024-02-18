@@ -149,9 +149,9 @@ class RepoClient:
             try:
                 self.repo.get_git_ref(branch_ref.ref).delete()
             except UnknownObjectException:
-                logger.warning("Attempted to delete a branch or reference that does not exist.")
+                logger.warning(f"Attempted to delete a branch or reference that does not exist: {branch_ref.ref}.")
             except UnknownObjectException:
-                logger.warning("Attempted to delete a branch or reference that does not exist.")
+                logger.warning(f"Attempted to delete a branch or reference that does not exist: {branch_ref.ref}.")
             sentry_sdk.capture_message(
                 f"Failed to create branch from changes. Comparison is ahead by {comparison.ahead_by}"
             )
