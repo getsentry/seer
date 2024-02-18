@@ -95,6 +95,8 @@ class RepoClient:
         return changed_files, removed_files
 
     def _create_branch(self, branch_name, base_branch=None, base_commit_sha: str | None = None):
+        if not base_commit_sha and not base_branch:
+            raise ValueError("Either base_commit_sha or base_branch must be provided")
         base_sha = base_commit_sha
         if base_branch:
             base_sha = self.repo.get_branch(base_branch).commit.sha
