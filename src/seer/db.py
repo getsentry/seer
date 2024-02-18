@@ -116,7 +116,5 @@ class DbDocumentChunk(Base):
     index: Mapped[int] = mapped_column(Integer, nullable=False)
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    first_line_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    last_line_number: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     for_run_id: Mapped[str] = mapped_column(String(36), nullable=True)

@@ -319,7 +319,6 @@ class DocumentParser:
         chunked_documents = self._chunk_nodes_by_whitespace(tree.root_node, document.language)
 
         chunks: list[DocumentChunk] = []
-        last_line = 1
 
         for i, tmp_chunk in enumerate(chunked_documents):
             context_text = tmp_chunk.get_context(tree.root_node)
@@ -328,8 +327,6 @@ class DocumentParser:
 
             chunk = DocumentChunk(
                 index=i,
-                first_line_number=last_line,
-                last_line_number=last_line + len(chunk_text.split("\n")) - 1,
                 context=context_text,
                 content=chunk_text.strip("\n"),
                 path=document.path,
@@ -339,8 +336,6 @@ class DocumentParser:
                 repo_id=document.repo_id,
                 language=document.language,
             )
-
-            last_line += len(chunk_text.split("\n"))
 
             chunks.append(chunk)
 

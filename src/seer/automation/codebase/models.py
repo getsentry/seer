@@ -22,8 +22,6 @@ class DocumentChunk(BaseModel):
     hash: str
     path: str
     index: int
-    first_line_number: int
-    last_line_number: int
     token_count: int
     repo_id: int
 
@@ -36,12 +34,10 @@ class DocumentChunk(BaseModel):
     def get_dump_for_llm(self, repo_name: str):
         return textwrap.dedent(
             """\
-            [Lines {first_line_number}-{last_line_number} in "{path}" in repo "{repo_name}"]
+            ["{path}" in repo "{repo_name}"]
             {context}{content}"""
         ).format(
             path=self.path,
-            first_line_number=self.first_line_number,
-            last_line_number=self.last_line_number,
             repo_name=repo_name,
             context=self.context if self.context else "",
             content=self.content,
@@ -50,12 +46,10 @@ class DocumentChunk(BaseModel):
     def __str__(self):
         return textwrap.dedent(
             """\
-            [Lines {first_line_number}-{last_line_number} in "{path}"]
+            [{path}]
             {context}{content}"""
         ).format(
             path=self.path,
-            first_line_number=self.first_line_number,
-            last_line_number=self.last_line_number,
             context=self.context if self.context else "",
             content=self.content,
         )
@@ -75,8 +69,6 @@ class DocumentChunkWithEmbedding(DocumentChunk):
             index=self.index,
             hash=self.hash,
             token_count=self.token_count,
-            first_line_number=self.first_line_number,
-            last_line_number=self.last_line_number,
             embedding=self.embedding,
             language=self.language,
         )

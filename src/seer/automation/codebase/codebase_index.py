@@ -399,8 +399,6 @@ class CodebaseIndex:
                     index=chunk.index,
                     hash=chunk.hash,
                     token_count=chunk.token_count,
-                    first_line_number=chunk.first_line_number,
-                    last_line_number=chunk.last_line_number,
                     embedding=np.array(chunk.embedding),
                     content=matched_chunk.content,
                     context=matched_chunk.context,
