@@ -35,6 +35,9 @@ services:
             - CELERY_BROKER_URL=amqp://guest:guest@host.docker.internal:5672//
             - CELERY_WORKER_ENABLE=true # Enable celery worker
             - DATABASE_URL=postgresql+psycopg://root:seer@db/seer
+            - LANGCHAIN_TRACING_V2=true
+            - LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+            - LANGCHAIN_PROJECT="ai-autofix"
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:

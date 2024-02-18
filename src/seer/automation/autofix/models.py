@@ -2,7 +2,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from seer.automation.agent.types import Usage
+from seer.automation.agent.models import Usage
 
 
 class FileChangeError(Exception):

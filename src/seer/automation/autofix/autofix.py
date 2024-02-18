@@ -4,11 +4,12 @@ import textwrap
 import xml.etree.ElementTree as ET
 
 import sentry_sdk
+from langsmith import RunTree, traceable
 
 from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.agent.agent import GptAgent
-from seer.automation.agent.singleturn import LlmClient
-from seer.automation.agent.types import Message, Usage
+from seer.automation.agent.client import GptClient, LlmClient
+from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.event_manager import AutofixEventManager, AutofixStatus
 from seer.automation.autofix.models import (
@@ -55,7 +56,10 @@ class Autofix:
             request.repos,
         )
 
-    def run(self) -> None:
+    @traceable(name="Autofix Run")
+    def run(self, run_tree: RunTree) -> None:
+        run_tree.inputs = {"request": self.request.model_dump()}
+
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
@@ -126,6 +130,7 @@ class Autofix:
                         logger.info(f"Codebase indexing scheduled for later")
                 else:
                     logger.debug(f"Codebase is up to date")
+                    self.event_manager.send_codebase_indexing_result("COMPLETED")
 
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
@@ -147,10 +152,10 @@ class Autofix:
 
                 if not planning_output:
                     logger.warning(f"Planning agent did not return a valid response")
-                    self.event_manager.send_planning_result(None)
+                    # self.event_manager.send_planning_result(None)
                     return
 
-                self.event_manager.send_planning_result(planning_output)
+                # self.event_manager.send_planning_result(planning_output)
 
                 logger.info(
                     f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
@@ -158,16 +163,16 @@ class Autofix:
             except Exception as e:
                 logger.error(f"Failed to plan: {e}")
                 sentry_sdk.capture_exception(e)
-                self.event_manager.send_planning_result(None)
+                # self.event_manager.send_planning_result(None)
                 return
 
             for i, step in enumerate(planning_output.steps):
-                self.event_manager.send_execution_step_start(step.id)
+                # self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
                 self.run_execution_agent(step)
 
-                self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
+                # self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
 
             logger.debug(
                 "File changes:",
@@ -191,6 +196,13 @@ class Autofix:
                         usage=self.usage,
                     )
                 )
+
+            run_tree.outputs = {
+                "file_changes": [
+                    codebase.file_changes for codebase in self.context.codebases.values()
+                ],
+                "prs": prs,
+            }
         except Exception as e:
             logger.error(f"Failed to complete autofix")
             logger.exception(e)
@@ -271,6 +283,7 @@ class Autofix:
 
         return None
 
+    @traceable(run_type="llm", name="Problem Discovery Agent")
     def run_problem_discovery_agent(
         self, request: ProblemDiscoveryRequest | None = None
     ) -> ProblemDiscoveryOutput | None:
@@ -299,7 +312,7 @@ class Autofix:
 
         problem_discovery_response = problem_discovery_agent.run(message)
 
-        self.usage.add(problem_discovery_agent.usage)
+        self.usage += problem_discovery_agent.usage
 
         if problem_discovery_response is None:
             logger.warning(f"Problem discovery agent did not return a valid response")
@@ -354,6 +367,7 @@ class Autofix:
             logger.warning(f"Planning response does not contain a title, description, or plan: {e}")
             return None
 
+    @traceable(run_type="llm", name="Planning Agent")
     def run_planning_agent(self, input: PlanningInput) -> PlanningOutput | None:
         assert (
             input.message or input.previous_output or input.problem
@@ -390,7 +404,7 @@ class Autofix:
 
         planning_response = planning_agent.run(message)
 
-        self.usage.add(planning_agent.usage)
+        self.usage += planning_agent.usage
 
         if planning_response is None:
             logger.warning(f"Planning agent did not return a valid response")
@@ -398,11 +412,15 @@ class Autofix:
 
         return self._parse_planning_output(planning_response)
 
+    @traceable(run_type="retriever", name="Execution Agent Plan Step Context Fetcher")
     def _get_plan_step_context(self, plan_item: PlanStep):
         logger.debug(f"Getting context for plan item: {plan_item}")
 
+        def json_parser(x) -> list[str] | None:
+            return json.loads(x) if x else None
+
         # Identify good search queries for the plan item
-        resp: tuple[list[str], Usage] = LlmClient().completion_with_parser(
+        queries, message, usage = GptClient().completion_with_parser(
             model="gpt-4-0125-preview",
             messages=[
                 Message(role="system", content=PlanningPrompts.format_plan_item_query_system_msg()),
@@ -411,11 +429,16 @@ class Autofix:
                     content=PlanningPrompts.format_plan_item_query_default_msg(plan_item=plan_item),
                 ),
             ],
-            parser=lambda x: json.loads(x),
+            parser=json_parser,
         )
-        queries: list[str] = resp[0]
+
+        self.usage += usage
 
         logger.debug(f"Search queries: {queries}")
+
+        if not queries:
+            logger.warning(f"No search queries found for plan item: {plan_item}")
+            return ""
 
         context_dump = ""
         unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
@@ -432,6 +455,7 @@ class Autofix:
 
         return context_dump
 
+    @traceable(run_type="llm", name="Execution Agent")
     def run_execution_agent(self, plan_item: PlanStep):
         # TODO: make this more robust
         try:
@@ -465,4 +489,4 @@ class Autofix:
 
         execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
 
-        self.usage.add(execution_agent.usage)
+        self.usage += execution_agent.usage
