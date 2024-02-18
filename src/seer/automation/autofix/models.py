@@ -5,6 +5,10 @@ from pydantic import BaseModel
 from seer.automation.agent.types import Usage
 
 
+class FileChangeError(Exception):
+    pass
+
+
 class FileChange(BaseModel):
     change_type: Literal["create", "edit", "delete"]
     path: str
@@ -14,17 +18,20 @@ class FileChange(BaseModel):
 
     def apply(self, file_contents: str | None) -> str | None:
         if self.change_type == "create":
-            assert file_contents is None, "Cannot create a file that already exists."
-            assert self.new_snippet is not None, "New snippet must be provided for creating a file."
+            if file_contents is not None:
+                raise FileChangeError("Cannot create a file that already exists.")
+            if self.new_snippet is None:
+                raise FileChangeError("New snippet must be provided for creating a file.")
             return self.new_snippet
 
-        assert file_contents is not None
+        if file_contents is None:
+            raise FileChangeError("File contents must be provided for non-create operations.")
 
         if self.change_type == "edit":
-            assert self.new_snippet is not None, "New snippet must be provided for editing a file."
-            assert (
-                self.reference_snippet is not None
-            ), "Reference snippet must be provided for editing a file."
+            if self.new_snippet is None:
+                raise FileChangeError("New snippet must be provided for editing a file.")
+            if self.reference_snippet is None:
+                raise FileChangeError("Reference snippet must be provided for editing a file.")
             return file_contents.replace(self.reference_snippet, self.new_snippet)
 
         # Delete

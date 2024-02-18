@@ -92,8 +92,6 @@ class AutofixContext:
             db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
             populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
 
-        print("populated_chunks", populated_chunks)
-
         return populated_chunks
 
     def get_document_and_codebase(
