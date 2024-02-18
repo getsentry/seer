@@ -41,8 +41,6 @@ def upgrade():
         sa.Column("index", sa.Integer(), nullable=False),
         sa.Column("hash", sa.String(length=64), nullable=False),
         sa.Column("token_count", sa.Integer(), nullable=False),
-        sa.Column("first_line_number", sa.Integer(), nullable=False),
-        sa.Column("last_line_number", sa.Integer(), nullable=False),
         sa.Column("embedding", Vector(dim=768), nullable=False),
         sa.Column("for_run_id", sa.String(length=36), nullable=True),
         sa.ForeignKeyConstraint(
