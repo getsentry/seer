@@ -102,6 +102,13 @@ class RepoClient:
         if not base_sha:
             raise ValueError("base_sha cannot be None")
 
+        # Check if base_sha is a valid reference in the repo
+        try:
+            self.repo.get_commit(base_sha)
+        except UnknownObjectException:
+            logger.error("Invalid base_sha: The specified base commit SHA does not exist in the repository.")
+            return None
+
         ref = self.repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=base_sha)
         return ref
 
