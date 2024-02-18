@@ -10,7 +10,7 @@ from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.singleturn import LlmClient
 from seer.automation.agent.types import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.event_manager import AutofixEventManager
+from seer.automation.autofix.event_manager import AutofixEventManager, AutofixStatus
 from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
@@ -136,7 +136,7 @@ class Autofix:
                 self.event_manager.send_autofix_complete(None)
                 return
 
-            self.event_manager.send_codebase_indexing_result("COMPLETED")
+            self.event_manager.send_codebase_indexing_result(AutofixStatus.COMPLETED)
 
             self.context.process_stacktrace(self.stacktrace)
 
@@ -167,7 +167,7 @@ class Autofix:
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
                 self.run_execution_agent(step)
 
-                self.event_manager.send_execution_step_result(step.id, "COMPLETED")
+                self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
 
             logger.debug(
                 "File changes:",
