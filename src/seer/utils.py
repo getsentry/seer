@@ -1,5 +1,7 @@
 import functools
+import json
 import weakref
+from enum import Enum
 
 
 def class_method_lru_cache(*lru_args, **lru_kwargs):
@@ -21,3 +23,14 @@ def class_method_lru_cache(*lru_args, **lru_kwargs):
         return wrapped_func
 
     return decorator
+
+
+class SeerJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
+
+
+def json_dumps(data, **kwargs) -> str:
+    return json.dumps(data, cls=SeerJSONEncoder, **kwargs)

@@ -1,11 +1,12 @@
 import hashlib
 import hmac
-import json
 import logging
 import os
 from abc import ABC, abstractmethod
 
 import requests
+
+from seer.utils import json_dumps
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +18,17 @@ class RpcClient(ABC):
 
 
 class DummyRpcClient(RpcClient):
+    """Dummy RPC client that logs the method and arguments it's called with. Use for dev only."""
+
     def __init__(self, should_log: bool = False):
         self.should_log = should_log
 
     def call(self, method: str, **kwargs):
+        body_dict = {"args": kwargs}
+        json_dump = json_dumps(body_dict, separators=(",", ":"))
+
         if self.should_log:
-            print(f"Calling {method} with {kwargs}")
+            print(f"Calling {method} with {json_dump}")
         return None
 
 
@@ -47,14 +53,14 @@ class SentryRpcClient(RpcClient):
         url_path = f"/api/0/internal/seer-rpc/{method}/"
         endpoint = f"{self.base_url}{url_path}"
         body_dict = {"args": kwargs}
-        body = json.dumps(body_dict, separators=(",", ":"))
+        body = json_dumps(body_dict, separators=(",", ":"))
         body_bytes = body.encode("utf-8")
         signature = self._generate_request_signature(url_path, body_bytes)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Rpcsignature {signature}",
         }
-        response = requests.post(endpoint, headers=headers, json=body_dict)
+        response = requests.post(endpoint, headers=headers, data=body_bytes)
         response.raise_for_status()
 
         if response.headers.get("Content-Type") == "application/json":
