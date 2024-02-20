@@ -3,6 +3,7 @@ name: Commit schema updates
 on:
   push:
     branches: [ main ]
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -14,10 +15,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Check for schema changes
         id: diff
         run: |
-          if [[ -n $(git show --name-only | grep src/seer/schemas) ]]; then
+          if [[ -n "$(git show --name-only | grep src/seer/schemas)" ]]; then
             echo "changes=true" >> ${GITHUB_OUTPUT}
           else
             echo "changes=false" >> ${GITHUB_OUTPUT}
@@ -34,6 +37,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
         run: |
+          set -x
           git config --global user.name "$(git log -1 --pretty=format:%an $GITHUB_SHA)"
           git config --global user.email "$(git log -1 --pretty=format:%ae $GITHUB_SHA)"
           git clone https://getsentry-bot:$GITHUB_TOKEN@github.com/getsentry/sentry-data-schemas
