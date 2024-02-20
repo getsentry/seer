@@ -1,3 +1,12 @@
+from json import JSONEncoder
+from src.seer.automation.autofix.event_manager import AutofixStatus
+
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AutofixStatus):
+            return obj.value
+        return JSONEncoder.default(self, obj)
+
 import hashlib
 import hmac
 import logging
