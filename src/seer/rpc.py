@@ -5,6 +5,17 @@ import os
 from abc import ABC, abstractmethod
 
 import requests
+from abc import ABC, abstractmethod
+import json
+from enum import Enum
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AutofixStatus):
+            return obj.value
+        return super().default(obj)
+
 
 from seer.utils import json_dumps
 
