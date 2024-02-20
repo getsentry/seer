@@ -152,10 +152,10 @@ class Autofix:
 
                 if not planning_output:
                     logger.warning(f"Planning agent did not return a valid response")
-                    # self.event_manager.send_planning_result(None)
+                    self.event_manager.send_planning_result(None)
                     return
 
-                # self.event_manager.send_planning_result(planning_output)
+                self.event_manager.send_planning_result(planning_output)
 
                 logger.info(
                     f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
@@ -163,16 +163,16 @@ class Autofix:
             except Exception as e:
                 logger.error(f"Failed to plan: {e}")
                 sentry_sdk.capture_exception(e)
-                # self.event_manager.send_planning_result(None)
+                self.event_manager.send_planning_result(None)
                 return
 
             for i, step in enumerate(planning_output.steps):
-                # self.event_manager.send_execution_step_start(step.id)
+                self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
                 self.run_execution_agent(step)
 
-                # self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
+                self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
 
             logger.debug(
                 "File changes:",
