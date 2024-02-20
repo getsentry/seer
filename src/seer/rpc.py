@@ -2,6 +2,15 @@ import hashlib
 import hmac
 import logging
 import os
+from enum import Enum
+import json
+
+class EnumEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return json.JSONEncoder.default(self, obj)
+
 from abc import ABC, abstractmethod
 
 import requests
