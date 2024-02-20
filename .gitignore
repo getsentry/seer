@@ -134,3 +134,7 @@ dmypy.json
 .Dockerfile.swp
 
 models
+
+
+# Mac specific
+.DS_Store
