@@ -1,6 +1,7 @@
 import pytest
 
 from seer.db import Session, db
+from seer.generator import GeneratorPlugin
 
 
 @pytest.fixture(autouse=True)
@@ -16,3 +17,7 @@ def manage_db():
     finally:
         with app.app_context():
             db.metadata.drop_all(bind=db.engine)
+
+
+def pytest_configure(config: pytest.Config):
+    config.pluginmanager.register(GeneratorPlugin())
