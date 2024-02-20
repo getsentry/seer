@@ -107,14 +107,7 @@ class CodebaseIndex:
 
     @classmethod
     @traceable(name="Creating codebase index")
-    def create(
-        cls,
-        organization: int,
-        project: int,
-        repo: RepoDefinition,
-        run_id: uuid.UUID,
-        run_tree: RunTree,
-    ):
+    def create(cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID):
         repo_client = RepoClient(repo.repo_provider, repo.repo_owner, repo.repo_name)
 
         head_sha = repo_client.get_default_branch_head_sha()
@@ -219,7 +212,7 @@ class CodebaseIndex:
             for i in range(0, len(chunks), superchunk_size := 128):
                 batch_embeddings: np.ndarray = get_embedding_model().encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=1,
+                    batch_size=4,
                     show_progress_bar=True,
                 )
                 embeddings_list.extend(batch_embeddings)

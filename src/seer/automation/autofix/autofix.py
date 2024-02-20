@@ -8,7 +8,7 @@ from langsmith import RunTree, traceable
 
 from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.agent.agent import GptAgent
-from seer.automation.agent.client import GptClient, LlmClient
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.event_manager import AutofixEventManager, AutofixStatus
@@ -57,9 +57,9 @@ class Autofix:
         )
 
     @traceable(name="Autofix Run")
-    def run(self, run_tree: RunTree) -> None:
-        run_tree.inputs = {"request": self.request.model_dump()}
-
+    def run(self, run_tree: RunTree):
+        metadata = run_tree.extra.get("metadata", {})
+        metadata["request"] = self.request.model_dump()
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
@@ -183,26 +183,28 @@ class Autofix:
                 planning_output.title, planning_output.description, planning_output.steps
             )
 
+            outputs = []
             if prs:
                 # TODO: Support more than 1 PR...
                 pr = prs[0]
-                self.event_manager.send_autofix_complete(
-                    AutofixOutput(
-                        title=planning_output.title,
-                        description=planning_output.description,
-                        pr_url=pr.pr_url,
-                        repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
-                        pr_number=pr.pr_number,
-                        usage=self.usage,
-                    )
+                output = AutofixOutput(
+                    title=planning_output.title,
+                    description=planning_output.description,
+                    pr_url=pr.pr_url,
+                    repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
+                    pr_number=pr.pr_number,
+                    usage=self.usage,
                 )
+                self.event_manager.send_autofix_complete(output)
+                outputs.append(output)
 
-            run_tree.outputs = {
-                "file_changes": [
-                    codebase.file_changes for codebase in self.context.codebases.values()
-                ],
-                "prs": prs,
-            }
+                metadata.setdefault("prs", []).extend([pr.model_dump() for pr in prs])
+
+            file_changes = {}
+            for repo_id, codebase in self.context.codebases.items():
+                file_changes[repo_id] = codebase.file_changes
+
+            return {"outputs": outputs, "prs": prs, "file_changes": file_changes}
         except Exception as e:
             logger.error(f"Failed to complete autofix")
             logger.exception(e)

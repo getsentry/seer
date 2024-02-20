@@ -37,7 +37,7 @@ services:
             - DATABASE_URL=postgresql+psycopg://root:seer@db/seer
             - LANGCHAIN_TRACING_V2=true
             - LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
-            - LANGCHAIN_PROJECT="ai-autofix"
+            - LANGCHAIN_PROJECT="ai-autofix-dev"
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:
