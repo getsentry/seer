@@ -29,8 +29,6 @@ class Usage(BaseModel):
     total_tokens: int = 0
 
     def __add__(self, other: "Usage"):
-        if not isinstance(other, Usage):
-            return NotImplemented
         return Usage(
             completion_tokens=self.completion_tokens + other.completion_tokens,
             prompt_tokens=self.prompt_tokens + other.prompt_tokens,

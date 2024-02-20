@@ -130,7 +130,7 @@ class Autofix:
                         logger.info(f"Codebase indexing scheduled for later")
                 else:
                     logger.debug(f"Codebase is up to date")
-                    self.event_manager.send_codebase_indexing_result("COMPLETED")
+                    self.event_manager.send_codebase_indexing_result(AutofixStatus.COMPLETED)
 
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
