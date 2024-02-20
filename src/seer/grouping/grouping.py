@@ -124,11 +124,12 @@ class GroupingLookup:
         Returns:
             None
         """
-        new_embedding_normalized = new_record.embeddings / np.linalg.norm(new_record.embeddings)
-        self.data = pd.concat([self.data, pd.DataFrame([new_record.dict()])], ignore_index=True)
-        project_index = self.indexes[new_record.project_id]
-        project_index.add(np.array([new_embedding_normalized], dtype="float32"))
-        self.indexes[new_record.project_id] = project_index
+        if new_record.group_id not in self.data["group_id"].values:
+            new_embedding_normalized = new_record.embeddings / np.linalg.norm(new_record.embeddings)
+            self.data = pd.concat([self.data, pd.DataFrame([new_record.dict()])], ignore_index=True)
+            project_index = self.indexes[new_record.project_id]
+            project_index.add(np.array([new_embedding_normalized], dtype="float32"))
+            self.indexes[new_record.project_id] = project_index
 
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
