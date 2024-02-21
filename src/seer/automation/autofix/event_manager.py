@@ -28,6 +28,14 @@ class Step(BaseModel):
     status: AutofixStatus
 
 
+import json
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AutofixStatus):
+            return obj.value
+        return super().default(obj)
+
 class AutofixEventManager:
     steps: list[Step] = []
 
