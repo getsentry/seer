@@ -1,5 +1,8 @@
 import functools
+import json
 import weakref
+from enum import Enum
+
 
 
 def class_method_lru_cache(*lru_args, **lru_kwargs):
