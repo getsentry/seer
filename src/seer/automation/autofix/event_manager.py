@@ -39,7 +39,7 @@ class AutofixEventManager:
         self.rpc_client.call(
             "on_autofix_step_update",
             issue_id=self.issue_id,
-            status=status,
+            status=status.value,
             steps=[step.model_dump() for step in self.steps],
         )
 
