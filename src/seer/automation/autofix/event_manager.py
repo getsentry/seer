@@ -1,4 +1,12 @@
 import enum
+import json
+from enum import Enum
+
+class AutoFixJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
 import logging
 from typing import Literal, Optional
 
