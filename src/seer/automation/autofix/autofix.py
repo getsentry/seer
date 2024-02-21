@@ -4,11 +4,12 @@ import textwrap
 import xml.etree.ElementTree as ET
 
 import sentry_sdk
+from langsmith import RunTree, traceable
 
 from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.agent.agent import GptAgent
-from seer.automation.agent.singleturn import LlmClient
-from seer.automation.agent.types import Message, Usage
+from seer.automation.agent.client import GptClient
+from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.event_manager import AutofixEventManager, AutofixStatus
 from seer.automation.autofix.models import (
@@ -28,6 +29,7 @@ from seer.automation.autofix.prompts import (
     ExecutionPrompts,
     PlanningPrompts,
     ProblemDiscoveryPrompt,
+    UnitTestGenerationPrompts,
 )
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
@@ -55,18 +57,27 @@ class Autofix:
             request.repos,
         )
 
-    def run(self) -> None:
+    def set_stacktrace(self) -> bool:
+        events = self.request.issue.events
+        stacktrace = events[-1].get_stacktrace() if events else None
+        if not stacktrace:
+            return False
+        self.stacktrace = stacktrace
+
+        return True
+
+    @traceable(name="Autofix Run")
+    def run(self, run_tree: RunTree):
+        metadata = run_tree.extra.get("metadata", {})
+        metadata["request"] = self.request.model_dump()
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-            events = self.request.issue.events
-            stacktrace = events[-1].get_stacktrace() if events else None
-            if not stacktrace:
+            if not self.set_stacktrace():
                 logger.warning(f"No stacktrace found for issue {self.request.issue.id}")
 
                 self.event_manager.send_no_stacktrace_error()
                 return
-            self.stacktrace = stacktrace
 
             self.event_manager.send_initial_steps()
 
@@ -75,6 +86,8 @@ class Autofix:
             if not problem_discovery_output:
                 logger.warning(f"Problem discovery agent did not return a valid response")
                 return
+
+            print("problem_discovery_output", problem_discovery_output.model_dump())
 
             problem_discovery_payload = ProblemDiscoveryResult(
                 status=(
@@ -126,6 +139,7 @@ class Autofix:
                         logger.info(f"Codebase indexing scheduled for later")
                 else:
                     logger.debug(f"Codebase is up to date")
+                    self.event_manager.send_codebase_indexing_result(AutofixStatus.COMPLETED)
 
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
@@ -147,10 +161,12 @@ class Autofix:
 
                 if not planning_output:
                     logger.warning(f"Planning agent did not return a valid response")
-                    self.event_manager.send_planning_result(None)
+                    # self.event_manager.send_planning_result(None)
                     return
 
-                self.event_manager.send_planning_result(planning_output)
+                print("planning_output", planning_output.model_dump())
+
+                # self.event_manager.send_planning_result(planning_output)
 
                 logger.info(
                     f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
@@ -158,16 +174,18 @@ class Autofix:
             except Exception as e:
                 logger.error(f"Failed to plan: {e}")
                 sentry_sdk.capture_exception(e)
-                self.event_manager.send_planning_result(None)
+                # self.event_manager.send_planning_result(None)
                 return
 
             for i, step in enumerate(planning_output.steps):
-                self.event_manager.send_execution_step_start(step.id)
+                # self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
                 self.run_execution_agent(step)
 
-                self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
+                # self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
+
+            self.run_unit_test_generation(problem_discovery_output, planning_output)
 
             logger.debug(
                 "File changes:",
@@ -178,19 +196,28 @@ class Autofix:
                 planning_output.title, planning_output.description, planning_output.steps
             )
 
+            outputs = []
             if prs:
                 # TODO: Support more than 1 PR...
                 pr = prs[0]
-                self.event_manager.send_autofix_complete(
-                    AutofixOutput(
-                        title=planning_output.title,
-                        description=planning_output.description,
-                        pr_url=pr.pr_url,
-                        repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
-                        pr_number=pr.pr_number,
-                        usage=self.usage,
-                    )
+                output = AutofixOutput(
+                    title=planning_output.title,
+                    description=planning_output.description,
+                    pr_url=pr.pr_url,
+                    repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
+                    pr_number=pr.pr_number,
+                    usage=self.usage,
                 )
+                # self.event_manager.send_autofix_complete(output)
+                outputs.append(output)
+
+                metadata.setdefault("prs", []).extend([pr.model_dump() for pr in prs])
+
+            file_changes = {}
+            for repo_id, codebase in self.context.codebases.items():
+                file_changes[repo_id] = codebase.file_changes
+
+            return {"outputs": outputs, "prs": prs, "file_changes": file_changes}
         except Exception as e:
             logger.error(f"Failed to complete autofix")
             logger.exception(e)
@@ -271,6 +298,7 @@ class Autofix:
 
         return None
 
+    @traceable(run_type="llm", name="Problem Discovery Agent")
     def run_problem_discovery_agent(
         self, request: ProblemDiscoveryRequest | None = None
     ) -> ProblemDiscoveryOutput | None:
@@ -299,7 +327,7 @@ class Autofix:
 
         problem_discovery_response = problem_discovery_agent.run(message)
 
-        self.usage.add(problem_discovery_agent.usage)
+        self.usage += problem_discovery_agent.usage
 
         if problem_discovery_response is None:
             logger.warning(f"Problem discovery agent did not return a valid response")
@@ -354,6 +382,7 @@ class Autofix:
             logger.warning(f"Planning response does not contain a title, description, or plan: {e}")
             return None
 
+    @traceable(run_type="llm", name="Planning Agent")
     def run_planning_agent(self, input: PlanningInput) -> PlanningOutput | None:
         assert (
             input.message or input.previous_output or input.problem
@@ -390,7 +419,7 @@ class Autofix:
 
         planning_response = planning_agent.run(message)
 
-        self.usage.add(planning_agent.usage)
+        self.usage += planning_agent.usage
 
         if planning_response is None:
             logger.warning(f"Planning agent did not return a valid response")
@@ -398,11 +427,51 @@ class Autofix:
 
         return self._parse_planning_output(planning_response)
 
+    @traceable(run_type="llm", name="Unit Test Generation Agent")
+    def run_unit_test_generation(
+        self, problem: ProblemDiscoveryOutput, planning_output: PlanningOutput
+    ):
+        file_changes = []
+        for codebase in self.context.codebases.values():
+            file_changes.extend(codebase.file_changes)
+
+        prompt = UnitTestGenerationPrompts.format_default_msg(
+            problem, planning_output, file_changes
+        )
+
+        code_action_tools = CodeActionTools(
+            self.context,
+        )
+
+        execution_agent = GptAgent(
+            name="unit test",
+            tools=code_action_tools.get_tools(),
+            memory=[
+                Message(
+                    role="system",
+                    content=ExecutionPrompts.format_system_msg(
+                        "",  # TODO: Put context dump...
+                        error_message=self.request.issue.title,
+                        stack_trace=self.stacktrace.to_str(),
+                    ),
+                ),
+            ],
+            stop_message="<DONE>",
+        )
+
+        execution_agent.run(prompt)
+
+        self.usage += execution_agent.usage
+
+    @traceable(run_type="retriever", name="Execution Agent Plan Step Context Fetcher")
     def _get_plan_step_context(self, plan_item: PlanStep):
         logger.debug(f"Getting context for plan item: {plan_item}")
 
+        def json_parser(x) -> list[str] | None:
+            return json.loads(x) if x else None
+
         # Identify good search queries for the plan item
-        resp: tuple[list[str], Usage] = LlmClient().completion_with_parser(
+        queries, message, usage = GptClient().completion_with_parser(
             model="gpt-4-0125-preview",
             messages=[
                 Message(role="system", content=PlanningPrompts.format_plan_item_query_system_msg()),
@@ -411,11 +480,16 @@ class Autofix:
                     content=PlanningPrompts.format_plan_item_query_default_msg(plan_item=plan_item),
                 ),
             ],
-            parser=lambda x: json.loads(x),
+            parser=json_parser,
         )
-        queries: list[str] = resp[0]
+
+        self.usage += usage
 
         logger.debug(f"Search queries: {queries}")
+
+        if not queries:
+            logger.warning(f"No search queries found for plan item: {plan_item}")
+            return ""
 
         context_dump = ""
         unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
@@ -432,6 +506,7 @@ class Autofix:
 
         return context_dump
 
+    @traceable(run_type="llm", name="Execution Agent")
     def run_execution_agent(self, plan_item: PlanStep):
         # TODO: make this more robust
         try:
@@ -465,4 +540,4 @@ class Autofix:
 
         execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
 
-        self.usage.add(execution_agent.usage)
+        self.usage += execution_agent.usage

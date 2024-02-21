@@ -1,7 +1,12 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.models import PlanStep, ProblemDiscoveryOutput
+from seer.automation.autofix.models import (
+    FileChange,
+    PlanningOutput,
+    PlanStep,
+    ProblemDiscoveryOutput,
+)
 
 
 def format_additional_context(additional_context: str):
@@ -156,11 +161,12 @@ class PlanningPrompts:
 
             <guidelines>
                 - The plan should be a specific series of code changes, anything else that is not a specific code change is implied. The other engineers will be able to figure out the rest.
-                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred.
+                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred before outputting the plan.
                 - Search as many times as you'd like as these searches are free and you have a big bonus waiting for you.
                 - Think out loud step-by-step as you search the codebase and write the plan.
                 - Understand the context of the issue and the codebase before you start writing the plan.
                 - Make sure that the code changed by the plan would work well with the rest of the codebase and would not introduce any new bugs.
+                - The plan should not include research tasks, such as "look into this" or "investigate that", you should be the one doing the research.
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Call the tools via the tool calling API before you output the plan.
@@ -194,6 +200,62 @@ class PlanningPrompts:
             {stack_str}
             </stack_trace>"""
         ).format(err_msg=err_msg, stack_str=stack_str)
+
+
+class UnitTestGenerationPrompts:
+    @staticmethod
+    def format_default_msg(
+        problem: ProblemDiscoveryOutput,
+        planning_output: PlanningOutput,
+        file_changes: list[FileChange],
+    ):
+        steps_str = "\n".join([f"    - {step.text}" for step in planning_output.steps])
+        file_changes_str = "\n".join([f"{file_change}" for file_change in file_changes])
+
+        return textwrap.dedent(
+            """\
+            The problem has been identified as:
+
+            <problem>
+            {problem_description}
+            {problem_reasoning}
+            </problem>
+
+            Given this problem, an execution plan was generated:
+
+            <plan>
+            <description>
+            {plan_description}
+            </description>
+            <steps>
+            {steps_str}
+            </steps>
+            </plan>
+
+            To accomplish this task, the following file changes have been performed to execute the plan:
+
+            <file_changes>
+            {file_changes}
+            </file_changes>
+
+            Please generate high-quality unit tests that reproduce the above problems and test the file changes.
+            <guidelines>
+            - Use the tools provided to you and think out loud step-by-step before you start writing the tests.
+            - Do the necessary research with the codebase_search tool to understand the context of the issue and the codebase.
+            - You have all the necessary tools needed to write the code for the unit tests.
+            - You do not need to run the tests, just write the tests.
+            - The tests should be valid, executable code and should be written in the language of the codebase.
+            - The tests should be written in a way that they are easy to understand and maintain.
+            </guidelines>
+
+            When you are done, and the steps have been performed using the provided tools, or if you are unable to complete the task, reply with "<DONE>"."""
+        ).format(
+            problem_description=problem.description,
+            problem_reasoning=problem.reasoning,
+            plan_description=planning_output.description,
+            steps_str=steps_str,
+            file_changes=file_changes_str,
+        )
 
 
 class ExecutionPrompts:

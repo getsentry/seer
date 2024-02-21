@@ -1,8 +1,9 @@
+import textwrap
 from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from seer.automation.agent.types import Usage
+from seer.automation.agent.models import Usage
 
 
 class FileChangeError(Exception):
@@ -39,6 +40,25 @@ class FileChange(BaseModel):
             return None
 
         return file_contents.replace(self.reference_snippet, "")
+
+    def __str__(self):
+        return textwrap.dedent(
+            """\
+            <file_change type="{change_type}" path="{path}" description="{description}">
+            <before>
+            {reference_snippet}
+            </before>
+            <after>
+            {new_snippet}
+            </after>
+            </file_change>"""
+        ).format(
+            change_type=self.change_type,
+            path=self.path,
+            reference_snippet=self.reference_snippet,
+            new_snippet=self.new_snippet,
+            description=self.description,
+        )
 
 
 class PlanStep(BaseModel):
