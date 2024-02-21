@@ -130,6 +130,7 @@ class GptAgent(LlmAgent):
         self.memory.append(message)
 
         logger.debug(f"Message content:\n{message.content}")
+        logger.debug(f"Message tool calls:\n{message.tool_calls}")
 
         if message.tool_calls:
             for tool_call in message.tool_calls:

@@ -29,6 +29,7 @@ from seer.automation.autofix.prompts import (
     ExecutionPrompts,
     PlanningPrompts,
     ProblemDiscoveryPrompt,
+    UnitTestGenerationPrompts,
 )
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
@@ -56,6 +57,15 @@ class Autofix:
             request.repos,
         )
 
+    def set_stacktrace(self) -> bool:
+        events = self.request.issue.events
+        stacktrace = events[-1].get_stacktrace() if events else None
+        if not stacktrace:
+            return False
+        self.stacktrace = stacktrace
+
+        return True
+
     @traceable(name="Autofix Run")
     def run(self, run_tree: RunTree):
         metadata = run_tree.extra.get("metadata", {})
@@ -63,14 +73,11 @@ class Autofix:
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-            events = self.request.issue.events
-            stacktrace = events[-1].get_stacktrace() if events else None
-            if not stacktrace:
+            if not self.set_stacktrace():
                 logger.warning(f"No stacktrace found for issue {self.request.issue.id}")
 
                 self.event_manager.send_no_stacktrace_error()
                 return
-            self.stacktrace = stacktrace
 
             self.event_manager.send_initial_steps()
 
@@ -79,6 +86,8 @@ class Autofix:
             if not problem_discovery_output:
                 logger.warning(f"Problem discovery agent did not return a valid response")
                 return
+
+            print("problem_discovery_output", problem_discovery_output.model_dump())
 
             problem_discovery_payload = ProblemDiscoveryResult(
                 status=(
@@ -152,10 +161,12 @@ class Autofix:
 
                 if not planning_output:
                     logger.warning(f"Planning agent did not return a valid response")
-                    self.event_manager.send_planning_result(None)
+                    # self.event_manager.send_planning_result(None)
                     return
 
-                self.event_manager.send_planning_result(planning_output)
+                print("planning_output", planning_output.model_dump())
+
+                # self.event_manager.send_planning_result(planning_output)
 
                 logger.info(
                     f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
@@ -163,16 +174,18 @@ class Autofix:
             except Exception as e:
                 logger.error(f"Failed to plan: {e}")
                 sentry_sdk.capture_exception(e)
-                self.event_manager.send_planning_result(None)
+                # self.event_manager.send_planning_result(None)
                 return
 
             for i, step in enumerate(planning_output.steps):
-                self.event_manager.send_execution_step_start(step.id)
+                # self.event_manager.send_execution_step_start(step.id)
 
                 logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
                 self.run_execution_agent(step)
 
-                self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
+                # self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
+
+            self.run_unit_test_generation(problem_discovery_output, planning_output)
 
             logger.debug(
                 "File changes:",
@@ -195,7 +208,7 @@ class Autofix:
                     pr_number=pr.pr_number,
                     usage=self.usage,
                 )
-                self.event_manager.send_autofix_complete(output)
+                # self.event_manager.send_autofix_complete(output)
                 outputs.append(output)
 
                 metadata.setdefault("prs", []).extend([pr.model_dump() for pr in prs])
@@ -413,6 +426,42 @@ class Autofix:
             return None
 
         return self._parse_planning_output(planning_response)
+
+    @traceable(run_type="llm", name="Unit Test Generation Agent")
+    def run_unit_test_generation(
+        self, problem: ProblemDiscoveryOutput, planning_output: PlanningOutput
+    ):
+        file_changes = []
+        for codebase in self.context.codebases.values():
+            file_changes.extend(codebase.file_changes)
+
+        prompt = UnitTestGenerationPrompts.format_default_msg(
+            problem, planning_output, file_changes
+        )
+
+        code_action_tools = CodeActionTools(
+            self.context,
+        )
+
+        execution_agent = GptAgent(
+            name="unit test",
+            tools=code_action_tools.get_tools(),
+            memory=[
+                Message(
+                    role="system",
+                    content=ExecutionPrompts.format_system_msg(
+                        "",  # TODO: Put context dump...
+                        error_message=self.request.issue.title,
+                        stack_trace=self.stacktrace.to_str(),
+                    ),
+                ),
+            ],
+            stop_message="<DONE>",
+        )
+
+        execution_agent.run(prompt)
+
+        self.usage += execution_agent.usage
 
     @traceable(run_type="retriever", name="Execution Agent Plan Step Context Fetcher")
     def _get_plan_step_context(self, plan_item: PlanStep):
