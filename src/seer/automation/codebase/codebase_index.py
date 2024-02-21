@@ -2,6 +2,7 @@ import logging
 import uuid
 
 import numpy as np
+from langsmith import RunTree, traceable
 from tqdm import tqdm
 
 from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
@@ -105,6 +106,7 @@ class CodebaseIndex:
         raise ValueError(f"Repository with id {repo_id} not found")
 
     @classmethod
+    @traceable(name="Creating codebase index")
     def create(cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID):
         repo_client = RepoClient(repo.repo_provider, repo.repo_owner, repo.repo_name)
 
@@ -148,6 +150,7 @@ class CodebaseIndex:
         finally:
             cleanup_dir(tmp_dir)
 
+    @traceable(name="Updating codebase index")
     def update(self):
         """
         Updates the codebase index to the latest state of the default branch if needed

@@ -1,6 +1,8 @@
 import logging
 import textwrap
 
+from langsmith import traceable
+
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import FileChange
@@ -16,6 +18,7 @@ class BaseTools:
     def __init__(self, context: AutofixContext):
         self.context = context
 
+    @traceable(run_type="tool", name="Codebase Search")
     def codebase_retriever(self, query: str, repo_name: str | None):
         chunks = self.context.query(query, repo_name=repo_name)
 
@@ -29,6 +32,7 @@ class BaseTools:
             )
         return content
 
+    @traceable(run_type="tool", name="Expand Document")
     def expand_document(self, input: str, repo_name: str | None = None):
         _, document = self.context.get_document_and_codebase(input, repo_name=repo_name)
 
@@ -92,6 +96,7 @@ class BaseTools:
 class CodeActionTools(BaseTools):
     _snippet_matching_threshold = 0.9
 
+    @traceable(run_type="tool", name="Replace Snippet")
     def replace_snippet_with(
         self,
         file_path: str,
@@ -137,6 +142,7 @@ class CodeActionTools(BaseTools):
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
+    @traceable(run_type="tool", name="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
         Deletes a snippet.
@@ -220,6 +226,7 @@ class CodeActionTools(BaseTools):
 
     #     return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
+    @traceable(run_type="tool", name="Create File")
     def create_file(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
         Creates a file with the provided snippet.
@@ -243,6 +250,7 @@ class CodeActionTools(BaseTools):
 
         return "success"
 
+    @traceable(run_type="tool", name="Delete File")
     def delete_file(self, file_path: str, repo_name: str, commit_message: str):
         """
         Deletes a file.

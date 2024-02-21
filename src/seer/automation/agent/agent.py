@@ -3,12 +3,11 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
-import openai_multi_tool_use_parallel_patch  # import applies the patch
-from openai import OpenAI
 from openai._types import NotGiven
 
+from seer.automation.agent.client import GptClient, LlmClient
+from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
-from seer.automation.agent.types import Message, ToolCall, Usage
 
 logger = logging.getLogger("autofix")
 
@@ -18,7 +17,7 @@ class LlmAgent(ABC):
     tools: list[FunctionTool]
     memory: list[Message]
 
-    openai_client: OpenAI
+    client: LlmClient
     iterations: int = 0
     max_iterations: int = 48
 
@@ -33,7 +32,6 @@ class LlmAgent(ABC):
         self.memory = memory or []
         self.usage = Usage()
         self.name = name
-        self.openai_client = OpenAI()
         self.stop_message = stop_message
 
     @abstractmethod
@@ -112,6 +110,7 @@ class GptAgent(LlmAgent):
         stop_message: str | None = None,
     ):
         super().__init__(tools, memory, name=name, stop_message=stop_message)
+        self.client = GptClient()
 
         self.chat_completion_kwargs = chat_completion_kwargs
 
@@ -121,20 +120,19 @@ class GptAgent(LlmAgent):
         messages = [{k: v for k, v in msg.dict().items() if v is not None} for msg in self.memory]
         # logger.debug(f"Messages: {messages}")
 
-        completion = self.openai_client.chat.completions.create(
+        message, usage = self.client.completion(
             model=self.model,
             messages=messages,  # type: ignore
             tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),
             **self.chat_completion_kwargs,
         )
 
-        response_message = completion.choices[0].message
-        self.memory.append(Message(**response_message.dict()))
+        self.memory.append(message)
 
-        logger.debug(f"Message content:\n{response_message.content}")
+        logger.debug(f"Message content:\n{message.content}")
 
-        if response_message.tool_calls:
-            for tool_call in response_message.tool_calls:
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
                 tool_response = self.call_tool(
                     ToolCall(
                         id=tool_call.id,
@@ -146,10 +144,6 @@ class GptAgent(LlmAgent):
                 self.memory.append(tool_response)
 
         self.iterations += 1
-
-        if completion.usage:
-            self.usage.completion_tokens += completion.usage.completion_tokens
-            self.usage.prompt_tokens += completion.usage.prompt_tokens
-            self.usage.total_tokens += completion.usage.total_tokens
+        self.usage += usage
 
         return self.memory
