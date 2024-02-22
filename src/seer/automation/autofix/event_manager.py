@@ -8,7 +8,7 @@ from seer.automation.autofix.models import AutofixOutput, PlanningOutput, Proble
 from seer.rpc import RpcClient
 
 
-class AutofixStatus(enum.Enum):
+class AutofixStatus(enum.Enum):\n\n\ndef json_serializable_enum(obj):\n    if isinstance(obj, enum.Enum):\n        return obj.value\n    raise TypeError(\"Type not serializable\")
     COMPLETED = "COMPLETED"
     ERROR = "ERROR"
     PENDING = "PENDING"
