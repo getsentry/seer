@@ -29,7 +29,6 @@ from seer.automation.autofix.prompts import (
     ExecutionPrompts,
     PlanningPrompts,
     ProblemDiscoveryPrompt,
-    UnitTestGenerationPrompts,
 )
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
