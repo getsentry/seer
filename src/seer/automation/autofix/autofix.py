@@ -418,8 +418,17 @@ class Autofix:
     def _get_plan_step_context(self, plan_item: PlanStep):
         logger.debug(f"Getting context for plan item: {plan_item}")
 
-        def json_parser(x) -> list[str] | None:
-            return json.loads(x) if x else None
+        def parser(x: str | None) -> list[str] | None:
+            if x is None:
+                return None
+
+            el = ET.fromstring(f"<response>{x}</response>")
+            text = extract_xml_element_text(el, "queries")
+
+            if text is None:
+                return None
+
+            return json.loads(text)
 
         # Identify good search queries for the plan item
         queries, message, usage = GptClient().completion_with_parser(
@@ -431,7 +440,7 @@ class Autofix:
                     content=PlanningPrompts.format_plan_item_query_default_msg(plan_item=plan_item),
                 ),
             ],
-            parser=json_parser,
+            parser=parser,
         )
 
         self.usage += usage
@@ -445,7 +454,7 @@ class Autofix:
         context_dump = ""
         unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
         for query in queries:
-            retrived_chunks = self.context.query(query, top_k=2)
+            retrived_chunks = self.context.query(query, top_k=4)
             for chunk in retrived_chunks:
                 unique_chunks[chunk.hash] = chunk
         chunks = list(unique_chunks.values())
@@ -466,8 +475,6 @@ class Autofix:
             logger.error(f"Failed to get context for plan item: {e}")
             sentry_sdk.capture_exception(e)
             context_dump = ""
-
-        context_dump = ""
 
         code_action_tools = CodeActionTools(
             self.context,

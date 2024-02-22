@@ -84,18 +84,38 @@ class PlanningPrompts:
     def format_plan_item_query_system_msg():
         return textwrap.dedent(
             """\
-            Given the below plan item, please output a JSON array of strings of queries that you would use to find the code that would accomplish the plan item.
+            Given the below instruction, please output a JSON array of strings of queries that you would use to find the code that would accomplish the instruction.
 
-            Examples:
-            - "Rename the function `get_abc()` to `get_xyz()` in `static/app.py`."
+            <guidelines>
+            - The queries should be specific to the codebase and should be able to be used to find the code that would accomplish the instruction.
+            - The queries can be both keywords and semantic queries.
+            </guidelines>
 
-            Output:
-            ["get_abc", "static/app.py", "get_abc in static/app.py"]"""
+            Examples are provided below:
+
+            <instruction>
+            "Rename the function `get_abc()` to `get_xyz()` in `static/app.py`."
+            </instruction>
+            <queries>
+            ["get_abc", "static/app.py", "get_abc in static/app.py"]
+            </queries>
+            <instruction>
+            "Find where the endpoint for `/api/v1/health` is defined in the codebase."
+            </instruction>
+            <queries>
+            ["/api/v1/health", "health endpoint", "health api", "status check"]
+            </queries>"""
         )
 
     @staticmethod
     def format_plan_item_query_default_msg(plan_item: PlanStep):
-        return plan_item.text
+        return textwrap.dedent(
+            """\
+            <instruction>
+            "{text}"
+            </instruction>
+            """
+        ).format(text=plan_item.text)
 
     @staticmethod
     def format_default_msg(
