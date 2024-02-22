@@ -4,7 +4,7 @@ import logging
 import os
 from abc import ABC, abstractmethod
 
-import requests
+import requests\n\nclass CustomJSONEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, AutofixStatus):\n            return obj.name\n        # Let the base class default method raise the TypeError\n        return json.JSONEncoder.default(self, obj)
 
 from seer.utils import json_dumps
 
