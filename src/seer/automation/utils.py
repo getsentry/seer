@@ -29,7 +29,7 @@ def get_embedding_model():
 
 def parse_json_with_keys(json_str: str, valid_keys: list[str]) -> dict[str, Any]:
     """
-    NOTE: This function will only work if the json is not nested, and the values are all strings.
+    NOTE: This function will only work if the json is not nested, and also doesn't work on arrays.
 
     Parses a JSON string and extracts key-value pairs where the key is in the list of valid keys.
 
