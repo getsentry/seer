@@ -58,17 +58,20 @@ def parse_json_with_keys(json_str: str, valid_keys: list[str]) -> dict[str, Any]
                 key_contains_invalid_chars = any(
                     char in key for char in [" ", "\n", "\t", "\r", "\f", "\b", '"', "'", ":", ","]
                 )
-                if (
-                    key_contains_invalid_chars
-                    and node.prev_named_sibling
-                    and node.prev_named_sibling.type == "pair"
+                prev_sibling = node.prev_named_sibling
+                while prev_sibling and (
+                    prev_sibling.type != "pair"
+                    or prev_sibling.children[0].text[1:-1].decode("utf-8") not in valid_keys
                 ):
-                    correct_key = node.prev_named_sibling.children[0].text[1:-1].decode("utf-8")
-                    is_previous_child_str = node.prev_named_sibling.children[2].type == "string"
+                    prev_sibling = prev_sibling.prev_named_sibling
+
+                if key_contains_invalid_chars and prev_sibling and prev_sibling.type == "pair":
+                    correct_key = prev_sibling.children[0].text[1:-1].decode("utf-8")
+                    is_previous_child_str = prev_sibling.children[2].type == "string"
                     start_byte = (
-                        node.prev_named_sibling.children[2].start_byte + 1
+                        prev_sibling.children[2].start_byte + 1
                         if is_previous_child_str
-                        else node.prev_named_sibling.children[2].start_byte
+                        else prev_sibling.children[2].start_byte
                     )
                     is_current_child_str = node.children[2].type == "string"
                     end_byte = (
