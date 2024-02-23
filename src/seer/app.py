@@ -4,7 +4,6 @@ import time
 from typing import Any, Callable
 
 import sentry_sdk
-from flask import Flask
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from seer.automation.autofix.models import (
@@ -14,36 +13,15 @@ from seer.automation.autofix.models import (
     RepoDefinition,
 )
 from seer.automation.autofix.tasks import run_autofix
+from seer.bootup import bootup
 from seer.db import Session, db, migrate
 from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
-
-def traces_sampler(sampling_context):
-    if "wsgi_environ" in sampling_context:
-        path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
-        if path_info and path_info.startswith("/health/"):
-            return 0.0
-
-    return 1.0
-
-
-sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
-    integrations=[FlaskIntegration()],
-    traces_sampler=traces_sampler,
-    profiles_sample_rate=1.0,
-    enable_tracing=True,
-)
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
-
-db.init_app(app)
-migrate.init_app(app, db)
-
 root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
+app = bootup(__name__, [FlaskIntegration()], init_migrations=True)
 
 
 def model_path(subpath: str) -> str:

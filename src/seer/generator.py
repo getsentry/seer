@@ -1,15 +1,17 @@
 import dataclasses
+import datetime
 import enum
+import functools
 import inspect
 import itertools
 import math
+import os.path
 import random
 import string
 import struct
 import typing
 from typing import Any, Iterator, TypeVar, get_type_hints
 
-import pytest
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
@@ -18,9 +20,6 @@ _A = TypeVar("_A")
 _B = TypeVar("_B")
 _Pydantic = TypeVar("_Pydantic", bound=BaseModel)
 _Tuple = TypeVar("_Tuple", bound=tuple)
-
-if typing.TYPE_CHECKING:
-    import pytest
 
 
 @dataclasses.dataclass
@@ -54,7 +53,51 @@ all_floats = (struct.unpack("d", struct.pack("Q", bits))[0] for bits in unsigned
 floats = (v for v in all_floats if not math.isinf(v) and not math.isnan(v))
 bools = gen.one_of([True, False])
 objects = (object() for _ in gen)
-ascii_words = ("".join(r.sample(string.printable, r.randint(0, 20))) for r in gen)
+printable_strings = ("".join(r.sample(string.printable, r.randint(0, 20))) for r in gen)
+colors = gen.one_of(
+    ["red", "green", "blue", "orange", "purple", "cyan", "magenta", "magenta", "yellow"]
+)
+names = gen.one_of(
+    [
+        "bob",
+        "alice",
+        "jennifer",
+        "john",
+        "mary",
+        "jane",
+        "sally",
+        "fred",
+        "dan",
+        "alex",
+        "margaret",
+        "vincent",
+        "timothy",
+    ]
+)
+things = gen.one_of(
+    [
+        "shirt",
+        "sneaker",
+        "shoe",
+        "apple",
+        "banana",
+        "orange",
+        "tea",
+        "sandwich",
+        "tennis",
+        "football",
+        "basketball",
+        "fork",
+    ]
+)
+ascii_words = ("-".join(group) for group in zip(colors, names, things))
+datetimes = (
+    datetime.datetime(2023, 1, 1, 1)
+    + datetime.timedelta(
+        days=r.randint(0, 365), seconds=r.randint(0, 60 * 60 * 24), milliseconds=r.randint(0, 1000)
+    )
+    for r in gen
+)
 
 
 def _pydantic_has_default(field: FieldInfo) -> bool:
@@ -98,7 +141,7 @@ def generate_dicts_for_annotations(
 def generate_dicts_for_pydantic_model(
     context: "GeneratorContext",
 ) -> Iterator[dict[str, Any]]:
-    hints = get_type_hints(context.source)
+    hints = get_type_hints(context.source, include_extras=True)
     return generate_dicts_for_annotations(
         {
             k: hints.get(k, Any)
@@ -112,7 +155,7 @@ def generate_dicts_for_pydantic_model(
 def generate_dicts_for_dataclass_model(
     context: "GeneratorContext",
 ) -> Iterator[dict[str, Any]]:
-    hints = get_type_hints(context.source)
+    hints = get_type_hints(context.source, include_extras=True)
     fields = {f.name: f for f in dataclasses.fields(context.source)}
     return generate_dicts_for_annotations(
         {
@@ -214,6 +257,7 @@ class GeneratorContext:
             generate_pydantic_instances,
             generate_dataclass_instances,
             generate_dicts_from_typeddict,
+            generate_sqlalchemy_instance,
             generate_dicts,
             generate_enums,
             generate_results_from_call,
@@ -280,12 +324,11 @@ def generate_dicts_from_typeddict(context: GeneratorContext) -> Iterator[Any] | 
 
 
 def generate_dicts(context: GeneratorContext) -> Iterator[dict[Any, Any]] | None:
-    if (
-        context.origin
-        and inspect.isclass(context.origin)
-        and issubclass(context.origin, typing.Mapping)
+    if any(
+        source and inspect.isclass(source) and issubclass(source, typing.Mapping)
+        for source in (context.source, context.origin)
     ):
-        key, value, *_ = (*context.args, object, object)
+        key, value, *_ = (*context.args, str, str)
         key_generator = generate(context.step(key, "[Key]"))
         value_generator = generate(context.step(value, "[Value]"))
         return (
@@ -382,6 +425,8 @@ def generate_primitives(context: GeneratorContext) -> typing.Iterator[Any] | Non
         return objects
     if source is float:
         return floats
+    if source is datetime.datetime:
+        return datetimes
     return None
 
 
@@ -391,7 +436,54 @@ def generate_any(context: GeneratorContext) -> typing.Iterator[Any] | None:
     return None
 
 
-def generate(context: GeneratorContext | Any) -> typing.Iterator[Any]:
+def generate_sqlalchemy_instance(context: GeneratorContext) -> typing.Iterator[Any] | None:
+    import sqlalchemy
+    import sqlalchemy.orm
+
+    if inspect.isclass(context.source) and issubclass(
+        context.source, sqlalchemy.orm.DeclarativeBase
+    ):
+        hints = get_type_hints(context.source, include_extras=True)
+        inspection = sqlalchemy.inspect(context.source)
+        dict_generator = generate_dicts_for_annotations(
+            {
+                c.key: next(iter(typing.get_args(hint)), Any)
+                if typing.get_origin(hint) is sqlalchemy.orm.Mapped
+                else hint
+                for c in inspection.c
+                for hint in (hints.get(c.key, Any),)
+                if context.include_defaults
+                or (
+                    not c.primary_key
+                    and not c.nullable
+                    and c.default is None
+                    and c.server_default is None
+                )
+            },
+            context,
+        )
+        return (context.source(**d) for d in dict_generator)
+    return None
+
+
+@typing.overload
+def generate(context: GeneratorContext | Any, count: None = ...) -> typing.Iterator[Any]:
+    ...
+
+
+@typing.overload
+def generate(context: GeneratorContext | Any, count: int) -> list[Any]:
+    ...
+
+
+@typing.overload
+def generate(context: typing.Callable[..., _A] | Any, count: int) -> list[_A]:
+    ...
+
+
+def generate(
+    context: GeneratorContext | Any, count: int | None = None
+) -> typing.Iterator[Any] | list[Any]:
     if not isinstance(context, GeneratorContext):
         gen_context = GeneratorContext.from_source(context)
     else:
@@ -400,53 +492,63 @@ def generate(context: GeneratorContext | Any) -> typing.Iterator[Any]:
     for generator in gen_context.generators:
         result = generator(gen_context)
         if result is not None:
+            if count is not None:
+                rv = [i for i, _ in zip(result, range(count))]
+                if len(rv) < count:
+                    raise ValueError(
+                        f"Failed to generator {count} values, check that constraint is not too strong."
+                    )
+                return rv
             return result
     raise TypeError(f"Could not generate for {' '.join(gen_context.context)} {gen_context.source}")
 
 
 def parameterize(
-    seed: int, count: int = 10, include_defaults=False, **generators: Any
-) -> typing.Callable[[typing.Callable[..., Any]], typing.Callable[..., Any]]:
+    _arg: Any = None,
+    *,
+    seed: int | None = None,
+    count: int = 10,
+    include_defaults=False,
+    arg_set: typing.Sequence[str] | None = None,
+    generators: typing.Sequence[Generator] = (),
+    **parameter_overrides: Any,
+) -> typing.Callable:
     import pytest
 
-    def decorator(func: typing.Callable[..., Any]) -> typing.Callable[..., Any]:
+    if _arg is not None:
+        return parameterize()(_arg)
+
+    def decorator(func: typing.Callable[..., Any]) -> Any:
         argspec = inspect.getfullargspec(func)
-        context = GeneratorContext.from_source(func)
-        return pytest.mark.generate(
-            seed=seed,
-            count=count,
-            include_defaults=include_defaults,
-            generators=generators,
-            argspec=argspec,
-            context=context,
-        )(func)
+        injected_args: list[str] = sorted(arg_set if arg_set is not None else argspec.args)
+        if invalid_arg := next((k not in injected_args for k in parameter_overrides.keys()), None):
+            raise ValueError(
+                f"Argument {invalid_arg} cannot be injected, check your arg_set and your kwd arguments to parameterize."
+            )
 
-    return decorator
-
-
-class GeneratorPlugin:
-    def pytest_configure(self, config: pytest.Config):
-        config.addinivalue_line("markers", "generate: runs test with generated inputs")
-
-    def pytest_generate_tests(self, metafunc: pytest.Metafunc):
-        generate = metafunc.definition.get_closest_marker("generate")
-        if generate:
-            seed = generate.kwargs["seed"]
-            count = generate.kwargs["count"]
-            include_defaults = generate.kwargs["include_defaults"]
-            generators = generate.kwargs["generators"]
-            argspec = generate.kwargs["argspec"]
-            context = generate.kwargs["context"]
-
-            gen.restart_at(seed)
+        def generate() -> typing.Iterator[typing.Sequence[Any]]:
+            gen.restart_at(seed if seed is not None else hash(func.__name__))
+            context = GeneratorContext.from_source(func)
+            context.include_defaults = include_defaults
+            context.generators = [*generators, *context.generators]
             context.include_defaults = include_defaults
             call_args = generate_dicts_for_annotations(
-                {k: generators.get(k, argspec.annotations.get(k, Any)) for k in argspec.args},
+                {
+                    k: parameter_overrides.get(k, argspec.annotations.get(k, Any))
+                    for k in injected_args
+                },
                 context,
             )
 
-            arg_groups = [d.values() for d, _ in zip(call_args, range(count))]
-            assert arg_groups, "Could not generate test inputs for {}".format(
-                context.source.__name__
-            )
-            metafunc.parametrize(argspec.args, arg_groups)
+            i = 0
+            for d, _ in zip(call_args, range(count)):
+                yield list(d.values())
+                i += 1
+            if i < count:
+                raise ValueError(
+                    f"Failed to generator {count} test cases for {func.__name__} ({i}), check that constraint is not too strong."
+                )
+
+        return pytest.mark.parametrize(injected_args, generate())(func)
+
+    return decorator

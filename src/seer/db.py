@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import datetime
 from typing import Collection
 
@@ -5,7 +7,7 @@ import sqlalchemy
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, delete
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -17,7 +19,7 @@ class Base(DeclarativeBase):
 # Initialized in src/app.run
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
-Session = sessionmaker()
+Session = sessionmaker(expire_on_commit=False)
 
 
 class ProcessRequest(Base):
@@ -42,7 +44,7 @@ class ProcessRequest(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True, nullable=False)
     scheduled_for: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, index=True, nullable=False
+        DateTime, default=datetime.datetime(2020, 1, 1), index=True, nullable=False
     )
     scheduled_from: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime(2020, 1, 1), nullable=False
@@ -57,29 +59,52 @@ class ProcessRequest(Base):
         return self.scheduled_for < self.scheduled_from
 
     def last_delay(self) -> datetime.timedelta:
-        return max(self.scheduled_for - self.scheduled_from, datetime.timedelta(seconds=1))
+        return max(self.scheduled_for - self.scheduled_from, datetime.timedelta(minutes=1))
 
     def next_schedule(self, now: datetime.datetime) -> datetime.datetime:
         return now + min((self.last_delay() * 2), datetime.timedelta(hours=1))
 
     @classmethod
-    def schedule_stmt(cls, name: str, payload: dict) -> sqlalchemy.UpdateBase:
-        insert_stmt = insert(cls).values(name=name, payload=payload)
+    def schedule_stmt(
+        cls,
+        name: str,
+        payload: dict,
+        now: datetime.datetime,
+        expected_duration: datetime.timedelta | None = None,
+    ) -> sqlalchemy.UpdateBase:
+        scheduled_from = scheduled_for = now
+        if expected_duration is not None:
+            # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.
+            scheduled_from -= expected_duration
+
+        insert_stmt = insert(cls).values(
+            name=name, payload=payload, scheduled_for=scheduled_for, scheduled_from=scheduled_from
+        )
+
         return insert_stmt.on_conflict_do_update(
             index_elements=[cls.name],
-            set_={cls.payload: payload},
+            set_={
+                cls.payload: payload,
+                cls.scheduled_from: scheduled_from,
+                cls.scheduled_for: scheduled_for,
+            },
         )
 
     @classmethod
-    def acquire_work(cls, batch_size: int, now: datetime.datetime):
-        with Session() as session:
-            items: Collection[ProcessRequest] = (
-                session.query(cls)
-                .where(cls.scheduled_for < now)
-                .order_by(cls.scheduled_for)
-                .limit(batch_size)
-                .with_for_update()
-                .all()
+    def acquire_work(
+        cls, batch_size: int, now: datetime.datetime, session: sqlalchemy.orm.Session | None = None
+    ):
+        with contextlib.ExitStack() as stack:
+            if session is None:
+                session = stack.enter_context(Session())
+            items: list[ProcessRequest] = list(
+                session.scalars(
+                    select(cls)
+                    .where(cls.scheduled_for < now)
+                    .order_by(cls.scheduled_for)
+                    .limit(batch_size)
+                    .with_for_update()
+                ).all()
             )
 
             for item in items:
@@ -88,11 +113,12 @@ class ProcessRequest(Base):
                 session.add(item)
 
             session.commit()
-        return items
+
+            return items
 
     def mark_completed_stmt(self) -> sqlalchemy.UpdateBase:
         return delete(type(self)).where(
-            type(self).scheduled_from <= self.scheduled_from and type(self).name == self.name
+            type(self).scheduled_from <= self.scheduled_from, type(self).name == self.name
         )
 
 
