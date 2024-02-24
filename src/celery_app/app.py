@@ -6,6 +6,7 @@ from celery import Celery, signals
 from flask import Flask
 from sentry_sdk.integrations.celery import CeleryIntegration
 
+from seer.bootup import bootup
 from seer.db import Session, db
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ app.conf.task_queues = {
 }
 app.autodiscover_tasks(["celery_app.tasks"])
 
+bootup(__name__, [])
 flask_app = Flask(__name__)
 flask_app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
 
@@ -42,13 +44,7 @@ with flask_app.app_context():
 
 @signals.celeryd_init.connect
 def init_sentry(**_kwargs):
-    sentry_sdk.init(
-        dsn=os.environ.get("SENTRY_DSN"),
-        integrations=[CeleryIntegration(propagate_traces=True)],
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-        enable_tracing=True,
-    )
+    bootup(__name__, [CeleryIntegration(propagate_traces=True)])
 
 
 @signals.task_failure.connect
