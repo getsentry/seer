@@ -42,5 +42,5 @@ def bootup(
         with app.app_context():
             Session.configure(bind=db.engine)
             if with_async:
-                AsyncSession.configure(bind=create_async_engine(db.engine.url))  # type: ignore
+                AsyncSession.configure(bind=create_async_engine(db.engine.url))
     return app

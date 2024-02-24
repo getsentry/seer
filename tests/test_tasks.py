@@ -1,6 +1,8 @@
 import asyncio
 import dataclasses
 import datetime
+import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Callable, Self
 
 import pytest
@@ -162,7 +164,7 @@ class ScheduleAsyncTest:
     side_effect_calls: list[str] = dataclasses.field(default_factory=list)
     end_event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
-    def create_app(self) -> AsyncApp:
+    def create_app(self, io_work=multiprocessing.Queue()) -> AsyncApp:
         test_task = TestTaskFactory()
         test_task.side_effect = lambda v: self.side_effect_calls.append(v)
 
@@ -173,6 +175,7 @@ class ScheduleAsyncTest:
                 test_task,
             ],
             num_consumers=2,
+            io_work=io_work,
         )
 
     async def current_process_request_by_name(self, name: str):
@@ -204,11 +207,36 @@ async def test_next_schedule_async(test: ScheduleAsyncTest, now: datetime.dateti
     run_task = asyncio.create_task(test.create_app().run())
     processed = await test.new_side_effect()
     test.end_event.set()
-    await run_task
-    assert processed == [test.payload.my_special_value]
 
+    async with asyncio.timeout(10):
+        await run_task
+
+    assert processed == [test.payload.my_special_value]
     process = await test.current_process_request_by_name(test.acceptable_name)
     assert process is None
 
     process = await test.current_process_request_by_name(test.unacceptable_name)
     assert process is not None
+
+
+@pytest.mark.asyncio
+@parameterize
+async def test_io_work(test: ScheduleAsyncTest, now: datetime.datetime):
+    io_work = multiprocessing.Queue()
+
+    put_task = asyncio.get_running_loop().run_in_executor(
+        ThreadPoolExecutor(),
+        lambda: io_work.put(
+            ProcessRequest(name=test.acceptable_name, payload=test.payload.model_dump())
+        ),
+    )
+    run_task = asyncio.create_task(test.create_app(io_work).run())
+
+    processed = await test.new_side_effect()
+    test.end_event.set()
+
+    async with asyncio.timeout(10):
+        await put_task
+        await run_task
+
+    assert processed == [test.payload.my_special_value]

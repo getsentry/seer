@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -22,3 +24,10 @@ def manage_db():
     finally:
         with app.app_context():
             db.metadata.drop_all(bind=db.engine)
+
+
+# @pytest.fixture(autouse=True)
+# def manage_async_errors():
+# asyncio.events.get_event_loop().set_exception_handler()
+
+pytest_plugins = ("pytest_asyncio",)
