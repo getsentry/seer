@@ -41,6 +41,7 @@ def grouping_lookup() -> GroupingLookup:
         raise ValueError("Grouping is not enabled")
     return GroupingLookup(
         model_path=model_path("issue_grouping_v0/embeddings"),
+        data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
 

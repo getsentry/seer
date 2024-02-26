@@ -7,7 +7,17 @@ import sqlalchemy
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, delete, select
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    delete,
+    select,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -149,8 +159,8 @@ class DbDocumentChunk(Base):
 class DbGroupingRecord(Base):
     __tablename__ = "grouping_records"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
 

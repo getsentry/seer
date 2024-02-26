@@ -1,8 +1,8 @@
 """Migration
 
-Revision ID: 49e9388dfd85
+Revision ID: 34e1f6a6297a
 Revises: 1eadd11b67ed
-Create Date: 2024-02-26 05:36:24.659279
+Create Date: 2024-02-26 22:03:21.527166
 
 """
 import sqlalchemy as sa
@@ -10,7 +10,7 @@ from alembic import op
 from pgvector.sqlalchemy import Vector  # type: ignore
 
 # revision identifiers, used by Alembic.
-revision = "49e9388dfd85"
+revision = "34e1f6a6297a"
 down_revision = "1eadd11b67ed"
 branch_labels = None
 depends_on = None
@@ -21,10 +21,10 @@ def upgrade():
     op.create_table(
         "grouping_records",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("group_id", sa.Integer(), nullable=False),
-        sa.Column("project_id", sa.Integer(), nullable=False),
+        sa.Column("group_id", sa.BigInteger(), nullable=False),
+        sa.Column("project_id", sa.BigInteger(), nullable=False),
         sa.Column("message", sa.String(), nullable=False),
-        sa.Column("stacktrace_embedding", Vector(dim=768), nullable=False),
+        sa.Column("stacktrace_embedding", pgvector.sqlalchemy.Vector(dim=768), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("grouping_records", schema=None) as batch_op:

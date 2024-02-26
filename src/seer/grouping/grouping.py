@@ -2,6 +2,7 @@ import difflib
 from typing import List, Optional
 
 import numpy as np
+import pandas as pd
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 
@@ -47,8 +48,8 @@ class GroupingRecord(BaseModel):
 
 class GroupingResponse(BaseModel):
     parent_group_id: Optional[int]
-    stacktrace_similarity: float
-    message_similarity: float
+    stacktrace_distance: float
+    message_distance: float
     should_group: bool
 
 
@@ -64,13 +65,49 @@ class GroupingLookup:
 
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, data_path: str):
         """
         Initializes the GroupingLookup with the sentence transformer model.
 
         :param model_path: Path to the sentence transformer model.
         """
         self.model = SentenceTransformer(model_path, trust_remote_code=True)
+        self.initialize_db(data_path)
+
+    def initialize_db(self, data_path: str):
+        """
+        Initializes the database with records from a pickle file if a specific record does not exist.
+
+        This method checks for the existence of a record with a specific group_id in the database.
+        If the record exists, the database is assumed to be initialized, and the method returns early.
+        If the record does not exist, the method proceeds to load data from a pickle file located at
+        `data_path` and populates the database with these records.
+
+        :param data_path: The file path to the pickle file containing the records to load into the database.
+        """
+        with Session() as session:
+            key_group_id = 4506283937  # TODO: less hacky solution to populating the DB if needed
+            record_exists = (
+                session.query(DbGroupingRecord)
+                .filter(DbGroupingRecord.group_id == key_group_id)
+                .first()
+                is not None
+            )
+
+            if record_exists:
+                return
+
+            with open(data_path, mode="rb") as records_file:
+                records_df = pd.read_pickle(records_file)
+                for _, row in records_df.iterrows():
+                    new_record = DbGroupingRecord(
+                        group_id=row["group_id"],
+                        project_id=row["project_id"],
+                        message=row["message"],
+                        stacktrace_embedding=row["stacktrace_embedding"].astype(np.float32),
+                    )
+                    session.add(new_record)
+                session.commit()
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
@@ -104,12 +141,12 @@ class GroupingLookup:
                     DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= 0.15,
                     DbGroupingRecord.group_id != issue.group_id,
                 )
-                .order_by(DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding))
+                .order_by("distance")
                 .limit(issue.k)
                 .all()
             )
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
-            if not any(record.distance <= issue.threshold for _, record in results):
+            if not any(distance <= issue.threshold for _, distance in results):
                 self.insert_new_grouping_record(session, issue, embedding)
 
             session.commit()
@@ -124,8 +161,8 @@ class GroupingLookup:
             similarity_response.responses.append(
                 GroupingResponse(
                     parent_group_id=record.group_id,
-                    stacktrace_similarity=distance,
-                    message_similarity=message_similarity_score,
+                    stacktrace_distance=distance,
+                    message_distance=1.0 - message_similarity_score,
                     should_group=should_group,
                 )
             )
