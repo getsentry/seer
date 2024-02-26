@@ -154,15 +154,6 @@ class DbGroupingRecord(Base):
     message: Mapped[str] = mapped_column(String, nullable=False)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
 
-
-class DbGroupingRecord(Base):
-    __tablename__ = "grouping_records"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    project_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    message: Mapped[str] = mapped_column(String, nullable=False)
-    stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-
     __table_args__ = (
         Index(
             "ix_grouping_records_stacktrace_embedding_hnsw",
