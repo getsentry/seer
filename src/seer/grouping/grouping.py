@@ -38,6 +38,12 @@ class GroupingRecord(BaseModel):
             stacktrace_embedding=self.stacktrace_embedding,
         )
 
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
+        }
+
 
 class GroupingResponse(BaseModel):
     parent_group_id: Optional[int]
