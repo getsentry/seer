@@ -104,7 +104,7 @@ class GroupingLookup:
                     DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= 0.15,
                     DbGroupingRecord.group_id != issue.group_id,
                 )
-                .order_by(DbGroupingRecord.stacktrace_embedding.nearest(embedding))
+                .order_by(DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding))
                 .limit(issue.k)
                 .all()
             )

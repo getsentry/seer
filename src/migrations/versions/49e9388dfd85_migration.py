@@ -7,6 +7,7 @@ Create Date: 2024-02-26 05:36:24.659279
 """
 import sqlalchemy as sa
 from alembic import op
+from pgvector.sqlalchemy import Vector  # type: ignore
 
 # revision identifiers, used by Alembic.
 revision = "49e9388dfd85"
@@ -23,7 +24,7 @@ def upgrade():
         sa.Column("group_id", sa.Integer(), nullable=False),
         sa.Column("project_id", sa.Integer(), nullable=False),
         sa.Column("message", sa.String(), nullable=False),
-        sa.Column("stacktrace_embedding", pgvector.sqlalchemy.Vector(dim=768), nullable=False),
+        sa.Column("stacktrace_embedding", Vector(dim=768), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("grouping_records", schema=None) as batch_op:
