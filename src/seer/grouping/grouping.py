@@ -108,29 +108,30 @@ class GroupingLookup:
                 .limit(issue.k)
                 .all()
             )
+            new_group_flag = not any(record.distance <= issue.threshold for _, record in results)
 
-            similarity_response = SimilarityResponse(responses=[])
-            should_group_flag = False
-            for record in results:
-                message_similarity_score = difflib.SequenceMatcher(
-                    None, issue.message, record.message
-                ).ratio()
-                should_group = record.distance <= issue.threshold
-                should_group_flag = should_group_flag or should_group
-
-                similarity_response.responses.append(
-                    GroupingResponse(
-                        parent_group_id=record.group_id,
-                        stacktrace_similarity=record.distance,
-                        message_similarity=message_similarity_score,
-                        should_group=should_group,
-                    )
-                )
-
-            if not should_group_flag:
+            if new_group_flag:
                 self.insert_new_grouping_record(session, issue, embedding)
+                session.commit()
+                return SimilarityResponse(responses=[])
 
             session.commit()
+
+        similarity_response = SimilarityResponse(responses=[])
+        for record, distance in results:
+            message_similarity_score = difflib.SequenceMatcher(
+                None, issue.message, record.message
+            ).ratio()
+            should_group = distance <= issue.threshold
+
+            similarity_response.responses.append(
+                GroupingResponse(
+                    parent_group_id=record.group_id,
+                    stacktrace_similarity=distance,
+                    message_similarity=message_similarity_score,
+                    should_group=should_group,
+                )
+            )
 
         return similarity_response
 
