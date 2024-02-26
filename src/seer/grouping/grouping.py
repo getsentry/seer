@@ -108,10 +108,10 @@ class GroupingLookup:
                 .limit(issue.k)
                 .all()
             )
-            new_group_flag = not any(record.distance <= issue.threshold for _, record in results)
-
-            if new_group_flag:
+            # If no existing groups within the threshold, insert the request as a new GroupingRecord
+            if not any(record.distance <= issue.threshold for _, record in results):
                 self.insert_new_grouping_record(session, issue, embedding)
+
             session.commit()
 
         similarity_response = SimilarityResponse(responses=[])
