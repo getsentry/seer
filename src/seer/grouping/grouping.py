@@ -171,16 +171,18 @@ class GroupingLookup:
 
     def insert_new_grouping_record(self, session, issue: GroupingRequest, embedding: np.ndarray):
         """
-        Inserts a new GroupingRecord into the database.
+        Inserts a new GroupingRecord into the database if the group_id does not already exist.
 
         :param session: The database session.
         :param issue: The issue to insert as a new GroupingRecord.
         :param embedding: The embedding of the stacktrace.
         """
-        new_record = GroupingRecord(
-            group_id=issue.group_id,
-            project_id=issue.project_id,
-            message=issue.message,
-            stacktrace_embedding=embedding,
-        ).to_db_model()
-        session.add(new_record)
+        existing_record = session.query(DbGroupingRecord).filter_by(group_id=issue.group_id).first()
+        if existing_record is None:
+            new_record = GroupingRecord(
+                group_id=issue.group_id,
+                project_id=issue.project_id,
+                message=issue.message,
+                stacktrace_embedding=embedding,
+            ).to_db_model()
+            session.add(new_record)

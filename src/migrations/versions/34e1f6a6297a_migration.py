@@ -24,7 +24,7 @@ def upgrade():
         sa.Column("group_id", sa.BigInteger(), nullable=False),
         sa.Column("project_id", sa.BigInteger(), nullable=False),
         sa.Column("message", sa.String(), nullable=False),
-        sa.Column("stacktrace_embedding", pgvector.sqlalchemy.Vector(dim=768), nullable=False),
+        sa.Column("stacktrace_embedding", Vector(dim=768), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("grouping_records", schema=None) as batch_op:
