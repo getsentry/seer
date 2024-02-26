@@ -112,9 +112,6 @@ class GroupingLookup:
 
             if new_group_flag:
                 self.insert_new_grouping_record(session, issue, embedding)
-                session.commit()
-                return SimilarityResponse(responses=[])
-
             session.commit()
 
         similarity_response = SimilarityResponse(responses=[])
