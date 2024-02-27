@@ -298,3 +298,7 @@ class TestSeer(unittest.TestCase):
 
         output = json.loads(response.get_data(as_text=True))
         assert output == {"data": []}
+
+
+def test_loading_models():
+    pass

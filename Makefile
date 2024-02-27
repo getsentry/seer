@@ -29,6 +29,7 @@ dev: .env # Starts the webserver based on the current src on port 9091
 
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
+	docker-compose run app mypy
 	docker-compose run app pytest
 #	docker run --rm pgvector/pgvector:pg14
 #	docker run --rm -v ./tests:/app/tests -v ./src:/app/src $(project_name):latest pytest
