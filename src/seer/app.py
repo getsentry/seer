@@ -1,7 +1,5 @@
-import functools
 import os
 import time
-from typing import Any, Callable
 
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -14,35 +12,18 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.tasks import run_autofix
 from seer.bootup import bootup
-from seer.db import Session, db, migrate
-from seer.grouping.grouping import GroupingLookup, GroupingRequest, SimilarityResponse
+from seer.grouping.grouping import GroupingRequest, SimilarityResponse
+from seer.inference_models import embeddings_model, grouping_lookup
 from seer.json_api import json_api, register_json_api_views
-from seer.severity.severity_inference import SeverityInference, SeverityRequest, SeverityResponse
+from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
-root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
-app = bootup(__name__, [FlaskIntegration()], init_migrations=True)
-
-
-def model_path(subpath: str) -> str:
-    return os.path.join(root, "models", subpath)
-
-
-@functools.cache
-def embeddings_model() -> SeverityInference:
-    return SeverityInference(
-        model_path("issue_severity_v0/embeddings"), model_path("issue_severity_v0/classifier")
-    )
-
-
-@functools.cache
-def grouping_lookup() -> GroupingLookup:
-    if os.environ.get("GROUPING_ENABLED") != "true":
-        raise ValueError("Grouping is not enabled")
-    return GroupingLookup(
-        model_path=model_path("issue_grouping_v0/embeddings"),
-        data_path=model_path("issue_grouping_v0/data.pkl"),
-    )
+app = bootup(
+    __name__,
+    [FlaskIntegration()],
+    init_migrations=True,
+    eager_load_inference_models=os.environ.get("LAZY_INFERENCE_MODELS") != "1",
+)
 
 
 @json_api("/v0/issues/severity-score")
@@ -122,13 +103,3 @@ def ready_check():
 
 
 register_json_api_views(app)
-
-
-def run(environ: dict, start_response: Callable) -> Any:
-    with app.app_context():
-        Session.configure(bind=db.engine)
-
-    embeddings_model()
-    if os.environ.get("GROUPING_ENABLED") == "true":
-        grouping_lookup()
-    return app(environ, start_response)
