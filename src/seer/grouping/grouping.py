@@ -3,6 +3,7 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
+import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 
@@ -71,7 +72,11 @@ class GroupingLookup:
 
         :param model_path: Path to the sentence transformer model.
         """
-        self.model = SentenceTransformer(model_path, trust_remote_code=True)
+        self.model = SentenceTransformer(
+            model_path,
+            trust_remote_code=True,
+            device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
+        )
         self.initialize_db(data_path)
 
     def initialize_db(self, data_path: str):
