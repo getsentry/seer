@@ -75,6 +75,18 @@ class AutofixEventManager:
         problem_discovery_step.status = AutofixStatus.COMPLETED
         self.steps = [
             problem_discovery_step,
+            Step(
+                id="codebase_indexing",
+                index=1,
+                title="Codebase Indexing",
+                status=AutofixStatus.PENDING,
+            ),
+            Step(
+                id="plan",
+                index=2,
+                title="Execution Plan",
+                status=AutofixStatus.PENDING,
+            ),
         ]
 
         self._send_steps_update(
@@ -83,57 +95,19 @@ class AutofixEventManager:
         logger.debug(f"Sent problem discovery result: {result}")
 
     def send_codebase_creation_message(self):
-        self.steps.extend(
-            [
-                Step(
-                    id="codebase_indexing",
-                    index=1,
-                    title="Codebase Indexing",
-                    description="This will take longer than usual because this is the first time you've run Autofix on this codebase.",
-                    status=AutofixStatus.PROCESSING,
-                ),
-                Step(
-                    id="plan",
-                    index=2,
-                    title="Execution Plan",
-                    status=AutofixStatus.PENDING,
-                ),
-            ]
+        indexing_step = next(step for step in self.steps if step.id == "codebase_indexing")
+
+        indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.description = (
+            "Creating initial codebase index for project, this may take a while..."
         )
 
         self._send_steps_update(AutofixStatus.PROCESSING)
 
     def send_codebase_indexing_message(self):
-        self.steps.extend(
-            [
-                Step(
-                    id="codebase_indexing",
-                    index=1,
-                    title="Codebase Indexing",
-                    status=AutofixStatus.PROCESSING,
-                ),
-                Step(
-                    id="plan",
-                    index=2,
-                    title="Execution Plan",
-                    status=AutofixStatus.PENDING,
-                ),
-            ]
-        )
+        indexing_step = next(step for step in self.steps if step.id == "codebase_indexing")
 
-        self._send_steps_update(AutofixStatus.PROCESSING)
-
-    def send_codebase_creation_skip(self):
-        self.steps.extend(
-            [
-                Step(
-                    id="plan",
-                    index=1,
-                    title="Execution Plan",
-                    status=AutofixStatus.PENDING,
-                ),
-            ]
-        )
+        indexing_step.status = AutofixStatus.PROCESSING
 
         self._send_steps_update(AutofixStatus.PROCESSING)
 
