@@ -56,6 +56,15 @@ class Autofix:
             request.repos,
         )
 
+    def set_stacktrace(self) -> bool:
+        events = self.request.issue.events
+        stacktrace = events[-1].get_stacktrace() if events else None
+        if not stacktrace:
+            return False
+        self.stacktrace = stacktrace
+
+        return True
+
     @traceable(name="Autofix Run")
     def run(self, run_tree: RunTree):
         metadata = run_tree.extra.get("metadata", {})
@@ -63,14 +72,11 @@ class Autofix:
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-            events = self.request.issue.events
-            stacktrace = events[-1].get_stacktrace() if events else None
-            if not stacktrace:
+            if not self.set_stacktrace():
                 logger.warning(f"No stacktrace found for issue {self.request.issue.id}")
 
                 self.event_manager.send_no_stacktrace_error()
                 return
-            self.stacktrace = stacktrace
 
             self.event_manager.send_initial_steps()
 
