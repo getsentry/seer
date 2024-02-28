@@ -8,6 +8,7 @@ from openai._types import NotGiven
 from seer.automation.agent.client import GptClient, LlmClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
+from seer.automation.utils import parse_json_with_keys
 
 logger = logging.getLogger("autofix")
 
@@ -85,7 +86,8 @@ class LlmAgent(ABC):
 
         tool = next(tool for tool in self.tools if tool.name == tool_call.function)
 
-        tool_result = tool.call(**tool_call.args)
+        kwargs = parse_json_with_keys(tool_call.args, [param["name"] for param in tool.parameters])
+        tool_result = tool.call(**kwargs)
 
         logger.debug(f"Tool {tool_call.function} returned \n{tool_result}")
 
@@ -130,6 +132,7 @@ class GptAgent(LlmAgent):
         self.memory.append(message)
 
         logger.debug(f"Message content:\n{message.content}")
+        logger.debug(f"Message tool calls:\n{message.tool_calls}")
 
         if message.tool_calls:
             for tool_call in message.tool_calls:
@@ -137,7 +140,7 @@ class GptAgent(LlmAgent):
                     ToolCall(
                         id=tool_call.id,
                         function=tool_call.function.name,
-                        args=json.loads(tool_call.function.arguments),
+                        args=tool_call.function.arguments,
                     )
                 )
 

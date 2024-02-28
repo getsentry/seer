@@ -20,7 +20,7 @@ class Message(BaseModel):
 class ToolCall(BaseModel):
     id: Optional[str] = None
     function: str
-    args: dict[str, str]
+    args: str
 
 
 class Usage(BaseModel):

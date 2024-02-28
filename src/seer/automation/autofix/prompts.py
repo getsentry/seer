@@ -1,7 +1,12 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.models import PlanStep, ProblemDiscoveryOutput
+from seer.automation.autofix.models import (
+    FileChange,
+    PlanningOutput,
+    PlanStep,
+    ProblemDiscoveryOutput,
+)
 
 
 def format_additional_context(additional_context: str):
@@ -84,18 +89,38 @@ class PlanningPrompts:
     def format_plan_item_query_system_msg():
         return textwrap.dedent(
             """\
-            Given the below plan item, please output a JSON array of strings of queries that you would use to find the code that would accomplish the plan item.
+            Given the below instruction, please output a JSON array of strings of queries that you would use to find the code that would accomplish the instruction.
 
-            Examples:
-            - "Rename the function `get_abc()` to `get_xyz()` in `static/app.py`."
+            <guidelines>
+            - The queries should be specific to the codebase and should be able to be used to find the code that would accomplish the instruction.
+            - The queries can be both keywords and semantic queries.
+            </guidelines>
 
-            Output:
-            ["get_abc", "static/app.py", "get_abc in static/app.py"]"""
+            Examples are provided below:
+
+            <instruction>
+            "Rename the function `get_abc()` to `get_xyz()` in `static/app.py`."
+            </instruction>
+            <queries>
+            ["get_abc", "static/app.py", "get_abc in static/app.py"]
+            </queries>
+            <instruction>
+            "Find where the endpoint for `/api/v1/health` is defined in the codebase."
+            </instruction>
+            <queries>
+            ["/api/v1/health", "health endpoint", "health api", "status check"]
+            </queries>"""
         )
 
     @staticmethod
     def format_plan_item_query_default_msg(plan_item: PlanStep):
-        return plan_item.text
+        return textwrap.dedent(
+            """\
+            <instruction>
+            "{text}"
+            </instruction>
+            """
+        ).format(text=plan_item.text)
 
     @staticmethod
     def format_default_msg(
@@ -156,11 +181,12 @@ class PlanningPrompts:
 
             <guidelines>
                 - The plan should be a specific series of code changes, anything else that is not a specific code change is implied. The other engineers will be able to figure out the rest.
-                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred.
+                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred before outputting the plan.
                 - Search as many times as you'd like as these searches are free and you have a big bonus waiting for you.
                 - Think out loud step-by-step as you search the codebase and write the plan.
                 - Understand the context of the issue and the codebase before you start writing the plan.
                 - Make sure that the code changed by the plan would work well with the rest of the codebase and would not introduce any new bugs.
+                - The plan should not include research tasks, such as "look into this" or "investigate that", you should be the one doing the research.
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Call the tools via the tool calling API before you output the plan.

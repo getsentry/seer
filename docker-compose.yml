@@ -38,6 +38,7 @@ services:
             - LANGCHAIN_TRACING_V2=true
             - LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
             - LANGCHAIN_PROJECT="ai-autofix-dev"
+            - LAZY_INFERENCE_MODELS=1
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:
