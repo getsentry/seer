@@ -140,9 +140,9 @@ class IssueDetails(BaseModel):
 
 
 class RepoDefinition(BaseModel):
-    repo_provider: Literal["github"]
-    repo_owner: str
-    repo_name: str
+    provider: Literal["github"]
+    owner: str
+    name: str
 
 
 class OldAutofixRequest(BaseModel):

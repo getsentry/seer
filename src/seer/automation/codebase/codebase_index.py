@@ -58,8 +58,8 @@ class CodebaseIndex:
             .filter(
                 DbRepositoryInfo.organization == organization,
                 DbRepositoryInfo.project == project,
-                DbRepositoryInfo.provider == repo.repo_provider,
-                DbRepositoryInfo.external_slug == f"{repo.repo_owner}/{repo.repo_name}",
+                DbRepositoryInfo.provider == repo.provider,
+                DbRepositoryInfo.external_slug == f"{repo.owner}/{repo.name}",
             )
             .count()
             > 0
@@ -75,14 +75,14 @@ class CodebaseIndex:
             .filter(
                 DbRepositoryInfo.organization == organization,
                 DbRepositoryInfo.project == project,
-                DbRepositoryInfo.provider == repo.repo_provider,
-                DbRepositoryInfo.external_slug == f"{repo.repo_owner}/{repo.repo_name}",
+                DbRepositoryInfo.provider == repo.provider,
+                DbRepositoryInfo.external_slug == f"{repo.owner}/{repo.name}",
             )
             .one_or_none()
         )
         if db_repo_info:
             repo_info = RepositoryInfo.from_db(db_repo_info)
-            repo_client = RepoClient(repo.repo_provider, repo.repo_owner, repo.repo_name)
+            repo_client = RepoClient(repo.provider, repo.owner, repo.name)
             return cls(organization, project, repo_client, repo_info, run_id)
 
         return None
@@ -108,7 +108,7 @@ class CodebaseIndex:
     @classmethod
     @traceable(name="Creating codebase index")
     def create(cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID):
-        repo_client = RepoClient(repo.repo_provider, repo.repo_owner, repo.repo_name)
+        repo_client = RepoClient(repo.provider, repo.owner, repo.name)
 
         head_sha = repo_client.get_default_branch_head_sha()
         tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
