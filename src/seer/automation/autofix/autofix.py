@@ -56,6 +56,15 @@ class Autofix:
             request.repos,
         )
 
+    def set_stacktrace(self) -> bool:
+        events = self.request.issue.events
+        stacktrace = events[-1].get_stacktrace() if events else None
+        if not stacktrace:
+            return False
+        self.stacktrace = stacktrace
+
+        return True
+
     @traceable(name="Autofix Run")
     def run(self, run_tree: RunTree):
         metadata = run_tree.extra.get("metadata", {})
@@ -63,14 +72,11 @@ class Autofix:
         try:
             logger.info(f"Beginning autofix for issue {self.request.issue.id}")
 
-            events = self.request.issue.events
-            stacktrace = events[-1].get_stacktrace() if events else None
-            if not stacktrace:
+            if not self.set_stacktrace():
                 logger.warning(f"No stacktrace found for issue {self.request.issue.id}")
 
                 self.event_manager.send_no_stacktrace_error()
                 return
-            self.stacktrace = stacktrace
 
             self.event_manager.send_initial_steps()
 
@@ -418,8 +424,17 @@ class Autofix:
     def _get_plan_step_context(self, plan_item: PlanStep):
         logger.debug(f"Getting context for plan item: {plan_item}")
 
-        def json_parser(x) -> list[str] | None:
-            return json.loads(x) if x else None
+        def parser(x: str | None) -> list[str] | None:
+            if x is None:
+                return None
+
+            el = ET.fromstring(f"<response>{x}</response>")
+            text = extract_xml_element_text(el, "queries")
+
+            if text is None:
+                return None
+
+            return json.loads(text)
 
         # Identify good search queries for the plan item
         queries, message, usage = GptClient().completion_with_parser(
@@ -431,7 +446,7 @@ class Autofix:
                     content=PlanningPrompts.format_plan_item_query_default_msg(plan_item=plan_item),
                 ),
             ],
-            parser=json_parser,
+            parser=parser,
         )
 
         self.usage += usage
@@ -445,7 +460,7 @@ class Autofix:
         context_dump = ""
         unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
         for query in queries:
-            retrived_chunks = self.context.query(query, top_k=2)
+            retrived_chunks = self.context.query(query, top_k=4)
             for chunk in retrived_chunks:
                 unique_chunks[chunk.hash] = chunk
         chunks = list(unique_chunks.values())
@@ -466,8 +481,6 @@ class Autofix:
             logger.error(f"Failed to get context for plan item: {e}")
             sentry_sdk.capture_exception(e)
             context_dump = ""
-
-        context_dump = ""
 
         code_action_tools = CodeActionTools(
             self.context,

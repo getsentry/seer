@@ -19,7 +19,7 @@ class BaseTools:
         self.context = context
 
     @traceable(run_type="tool", name="Codebase Search")
-    def codebase_retriever(self, query: str, repo_name: str | None):
+    def codebase_retriever(self, query: str, repo_name: str | None = None):
         chunks = self.context.query(query, repo_name=repo_name)
 
         content = ""
@@ -237,7 +237,9 @@ class CodeActionTools(BaseTools):
 
         codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
 
-        if not document or not codebase:
+        if not codebase:
+            raise FileNotFoundError(f"Repository `{repo_name}` not found.")
+        if document:
             raise FileExistsError(f"File `{file_path}` already exists.")
 
         file_change = FileChange(
@@ -276,6 +278,8 @@ class CodeActionTools(BaseTools):
                 name="replace_snippet_with",
                 description=textwrap.dedent(
                     """\
+                    Use this as the primary tool to write code changes to a file.
+
                     Replaces a snippet in a file with the provided replacement.
                     - The snippet must be an exact match.
                     - The replacement can be any string.

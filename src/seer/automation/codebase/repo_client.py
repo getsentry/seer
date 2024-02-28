@@ -215,27 +215,43 @@ class RepoClient:
         return ref
 
     def _commit_file_change(self, change: FileChange, branch_ref: str):
-        contents = self.repo.get_contents(change.path, ref=branch_ref)
+        contents = (
+            self.repo.get_contents(change.path, ref=branch_ref)
+            if change.change_type != "create"
+            else None
+        )
 
         if isinstance(contents, list):
-            raise Exception(f"Expected a single ContentFile but got a list for path {change.path}")
+            raise RuntimeError(
+                f"Expected a single ContentFile but got a list for path {change.path}"
+            )
 
         new_contents = change.apply(contents.decoded_content.decode("utf-8") if contents else None)
 
-        # TODO: Do this elsewhere
+        # Remove leading slash if it exists, the github api will reject paths with leading slashes.
         if change.path.startswith("/"):
             change.path = change.path[1:]
 
-        if new_contents is None:
+        if change.change_type == "delete" and contents:
             self.repo.delete_file(
-                change.path, change.description or "File deletion", contents.sha, branch=branch_ref
+                change.path,
+                change.description or "File deletion",
+                contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
+                branch=branch_ref,
+            )
+        elif change.change_type == "create" and new_contents:
+            self.repo.create_file(
+                change.path, change.description or "New file", new_contents, branch=branch_ref
             )
         else:
+            if contents is None:
+                raise FileNotFoundError(f"File {change.path} does not exist in the repository.")
+
             self.repo.update_file(
                 change.path,
                 change.description or "File change",
-                new_contents,
-                contents.sha,
+                new_contents or "",
+                contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
                 branch=branch_ref,
             )
 
