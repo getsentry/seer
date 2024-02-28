@@ -495,24 +495,24 @@
       },
       "RepoDefinition": {
         "properties": {
-          "repo_provider": {
+          "provider": {
             "const": "github",
-            "title": "Repo Provider"
+            "title": "Provider"
           },
-          "repo_owner": {
+          "owner": {
             "type": "string",
-            "title": "Repo Owner"
+            "title": "Owner"
           },
-          "repo_name": {
+          "name": {
             "type": "string",
-            "title": "Repo Name"
+            "title": "Name"
           }
         },
         "type": "object",
         "required": [
-          "repo_provider",
-          "repo_owner",
-          "repo_name"
+          "provider",
+          "owner",
+          "name"
         ],
         "title": "RepoDefinition"
       },

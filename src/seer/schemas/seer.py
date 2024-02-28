@@ -122,9 +122,9 @@ IssueDetails = typing_extensions.TypedDict(
 RepoDefinition = typing_extensions.TypedDict(
     "RepoDefinition",
     {
-        "repo_provider": typing.Literal["github"],
-        "repo_owner": str,
-        "repo_name": str,
+        "provider": typing.Literal["github"],
+        "owner": str,
+        "name": str,
     },
     total=False,
 )
