@@ -65,7 +65,7 @@ class Autofix:
 
         return True
 
-    @traceable(name="Autofix Run")
+    @traceable(name="Autofix Run", tags=["v1"])
     def run(self, run_tree: RunTree):
         metadata = run_tree.extra.get("metadata", {})
         metadata["request"] = self.request.model_dump()

@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import pytest
 from sqlalchemy import text
@@ -10,6 +11,9 @@ from seer.tasks import AsyncSession
 
 @pytest.fixture(autouse=True)
 def manage_db():
+    # disables langsmith
+    os.environ["LANGCHAIN_TRACING_SAMPLING_RATE"] = "0"
+
     # Forces the initialization of the database
     from seer.app import app
 
