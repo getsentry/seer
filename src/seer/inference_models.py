@@ -35,6 +35,6 @@ function_env_config = {
 cached: list[Callable[..., Any]] = [
     globals()[function_name]
     for function_name, env_var in function_env_config.items()
-    if os.environ.get(env_var).lower() in ("true", "1", "t")
+    if os.environ.get(env_var, "").lower() in ("true", "1", "t")
     if hasattr(globals()[function_name], "cache_info")
 ]
