@@ -21,12 +21,20 @@ def embeddings_model() -> SeverityInference:
 
 @functools.cache
 def grouping_lookup() -> GroupingLookup:
-    if os.environ.get("GROUPING_ENABLED") != "true":
-        raise ValueError("Grouping is not enabled")
     return GroupingLookup(
         model_path=model_path("issue_grouping_v0/embeddings"),
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
 
 
-cached: list[Callable[..., Any]] = [v for k, v in globals().items() if hasattr(v, "cache_info")]
+function_env_config = {
+    "embeddings_model": "SEVERITY_ENABLED",
+    "grouping_lookup": "GROUPING_ENABLED",
+}
+
+cached: list[Callable[..., Any]] = [
+    globals()[function_name]
+    for function_name, env_var in function_env_config.items()
+    if os.environ.get(env_var, "").lower() in ("true", "1", "t")
+    if hasattr(globals()[function_name], "cache_info")
+]

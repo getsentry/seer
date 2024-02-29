@@ -7,7 +7,17 @@ import sqlalchemy
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, delete, func, select
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    delete,
+    select,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -144,3 +154,26 @@ class DbDocumentChunk(Base):
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     for_run_id: Mapped[str] = mapped_column(String(36), nullable=True)
+
+
+class DbGroupingRecord(Base):
+    __tablename__ = "grouping_records"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    message: Mapped[str] = mapped_column(String, nullable=False)
+    stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
+
+    __table_args__ = (
+        Index(
+            "ix_grouping_records_stacktrace_embedding_hnsw",
+            "stacktrace_embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+        ),
+        Index(
+            "ix_grouping_records_project_id",
+            "project_id",
+        ),
+    )
