@@ -154,7 +154,7 @@ class DbDocumentChunk(Base):
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     namespace: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
 
@@ -179,7 +179,7 @@ class DbDocumentChunkTombstone(Base):
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     namespace: Mapped[str] = mapped_column(String(36), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
 

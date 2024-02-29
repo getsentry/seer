@@ -48,9 +48,7 @@ class TaskFactory(Protocol[_Request]):
 _async_task_factories: list[TaskFactory[BaseModel]] = []
 
 
-def async_task_factory(
-    f: Callable[[], TaskFactory[_Request]]
-) -> Callable[[], TaskFactory[_Request]]:
+def async_task_factory(f: Callable[[], TaskFactory]) -> Callable[[], TaskFactory]:
     _async_task_factories.append(f())
     return f
 
