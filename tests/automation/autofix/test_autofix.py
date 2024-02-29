@@ -26,9 +26,7 @@ class TestAutoFixRunFlow(unittest.TestCase):
                 additional_context="",
                 organization_id=1,
                 project_id=1,
-                repos=[
-                    RepoDefinition(repo_provider="github", repo_owner="owner", repo_name="name")
-                ],
+                repos=[RepoDefinition(provider="github", owner="owner", name="name")],
                 issue=IssueDetails(
                     id=1,
                     title="",
@@ -96,9 +94,7 @@ class TestAutoFixRunFlow(unittest.TestCase):
                 additional_context="",
                 organization_id=1,
                 project_id=1,
-                repos=[
-                    RepoDefinition(repo_provider="github", repo_owner="owner", repo_name="name")
-                ],
+                repos=[RepoDefinition(provider="github", owner="owner", name="name")],
                 base_commit_sha="",
                 issue=IssueDetails(
                     id=1,
@@ -181,9 +177,7 @@ class TestAutoFixRunFlow(unittest.TestCase):
                 additional_context="",
                 organization_id=1,
                 project_id=1,
-                repos=[
-                    RepoDefinition(repo_provider="github", repo_owner="owner", repo_name="name")
-                ],
+                repos=[RepoDefinition(provider="github", owner="owner", name="name")],
                 base_commit_sha="",
                 issue=IssueDetails(
                     id=1,

@@ -104,15 +104,15 @@ class Autofix:
 
             for repo in self.request.repos:
                 if not self.context.has_codebase_index(repo):
-                    logger.info(f"Creating codebase index for repo {repo.repo_name}")
+                    logger.info(f"Creating codebase index for repo {repo.name}")
                     self.event_manager.send_codebase_creation_message()
                     with sentry_sdk.start_span(
                         op="seer.automation.autofix.codebase_index.create",
                         description="Create codebase index",
                     ) as span:
-                        span.set_tag("repo", repo.repo_name)
+                        span.set_tag("repo", repo.name)
                         self.context.create_codebase_index(repo)
-                    logger.info(f"Codebase index created for repo {repo.repo_name}")
+                    logger.info(f"Codebase index created for repo {repo.name}")
 
             for repo_id, codebase in self.context.codebases.items():
                 if codebase.is_behind():
@@ -141,7 +141,7 @@ class Autofix:
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
                 sentry_sdk.capture_message(
-                    f"No codebases found for organization {self.request.organization_id} and project {self.request.project_id}'s repos: {', '.join([repo.repo_name for repo in self.request.repos])}"
+                    f"No codebases found for organization {self.request.organization_id} and project {self.request.project_id}'s repos: {', '.join([repo.name for repo in self.request.repos])}"
                 )
                 self.event_manager.mark_running_steps_errored()
                 self.event_manager.send_autofix_complete(None)
@@ -197,7 +197,7 @@ class Autofix:
                     title=planning_output.title,
                     description=planning_output.description,
                     pr_url=pr.pr_url,
-                    repo_name=f"{pr.repo.repo_owner}/{pr.repo.repo_name}",
+                    repo_name=f"{pr.repo.owner}/{pr.repo.name}",
                     pr_number=pr.pr_number,
                     usage=self.usage,
                 )
@@ -243,9 +243,9 @@ class Autofix:
                         pr_number=pr.number,
                         pr_url=pr.html_url,
                         repo=RepoDefinition(
-                            repo_provider=codebase.repo_client.provider,
-                            repo_owner=codebase.repo_client.repo_owner,
-                            repo_name=codebase.repo_client.repo_name,
+                            provider=codebase.repo_client.provider,
+                            owner=codebase.repo_client.repo_owner,
+                            name=codebase.repo_client.repo_name,
                         ),
                     )
                 )

@@ -4,12 +4,7 @@ import time
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from seer.automation.autofix.models import (
-    AutofixEndpointResponse,
-    AutofixRequest,
-    OldAutofixRequest,
-    RepoDefinition,
-)
+from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
 from seer.automation.autofix.tasks import run_autofix
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityResponse
@@ -80,14 +75,8 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
 
 
 @json_api("/v0/automation/autofix")
-def autofix_endpoint(data: OldAutofixRequest) -> AutofixEndpointResponse:
-    new_request = AutofixRequest(
-        organization_id=1,
-        project_id=1,
-        repos=[RepoDefinition(repo_provider="github", repo_owner="getsentry", repo_name="sentry")],
-        issue=data.issue,
-    )
-    run_autofix.delay(new_request.model_dump())
+def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    run_autofix.delay(data.model_dump())
 
     return AutofixEndpointResponse(started=True)
 

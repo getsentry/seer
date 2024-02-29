@@ -144,12 +144,34 @@
       },
       "AutofixRequest": {
         "properties": {
-          "issue": {
-            "$ref": "#/components/schemas/IssueDetails"
+          "organization_id": {
+            "type": "integer",
+            "title": "Organization Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/RepoDefinition"
+            },
+            "type": "array",
+            "title": "Repos"
           },
           "base_commit_sha": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Base Commit Sha"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/IssueDetails"
           },
           "additional_context": {
             "anyOf": [
@@ -165,8 +187,10 @@
         },
         "type": "object",
         "required": [
-          "issue",
-          "base_commit_sha"
+          "organization_id",
+          "project_id",
+          "repos",
+          "issue"
         ],
         "title": "AutofixRequest"
       },
@@ -468,6 +492,29 @@
           "events"
         ],
         "title": "IssueDetails"
+      },
+      "RepoDefinition": {
+        "properties": {
+          "provider": {
+            "const": "github",
+            "title": "Provider"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "owner",
+          "name"
+        ],
+        "title": "RepoDefinition"
       },
       "SentryEvent": {
         "properties": {
