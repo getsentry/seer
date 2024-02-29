@@ -151,14 +151,15 @@ class CodebaseIndex:
             cleanup_dir(tmp_dir)
 
     @traceable(name="Updating codebase index")
-    def update(self):
+    def update(self, to_sha: str | None = None, is_temporary: bool = False):
         """
-        Updates the codebase index to the latest state of the default branch if needed
+        Updates the codebase index to a state.
+        Defaults to the latest state of the default branch if no sha is provided.
         """
         if not self.repo_info:
             raise ValueError("Repository info is not set")
 
-        head_sha = self.repo_client.get_default_branch_head_sha()
+        head_sha = to_sha if to_sha else self.repo_client.get_default_branch_head_sha()
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
             self.repo_info.sha, head_sha
         )
@@ -183,9 +184,15 @@ class CodebaseIndex:
 
             with Session() as session:
                 db_chunks = [chunk.to_db_model() for chunk in embedded_chunks]
+
+                if is_temporary:
+                    for chunk in db_chunks:
+                        chunk.for_run_id = str(self.run_id)
+
                 session.add_all(db_chunks)
 
                 if removed_files:
+                    # TODO: Hide these files on temporary run?
                     session.query(DbDocumentChunk).filter(
                         DbDocumentChunk.repo_id == self.repo_info.id,
                         DbDocumentChunk.path.in_(removed_files),
@@ -212,7 +219,7 @@ class CodebaseIndex:
             for i in range(0, len(chunks), superchunk_size := 128):
                 batch_embeddings: np.ndarray = get_embedding_model().encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=1,
+                    batch_size=4,
                     show_progress_bar=True,
                 )
                 embeddings_list.extend(batch_embeddings)

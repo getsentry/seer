@@ -45,7 +45,10 @@ class Autofix:
         self,
         request: AutofixRequest,
         event_manager: AutofixEventManager,
+        evaluation_mode: bool = False,
     ):
+        self.evaluation_mode = evaluation_mode
+
         self.request = request
         self.usage = Usage()
         self.event_manager = event_manager
@@ -115,8 +118,10 @@ class Autofix:
                     logger.info(f"Codebase index created for repo {repo.name}")
 
             for repo_id, codebase in self.context.codebases.items():
-                if codebase.is_behind():
-                    if self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace):
+                if codebase.is_behind() or self.evaluation_mode:
+                    if self.evaluation_mode or self.context.diff_contains_stacktrace_files(
+                        repo_id, self.stacktrace
+                    ):
                         logger.debug(
                             f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
                         )
@@ -126,7 +131,12 @@ class Autofix:
                             description="Update codebase index",
                         ) as span:
                             span.set_tag("repo", codebase.repo_info.external_slug)
-                            codebase.update()
+                            codebase.update(
+                                to_sha=(
+                                    self.request.base_commit_sha if self.evaluation_mode else None
+                                ),
+                                is_temporary=self.evaluation_mode,
+                            )
                         logger.debug(f"Codebase index updated")
                     else:
                         update_codebase_index.apply_async(
@@ -185,26 +195,28 @@ class Autofix:
                 [codebase.file_changes for codebase in self.context.codebases.values()],
             )
 
-            prs = self._create_prs(
-                planning_output.title, planning_output.description, planning_output.steps
-            )
-
             outputs = []
-            if prs:
-                # TODO: Support more than 1 PR...
-                pr = prs[0]
-                output = AutofixOutput(
-                    title=planning_output.title,
-                    description=planning_output.description,
-                    pr_url=pr.pr_url,
-                    repo_name=f"{pr.repo.owner}/{pr.repo.name}",
-                    pr_number=pr.pr_number,
-                    usage=self.usage,
+            prs = []
+            if not self.evaluation_mode:
+                prs = self._create_prs(
+                    planning_output.title, planning_output.description, planning_output.steps
                 )
-                self.event_manager.send_autofix_complete(output)
-                outputs.append(output)
 
-                metadata.setdefault("prs", []).extend([pr.model_dump() for pr in prs])
+                if prs:
+                    # TODO: Support more than 1 PR...
+                    pr = prs[0]
+                    output = AutofixOutput(
+                        title=planning_output.title,
+                        description=planning_output.description,
+                        pr_url=pr.pr_url,
+                        repo_name=f"{pr.repo.owner}/{pr.repo.name}",
+                        pr_number=pr.pr_number,
+                        usage=self.usage,
+                    )
+                    self.event_manager.send_autofix_complete(output)
+                    outputs.append(output)
+
+                    metadata.setdefault("prs", []).extend([pr.model_dump() for pr in prs])
 
             file_changes = {}
             for repo_id, codebase in self.context.codebases.items():

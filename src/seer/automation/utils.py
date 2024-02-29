@@ -18,7 +18,7 @@ def get_torch_device():
 @functools.cache
 def get_embedding_model():
     model = SentenceTransformer(
-        os.path.join("./", "models", "autofix_embeddings_v0"),
+        os.path.join("../", "models", "autofix_embeddings_v0"),
         trust_remote_code=True,
     ).to(get_torch_device())
 
