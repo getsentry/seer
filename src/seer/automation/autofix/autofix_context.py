@@ -2,10 +2,7 @@ import uuid
 
 from seer.automation.autofix.models import RepoDefinition, Stacktrace
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import (
-    DocumentChunkWithEmbedding,
-    DocumentChunkWithEmbeddingAndId,
-)
+from seer.automation.codebase.models import DocumentChunkWithEmbeddingAndId
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
 
