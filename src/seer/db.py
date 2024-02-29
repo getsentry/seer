@@ -164,17 +164,23 @@ class DbDocumentChunk(Base):
             "repo_id",
             "namespace",
             "path",
+            "index",
             unique=True,
             postgresql_where=namespace.isnot(None),
         ),
         Index(
-            "idx_repo_path", "repo_id", "path", unique=True, postgresql_where=namespace.is_(None)
+            "idx_repo_path",
+            "repo_id",
+            "path",
+            "index",
+            unique=True,
+            postgresql_where=namespace.is_(None),
         ),
     )
 
 
-class DbDocumentChunkTombstone(Base):
-    __tablename__ = "document_chunk_tombstones"
+class DbDocumentTombstone(Base):
+    __tablename__ = "document_tombstones"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
