@@ -164,11 +164,17 @@ class DbDocumentChunk(Base):
             "repo_id",
             "namespace",
             "path",
-            unique=False,
+            "index",
+            unique=True,
             postgresql_where=namespace.isnot(None),
         ),
         Index(
-            "idx_repo_path", "repo_id", "path", unique=False, postgresql_where=namespace.is_(None)
+            "idx_repo_path",
+            "repo_id",
+            "path",
+            "index",
+            unique=True,
+            postgresql_where=namespace.is_(None),
         ),
     )
 
