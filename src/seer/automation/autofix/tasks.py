@@ -10,6 +10,7 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixRequest
 from seer.automation.models import InitializationError
 from seer.rpc import SentryRpcClient
+from seer.tasks import TaskFactory, async_task_factory
 
 logger = logging.getLogger("autofix")
 
@@ -36,3 +37,8 @@ def run_autofix(data: dict[str, Any]) -> None:
         event_manager.mark_running_steps_errored()
         event_manager.send_autofix_complete(None)
         sentry_sdk.capture_exception(e)
+
+
+@async_task_factory
+class CodebaseIndexCreator(TaskFactory):
+    pass

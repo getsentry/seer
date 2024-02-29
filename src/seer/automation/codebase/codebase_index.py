@@ -249,8 +249,8 @@ class CodebaseIndex:
                 session.query(DbDocumentChunk)
                 .filter(
                     DbDocumentChunk.repo_id == self.repo_info.id,
-                    (DbDocumentChunk.for_run_id == str(self.run_id))
-                    | (DbDocumentChunk.for_run_id.is_(None)),
+                    (DbDocumentChunk.namespace == str(self.run_id))
+                    | (DbDocumentChunk.namespace.is_(None)),
                 )
                 .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
                 .limit(top_k)
@@ -321,7 +321,7 @@ class CodebaseIndex:
             session.query(DbDocumentChunk).filter(
                 DbDocumentChunk.repo_id == self.repo_info.id,
                 DbDocumentChunk.path == document.path,
-                DbDocumentChunk.for_run_id == str(self.run_id),
+                DbDocumentChunk.namespace == str(self.run_id),
             ).delete(synchronize_session=False)
 
             doc_parser = DocumentParser(get_embedding_model())
@@ -331,14 +331,14 @@ class CodebaseIndex:
             db_chunks: list[DbDocumentChunk] = []
             for chunk in embedded_chunks:
                 db_chunk = chunk.to_db_model()
-                db_chunk.for_run_id = str(self.run_id)
+                db_chunk.namespace = str(self.run_id)
             session.add_all(db_chunks)
             session.commit()
 
     def cleanup(self):
         with Session() as session:
             rows_to_delete = session.query(DbDocumentChunk).filter(
-                DbDocumentChunk.for_run_id == str(self.run_id)
+                DbDocumentChunk.namespace == str(self.run_id)
             )
             rows_to_delete.delete(synchronize_session=False)
             session.commit()

@@ -5,7 +5,7 @@ import multiprocessing
 from asyncio import CancelledError, Future, Task
 from concurrent.futures import ThreadPoolExecutor
 from queue import Empty
-from typing import Any, Coroutine, Protocol, TypeVar
+from typing import Any, Callable, Coroutine, Protocol, TypeVar
 
 from pydantic import BaseModel
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
@@ -43,6 +43,14 @@ class TaskFactory(Protocol[_Request]):
 
     async def invoke(self, request: _Request):
         pass
+
+
+_async_task_factories: list[TaskFactory[BaseModel]] = []
+
+
+def async_task_factory(f: Callable[[], TaskFactory]) -> Callable[[], TaskFactory]:
+    _async_task_factories.append(f())
+    return f
 
 
 @dataclasses.dataclass

@@ -2,10 +2,7 @@ import uuid
 
 from seer.automation.autofix.models import RepoDefinition, Stacktrace
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import (
-    DocumentChunkWithEmbedding,
-    DocumentChunkWithEmbeddingAndId,
-)
+from seer.automation.codebase.models import DocumentChunkWithEmbeddingAndId
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
 
@@ -71,8 +68,8 @@ class AutofixContext:
                 session.query(DbDocumentChunk)
                 .filter(
                     DbDocumentChunk.repo_id.in_(repo_ids),
-                    (DbDocumentChunk.for_run_id == str(self.run_id))
-                    | (DbDocumentChunk.for_run_id.is_(None)),
+                    (DbDocumentChunk.namespace == str(self.run_id))
+                    | (DbDocumentChunk.namespace.is_(None)),
                 )
                 .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
                 .limit(top_k)

@@ -1,7 +1,6 @@
-import asyncio
 import contextlib
 import datetime
-from typing import Collection
+from typing import Optional
 
 import sqlalchemy
 from flask_migrate import Migrate
@@ -16,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     delete,
+    func,
     select,
 )
 from sqlalchemy.dialects.postgresql import insert
@@ -153,7 +153,45 @@ class DbDocumentChunk(Base):
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-    for_run_id: Mapped[str] = mapped_column(String(36), nullable=True)
+    namespace: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_repo_id_namespace_path",
+            "repo_id",
+            "namespace",
+            "path",
+            unique=True,
+            postgresql_where=namespace.isnot(None),
+        ),
+        Index(
+            "idx_repo_path", "repo_id", "path", unique=True, postgresql_where=namespace.is_(None)
+        ),
+    )
+
+
+class DbDocumentChunkTombstone(Base):
+    __tablename__ = "document_chunk_tombstones"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
+    path: Mapped[str] = mapped_column(String, nullable=False)
+    namespace: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_repo_namespace_path",
+            "repo_id",
+            "namespace",
+            "path",
+            unique=True,
+        ),
+    )
 
 
 class DbGroupingRecord(Base):

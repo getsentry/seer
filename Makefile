@@ -52,5 +52,9 @@ schemas: # Generates json files
 migration: .env
 	docker-compose run app flask db migrate -m 'Migration'
 
+.PHONY: merge-migrations
+merge-migrations: .env
+	docker-compose run app flask db merge heads
+
 .env:
 	cp .env.example .env
