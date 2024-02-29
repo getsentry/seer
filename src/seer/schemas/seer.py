@@ -13,8 +13,11 @@ AutofixEndpointResponse = typing_extensions.TypedDict(
 AutofixRequest = typing_extensions.TypedDict(
     "AutofixRequest",
     {
+        "organization_id": int,
+        "project_id": int,
+        "repos": typing.List["RepoDefinition"],
+        "base_commit_sha": typing.Union[str, None],
         "issue": "IssueDetails",
-        "base_commit_sha": str,
         "additional_context": typing.Union[str, None],
     },
     total=False,
@@ -112,6 +115,16 @@ IssueDetails = typing_extensions.TypedDict(
         "id": int,
         "title": str,
         "events": typing.List["SentryEvent"],
+    },
+    total=False,
+)
+
+RepoDefinition = typing_extensions.TypedDict(
+    "RepoDefinition",
+    {
+        "provider": typing.Literal["github"],
+        "owner": str,
+        "name": str,
     },
     total=False,
 )

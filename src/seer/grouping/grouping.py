@@ -1,12 +1,13 @@
 import difflib
-import pickle
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-import faiss  # type: ignore
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ValidationInfo, field_validator, validator
+import torch
+from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
+
+from seer.db import DbGroupingRecord, Session
 
 
 class GroupingRequest(BaseModel):
@@ -15,7 +16,7 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     k: int = 1
-    threshold: float = 0.99
+    threshold: float = 0.01
 
     @field_validator("stacktrace", "message")
     @classmethod
@@ -28,21 +29,28 @@ class GroupingRequest(BaseModel):
 class GroupingRecord(BaseModel):
     group_id: int
     project_id: int
-    stacktrace: str
     message: str
-    embeddings: Any
+    stacktrace_embedding: np.ndarray
 
-    @validator("embeddings", pre=True, allow_reuse=True)
-    def check_embeddings(cls, v):
-        if not isinstance(v, np.ndarray):
-            raise ValueError("Embeddings must be a numpy array.")
-        return v
+    def to_db_model(self) -> DbGroupingRecord:
+        return DbGroupingRecord(
+            group_id=self.group_id,
+            project_id=self.project_id,
+            message=self.message,
+            stacktrace_embedding=self.stacktrace_embedding,
+        )
+
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
+        }
 
 
 class GroupingResponse(BaseModel):
     parent_group_id: Optional[int]
-    stacktrace_similarity: float
-    message_similarity: float
+    stacktrace_distance: float
+    message_distance: float
     should_group: bool
 
 
@@ -51,143 +59,135 @@ class SimilarityResponse(BaseModel):
 
 
 class GroupingLookup:
-    """
-    Manages the grouping of similar stack traces using sentence embeddings.
+    """Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
 
     Attributes:
         model (SentenceTransformer): The sentence transformer model for encoding text.
-        data (pd.DataFrame): The dataset containing stacktrace embeddings.
-        index (faiss.IndexFlat): The FAISS index for similarity search.
+
     """
 
     def __init__(self, model_path: str, data_path: str):
         """
-        Initializes the GroupingLookup with the model and preprocessed data. Creates
-        FAISS indexes for similarity search for each unique project ID in the dataset.
+        Initializes the GroupingLookup with the sentence transformer model.
 
-        Args:
-            model_path (str): Path to the sentence transformer model.
-            data_path (str): Path to the preprocessed data with stacktrace embeddings.
+        :param model_path: Path to the sentence transformer model.
         """
-        self.model = SentenceTransformer(model_path, trust_remote_code=True)
-        with open(data_path, "rb") as file:
-            self.data = pickle.load(file)
-        self.indexes = self.create_indexes()
+        self.model = SentenceTransformer(
+            model_path,
+            trust_remote_code=True,
+            device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
+        )
+        self.initialize_db(data_path)
 
-    def create_indexes(self) -> Dict[int, faiss.IndexFlatIP]:
+    def initialize_db(self, data_path: str):
         """
-        Creates FAISS indexes for each unique project ID in the provided dataset.
+        Initializes the database with records from a pickle file if a specific record does not exist.
 
-        This method iterates over each unique project ID in the dataset, extracts the corresponding
-        embeddings, and creates a FAISS index for each project. The indexes are stored in a dictionary
-        with the project IDs as keys.
+        This method checks for the existence of a record with a specific group_id in the database.
+        If the record exists, the database is assumed to be initialized, and the method returns early.
+        If the record does not exist, the method proceeds to load data from a pickle file located at
+        `data_path` and populates the database with these records.
 
-        Args:
-            data (pd.DataFrame): The dataset containing stacktrace embeddings and project IDs.
-
-        Returns:
-            dict: A dictionary of FAISS indexes with project IDs as keys.
+        :param data_path: The file path to the pickle file containing the records to load into the database.
         """
-        indexes = {}
-        for project_id in self.data["project_id"].unique():
-            project_embeddings = self.data[self.data["project_id"] == project_id][
-                "embeddings"
-            ].values
-            embeddings_matrix = np.vstack(project_embeddings).astype("float32")
-            faiss.normalize_L2(embeddings_matrix)
-            index = faiss.IndexFlatIP(embeddings_matrix.shape[1])
-            index.add(embeddings_matrix)
-            indexes[project_id] = index
-        return indexes
+        with Session() as session:
+            key_group_id = 4506283937  # TODO: less hacky solution to populating the DB if needed
+            record_exists = (
+                session.query(DbGroupingRecord)
+                .filter(DbGroupingRecord.group_id == key_group_id)
+                .first()
+                is not None
+            )
+
+            if record_exists:
+                return
+
+            with open(data_path, mode="rb") as records_file:
+                records_df = pd.read_pickle(records_file)
+                for _, row in records_df.iterrows():
+                    new_record = DbGroupingRecord(
+                        group_id=row["group_id"],
+                        project_id=row["project_id"],
+                        message=row["message"],
+                        stacktrace_embedding=row["stacktrace_embedding"].astype(np.float32),
+                    )
+                    session.add(new_record)
+                session.commit()
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
-        Adds a new stacktrace embedding to the index for the specific project and updates the dataset.
+        Encodes the stacktrace using the sentence transformer model.
 
-        Args:
-            stacktrace (str): The stacktrace to encode.
-
-        Returns:
-            np.ndarray: The normalized embedding of the stacktrace.
+        :param stacktrace: The stacktrace to encode.
+        :return: The embedding of the stacktrace.
         """
-        embedding = self.model.encode(stacktrace)
-        embedding /= np.linalg.norm(embedding)
-        return embedding
-
-    def add_new_record_to_index(self, new_record: GroupingRecord) -> None:
-        """
-        Adds a new stacktrace embedding to the index and updates the dataset.
-
-        Args:
-            new_record (GroupingRecord): The new stacktrace record to add.
-
-        Returns:
-            None
-        """
-        if new_record.group_id not in self.data["group_id"].values:
-            new_embedding_normalized = new_record.embeddings / np.linalg.norm(new_record.embeddings)
-            self.data = pd.concat([self.data, pd.DataFrame([new_record.dict()])], ignore_index=True)
-            project_index = self.indexes[new_record.project_id]
-            project_index.add(np.array([new_embedding_normalized], dtype="float32"))
-            self.indexes[new_record.project_id] = project_index
+        return self.model.encode(stacktrace)
 
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
-        Retrieves the k nearest neighbors for a stacktrace within the same project and determines if they should be grouped,
-        ensuring that an issue is not grouped with itself.
+        Retrieves the k nearest neighbors for a stacktrace within the same project and determines if they should be grouped.
+        If no records should be grouped, inserts the request as a new GroupingRecord into the database.
 
-        Args:
-            issue (GroupingRequest): The issue containing the stacktrace, similarity threshold, and
-                                     number of nearest neighbors to find (k)
-
-        Returns:
-            SimilarityResponse: A SimilarityResponse object containing a list of GroupingResponse objects with the nearest group IDs,
-                                stacktrace similarity scores, message similarity scores, and grouping flags.
+        :param issue: The issue containing the stacktrace, similarity threshold, and number of nearest neighbors to find (k).
+        :return: A SimilarityResponse object containing a list of GroupingResponse objects with the nearest group IDs,
+                 stacktrace similarity scores, message similarity scores, and grouping flags.
         """
-        # Get the project data and index for the issue's project
-        project_data = self.data[self.data["project_id"] == issue.project_id]
-        index = self.indexes[issue.project_id]
-
         embedding = self.encode_text(issue.stacktrace).astype("float32")
-        embedding = np.expand_dims(embedding, axis=0)
-        # Find one extra neighbor to account for the issue itself
-        distances, indices = index.search(embedding, k=issue.k + 1)
+        with Session() as session:
+            results = (
+                session.query(
+                    DbGroupingRecord,
+                    DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label(
+                        "distance"
+                    ),
+                )
+                .filter(
+                    DbGroupingRecord.project_id == issue.project_id,
+                    DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= 0.15,
+                    DbGroupingRecord.group_id != issue.group_id,
+                )
+                .order_by("distance")
+                .limit(issue.k)
+                .all()
+            )
+            # If no existing groups within the threshold, insert the request as a new GroupingRecord
+            if not any(distance <= issue.threshold for _, distance in results):
+                self.insert_new_grouping_record(session, issue, embedding)
+
+            session.commit()
+
         similarity_response = SimilarityResponse(responses=[])
-
-        for i in range(indices.shape[1]):
-            group_id = project_data.iloc[indices[0][i]]["group_id"]
-            if group_id == issue.group_id:
-                continue  # Skip if the found group is the same as the issue's group
-
-            stacktrace_similarity_score = distances[0][i]
-            neighboring_message = project_data.iloc[indices[0][i]]["message"]
+        for record, distance in results:
             message_similarity_score = difflib.SequenceMatcher(
-                None, issue.message, neighboring_message
+                None, issue.message, record.message
             ).ratio()
-            should_group = stacktrace_similarity_score >= issue.threshold
+            should_group = distance <= issue.threshold
 
             similarity_response.responses.append(
                 GroupingResponse(
-                    parent_group_id=group_id,
-                    stacktrace_similarity=stacktrace_similarity_score,
-                    message_similarity=message_similarity_score,
+                    parent_group_id=record.group_id,
+                    stacktrace_distance=distance,
+                    message_distance=1.0 - message_similarity_score,
                     should_group=should_group,
                 )
             )
 
-            if len(similarity_response.responses) == issue.k:
-                break
-
-        if similarity_response.responses:
-            nearest_neighbor = similarity_response.responses[0]
-            if not nearest_neighbor.should_group:
-                new_record = GroupingRecord(
-                    group_id=issue.group_id,
-                    project_id=issue.project_id,
-                    embeddings=np.squeeze(embedding),
-                    message=issue.message,
-                    stacktrace=issue.stacktrace,
-                )
-                self.add_new_record_to_index(new_record)
-
         return similarity_response
+
+    def insert_new_grouping_record(self, session, issue: GroupingRequest, embedding: np.ndarray):
+        """
+        Inserts a new GroupingRecord into the database if the group_id does not already exist.
+
+        :param session: The database session.
+        :param issue: The issue to insert as a new GroupingRecord.
+        :param embedding: The embedding of the stacktrace.
+        """
+        existing_record = session.query(DbGroupingRecord).filter_by(group_id=issue.group_id).first()
+        if existing_record is None:
+            new_record = GroupingRecord(
+                group_id=issue.group_id,
+                project_id=issue.project_id,
+                message=issue.message,
+                stacktrace_embedding=embedding,
+            ).to_db_model()
+            session.add(new_record)
