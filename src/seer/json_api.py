@@ -30,7 +30,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
         def wrapper() -> Any:
             data = request.get_json()
             if not isinstance(data, dict):
-                sentry_sdk.capture_message(f"Data is not an object: {data}")
+                sentry_sdk.capture_message(f"Data is not an object: {type(data)}")
                 raise BadRequest("Data is not an object")
 
             try:
