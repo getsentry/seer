@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Collection
 
@@ -7,6 +8,7 @@ from sentry_sdk.integrations import Integration
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from seer.db import Session, db, migrate
+from seer.grouping.grouping import logger as grouping_logger
 from seer.tasks import AsyncSession
 
 
@@ -27,6 +29,8 @@ def bootup(
     with_async=False,
     eager_load_inference_models=False,
 ) -> Flask:
+    grouping_logger.setLevel(logging.DEBUG)
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
         integrations=[*plugins],
