@@ -34,7 +34,7 @@ RUN chmod +x ./celeryworker.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==23.0.1
-RUN pip install -r requirements.txt --ignore-installed blinker
+RUN pip install -r requirements.txt
 
 # Then install psycopg
 RUN pip install psycopg[binary]
