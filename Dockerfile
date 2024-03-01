@@ -36,9 +36,6 @@ RUN chmod +x ./celeryworker.sh
 RUN pip install --upgrade pip==23.0.1
 RUN pip install -r requirements.txt
 
-# Then install psycopg
-RUN pip install psycopg[binary]
-
 # Copy source code
 COPY src/ src/
 COPY pyproject.toml .
