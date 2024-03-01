@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Collection
 
@@ -27,6 +28,10 @@ def bootup(
     with_async=False,
     eager_load_inference_models=False,
 ) -> Flask:
+    from seer.grouping.grouping import logger as grouping_logger
+
+    grouping_logger.setLevel(logging.INFO)
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
         integrations=[*plugins],
