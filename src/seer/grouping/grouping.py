@@ -10,6 +10,8 @@ from sentence_transformers import SentenceTransformer
 
 from seer.db import DbGroupingRecord, Session
 
+logger = logging.getLogger("grouping")
+
 
 class GroupingRequest(BaseModel):
     group_id: int
@@ -79,7 +81,7 @@ class GroupingLookup:
             trust_remote_code=True,
             device=model_device,
         )
-        logging.info(f"GroupingLookup model initialized using device: {model_device}")
+        logger.info(f"GroupingLookup model initialized using device: {model_device}")
         self.initialize_db(data_path)
 
     def initialize_db(self, data_path: str):
