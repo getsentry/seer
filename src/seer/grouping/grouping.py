@@ -1,4 +1,5 @@
 import difflib
+import logging
 from typing import List, Optional
 
 import numpy as np
@@ -8,6 +9,8 @@ from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 
 from seer.db import DbGroupingRecord, Session
+
+logger = logging.getLogger("grouping")
 
 
 class GroupingRequest(BaseModel):
@@ -72,11 +75,13 @@ class GroupingLookup:
 
         :param model_path: Path to the sentence transformer model.
         """
+        model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.model = SentenceTransformer(
             model_path,
             trust_remote_code=True,
-            device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
+            device=model_device,
         )
+        logger.info(f"GroupingLookup model initialized using device: {model_device}")
         self.initialize_db(data_path)
 
     def initialize_db(self, data_path: str):
