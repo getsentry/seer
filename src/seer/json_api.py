@@ -2,6 +2,7 @@ import functools
 import inspect
 from typing import Any, Callable, List, Tuple, Type, TypeVar, get_type_hints
 
+import sentry_sdk
 from flask import Flask, request
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest
@@ -29,11 +30,13 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
         def wrapper() -> Any:
             data = request.get_json()
             if not isinstance(data, dict):
+                sentry_sdk.capture_message(f"Data is not an object: {type(data)}")
                 raise BadRequest("Data is not an object")
 
             try:
                 result: BaseModel = implementation(request_annotation.model_validate(data))
             except ValidationError as e:
+                sentry_sdk.capture_exception(e)
                 raise BadRequest(str(e))
 
             return result.model_dump()
