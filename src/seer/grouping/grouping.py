@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
+import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
@@ -82,6 +83,7 @@ class GroupingLookup:
             device=model_device,
         )
         logger.info(f"GroupingLookup model initialized using device: {model_device}")
+        sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
         self.initialize_db(data_path)
 
     def initialize_db(self, data_path: str):
