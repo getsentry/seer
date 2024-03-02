@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError, field_validator
 
 from seer.automation.agent.models import Usage
 
@@ -144,6 +144,9 @@ class RepoDefinition(BaseModel):
     owner: str
     name: str
 
+    def __hash__(self):
+        return hash((self.provider, self.owner, self.name))
+
 
 class AutofixRequest(BaseModel):
     organization_id: int
@@ -153,6 +156,17 @@ class AutofixRequest(BaseModel):
 
     issue: IssueDetails
     additional_context: Optional[str] = None
+
+    @field_validator("repos", mode="after")
+    @classmethod
+    def validate_repo_duplicates(cls, repos):
+        if isinstance(repos, list):
+            # Check for duplicates by comparing lengths after converting to a set
+            if len(set(repos)) != len(repos):
+                raise ValueError("Duplicate repos detected in the request.")
+            return repos
+
+        raise ValueError("Not a list of repos.")
 
 
 class AutofixOutput(BaseModel):
