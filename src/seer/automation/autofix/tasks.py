@@ -9,22 +9,21 @@ from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixRequest
 from seer.automation.models import InitializationError
-from seer.rpc import SentryRpcClient
+from seer.rpc import RpcClient, SentryRpcClient
 from seer.tasks import TaskFactory, async_task_factory
 
 logger = logging.getLogger("autofix")
 
 
 @celery_app.task(time_limit=60 * 60 * 5)  # 5 hour task timeout
-def run_autofix(data: dict[str, Any]) -> None:
-    base_url = os.environ.get("SENTRY_BASE_URL")
-    if not base_url:
-        raise RuntimeError("SENTRY_BASE_URL must be set")
-
-    client = SentryRpcClient(base_url)
+def run_autofix(
+    request_data: dict[str, Any], process_request_name: str = "", *, client: RpcClient | None = None
+) -> None:
+    if client is None:
+        client = SentryRpcClient(os.environ["SENTRY_BASE_URL"])
     # client = DummyRpcClient()
 
-    request = AutofixRequest(**data)
+    request = AutofixRequest(**request_data)
     event_manager = AutofixEventManager(client, request.issue.id)
     try:
         with sentry_sdk.start_span(

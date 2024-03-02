@@ -15,7 +15,6 @@ class Document(BaseModel):
 
 
 class DocumentChunk(BaseModel):
-    id: Optional[int] = None
     content: str
     context: Optional[str]
     language: str
@@ -24,6 +23,13 @@ class DocumentChunk(BaseModel):
     index: int
     token_count: int
     repo_id: int
+
+    @property
+    def identity_tuple(self) -> tuple[int, str, int]:
+        """
+        Unique *within* a namespace, but not *across* them.  See similar method on DbDocumentChunk
+        """
+        return self.repo_id, self.path, self.index
 
     def get_dump_for_embedding(self):
         return """{context}{content}""".format(
@@ -61,27 +67,11 @@ class DocumentChunk(BaseModel):
 class DocumentChunkWithEmbedding(DocumentChunk):
     embedding: np.ndarray
 
-    def to_db_model(self) -> DbDocumentChunk:
-        return DbDocumentChunk(
-            id=self.id,
-            repo_id=self.repo_id,
-            path=self.path,
-            index=self.index,
-            hash=self.hash,
-            token_count=self.token_count,
-            embedding=self.embedding,
-            language=self.language,
-        )
-
     class Config:
         arbitrary_types_allowed = True
         json_encoders = {
             np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
         }
-
-
-class DocumentChunkWithEmbeddingAndId(DocumentChunkWithEmbedding):
-    id: int
 
 
 class RepositoryInfo(BaseModel):
@@ -91,6 +81,10 @@ class RepositoryInfo(BaseModel):
     provider: str
     external_slug: str
     sha: str
+
+    @property
+    def is_indexed(self) -> bool:
+        return bool(self.sha)
 
     @classmethod
     def from_db(cls, db_repo: DbRepositoryInfo) -> "RepositoryInfo":

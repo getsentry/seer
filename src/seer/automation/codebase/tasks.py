@@ -5,7 +5,7 @@ import sentry_sdk
 
 from celery_app.app import app as celery_app
 from celery_app.models import UpdateCodebaseTaskRequest
-from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.automation.codebase.codebase.index import CodebaseIndex
 
 logger = logging.getLogger("autofix")
 

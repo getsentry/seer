@@ -32,8 +32,10 @@ from seer.automation.autofix.prompts import (
 )
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
+from seer.automation.codebase.codebase.index import CodebaseIndex
+from seer.automation.codebase.codebase.tasks import schedule_codebase_update_work
 from seer.automation.codebase.models import DocumentChunkWithEmbedding
-from seer.automation.codebase.tasks import update_codebase_index
+from seer.db import Session
 
 logger = logging.getLogger("autofix")
 
@@ -102,41 +104,14 @@ class Autofix:
                 logger.info(f"Problem is not actionable")
                 return
 
-            for repo in self.request.repos:
-                if not self.context.has_codebase_index(repo):
-                    logger.info(f"Creating codebase index for repo {repo.name}")
-                    self.event_manager.send_codebase_creation_message()
-                    with sentry_sdk.start_span(
-                        op="seer.automation.autofix.codebase_index.create",
-                        description="Create codebase index",
-                    ) as span:
-                        span.set_tag("repo", repo.name)
-                        self.context.create_codebase_index(repo)
-                    logger.info(f"Codebase index created for repo {repo.name}")
-
             for repo_id, codebase in self.context.codebases.items():
                 if codebase.is_behind():
-                    if self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace):
-                        logger.debug(
-                            f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
-                        )
-                        self.event_manager.send_codebase_indexing_message()
-                        with sentry_sdk.start_span(
-                            op="seer.automation.autofix.codebase_index.update",
-                            description="Update codebase index",
-                        ) as span:
-                            span.set_tag("repo", codebase.repo_info.external_slug)
-                            codebase.update()
-                        logger.debug(f"Codebase index updated")
-                    else:
-                        update_codebase_index.apply_async(
-                            (UpdateCodebaseTaskRequest(repo_id=repo_id).model_dump(),),
-                            countdown=3 * 60,
-                        )  # 3 minutes
-                        logger.info(f"Codebase indexing scheduled for later")
-                else:
-                    logger.debug(f"Codebase is up to date")
-                    self.event_manager.send_codebase_indexing_result(AutofixStatus.COMPLETED)
+                    with Session() as session:
+                        schedule_codebase_update_work(codebase.repo_info, session)
+                        session.commit()
+                    # break
+                    if self.break_on_codebase(repo_id, codebase):
+                        pass
 
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
@@ -221,6 +196,41 @@ class Autofix:
         finally:
             self.context.cleanup()
             logger.info(f"Autofix complete for issue {self.request.issue.id}")
+
+    def break_on_codebase(self, repo_id: int, codebase: CodebaseIndex) -> bool:
+        # If we haven't even indexed, let's break here.
+        if not codebase.repo_info.is_indexed:
+            return True
+        # If we have indexed, we should break iff the diff contains stacktrace files
+        return self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace)
+        #
+        #     with Session() as session:
+        #         schedule_codebase_update_work(
+        #             codebase.repo_info,
+        #             session
+        #         )
+        #         session.commit()
+        #     if self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace):
+        #         logger.debug(
+        #             f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
+        #         )
+        #         self.event_manager.send_codebase_indexing_message()
+        #         with sentry_sdk.start_span(
+        #                 op="seer.automation.autofix.codebase_index.update",
+        #                 description="Update codebase index",
+        #         ) as span:
+        #             span.set_tag("repo", codebase.repo_info.external_slug)
+        #             codebase.update()
+        #         logger.debug(f"Codebase index updated")
+        #     else:
+        #         update_codebase_index.apply_async(
+        #             (UpdateCodebaseTaskRequest(repo_id=repo_id).model_dump(),),
+        #             countdown=3 * 60,
+        #         )  # 3 minutes
+        #         logger.info(f"Codebase indexing scheduled for later")
+        # else:
+        #     logger.debug(f"Codebase is up to date")
+        #     self.event_manager.send_codebase_indexing_result(AutofixStatus.COMPLETED)
 
     def _create_prs(self, title: str, description: str, steps: list[PlanStep]):
         prs: list[PullRequestResult] = []

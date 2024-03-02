@@ -142,6 +142,13 @@ class DbRepositoryInfo(Base):
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
     __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
 
+    @property
+    def is_indexed(self) -> bool:
+        """
+        A repo that has an empty string sha is a placeholder, and has never completed an indexing operation.
+        """
+        return bool(self.sha)
+
 
 class DbDocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -157,6 +164,13 @@ class DbDocumentChunk(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
+
+    @property
+    def identity_tuple(self) -> tuple[int, str, int]:
+        """
+        Unique *within* a namespace, but not *across* them.  See similar method on DocumentChunk
+        """
+        return self.repo_id, self.path, self.index
 
     __table_args__ = (
         Index(

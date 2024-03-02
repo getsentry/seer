@@ -3,6 +3,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 from seer.automation.agent.models import Usage
+from seer.automation.autofix.event_manager import AutofixStatus
 
 
 class FileChangeError(Exception):
@@ -144,6 +145,12 @@ class RepoDefinition(BaseModel):
     owner: str
     name: str
 
+    @property
+    def external_slug(self) -> str:
+        if self.provider == "github":
+            return f"{self.owner}/{self.name}"
+        raise ValueError(f"Unknown provider: {self.provider}")
+
 
 class AutofixRequest(BaseModel):
     organization_id: int
@@ -153,6 +160,10 @@ class AutofixRequest(BaseModel):
 
     issue: IssueDetails
     additional_context: Optional[str] = None
+
+
+class AutofixContinuation(BaseModel):
+    request: AutofixRequest
 
 
 class AutofixOutput(BaseModel):
@@ -172,3 +183,12 @@ class PullRequestResult(BaseModel):
     pr_number: int
     pr_url: str
     repo: RepoDefinition
+
+
+class Step(BaseModel):
+    id: str
+    index: int
+    description: Optional[str] = None
+    title: str
+    children: list["Step"] = []
+    status: AutofixStatus

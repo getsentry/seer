@@ -2,8 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.models import RepoDefinition, Stacktrace, StacktraceFrame
-from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.automation.autofix.models import Stacktrace, StacktraceFrame
 
 
 class TestAutofixContext(unittest.TestCase):

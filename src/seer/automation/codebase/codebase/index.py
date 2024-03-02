@@ -2,15 +2,15 @@ import logging
 import uuid
 
 import numpy as np
-from langsmith import RunTree, traceable
+from langsmith import traceable
 from tqdm import tqdm
 
 from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
+from seer.automation.codebase.codebase.storage import CodebaseIndexStorage
 from seer.automation.codebase.models import (
     Document,
     DocumentChunk,
     DocumentChunkWithEmbedding,
-    DocumentChunkWithEmbeddingAndId,
     RepositoryInfo,
 )
 from seer.automation.codebase.parser import DocumentParser
@@ -50,6 +50,11 @@ class CodebaseIndex:
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
         )
 
+    @property
+    def index_storage(self) -> CodebaseIndexStorage:
+        return CodebaseIndexStorage(repository_info=self.repo_info, namespace=str(self.run_id))
+
+    # TODO: Lift this out.
     @staticmethod
     def has_repo_been_indexed(organization: int, project: int, repo: RepoDefinition):
         return (
@@ -232,11 +237,10 @@ class CodebaseIndex:
         return embedded_chunks
 
     def is_behind(self):
-        if not self.repo_info:
-            raise ValueError("Repository info is not set")
+        if not self.repo_info.is_indexed:
+            return True
 
         head_sha = self.repo_client.get_default_branch_head_sha()
-
         return self.repo_client.compare(self.repo_info.sha, head_sha).ahead_by > 0
 
     def query(self, query: str, top_k: int = 4):
@@ -364,15 +368,13 @@ class CodebaseIndex:
                             frame.filename = valid_path
                             break
 
-    def _populate_chunks(
-        self, chunks: list[DbDocumentChunk]
-    ) -> list[DocumentChunkWithEmbeddingAndId]:
+    def _populate_chunks(self, chunks: list[DbDocumentChunk]) -> list[DocumentChunkWithEmbedding]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(get_embedding_model())
 
-        matched_chunks: list[DocumentChunkWithEmbeddingAndId] = []
+        matched_chunks: list[DocumentChunkWithEmbedding] = []
         for chunk in chunks:
             content = self._get_file_content_with_cache(chunk.path, self.repo_info.sha)
 
@@ -396,8 +398,7 @@ class CodebaseIndex:
                 continue
 
             matched_chunks.append(
-                DocumentChunkWithEmbeddingAndId(
-                    id=chunk.id,
+                DocumentChunkWithEmbedding(
                     path=chunk.path,
                     index=chunk.index,
                     hash=chunk.hash,

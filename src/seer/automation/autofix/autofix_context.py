@@ -1,8 +1,8 @@
 import uuid
 
 from seer.automation.autofix.models import RepoDefinition, Stacktrace
-from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import DocumentChunkWithEmbeddingAndId
+from seer.automation.codebase.codebase.index import CodebaseIndex
+from seer.automation.codebase.models import DocumentChunkWithEmbedding
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
 
@@ -80,14 +80,15 @@ class AutofixContext:
             for db_chunk in db_chunks:
                 chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
 
-            populated_chunks: list[DocumentChunkWithEmbeddingAndId] = []
+            populated_chunks: list[DocumentChunkWithEmbedding] = []
             for _repo_id, db_chunks in chunks_by_repo_id.items():
                 codebase = self.get_codebase(_repo_id)
                 populated_chunks.extend(codebase._populate_chunks(db_chunks))
 
-            # Re-sort populated_chunks based on their original order in db_chunks
-            db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
-            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
+            db_chunk_order = {
+                db_chunk.identity_tuple: index for index, db_chunk in enumerate(db_chunks)
+            }
+            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.identity_tuple])
 
         return populated_chunks
 

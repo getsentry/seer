@@ -1,10 +1,14 @@
 import enum
 import logging
-from typing import Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel
-
-from seer.automation.autofix.models import AutofixOutput, PlanningOutput, ProblemDiscoveryResult
+from seer.automation.autofix.models import (
+    AutofixOutput,
+    PlanningOutput,
+    ProblemDiscoveryResult,
+    Step,
+)
+from seer.automation.state import State
 from seer.rpc import RpcClient
 
 
@@ -19,21 +23,13 @@ class AutofixStatus(enum.Enum):
 logger = logging.getLogger("autofix")
 
 
-class Step(BaseModel):
-    id: str
-    index: int
-    description: Optional[str] = None
-    title: str
-    children: list["Step"] = []
-    status: AutofixStatus
-
-
 class AutofixEventManager:
-    steps: list[Step] = []
+    steps: State[list[Step]] = []
 
-    def __init__(self, rpc_client: RpcClient, issue_id: int):
+    def __init__(self, rpc_client: RpcClient, issue_id: int, steps: State[list[Step]]):
         self.rpc_client = rpc_client
         self.issue_id = issue_id
+        self.steps = steps
 
     def _send_steps_update(self, status: AutofixStatus):
         self.rpc_client.call(
