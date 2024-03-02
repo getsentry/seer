@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
+FROM nvidia/cuda:12.3.2-base-ubuntu22.04
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
 ARG TEST
