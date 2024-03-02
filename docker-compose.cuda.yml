@@ -1,0 +1,8 @@
+services:
+    app:
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          capabilities: [gpu]

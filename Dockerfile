@@ -1,4 +1,4 @@
-FROM python:3.11
+FROM nvidia/cuda:12.3.2-base-ubuntu22.04
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
 ARG TEST
@@ -10,8 +10,22 @@ ENV PORT=$PORT
 ENV APP_HOME /app
 WORKDIR $APP_HOME
 
+# Install Python and pip
+RUN apt-get update && apt-get install -y software-properties-common && add-apt-repository ppa:deadsnakes/ppa
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3.11 python3-pip python3.11-dev
+
+# Make python3.11 the default python version if necessary
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
 # Install supervisord
-RUN apt-get update && apt-get install -y supervisor spell && rm -rf /var/lib/apt/lists/*
+RUN apt-get install -y supervisor spell
+
+# Install libpq-dev for psycopg
+RUN apt-get update && apt-get install -y libpq-dev
+
+# Clean up
+RUN rm -rf /var/lib/apt/lists/*
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/

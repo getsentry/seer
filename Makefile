@@ -27,6 +27,10 @@ update: .env # Updates the project's docker-compose image.
 dev: .env # Starts the webserver based on the current src on port 9091
 	docker-compose up --build
 
+.PHONY: dev-cuda
+dev-cuda: .env # Starts the webserver based on the current src on port 9091 with cuda enabled
+	docker-compose -f docker-compose.yml -f docker-compose.cuda.yml up --build
+
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
 	docker-compose run app mypy
