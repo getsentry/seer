@@ -140,7 +140,7 @@ class IssueDetails(BaseModel):
 
 
 class RepoDefinition(BaseModel):
-    provider: Literal["github"]
+    provider: str
     owner: str
     name: str
 

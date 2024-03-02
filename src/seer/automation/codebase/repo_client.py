@@ -57,6 +57,7 @@ class RepoClient:
         repo_owner: str,
         repo_name: str,
     ):
+        repo_provider = self._process_repo_provider(repo_provider)
         if repo_provider != "github":
             # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
             # easier if it does
@@ -70,6 +71,11 @@ class RepoClient:
 
         self.repo_owner = repo_owner
         self.repo_name = repo_name
+
+    def _process_repo_provider(self, provider: str) -> str:
+        if provider.startswith("integrations:"):
+            return provider.split(":")[1]
+        return provider
 
     def get_default_branch(self):
         return self.repo.default_branch
