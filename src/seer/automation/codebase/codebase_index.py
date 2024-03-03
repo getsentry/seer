@@ -212,7 +212,7 @@ class CodebaseIndex:
             for i in range(0, len(chunks), superchunk_size := 128):
                 batch_embeddings: np.ndarray = get_embedding_model().encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=1,
+                    batch_size=4,
                     show_progress_bar=True,
                 )
                 embeddings_list.extend(batch_embeddings)
