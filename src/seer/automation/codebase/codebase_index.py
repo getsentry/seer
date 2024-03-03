@@ -126,7 +126,7 @@ class CodebaseIndex:
             embedded_chunks = cls._embed_chunks(chunks)
             logger.debug(f"Processed {len(chunks)} chunks")
 
-            with Session() as session:\n            session.autoflush = False
+            with Session() as session:\n            session.autoflush = False\n            session.autoflush = False
                 db_repo_info = DbRepositoryInfo(
                     organization=organization,
                     project=project,
@@ -183,7 +183,7 @@ class CodebaseIndex:
             embedded_chunks = self._embed_chunks(chunks)
             logger.debug(f"Processed {len(chunks)} chunks")
 
-            with Session() as session:\n            session.autoflush = False
+            with Session() as session:\n            session.autoflush = False\n            session.autoflush = False
                 db_chunks = [
                     chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks
                 ]
@@ -248,7 +248,7 @@ class CodebaseIndex:
 
         embedding = get_embedding_model().encode(query, show_progress_bar=False)
 
-        with Session() as session:\n            session.autoflush = False
+        with Session() as session:\n            session.autoflush = False\n            session.autoflush = False
             db_chunks = (
                 session.query(DbDocumentChunk)
                 .filter(
@@ -318,7 +318,7 @@ class CodebaseIndex:
     def update_document_temporarily(self, document: Document):
         assert self.repo_info is not None, "Repository info is not set"
 
-        with Session() as session:\n            session.autoflush = False
+        with Session() as session:\n            session.autoflush = False\n            session.autoflush = False
             # Delete the entire document from the temporary chunks if it exists
             session.query(DbDocumentChunk).filter(
                 DbDocumentChunk.repo_id == self.repo_info.id,
@@ -338,7 +338,7 @@ class CodebaseIndex:
             session.commit()
 
     def cleanup(self):
-        with Session() as session:\n            session.autoflush = False
+        with Session() as session:\n            session.autoflush = False\n            session.autoflush = False
             rows_to_delete = session.query(DbDocumentChunk).filter(
                 DbDocumentChunk.namespace == str(self.run_id)
             )
