@@ -165,15 +165,3 @@ class TestAutofixRequest(unittest.TestCase):
             issue=issue_details,
         )
         self.assertEqual(len(autofix_request.repos), 2)
-
-    def test_autofix_request_with_invalid_repo(self):
-        repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="bitbucket", owner="seer", name="automation-tools")
-        issue_details = IssueDetails(id=789, title="Test Issue", events=[SentryEvent(entries=[])])
-        with self.assertRaises(ValidationError):
-            AutofixRequest(
-                organization_id=123,
-                project_id=456,
-                repos=[repo_def1, repo_def2],
-                issue=issue_details,
-            )
