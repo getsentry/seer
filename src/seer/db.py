@@ -29,7 +29,7 @@ class Base(DeclarativeBase):
 # Initialized in src/app.run
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
-Session = sessionmaker(expire_on_commit=False)
+Session = sessionmaker(autoflush=False, expire_on_commit=False)
 
 
 class ProcessRequest(Base):
