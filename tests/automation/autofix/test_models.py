@@ -108,8 +108,18 @@ class TestRepoDefinition(unittest.TestCase):
 
     def test_multiple_repos(self):
         repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="bitbucket", owner="seer", name="automation-tools")
+        repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation-tools")
         self.assertNotEqual(hash(repo_def1), hash(repo_def2))
+
+    def test_repo_with_provider_processing(self):
+        repo_def = RepoDefinition(provider="integrations:github", owner="seer", name="automation")
+        self.assertEqual(repo_def.provider, "github")
+        self.assertEqual(repo_def.owner, "seer")
+        self.assertEqual(repo_def.name, "automation")
+
+    def test_repo_with_invalid_provider(self):
+        with self.assertRaises(ValidationError):
+            RepoDefinition(provider="invalid_provider", owner="seer", name="automation")
 
     def test_repo_with_none_provider(self):
         repo_dict = {"provider": None, "owner": "seer", "name": "automation"}
@@ -146,7 +156,7 @@ class TestAutofixRequest(unittest.TestCase):
 
     def test_autofix_request_with_multiple_repos(self):
         repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="bitbucket", owner="seer", name="automation-tools")
+        repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation-tools")
         issue_details = IssueDetails(id=789, title="Test Issue", events=[SentryEvent(entries=[])])
         autofix_request = AutofixRequest(
             organization_id=123,
@@ -155,3 +165,15 @@ class TestAutofixRequest(unittest.TestCase):
             issue=issue_details,
         )
         self.assertEqual(len(autofix_request.repos), 2)
+
+    def test_autofix_request_with_invalid_repo(self):
+        repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
+        repo_def2 = RepoDefinition(provider="bitbucket", owner="seer", name="automation-tools")
+        issue_details = IssueDetails(id=789, title="Test Issue", events=[SentryEvent(entries=[])])
+        with self.assertRaises(ValidationError):
+            AutofixRequest(
+                organization_id=123,
+                project_id=456,
+                repos=[repo_def1, repo_def2],
+                issue=issue_details,
+            )
