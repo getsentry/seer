@@ -8,7 +8,7 @@ from openai._types import NotGiven
 from seer.automation.agent.client import GptClient, LlmClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
-from seer.automation.utils import parse_json_with_keys
+from seer.automation.agent.utils import parse_json_with_keys
 
 logger = logging.getLogger("autofix")
 
