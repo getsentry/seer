@@ -135,7 +135,7 @@ class RepoClient:
                 for item in os.listdir(root_folder_path):
                     s = os.path.join(root_folder_path, item)
                     d = os.path.join(tmp_repo_dir, item)
-                    if os.path.isdir(s):
+                    if os.path.exists(s) and os.path.isdir(s):
                         shutil.move(
                             s, d
                         )  # move all directories from the root folder to the output directory
