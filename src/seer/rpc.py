@@ -11,7 +11,7 @@ from seer.utils import json_dumps
 logger = logging.getLogger(__name__)
 
 
-class RpcClient(ABC):
+import json\nfrom enum import Enum\n\nclass CustomJSONEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Enum):\n            return obj.value\n        return json.JSONEncoder.default(self, obj)\n\nclass RpcClient(ABC):
     @abstractmethod
     def call(self, method: str, **kwargs):
         pass
