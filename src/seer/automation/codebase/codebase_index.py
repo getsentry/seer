@@ -319,8 +319,9 @@ class CodebaseIndex:
         assert self.repo_info is not None, "Repository info is not set"
 
         with Session() as session:
-            # Delete the entire document from the temporary chunks if it exists
-            session.query(DbDocumentChunk).filter(
+            with session.no_autoflush:
+                # Delete the entire document from the temporary chunks if it exists
+                session.query(DbDocumentChunk).filter(
                 DbDocumentChunk.repo_id == self.repo_info.id,
                 DbDocumentChunk.path == document.path,
                 DbDocumentChunk.namespace == str(self.run_id),
