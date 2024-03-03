@@ -76,7 +76,6 @@ def get_language_from_path(path: str) -> str | None:
 
 def read_directory(
     path: str,
-    repo_id: int,
     parent_tmp_dir: str | None = None,
     max_file_size=2 * 1024 * 1024,  # 2 MB
 ) -> list[Document]:
@@ -92,7 +91,7 @@ def read_directory(
     dir_children = []
     for entry in os.scandir(path):
         if entry.is_dir(follow_symlinks=False):
-            dir_children.extend(read_directory(entry.path, repo_id, path_to_remove))
+            dir_children.extend(read_directory(entry.path, path_to_remove))
         elif entry.is_file() and entry.stat().st_size < max_file_size:
             language = get_language_from_path(entry.path)
 
@@ -108,13 +107,11 @@ def read_directory(
             if truncated_path.startswith("/"):
                 truncated_path = truncated_path[1:]
 
-            dir_children.append(
-                Document(path=truncated_path, text=text, repo_id=repo_id, language=language)
-            )
+            dir_children.append(Document(path=truncated_path, text=text, language=language))
     return dir_children
 
 
-def read_specific_files(repo_path: str, files: list[str], repo_id: int) -> list[Document]:
+def read_specific_files(repo_path: str, files: list[str]) -> list[Document]:
     """
     Reads the contents of specific files and returns a list of Document objects.
 
@@ -134,7 +131,7 @@ def read_specific_files(repo_path: str, files: list[str], repo_id: int) -> list[
         with open(file_path, "r", encoding="utf-8") as f:
             text = f.read()
 
-        documents.append(Document(path=file, text=text, repo_id=repo_id, language=language))
+        documents.append(Document(path=file, text=text, language=language))
     return documents
 
 

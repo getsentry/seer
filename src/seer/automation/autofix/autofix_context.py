@@ -2,7 +2,7 @@ import uuid
 
 from seer.automation.autofix.models import RepoDefinition, Stacktrace
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import DocumentChunkWithEmbeddingAndId
+from seer.automation.codebase.models import StoredDocumentChunk
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
 
@@ -80,7 +80,7 @@ class AutofixContext:
             for db_chunk in db_chunks:
                 chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
 
-            populated_chunks: list[DocumentChunkWithEmbeddingAndId] = []
+            populated_chunks: list[StoredDocumentChunk] = []
             for _repo_id, db_chunks in chunks_by_repo_id.items():
                 codebase = self.get_codebase(_repo_id)
                 populated_chunks.extend(codebase._populate_chunks(db_chunks))

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from tree_sitter import Node
 
-from seer.automation.codebase.models import Document, DocumentChunk
+from seer.automation.codebase.models import BaseDocumentChunk, Document
 from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger("autofix")
@@ -313,19 +313,19 @@ class DocumentParser:
     def _get_parser(self, language: str):
         return tree_sitter_languages.get_parser(language)
 
-    def _chunk_document(self, document: Document) -> list[DocumentChunk]:
+    def _chunk_document(self, document: Document) -> list[BaseDocumentChunk]:
         tree = self._get_parser(document.language).parse(bytes(document.text, "utf-8"))
 
         chunked_documents = self._chunk_nodes_by_whitespace(tree.root_node, document.language)
 
-        chunks: list[DocumentChunk] = []
+        chunks: list[BaseDocumentChunk] = []
 
         for i, tmp_chunk in enumerate(chunked_documents):
             context_text = tmp_chunk.get_context(tree.root_node)
             chunk_text = tmp_chunk.get_content(tree.root_node)
             embedding_dump = tmp_chunk.get_dump_for_embedding(tree.root_node)
 
-            chunk = DocumentChunk(
+            chunk = BaseDocumentChunk(
                 index=i,
                 context=context_text,
                 content=chunk_text.strip("\n"),
@@ -333,7 +333,6 @@ class DocumentParser:
                 # Hash should be unique to the file, it is used in comparing which chunks changed
                 hash=self._generate_sha256_hash(f"[{document.path}][{i}]\n{embedding_dump}"),
                 token_count=self._get_str_token_count(embedding_dump),
-                repo_id=document.repo_id,
                 language=document.language,
             )
 
@@ -344,7 +343,7 @@ class DocumentParser:
     def _generate_sha256_hash(self, text: str):
         return hashlib.sha256(text.encode("utf-8"), usedforsecurity=False).hexdigest()
 
-    def process_document(self, document: Document) -> list[DocumentChunk]:
+    def process_document(self, document: Document) -> list[BaseDocumentChunk]:
         """
         Process a document by chunking it into smaller pieces and extracting metadata about each chunk.
         """
@@ -354,7 +353,7 @@ class DocumentParser:
 
         return chunks
 
-    def process_documents(self, documents: list[Document]) -> list[DocumentChunk]:
+    def process_documents(self, documents: list[Document]) -> list[BaseDocumentChunk]:
         """
         Process a list of documents by chunking them into smaller pieces and extracting metadata about each chunk.
         """

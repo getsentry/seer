@@ -2,16 +2,16 @@ import logging
 import uuid
 
 import numpy as np
-from langsmith import RunTree, traceable
+from langsmith import traceable
 from tqdm import tqdm
 
 from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
 from seer.automation.codebase.models import (
+    BaseDocumentChunk,
     Document,
-    DocumentChunk,
-    DocumentChunkWithEmbedding,
-    DocumentChunkWithEmbeddingAndId,
+    EmbeddedDocumentChunk,
     RepositoryInfo,
+    StoredDocumentChunk,
 )
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
@@ -114,6 +114,18 @@ class CodebaseIndex:
         tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
         try:
+            documents = read_directory(tmp_repo_dir)
+
+            logger.debug(f"Read {len(documents)} documents:")
+            documents_by_language = group_documents_by_language(documents)
+            for language, docs in documents_by_language.items():
+                logger.debug(f"  {language}: {len(docs)}")
+
+            doc_parser = DocumentParser(get_embedding_model())
+            chunks = doc_parser.process_documents(documents)
+            embedded_chunks = cls._embed_chunks(chunks)
+            logger.debug(f"Processed {len(chunks)} chunks")
+
             with Session() as session:
                 db_repo_info = DbRepositoryInfo(
                     organization=organization,
@@ -124,25 +136,15 @@ class CodebaseIndex:
                 )
                 session.add(db_repo_info)
                 session.flush()
-                logger.debug(f"Inserted repository info with id {db_repo_info.id}")
 
-                documents = read_directory(tmp_repo_dir, repo_id=db_repo_info.id)
+                db_chunks = [
+                    chunk.to_db_model(repo_id=db_repo_info.id) for chunk in embedded_chunks
+                ]
 
-                logger.debug(f"Read {len(documents)} documents:")
-                documents_by_language = group_documents_by_language(documents)
-                for language, docs in documents_by_language.items():
-                    logger.debug(f"  {language}: {len(docs)}")
-
-                doc_parser = DocumentParser(get_embedding_model())
-                chunks = doc_parser.process_documents(documents)
-                embedded_chunks = cls._embed_chunks(chunks)
-                logger.debug(f"Processed {len(chunks)} chunks")
-
-                repo_info = RepositoryInfo.from_db(db_repo_info)
-
-                db_chunks = [chunk.to_db_model() for chunk in embedded_chunks]
                 session.add_all(db_chunks)
                 session.commit()
+
+                repo_info = RepositoryInfo.from_db(db_repo_info)
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
@@ -174,7 +176,7 @@ class CodebaseIndex:
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
         try:
-            documents = read_specific_files(tmp_repo_dir, changed_files, repo_id=self.repo_info.id)
+            documents = read_specific_files(tmp_repo_dir, changed_files)
 
             doc_parser = DocumentParser(get_embedding_model())
             chunks = doc_parser.process_documents(documents)
@@ -182,7 +184,9 @@ class CodebaseIndex:
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
-                db_chunks = [chunk.to_db_model() for chunk in embedded_chunks]
+                db_chunks = [
+                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks
+                ]
                 session.add_all(db_chunks)
 
                 if removed_files:
@@ -204,7 +208,7 @@ class CodebaseIndex:
             cleanup_dir(tmp_dir)
 
     @classmethod
-    def _embed_chunks(cls, chunks: list[DocumentChunk]) -> list[DocumentChunkWithEmbedding]:
+    def _embed_chunks(cls, chunks: list[BaseDocumentChunk]) -> list[EmbeddedDocumentChunk]:
         logger.debug(f"Embedding {len(chunks)} chunks...")
         embeddings_list: list[np.ndarray] = []
 
@@ -223,7 +227,7 @@ class CodebaseIndex:
         embedded_chunks = []
         for i, chunk in enumerate(chunks):
             embedded_chunks.append(
-                DocumentChunkWithEmbedding(
+                EmbeddedDocumentChunk(
                     **chunk.model_dump(),
                     embedding=embeddings[i],
                 )
@@ -277,9 +281,7 @@ class CodebaseIndex:
             logger.warning(f"Unsupported language for {path}")
             return None
 
-        document = Document(
-            path=path, text=document_content, repo_id=self.repo_info.id, language=language
-        )
+        document = Document(path=path, text=document_content, language=language)
 
         content = document_content
         if not ignore_local_changes:
@@ -330,7 +332,7 @@ class CodebaseIndex:
 
             db_chunks: list[DbDocumentChunk] = []
             for chunk in embedded_chunks:
-                db_chunk = chunk.to_db_model()
+                db_chunk = chunk.to_db_model(repo_id=self.repo_info.id)
                 db_chunk.namespace = str(self.run_id)
             session.add_all(db_chunks)
             session.commit()
@@ -364,15 +366,13 @@ class CodebaseIndex:
                             frame.filename = valid_path
                             break
 
-    def _populate_chunks(
-        self, chunks: list[DbDocumentChunk]
-    ) -> list[DocumentChunkWithEmbeddingAndId]:
+    def _populate_chunks(self, chunks: list[DbDocumentChunk]) -> list[StoredDocumentChunk]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(get_embedding_model())
 
-        matched_chunks: list[DocumentChunkWithEmbeddingAndId] = []
+        matched_chunks: list[StoredDocumentChunk] = []
         for chunk in chunks:
             content = self._get_file_content_with_cache(chunk.path, self.repo_info.sha)
 
@@ -385,7 +385,6 @@ class CodebaseIndex:
                 Document(
                     path=chunk.path,
                     text=content,
-                    repo_id=self.repo_info.id,
                     language=chunk.language,
                 )
             )
@@ -396,7 +395,7 @@ class CodebaseIndex:
                 continue
 
             matched_chunks.append(
-                DocumentChunkWithEmbeddingAndId(
+                StoredDocumentChunk(
                     id=chunk.id,
                     path=chunk.path,
                     index=chunk.index,
