@@ -134,9 +134,12 @@ class RepoClient:
                             s, d
                         )  # move all directories from the root folder to the output directory
                     else:
-                        shutil.copy2(
-                            s, d
-                        )  # copy all files from the root folder to the output directory
+                        if not os.path.islink(s):
+                            shutil.copy2(
+                                s, d
+                            )  # copy all files from the root folder to the output directory
+                        # Skipping symlinks to prevent FileNotFoundError.
+                        # TODO: Consider appropriate handling for symlinks in future revisions.
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
         return tmp_dir, tmp_repo_dir
