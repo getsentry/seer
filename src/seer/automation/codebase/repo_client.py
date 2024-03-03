@@ -129,14 +129,18 @@ class RepoClient:
                 for item in os.listdir(root_folder_path):
                     s = os.path.join(root_folder_path, item)
                     d = os.path.join(tmp_repo_dir, item)
+                    # TODO: Consider a strategy for handling symlinks more appropriately in the future, possibly by resolving them or copying as symlinks to maintain the original structure.
                     if os.path.isdir(s):
                         shutil.move(
                             s, d
                         )  # move all directories from the root folder to the output directory
                     else:
-                        shutil.copy2(
-                            s, d
-                        )  # copy all files from the root folder to the output directory
+                        # Skipping symlinks to prevent FileNotFoundError.
+                        if not os.path.islink(s):
+                            shutil.copy2(
+                                s, d
+                            )  # copy all files from the root folder to the output directory
+
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
         return tmp_dir, tmp_repo_dir
