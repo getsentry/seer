@@ -129,7 +129,8 @@ class RepoClient:
                 for item in os.listdir(root_folder_path):
                     s = os.path.join(root_folder_path, item)
                     d = os.path.join(tmp_repo_dir, item)
-                    if os.path.isdir(s):
+                    # TODO: Consider a strategy for handling symlinks more appropriately in the future, possibly by resolving them or copying as symlinks to maintain the original structure.
+            if os.path.isdir(s):
                         shutil.move(
                             s, d
                         )  # move all directories from the root folder to the output directory
