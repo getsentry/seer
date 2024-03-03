@@ -1,15 +1,9 @@
 import difflib
-import json
 import logging
-import os
 import random
 import re
 from typing import List
 from xml.etree import ElementTree as ET
-
-import fsspec
-import torch
-from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger("autofix")
 
@@ -54,9 +48,7 @@ def get_last_non_empty_line(text: str) -> str:
     return ""
 
 
-def find_original_snippet(
-    snippet: str, file_contents: str, threshold=0.99, verbose=False
-) -> str | None:
+def find_original_snippet(snippet: str, file_contents: str, threshold=0.9) -> str | None:
     """
     This function finds the original snippet of code in a file given a snippet and the file contents.
 
@@ -67,14 +59,12 @@ def find_original_snippet(
     The function works by splitting the snippet and the file contents into lines and comparing them line by line.
     It uses the compute_similarity function to find the first line of the snippet in the file.
     It then continues comparing the following lines, handling ellipsis cases, until it finds a discrepancy or reaches the end of the snippet.
-    If the last line of the snippet is not at least 99% similar to the corresponding line in the file, it returns None.
+    If the last line of the snippet is not at least `threshold` similar to the corresponding line in the file, it returns None.
     Otherwise, it returns the original snippet from the file.
 
     Returns:
     str: The original snippet from the file, or None if the snippet could not be found.
     """
-    if verbose:
-        print(f"Finding original snippet in file with {len(file_contents)} characters")
     snippet_lines = snippet.split("\n")
     file_lines = file_contents.split("\n")
 
@@ -94,7 +84,7 @@ def find_original_snippet(
     if snippet_start is None:
         return None
 
-    ellipsis_cases = ["... ", "// ...", "# ...", "/* ... */"]
+    ellipsis_comment_cases = ["// ...", "# ...", "/* ... */"]
     ellipsis_found = False
     snippet_index = 0
     file_line_index = snippet_start
@@ -102,7 +92,9 @@ def find_original_snippet(
         snippet_line = snippet_lines[snippet_index]
 
         if not ellipsis_found:
-            ellipsis_found = any(s in snippet_line for s in ellipsis_cases)
+            ellipsis_found = snippet_line.strip() == "..." or any(
+                s in snippet_line for s in ellipsis_comment_cases
+            )
             if ellipsis_found:
                 snippet_index += 1
                 if snippet_index >= len(snippet_lines):
@@ -124,21 +116,13 @@ def find_original_snippet(
             file_line_index += 1
         else:
             if similarity < threshold:
-                if verbose:
-                    print(f"Similarity is less than 99%: {similarity}")
-                    print(f"Snippet: {snippet_line}")
-                    print(f"File: {file_line}")
-
                 return None
             ellipsis_found = False
             snippet_index += 1
             file_line_index += 1
     final_file_snippet = "\n".join(file_lines[snippet_start:file_line_index])
 
-    if verbose:
-        print(f"Final file snippet: {final_file_snippet}")
-
-    # Ensure the last line of the file is at least 99% similar to the last line of the snippet
+    # Ensure the last line of the file is at least `threshold` similar to the last line of the snippet
     if (
         compute_similarity(
             get_last_non_empty_line("\n".join(snippet_lines)),
@@ -146,10 +130,6 @@ def find_original_snippet(
         )
         < threshold
     ):
-        if verbose:
-            print("Last line of snippet is not at least 99% similar to the last line of the file: ")
-            print(f"Snippet: {snippet_lines[-1]}")
-            print(f"File: {file_lines[file_line_index - 1]}")
         return None
 
     return final_file_snippet
