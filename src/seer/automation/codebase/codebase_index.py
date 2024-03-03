@@ -69,21 +69,20 @@ class CodebaseIndex:
     def from_repo_definition(
         cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID
     ):
-        provider = RepoClient.process_repo_provider(repo.provider)
         db_repo_info = (
             Session()
             .query(DbRepositoryInfo)
             .filter(
                 DbRepositoryInfo.organization == organization,
                 DbRepositoryInfo.project == project,
-                DbRepositoryInfo.provider == provider,
+                DbRepositoryInfo.provider == repo.provider,
                 DbRepositoryInfo.external_slug == f"{repo.owner}/{repo.name}",
             )
             .one_or_none()
         )
         if db_repo_info:
             repo_info = RepositoryInfo.from_db(db_repo_info)
-            repo_client = RepoClient(provider, repo.owner, repo.name)
+            repo_client = RepoClient(repo.provider, repo.owner, repo.name)
             return cls(organization, project, repo_client, repo_info, run_id)
 
         return None

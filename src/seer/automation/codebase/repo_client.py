@@ -71,12 +71,6 @@ class RepoClient:
         self.repo_owner = repo_owner
         self.repo_name = repo_name
 
-    @staticmethod
-    def process_repo_provider(provider: str) -> str:
-        if provider.startswith("integrations:"):
-            return provider.split(":")[1]
-        return provider
-
     def get_default_branch(self):
         return self.repo.default_branch
 

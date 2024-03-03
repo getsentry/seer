@@ -27,8 +27,3 @@ class TestRepoClient(unittest.TestCase):
             RepoClient(
                 repo_provider="unsupported_provider", repo_owner="test_owner", repo_name="test_repo"
             )
-
-    def test_repo_client_process_repo_provider(self):
-        assert RepoClient.process_repo_provider("github") == "github"
-        assert RepoClient.process_repo_provider("integrations:github") == "github"
-        assert RepoClient.process_repo_provider("integrations:bitbucket") == "bitbucket"

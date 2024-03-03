@@ -144,6 +144,18 @@ class RepoDefinition(BaseModel):
     owner: str
     name: str
 
+    @field_validator("provider", mode="after")
+    @classmethod
+    def validate_provider(cls, provider: str):
+        cleaned_provider = provider
+        if provider.startswith("integrations:"):
+            cleaned_provider = provider.split(":")[1]
+
+        if cleaned_provider != "github":
+            raise ValueError(f"Provider {cleaned_provider} is not supported.")
+
+        return cleaned_provider
+
     def __hash__(self):
         return hash((self.provider, self.owner, self.name))
 
