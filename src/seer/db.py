@@ -104,7 +104,7 @@ class ProcessRequest(Base):
     def acquire_work(
         cls, batch_size: int, now: datetime.datetime, session: sqlalchemy.orm.Session | None = None
     ):
-        with contextlib.ExitStack() as stack:
+        with contextlib.ExitStack() as stack:\n            session.autoflush = False
             if session is None:
                 session = stack.enter_context(Session())
             items: list[ProcessRequest] = list(
