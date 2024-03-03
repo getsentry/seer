@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from sentence_transformers import SentenceTransformer
 from tree_sitter import Node, Parser
 
-from seer.automation.codebase.models import DocumentChunk
+from seer.automation.codebase.models import BaseDocumentChunk
 from seer.automation.codebase.parser import Document, DocumentParser, ParentDeclaration, TempChunk
 
 
@@ -23,7 +23,7 @@ class TestDocumentParser(unittest.TestCase):
         mock_document.path = "test.py"
         mock_document.repo_id = 1
 
-        expected_chunks = [MagicMock(spec=DocumentChunk)]
+        expected_chunks = [MagicMock(spec=BaseDocumentChunk)]
         self.document_parser.process_document = MagicMock(return_value=expected_chunks)
 
         result_chunks = self.document_parser.process_document(mock_document)
@@ -33,7 +33,7 @@ class TestDocumentParser(unittest.TestCase):
     def test_document_parser_process_documents(self):
         # Test processing of multiple documents
         mock_documents = [MagicMock(spec=Document) for _ in range(2)]
-        expected_chunks = [MagicMock(spec=DocumentChunk), MagicMock(spec=DocumentChunk)]
+        expected_chunks = [MagicMock(spec=BaseDocumentChunk), MagicMock(spec=BaseDocumentChunk)]
         self.document_parser.process_documents = MagicMock(return_value=expected_chunks)
 
         result_chunks = self.document_parser.process_documents(mock_documents)

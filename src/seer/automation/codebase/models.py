@@ -10,11 +10,10 @@ from seer.db import DbDocumentChunk, DbRepositoryInfo
 class Document(BaseModel):
     path: str
     text: str
-    repo_id: int
     language: str
 
 
-class DocumentChunk(BaseModel):
+class BaseDocumentChunk(BaseModel):
     id: Optional[int] = None
     content: str
     context: Optional[str]
@@ -23,7 +22,6 @@ class DocumentChunk(BaseModel):
     path: str
     index: int
     token_count: int
-    repo_id: int
 
     def get_dump_for_embedding(self):
         return """{context}{content}""".format(
@@ -58,13 +56,13 @@ class DocumentChunk(BaseModel):
         return self.__str__()
 
 
-class DocumentChunkWithEmbedding(DocumentChunk):
+class EmbeddedDocumentChunk(BaseDocumentChunk):
     embedding: np.ndarray
 
-    def to_db_model(self) -> DbDocumentChunk:
+    def to_db_model(self, repo_id: int) -> DbDocumentChunk:
         return DbDocumentChunk(
             id=self.id,
-            repo_id=self.repo_id,
+            repo_id=repo_id,
             path=self.path,
             index=self.index,
             hash=self.hash,
@@ -80,8 +78,9 @@ class DocumentChunkWithEmbedding(DocumentChunk):
         }
 
 
-class DocumentChunkWithEmbeddingAndId(DocumentChunkWithEmbedding):
+class StoredDocumentChunk(EmbeddedDocumentChunk):
     id: int
+    repo_id: int
 
 
 class RepositoryInfo(BaseModel):

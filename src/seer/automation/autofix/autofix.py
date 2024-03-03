@@ -32,7 +32,7 @@ from seer.automation.autofix.prompts import (
 )
 from seer.automation.autofix.tools import BaseTools, CodeActionTools
 from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
-from seer.automation.codebase.models import DocumentChunkWithEmbedding
+from seer.automation.codebase.models import StoredDocumentChunk
 from seer.automation.codebase.tasks import update_codebase_index
 
 logger = logging.getLogger("autofix")
@@ -457,7 +457,7 @@ class Autofix:
             return ""
 
         context_dump = ""
-        unique_chunks: dict[str, DocumentChunkWithEmbedding] = {}
+        unique_chunks: dict[str, StoredDocumentChunk] = {}
         for query in queries:
             retrived_chunks = self.context.query(query, top_k=4)
             for chunk in retrived_chunks:
