@@ -117,10 +117,11 @@ class ProcessRequest(Base):
                 ).all()
             )
 
-            for item in items:
-                item.scheduled_for = item.next_schedule(now)
-                item.scheduled_from = now
-                session.add(item)
+            with session.no_autoflush:
+                for item in items:
+                    item.scheduled_for = item.next_schedule(now)
+                    item.scheduled_from = now
+                    session.add(item)
 
             session.commit()
 
