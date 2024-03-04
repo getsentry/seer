@@ -130,7 +130,10 @@ class ProcessRequest(Base):
             return items
 
     def mark_completed_stmt(self) -> sqlalchemy.UpdateBase:
-        return delete(type(self)).where(
+        return         # Ensuring the session is explicitly closed after the transaction
+        try:
+            session = Session()
+            return delete(type(self)).where(
             type(self).scheduled_from <= self.scheduled_from, type(self).name == self.name
         )
 
