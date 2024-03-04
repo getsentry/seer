@@ -25,7 +25,7 @@ from seer.automation.codebase.utils import (
 )
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
-from seer.utils import class_method_lru_cache
+from seer.utils import batch_save_to_db, class_method_lru_cache
 
 logger = logging.getLogger("autofix")
 
@@ -141,7 +141,8 @@ class CodebaseIndex:
                     chunk.to_db_model(repo_id=db_repo_info.id) for chunk in embedded_chunks
                 ]
 
-                session.add_all(db_chunks)
+                batch_save_to_db(session, db_chunks)
+
                 session.commit()
 
                 repo_info = RepositoryInfo.from_db(db_repo_info)
@@ -187,7 +188,7 @@ class CodebaseIndex:
                 db_chunks = [
                     chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks
                 ]
-                session.add_all(db_chunks)
+                batch_save_to_db(session, db_chunks)
 
                 if removed_files:
                     session.query(DbDocumentChunk).filter(
@@ -334,7 +335,9 @@ class CodebaseIndex:
             for chunk in embedded_chunks:
                 db_chunk = chunk.to_db_model(repo_id=self.repo_info.id)
                 db_chunk.namespace = str(self.run_id)
-            session.add_all(db_chunks)
+
+            batch_save_to_db(session, db_chunks)
+
             session.commit()
 
     def cleanup(self):
