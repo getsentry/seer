@@ -204,6 +204,8 @@ class Autofix:
                 outputs.append(output)
 
                 metadata.setdefault("prs", []).extend([pr.model_dump() for pr in prs])
+            else:
+                self.event_manager.send_autofix_complete(None)
 
             file_changes = {}
             for repo_id, codebase in self.context.codebases.items():
@@ -233,8 +235,58 @@ class Autofix:
                     logger.warning(f"Failed to create branch from changes")
                     return None
 
+                pr_title = f"""🤖 {title}"""
+
+                issue_url = (
+                    f"https://sentry.io/organizations/sentry/issues/{self.request.issue.id}/"
+                )
+                issue_link = (
+                    f"[{self.request.issue.short_id}]({issue_url})"
+                    if self.request.issue.short_id
+                    else issue_url
+                )
+
+                pr_description = textwrap.dedent(
+                    """\
+                    👋 Hi there! This PR was automatically generated 🤖
+                    {user_line}
+
+                    Fixes {issue_link}
+
+                    {description}
+
+                    #### The steps that were performed:
+                    {steps}
+
+                    ### 📣 Instructions for the reviewer which is you, yes **you**:
+                    - **If these changes were incorrect, please close this PR and comment explaining why.**
+                    - **If these changes were incomplete, please continue working on this PR then merge it.**
+                    - **If you are feeling confident in my changes, please merge this PR.**
+
+                    This will greatly help us improve the autofix system. Thank you! 🙏
+
+                    If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#proj-autofix](https://sentry.slack.com/archives/C06904P7Z6E)
+
+                    ### 🤓 Stats for the nerds:
+                    Prompt tokens: **{prompt_tokens}**
+                    Completion tokens: **{completion_tokens}**
+                    Total tokens: **{total_tokens}**"""
+                ).format(
+                    user_line=(
+                        f"\nTriggered by {self.request.invoking_user.display_name}"
+                        if self.request.invoking_user
+                        else ""
+                    ),
+                    description=description,
+                    issue_link=issue_link,
+                    steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
+                    prompt_tokens=self.usage.prompt_tokens,
+                    completion_tokens=self.usage.completion_tokens,
+                    total_tokens=self.usage.total_tokens,
+                )
+
                 pr = codebase.repo_client.create_pr_from_branch(
-                    branch_ref, title, description, steps, self.request.issue.id, self.usage
+                    branch_ref, pr_title, pr_description
                 )
 
                 prs.append(

@@ -136,6 +136,7 @@ class SentryEvent(BaseModel):
 class IssueDetails(BaseModel):
     id: int
     title: str
+    short_id: Optional[str] = None
     events: list[SentryEvent]
 
 
@@ -160,13 +161,19 @@ class RepoDefinition(BaseModel):
         return hash((self.provider, self.owner, self.name))
 
 
+class AutofixUserDetails(BaseModel):
+    id: int
+    display_name: str
+
+
 class AutofixRequest(BaseModel):
     organization_id: int
     project_id: int
     repos: list[RepoDefinition]
-    base_commit_sha: Optional[str] = None
-
     issue: IssueDetails
+    invoking_user: Optional[AutofixUserDetails] = None
+
+    base_commit_sha: Optional[str] = None
     additional_context: Optional[str] = None
 
     @field_validator("repos", mode="after")
