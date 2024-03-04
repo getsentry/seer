@@ -4,6 +4,7 @@ import shutil
 import tarfile
 import tempfile
 import textwrap
+from typing import Optional
 
 import requests
 import sentry_sdk
@@ -13,7 +14,7 @@ from github.Repository import Repository
 from unidiff import PatchSet
 
 from seer.automation.agent.models import Usage
-from seer.automation.autofix.models import FileChange, PlanStep
+from seer.automation.autofix.models import AutofixUserDetails, FileChange, PlanStep
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.models import InitializationError
 from seer.utils import class_method_lru_cache
@@ -289,59 +290,12 @@ class RepoClient:
 
         return branch_ref
 
-    def _get_stats_str(self, prompt_tokens: int, completion_tokens: int):
-        stats_str = textwrap.dedent(
-            f"""\
-            Prompt tokens: **{prompt_tokens}**
-            Completion tokens: **{completion_tokens}**
-            Total tokens: **{prompt_tokens + completion_tokens}**"""
-        )
-
-        return stats_str
-
     def create_pr_from_branch(
         self,
         branch: GitRef,
         title: str,
         description: str,
-        steps: list[PlanStep],
-        issue_id: int | str,
-        usage: Usage,
     ):
-        title = f"""🤖 {title}"""
-
-        issue_link = f"https://sentry.io/organizations/sentry/issues/{issue_id}/"
-
-        description = textwrap.dedent(
-            """\
-            👋 Hi there! This PR was automatically generated 🤖
-
-            {description}
-
-            #### The steps that were performed:
-            {steps}
-
-            #### The issue that triggered this PR:
-            {issue_link}
-
-            ### 📣 Instructions for the reviewer which is you, yes **you**:
-            - **If these changes were incorrect, please close this PR and comment explaining why.**
-            - **If these changes were incomplete, please continue working on this PR then merge it.**
-            - **If you are feeling confident in my changes, please merge this PR.**
-
-            This will greatly help us improve the autofix system. Thank you! 🙏
-
-            If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#proj-suggested-fix](https://sentry.slack.com/archives/C06904P7Z6E)
-
-            ### 🤓 Stats for the nerds:
-            {stats}"""
-        ).format(
-            description=description,
-            issue_link=issue_link,
-            steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
-            stats=self._get_stats_str(usage.prompt_tokens, usage.completion_tokens),
-        )
-
         return self.repo.create_pull(
             title=title,
             body=description,
