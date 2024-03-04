@@ -119,12 +119,17 @@ class SentryEvent(BaseModel):
         frames: list[StacktraceFrame] = []
         for frame in exception_entry["data"]["values"][0]["stacktrace"]["frames"]:
             frames.append(
-                StacktraceFrame(
-                    function=frame["function"],
-                    filename=frame["filename"],
-                    line_no=frame["lineNo"],
-                    abs_path=frame["absPath"],
-                    col_no=frame["colNo"],
+StacktraceFrame(
+        function=frame.get(\"function\"),
+        filename=frame.get(\"filename\"),
+        line_no=frame.get(\"lineNo\"),
+        abs_path=frame.get(\"absPath\"),
+        col_no=frame.get(\"colNo\", None),
+        context=frame.get(\"context\", []),
+        repo_name=frame.get(\"repoName\", None),
+        repo_id=frame.get(\"repoId\", None),
+        in_app=frame.get(\"inApp\", False)
+    )
                     context=frame["context"],
                     in_app=frame["inApp"],
                 )
