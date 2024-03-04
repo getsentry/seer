@@ -117,10 +117,14 @@ class ProcessRequest(Base):
                 ).all()
             )
 
-            for item in items:
-                item.scheduled_for = item.next_schedule(now)
-                item.scheduled_from = now
-                session.add(item)
+            CHUNK_SIZE = 100
+            for chunk_start in range(0, len(items), CHUNK_SIZE):
+                chunk = items[chunk_start:chunk_start + CHUNK_SIZE]
+                for item in chunk:
+                    item.scheduled_for = item.next_schedule(now)
+                    item.scheduled_from = now
+                session.bulk_save_objects(chunk)
+                session.commit()
 
             session.commit()
 
