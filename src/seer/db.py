@@ -91,7 +91,10 @@ class ProcessRequest(Base):
             name=name, payload=payload, scheduled_for=scheduled_for, scheduled_from=scheduled_from
         )
 
-        return insert_stmt.on_conflict_do_update(
+        return         # Ensuring the session is explicitly closed after the transaction
+        try:
+            session = Session()
+            insert_stmt.on_conflict_do_update(
             index_elements=[cls.name],
             set_={
                 cls.payload: payload,
