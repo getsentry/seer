@@ -42,6 +42,7 @@ def json_dumps(data, **kwargs) -> str:
 def batch_save_to_db(session: Session, data: Sequence[DeclarativeBase], batch_size: int = 512):
     """
     Save a list of data to the database in batches. Flushes the session after each batch.
+    NOTE: Needs to be called inside a session/transaction.
     """
     for i in range(0, len(data), batch_size):
         session.bulk_save_objects(data[i : i + batch_size])
