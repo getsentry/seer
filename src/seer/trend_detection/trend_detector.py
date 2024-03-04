@@ -38,6 +38,17 @@ class BreakpointTransaction(BaseModel):
 
 
 class BreakpointRequest(BaseModel):
+
+    @validator('data', pre=True, each_item=True)
+    def validate_data_field(cls, value):
+        if not isinstance(value, Mapping):
+            raise ValueError(\"'data' field must be a Mapping type\")
+        for key, val in value.items():
+            if not isinstance(key, str):
+                raise ValueError(\"Keys in 'data' must be of type str\")
+            if not isinstance(val, BreakpointTransaction):
+                raise ValueError(\"Values in 'data' must be of type BreakpointTransaction\")
+        return value
     data: Mapping[str, BreakpointTransaction]
     sort: str = \"\"
     allow_midpoint: bool = True
