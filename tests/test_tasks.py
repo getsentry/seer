@@ -192,6 +192,23 @@ class ScheduleAsyncTest:
 
 
 @pytest.mark.asyncio
+async def test_prepared_statement_rapid_operations():
+    async with AsyncSession() as session:
+        try:
+            for _ in range(100):  # Arbitrarily chosen to simulate rapid operations
+                process_request = ProcessRequest(name=\"rapid-test\", payload={\"data\": \"dummy\"})
+                session.add(process_request)
+                await session.flush()  # Ensures the data is sent to DB but not committed yet
+                
+                session.rollback()  # Immediately rollback to simulate rapid cancellation of statements
+                
+            await session.commit()  # Final commit to clean-up
+        except Exception as e:
+            assert False, f\"Unexpected exception: {e}\"
+        else:
+            assert True, \"Rapid operations executed successfully\"
+
+@pytest.mark.asyncio
 @parameterize
 async def test_next_schedule_async(test: ScheduleAsyncTest, now: datetime.datetime):
     async with AsyncSession() as session:
