@@ -34,7 +34,8 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
                 raise BadRequest("Data is not an object")
 
             try:
-                result: BaseModel = implementation(request_annotation.model_validate(data))
+                logging.info(f\"Raw data before validation: {data}\")
+                    result: BaseModel = implementation(request_annotation.model_validate(data))
             except ValidationError as e:
                 sentry_sdk.capture_exception(e)
                 raise BadRequest(str(e))
