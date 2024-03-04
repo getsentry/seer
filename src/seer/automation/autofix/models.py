@@ -1,3 +1,4 @@
+import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -175,6 +176,8 @@ class AutofixRequest(BaseModel):
 
     base_commit_sha: Optional[str] = None
     additional_context: Optional[str] = None
+    timeout_secs: Optional[int] = None
+    last_updated: Optional[datetime.datetime] = None
 
     @field_validator("repos", mode="after")
     @classmethod
