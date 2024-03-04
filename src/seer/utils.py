@@ -2,6 +2,9 @@ import functools
 import json
 import weakref
 from enum import Enum
+from typing import Sequence
+
+from sqlalchemy.orm import DeclarativeBase, Session
 
 
 def class_method_lru_cache(*lru_args, **lru_kwargs):
@@ -34,3 +37,14 @@ class SeerJSONEncoder(json.JSONEncoder):
 
 def json_dumps(data, **kwargs) -> str:
     return json.dumps(data, cls=SeerJSONEncoder, **kwargs)
+
+
+def batch_save_to_db(session: Session, data: Sequence[DeclarativeBase], batch_size: int = 512):
+    """
+    Save a list of data to the database in batches. Flushes the session after each batch.
+    """
+    for i in range(0, len(data), batch_size):
+        session.bulk_save_objects(data[i : i + batch_size])
+
+        # Flush to move the data to the db transaction buffer
+        session.flush()
