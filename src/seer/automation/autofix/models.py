@@ -146,6 +146,10 @@ class RepoDefinition(BaseModel):
     owner: str
     name: str
 
+    @property
+    def full_name(self):
+        return f"{self.owner}/{self.name}"
+
     @field_validator("provider", mode="after")
     @classmethod
     def validate_provider(cls, provider: str):
