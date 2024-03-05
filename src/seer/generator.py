@@ -42,11 +42,12 @@ class _RandomGenerator:
 
     @staticmethod
     def one_of(*options: typing.Iterable[_A]) -> Iterator[_A]:
-        composed_options = [
-            (r.choice(i) for r in gen) if isinstance(i, (list, tuple, set, frozenset)) else i
+        composed_options: list[typing.Iterable[_A]] = [
+            (r.choice(i) for r in gen) if isinstance(i, list) else i
             for i in options
+            for i in (list(i) if isinstance(i, (list, tuple, set, frozenset)) else i,)
         ]
-        return (next(r.choice(composed_options)) for r in gen)
+        return (next(iter(r.choice(composed_options))) for r in gen)
 
 
 gen = _RandomGenerator()
