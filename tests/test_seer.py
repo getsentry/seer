@@ -319,7 +319,8 @@ def test_prepared_statements_disabled(
 ):
     with Session() as session:
         # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
-        for request in requests:
+        for i, request in enumerate(requests):
+            request.name += str(i)
             session.add(request)
             session.flush()
         assert session.execute(text("select count(*) from pg_prepared_statements")).scalar() == 0
