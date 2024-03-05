@@ -270,6 +270,6 @@ class ExecutionPrompts:
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Do not just add a comment or leave a TODO, you must write functional code.
-                - Carefully review your code to ensure that it is correct.
+                - Carefully review your code and ensure that it is formatted correctly.
             </guidelines>{issue_str}"""
         ).format(context_dump=context_dump, issue_str=issue_str)
