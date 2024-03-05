@@ -217,18 +217,6 @@ class CodebaseIndex:
                 embedded_chunks_to_add = self._embed_chunks(chunks_to_add)
             logger.debug(f"Processed {len(chunks)} chunks")
 
-            print("Deleting")
-            for chunk in chunks_that_no_longer_exist:
-                print(chunk.path, chunk.hash, chunk.index, chunk.token_count)
-
-            print("Adding")
-            for chunk in embedded_chunks_to_add:
-                print(chunk.path, chunk.hash, chunk.index, chunk.token_count)
-
-            print("Updating")
-            for chunk in chunks_to_update:
-                print(chunk.path, chunk.hash, chunk.index, chunk.token_count)
-
             with Session() as session:
                 for chunk in chunks_that_no_longer_exist:
                     session.delete(chunk)
