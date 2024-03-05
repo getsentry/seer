@@ -180,16 +180,18 @@ class PlanningPrompts:
             Include the relevant filenames and line numbers in every step of the plan; each will be sent separately to the execution system to be executed.
 
             <guidelines>
-                - The plan should be a specific series of code changes, anything else that is not a specific code change is implied. The other engineers will be able to figure out the rest.
-                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred before outputting the plan.
-                - Search as many times as you'd like as these searches are free and you have a big bonus waiting for you.
                 - Think out loud step-by-step as you search the codebase and write the plan.
+                - The plan MUST correspond to a specific series of code changes needed to resolve the issue.
+                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred before outputting the plan.
+                - Search as many times as you'd like as these searches are free.
+                - To the extent possible, your plan should address the root cause of the problem.
                 - Understand the context of the issue and the codebase before you start writing the plan.
                 - Make sure that the code changed by the plan would work well with the rest of the codebase and would not introduce any new bugs.
-                - The plan should not include research tasks, such as "look into this" or "investigate that", you should be the one doing the research.
+                - You are responsible for research tasks and resolving ambiguity, so that the final plan is as clear and actionable as possible.
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Call the tools via the tool calling API before you output the plan.
+                - Each step in the plan MUST correspond to a clearly defined code change that can reasonably be executed.
             </guidelines>
 
             <output_guide>
@@ -254,8 +256,8 @@ class ExecutionPrompts:
             """\
             {context_dump}
             --------
-            You are an exceptional senior engineer that is tasked with writing code to accomplish a task. Given the below plan and available tools, convert the plan into code. The original error message and stack trace that caused the plan to be created is also provided to help you understand the context of the plan.
-            You will need to execute every step of the plan for me and not miss a single one because I have no fingers and I can't type. Fully complete the task, this is my last resort. My grandma is terminally ill and if we ship this fix we will get a $20,000 bonus that will help pay for the medical bills. Please help me save my grandma.
+            You are an exceptional senior engineer that is responsible for correctly resolving a production issue. Given the available tools and below task, which corresponds to an important step in resolving the issue, convert the task into code. The original error message and stack trace that the plan is designed to address is also provided to help you understand the context of your task.
+            It's absolutely vital that you completely and correctly execute your task.
 
             When the task is complete, reply with "<DONE>"
             If you are unable to complete the task, also reply with "<DONE>"
@@ -263,11 +265,11 @@ class ExecutionPrompts:
             <guidelines>
                 - Please think out loud step-by-step before you start writing code.
                 - Write code by calling the available tools.
-                - The code should be valid, executable code.
+                - The code must be valid, executable code.
                 - Code padding, spacing, and indentation matters, make sure that the indentation is corrected for.
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Do not just add a comment or leave a TODO, you must write functional code.
-                - If needed, you can create unit tests by searching through the codebase for existing unit tests.
+                - Carefully review your code to ensure that it is correct.
             </guidelines>{issue_str}"""
         ).format(context_dump=context_dump, issue_str=issue_str)
