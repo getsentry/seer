@@ -25,6 +25,7 @@ def manage_db():
         __name__,
         init_db=True,
         init_migrations=False,
+        with_async=True,
     )
 
     with app.app_context():
