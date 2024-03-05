@@ -33,7 +33,7 @@ dev-cuda: .env # Starts the webserver based on the current src on port 9091 with
 
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
-	docker-compose up test-db -d
+	docker-compose up -d test-db
 	docker-compose run app mypy
 	docker-compose run app pytest
 
