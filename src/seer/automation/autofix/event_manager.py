@@ -43,7 +43,6 @@ class Step(BaseModel):
 
     status: AutofixStatus
 
-    children: list["Step"] = []
     progress: list["ProgressItem | Step"] = []
 
 
@@ -62,8 +61,11 @@ class AutofixEventManager:
             steps=[step.model_dump() for step in self.steps],
         )
 
-    def _get_step(self, step_id: str) -> Step:
-        return next(step for step in self.steps if step.id == step_id)
+    def _get_step(self, step_id: str, steps: Optional[list[ProgressItem | Step]] = None) -> Step:
+        steps_to_use = steps or self.steps
+        step = next(step for step in steps_to_use if isinstance(step, Step) and step.id == step_id)
+
+        return step
 
     def send_no_stacktrace_error(self):
         self.steps = [
@@ -243,6 +245,13 @@ class AutofixEventManager:
             if step.id == "codebase_indexing":
                 step.status = status
                 step.completedMessage = None
+                step.progress.append(
+                    ProgressItem(
+                        timestamp=datetime.now().isoformat(),
+                        message="Codebase indexing complete.",
+                        type=ProgressType.INFO,
+                    )
+                )
             elif step.id == "plan":
                 step.status = (
                     AutofixStatus.PROCESSING
@@ -261,7 +270,7 @@ class AutofixEventManager:
         if result:
             plan_step.title = "Execute Plan"
 
-            plan_step.children = [
+            plan_step.progress = [
                 Step(
                     id=str(plan_step.id),
                     index=1,
@@ -272,17 +281,15 @@ class AutofixEventManager:
                 for plan_step in result.steps
             ]
 
-            if len(plan_step.children) > 0:
-                plan_step.children[0].status = AutofixStatus.PROCESSING
+            if len(plan_step.progress) > 0:
+                plan_step.progress[0].status = AutofixStatus.PROCESSING
 
         self._send_steps_update(AutofixStatus.PROCESSING if result else AutofixStatus.ERROR)
         logger.debug(f"Sent planning result: {result}")
 
     def send_execution_step_start(self, execution_id: int):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        execution_step = next(
-            child for child in plan_step.children if child.id == str(execution_id)
-        )
+        plan_step = self._get_step("plan")
+        execution_step = self._get_step(str(execution_id), plan_step.progress)
         execution_step.status = AutofixStatus.PROCESSING
 
         self._send_steps_update(AutofixStatus.PROCESSING)
@@ -291,10 +298,8 @@ class AutofixEventManager:
     def send_execution_step_result(
         self, execution_id: int, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR]
     ):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        execution_step = next(
-            child for child in plan_step.children if child.id == str(execution_id)
-        )
+        plan_step = self._get_step("plan")
+        execution_step = self._get_step(str(execution_id), plan_step.progress)
         execution_step.status = status
 
         self._send_steps_update(
@@ -310,11 +315,12 @@ class AutofixEventManager:
         for step in self.steps:
             if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.ERROR
-                for substep in step.children:
-                    if substep.status == AutofixStatus.PROCESSING:
-                        substep.status = AutofixStatus.ERROR
-                    if substep.status == AutofixStatus.PENDING:
-                        substep.status = AutofixStatus.CANCELLED
+                for substep in step.progress:
+                    if isinstance(substep, Step):
+                        if substep.status == AutofixStatus.PROCESSING:
+                            substep.status = AutofixStatus.ERROR
+                        if substep.status == AutofixStatus.PENDING:
+                            substep.status = AutofixStatus.CANCELLED
 
     def send_autofix_complete(self, fix: AutofixOutput | None):
         if fix:
