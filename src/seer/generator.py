@@ -42,7 +42,11 @@ class _RandomGenerator:
 
     @staticmethod
     def one_of(*options: typing.Iterable[_A]) -> Iterator[_A]:
-        return (r.choice(next(zip(*options))) for r in gen)
+        composed_options = [
+            (r.choice(i) for r in gen) if isinstance(i, (list, tuple, set, frozenset)) else i
+            for i in options
+        ]
+        return (next(r.choice(composed_options)) for r in gen)
 
 
 gen = _RandomGenerator()
@@ -55,7 +59,21 @@ bools = gen.one_of([True, False])
 objects = (object() for _ in gen)
 printable_strings = ("".join(r.sample(string.printable, r.randint(0, 20))) for r in gen)
 colors = gen.one_of(
-    ["red", "green", "blue", "orange", "purple", "cyan", "magenta", "magenta", "yellow"]
+    [
+        "red",
+        "green",
+        "blue",
+        "orange",
+        "purple",
+        "cyan",
+        "magenta",
+        "magenta",
+        "yellow",
+        "gold",
+        "silver",
+        "black",
+        "white",
+    ]
 )
 names = gen.one_of(
     [
@@ -72,6 +90,7 @@ names = gen.one_of(
         "margaret",
         "vincent",
         "timothy",
+        "samuel",
     ]
 )
 things = gen.one_of(
@@ -88,6 +107,8 @@ things = gen.one_of(
         "football",
         "basketball",
         "fork",
+        "table",
+        "computer",
     ]
 )
 ascii_words = ("-".join(group) for group in zip(colors, names, things))
@@ -527,7 +548,13 @@ def parameterize(
             )
 
         def generate() -> typing.Iterator[typing.Sequence[Any]]:
-            gen.restart_at(seed if seed is not None else hash(func.__name__))
+            import hashlib
+
+            gen.restart_at(
+                seed
+                if seed is not None
+                else int.from_bytes(hashlib.md5(func.__name__.encode("utf8")).digest()[:8])
+            )
             context = GeneratorContext.from_source(func)
             context.include_defaults = include_defaults
             context.generators = [*generators, *context.generators]

@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from seer.bootup import bootup
 from seer.db import Session, db
 from seer.tasks import AsyncSession
 
@@ -13,15 +14,19 @@ from seer.tasks import AsyncSession
 def manage_db():
     # disables langsmith
     os.environ["LANGCHAIN_TRACING_SAMPLING_RATE"] = "0"
+    os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].replace("db", "test-db")
 
     # Forces the initialization of the database
-    from seer.app import app
+    app = bootup(
+        __name__,
+        init_db=True,
+        init_migrations=False,
+    )
 
     with app.app_context():
-        Session.configure(bind=db.engine)
-        AsyncSession.configure(bind=create_async_engine(db.engine.url))  # type: ignore
         with Session() as session:
             session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            session.commit()
         db.metadata.create_all(bind=db.engine)
     try:
         yield
