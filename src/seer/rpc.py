@@ -8,6 +8,15 @@ import requests
 
 from seer.utils import json_dumps
 
+from json import JSONEncoder
+from src.seer.automation.autofix.event_manager import AutofixStatus
+
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AutofixStatus):
+            return obj.value
+        return JSONEncoder.default(self, obj)
+
 logger = logging.getLogger(__name__)
 
 
