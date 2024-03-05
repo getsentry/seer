@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 
 import requests
 
-from seer.utils import json_dumps
+from seer.utils import json_dumps, SeerJSONEncoder
 
 logger = logging.getLogger(__name__)
 
