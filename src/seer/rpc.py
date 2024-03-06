@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 import requests
 
 from seer.utils import json_dumps
+import json
+from .automation.autofix.event_manager import AutofixStatus
 
 logger = logging.getLogger(__name__)
 
