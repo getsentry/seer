@@ -1,9 +1,10 @@
 import dataclasses
 import logging
+from collections import defaultdict
 from typing import Self
 
 import sqlalchemy.orm
-from sqlalchemy import delete, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
@@ -42,25 +43,40 @@ class CodebaseIndexStorage:
         )
         session.execute(insert_stmt)
 
-    def _repo_files(self, chunks: list[DocumentChunk]) -> frozenset[tuple[int, str]]:
-        return frozenset((chunk.repo_id, chunk.path) for chunk in chunks)
+    def _repo_files(self, chunks: list[DocumentChunk]) -> dict[int, list[str]]:
+        result = defaultdict(list)
+        for chunk in chunks:
+            result[chunk.repo_id].append(chunk.path)
+        return result
 
     def replace_documents(
         self, chunks: list[DocumentChunkWithEmbedding], session: sqlalchemy.orm.Session
     ):
-        # session.query(DbDocumentChunk).filter(*(
-        #     DbDocumentChunk.repo_id == repo_id,
-        #     DbDocumentChunk.namespace == self.namespace,
-        #     DbDocumentChunk.path == path
-        #     for repo_id, path in self._repo_files(chunks)
-        # )).delete(synchronize_session=False)
+        session.query(DbDocumentChunk).filter(
+            or_(
+                *(
+                    and_(
+                        DbDocumentChunk.repo_id == repo_id,
+                        DbDocumentChunk.namespace == self.namespace,
+                        DbDocumentChunk.path.in_(paths),
+                    )
+                    for repo_id, paths in self._repo_files(chunks).items()
+                )
+            )
+        ).delete(synchronize_session=False)
 
-        # session.query(DbDocumentTombstone).filter(*(
-        #     DbDocumentTombstone.repo_id == repo_id,
-        #     DbDocumentTombstone.namespace == self.namespace,
-        #     DbDocumentTombstone.path == path
-        #     for repo_id, path in self._repo_files(chunks)
-        # )).delete(synchronize_session=False)
+        session.query(DbDocumentTombstone).filter(
+            or_(
+                *(
+                    and_(
+                        DbDocumentTombstone.repo_id == repo_id,
+                        DbDocumentTombstone.namespace == self.namespace,
+                        DbDocumentTombstone.path.in_(paths),
+                    )
+                    for repo_id, paths in self._repo_files(chunks).items()
+                )
+            )
+        ).delete(synchronize_session=False)
 
         session.add_all(
             DbDocumentChunk(
