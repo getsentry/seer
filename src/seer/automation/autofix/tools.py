@@ -97,7 +97,8 @@ class BaseTools:
 
 
 class CodeActionTools(BaseTools):
-    _snippet_matching_threshold = 0.9
+    snippet_matching_threshold = 0.9
+    chunk_padding = 16
 
     def __init__(self, context: AutofixContext):
         super().__init__(context)
@@ -125,7 +126,9 @@ class CodeActionTools(BaseTools):
         if not document or not codebase:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
-        result = find_original_snippet(reference_snippet, document.text, threshold=0.9)
+        result = find_original_snippet(
+            reference_snippet, document.text, threshold=self.snippet_matching_threshold
+        )
 
         if not result:
             raise Exception("Reference snippet not found. Try again with an exact match.")
@@ -133,11 +136,10 @@ class CodeActionTools(BaseTools):
         original_snippet, snippet_start_line, snippet_end_line = result
 
         lines = document.text.splitlines()
-        chunk_padding = 16
         chunk = "\n".join(
             lines[
-                max(0, snippet_start_line - chunk_padding) : min(
-                    len(lines), snippet_end_line + chunk_padding
+                max(0, snippet_start_line - self.chunk_padding) : min(
+                    len(lines), snippet_end_line + self.chunk_padding
                 )
             ]
         )
@@ -188,7 +190,7 @@ class CodeActionTools(BaseTools):
             original_snippet = snippet
         else:
             result = find_original_snippet(
-                snippet, document.text, threshold=self._snippet_matching_threshold
+                snippet, document.text, threshold=self.snippet_matching_threshold
             )
 
             if result:
