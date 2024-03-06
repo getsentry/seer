@@ -42,6 +42,23 @@ class TestSeverityInference(unittest.TestCase):
             self.assertLessEqual(score, 1.0)
 
     def test_get_embeddings(self):
+        embeddings = self.severity_inference.get_embeddings(\"log: user enjoyed their experience\")
+        self.assertEqual(len(embeddings), 384)
+
+        embeddings = self.severity_inference.get_embeddings(\"short\")
+        self.assertEqual(len(embeddings), 384)
+
+        embeddings = self.severity_inference.get_embeddings(
+            \"very long gibberish, but how is this going i think it will work right???\"
+        )
+        self.assertEqual(len(embeddings), 384)
+
+    def test_handled_field_set_to_none(self):
+        \"\"\"Test SeverityRequest instantiation with 'handled' field set to None\"\"\"
+        try:
+            SeverityRequest(message=\"log: user encountered an unexpected error\", handled=None)
+        except Exception as e:
+            self.fail(\"Failed with exception: \"+ str(e))
         embeddings = self.severity_inference.get_embeddings("log: user enjoyed their experience")
         self.assertEqual(len(embeddings), 384)
 
