@@ -2,7 +2,9 @@ import logging
 import uuid
 
 import numpy as np
+import sentry_sdk
 from langsmith import traceable
+from sqlalchemy.orm import class_mapper
 from tqdm import tqdm
 
 from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
@@ -122,8 +124,10 @@ class CodebaseIndex:
                 logger.debug(f"  {language}: {len(docs)}")
 
             doc_parser = DocumentParser(get_embedding_model())
-            chunks = doc_parser.process_documents(documents)
-            embedded_chunks = cls._embed_chunks(chunks)
+            with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
+                chunks = doc_parser.process_documents(documents)
+            with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
+                embedded_chunks = cls._embed_chunks(chunks)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
@@ -180,15 +184,63 @@ class CodebaseIndex:
             documents = read_specific_files(tmp_repo_dir, changed_files)
 
             doc_parser = DocumentParser(get_embedding_model())
-            chunks = doc_parser.process_documents(documents)
-            embedded_chunks = self._embed_chunks(chunks)
+
+            with sentry_sdk.start_span(op="seer.automation.codebase.update.process_documents"):
+                chunks = doc_parser.process_documents(documents)
+
+            with Session() as session:
+                existing_chunks: list[DbDocumentChunk] = (
+                    session.query(DbDocumentChunk)
+                    .filter(
+                        DbDocumentChunk.repo_id == self.repo_info.id,
+                        DbDocumentChunk.path.in_(changed_files),
+                    )
+                    .all()
+                )
+
+            db_chunk_hash_map = {chunk.hash: chunk for chunk in existing_chunks}
+            new_chunk_hashes = set([chunk.hash for chunk in chunks])
+
+            chunks_ids_that_no_longer_exist: set[int] = set()
+            for db_chunk in existing_chunks:
+                if db_chunk.hash not in new_chunk_hashes:
+                    chunks_ids_that_no_longer_exist.add(db_chunk.id)
+
+            chunks_to_add: list[BaseDocumentChunk] = []
+            chunks_indexes_to_update: list[tuple[int, int]] = []
+            for chunk in chunks:
+                if chunk.hash not in db_chunk_hash_map:
+                    chunks_to_add.append(chunk)
+                else:
+                    db_chunk = db_chunk_hash_map[chunk.hash]
+                    chunks_indexes_to_update.append((db_chunk.id, chunk.index))
+
+            with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
+                embedded_chunks_to_add = self._embed_chunks(chunks_to_add)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
-                db_chunks = [
-                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks
+                session.query(DbDocumentChunk).filter(
+                    DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
+                ).delete(synchronize_session=False)
+
+                session.flush()
+
+                # Bulk update indices of the chunks that already exist
+                session.bulk_update_mappings(
+                    class_mapper(DbDocumentChunk),
+                    [
+                        {"id": db_chunk_id, "index": new_index}
+                        for db_chunk_id, new_index in chunks_indexes_to_update
+                    ],
+                )
+
+                session.flush()
+
+                new_db_chunks = [
+                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks_to_add
                 ]
-                batch_save_to_db(session, db_chunks)
+                batch_save_to_db(session, new_db_chunks)
 
                 if removed_files:
                     session.query(DbDocumentChunk).filter(

@@ -131,8 +131,8 @@ class Autofix:
                     else:
                         update_codebase_index.apply_async(
                             (UpdateCodebaseTaskRequest(repo_id=repo_id).model_dump(),),
-                            countdown=3 * 60,
-                        )  # 3 minutes
+                            countdown=10 * 60,
+                        )  # 10 minutes
                         logger.info(f"Codebase indexing scheduled for later")
                 else:
                     logger.debug(f"Codebase is up to date")
