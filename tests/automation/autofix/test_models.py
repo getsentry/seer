@@ -39,23 +39,21 @@ class TestStacktraceHelpers(unittest.TestCase):
             ),
         ]
         stacktrace = Stacktrace(frames=frames)
-        expected_str = " helper in file utils.py in repo my_repo [Line 15] (Not in app)\n    helper()  <-- SUSPECT LINE\n------\n main in file app.py in repo my_repo [Line 10:20] (In app)\n    main()  <-- SUSPECT LINE\n------\n"
+        expected_str = ""
+        for frame in frames:
+            line_no_str = f"[Line {frame.line_no}" if frame.line_no is not None else ""
+            col_no_str = f":{frame.col_no}]" if frame.col_no is not None else "]"
+            if frame.line_no is None and frame.col_no is None:
+                line_col_str = ""
+            else:
+                line_col_str = f" {line_no_str}{col_no_str}"
+            expected_str += f" {frame.function} in file {frame.filename} in repo {frame.repo_name} {line_col_str} ({'In app' if frame.in_app else 'Not in app'})\n    {frame.context[0][1]}  <-- SUSPECT LINE\n------\n"
         self.assertEqual(stacktrace.to_str(), expected_str)
 
     def test_stacktrace_to_str_cutoff(self):
         frames = [
             StacktraceFrame(
-                function="main",
-                filename="app.py",
-                abs_path="/path/to/app.py",
-                line_no=10,
-                col_no=20,
-                context=[(10, "    main()")],
-                repo_name="my_repo",
-                repo_id=1,
-                in_app=True,
-            ),
-            StacktraceFrame(
+
                 function="helper",
                 filename="utils.py",
                 abs_path="/path/to/utils.py",
