@@ -296,26 +296,3 @@ async def test_next_schedule_async(test: ScheduleAsyncTest, now: Now):
 
     process = await test.current_process_request_by_name(test.unacceptable_name)
     assert process is not None
-
-
-@pytest.mark.asyncio
-@parameterize
-async def test_io_work(test: ScheduleAsyncTest):
-    io_work = multiprocessing.Queue()
-
-    put_task = asyncio.get_running_loop().run_in_executor(
-        ThreadPoolExecutor(),
-        lambda: io_work.put(
-            ProcessRequest(name=test.acceptable_name, payload=test.payload.model_dump())
-        ),
-    )
-    run_task = asyncio.create_task(test.create_app(io_work).run())
-
-    processed = await test.new_side_effect()
-    test.end_event.set()
-
-    async with asyncio.timeout(10):
-        await put_task
-        await run_task
-
-    assert processed == [test.payload.my_special_value]

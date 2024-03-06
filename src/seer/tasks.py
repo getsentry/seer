@@ -5,6 +5,7 @@ import datetime
 from asyncio import Future, Task
 from typing import Any, Callable, Coroutine, Protocol, TypeVar
 
+import celery.result
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -55,6 +56,9 @@ class AsyncTaskFactory(abc.ABC):
 
     @abc.abstractmethod
     async def invoke(self, process_request: ProcessRequest) -> None:
+        pass
+
+    def await_celery_job(self, result: celery.result.AsyncResult):
         pass
 
 

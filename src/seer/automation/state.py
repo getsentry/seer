@@ -158,6 +158,3 @@ class JsonSerializedState(State[_State]):
     def store_state(self, state: _State) -> bool:
         self.state = state.model_dump()
         return True
-
-
-# class BufferedState(State[_State]):
