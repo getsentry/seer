@@ -68,7 +68,13 @@ class TestStacktraceHelpers(unittest.TestCase):
             ),
         ]
         stacktrace = Stacktrace(frames=frames)
-        expected_str = " helper in file utils.py in repo my_repo [Line 15] (Not in app)\n    helper()  <-- SUSPECT LINE\n------\n"
+        line_no_str = f"[Line {frames[1].line_no}" if frames[1].line_no is not None else ""
+        col_no_str = f":{frames[1].col_no}]" if frames[1].col_no is not None else "]"
+        if frames[1].line_no is None and frames[1].col_no is None:
+            line_col_str = ""
+        else:
+            line_col_str = f" {line_no_str}{col_no_str}"
+        expected_str = f" helper in file {frames[1].filename} in repo {frames[1].repo_name} {line_col_str} (Not in app)\n    helper()  <-- SUSPECT LINE\n------\n"
         self.assertEqual(stacktrace.to_str(max_frames=1), expected_str)
 
     def test_stacktrace_frame_str(self):
