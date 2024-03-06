@@ -197,7 +197,7 @@ class CodebaseIndex:
                     .all()
                 )
 
-            db_chunk_hashes = set([db_chunk.hash for db_chunk in existing_chunks])
+            db_chunk_hash_map = {chunk.hash: chunk for chunk in existing_chunks}
             new_chunk_hashes = set([chunk.hash for chunk in chunks])
 
             chunks_that_no_longer_exist: list[DbDocumentChunk] = []
@@ -206,12 +206,13 @@ class CodebaseIndex:
                     chunks_that_no_longer_exist.append(db_chunk)
 
             chunks_to_add: list[BaseDocumentChunk] = []
-            chunks_to_update: list[BaseDocumentChunk] = []
+            chunks_indexes_to_update: list[tuple[int, int]] = []
             for chunk in chunks:
-                if chunk.hash not in db_chunk_hashes:
+                if chunk.hash not in db_chunk_hash_map:
                     chunks_to_add.append(chunk)
                 else:
-                    chunks_to_update.append(chunk)
+                    db_chunk = db_chunk_hash_map[chunk.hash]
+                    chunks_indexes_to_update.append((db_chunk.id, chunk.index))
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
                 embedded_chunks_to_add = self._embed_chunks(chunks_to_add)
@@ -223,20 +224,14 @@ class CodebaseIndex:
 
                 session.flush()
 
-                # Update the indices of the chunks that already exist
-                for chunk in chunks_to_update:
-                    db_chunk = (
-                        session.query(DbDocumentChunk)
-                        .filter(
-                            DbDocumentChunk.repo_id == self.repo_info.id,
-                            DbDocumentChunk.path == chunk.path,
-                            DbDocumentChunk.hash == chunk.hash,
-                        )
-                        .one()
-                    )
-                    db_chunk.index = chunk.index
-
-                    session.add(db_chunk)
+                # Bulk update indices of the chunks that already exist
+                session.bulk_update_mappings(
+                    DbDocumentChunk,
+                    [
+                        {"id": db_chunk_id, "index": new_index}
+                        for db_chunk_id, new_index in chunks_indexes_to_update
+                    ],
+                )
 
                 session.flush()
 
