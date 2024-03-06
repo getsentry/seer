@@ -361,10 +361,7 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=ProblemDiscoveryPrompt.format_system_msg(
-                        err_msg=self.request.issue.title,
-                        stack_str=self.stacktrace.to_str(),
-                    ),
+                    content=ProblemDiscoveryPrompt.format_system_msg(),
                 )
             ],
         )
@@ -376,7 +373,9 @@ class Autofix:
             raise NotImplementedError("Problem discovery feedback not implemented yet.")
         else:
             message = ProblemDiscoveryPrompt.format_default_msg(
-                additional_context=self.request.additional_context
+                err_msg=self.request.issue.title,
+                stack_str=self.stacktrace.to_str(),
+                additional_context=self.request.additional_context,
             )
 
         problem_discovery_response = problem_discovery_agent.run(message)
@@ -450,10 +449,7 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=PlanningPrompts.format_system_msg(
-                        err_msg=self.request.issue.title,
-                        stack_str=self.stacktrace.to_str(),
-                    ),
+                    content=PlanningPrompts.format_system_msg(),
                 )
             ],
         )
@@ -463,6 +459,8 @@ class Autofix:
         elif input.problem:
             # TODO: Remove this and also find how to address mismatches in the stack trace path and the actual filepaths
             message = PlanningPrompts.format_default_msg(
+                err_msg=self.request.issue.title,
+                stack_str=self.stacktrace.to_str(),
                 problem=input.problem,
                 additional_context=self.request.additional_context or "",
             )
@@ -553,17 +551,20 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=ExecutionPrompts.format_system_msg(
-                        context_dump,
-                        error_message=self.request.issue.title,
-                        stack_trace=self.stacktrace.to_str(),
-                    ),
+                    content=ExecutionPrompts.format_system_msg(),
                 ),
             ],
             stop_message="<DONE>",
         )
 
-        execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
+        execution_agent.run(
+            ExecutionPrompts.format_default_msg(
+                context_dump,
+                error_message=self.request.issue.title,
+                stack_trace=self.stacktrace.to_str(),
+                plan_item=plan_item,
+            )
+        )
 
         self.usage += execution_agent.usage
         self.usage += code_action_tools.usage

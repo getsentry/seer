@@ -136,13 +136,12 @@ class CodeActionTools(BaseTools):
         original_snippet, snippet_start_line, snippet_end_line = result
 
         lines = document.text.splitlines()
-        chunk = "\n".join(
-            lines[
-                max(0, snippet_start_line - self.chunk_padding) : min(
-                    len(lines), snippet_end_line + self.chunk_padding
-                )
-            ]
-        )
+        chunk_lines = lines[
+            max(0, snippet_start_line - self.chunk_padding) : min(
+                len(lines), snippet_end_line + self.chunk_padding
+            )
+        ]
+        chunk = "\n".join(chunk_lines).strip("\n")
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
@@ -169,7 +168,7 @@ class CodeActionTools(BaseTools):
         )
         codebase.store_file_change(file_change)
 
-        return f"success: Resulting code after replacement: ```{llm_result['code']}```"
+        return f"success: Resulting code after replacement:\n```\n{llm_result['code']}\n```\n"
 
     @traceable(run_type="tool", name="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
