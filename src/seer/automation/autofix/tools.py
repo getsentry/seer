@@ -151,7 +151,7 @@ class CodeActionTools(BaseTools):
             reference_snippet, replacement_snippet, chunk, commit_message
         )
 
-        result, message, usage = self.llm_client.completion_with_parser(
+        llm_result, message, usage = self.llm_client.completion_with_parser(
             "gpt-4-0125-preview",
             [Message(role="user", content=prompt)],
             response_format={"type": "json_object"},
@@ -164,12 +164,12 @@ class CodeActionTools(BaseTools):
             change_type="edit",
             path=file_path,
             reference_snippet=chunk,
-            new_snippet=result["code"],
+            new_snippet=llm_result["code"],
             description=commit_message,
         )
         codebase.store_file_change(file_change)
 
-        return f"success: Resulting code after replacement: ```{result['code']}```"
+        return f"success: Resulting code after replacement: ```{llm_result['code']}```"
 
     @traceable(run_type="tool", name="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
