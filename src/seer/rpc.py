@@ -13,6 +13,25 @@ from .automation.autofix.event_manager import AutofixStatus
 logger = logging.getLogger(__name__)
 
 
+import json
+from abc import ABC, abstractmethod
+import os
+from typing import Any, Dict
+
+
+class AutofixStatus:
+    # mock class to demonstrate the encoder usage
+    def __init__(self, value):
+        self.value = value
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AutofixStatus):
+            return obj.value
+        return super().default(obj)
+
+
 class RpcClient(ABC):
     @abstractmethod
     def call(self, method: str, **kwargs):
@@ -27,7 +46,7 @@ class DummyRpcClient(RpcClient):
 
     def call(self, method: str, **kwargs):
         body_dict = {"args": kwargs}
-        json_dump = json_dumps(body_dict, separators=(",", ":"))
+        json_dump = json.dumps(body_dict, separators=(",", ":"), cls=CustomJSONEncoder)
 
         if self.should_log:
             print(f"Calling {method} with {json_dump}")
@@ -46,6 +65,7 @@ class SentryRpcClient(RpcClient):
 
     def _generate_request_signature(self, url_path: str, body: bytes) -> str:
         signature_input = b"%s:%s" % (url_path.encode("utf8"), body)
+
         signature = hmac.new(
             self.shared_secret.encode("utf-8"), signature_input, hashlib.sha256
         ).hexdigest()
