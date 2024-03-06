@@ -59,6 +59,7 @@ class SentryRpcClient(RpcClient):
     def __init__(self, base_url: str):
         self.base_url = base_url
         shared_secret = os.environ.get("RPC_SHARED_SECRET")
+
         if not shared_secret:
             raise RuntimeError("RPC_SHARED_SECRET must be set")
         self.shared_secret = shared_secret
@@ -75,7 +76,7 @@ class SentryRpcClient(RpcClient):
         url_path = f"/api/0/internal/seer-rpc/{method}/"
         endpoint = f"{self.base_url}{url_path}"
         body_dict = {"args": kwargs}
-        body = json_dumps(body_dict, separators=(",", ":"))
+        body = json.dumps(body_dict, cls=CustomJSONEncoder, separators=(",", ":"))
         body_bytes = body.encode("utf-8")
         signature = self._generate_request_signature(url_path, body_bytes)
         headers = {
@@ -89,3 +90,4 @@ class SentryRpcClient(RpcClient):
             return response.json()
         else:
             return None
+
