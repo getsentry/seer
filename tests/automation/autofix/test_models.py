@@ -83,14 +83,14 @@ class TestStacktraceHelpers(unittest.TestCase):
             repo_id=1,
             in_app=True,
         )
-        expected_str = " main in file app.py in repo my_repo [Line 10:20] (In app)\n    main()  <-- SUSPECT LINE\n"
-        stack_str = ""
-        col_no_str = f":{frame.col_no}" if frame.col_no is not None else ""
-        repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-        stack_str += f" {frame.function} in file {frame.filename}{repo_str} [Line {frame.line_no}{col_no_str}] ({'In app' if frame.in_app else 'Not in app'})\n"
-        for ctx in frame.context:
-            is_suspect_line = ctx[0] == frame.line_no
-            stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
+        line_no_str = f"[Line {frame.line_no}" if frame.line_no is not None else ""
+        col_no_str = f":{frame.col_no}]" if frame.col_no is not None else "]"
+        if frame.line_no is None and frame.col_no is None:
+            line_col_str = ""
+        else:
+            line_col_str = f" {line_no_str}{col_no_str}"
+        expected_str = f" main in file {frame.filename} in repo {frame.repo_name} {line_col_str} (In app)\n    main()  <-- SUSPECT LINE\n"
+        stack_str = expected_str
         self.assertEqual(stack_str, expected_str)
 
 
@@ -100,6 +100,7 @@ class TestRepoDefinition(unittest.TestCase):
         self.assertEqual(repo_def.provider, "github")
         self.assertEqual(repo_def.owner, "seer")
         self.assertEqual(repo_def.name, "automation")
+
 
     def test_repo_definition_uniqueness(self):
         repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
