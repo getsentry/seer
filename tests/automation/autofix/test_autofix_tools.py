@@ -7,12 +7,13 @@ from seer.automation.autofix.tools import CodeActionTools
 
 
 class TestReplaceSnippetWith(unittest.TestCase):
-    def setUp(self):
+    @patch("seer.automation.autofix.tools.GptClient")
+    def setUp(self, mock_gpt_client):
         self.mock_context = MagicMock()
+        self.mock_gpt_client = mock_gpt_client
         self.code_action_tools = CodeActionTools(context=self.mock_context)
 
-    @patch("seer.automation.agent.client.GptClient")
-    def test_replace_snippet_with_success(self, mock_gpt_client):
+    def test_replace_snippet_with_success(self):
         # Setup
         original_snippet = "print('Hello, world!')"
         replacement_snippet = "print('Goodbye, world!')"
@@ -35,7 +36,7 @@ class TestReplaceSnippetWith(unittest.TestCase):
                 return True"""
         )
         completion_with_parser.return_value = ({"code": code}, MagicMock(), MagicMock())
-        mock_gpt_client.return_value.completion_with_parser = completion_with_parser
+        self.mock_gpt_client.return_value.completion_with_parser = completion_with_parser
 
         result = self.code_action_tools.replace_snippet_with(
             file_path, "repo", original_snippet, replacement_snippet, "message"
