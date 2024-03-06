@@ -96,9 +96,8 @@ class Stacktrace(BaseModel):
         stack_str = ""
         for frame in reversed(self.frames[-max_frames:]):
             line_no_str = f"[Line {frame.line_no}, column {frame.col_no}]" if frame.line_no is not None and frame.col_no is not None else (f"[Line {frame.line_no}]" if frame.line_no is not None else "[Line: Unknown]")
-            col_no_str = "" if frame.col_no is None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str}{line_no_str}{col_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
@@ -114,6 +113,7 @@ class SentryEvent(BaseModel):
             (entry for entry in self.entries if entry["type"] == "exception"),
             None,
         )
+
 
         if exception_entry is None:
             return None
