@@ -556,3 +556,4 @@ class Autofix:
         execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
 
         self.usage += execution_agent.usage
+        self.usage += code_action_tools.usage

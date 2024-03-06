@@ -1,11 +1,15 @@
+import json
 import logging
 import textwrap
 
 from langsmith import traceable
 
+from seer.automation.agent.client import GptClient
+from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import FileChange
+from seer.automation.autofix.prompts import ExecutionPrompts
 from seer.automation.autofix.utils import find_original_snippet
 
 logger = logging.getLogger("autofix")
@@ -95,6 +99,11 @@ class BaseTools:
 class CodeActionTools(BaseTools):
     _snippet_matching_threshold = 0.9
 
+    def __init__(self, context: AutofixContext):
+        super().__init__(context)
+        self.llm_client = GptClient()
+        self.usage = Usage()
+
     @traceable(run_type="tool", name="Replace Snippet")
     def replace_snippet_with(
         self,
@@ -108,7 +117,7 @@ class CodeActionTools(BaseTools):
         Replaces a snippet with the provided replacement.
         """
         logger.debug(
-            f"[CodeActionTools.replace_snippet_with] Replacing snippet {reference_snippet} with {replacement_snippet} in {file_path} in repo {repo_name}"
+            f"[CodeActionTools.replace_snippet_with] Replacing snippet\n```\n{reference_snippet}\n```\n with \n```\n{replacement_snippet}\n```\nin {file_path} in repo {repo_name}"
         )
 
         codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
@@ -116,30 +125,49 @@ class CodeActionTools(BaseTools):
         if not document or not codebase:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
-        logger.debug("Exact snippet:")
-        logger.debug(f'"{reference_snippet}"')
+        result = find_original_snippet(reference_snippet, document.text, threshold=0.9)
 
-        original_snippet: str | None = None
-        if reference_snippet in document.text:
-            original_snippet = reference_snippet
-        else:
-            original_snippet = find_original_snippet(
-                reference_snippet, document.text, threshold=self._snippet_matching_threshold
-            )
+        if not result:
+            raise Exception("Reference snippet not found. Try again with an exact match.")
+
+        original_snippet, snippet_start_line, snippet_end_line = result
+
+        lines = document.text.splitlines()
+        chunk_padding = 16
+        chunk = "\n".join(
+            lines[
+                max(0, snippet_start_line - chunk_padding) : min(
+                    len(lines), snippet_end_line + chunk_padding
+                )
+            ]
+        )
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
 
+        prompt = ExecutionPrompts.format_snippet_replacement_msg(
+            reference_snippet, replacement_snippet, chunk, commit_message
+        )
+
+        result, message, usage = self.llm_client.completion_with_parser(
+            "gpt-4-0125-preview",
+            [Message(role="user", content=prompt)],
+            response_format={"type": "json_object"},
+            parser=lambda x: json.loads(str(x)),
+        )
+
+        self.usage += usage
+
         file_change = FileChange(
             change_type="edit",
             path=file_path,
-            reference_snippet=original_snippet,
-            new_snippet=replacement_snippet,
+            reference_snippet=chunk,
+            new_snippet=result["code"],
             description=commit_message,
         )
         codebase.store_file_change(file_change)
 
-        return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
+        return f"success: Resulting code after replacement: ```{result['code']}```"
 
     @traceable(run_type="tool", name="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
@@ -159,9 +187,12 @@ class CodeActionTools(BaseTools):
         if snippet in document.text:
             original_snippet = snippet
         else:
-            original_snippet = find_original_snippet(
+            result = find_original_snippet(
                 snippet, document.text, threshold=self._snippet_matching_threshold
             )
+
+            if result:
+                original_snippet, snippet_start_line, snippet_end_line = result
 
         logger.debug("Exact snippet:")
         logger.debug(f'"{snippet}"')
