@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import enum
 import typing
 from typing import Any, Mapping, NotRequired, TypedDict
@@ -124,3 +125,23 @@ def test_any(a, b: Any, c):
     assert a == 1
     assert b is not None
     assert c is not None
+
+
+expected_a = {0, -12113004732277236420, 560161460}
+expected_b = {"green-vincent-banana", "cyan-timothy-apple", "blue-sally-orange"}
+expected_c = {
+    datetime.datetime(2023, 2, 11, 20, 52, 19, 444000),
+    datetime.datetime(2031, 3, 14, 9, 15, 28, 725000),
+    datetime.datetime(2017, 10, 13, 6, 7, 25, 425000),
+}
+
+
+@parameterize(count=3)
+def test_generates_stable(a: int, b: str, c: datetime.datetime):
+    assert a in expected_a
+    assert b in expected_b
+    assert c in expected_c
+
+    expected_a.remove(a)
+    expected_b.remove(b)
+    expected_c.remove(c)

@@ -79,26 +79,36 @@ class ProcessRequest(Base):
         cls,
         name: str,
         payload: dict,
-        now: datetime.datetime,
-        expected_duration: datetime.timedelta | None = None,
+        when: datetime.datetime,
+        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),
     ) -> sqlalchemy.UpdateBase:
-        scheduled_from = scheduled_for = now
-        if expected_duration is not None:
-            # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.
-            scheduled_from -= expected_duration
+        scheduled_from = scheduled_for = when
+        # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.
+        scheduled_from -= expected_duration
 
         insert_stmt = insert(cls).values(
             name=name, payload=payload, scheduled_for=scheduled_for, scheduled_from=scheduled_from
         )
 
+        scheduled_for_update = func.least(insert_stmt.excluded.scheduled_for, cls.scheduled_for)
+
         return insert_stmt.on_conflict_do_update(
             index_elements=[cls.name],
             set_={
                 cls.payload: payload,
-                cls.scheduled_from: scheduled_from,
-                cls.scheduled_for: scheduled_for,
+                cls.scheduled_from: scheduled_for_update - expected_duration,
+                cls.scheduled_for: scheduled_for_update,
             },
         )
+
+    @classmethod
+    def peek_next_scheduled(
+        cls, session: sqlalchemy.orm.Session | None = None
+    ) -> datetime.datetime | None:
+        with contextlib.ExitStack() as stack:
+            if session is None:
+                session = stack.enter_context(Session())
+            return session.scalar(select(cls.scheduled_for).order_by(cls.scheduled_for).limit(1))
 
     @classmethod
     def acquire_work(

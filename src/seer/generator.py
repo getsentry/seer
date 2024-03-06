@@ -1,15 +1,15 @@
+import contextlib
 import dataclasses
 import datetime
 import enum
-import functools
 import inspect
 import itertools
 import math
-import os.path
 import random
 import string
 import struct
 import typing
+import zlib
 from typing import Any, Iterator, TypeVar, get_type_hints
 
 from pydantic import BaseModel
@@ -24,25 +24,31 @@ _Tuple = TypeVar("_Tuple", bound=tuple)
 
 @dataclasses.dataclass
 class _RandomGenerator:
-    state: tuple[Any, ...] = dataclasses.field(default_factory=lambda: random.Random().getstate())
+    r: random.Random = dataclasses.field(default_factory=lambda: random.Random())
     max_count: int = 10000
 
     def restart_at(self, seed: int) -> typing.Self:
-        self.state = random.Random(seed).getstate()
+        self.r = random.Random(seed)
+        self.max_count = 10000
         return self
 
-    def __iter__(self) -> Iterator[random.Random]:
-        r = random.Random()
-        r.setstate(self.state)
+    def __next__(self) -> "random.Random":
+        self.max_count -= 1
+        if self.max_count <= 0:
+            raise ValueError("generator did not find a valid generation")
+        return self.r
 
-        for _ in range(self.max_count):
-            yield r
-            self.state = r.getstate()
-        raise ValueError("generator did not find a valid generation")
+    def __iter__(self) -> "Iterator[random.Random]":
+        return self
 
     @staticmethod
     def one_of(*options: typing.Iterable[_A]) -> Iterator[_A]:
-        return (r.choice(next(zip(*options))) for r in gen)
+        composed_options: list[typing.Iterable[_A]] = [
+            (r.choice(i) for r in gen) if isinstance(i, list) else i
+            for i in options
+            for i in (list(i) if isinstance(i, (list, tuple, set, frozenset)) else i,)
+        ]
+        return (next(iter(r.choice(composed_options))) for r in gen)
 
 
 gen = _RandomGenerator()
@@ -92,11 +98,16 @@ things = gen.one_of(
 )
 ascii_words = ("-".join(group) for group in zip(colors, names, things))
 datetimes = (
-    datetime.datetime(2023, 1, 1, 1)
+    datetime.datetime(2013, 1, 1, 1)
     + datetime.timedelta(
-        days=r.randint(0, 365), seconds=r.randint(0, 60 * 60 * 24), milliseconds=r.randint(0, 1000)
+        days=r.randint(0, 365 * 20),
+        seconds=r.randint(0, 60 * 60 * 24),
+        milliseconds=r.randint(0, 1000),
     )
     for r in gen
+)
+positive_timedeltas = (
+    datetime.timedelta(seconds=r.randint(0, 59), hours=r.randint(0, 23)) for r in gen
 )
 
 
@@ -401,7 +412,7 @@ def generate_annotated(context: GeneratorContext) -> typing.Iterator[Any] | None
         annotated_inner = [*context.args, Any][0]
         examples = (v for ex in context.args[1:] if isinstance(ex, Examples) for v in ex)
         if examples:
-            return gen.one_of(*(generate(v) for v in examples))
+            return gen.one_of(*examples)
 
         return generate(context.step(annotated_inner))
     return None
@@ -427,6 +438,8 @@ def generate_primitives(context: GeneratorContext) -> typing.Iterator[Any] | Non
         return floats
     if source is datetime.datetime:
         return datetimes
+    if source is datetime.timedelta:
+        return positive_timedeltas
     return None
 
 
@@ -526,8 +539,13 @@ def parameterize(
                 f"Argument {invalid_arg} cannot be injected, check your arg_set and your kwd arguments to parameterize."
             )
 
+        if seed is None:
+            final_seed = zlib.crc32(func.__name__.encode("utf8")) & 0xFFFFFFFF
+        else:
+            final_seed = seed
+
         def generate() -> typing.Iterator[typing.Sequence[Any]]:
-            gen.restart_at(seed if seed is not None else hash(func.__name__))
+            gen.restart_at(final_seed)
             context = GeneratorContext.from_source(func)
             context.include_defaults = include_defaults
             context.generators = [*generators, *context.generators]
@@ -549,6 +567,77 @@ def parameterize(
                     f"Failed to generator {count} test cases for {func.__name__} ({i}), check that constraint is not too strong."
                 )
 
-        return pytest.mark.parametrize(injected_args, generate())(func)
+        return pytest.mark.parametrize(injected_args, list(generate()))(func)
 
     return decorator
+
+
+class _Unset:
+    pass
+
+
+_unset = _Unset()
+
+
+@dataclasses.dataclass
+class change_watcher:
+    cb: typing.Callable[[], Any]
+    stack: list[Any] = dataclasses.field(default_factory=list)
+
+    def __enter__(self):
+        self.stack.append(ChangeResult(orig=self.cb()))
+        return self.stack[-1]
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            return None
+
+        self.stack.pop().result = self.cb()
+
+
+@dataclasses.dataclass
+class NamedBool:
+    message: str
+    result: bool
+
+    def __bool__(self):
+        return self.result
+
+    def __str__(self):
+        return self.message
+
+    __repr__ = __str__
+
+
+@dataclasses.dataclass
+class ChangeResult:
+    orig: Any = _unset
+    result: Any = _unset
+
+    def from_value(self, value: Any):
+        return NamedBool(f"{self} (expected from: {value!r})", bool(self and self.orig == value))
+
+    def to_value(self, value: Any):
+        return NamedBool(
+            f"{self} (expected result: {value!r})", bool(self and self.result == value)
+        )
+
+    def __bool__(self) -> bool:
+        assert (
+            self.orig is not _unset
+        ), "ChangeWatcher.__enter__ was not called, cannot compute result!"
+        assert (
+            self.result is not _unset
+        ), "ChangeWatcher.__exit__ was not called, cannot compute result!"
+        return self.result != self.orig
+
+    def __str__(self) -> str:
+        assert (
+            self.orig is not _unset
+        ), "ChangeWatcher.__enter__ was not called, cannot compute result!"
+        assert (
+            self.result is not _unset
+        ), "ChangeWatcher.__exit__ was not called, cannot compute result!"
+        return f"{self.orig!r} changed to {self.result!r}"
+
+    __repr__ = __str__
