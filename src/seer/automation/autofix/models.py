@@ -81,7 +81,7 @@ class StacktraceFrame(BaseModel):
     function: str
     filename: str
     abs_path: str
-    line_no: int
+    line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]
     repo_name: Optional[str] = None
@@ -97,7 +97,8 @@ class Stacktrace(BaseModel):
         for frame in reversed(self.frames[-max_frames:]):
             col_no_str = f":{frame.col_no}" if frame.col_no is not None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} [Line {frame.line_no}{col_no_str}] ({'In app' if frame.in_app else 'Not in app'})\n"
+            line_no_str = f" [Line {frame.line_no}]" if frame.line_no is not None else " [Line: Unknown]"
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str}{line_no_str}{col_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
