@@ -273,3 +273,40 @@ class ExecutionPrompts:
                 - Carefully review your code and ensure that it is formatted correctly.
             </guidelines>{issue_str}"""
         ).format(context_dump=context_dump, issue_str=issue_str)
+
+    @staticmethod
+    def format_snippet_replacement_msg(
+        reference_snippet: str, replacement_snippet: str, chunk: str, commit_message: str
+    ):
+        return textwrap.dedent(
+            """\
+            Replace the following snippet:
+
+            <snippet>
+            {reference_snippet}
+            </snippet>
+
+            with the following snippet:
+            <snippet>
+            {replacement_snippet}
+            </snippet>
+
+            in the below chunk of code:
+            <chunk>
+            {chunk}
+            </chunk>
+
+            The intent of this change is
+            <description>
+            {commit_message}
+            </description>
+
+            Make sure you fix any errors in the code and ensure it is working as expected to the intent of the change.
+
+            You MUST return the code result under the "code": key in the response JSON object."""
+        ).format(
+            reference_snippet=reference_snippet,
+            replacement_snippet=replacement_snippet,
+            chunk=chunk,
+            commit_message=commit_message,
+        )

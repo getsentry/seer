@@ -19,7 +19,7 @@ class TestFindOriginalSnippet(unittest.TestCase):
                 print("Goodbye, world!")
             """
         )
-        self.assertEqual(find_original_snippet(snippet, file_contents), snippet)
+        self.assertEqual(find_original_snippet(snippet, file_contents), (snippet, 3, 5))
 
     def test_find_original_snippet_with_whitespace_variation(self):
         snippet = "def example_function():\n    pass"

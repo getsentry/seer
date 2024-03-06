@@ -48,7 +48,9 @@ def get_last_non_empty_line(text: str) -> str:
     return ""
 
 
-def find_original_snippet(snippet: str, file_contents: str, threshold=0.9) -> str | None:
+def find_original_snippet(
+    snippet: str, file_contents: str, threshold=0.9
+) -> tuple[str, int, int] | None:
     """
     This function finds the original snippet of code in a file given a snippet and the file contents.
 
@@ -132,7 +134,7 @@ def find_original_snippet(snippet: str, file_contents: str, threshold=0.9) -> st
     ):
         return None
 
-    return final_file_snippet
+    return final_file_snippet, snippet_start, file_line_index
 
 
 def sanitize_branch_name(title: str) -> str:
