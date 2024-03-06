@@ -4,6 +4,7 @@ import uuid
 import numpy as np
 import sentry_sdk
 from langsmith import traceable
+from sqlalchemy.orm import class_mapper
 from tqdm import tqdm
 
 from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
@@ -188,7 +189,7 @@ class CodebaseIndex:
                 chunks = doc_parser.process_documents(documents)
 
             with Session() as session:
-                existing_chunks = (
+                existing_chunks: list[DbDocumentChunk] = (
                     session.query(DbDocumentChunk)
                     .filter(
                         DbDocumentChunk.repo_id == self.repo_info.id,
@@ -200,10 +201,10 @@ class CodebaseIndex:
             db_chunk_hash_map = {chunk.hash: chunk for chunk in existing_chunks}
             new_chunk_hashes = set([chunk.hash for chunk in chunks])
 
-            chunks_that_no_longer_exist: list[DbDocumentChunk] = []
+            chunks_ids_that_no_longer_exist: set[int] = set()
             for db_chunk in existing_chunks:
                 if db_chunk.hash not in new_chunk_hashes:
-                    chunks_that_no_longer_exist.append(db_chunk)
+                    chunks_ids_that_no_longer_exist.add(db_chunk.id)
 
             chunks_to_add: list[BaseDocumentChunk] = []
             chunks_indexes_to_update: list[tuple[int, int]] = []
@@ -219,14 +220,15 @@ class CodebaseIndex:
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
-                for chunk in chunks_that_no_longer_exist:
-                    session.delete(chunk)
+                session.query(DbDocumentChunk).filter(
+                    DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
+                ).delete(synchronize_session=False)
 
                 session.flush()
 
                 # Bulk update indices of the chunks that already exist
                 session.bulk_update_mappings(
-                    DbDocumentChunk,
+                    class_mapper(DbDocumentChunk),
                     [
                         {"id": db_chunk_id, "index": new_index}
                         for db_chunk_id, new_index in chunks_indexes_to_update
