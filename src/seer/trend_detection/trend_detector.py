@@ -1,3 +1,4 @@
+
 """
 Trend Detection Logic:
 
@@ -15,7 +16,7 @@ from typing import Any, List, Literal, Mapping, Tuple, Union
 import numpy as np
 import pandas as pd
 import scipy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing_extensions import TypedDict
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
@@ -27,6 +28,7 @@ class SnubaMetadata(TypedDict):
 
 # timestamp,
 SnubaTSEntry = Tuple[int, Tuple[SnubaMetadata]]
+
 
 
 class BreakpointTransaction(BaseModel):
