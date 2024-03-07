@@ -15,8 +15,9 @@ from typing import Any, List, Literal, Mapping, Tuple, Union
 import numpy as np
 import pandas as pd
 import scipy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing_extensions import TypedDict
+from typing import List, Tuple, Mapping
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
 
@@ -36,6 +37,12 @@ class BreakpointTransaction(BaseModel):
     data_start: int
     data_end: int
 
+    @validator('request_start', 'request_end', pre=True)
+    def convert_float_to_int(cls, v):
+        if isinstance(v, float):
+            return int(v)
+        return v
+
 
 class BreakpointRequest(BaseModel):
     data: Mapping[str, BreakpointTransaction]
@@ -48,9 +55,8 @@ class BreakpointRequest(BaseModel):
 
 class BreakpointEntry(BaseModel):
     project: str
-    # For legacy reasons, the group name is always
-    # transaction even when working with functions.
     transaction: str
+
     aggregate_range_1: float
     aggregate_range_2: float
     unweighted_t_value: float
