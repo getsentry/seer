@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer
 class SeverityRequest(BaseModel):
     message: str = ""
     has_stacktrace: int = 0
-    handled: bool = False
+    handled: Optional[bool] = False
     trigger_timeout: bool | None = None
     trigger_error: bool | None = None
 
@@ -26,6 +26,7 @@ class SeverityInference:
             device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
         )
         self.classifier = load(classifier_path)
+
 
     def get_embeddings(self, text) -> np.ndarray:
         """Generate embeddings for the given text using the pre-trained model."""
