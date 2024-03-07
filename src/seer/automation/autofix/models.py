@@ -96,13 +96,9 @@ class Stacktrace(BaseModel):
     def to_str(self, max_frames: int = 16):
         stack_str = ""
         for frame in reversed(self.frames[-max_frames:]):
+            line_no_str = f"[Line {frame.line_no if frame.line_no is not None else 'Unknown'}{col_no_str if frame.col_no is not None else ''}]"
             col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            line_no_str = (
-                f"[Line {frame.line_no}{col_no_str}]"
-                if frame.line_no is not None
-                else "[Line: Unknown]"
-            )
             stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
