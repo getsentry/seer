@@ -23,7 +23,8 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """\
             def foo():
                 print('Hello, world!')
-                return True"""
+                return True
+            """
         )
         mock_codebase = MagicMock()
         self.mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
@@ -33,7 +34,8 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """\
             def foo():
                 print('Goodbye, world!')
-                return True"""
+                return True
+            """
         )
         completion_with_parser.return_value = ({"code": code}, MagicMock(), MagicMock())
         self.mock_gpt_client.return_value.completion_with_parser = completion_with_parser
