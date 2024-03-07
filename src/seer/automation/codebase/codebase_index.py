@@ -1,3 +1,4 @@
+import difflib
 import logging
 import uuid
 
@@ -6,8 +7,9 @@ import sentry_sdk
 from langsmith import traceable
 from sqlalchemy.orm import class_mapper
 from tqdm import tqdm
+from unidiff import PatchSet
 
-from seer.automation.autofix.models import FileChange, RepoDefinition, Stacktrace
+from seer.automation.autofix.models import RepoDefinition, Stacktrace
 from seer.automation.codebase.models import (
     BaseDocumentChunk,
     Document,
@@ -25,6 +27,7 @@ from seer.automation.codebase.utils import (
     read_directory,
     read_specific_files,
 )
+from seer.automation.models import FileChange, FilePatch, Hunk, Line
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
 from seer.utils import batch_save_to_db, class_method_lru_cache
@@ -320,6 +323,19 @@ class CodebaseIndex:
     def _get_file_content_with_cache(self, path: str, sha: str):
         return self.repo_client.get_file_content(path, sha)
 
+    def _copy_document_with_local_changes(self, document: Document) -> Document | None:
+        content = document.text
+        # Make sure the changes are applied in order!
+        changes = list(filter(lambda x: x.path == document.path, self.file_changes))
+        if changes:
+            for change in changes:
+                content = change.apply(content)
+
+        if content is None or content == "":
+            return None
+
+        return Document(path=document.path, text=content, language=document.language)
+
     def get_document(self, path: str, ignore_local_changes=False) -> Document | None:
         assert self.repo_info is not None, "Repository info is not set"
 
@@ -336,18 +352,8 @@ class CodebaseIndex:
 
         document = Document(path=path, text=document_content, language=language)
 
-        content = document_content
         if not ignore_local_changes:
-            # Make sure the changes are applied in order!
-            changes = list(filter(lambda x: x.path == path, self.file_changes))
-            if changes:
-                for change in changes:
-                    content = change.apply(content)
-
-            if content is None:
-                return None
-
-        document.text = content
+            document = self._copy_document_with_local_changes(document)
 
         return document
 
@@ -465,3 +471,87 @@ class CodebaseIndex:
             )
 
         return matched_chunks
+
+    def get_file_patches(self) -> list[FilePatch]:
+        document_paths = list(set([file_change.path for file_change in self.file_changes]))
+
+        original_documents = [
+            self.get_document(path, ignore_local_changes=True) for path in document_paths
+        ]
+
+        diffs = []
+        for i, document in enumerate(original_documents):
+            if document and document.text:
+                changed_document = self._copy_document_with_local_changes(document)
+
+                diff = difflib.unified_diff(
+                    document.text.splitlines(),
+                    changed_document.text.splitlines() if changed_document else "",
+                    fromfile=document.path,
+                    tofile=changed_document.path if changed_document else "/dev/null",
+                    lineterm="",
+                )
+
+                diff_str = "\n".join(diff).strip("\n")
+                diffs.append(diff_str)
+            else:
+                path = document_paths[i]
+                changed_document = self._copy_document_with_local_changes(
+                    Document(path=path, language=get_language_from_path(path) or "unknown", text="")
+                )
+
+                diff = difflib.unified_diff(
+                    "",
+                    changed_document.text.splitlines() if changed_document else "",
+                    fromfile="/dev/null",
+                    tofile=path,
+                    lineterm="",
+                )
+
+                diff_str = "\n".join(diff).strip("\n")
+                diffs.append(diff_str)
+
+        combined_diff = "\n".join(diffs).strip("\n")
+        patch = PatchSet(combined_diff)
+        file_patches = []
+        for patched_file in patch:
+            hunks = []
+            for hunk in patched_file:
+                lines = []
+                for line in hunk:
+                    lines.append(
+                        Line(
+                            source_line_no=line.source_line_no,
+                            target_line_no=line.target_line_no,
+                            diff_line_no=line.diff_line_no,
+                            value=line.value,
+                            line_type=line.line_type,
+                        )
+                    )
+                hunks.append(
+                    Hunk(
+                        source_start=hunk.source_start,
+                        source_length=hunk.source_length,
+                        target_start=hunk.target_start,
+                        target_length=hunk.target_length,
+                        section_header=hunk.section_header,
+                        lines=lines,
+                    )
+                )
+            file_patches.append(
+                FilePatch(
+                    type=patched_file.is_added_file
+                    and "A"
+                    or patched_file.is_removed_file
+                    and "D"
+                    or "M",
+                    path=patched_file.path,
+                    added=patched_file.added,
+                    removed=patched_file.removed,
+                    source_file=patched_file.source_file,
+                    target_file=patched_file.target_file,
+                    hunks=hunks,
+                )
+            )
+
+        return file_patches

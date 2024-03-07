@@ -13,10 +13,8 @@ from github.GitRef import GitRef
 from github.Repository import Repository
 from unidiff import PatchSet
 
-from seer.automation.agent.models import Usage
-from seer.automation.autofix.models import AutofixUserDetails, FileChange, PlanStep
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
-from seer.automation.models import InitializationError
+from seer.automation.models import FileChange, InitializationError
 from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger("autofix")

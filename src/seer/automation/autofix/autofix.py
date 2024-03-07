@@ -208,6 +208,7 @@ class Autofix:
                     pr_url=pr.pr_url,
                     repo_name=f"{pr.repo.owner}/{pr.repo.name}",
                     pr_number=pr.pr_number,
+                    diff=pr.diff,
                     usage=self.usage,
                 )
                 self.event_manager.send_autofix_complete(output)
@@ -307,6 +308,7 @@ class Autofix:
                             owner=codebase.repo_client.repo_owner,
                             name=codebase.repo_client.repo_name,
                         ),
+                        diff=codebase.get_file_patches(),
                     )
                 )
 
