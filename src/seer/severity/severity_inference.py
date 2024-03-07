@@ -24,6 +24,7 @@ class SeverityInference:
         self.embeddings_model = SentenceTransformer(
             embeddings_path,
             device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
+
         )
         self.classifier = load(classifier_path)
 
@@ -40,7 +41,7 @@ class SeverityInference:
             has_stacktrace = data.has_stacktrace
 
             handled = data.handled
-            handled_true = 1 if handled is True else 0
+            handled_true = 1 if handled else 0
             handled_false = 1 if handled is False else 0
             handled_unknown = 1 if handled is None else 0
 
@@ -53,3 +54,4 @@ class SeverityInference:
             pred = self.classifier.predict_proba(input_data)[0][1]
 
         return SeverityResponse(severity=round(min(1.0, max(0.0, pred)), 2))
+
