@@ -114,6 +114,7 @@ class Stacktrace(BaseModel):
 class SentryEvent(BaseModel):
     entries: list[dict]
 
+
     def get_stacktrace(self):
         exception_entry = next(
             (entry for entry in self.entries if entry["type"] == "exception"),
