@@ -350,10 +350,10 @@ class CodebaseIndex:
             logger.warning(f"Unsupported language for {path}")
             return None
 
-        document: Document | None = Document(path=path, text=document_content, language=language)
+        document = Document(path=path, text=document_content, language=language)
 
         if not ignore_local_changes:
-            document = self._copy_document_with_local_changes(document)
+            return self._copy_document_with_local_changes(document)
 
         return document
 
