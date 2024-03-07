@@ -35,14 +35,14 @@ class BreakpointTransaction(BaseModel):
     data: List[SnubaTSEntry]
     request_start: int = Field(default=... , pre_validators=[ensure_int])
     request_end: int = Field(default=... , pre_validators=[ensure_int])
-    data_start: int
+    data_start: int = Field(default=... , pre_validators=[ensure_int])
     data_end: int
 
 
 class BreakpointRequest(BaseModel):
     data: Mapping[str, BreakpointTransaction]
     sort: str = ""
-    allow_midpoint: str = "1"
+    allow_mididpoint: str = "1"
     validate_tail_hours: int = 0
     trend_percentage: float = Field(default=0.1, alias="trend_percentage()")
     min_change: float = Field(default=0.0, alias="min_change()")
@@ -52,6 +52,7 @@ class BreakpointEntry(BaseModel):
     project: str
 
     # For legacy reasons, the group name is always
+
     # transaction even when working with functions.
     transaction: str
     aggregate_range_1: float
