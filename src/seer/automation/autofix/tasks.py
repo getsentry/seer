@@ -9,7 +9,7 @@ from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixRequest
 from seer.automation.models import InitializationError
-from seer.rpc import DummyRpcClient
+from seer.rpc import SentryRpcClient
 from seer.tasks import TaskFactory, async_task_factory
 
 logger = logging.getLogger("autofix")
@@ -21,8 +21,8 @@ def run_autofix(data: dict[str, Any]) -> None:
     if not base_url:
         raise RuntimeError("SENTRY_BASE_URL must be set")
 
-    # client = SentryRpcClient(base_url)
-    client = DummyRpcClient()
+    client = SentryRpcClient(base_url)
+    # client = DummyRpcClient()
 
     request = AutofixRequest(**data)
     event_manager = AutofixEventManager(client, request.issue.id)
