@@ -47,6 +47,13 @@ class BreakpointRequest(BaseModel):
     trend_percentage: float = Field(default=0.1, alias="trend_percentage()")
     min_change: float = Field(default=0.0, alias="min_change()")
 
+    @validator('request_start', 'request_end', pre=True)
+    @classmethod
+    def convert_float_to_int(cls, v):
+        if isinstance(v, float):
+            return int(v)
+        return v
+
 
 class BreakpointEntry(BaseModel):
     project: str
@@ -56,6 +63,7 @@ class BreakpointEntry(BaseModel):
     aggregate_range_1: float
     aggregate_range_2: float
     unweighted_t_value: float
+
     unweighted_p_value: float
     trend_percentage: float
     absolute_percentage_change: float
