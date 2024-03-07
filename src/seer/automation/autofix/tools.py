@@ -141,7 +141,7 @@ class CodeActionTools(BaseTools):
                 len(lines), snippet_end_line + self.chunk_padding
             )
         ]
-        chunk = "\n".join(chunk_lines).strip("\n")
+        chunk = "\n".join(chunk_lines).strip("\n") + "\n"  # Keep a newline at the end
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
