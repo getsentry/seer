@@ -87,7 +87,7 @@ class AutofixContext:
 
             # Re-sort populated_chunks based on their original order in db_chunks
             db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
-            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
+            populated_chunks.sort(key=lambda chunk: db_chunk_order.get(chunk.id, len(populated_chunks)))
 
         return populated_chunks
 
@@ -104,6 +104,7 @@ class AutofixContext:
                 None,
             )
         if repo_id:
+
             codebase = self.get_codebase(repo_id)
             return codebase, codebase.get_document(path)
 
