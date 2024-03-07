@@ -1,6 +1,7 @@
 import enum
 import logging
-from typing import Literal, Optional
+from datetime import datetime
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -16,16 +17,33 @@ class AutofixStatus(enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class ProgressType(enum.Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
+    USER_RESPONSE = "USER_RESPONSE"
+
+
 logger = logging.getLogger("autofix")
+
+
+class ProgressItem(BaseModel):
+    timestamp: str
+    message: str
+    type: ProgressType
+    data: Any = None
 
 
 class Step(BaseModel):
     id: str
     index: int
-    description: Optional[str] = None
+    completedMessage: Optional[str] = None
     title: str
-    children: list["Step"] = []
+
     status: AutofixStatus
+
+    progress: list["ProgressItem | Step"] = []
 
 
 class AutofixEventManager:
@@ -43,6 +61,12 @@ class AutofixEventManager:
             steps=[step.model_dump() for step in self.steps],
         )
 
+    def _get_step(self, step_id: str, steps: Optional[list[ProgressItem | Step]] = None) -> Step:
+        steps_to_use = steps or self.steps
+        step = next(step for step in steps_to_use if isinstance(step, Step) and step.id == step_id)
+
+        return step
+
     def send_no_stacktrace_error(self):
         self.steps = [
             Step(
@@ -50,7 +74,7 @@ class AutofixEventManager:
                 index=0,
                 title="Preliminary Assessment",
                 status=AutofixStatus.ERROR,
-                description="Error: Cannot fix issues without a stacktrace.",
+                completedMessage="Error: Cannot fix issues without a stacktrace.",
             )
         ]
 
@@ -70,8 +94,20 @@ class AutofixEventManager:
         logger.debug("Sent initial steps")
 
     def send_problem_discovery_result(self, result: ProblemDiscoveryResult):
-        problem_discovery_step = next(step for step in self.steps if step.id == "problem_discovery")
-        problem_discovery_step.description = result.description
+        problem_discovery_step = self._get_step("problem_discovery")
+        problem_discovery_step.progress = [
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=result.reasoning,
+                type=ProgressType.INFO,
+            ),
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=result.description,
+                type=ProgressType.INFO,
+            ),
+        ]
+        problem_discovery_step.completedMessage = result.description
         problem_discovery_step.status = AutofixStatus.COMPLETED
         self.steps = [
             problem_discovery_step,
@@ -80,12 +116,14 @@ class AutofixEventManager:
                 index=1,
                 title="Codebase Indexing",
                 status=AutofixStatus.PENDING,
+                progress=[],
             ),
             Step(
                 id="plan",
                 index=2,
                 title="Execution Plan",
                 status=AutofixStatus.PENDING,
+                progress=[],
             ),
         ]
 
@@ -94,20 +132,108 @@ class AutofixEventManager:
         )
         logger.debug(f"Sent problem discovery result: {result}")
 
-    def send_codebase_creation_message(self):
-        indexing_step = next(step for step in self.steps if step.id == "codebase_indexing")
+    def send_codebase_indexing_repo_check_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
 
         indexing_step.status = AutofixStatus.PROCESSING
-        indexing_step.description = (
-            "Creating initial codebase index for project, this may take a while..."
+        indexing_step.progress.append(
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=f"Checking if {repo_full_name} is indexed...",
+                type=ProgressType.INFO,
+            )
         )
 
         self._send_steps_update(AutofixStatus.PROCESSING)
 
-    def send_codebase_indexing_message(self):
-        indexing_step = next(step for step in self.steps if step.id == "codebase_indexing")
+    def send_codebase_indexing_repo_exists_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
 
         indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.progress.append(
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=f"{repo_full_name} is indexed.",
+                type=ProgressType.INFO,
+            )
+        )
+
+        self._send_steps_update(AutofixStatus.PROCESSING)
+
+    def send_codebase_index_creation_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
+
+        indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.progress.extend(
+            [
+                ProgressItem(
+                    timestamp=datetime.now().isoformat(),
+                    message=f"Indexing {repo_full_name}...",
+                    type=ProgressType.INFO,
+                ),
+                ProgressItem(
+                    timestamp=datetime.now().isoformat(),
+                    message=f"Because this is the first time indexing {repo_full_name}, this may take a while...",
+                    type=ProgressType.INFO,
+                ),
+            ]
+        )
+
+        self._send_steps_update(AutofixStatus.PROCESSING)
+
+    def send_codebase_index_creation_complete_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
+
+        indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.progress.append(
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=f"Indexing {repo_full_name} complete.",
+                type=ProgressType.INFO,
+            )
+        )
+
+        self._send_steps_update(AutofixStatus.PROCESSING)
+
+    def send_codebase_index_up_to_date_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
+
+        indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.progress.append(
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=f"{repo_full_name} is up to date.",
+                type=ProgressType.INFO,
+            )
+        )
+
+        self._send_steps_update(AutofixStatus.PROCESSING)
+
+    def send_codebase_index_update_wait_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
+
+        indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.progress.append(
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=f"{repo_full_name} needs to be updated. Waiting for the update to complete...",
+                type=ProgressType.INFO,
+            )
+        )
+
+        self._send_steps_update(AutofixStatus.PROCESSING)
+
+    def send_codebase_index_update_scheduled_message(self, repo_full_name: str):
+        indexing_step = self._get_step("codebase_indexing")
+
+        indexing_step.status = AutofixStatus.PROCESSING
+        indexing_step.progress.append(
+            ProgressItem(
+                timestamp=datetime.now().isoformat(),
+                message=f"{repo_full_name} will be updated in the background.",
+                type=ProgressType.INFO,
+            )
+        )
 
         self._send_steps_update(AutofixStatus.PROCESSING)
 
@@ -118,7 +244,14 @@ class AutofixEventManager:
         for step in self.steps:
             if step.id == "codebase_indexing":
                 step.status = status
-                step.description = None
+                step.completedMessage = None
+                step.progress.append(
+                    ProgressItem(
+                        timestamp=datetime.now().isoformat(),
+                        message="Codebase indexing complete.",
+                        type=ProgressType.INFO,
+                    )
+                )
             elif step.id == "plan":
                 step.status = (
                     AutofixStatus.PROCESSING
@@ -137,27 +270,26 @@ class AutofixEventManager:
         if result:
             plan_step.title = "Execute Plan"
 
-            plan_step.children = [
+            plan_step.progress = [
                 Step(
                     id=str(plan_step.id),
                     index=1,
                     title=plan_step.title,
                     status=AutofixStatus.PENDING,
+                    progress=[],
                 )
                 for plan_step in result.steps
             ]
 
-            if len(plan_step.children) > 0:
-                plan_step.children[0].status = AutofixStatus.PROCESSING
+            if len(plan_step.progress) > 0:
+                plan_step.progress[0].status = AutofixStatus.PROCESSING
 
         self._send_steps_update(AutofixStatus.PROCESSING if result else AutofixStatus.ERROR)
         logger.debug(f"Sent planning result: {result}")
 
     def send_execution_step_start(self, execution_id: int):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        execution_step = next(
-            child for child in plan_step.children if child.id == str(execution_id)
-        )
+        plan_step = self._get_step("plan")
+        execution_step = self._get_step(str(execution_id), plan_step.progress)
         execution_step.status = AutofixStatus.PROCESSING
 
         self._send_steps_update(AutofixStatus.PROCESSING)
@@ -166,10 +298,8 @@ class AutofixEventManager:
     def send_execution_step_result(
         self, execution_id: int, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR]
     ):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        execution_step = next(
-            child for child in plan_step.children if child.id == str(execution_id)
-        )
+        plan_step = self._get_step("plan")
+        execution_step = self._get_step(str(execution_id), plan_step.progress)
         execution_step.status = status
 
         self._send_steps_update(
@@ -185,11 +315,12 @@ class AutofixEventManager:
         for step in self.steps:
             if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.ERROR
-                for substep in step.children:
-                    if substep.status == AutofixStatus.PROCESSING:
-                        substep.status = AutofixStatus.ERROR
-                    if substep.status == AutofixStatus.PENDING:
-                        substep.status = AutofixStatus.CANCELLED
+                for substep in step.progress:
+                    if isinstance(substep, Step):
+                        if substep.status == AutofixStatus.PROCESSING:
+                            substep.status = AutofixStatus.ERROR
+                        if substep.status == AutofixStatus.PENDING:
+                            substep.status = AutofixStatus.CANCELLED
 
     def send_autofix_complete(self, fix: AutofixOutput | None):
         if fix:
