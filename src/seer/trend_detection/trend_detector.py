@@ -36,7 +36,7 @@ class BreakpointTransaction(BaseModel):
     request_start: int = Field(default=... , pre_validators=[ensure_int])
     request_end: int = Field(default=... , pre_validators=[ensure_int])
     data_start: int = Field(default=... , pre_validators=[ensure_int])
-    data_end: int
+    data_end: int = Field(default=... , pre_validators=[ensure_int])
 
 
 class BreakpointRequest(BaseModel):
