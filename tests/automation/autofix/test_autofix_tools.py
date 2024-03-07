@@ -44,7 +44,7 @@ class TestReplaceSnippetWith(unittest.TestCase):
 
         # Assert
         self.assertTrue(result)
-        self.assertEquals(result, f"success: Resulting code after replacement: ```{code}```")
+        self.assertEquals(result, f"success: Resulting code after replacement:\n```\n{code}\n```\n")
         mock_codebase.store_file_change.assert_called_once_with(
             FileChange(
                 change_type="edit",
