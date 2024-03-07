@@ -324,7 +324,7 @@ class CodebaseIndex:
         return self.repo_client.get_file_content(path, sha)
 
     def _copy_document_with_local_changes(self, document: Document) -> Document | None:
-        content = document.text
+        content: str | None = document.text
         # Make sure the changes are applied in order!
         changes = list(filter(lambda x: x.path == document.path, self.file_changes))
         if changes:
@@ -350,7 +350,7 @@ class CodebaseIndex:
             logger.warning(f"Unsupported language for {path}")
             return None
 
-        document = Document(path=path, text=document_content, language=language)
+        document: Document | None = Document(path=path, text=document_content, language=language)
 
         if not ignore_local_changes:
             document = self._copy_document_with_local_changes(document)
