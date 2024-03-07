@@ -63,6 +63,14 @@ BreakpointRequest = typing_extensions.TypedDict(
     total=False,
 )
 
+@validator('request_start', 'request_end', 'data_start', 'data_end', pre=True, each_item=True)
+@classmethod
+def ensure_int(cls, v):
+    if isinstance(v, float):
+        return int(v)
+    return v
+
+
 BreakpointResponse = typing_extensions.TypedDict(
     "BreakpointResponse",
     {
