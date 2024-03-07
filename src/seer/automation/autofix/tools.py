@@ -211,16 +211,16 @@ class CodeActionTools(BaseTools):
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
-
+        file_change = FileChange(
+            change_type="delete",
+            path=file_path,
+            description=commit_message,
+            reference_snippet=original_snippet,
+            new_snippet="",
+        )
         self.store_file_change(
             codebase,
-            FileChange(
-                change_type="delete",
-                path=file_path,
-                description=commit_message,
-                reference_snippet=original_snippet,
-                new_snippet="",
-            ),
+            file_change,
         )
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
