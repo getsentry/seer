@@ -7,8 +7,17 @@ from abc import ABC, abstractmethod
 import requests
 
 from seer.utils import json_dumps
+from json.encoder import JSONEncoder
+from src.seer.automation.autofix.event_manager import AutofixStatus
 
 logger = logging.getLogger(__name__)
+
+
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, AutofixStatus):
+            return obj.value
+        return super().default(obj)
 
 
 class RpcClient(ABC):
