@@ -45,15 +45,18 @@ class BreakpointRequest(BaseModel):
     trend_percentage: float = Field(default=0.1, alias="trend_percentage()")
     min_change: float = Field(default=0.0, alias="min_change()")
 
+    @validator('request_start', 'request_end', pre=True, always=True)
+    def round_to_nearest_int(cls, v):
+        return round(v)
+
 
 class BreakpointEntry(BaseModel):
     project: str
-    # For legacy reasons, the group name is always
-    # transaction even when working with functions.
     transaction: str
     aggregate_range_1: float
     aggregate_range_2: float
     unweighted_t_value: float
+
     unweighted_p_value: float
     trend_percentage: float
     absolute_percentage_change: float
