@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field, validator
 from typing_extensions import TypedDict
 from pydantic import BaseModel, Field
 from typing import Tuple, List, Mapping
-
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
 
 
@@ -32,11 +31,10 @@ class SnubaMetadata(TypedDict):
 SnubaTSEntry = Tuple[int, Tuple[SnubaMetadata]]
 
 
-
 class BreakpointTransaction(BaseModel):
     data: List[SnubaTSEntry]
     request_start: int = Field(default=... , pre_validators=[ensure_int])
-    request_end: int
+    request_end: int = Field(default=... , pre_validators=[ensure_int])
     data_start: int
     data_end: int
 
