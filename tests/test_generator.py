@@ -59,7 +59,7 @@ def interesting_strings_2(*c: int, **kwds: int) -> str:
 
 
 @parameterize(seed=400, a=interesting_strings, b=interesting_strings_2)
-def test_generates_from_callables(a: str, b: str):
+def test_generates_from_callables(a: str, b: str, c):
     assert isinstance(a, str) and isinstance(b, str)
     assert a
     assert b

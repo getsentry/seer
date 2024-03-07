@@ -87,7 +87,11 @@ class ProcessRequest(Base):
         scheduled_from -= expected_duration
 
         insert_stmt = insert(cls).values(
-            name=name, payload=payload, scheduled_for=scheduled_for, scheduled_from=scheduled_from
+            name=name,
+            payload=payload,
+            scheduled_for=scheduled_for,
+            scheduled_from=scheduled_from,
+            created_at=when,
         )
 
         scheduled_for_update = func.least(insert_stmt.excluded.scheduled_for, cls.scheduled_for)
@@ -98,6 +102,7 @@ class ProcessRequest(Base):
                 cls.payload: payload,
                 cls.scheduled_from: scheduled_for_update - expected_duration,
                 cls.scheduled_for: scheduled_for_update,
+                cls.created_at: when,
             },
         )
 
@@ -108,7 +113,8 @@ class ProcessRequest(Base):
         with contextlib.ExitStack() as stack:
             if session is None:
                 session = stack.enter_context(Session())
-            return session.scalar(select(cls.scheduled_for).order_by(cls.scheduled_for).limit(1))
+            result = session.scalar(select(cls.scheduled_for).order_by(cls.scheduled_for).limit(1))
+        return result
 
     @classmethod
     def acquire_work(
@@ -138,7 +144,7 @@ class ProcessRequest(Base):
 
     def mark_completed_stmt(self) -> sqlalchemy.UpdateBase:
         return delete(type(self)).where(
-            type(self).scheduled_from <= self.scheduled_from, type(self).name == self.name
+            type(self).id == self.id, type(self).created_at <= self.created_at
         )
 
 

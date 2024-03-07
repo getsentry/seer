@@ -1,13 +1,20 @@
 import abc
 import asyncio
+import contextlib
 import dataclasses
 import datetime
+import hashlib
 from asyncio import Future, Task
+from concurrent.futures import ThreadPoolExecutor
+from queue import Empty, Full, Queue
+from threading import Event
 from typing import Any, Callable, Coroutine, Protocol, TypeVar
 
 import celery.result
+import sqlalchemy
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from seer.db import ProcessRequest
@@ -55,11 +62,57 @@ class AsyncTaskFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def invoke(self, process_request: ProcessRequest) -> None:
+    async def invoke(self, process_request: ProcessRequest):
         pass
 
-    def await_celery_job(self, result: celery.result.AsyncResult):
-        pass
+    async def async_celery_job(self, cb: Callable[[], celery.result.AsyncResult]):
+        loop = asyncio.get_running_loop()
+        q: Queue = Queue(1)
+
+        with ThreadPoolExecutor() as pool:
+            ar = await loop.run_in_executor(pool, cb)
+
+            def run():
+                def on_message(raw: Any):
+                    # Keep trying to put the item into the queue by removing existing item until we get in.
+                    while True:
+                        try:
+                            q.put_nowait(raw)
+                            return
+                        except Full:
+                            try:
+                                q.get_nowait()
+                            except Empty:
+                                pass
+
+                ar.get(on_message=on_message, propagate=True)
+
+            complete = loop.run_in_executor(pool, run)
+
+            try:
+                while not complete.done():
+                    get = loop.run_in_executor(pool, q.get)
+                    await asyncio.wait([get, complete], return_when=asyncio.FIRST_COMPLETED)
+                    if get.done():
+                        v = await get
+                        if v:
+                            if v["status"] == "PROGRESS":
+                                try:
+                                    yield v["result"]
+                                except Exception as e:
+                                    if not complete.done():
+                                        await loop.run_in_executor(
+                                            pool,
+                                            lambda: ar.revoke(
+                                                terminate=True, signal="SIGUSR1", wait=False
+                                            ),
+                                        )
+                                    raise e
+                            # if v['status'] == 'FAILURE':
+                            #     raise v['result']
+            finally:
+                loop.run_in_executor(pool, lambda: q.put_nowait(None))
+        await complete
 
 
 _async_task_factories: list[Callable[[], AsyncTaskFactory]] = []
@@ -120,6 +173,14 @@ class AsyncApp:
     async def producer_loop(self):
         await asyncio.gather(self.select_from_db())
 
+    async def invoke_task(self, task: AsyncTaskFactory, process_request: ProcessRequest):
+        async with AsyncSession() as session, acquire_x_lock(
+            process_request.name, session
+        ) as acquired:
+            if acquired:
+                await task.invoke(process_request)
+            return acquired
+
     async def consumer_loop(self):
         while not self.end_event.is_set():
             result = await self.run_or_end(self.queue.get())
@@ -131,14 +192,12 @@ class AsyncApp:
                 task = factory()
                 accept = task.matches(item)
                 if accept:
-                    await task.invoke(item)
+                    result = await self.run_or_end(self.invoke_task(task, item))
 
-                    # If this was persisted work, clean it up.
-                    if item.id:
+                    if result and result[0] is not False and item.id:
                         async with AsyncSession() as session:
                             await session.execute(item.mark_completed_stmt())
                             await session.commit()
-                    break
 
     async def run(self):
         producer_task = asyncio.create_task(self.producer_loop())
@@ -162,6 +221,21 @@ class AsyncApp:
         all_tasks = [producer_task, *consumer_tasks]
         async with asyncio.timeout(10):
             await asyncio.gather(*all_tasks)
+
+
+@contextlib.asynccontextmanager
+async def acquire_x_lock(name: str, session: sqlalchemy.ext.asyncio.AsyncSession):
+    m = hashlib.sha256()
+    m.update(name.encode("utf8"))
+    key = int.from_bytes(m.digest()[:8], byteorder="big", signed=True)
+
+    rows = await session.execute(select(func.pg_try_advisory_lock(key)))
+    acquired = next(rows)[0]
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            await session.execute(select(func.pg_advisory_unlock(key)))
 
 
 def async_main():

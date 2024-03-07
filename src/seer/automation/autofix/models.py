@@ -1,13 +1,22 @@
 import datetime
+import enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from seer.automation.agent.models import Usage
 
 
 class FileChangeError(Exception):
     pass
+
+
+class AutofixStatus(enum.Enum):
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    CANCELLED = "CANCELLED"
 
 
 class FileChange(BaseModel):
@@ -179,6 +188,18 @@ class AutofixRequest(BaseModel):
     timeout_secs: Optional[int] = None
     last_updated: Optional[datetime.datetime] = None
 
+    @property
+    def process_request_name(self) -> str:
+        return f"{self.organization_id}:{self.issue.id}"
+
+    @property
+    def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
+        if self.timeout_secs and self.last_updated:
+            if now is None:
+                now = datetime.datetime.now()
+            return self.last_updated + datetime.timedelta(seconds=self.timeout_secs) < now
+        return False
+
     @field_validator("repos", mode="after")
     @classmethod
     def validate_repo_duplicates(cls, repos):
@@ -208,3 +229,53 @@ class PullRequestResult(BaseModel):
     pr_number: int
     pr_url: str
     repo: RepoDefinition
+
+
+class Step(BaseModel):
+    id: str
+    title: str
+
+    status: AutofixStatus = AutofixStatus.PENDING
+    index: int = -1
+    description: Optional[str] = None
+    children: list["Step"] = []
+
+    def find_child(self, *, id: str) -> "Step | None":
+        for step in self.children:
+            if step.id == id:
+                return step
+        return None
+
+    def find_or_add_child(self, base_step: "Step") -> "Step":
+        existing = self.find_child(id=base_step.id)
+        if existing:
+            return existing
+
+        base_step = base_step.model_copy()
+        base_step.index = len(self.children)
+        self.children.append(base_step)
+        return base_step
+
+
+class AutofixContinuation(BaseModel):
+    request: AutofixRequest
+    steps: list[Step] = Field(default_factory=list)
+    status: AutofixStatus = Field(default=AutofixStatus.PENDING)
+    fix: AutofixOutput | None = None
+    completedAt: datetime.datetime | None = None
+
+    def find_step(self, *, id: str) -> Step | None:
+        for step in self.steps:
+            if step.id == id:
+                return step
+        return None
+
+    def find_or_add(self, base_step: Step) -> Step:
+        existing = self.find_step(id=base_step.id)
+        if existing:
+            return existing
+
+        base_step = base_step.model_copy()
+        base_step.index = len(self.steps)
+        self.steps.append(base_step)
+        return base_step

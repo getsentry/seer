@@ -1,188 +1,157 @@
-import enum
+import dataclasses
 import logging
-from typing import Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel
-
-from seer.automation.autofix.models import AutofixOutput, PlanningOutput, ProblemDiscoveryResult
+from seer.automation.autofix.models import (
+    AutofixContinuation,
+    AutofixOutput,
+    AutofixStatus,
+    PlanningOutput,
+    ProblemDiscoveryResult,
+    Step,
+)
+from seer.automation.state import State
 from seer.rpc import RpcClient
-
-
-class AutofixStatus(enum.Enum):
-    COMPLETED = "COMPLETED"
-    ERROR = "ERROR"
-    PENDING = "PENDING"
-    PROCESSING = "PROCESSING"
-    CANCELLED = "CANCELLED"
-
 
 logger = logging.getLogger("autofix")
 
 
-class Step(BaseModel):
-    id: str
-    index: int
-    description: Optional[str] = None
-    title: str
-    children: list["Step"] = []
-    status: AutofixStatus
-
-
+@dataclasses.dataclass
 class AutofixEventManager:
-    steps: list[Step] = []
+    state: State[AutofixContinuation]
 
-    def __init__(self, rpc_client: RpcClient, issue_id: int):
-        self.rpc_client = rpc_client
-        self.issue_id = issue_id
-
-    def _send_steps_update(self, status: AutofixStatus):
-        self.rpc_client.call(
-            "on_autofix_step_update",
-            issue_id=self.issue_id,
-            status=status,
-            steps=[step.model_dump() for step in self.steps],
+    @property
+    def problem_discovery_step(self) -> Step:
+        return Step(
+            id="problem_discovery",
+            title="Preliminary Assessment",
         )
 
     def send_no_stacktrace_error(self):
-        self.steps = [
-            Step(
-                id="problem_discovery",
-                index=0,
-                title="Preliminary Assessment",
-                status=AutofixStatus.ERROR,
-                description="Error: Cannot fix issues without a stacktrace.",
-            )
-        ]
-
-        self._send_steps_update(AutofixStatus.ERROR)
+        with self.state.update() as cur:
+            step = cur.find_or_add(self.problem_discovery_step)
+            step.description = "Error: Cannot fix issues without a stacktrace."
+            step.status = AutofixStatus.ERROR
 
     def send_initial_steps(self):
-        self.steps = [
-            Step(
-                id="problem_discovery",
-                index=0,
-                title="Preliminary Assessment",
-                status=AutofixStatus.PROCESSING,
-            )
-        ]
+        with self.state.update() as cur:
+            step = cur.find_or_add(self.problem_discovery_step)
+            step.status = AutofixStatus.PROCESSING
 
-        self._send_steps_update(AutofixStatus.PROCESSING)
-        logger.debug("Sent initial steps")
+    @property
+    def indexing_step(self) -> Step:
+        return Step(
+            id="codebase_indexing",
+            title="Codebase Indexing",
+        )
+
+    @property
+    def plan_step(self) -> Step:
+        return Step(
+            id="plan",
+            title="Execution Plan",
+        )
 
     def send_problem_discovery_result(self, result: ProblemDiscoveryResult):
-        problem_discovery_step = next(step for step in self.steps if step.id == "problem_discovery")
-        problem_discovery_step.description = result.description
-        problem_discovery_step.status = AutofixStatus.COMPLETED
-        self.steps = [
-            problem_discovery_step,
-            Step(
-                id="codebase_indexing",
-                index=1,
-                title="Codebase Indexing",
-                status=AutofixStatus.PENDING,
-            ),
-            Step(
-                id="plan",
-                index=2,
-                title="Execution Plan",
-                status=AutofixStatus.PENDING,
-            ),
-        ]
+        with self.state.update() as cur:
+            problem_discovery_step = cur.find_or_add(self.problem_discovery_step)
+            problem_discovery_step.description = result.description
+            problem_discovery_step.status = AutofixStatus.COMPLETED
 
-        self._send_steps_update(
-            AutofixStatus.PROCESSING if result.status == "CONTINUE" else AutofixStatus.COMPLETED
-        )
-        logger.debug(f"Sent problem discovery result: {result}")
+            cur.find_or_add(self.indexing_step)
+            cur.find_or_add(self.plan_step)
+
+            cur.status = (
+                AutofixStatus.PROCESSING if result.status == "CONTINUE" else AutofixStatus.COMPLETED
+            )
 
     def send_codebase_creation_message(self):
-        indexing_step = next(step for step in self.steps if step.id == "codebase_indexing")
+        with self.state.update() as cur:
+            indexing_step = cur.find_or_add(self.indexing_step)
 
-        indexing_step.status = AutofixStatus.PROCESSING
-        indexing_step.description = (
-            "Creating initial codebase index for project, this may take a while..."
-        )
+            indexing_step.status = AutofixStatus.PROCESSING
+            indexing_step.description = (
+                "Creating initial codebase index for project, this may take a while..."
+            )
 
-        self._send_steps_update(AutofixStatus.PROCESSING)
+            cur.status = AutofixStatus.PROCESSING
 
     def send_codebase_indexing_message(self):
-        indexing_step = next(step for step in self.steps if step.id == "codebase_indexing")
-
-        indexing_step.status = AutofixStatus.PROCESSING
-
-        self._send_steps_update(AutofixStatus.PROCESSING)
+        with self.state.update() as cur:
+            indexing_step = cur.find_or_add(self.indexing_step)
+            indexing_step.status = AutofixStatus.PROCESSING
+            cur.status = AutofixStatus.PROCESSING
 
     def send_codebase_indexing_result(
         self, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR, AutofixStatus.CANCELLED]
     ):
         # Update the status of step 2 to COMPLETED and step 3 to PROCESSING
-        for step in self.steps:
-            if step.id == "codebase_indexing":
-                step.status = status
-                step.description = None
-            elif step.id == "plan":
-                step.status = (
+        with self.state.update() as cur:
+            indexing_step = cur.find_step(id=self.indexing_step.id)
+            if indexing_step:
+                indexing_step.status = status
+                indexing_step.description = None
+
+            plan_step = cur.find_step(id=self.plan_step.id)
+            if plan_step:
+                plan_step.status = (
                     AutofixStatus.PROCESSING
                     if status != AutofixStatus.ERROR
                     else AutofixStatus.CANCELLED
                 )
 
-        self._send_steps_update(
-            AutofixStatus.PROCESSING if status != AutofixStatus.ERROR else AutofixStatus.ERROR
-        )
-        logger.debug(f"Sent codebase indexing result: {status}")
+            cur.status = (
+                AutofixStatus.PROCESSING if status != AutofixStatus.ERROR else AutofixStatus.ERROR
+            )
 
     def send_planning_result(self, result: PlanningOutput | None):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
-        if result:
-            plan_step.title = "Execute Plan"
-
-            plan_step.children = [
-                Step(
-                    id=str(plan_step.id),
-                    index=1,
-                    title=plan_step.title,
-                    status=AutofixStatus.PENDING,
-                )
-                for plan_step in result.steps
-            ]
+        with self.state.update() as cur:
+            plan_step = cur.find_or_add(self.plan_step)
+            plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+            if result:
+                plan_step.title = "Execute Plan"
+                for child_step in result.steps:
+                    plan_step.find_or_add_child(
+                        Step(
+                            id=str(child_step.id),
+                            title=child_step.title,
+                        )
+                    )
 
             if len(plan_step.children) > 0:
                 plan_step.children[0].status = AutofixStatus.PROCESSING
 
-        self._send_steps_update(AutofixStatus.PROCESSING if result else AutofixStatus.ERROR)
-        logger.debug(f"Sent planning result: {result}")
+            cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
     def send_execution_step_start(self, execution_id: int):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        execution_step = next(
-            child for child in plan_step.children if child.id == str(execution_id)
-        )
-        execution_step.status = AutofixStatus.PROCESSING
-
-        self._send_steps_update(AutofixStatus.PROCESSING)
-        logger.debug(f"Sent execution step start: {execution_id}")
+        with self.state.update() as cur:
+            plan_step = cur.find_or_add(self.plan_step)
+            execution_step = plan_step.find_child(id=str(execution_id))
+            if execution_step:
+                execution_step.status = AutofixStatus.PROCESSING
+            cur.status = AutofixStatus.PROCESSING
 
     def send_execution_step_result(
         self, execution_id: int, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR]
     ):
-        plan_step = next(step for step in self.steps if step.id == "plan")
-        execution_step = next(
-            child for child in plan_step.children if child.id == str(execution_id)
-        )
-        execution_step.status = status
+        with self.state.update() as cur:
+            plan_step = cur.find_or_add(self.plan_step)
+            execution_step = plan_step.find_child(id=str(execution_id))
+            if execution_step:
+                execution_step.status = status
 
-        self._send_steps_update(
-            AutofixStatus.PROCESSING if status == AutofixStatus.COMPLETED else AutofixStatus.ERROR
-        )
-        logger.debug(f"Sent execution step result: {execution_id} {status}")
+            cur.status = (
+                AutofixStatus.PROCESSING
+                if status == AutofixStatus.COMPLETED
+                else AutofixStatus.ERROR
+            )
 
-    def mark_all_steps_completed(self):
-        for step in self.steps:
+    def mark_all_steps_completed(self, state: AutofixContinuation):
+        for step in state.steps:
             step.status = AutofixStatus.COMPLETED
 
-    def mark_running_steps_errored(self):
-        for step in self.steps:
+    def mark_running_steps_errored(self, state: AutofixContinuation):
+        for step in state.steps:
             if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.ERROR
                 for substep in step.children:
@@ -192,14 +161,9 @@ class AutofixEventManager:
                         substep.status = AutofixStatus.CANCELLED
 
     def send_autofix_complete(self, fix: AutofixOutput | None):
-        if fix:
-            self.mark_all_steps_completed()
-
-        self.rpc_client.call(
-            "on_autofix_complete",
-            issue_id=self.issue_id,
-            status=AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR,
-            steps=[step.model_dump() for step in self.steps],
-            fix=fix.model_dump() if fix else None,
-        )
-        logger.debug(f"Sent autofix complete: {fix}")
+        with self.state.update() as cur:
+            if fix:
+                self.mark_all_steps_completed(cur)
+            else:
+                self.mark_running_steps_errored(cur)
+            cur.status = AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR

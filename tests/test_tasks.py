@@ -1,12 +1,12 @@
 import asyncio
 import dataclasses
 import datetime
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
-from functools import cached_property
+import time
 from typing import Annotated, Callable, Self
 
 import pytest
+from celery import Celery, Task
+from celery.worker import WorkController
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -15,8 +15,6 @@ from seer.generator import (
     Examples,
     ascii_words,
     change_watcher,
-    gen,
-    generate,
     ints,
     parameterize,
     positive_timedeltas,
@@ -244,7 +242,7 @@ class ScheduleAsyncTest:
     side_effect_calls: list[str] = dataclasses.field(default_factory=list)
     end_event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
-    def create_app(self, io_work=multiprocessing.Queue()) -> AsyncApp:
+    def create_app(self) -> AsyncApp:
         test_task = TestAsyncTaskFactory()
         test_task.side_effect = lambda v: self.side_effect_calls.append(v)
 
@@ -296,3 +294,80 @@ async def test_next_schedule_async(test: ScheduleAsyncTest, now: Now):
 
     process = await test.current_process_request_by_name(test.unacceptable_name)
     assert process is not None
+
+
+@pytest.mark.asyncio
+@parameterize(arg_set=("test_value", "error_msg"))
+async def test_async_celery_job_failure(
+    test_value: int, error_msg: str, celery_app: Celery, celery_worker: WorkController
+):
+    factory = TestAsyncTaskFactory()
+    buff = []
+
+    @celery_app.task
+    def my_task(value: int):
+        buff.append(value)
+        raise ValueError(error_msg)
+
+    celery_worker.reload()
+
+    async with asyncio.timeout(10):
+        with pytest.raises(ValueError, match=error_msg):
+            async for v in factory.async_celery_job(lambda: my_task.delay(test_value)):
+                pass
+    assert buff[-1] == test_value
+
+
+@pytest.mark.asyncio
+@parameterize(arg_set=("iterations",))
+async def test_async_celery_job_generator(
+    iterations: tuple[int, int, int], celery_app: Celery, celery_worker: WorkController
+):
+    factory = TestAsyncTaskFactory()
+    buff = []
+
+    @celery_app.task(bind=True)
+    def my_task(self: Task):
+        for val in iterations:
+            self.update_state(state="PROGRESS", meta={"val": val})
+
+    celery_worker.reload()
+
+    async with asyncio.timeout(10):
+        async for update in factory.async_celery_job(lambda: my_task.delay()):
+            buff.append(update["val"])
+    assert buff == list(iterations)
+
+
+@pytest.mark.asyncio
+@parameterize(arg_set=("iterations", "err_msg"))
+async def test_async_celery_job_generator_cancels(
+    iterations: tuple[int, int, int],
+    err_msg: str,
+    celery_app: Celery,
+    celery_worker: WorkController,
+):
+    factory = TestAsyncTaskFactory()
+    sent_buff = []
+    received_buff = []
+
+    @celery_app.task(bind=True)
+    def my_task(self: Task):
+        for val in iterations:
+            self.update_state(state="PROGRESS", meta={"val": val})
+            sent_buff.append(val)
+            time.sleep(1)
+
+    celery_worker.reload()
+
+    async with asyncio.timeout(10):
+        with pytest.raises(ValueError, match=err_msg):
+            i = 0
+            async for update in factory.async_celery_job(lambda: my_task.delay()):
+                received_buff.append(update["val"])
+                if i == 1:
+                    raise ValueError(err_msg)
+                i += 1
+
+    assert received_buff == list(iterations[:2])
+    assert sent_buff == list(iterations[:2])

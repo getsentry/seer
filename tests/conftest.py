@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from seer.bootup import CELERY_CONFIG
 from seer.db import Session, db
 from seer.tasks import AsyncSession
 
@@ -34,4 +35,12 @@ def manage_db():
 # def manage_async_errors():
 # asyncio.events.get_event_loop().set_exception_handler()
 
-pytest_plugins = ("pytest_asyncio",)
+pytest_plugins = (
+    "pytest_asyncio",
+    "celery.contrib.pytest",
+)
+
+
+@pytest.fixture(scope="session")
+def celery_config():
+    return CELERY_CONFIG
