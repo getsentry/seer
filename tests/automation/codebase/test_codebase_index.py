@@ -471,10 +471,12 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
             language="python",
             text=textwrap.dedent(
                 """\
-                def foo():
-                    x = 1 + 1
-                    y = 2 + 2
-                    return x + y"""
+                class foo:
+                    a = 5
+                    def foobar(a: int):
+                        x = 1 + 1
+                        y = 2 + 2
+                        return x + y"""
             ),
         )
 
@@ -502,4 +504,4 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.assertEqual(patches[0].path, "file1.py")
         self.assertEqual(patches[0].type, "M")
         self.assertEqual(len(patches[0].hunks), 1)
-        self.assertEqual(patches[0].hunks[0].section_header, "def foo():")
+        self.assertEqual(patches[0].hunks[0].section_header, "def foobar(a: int):")

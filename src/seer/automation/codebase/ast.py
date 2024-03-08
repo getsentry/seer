@@ -5,8 +5,8 @@ from tree_sitter import Node, Tree
 class AstDeclaration(BaseModel):
     id: int
     indent_start_byte: int
-    declaration_byte_start: int
-    declaration_byte_end: int
+    declaration_start_byte: int
+    declaration_end_byte: int
 
     declaration_nodes: list[Node]
 
@@ -24,8 +24,8 @@ class AstDeclaration(BaseModel):
     def to_str(self, root_node: Node, include_indent=False) -> str:
         return root_node.text[
             (
-                self.indent_start_byte if include_indent else self.declaration_byte_start
-            ) : self.declaration_byte_end
+                self.indent_start_byte if include_indent else self.declaration_start_byte
+            ) : self.declaration_end_byte
         ].decode("utf-8")
 
 
@@ -99,13 +99,14 @@ def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclar
         index_of_colon, _ = result
 
         indent_start_byte = get_indent_start_byte(node.children[0], root_node)
+        declaration_start_byte = node.children[0].start_byte
         declaration_end_byte = node.children[index_of_colon].end_byte
 
         return AstDeclaration(
             id=node.id,
             indent_start_byte=indent_start_byte,
-            declaration_byte_start=node.children[index_of_colon + 1].start_byte,
-            declaration_byte_end=declaration_end_byte,
+            declaration_start_byte=declaration_start_byte,
+            declaration_end_byte=declaration_end_byte,
             declaration_nodes=node.children[: index_of_colon + 1],
         )
 
@@ -133,8 +134,8 @@ def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclar
             return AstDeclaration(
                 id=node.id,
                 indent_start_byte=indent_start_byte,
-                declaration_byte_start=declaration_start_byte,
-                declaration_byte_end=declaration_end_byte,
+                declaration_start_byte=declaration_start_byte,
+                declaration_end_byte=declaration_end_byte,
                 declaration_nodes=declaration_nodes,
             )
     return None

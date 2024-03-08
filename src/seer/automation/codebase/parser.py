@@ -49,7 +49,7 @@ class TempChunk(BaseModel):
             ).format(
                 declaration=declaration.to_str(root, include_indent=True),
                 content_indent=root.text[
-                    declaration.indent_start_byte : declaration.declaration_byte_start
+                    declaration.indent_start_byte : declaration.declaration_start_byte
                 ].decode("utf-8"),
             )
         return context_text

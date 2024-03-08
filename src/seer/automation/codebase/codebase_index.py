@@ -574,6 +574,8 @@ class CodebaseIndex:
                             )
                             section_header = (
                                 declaration.to_str(tree.root_node, include_indent=False)
+                                .splitlines()[0]
+                                .strip()
                                 if declaration
                                 else section_header
                             )
