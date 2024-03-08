@@ -33,6 +33,7 @@ services:
             - ./src:/app/src
             - ./tests:/app/tests
             - ./models:/app/models
+            - ./sentry-data-schemas:/app/sentry-data-schemas
         depends_on:
             - rabbitmq
             - db

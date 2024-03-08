@@ -159,6 +159,19 @@
             "type": "array",
             "title": "Repos"
           },
+          "issue": {
+            "$ref": "#/components/schemas/IssueDetails"
+          },
+          "invoking_user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AutofixUserDetails"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "base_commit_sha": {
             "anyOf": [
               {
@@ -170,9 +183,6 @@
             ],
             "title": "Base Commit Sha"
           },
-          "issue": {
-            "$ref": "#/components/schemas/IssueDetails"
-          },
           "additional_context": {
             "anyOf": [
               {
@@ -183,6 +193,29 @@
               }
             ],
             "title": "Additional Context"
+          },
+          "timeout_secs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Secs"
+          },
+          "last_updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Updated"
           }
         },
         "type": "object",
@@ -193,6 +226,24 @@
           "issue"
         ],
         "title": "AutofixRequest"
+      },
+      "AutofixUserDetails": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "AutofixUserDetails"
       },
       "BreakpointEntry": {
         "properties": {
@@ -420,7 +471,7 @@
           "threshold": {
             "type": "number",
             "title": "Threshold",
-            "default": 0.99
+            "default": 0.01
           }
         },
         "type": "object",
@@ -445,13 +496,13 @@
             ],
             "title": "Parent Group Id"
           },
-          "stacktrace_similarity": {
+          "stacktrace_distance": {
             "type": "number",
-            "title": "Stacktrace Similarity"
+            "title": "Stacktrace Distance"
           },
-          "message_similarity": {
+          "message_distance": {
             "type": "number",
-            "title": "Message Similarity"
+            "title": "Message Distance"
           },
           "should_group": {
             "type": "boolean",
@@ -461,8 +512,8 @@
         "type": "object",
         "required": [
           "parent_group_id",
-          "stacktrace_similarity",
-          "message_similarity",
+          "stacktrace_distance",
+          "message_distance",
           "should_group"
         ],
         "title": "GroupingResponse"
@@ -476,6 +527,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "short_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Id"
           },
           "events": {
             "items": {
@@ -496,7 +558,7 @@
       "RepoDefinition": {
         "properties": {
           "provider": {
-            "const": "github",
+            "type": "string",
             "title": "Provider"
           },
           "owner": {
@@ -545,9 +607,15 @@
             "default": 0
           },
           "handled": {
-            "type": "boolean",
-            "title": "Handled",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled"
           },
           "trigger_timeout": {
             "anyOf": [

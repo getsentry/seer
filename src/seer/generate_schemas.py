@@ -1,6 +1,6 @@
 import json
 import os.path
-from typing import Dict, Generator, Iterable, Iterator, List, Optional, Set, Union
+from typing import Generator, Iterator, Optional, Union
 
 root = os.path.abspath(os.path.join(__file__, ".."))
 
@@ -12,12 +12,50 @@ import seer.app  # noqa
 from seer.json_api import view_functions
 
 
-class TypedDictsGenerator:
-    spec: OpenAPI
-    imports: Set[str]
-    lines: List[str]
+def convert_json_schema_to_openapi_schema(d: dict) -> dict:
+    if "$ref" in d:
+        return d
 
-    def __init__(self, spec: OpenAPI):
+    if "definitions" in d:
+        for k, v in d["definitions"].items():
+            d["definitions"][k] = convert_json_schema_to_openapi_schema(v)
+
+    if "anyOf" in d:
+        if len(d["anyOf"]) == 1:
+            d.update(convert_json_schema_to_openapi_schema(d["anyOf"][0]))
+            del d["anyOf"]
+        else:
+            d["anyOf"] = [convert_json_schema_to_openapi_schema(v) for v in d["anyOf"]]
+
+    if "type" in d:
+        if isinstance(d["type"], list):
+            if "null" in d["type"]:
+                d["type"].remove("null")
+                d["nullable"] = True
+
+            if len(d["type"]) == 1:
+                d["type"] = d["type"][0]
+
+    if "items" in d:
+        if isinstance(d["items"], list):
+            d["prefixItems"] = [convert_json_schema_to_openapi_schema(v) for v in d["items"]]
+            del d["items"]
+        else:
+            d["items"] = convert_json_schema_to_openapi_schema(d["items"])
+
+    if "properties" in d:
+        for k, v in d["properties"].items():
+            d["properties"][k] = convert_json_schema_to_openapi_schema(v)
+
+    return d
+
+
+class TypedDictsGenerator:
+    spec: "OpenAPI | Schema"
+    imports: set[str]
+    lines: list[str]
+
+    def __init__(self, spec: "OpenAPI | Schema"):
         self.spec = spec
         self.imports = set()
         self.lines = []
@@ -26,32 +64,55 @@ class TypedDictsGenerator:
         self.imports.add("typing")
         return f"typing.{t}"
 
-    def generate(self) -> List[str]:
-        assert self.spec.components
-        assert self.spec.components.schemas
-        for schema_ref, schema in self.spec.components.schemas.items():
-            self.lines.extend([*self.generate_schema(schema_ref, schema)])
+    def generate(self) -> list[str]:
+        from openapi_pydantic import OpenAPI, Schema
+
+        if isinstance(self.spec, OpenAPI):
+            if self.spec.components and self.spec.components.schemas:
+                for schema_ref, schema in self.spec.components.schemas.items():
+                    self.lines.extend([*self.generate_schema(schema_ref, schema)])
+                    self.lines.append("")
+        else:
+            title = self.spec.title
+            assert title
+            self.lines.extend([*self.generate_schema(title, self.spec)])
             self.lines.append("")
+
+            if self.spec.__pydantic_extra__:
+                for k, v in self.spec.__pydantic_extra__.get("definitions", {}).items():
+                    self.lines.extend([*self.generate_schema(k, Schema.model_validate(v))])
+                    self.lines.append("")
 
         return [*(f"import {module}" for module in self.imports), "\n", *self.lines]
 
-    def generate_schema(self, schema_ref: str, schema: Schema) -> Iterator[str]:
-        assert schema.properties
-        self.imports.add("typing_extensions")
-        yield f"{schema_ref} = typing_extensions.TypedDict({repr(schema_ref)}, {{"
-        for prop_name, prop in schema.properties.items():
-            annotation = yield from self.get_annotation(prop)
-            yield f"  {repr(prop_name)}: {annotation},"
-        yield "}, total=False)"
+    def generate_schema(self, schema_ref: str, schema: "Schema") -> "Iterator[str]":
+        if schema.description:
+            yield from ["# " + v for v in schema.description.splitlines()]
+        if schema.properties is not None:
+            yield f"{schema_ref} = {self.typing('TypedDict')}({repr(schema_ref)}, {{"
+            for prop_name, prop in schema.properties.items():
+                annotation = yield from self.get_annotation(prop)
+                yield f"    {repr(prop_name)}: {annotation},"
+            yield "})"
+        else:
+            annotation = yield from self.get_annotation(schema)
+            yield f"{schema_ref} = {annotation}"
 
     def get_annotation(
-        self, schema: Optional[Union[Reference, Schema, bool]]
-    ) -> Generator[str, None, str]:
+        self, schema: "Optional[Union[Reference, Schema, bool]]"
+    ) -> "Generator[str, None, str]":
+        from openapi_pydantic import Reference, Schema
+
         if isinstance(schema, Schema):
-            if schema.schema_format:
-                yield f"  # format: {schema.schema_format}"
             if schema.default is not None:
-                yield f"  # default: {repr(schema.default)}"
+                yield f"    # default: {repr(schema.default)}"
+                inner_type = yield from self.get_annotation(
+                    schema.model_copy(update=dict(default=None))
+                )
+                return self.typing("NotRequired") + f"[{inner_type}]"
+
+            if schema.schema_format:
+                yield f"    # format: {schema.schema_format}"
 
             if schema.const:
                 return self.typing(f"Literal[{repr(schema.const)}]")
@@ -90,7 +151,6 @@ class TypedDictsGenerator:
             elif schema.type == "boolean":
                 return "bool"
         elif isinstance(schema, Reference):
-            assert schema.ref.startswith("#/components/schemas/")
             return repr(schema.ref.split("/")[-1])
         return self.typing("Any")
 
@@ -144,3 +204,15 @@ if __name__ == "__main__":
 
     with open(os.path.join(root, "schemas", "seer.py"), "w") as file:
         file.write("\n".join(TypedDictsGenerator(spec).generate()))
+
+    relay_path = os.path.join(root, "..", "..", "sentry-data-schemas", "relay", "event.schema.json")
+    print(relay_path)
+    if os.path.exists(relay_path):
+        print("relay")
+        with open(relay_path, "r") as file:
+            relay_schema = convert_json_schema_to_openapi_schema(json.load(file))
+
+        with open(os.path.join(root, "schemas", "event.py"), "w") as file:
+            file.write(
+                "\n".join(TypedDictsGenerator(Schema.model_validate(relay_schema)).generate())
+            )
