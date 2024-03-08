@@ -4,10 +4,10 @@ import contextlib
 import dataclasses
 import datetime
 import hashlib
+import logging
 from asyncio import Future, Task
 from concurrent.futures import ThreadPoolExecutor
 from queue import Empty, Full, Queue
-from threading import Event
 from typing import Any, Callable, Coroutine, Protocol, TypeVar
 
 import celery.result
@@ -17,11 +17,12 @@ from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from seer.db import ProcessRequest
+from seer.db import AsyncSession, ProcessRequest
 
 _A = TypeVar("_A")
 
-AsyncSession = async_sessionmaker(expire_on_commit=False)
+logger = logging.getLogger("asyncrunner")
+logger.setLevel(logging.INFO)
 
 
 class QConsumer(Protocol):
@@ -66,6 +67,7 @@ class AsyncTaskFactory(abc.ABC):
         pass
 
     async def async_celery_job(self, cb: Callable[[], celery.result.AsyncResult]):
+        logger.info("Starting async celery job")
         loop = asyncio.get_running_loop()
         q: Queue = Queue(1)
 
@@ -75,6 +77,7 @@ class AsyncTaskFactory(abc.ABC):
             def run():
                 def on_message(raw: Any):
                     # Keep trying to put the item into the queue by removing existing item until we get in.
+                    logger.info("Received response from celery job")
                     while True:
                         try:
                             q.put_nowait(raw)
@@ -101,6 +104,7 @@ class AsyncTaskFactory(abc.ABC):
                                     yield v["result"]
                                 except Exception as e:
                                     if not complete.done():
+                                        logger.warning("SIGUSR1 on job, generator failed")
                                         await loop.run_in_executor(
                                             pool,
                                             lambda: ar.revoke(
@@ -111,6 +115,7 @@ class AsyncTaskFactory(abc.ABC):
                             # if v['status'] == 'FAILURE':
                             #     raise v['result']
             finally:
+                logger.info("async celery job completing")
                 loop.run_in_executor(pool, lambda: q.put_nowait(None))
         await complete
 
@@ -155,6 +160,7 @@ class AsyncApp:
     async def select_from_db(self) -> None:
         while not self.end_event.is_set():
             async with AsyncSession() as session:
+                logger.info("Checking for process requests")
                 result = await self.run_or_end(
                     session.run_sync(
                         lambda session: ProcessRequest.acquire_work(
@@ -164,10 +170,13 @@ class AsyncApp:
                 )
             if result is not None:
                 for item in result[0]:
+                    logger.info(f"Picked up process request, running")
                     await self.run_or_end(self.queue.put(item))
+                    logger.info(f"Process request completed successfully")
                     if self.end_event.is_set():
                         break
             else:
+                logger.info("Sleeping")
                 await self.run_or_end(asyncio.sleep(self.consumer_sleep))
 
     async def producer_loop(self):
@@ -183,6 +192,7 @@ class AsyncApp:
 
     async def consumer_loop(self):
         while not self.end_event.is_set():
+            logger.info("Running consumer loop")
             result = await self.run_or_end(self.queue.get())
             if result is None:
                 continue
@@ -194,8 +204,9 @@ class AsyncApp:
                 if accept:
                     result = await self.run_or_end(self.invoke_task(task, item))
 
-                    if result and result[0] is not False and item.id:
+                    if result and item.id:
                         async with AsyncSession() as session:
+                            logger.info("Marking process request completed.")
                             await session.execute(item.mark_completed_stmt())
                             await session.commit()
 
@@ -212,6 +223,7 @@ class AsyncApp:
             for task in [*consumer_tasks]:
                 if task.done():
                     # Unexpected death of a task?  Reboot it.
+                    logger.info("Unexpected consumer death, restarting...")
                     consumer_tasks.remove(task)
 
             while len(consumer_tasks) < self.num_consumers:
@@ -229,18 +241,30 @@ async def acquire_x_lock(name: str, session: sqlalchemy.ext.asyncio.AsyncSession
     m.update(name.encode("utf8"))
     key = int.from_bytes(m.digest()[:8], byteorder="big", signed=True)
 
+    logger.info("Acquiring exclusive lock for %s", key)
     rows = await session.execute(select(func.pg_try_advisory_lock(key)))
     acquired = next(rows)[0]
     try:
         yield acquired
     finally:
         if acquired:
+            logger.info("Releasing exclusive lock for %s", key)
             await session.execute(select(func.pg_advisory_unlock(key)))
 
 
 def async_main():
     from seer.bootup import bootup
 
-    bootup(__name__, [AsyncioIntegration()])
+    bootup(
+        __name__,
+        [AsyncioIntegration()],
+        init_db=True,
+        with_async=True,
+        eager_load_inference_models=False,
+    )
     app = AsyncApp()
     asyncio.run(app.run())
+
+
+if __name__ == "__main__":
+    async_main()

@@ -11,14 +11,13 @@ from seer.db import Session, db
 
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
+    # disables langsmith
     os.environ["LANGCHAIN_TRACING_SAMPLING_RATE"] = "0"
     os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].replace("db", "test-db")
 
 
 @pytest.fixture(autouse=True)
 def manage_db():
-    # disables langsmith
-
     # Forces the initialization of the database
     app = bootup(
         __name__,

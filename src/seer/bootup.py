@@ -9,8 +9,7 @@ from psycopg import Connection
 from sentry_sdk.integrations import Integration
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from seer.db import Session, db, migrate
-from seer.tasks import AsyncSession
+from seer.db import AsyncSession, Session, db, migrate
 
 logger = logging.getLogger(__name__)
 
