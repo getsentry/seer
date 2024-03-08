@@ -4,8 +4,8 @@ from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from seer.automation.models import FilePatch
 from seer.automation.agent.models import Usage
+from seer.automation.models import FilePatch
 from seer.generator import Examples
 
 
@@ -231,6 +231,7 @@ class PullRequestResult(BaseModel):
     repo: RepoDefinition
     diff: list[FilePatch]
 
+
 class Step(BaseModel):
     id: str
     title: str
@@ -295,4 +296,3 @@ class AutofixContinuation(BaseModel):
                             substep.status = AutofixStatus.ERROR
                         if substep.status == AutofixStatus.PENDING:
                             substep.status = AutofixStatus.CANCELLED
-
