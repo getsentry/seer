@@ -393,9 +393,7 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
                 ),
             ),
             FileChange(
-                change_type="delete",
-                path="file3.py",
-                reference_snippet=textwrap.dedent("""    a = 1 + 5\n"""),
+                change_type="delete", path="file3.py", reference_snippet="""    a = 1 + 5\n"""
             ),
         ]
 
@@ -423,8 +421,8 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
 
         self.assertEqual(patches[2].path, "file3.py")
         self.assertEqual(patches[2].type, "M")
-        self.assertEqual(patches[2].added, 1)
-        self.assertEqual(patches[2].removed, 2)
+        self.assertEqual(patches[2].added, 0)
+        self.assertEqual(patches[2].removed, 1)
         self.assertEqual(patches[2].source_file, "file3.py")
         self.assertEqual(patches[2].target_file, "file3.py")
         self.assertEqual(len(patches[2].hunks), 1)
@@ -466,3 +464,42 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.assertEqual(patches[0].removed, 3)
         self.assertEqual(patches[0].source_file, "file_to_delete.py")
         self.assertEqual(patches[0].target_file, "/dev/null")
+
+    def test_section_header(self):
+        self.mock_get_document.return_value = Document(
+            path="file1.py",
+            language="python",
+            text=textwrap.dedent(
+                """\
+                def foo():
+                    x = 1 + 1
+                    y = 2 + 2
+                    return x + y"""
+            ),
+        )
+
+        self.codebase_index.file_changes = [
+            FileChange(
+                change_type="edit",
+                path="file1.py",
+                reference_snippet="""    y = 2 + 2""",
+                new_snippet="""    y = 2 + 3""",
+            ),
+            FileChange(
+                change_type="edit",
+                path="file1.py",
+                reference_snippet="""    y = 2 + 3""",
+                new_snippet="""    y = 2 + 4 # yes\n    z = 3 + 3""",
+            ),
+        ]
+
+        # Execute
+        patches = self.codebase_index.get_file_patches()
+        patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
+
+        # Assert
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(patches[0].path, "file1.py")
+        self.assertEqual(patches[0].type, "M")
+        self.assertEqual(len(patches[0].hunks), 1)
+        self.assertEqual(patches[0].hunks[0].section_header, "def foo():")

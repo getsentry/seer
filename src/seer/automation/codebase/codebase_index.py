@@ -4,12 +4,19 @@ import uuid
 
 import numpy as np
 import sentry_sdk
+import tree_sitter_languages
 from langsmith import traceable
 from sqlalchemy.orm import class_mapper
 from tqdm import tqdm
+from tree_sitter import Tree
 from unidiff import PatchSet
 
 from seer.automation.autofix.models import RepoDefinition, Stacktrace
+from seer.automation.codebase.ast import (
+    extract_declaration,
+    find_first_parent_declaration,
+    supports_parent_declarations,
+)
 from seer.automation.codebase.models import (
     BaseDocumentChunk,
     Document,
@@ -478,8 +485,9 @@ class CodebaseIndex:
         original_documents = [
             self.get_document(path, ignore_local_changes=True) for path in document_paths
         ]
+        changed_documents_map: dict[str, Document] = {}
 
-        diffs = []
+        diffs: list[str] = []
         for i, document in enumerate(original_documents):
             if document and document.text:
                 changed_document = self._copy_document_with_local_changes(document)
@@ -494,30 +502,41 @@ class CodebaseIndex:
 
                 diff_str = "\n".join(diff).strip("\n")
                 diffs.append(diff_str)
+
+                if changed_document:
+                    changed_documents_map[changed_document.path] = changed_document
             else:
                 path = document_paths[i]
                 changed_document = self._copy_document_with_local_changes(
                     Document(path=path, language=get_language_from_path(path) or "unknown", text="")
                 )
 
-                diff = difflib.unified_diff(
-                    "",
-                    changed_document.text.splitlines() if changed_document else "",
-                    fromfile="/dev/null",
-                    tofile=path,
-                    lineterm="",
-                )
+                if changed_document:
+                    diff = difflib.unified_diff(
+                        "",
+                        changed_document.text.splitlines(),
+                        fromfile="/dev/null",
+                        tofile=path,
+                        lineterm="",
+                    )
 
-                diff_str = "\n".join(diff).strip("\n")
-                diffs.append(diff_str)
+                    diff_str = "\n".join(diff).strip("\n")
+                    diffs.append(diff_str)
+                    changed_documents_map[path] = changed_document
 
         combined_diff = "\n".join(diffs).strip("\n")
         patch = PatchSet(combined_diff)
         file_patches = []
         for patched_file in patch:
-            hunks = []
+            tree: Tree | None = None
+            document = changed_documents_map.get(patched_file.path)
+            if document and supports_parent_declarations(document.language):
+                ast_parser = tree_sitter_languages.get_parser(document.language)
+                tree = ast_parser.parse(document.text.encode("utf-8"))
+
+            hunks: list[Hunk] = []
             for hunk in patched_file:
-                lines = []
+                lines: list[Line] = []
                 for line in hunk:
                     lines.append(
                         Line(
@@ -528,23 +547,53 @@ class CodebaseIndex:
                             line_type=line.line_type,
                         )
                     )
+
+                section_header = hunk.section_header
+                if tree and document:
+                    line_numbers = [
+                        line.source_line_no
+                        for line in lines
+                        if line.line_type != " " and line.source_line_no is not None
+                    ]
+                    first_line_no = line_numbers[0] if line_numbers else None
+                    last_line_no = line_numbers[-1] if line_numbers else None
+                    if first_line_no is not None and last_line_no is not None:
+                        node = tree.root_node.descendant_for_point_range(
+                            (first_line_no, 0), (last_line_no, 0)
+                        )
+                        if node:
+                            parent_declaration_node = find_first_parent_declaration(
+                                node, document.language
+                            )
+                            declaration = (
+                                extract_declaration(
+                                    parent_declaration_node, tree.root_node, document.language
+                                )
+                                if parent_declaration_node
+                                else None
+                            )
+                            section_header = (
+                                declaration.to_str(tree.root_node)
+                                if declaration
+                                else section_header
+                            )
+
                 hunks.append(
                     Hunk(
                         source_start=hunk.source_start,
                         source_length=hunk.source_length,
                         target_start=hunk.target_start,
                         target_length=hunk.target_length,
-                        section_header=hunk.section_header,
+                        section_header=section_header,
                         lines=lines,
                     )
                 )
+            patch_type = (
+                patched_file.is_added_file and "A" or patched_file.is_removed_file and "D" or "M"
+            )
             file_patches.append(
                 FilePatch(
-                    type=patched_file.is_added_file
-                    and "A"
-                    or patched_file.is_removed_file
-                    and "D"
-                    or "M",
+                    type=patch_type,
                     path=patched_file.path,
                     added=patched_file.added,
                     removed=patched_file.removed,
