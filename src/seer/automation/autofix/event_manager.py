@@ -262,25 +262,10 @@ class AutofixEventManager:
                 else AutofixStatus.ERROR
             )
 
-    def mark_all_steps_completed(self, state: AutofixContinuation):
-        for step in state.steps:
-            step.status = AutofixStatus.COMPLETED
-
-    def mark_running_steps_errored(self, state: AutofixContinuation):
-        for step in state.steps:
-            if step.status == AutofixStatus.PROCESSING:
-                step.status = AutofixStatus.ERROR
-                for substep in step.progress:
-                    if isinstance(substep, Step):
-                        if substep.status == AutofixStatus.PROCESSING:
-                            substep.status = AutofixStatus.ERROR
-                        if substep.status == AutofixStatus.PENDING:
-                            substep.status = AutofixStatus.CANCELLED
-
     def send_autofix_complete(self, fix: AutofixOutput | None):
         with self.state.update() as cur:
             if fix:
-                self.mark_all_steps_completed(cur)
+                cur.mark_all_steps_completed()
             else:
-                self.mark_running_steps_errored(cur)
+                cur.mark_running_steps_errored()
             cur.status = AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR

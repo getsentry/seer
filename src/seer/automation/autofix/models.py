@@ -309,3 +309,18 @@ class AutofixContinuation(BaseModel):
         base_step.index = len(self.steps)
         self.steps.append(base_step)
         return base_step
+
+    def mark_all_steps_completed(self):
+        for step in self.steps:
+            step.status = AutofixStatus.COMPLETED
+
+    def mark_running_steps_errored(self):
+        for step in self.steps:
+            if step.status == AutofixStatus.PROCESSING:
+                step.status = AutofixStatus.ERROR
+                for substep in step.progress:
+                    if isinstance(substep, Step):
+                        if substep.status == AutofixStatus.PROCESSING:
+                            substep.status = AutofixStatus.ERROR
+                        if substep.status == AutofixStatus.PENDING:
+                            substep.status = AutofixStatus.CANCELLED
