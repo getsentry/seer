@@ -87,6 +87,13 @@ class AutofixContext:
 
             # Re-sort populated_chunks based on their original order in db_chunks
             db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
+            # Prepare to log missing chunk IDs
+            missing_chunk_ids = [chunk.id for chunk in populated_chunks if chunk.id not in db_chunk_order]
+            if missing_chunk_ids:
+                logger.warning(f"Missing chunk IDs in db_chunk_order: {missing_chunk_ids}")
+
+            # Sort only chunks present in db_chunk_order
+            populated_chunks = [chunk for chunk in populated_chunks if chunk.id in db_chunk_order]
             populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
 
         return populated_chunks
