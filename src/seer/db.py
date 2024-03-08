@@ -1,11 +1,13 @@
 import contextlib
 import datetime
+import json
 from typing import Optional
 
 import sqlalchemy
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
+from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -80,13 +82,19 @@ class ProcessRequest(Base):
     def schedule_stmt(
         cls,
         name: str,
-        payload: dict,
+        payload: dict | str | bytes | BaseModel,
         when: datetime.datetime,
         expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),
     ) -> sqlalchemy.UpdateBase:
         scheduled_from = scheduled_for = when
         # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.
         scheduled_from -= expected_duration
+
+        if isinstance(payload, BaseModel):
+            payload = payload.model_dump_json()
+
+        if isinstance(payload, (str, bytes)):
+            payload = json.loads(payload)
 
         insert_stmt = insert(cls).values(
             name=name,

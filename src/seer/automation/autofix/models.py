@@ -1,10 +1,11 @@
 import datetime
 import enum
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from seer.automation.agent.models import Usage
+from seer.generator import Examples
 
 
 class FileChangeError(Exception):
@@ -176,7 +177,7 @@ class IssueDetails(BaseModel):
 
 
 class RepoDefinition(BaseModel):
-    provider: str
+    provider: Annotated[str, Examples(("github", "integrations:github"))]
     owner: str
     name: str
 
