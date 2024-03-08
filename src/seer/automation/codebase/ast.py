@@ -4,9 +4,9 @@ from tree_sitter import Node, Tree
 
 class AstDeclaration(BaseModel):
     id: int
+    indent_start_byte: int
     declaration_byte_start: int
     declaration_byte_end: int
-    content_indent: str
 
     declaration_nodes: list[Node]
 
@@ -21,10 +21,12 @@ class AstDeclaration(BaseModel):
     def __hash__(self):
         return self.id
 
-    def to_str(self, root_node: Node) -> str:
-        return root_node.text[self.declaration_byte_start : self.declaration_byte_end].decode(
-            "utf-8"
-        )
+    def to_str(self, root_node: Node, include_indent=False) -> str:
+        return root_node.text[
+            (
+                self.indent_start_byte if include_indent else self.declaration_byte_start
+            ) : self.declaration_byte_end
+        ].decode("utf-8")
 
 
 def get_indent_start_byte(node: Node, root: Node) -> int:
@@ -96,19 +98,14 @@ def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclar
             return None
         index_of_colon, _ = result
 
-        declaration_start_byte = get_indent_start_byte(node.children[0], root_node)
+        indent_start_byte = get_indent_start_byte(node.children[0], root_node)
         declaration_end_byte = node.children[index_of_colon].end_byte
-        content_indent = root_node.text[
-            get_indent_start_byte(node.children[index_of_colon + 1], root_node) : node.children[
-                index_of_colon + 1
-            ].start_byte
-        ].decode("utf-8")
 
         return AstDeclaration(
             id=node.id,
-            declaration_byte_start=declaration_start_byte,
+            indent_start_byte=indent_start_byte,
+            declaration_byte_start=node.children[index_of_colon + 1].start_byte,
             declaration_byte_end=declaration_end_byte,
-            content_indent=content_indent,
             declaration_nodes=node.children[: index_of_colon + 1],
         )
 
@@ -123,13 +120,9 @@ def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclar
         child_index, bracket_node = result
 
         if bracket_node.next_sibling:
-            declaration_start_byte = get_indent_start_byte(node.children[0], root_node)
+            indent_start_byte = get_indent_start_byte(node.children[0], root_node)
+            declaration_start_byte = bracket_node.next_sibling.start_byte
             declaration_end_byte = bracket_node.end_byte
-            content_indent = root_node.text[
-                get_indent_start_byte(
-                    bracket_node.next_sibling, root_node
-                ) : bracket_node.next_sibling.start_byte
-            ].decode("utf-8")
 
             declaration_nodes = node.children[:child_index]
             if bracket_node.parent:
@@ -139,9 +132,9 @@ def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclar
 
             return AstDeclaration(
                 id=node.id,
+                indent_start_byte=indent_start_byte,
                 declaration_byte_start=declaration_start_byte,
                 declaration_byte_end=declaration_end_byte,
-                content_indent=content_indent,
                 declaration_nodes=declaration_nodes,
             )
     return None

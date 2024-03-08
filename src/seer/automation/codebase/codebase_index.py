@@ -573,7 +573,7 @@ class CodebaseIndex:
                                 else None
                             )
                             section_header = (
-                                declaration.to_str(tree.root_node)
+                                declaration.to_str(tree.root_node, include_indent=False)
                                 if declaration
                                 else section_header
                             )
