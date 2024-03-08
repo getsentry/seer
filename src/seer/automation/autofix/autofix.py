@@ -11,10 +11,11 @@ from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.event_manager import AutofixEventManager, AutofixStatus
+from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
+    AutofixStatus,
     PlanningInput,
     PlanningOutput,
     PlanStep,
@@ -152,7 +153,6 @@ class Autofix:
                 sentry_sdk.capture_message(
                     f"No codebases found for organization {self.request.organization_id} and project {self.request.project_id}'s repos: {', '.join([repo.name for repo in self.request.repos])}"
                 )
-                self.event_manager.mark_running_steps_errored()
                 self.event_manager.send_autofix_complete(None)
                 return
 
@@ -227,7 +227,6 @@ class Autofix:
             logger.exception(e)
             sentry_sdk.capture_exception(e)
 
-            self.event_manager.mark_running_steps_errored()
             self.event_manager.send_autofix_complete(None)
         finally:
             self.context.cleanup()

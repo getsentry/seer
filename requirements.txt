@@ -95,3 +95,5 @@ types-tree-sitter==0.20.1.20240106
 types-tree-sitter-languages==1.10.0.20240201
 langsmith==0.0.87
 pytest-asyncio==0.23.5
+aiohttp==3.9.3
+types-python-dateutil==2.8.19.20240106

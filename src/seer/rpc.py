@@ -1,9 +1,13 @@
+import contextlib
 import hashlib
 import hmac
 import logging
 import os
 from abc import ABC, abstractmethod
+from functools import cached_property
+from typing import Any, Callable
 
+import aiohttp
 import requests
 
 from seer.utils import json_dumps
@@ -13,34 +17,51 @@ logger = logging.getLogger(__name__)
 
 class RpcClient(ABC):
     @abstractmethod
-    def call(self, method: str, **kwargs):
+    def call(self, method: str, **kwargs) -> dict[str, Any]:
+        pass
+
+    @abstractmethod
+    async def acall(self, method: str, **kwargs) -> dict[str, Any]:
         pass
 
 
 class DummyRpcClient(RpcClient):
-    """Dummy RPC client that logs the method and arguments it's called with. Use for dev only."""
+    handlers: dict[str, Callable[[str, dict[str, Any]], dict[str, Any]]]
 
     def __init__(self, should_log: bool = False):
         self.should_log = should_log
+        self.handlers = {}
 
-    def call(self, method: str, **kwargs):
+    def call(self, method: str, **kwargs) -> dict[str, Any]:
+        return self.handlers.get(method, self._default_call)(method, kwargs)
+
+    def _default_call(self, method: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         body_dict = {"args": kwargs}
         json_dump = json_dumps(body_dict, separators=(",", ":"))
 
         if self.should_log:
             print(f"Calling {method} with {json_dump}")
-        return None
+        return {}
+
+    async def acall(self, method: str, **kwargs) -> dict[str, Any]:
+        kwargs.pop("session", None)
+        return self.call(method, **kwargs)
 
 
 class SentryRpcClient(RpcClient):
-    shared_secret: str
-
-    def __init__(self, base_url: str):
-        self.base_url = base_url
-        shared_secret = os.environ.get("RPC_SHARED_SECRET")
+    @cached_property
+    def shared_secret(self) -> str:
+        shared_secret = os.environ.get("SENTRY_BASE_URL")
         if not shared_secret:
-            raise RuntimeError("RPC_SHARED_SECRET must be set")
-        self.shared_secret = shared_secret
+            raise RuntimeError("SENTRY_BASE_URL must be set")
+        return shared_secret
+
+    @cached_property
+    def base_url(self) -> str:
+        base_url = os.environ.get("SENTRY_BASE_URL")
+        if not base_url:
+            raise RuntimeError("SENTRY_BASE_URL must be set")
+        return base_url
 
     def _generate_request_signature(self, url_path: str, body: bytes) -> str:
         signature_input = b"%s:%s" % (url_path.encode("utf8"), body)
@@ -49,7 +70,28 @@ class SentryRpcClient(RpcClient):
         ).hexdigest()
         return f"rpc0:{signature}"
 
-    def call(self, method: str, **kwargs):
+    def call(self, method: str, **kwargs) -> dict[str, Any]:
+        body_bytes, endpoint, headers = self._prepare_request(method, kwargs)
+        response = requests.post(endpoint, headers=headers, data=body_bytes)
+        response.raise_for_status()
+        return response.json()
+
+    async def acall(
+        self, method: str, session: aiohttp.ClientSession | None = None, **kwargs
+    ) -> dict[str, Any]:
+        body_bytes, endpoint, headers = self._prepare_request(method, kwargs)
+        async with contextlib.AsyncExitStack() as stack:
+            if session is None:
+                session = aiohttp.ClientSession()
+            await stack.enter_async_context(session)
+            response = await stack.enter_async_context(
+                session.post(endpoint, headers=headers, data=body_bytes)
+            )
+            response.raise_for_status()
+            result = await response.json()
+        return result
+
+    def _prepare_request(self, method, kwargs):
         url_path = f"/api/0/internal/seer-rpc/{method}/"
         endpoint = f"{self.base_url}{url_path}"
         body_dict = {"args": kwargs}
@@ -60,10 +102,4 @@ class SentryRpcClient(RpcClient):
             "Content-Type": "application/json",
             "Authorization": f"Rpcsignature {signature}",
         }
-        response = requests.post(endpoint, headers=headers, data=body_bytes)
-        response.raise_for_status()
-
-        if response.headers.get("Content-Type") == "application/json":
-            return response.json()
-        else:
-            return None
+        return body_bytes, endpoint, headers

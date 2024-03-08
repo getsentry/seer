@@ -1,27 +1,51 @@
 import asyncio
 import dataclasses
 import datetime
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
+import time
 from typing import Annotated, Callable, Self
 
 import pytest
+from celery import Celery, Task
+from celery.worker import WorkController
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from seer.db import ProcessRequest, Session
-from seer.generator import Examples, gen, ints, parameterize, printable_strings
-from seer.tasks import AsyncApp, AsyncSession, TaskFactory
+from seer.generator import (
+    Examples,
+    ascii_words,
+    change_watcher,
+    ints,
+    parameterize,
+    positive_timedeltas,
+    printable_strings,
+)
+from seer.tasks import AsyncApp, AsyncSession, AsyncTaskFactory
+from tests.generators import Future, Now, Past
 
 
 @dataclasses.dataclass
 class ScheduledWork:
     process_request: ProcessRequest
+    name: Annotated[str, Examples(s for s in ascii_words if s)]
+    payload: dict[str, str]
+    now: Now
+
+    def __post_init__(self):
+        self.process_request.name = self.name
+        self.process_request.scheduled_from = self.now
+        self.process_request.scheduled_for = self.now
 
     def save(self) -> Self:
         with Session() as session:
             session.add(self.process_request)
             session.commit()
+        return self
+
+    def reload(self) -> Self:
+        with Session() as session:
+            self.process_request = session.merge(self.process_request, load=True)
+            session.refresh(self.process_request)
         return self
 
 
@@ -43,12 +67,19 @@ class UpdatedWork:
                 )
             )
 
-    def save(self, now: datetime.datetime) -> Self:
+    def save(
+        self,
+        now: datetime.datetime,
+        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),
+    ) -> Self:
+        self.scheduled_work.save()
         with Session() as session:
-            self.scheduled_work.save()
             session.execute(
                 ProcessRequest.schedule_stmt(
-                    self.original_process_request.name, self.new_payload, now=now
+                    self.original_process_request.name,
+                    self.new_payload,
+                    when=now,
+                    expected_duration=expected_duration,
                 )
             )
             session.commit()
@@ -56,17 +87,46 @@ class UpdatedWork:
 
 
 @parameterize
-def test_schedule_is_idempotent(updated: UpdatedWork):
-    updated.save(datetime.datetime.now())
-    assert updated.current_process_request_by_name.payload == updated.new_payload
-    assert (
-        updated.current_process_request_by_name.scheduled_from
-        > updated.original_process_request.scheduled_from
+def test_schedule_prefers_urgency(updated: UpdatedWork, future: Future, past: Past):
+    updated.scheduled_work.save()
+
+    payload_watcher = change_watcher(lambda: updated.current_process_request_by_name.payload)
+    scheduled_watcher = change_watcher(
+        lambda: (
+            updated.current_process_request_by_name.scheduled_for,
+            updated.current_process_request_by_name.scheduled_from,
+        )
     )
-    assert (
-        updated.current_process_request_by_name.scheduled_for
-        == updated.current_process_request_by_name.scheduled_for
-    )
+
+    with payload_watcher as payload_changes, scheduled_watcher as schedule_changes:
+        updated.save(future)
+
+    assert not schedule_changes
+    assert payload_changes.to_value(updated.new_payload)
+
+    with payload_watcher as payload_changes, scheduled_watcher as schedule_changes:
+        updated.new_payload["new_thing"] = 1
+        updated.save(past)
+
+    assert schedule_changes
+    assert payload_changes.to_value(updated.new_payload)
+
+
+@parameterize(duration=(d for d in positive_timedeltas if d > datetime.timedelta(minutes=1)))
+def test_schedule_preserves_expected_duration(
+    updated: UpdatedWork, future: Future, duration: datetime.timedelta
+):
+    updated.scheduled_work.save()
+
+    with change_watcher(
+        lambda: updated.current_process_request_by_name.last_delay()
+    ) as delay_changes, change_watcher(
+        lambda: updated.current_process_request_by_name.scheduled_for
+    ) as for_changes:
+        updated.save(future, duration)
+
+    assert not for_changes
+    assert delay_changes.to_value(duration)
 
 
 @parameterize
@@ -122,60 +182,77 @@ def test_next_schedule(
 def test_next_schedule(scheduled: ScheduledWork):
     scheduled.save()
     proc = scheduled.process_request
-    now = proc.scheduled_from
 
-    proc.scheduled_for = next_time = proc.next_schedule(now)
-    assert next_time - now == datetime.timedelta(minutes=2)
+    last_delay_watcher = change_watcher(lambda: proc.last_delay())
 
-    proc.scheduled_for = next_time = proc.next_schedule(now)
-    assert next_time - now == datetime.timedelta(minutes=4)
+    with last_delay_watcher as changed:
+        proc.scheduled_for = proc.next_schedule(proc.scheduled_from)
+    assert changed.to_value(datetime.timedelta(minutes=2))
 
-    proc.scheduled_for = next_time = proc.next_schedule(now)
-    assert next_time - now == datetime.timedelta(minutes=8)
+    with last_delay_watcher as changed:
+        proc.scheduled_for = proc.next_schedule(proc.scheduled_from)
+    assert changed.to_value(datetime.timedelta(minutes=4))
 
-    proc.scheduled_for = next_time = proc.next_schedule(now)
-    assert next_time - now == datetime.timedelta(minutes=16)
+    with last_delay_watcher as changed:
+        proc.scheduled_for = proc.next_schedule(proc.scheduled_from)
+    assert changed.to_value(datetime.timedelta(minutes=8))
+
+
+@parameterize
+def test_peek_scheduled(scheduled: ScheduledWork, future: Future):
+    peek_watcher = change_watcher(ProcessRequest.peek_next_scheduled)
+
+    with peek_watcher as changes:
+        scheduled.save()
+
+    assert changes.from_value(None)
+
+    with peek_watcher as changes:
+        work = ProcessRequest.acquire_work(1, future)
+        assert work, "did not acquire work"
+        scheduled.reload()
+
+    assert changes.to_value(work[0].scheduled_for)
+    assert changes.to_value(scheduled.process_request.scheduled_for)
 
 
 class TestRequest(BaseModel):
     my_special_value: str
 
 
-class TestTaskFactory(TaskFactory[TestRequest]):
+class TestAsyncTaskFactory(AsyncTaskFactory):
     acceptible_names: frozenset[str] = frozenset(["job-1", "job-2", "job-3", "job-4"])
     side_effect: Callable[[str], None] = lambda _: None
 
-    def from_process_request(self, process_request: ProcessRequest) -> TestRequest | None:
-        if process_request.name in self.acceptible_names:
-            return TestRequest(**process_request.payload)
-        return None
+    def matches(self, process_request: ProcessRequest):
+        return process_request.name in self.acceptible_names
 
-    async def invoke(self, request: TestRequest):
-        self.side_effect(request.my_special_value)
+    async def invoke(self, process_request: ProcessRequest):
+        self.side_effect(TestRequest(**process_request.payload).my_special_value)
 
 
 @dataclasses.dataclass
 class ScheduleAsyncTest:
-    acceptable_name: Annotated[str, Examples(gen.one_of(TestTaskFactory.acceptible_names))]
+    acceptable_name: Annotated[str, Examples(TestAsyncTaskFactory.acceptible_names)]
     unacceptable_name: Annotated[
-        str, Examples((s for s in printable_strings if s not in TestTaskFactory.acceptible_names))
+        str,
+        Examples((s for s in printable_strings if s not in TestAsyncTaskFactory.acceptible_names)),
     ]
     payload: TestRequest
     side_effect_calls: list[str] = dataclasses.field(default_factory=list)
     end_event: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
 
-    def create_app(self, io_work=multiprocessing.Queue()) -> AsyncApp:
-        test_task = TestTaskFactory()
+    def create_app(self) -> AsyncApp:
+        test_task = TestAsyncTaskFactory()
         test_task.side_effect = lambda v: self.side_effect_calls.append(v)
 
         return AsyncApp(
             end_event=self.end_event,
             queue=asyncio.Queue(),
             task_factories=[
-                test_task,
+                lambda: test_task,
             ],
             num_consumers=2,
-            io_work=io_work,
         )
 
     async def current_process_request_by_name(self, name: str):
@@ -193,11 +270,11 @@ class ScheduleAsyncTest:
 
 @pytest.mark.asyncio
 @parameterize
-async def test_next_schedule_async(test: ScheduleAsyncTest, now: datetime.datetime):
+async def test_next_schedule_async(test: ScheduleAsyncTest, now: Now):
     async with AsyncSession() as session:
         for name in [test.acceptable_name, test.unacceptable_name]:
             await session.execute(
-                ProcessRequest.schedule_stmt(name, test.payload.model_dump(), now=now)
+                ProcessRequest.schedule_stmt(name, test.payload.model_dump(), when=now)
             )
         await session.commit()
 
@@ -220,23 +297,77 @@ async def test_next_schedule_async(test: ScheduleAsyncTest, now: datetime.dateti
 
 
 @pytest.mark.asyncio
-@parameterize
-async def test_io_work(test: ScheduleAsyncTest, now: datetime.datetime):
-    io_work = multiprocessing.Queue()
+@parameterize(arg_set=("test_value", "error_msg"))
+async def test_async_celery_job_failure(
+    test_value: int, error_msg: str, celery_app: Celery, celery_worker: WorkController
+):
+    factory = TestAsyncTaskFactory()
+    buff = []
 
-    put_task = asyncio.get_running_loop().run_in_executor(
-        ThreadPoolExecutor(),
-        lambda: io_work.put(
-            ProcessRequest(name=test.acceptable_name, payload=test.payload.model_dump())
-        ),
-    )
-    run_task = asyncio.create_task(test.create_app(io_work).run())
+    @celery_app.task
+    def my_task(value: int):
+        buff.append(value)
+        raise ValueError(error_msg)
 
-    processed = await test.new_side_effect()
-    test.end_event.set()
+    celery_worker.reload()
 
     async with asyncio.timeout(10):
-        await put_task
-        await run_task
+        with pytest.raises(ValueError, match=error_msg):
+            async for v in factory.async_celery_job(lambda: my_task.delay(test_value)):
+                pass
+    assert buff[-1] == test_value
 
-    assert processed == [test.payload.my_special_value]
+
+@pytest.mark.asyncio
+@parameterize(arg_set=("iterations",))
+async def test_async_celery_job_generator(
+    iterations: tuple[int, int, int], celery_app: Celery, celery_worker: WorkController
+):
+    factory = TestAsyncTaskFactory()
+    buff = []
+
+    @celery_app.task(bind=True)
+    def my_task(self: Task):
+        for val in iterations:
+            self.update_state(state="PROGRESS", meta={"val": val})
+
+    celery_worker.reload()
+
+    async with asyncio.timeout(10):
+        async for update in factory.async_celery_job(lambda: my_task.delay()):
+            buff.append(update["val"])
+    assert buff == list(iterations)
+
+
+@pytest.mark.asyncio
+@parameterize(arg_set=("iterations", "err_msg"))
+async def test_async_celery_job_generator_cancels(
+    iterations: tuple[int, int, int],
+    err_msg: str,
+    celery_app: Celery,
+    celery_worker: WorkController,
+):
+    factory = TestAsyncTaskFactory()
+    sent_buff = []
+    received_buff = []
+
+    @celery_app.task(bind=True)
+    def my_task(self: Task):
+        for val in iterations:
+            self.update_state(state="PROGRESS", meta={"val": val})
+            sent_buff.append(val)
+            time.sleep(1)
+
+    celery_worker.reload()
+
+    async with asyncio.timeout(10):
+        with pytest.raises(ValueError, match=err_msg):
+            i = 0
+            async for update in factory.async_celery_job(lambda: my_task.delay()):
+                received_buff.append(update["val"])
+                if i == 1:
+                    raise ValueError(err_msg)
+                i += 1
+
+    assert received_buff == list(iterations[:2])
+    assert sent_buff == list(iterations[:2])

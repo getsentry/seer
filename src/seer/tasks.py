@@ -1,22 +1,28 @@
+import abc
 import asyncio
+import contextlib
 import dataclasses
 import datetime
-import multiprocessing
-from asyncio import CancelledError, Future, Task
+import hashlib
+import logging
+from asyncio import Future, Task
 from concurrent.futures import ThreadPoolExecutor
-from queue import Empty
+from queue import Empty, Full, Queue
 from typing import Any, Callable, Coroutine, Protocol, TypeVar
 
-from pydantic import BaseModel
+import celery.result
+import sqlalchemy
+from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from seer.db import ProcessRequest
+from seer.db import AsyncSession, ProcessRequest
 
-_Request = TypeVar("_Request", bound=BaseModel)
 _A = TypeVar("_A")
 
-AsyncSession = async_sessionmaker(expire_on_commit=False)
+logger = logging.getLogger("asyncrunner")
+logger.setLevel(logging.INFO)
 
 
 class QConsumer(Protocol):
@@ -24,49 +30,113 @@ class QConsumer(Protocol):
         ...
 
 
-class QProducer(Protocol):
-    def put(self, obj: Any, block: bool = True, timeout: int | None = None) -> None:
-        ...
+@dataclasses.dataclass(frozen=True, order=True)
+class Period:
+    period_start: datetime.date
+    period: relativedelta
+
+    @property
+    def period_end(self) -> datetime.date:
+        return self.period_start + self.period - datetime.timedelta(days=1)
+
+    def fit_to(self, date: datetime.date) -> "Period":
+        result = self
+
+        while date < result.period_start:
+            result = result.prev()
+
+        while date > result.period_end:
+            result = result.next()
+
+        return result
+
+    def next(self) -> "Period":
+        return Period(period_start=self.period_start + self.period, period=self.period)
+
+    def prev(self) -> "Period":
+        return Period(period_start=self.period_start - self.period, period=self.period)
 
 
-class TaskFactory(Protocol[_Request]):
-    """
-    Represents a potential factory for mapping a process request to a local job to be invoked.
-    """
-
-    def from_process_request(self, process_request: ProcessRequest) -> _Request | None:
-        """
-        Selects a process request, usually by matching its name, to this task, returning a request
-        object from that job if it is a match.
-        """
+class AsyncTaskFactory(abc.ABC):
+    @abc.abstractmethod
+    def matches(self, process_request: ProcessRequest) -> bool:
         pass
 
-    async def invoke(self, request: _Request):
+    @abc.abstractmethod
+    async def invoke(self, process_request: ProcessRequest):
         pass
 
+    async def async_celery_job(self, cb: Callable[[], celery.result.AsyncResult]):
+        logger.info("Starting async celery job")
+        loop = asyncio.get_running_loop()
+        q: Queue = Queue(1)
 
-_async_task_factories: list[TaskFactory[BaseModel]] = []
+        with ThreadPoolExecutor() as pool:
+            ar = await loop.run_in_executor(pool, cb)
+
+            def run():
+                def on_message(raw: Any):
+                    # Keep trying to put the item into the queue by removing existing item until we get in.
+                    logger.info("Received response from celery job")
+                    while True:
+                        try:
+                            q.put_nowait(raw)
+                            return
+                        except Full:
+                            try:
+                                q.get_nowait()
+                            except Empty:
+                                pass
+
+                ar.get(on_message=on_message, propagate=True)
+
+            complete = loop.run_in_executor(pool, run)
+
+            try:
+                while not complete.done():
+                    get = loop.run_in_executor(pool, q.get)
+                    await asyncio.wait([get, complete], return_when=asyncio.FIRST_COMPLETED)
+                    if get.done():
+                        v = await get
+                        if v:
+                            if v["status"] == "PROGRESS":
+                                try:
+                                    yield v["result"]
+                                except Exception as e:
+                                    if not complete.done():
+                                        logger.warning("SIGUSR1 on job, generator failed")
+                                        await loop.run_in_executor(
+                                            pool,
+                                            lambda: ar.revoke(
+                                                terminate=True, signal="SIGUSR1", wait=False
+                                            ),
+                                        )
+                                    raise e
+                            # if v['status'] == 'FAILURE':
+                            #     raise v['result']
+            finally:
+                logger.info("async celery job completing")
+                loop.run_in_executor(pool, lambda: q.put_nowait(None))
+        await complete
 
 
-def async_task_factory(f: Callable[[], TaskFactory]) -> Callable[[], TaskFactory]:
-    _async_task_factories.append(f())
+_async_task_factories: list[Callable[[], AsyncTaskFactory]] = []
+
+
+def async_task_factory(f: Callable[[], AsyncTaskFactory]) -> Callable[[], AsyncTaskFactory]:
+    _async_task_factories.append(f)
     return f
 
 
 @dataclasses.dataclass
 class AsyncApp:
-    end_event: asyncio.Event
-    queue: asyncio.Queue
-    io_work: QConsumer = dataclasses.field(default_factory=multiprocessing.Queue)
-    cpu_work: QProducer = dataclasses.field(default_factory=multiprocessing.Queue)
+    end_event: asyncio.Event = dataclasses.field(default_factory=lambda: asyncio.Event())
     num_consumers: int = 10
-    task_factories: list[TaskFactory[BaseModel]] = dataclasses.field(
-        default_factory=lambda: [],
+    queue: asyncio.Queue = dataclasses.field(default_factory=lambda: asyncio.Queue())
+    task_factories: list[Callable[[], AsyncTaskFactory]] = dataclasses.field(
+        default_factory=lambda: _async_task_factories,
     )
-    # workers = 2 => one for consuming io work, one for producing cpu_work
-    threaded_executor: ThreadPoolExecutor = dataclasses.field(
-        default_factory=lambda: ThreadPoolExecutor(max_workers=2)
-    )
+    consumer_sleep: int = 5
 
     async def run_or_end(self, c: Future[_A] | Coroutine[Any, Any, _A]) -> tuple[_A] | None:
         end_task = asyncio.create_task(self.end_event.wait())
@@ -90,6 +160,7 @@ class AsyncApp:
     async def select_from_db(self) -> None:
         while not self.end_event.is_set():
             async with AsyncSession() as session:
+                logger.info("Checking for process requests")
                 result = await self.run_or_end(
                     session.run_sync(
                         lambda session: ProcessRequest.acquire_work(
@@ -99,49 +170,45 @@ class AsyncApp:
                 )
             if result is not None:
                 for item in result[0]:
+                    logger.info(f"Picked up process request, running")
                     await self.run_or_end(self.queue.put(item))
+                    logger.info(f"Process request completed successfully")
                     if self.end_event.is_set():
                         break
             else:
-                await self.run_or_end(asyncio.sleep(5))
-
-    def get_io_work(self) -> ProcessRequest:
-        while not self.end_event.is_set():
-            try:
-                return self.io_work.get(True, 1)
-            except Empty:
-                pass
-        raise CancelledError()
-
-    async def select_from_local_work(self) -> None:
-        while not self.end_event.is_set():
-            result = await self.run_or_end(
-                asyncio.get_running_loop().run_in_executor(self.threaded_executor, self.get_io_work)
-            )
-            if result is not None:
-                await self.run_or_end(self.queue.put(result[0]))
+                logger.info("Sleeping")
+                await self.run_or_end(asyncio.sleep(self.consumer_sleep))
 
     async def producer_loop(self):
-        await asyncio.gather(self.select_from_db(), self.select_from_local_work())
+        await asyncio.gather(self.select_from_db())
+
+    async def invoke_task(self, task: AsyncTaskFactory, process_request: ProcessRequest):
+        async with AsyncSession() as session, acquire_x_lock(
+            process_request.name, session
+        ) as acquired:
+            if acquired:
+                await task.invoke(process_request)
+            return acquired
 
     async def consumer_loop(self):
         while not self.end_event.is_set():
+            logger.info("Running consumer loop")
             result = await self.run_or_end(self.queue.get())
             if result is None:
                 continue
 
             item: ProcessRequest = result[0]
             for factory in self.task_factories:
-                request = factory.from_process_request(item)
-                if request is not None:
-                    await factory.invoke(request)
+                task = factory()
+                accept = task.matches(item)
+                if accept:
+                    result = await self.run_or_end(self.invoke_task(task, item))
 
-                    # If this was persisted work, clean it up.
-                    if item.id:
+                    if result and item.id:
                         async with AsyncSession() as session:
+                            logger.info("Marking process request completed.")
                             await session.execute(item.mark_completed_stmt())
                             await session.commit()
-                    break
 
     async def run(self):
         producer_task = asyncio.create_task(self.producer_loop())
@@ -156,6 +223,7 @@ class AsyncApp:
             for task in [*consumer_tasks]:
                 if task.done():
                     # Unexpected death of a task?  Reboot it.
+                    logger.info("Unexpected consumer death, restarting...")
                     consumer_tasks.remove(task)
 
             while len(consumer_tasks) < self.num_consumers:
@@ -167,16 +235,36 @@ class AsyncApp:
             await asyncio.gather(*all_tasks)
 
 
-def main():
+@contextlib.asynccontextmanager
+async def acquire_x_lock(name: str, session: sqlalchemy.ext.asyncio.AsyncSession):
+    m = hashlib.sha256()
+    m.update(name.encode("utf8"))
+    key = int.from_bytes(m.digest()[:8], byteorder="big", signed=True)
+
+    logger.info("Acquiring exclusive lock for %s", key)
+    rows = await session.execute(select(func.pg_try_advisory_lock(key)))
+    acquired = next(rows)[0]
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            logger.info("Releasing exclusive lock for %s", key)
+            await session.execute(select(func.pg_advisory_unlock(key)))
+
+
+def async_main():
     from seer.bootup import bootup
 
-    bootup(__name__, [AsyncioIntegration()])
-    app = AsyncApp(
-        end_event=asyncio.Event(),
-        queue=asyncio.Queue(),
+    bootup(
+        __name__,
+        [AsyncioIntegration()],
+        init_db=True,
+        with_async=True,
+        eager_load_inference_models=False,
     )
+    app = AsyncApp()
     asyncio.run(app.run())
 
 
 if __name__ == "__main__":
-    main()
+    async_main()

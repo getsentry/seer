@@ -3,13 +3,15 @@ import os
 from typing import Collection
 
 import sentry_sdk
+from celery import Celery
 from flask import Flask
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from seer.db import Session, db, migrate
-from seer.tasks import AsyncSession
+from seer.db import AsyncSession, Session, db, migrate
+
+logger = logging.getLogger(__name__)
 
 
 def traces_sampler(sampling_context: dict):
@@ -66,4 +68,31 @@ def bootup(
             if with_async:
                 AsyncSession.configure(bind=create_async_engine(db.engine.url))
 
+    return app
+
+
+CELERY_CONFIG = dict(
+    broker_url=os.environ.get("CELERY_BROKER_URL"),
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    enable_utc=True,
+    task_default_queue="seer",
+    task_queues={
+        "seer": {
+            "exchange": "seer",
+            "routing_key": "seer",
+        },
+    },
+    result_backend="rpc://",
+)
+
+
+def bootup_celery() -> Celery:
+    if not CELERY_CONFIG["broker_url"]:
+        logger.warning("CELERY_BROKER_URL not set")
+
+    app = Celery("seer")
+    for k, v in CELERY_CONFIG.items():
+        setattr(app.conf, k, v)
     return app

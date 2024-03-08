@@ -18,8 +18,12 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3.
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
+# Make it available for ides that look in this directory by default.
+RUN ln -s /usr/bin/python /usr/local/bin/python && \
+    ln -s /usr/bin/python3 /usr/local/bin/python3
+
 # Install supervisord
-RUN apt-get install -y supervisor spell
+RUN apt-get install -y supervisor
 
 # Install libpq-dev for psycopg
 RUN apt-get update && apt-get install -y libpq-dev

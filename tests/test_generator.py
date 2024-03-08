@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import enum
 import typing
 from typing import Any, Mapping, NotRequired, TypedDict
@@ -58,7 +59,7 @@ def interesting_strings_2(*c: int, **kwds: int) -> str:
 
 
 @parameterize(seed=400, a=interesting_strings, b=interesting_strings_2)
-def test_generates_from_callables(a: str, b: str):
+def test_generates_from_callables(a: str, b: str, c):
     assert isinstance(a, str) and isinstance(b, str)
     assert a
     assert b
@@ -124,3 +125,23 @@ def test_any(a, b: Any, c):
     assert a == 1
     assert b is not None
     assert c is not None
+
+
+expected_a = {0, -12113004732277236420, 560161460}
+expected_b = {"green-vincent-banana", "silver-vincent-table", "blue-sally-computer"}
+expected_c = {
+    datetime.datetime(2027, 4, 6, 10, 12, 37, 246000),
+    datetime.datetime(2020, 9, 17, 9, 15, 28, 725000),
+    datetime.datetime(2017, 10, 13, 6, 7, 25, 425000),
+}
+
+
+@parameterize(count=3)
+def test_generates_stable(a: int, b: str, c: datetime.datetime):
+    assert a in expected_a
+    assert b in expected_b
+    assert c in expected_c
+
+    expected_a.remove(a)
+    expected_b.remove(b)
+    expected_c.remove(c)
