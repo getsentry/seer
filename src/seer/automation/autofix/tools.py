@@ -1,12 +1,17 @@
+import json
 import logging
 import textwrap
 
 from langsmith import traceable
 
+from seer.automation.agent.client import GptClient
+from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import FileChange
+from seer.automation.autofix.prompts import ExecutionPrompts
 from seer.automation.autofix.utils import find_original_snippet
+from seer.automation.codebase.codebase_index import CodebaseIndex
 
 logger = logging.getLogger("autofix")
 
@@ -93,7 +98,21 @@ class BaseTools:
 
 
 class CodeActionTools(BaseTools):
-    _snippet_matching_threshold = 0.9
+    snippet_matching_threshold = 0.9
+    chunk_padding = 16
+
+    def __init__(self, context: AutofixContext):
+        super().__init__(context)
+        self.llm_client = GptClient()
+        self.usage = Usage()
+
+    @traceable(run_type="tool", name="Store File Change")
+    def store_file_change(self, codebase: CodebaseIndex, file_change: FileChange):
+        """
+        Stores a file change to a codebase index.
+        This function exists mainly to be traceable in Langsmith.
+        """
+        codebase.store_file_change(file_change)
 
     @traceable(run_type="tool", name="Replace Snippet")
     def replace_snippet_with(
@@ -108,7 +127,7 @@ class CodeActionTools(BaseTools):
         Replaces a snippet with the provided replacement.
         """
         logger.debug(
-            f"[CodeActionTools.replace_snippet_with] Replacing snippet {reference_snippet} with {replacement_snippet} in {file_path} in repo {repo_name}"
+            f"[CodeActionTools.replace_snippet_with] Replacing snippet\n```\n{reference_snippet}\n```\n with \n```\n{replacement_snippet}\n```\nin {file_path} in repo {repo_name}"
         )
 
         codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
@@ -116,30 +135,51 @@ class CodeActionTools(BaseTools):
         if not document or not codebase:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
-        logger.debug("Exact snippet:")
-        logger.debug(f'"{reference_snippet}"')
+        result = find_original_snippet(
+            reference_snippet, document.text, threshold=self.snippet_matching_threshold
+        )
 
-        original_snippet: str | None = None
-        if reference_snippet in document.text:
-            original_snippet = reference_snippet
-        else:
-            original_snippet = find_original_snippet(
-                reference_snippet, document.text, threshold=self._snippet_matching_threshold
+        if not result:
+            raise Exception("Reference snippet not found. Try again with an exact match.")
+
+        original_snippet, snippet_start_line, snippet_end_line = result
+
+        lines = document.text.splitlines()
+        chunk_lines = lines[
+            max(0, snippet_start_line - self.chunk_padding) : min(
+                len(lines), snippet_end_line + self.chunk_padding
             )
+        ]
+        chunk = "\n".join(chunk_lines).strip("\n") + "\n"  # Keep a newline at the end
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
 
-        file_change = FileChange(
-            change_type="edit",
-            path=file_path,
-            reference_snippet=original_snippet,
-            new_snippet=replacement_snippet,
-            description=commit_message,
+        prompt = ExecutionPrompts.format_snippet_replacement_msg(
+            reference_snippet, replacement_snippet, chunk, commit_message
         )
-        codebase.store_file_change(file_change)
 
-        return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
+        llm_result, message, usage = self.llm_client.completion_with_parser(
+            "gpt-4-0125-preview",
+            [Message(role="user", content=prompt)],
+            response_format={"type": "json_object"},
+            parser=lambda x: json.loads(str(x)),
+        )
+
+        self.usage += usage
+
+        self.store_file_change(
+            codebase,
+            FileChange(
+                change_type="edit",
+                path=file_path,
+                reference_snippet=chunk,
+                new_snippet=llm_result["code"],
+                description=commit_message,
+            ),
+        )
+
+        return f"success: Resulting code after replacement:\n```\n{llm_result['code']}\n```\n"
 
     @traceable(run_type="tool", name="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
@@ -159,16 +199,18 @@ class CodeActionTools(BaseTools):
         if snippet in document.text:
             original_snippet = snippet
         else:
-            original_snippet = find_original_snippet(
-                snippet, document.text, threshold=self._snippet_matching_threshold
+            result = find_original_snippet(
+                snippet, document.text, threshold=self.snippet_matching_threshold
             )
+
+            if result:
+                original_snippet, snippet_start_line, snippet_end_line = result
 
         logger.debug("Exact snippet:")
         logger.debug(f'"{snippet}"')
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
-
         file_change = FileChange(
             change_type="delete",
             path=file_path,
@@ -176,8 +218,10 @@ class CodeActionTools(BaseTools):
             reference_snippet=original_snippet,
             new_snippet="",
         )
-
-        codebase.store_file_change(file_change)
+        self.store_file_change(
+            codebase,
+            file_change,
+        )
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
 
@@ -241,13 +285,15 @@ class CodeActionTools(BaseTools):
         if document:
             raise FileExistsError(f"File `{file_path}` already exists.")
 
-        file_change = FileChange(
-            change_type="create",
-            path=file_path,
-            new_snippet=snippet,
-            description=commit_message,
+        self.store_file_change(
+            codebase,
+            FileChange(
+                change_type="create",
+                path=file_path,
+                new_snippet=snippet,
+                description=commit_message,
+            ),
         )
-        codebase.store_file_change(file_change)
 
         return "success"
 
@@ -263,8 +309,10 @@ class CodeActionTools(BaseTools):
         if not document or not codebase:
             raise FileNotFoundError(f"File `{file_path}` not found.")
 
-        file_change = FileChange(change_type="delete", path=file_path, description=commit_message)
-        codebase.store_file_change(file_change)
+        self.store_file_change(
+            codebase,
+            FileChange(change_type="delete", path=file_path, description=commit_message),
+        )
 
         return "success"
 

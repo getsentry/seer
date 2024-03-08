@@ -61,7 +61,21 @@ bools = gen.one_of([True, False])
 objects = (object() for _ in gen)
 printable_strings = ("".join(r.sample(string.printable, r.randint(0, 20))) for r in gen)
 colors = gen.one_of(
-    ["red", "green", "blue", "orange", "purple", "cyan", "magenta", "magenta", "yellow"]
+    [
+        "red",
+        "green",
+        "blue",
+        "orange",
+        "purple",
+        "cyan",
+        "magenta",
+        "magenta",
+        "yellow",
+        "gold",
+        "silver",
+        "black",
+        "white",
+    ]
 )
 names = gen.one_of(
     [
@@ -78,6 +92,7 @@ names = gen.one_of(
         "margaret",
         "vincent",
         "timothy",
+        "samuel",
     ]
 )
 things = gen.one_of(
@@ -94,6 +109,8 @@ things = gen.one_of(
         "football",
         "basketball",
         "fork",
+        "table",
+        "computer",
     ]
 )
 ascii_words = ("-".join(group) for group in zip(colors, names, things))

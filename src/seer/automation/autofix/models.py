@@ -1,6 +1,6 @@
 import datetime
 import enum
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -9,6 +9,21 @@ from seer.automation.agent.models import Usage
 
 class FileChangeError(Exception):
     pass
+
+
+class ProgressType(enum.Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
+    USER_RESPONSE = "USER_RESPONSE"
+
+
+class ProgressItem(BaseModel):
+    timestamp: str
+    message: str
+    type: ProgressType
+    data: Any = None
 
 
 class AutofixStatus(enum.Enum):
@@ -88,9 +103,10 @@ class PlanningInput(BaseModel):
 
 class StacktraceFrame(BaseModel):
     function: str
+
     filename: str
     abs_path: str
-    line_no: int
+    line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]
     repo_name: Optional[str] = None
@@ -104,9 +120,14 @@ class Stacktrace(BaseModel):
     def to_str(self, max_frames: int = 16):
         stack_str = ""
         for frame in reversed(self.frames[-max_frames:]):
-            col_no_str = f":{frame.col_no}" if frame.col_no is not None else ""
+            col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} [Line {frame.line_no}{col_no_str}] ({'In app' if frame.in_app else 'Not in app'})\n"
+            line_no_str = (
+                f"[Line {frame.line_no}{col_no_str}]"
+                if frame.line_no is not None
+                else "[Line: Unknown]"
+            )
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
@@ -154,6 +175,10 @@ class RepoDefinition(BaseModel):
     provider: str
     owner: str
     name: str
+
+    @property
+    def full_name(self):
+        return f"{self.owner}/{self.name}"
 
     @field_validator("provider", mode="after")
     @classmethod
@@ -236,13 +261,14 @@ class Step(BaseModel):
     title: str
 
     status: AutofixStatus = AutofixStatus.PENDING
+
     index: int = -1
-    description: Optional[str] = None
-    children: list["Step"] = []
+    progress: list["ProgressItem | Step"] = Field(default_factory=list)
+    completedMessage: Optional[str] = None
 
     def find_child(self, *, id: str) -> "Step | None":
-        for step in self.children:
-            if step.id == id:
+        for step in self.progress:
+            if isinstance(step, Step) and step.id == id:
                 return step
         return None
 

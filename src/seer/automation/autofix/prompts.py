@@ -1,33 +1,43 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.models import (
-    FileChange,
-    PlanningOutput,
-    PlanStep,
-    ProblemDiscoveryOutput,
-)
+from seer.automation.autofix.models import PlanStep, ProblemDiscoveryOutput
 
 
-def format_additional_context(additional_context: str):
-    return textwrap.dedent(
+def format_additional_context(additional_context: str | None):
+    return textwrap.dedent(  # The leading newline is intentional
         f"""\
-        Additional context has also been provided:
-        {additional_context}"""
+
+        Additional context has been provided:
+        <additional_context>
+        {additional_context}
+        </additional_context>"""
+        if additional_context
+        else ""
     )
-
-
-def pad(s: str, p: str):
-    return f"{p}{s}{p}"
 
 
 class ProblemDiscoveryPrompt:
     @staticmethod
-    def format_default_msg(additional_context: Optional[str] = None):
-        additional_context_str = (
-            pad(format_additional_context(additional_context), "\n") if additional_context else ""
+    def format_default_msg(err_msg: str, stack_str: str, additional_context: Optional[str] = None):
+        return textwrap.dedent(
+            """\
+            Assess the issue:
+            <issue>
+            <error_message>
+            {err_msg}
+            </error_message>
+            <stack_trace>
+            {stack_str}
+            </stack_trace>
+            </issue>
+            {additional_context_str}
+            Assess the above issue."""
+        ).format(
+            err_msg=err_msg,
+            stack_str=stack_str,
+            additional_context_str=format_additional_context(additional_context),
         )
-        return f"""Assess the above issue.{additional_context_str}"""
 
     # TODO: To be implemented with the feedback system
     # @staticmethod
@@ -46,7 +56,7 @@ class ProblemDiscoveryPrompt:
     #     )
 
     @staticmethod
-    def format_system_msg(err_msg: str, stack_str: str):
+    def format_system_msg():
         return textwrap.dedent(
             """\
             You are an exceptional principal engineer that is tasked with finding how actionable the problem is given an error message and stack trace. Think step-by-step before outputting your answer.
@@ -55,33 +65,25 @@ class ProblemDiscoveryPrompt:
             The actionability score should also take into account whether this error should be fixed immediately or can be fixed at a later time.
 
             <output_guide>
-                - Output a description of the problem and whether it is actionable in XML format inside a <problem> tag.
-                - Provide a description of the problem inside the <description> tag.
-                - Provide a <reasoning> tag with your reasoning for why the problem is actionable or not.
-                - Inside the <actionability_score> tag, output a float score from 0-1.0 if the error message and stack trace is actionable and would be fixed with a simple, straightforward code change.
-                - Make sure to escape any special characters in the XML.
-                - Example format provided below:
-                <problem>
-                    <description>
-                        The function here is not working because X Y Z
-                    </description>
-                    <reasoning>
-                        This should be actionable because X Y Z
-                    </reasoning>
-                    <actionability_score>
-                        0.8
-                    </actionability_score>
-                </problem>
-            </output_guide>
-
-            <error_message>
-            {err_msg}
-            </error_message>
-
-            <stack_trace>
-            {stack_str}
-            </stack_trace>"""
-        ).format(err_msg=err_msg, stack_str=stack_str)
+            - Output a description of the problem and whether it is actionable in XML format inside a <problem> tag.
+            - Provide a description of the problem inside the <description> tag.
+            - Provide a <reasoning> tag with your reasoning for why the problem is actionable or not.
+            - Inside the <actionability_score> tag, output a float score from 0-1.0 if the error message and stack trace is actionable and would be fixed with a simple, straightforward code change.
+            - Make sure to escape any special characters in the XML.
+            - Example format provided below:
+            <problem>
+            <description>
+            The function here is not working because X Y Z
+            </description>
+            <reasoning>
+            This should be actionable because X Y Z
+            </reasoning>
+            <actionability_score>
+            0.8
+            </actionability_score>
+            </problem>
+            </output_guide>"""
+        )
 
 
 class PlanningPrompts:
@@ -124,19 +126,34 @@ class PlanningPrompts:
 
     @staticmethod
     def format_default_msg(
-        problem: ProblemDiscoveryOutput, additional_context: Optional[str] = None
+        err_msg: str,
+        stack_str: str,
+        problem: ProblemDiscoveryOutput,
+        additional_context: Optional[str] = None,
     ):
-        additional_context_str = (
-            pad(format_additional_context(additional_context), "\n") if additional_context else ""
-        )
         return textwrap.dedent(
-            f"""\
+            """\
+            Given the issue:
+            <issue>
+            <error_message>
+            {err_msg}
+            </error_message>
+            <stack_trace>
+            {stack_str}
+            </stack_trace>
+            </issue>
+
             The problem has been identified as:
 
-            {problem.description}
+            {problem_description}
             {additional_context_str}
 
-            Please generate the plan that fixes the above problems."""
+            Please generate a plan that fixes the above problems. DO NOT include any unit or integration tests in the plan. The shortest, simplest plan is needed."""
+        ).format(
+            err_msg=err_msg,
+            stack_str=stack_str,
+            problem_description=problem.description,
+            additional_context_str=format_additional_context(additional_context),
         )
 
     # TODO: to be implemented with the feedback system
@@ -170,7 +187,7 @@ class PlanningPrompts:
     #     )
 
     @staticmethod
-    def format_system_msg(err_msg: str, stack_str: str):
+    def format_system_msg():
         return textwrap.dedent(
             """\
             You are an exceptional principal engineer that, given an issue in the codebase and the result of a triage, is tasked with coming up with an actionable plan to fix the issue. Given the below error message and stack trace, please output actionable coding actions in XML format inside a <plan> tag to fix the issue.
@@ -180,16 +197,18 @@ class PlanningPrompts:
             Include the relevant filenames and line numbers in every step of the plan; each will be sent separately to the execution system to be executed.
 
             <guidelines>
-                - The plan should be a specific series of code changes, anything else that is not a specific code change is implied. The other engineers will be able to figure out the rest.
-                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred before outputting the plan.
-                - Search as many times as you'd like as these searches are free and you have a big bonus waiting for you.
                 - Think out loud step-by-step as you search the codebase and write the plan.
+                - The plan MUST correspond to a specific series of code changes needed to resolve the issue.
+                - Feel free to search around the codebase to understand the code structure of the project and context of why the issue occurred before outputting the plan.
+                - Search as many times as you'd like as these searches are free.
+                - To the extent possible, your plan should address the root cause of the problem.
                 - Understand the context of the issue and the codebase before you start writing the plan.
                 - Make sure that the code changed by the plan would work well with the rest of the codebase and would not introduce any new bugs.
-                - The plan should not include research tasks, such as "look into this" or "investigate that", you should be the one doing the research.
+                - You are responsible for research tasks and resolving ambiguity, so that the final plan is as clear and actionable as possible.
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
                 - Call the tools via the tool calling API before you output the plan.
+                - Each step in the plan MUST correspond to a clearly defined code change that can reasonably be executed.
             </guidelines>
 
             <output_guide>
@@ -203,71 +222,133 @@ class PlanningPrompts:
                 </description>
                 <steps>
                     <step title="Short title for task carding">
-                        Do X
+                        Change foo(arg1: str) to accept a second argument foo(arg1: str, arg2: int) and use arg2 in the function.
                     </step>
                     <step title="Short title for task carding">
-                        Do Y
+                        Add a new function bar(arg1: str, arg2: int) that uses the new argument.
                     </step>
                 </steps>
             </plan>
-            </output_guide>
-
-            <error_message>
-            {err_msg}
-            </error_message>
-
-            <stack_trace>
-            {stack_str}
-            </stack_trace>"""
-        ).format(err_msg=err_msg, stack_str=stack_str)
+            </output_guide>"""
+        )
 
 
 class ExecutionPrompts:
     @staticmethod
-    def format_default_msg(
-        plan_item: PlanStep,
-    ):
-        return plan_item.text
-
-    @staticmethod
-    def format_system_msg(context_dump: str, error_message: str | None, stack_trace: str | None):
-        issue_str = (
-            textwrap.dedent(
-                """\
-                <issue>
-                    <error_message>
-                {error_message}
-                    </error_message>
-                    <stack_trace>
-                {stack_trace}
-                    </stack_trace>
-                </issue>"""
-            ).format(
-                error_message=textwrap.indent(error_message, "        "),
-                stack_trace=textwrap.indent(stack_trace, "        "),
-            )
-            if error_message and stack_trace
-            else ""
-        )
-
+    def format_system_msg():
         return textwrap.dedent(
             """\
-            {context_dump}
-            --------
-            You are an exceptional senior engineer that is tasked with writing code to accomplish a task. Given the below plan and available tools, convert the plan into code. The original error message and stack trace that caused the plan to be created is also provided to help you understand the context of the plan.
-            You will need to execute every step of the plan for me and not miss a single one because I have no fingers and I can't type. Fully complete the task, this is my last resort. My grandma is terminally ill and if we ship this fix we will get a $20,000 bonus that will help pay for the medical bills. Please help me save my grandma.
+            You are an exceptional senior engineer that is responsible for correctly resolving a production issue. Given the available tools and below task, which corresponds to an important step in resolving the issue, convert the task into code. The original error message and stack trace that the plan is designed to address is also provided to help you understand the context of your task.
+            It's absolutely vital that you completely and correctly execute your task.
 
             When the task is complete, reply with "<DONE>"
             If you are unable to complete the task, also reply with "<DONE>"
 
             <guidelines>
-                - Please think out loud step-by-step before you start writing code.
                 - Write code by calling the available tools.
-                - The code should be valid, executable code.
+                - The code must be valid, executable code.
                 - Code padding, spacing, and indentation matters, make sure that the indentation is corrected for.
                 - `multi_tool_use.parallel` is invalid, do not use it.
                 - You cannot call tools via XML, use the tool calling API instead.
-                - Do not just add a comment or leave a TODO, you must write functional code.
-                - If needed, you can create unit tests by searching through the codebase for existing unit tests.
-            </guidelines>{issue_str}"""
-        ).format(context_dump=context_dump, issue_str=issue_str)
+            </guidelines>"""
+        )
+
+    @staticmethod
+    def format_default_msg(
+        context_dump: str | None,
+        error_message: str | None,
+        stack_trace: str | None,
+        plan_item: PlanStep,
+    ):
+        context_dump_str = (
+            textwrap.dedent(
+                """\
+                <relevant_context>
+                {context_dump}
+                </relevant_context>"""
+            ).format(context_dump=context_dump)
+            if context_dump
+            else ""
+        )
+
+        issue_str = (
+            textwrap.dedent(
+                """\
+                <issue>
+                <error_message>
+                {error_message}
+                </error_message>
+                <stack_trace>
+                {stack_trace}
+                </stack_trace>
+                </issue>"""
+            ).format(
+                error_message=error_message,
+                stack_trace=stack_trace,
+            )
+            if error_message and stack_trace
+            else ""
+        )
+
+        return (
+            textwrap.dedent(
+                """\
+            {context_dump_str}
+
+            {issue_str}
+
+            <task>
+            {task_text}
+            </task>
+
+            You must complete the task.
+            - Think out loud step-by-step before you start writing code.
+            - Do not just add a comment or leave a TODO, you must write functional code.
+            - Importing libraries and modules should be done in its own step.
+            - Carefully review your code and ensure that it is formatted correctly.
+
+            You must use the tools/functions provided to do so."""
+            )
+            .format(
+                context_dump_str=context_dump_str, issue_str=issue_str, task_text=plan_item.text
+            )
+            .strip()
+        )
+
+    @staticmethod
+    def format_snippet_replacement_msg(
+        reference_snippet: str, replacement_snippet: str, chunk: str, commit_message: str
+    ):
+        return textwrap.dedent(
+            """\
+            Replace the following snippet:
+
+            <snippet>
+            {reference_snippet}
+            </snippet>
+
+            with the following snippet:
+            <snippet>
+            {replacement_snippet}
+            </snippet>
+
+            in the below chunk of code:
+            <chunk>
+            {chunk}
+            </chunk>
+
+            The intent of this change is
+            <description>
+            {commit_message}
+            </description>
+
+            Make sure you fix any errors in the code and ensure it is working as expected to the intent of the change.
+            Do not make extraneous changes to the code or whitespace that are not related to the intent of the change.
+
+            You MUST return the code result under the "code": key in the response JSON object."""
+        ).format(
+            reference_snippet=reference_snippet,
+            replacement_snippet=replacement_snippet,
+            chunk=chunk,
+            commit_message=commit_message,
+        )

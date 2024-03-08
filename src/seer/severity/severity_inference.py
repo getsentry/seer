@@ -4,12 +4,13 @@ import torch
 from joblib import load
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
+from typing import Optional
 
 
 class SeverityRequest(BaseModel):
     message: str = ""
     has_stacktrace: int = 0
-    handled: bool = False
+    handled: Optional[bool] = None
     trigger_timeout: bool | None = None
     trigger_error: bool | None = None
 

@@ -72,6 +72,10 @@ class RepoClient:
         self.repo_owner = repo_owner
         self.repo_name = repo_name
 
+    @property
+    def repo_full_name(self):
+        return self.repo.full_name
+
     def get_default_branch(self):
         return self.repo.default_branch
 

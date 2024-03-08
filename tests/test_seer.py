@@ -6,8 +6,11 @@ from unittest import mock
 import pytest
 from flask import Flask
 from flask.cli import ScriptInfo
+from sqlalchemy import text
 
 from seer.app import app
+from seer.db import ProcessRequest, Session
+from seer.generator import parameterize
 
 
 @pytest.fixture(autouse=True)
@@ -301,3 +304,23 @@ class TestSeer(unittest.TestCase):
 
         output = json.loads(response.get_data(as_text=True))
         assert output == {"data": []}
+
+
+@parameterize(count=1)
+def test_prepared_statements_disabled(
+    requests: tuple[
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+    ]
+):
+    with Session() as session:
+        # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
+        for i, request in enumerate(requests):
+            request.name += str(i)
+            session.add(request)
+            session.flush()
+        assert session.execute(text("select count(*) from pg_prepared_statements")).scalar() == 0

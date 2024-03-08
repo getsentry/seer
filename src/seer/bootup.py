@@ -5,6 +5,7 @@ from typing import Collection
 import sentry_sdk
 from celery import Celery
 from flask import Flask
+from psycopg import Connection
 from sentry_sdk.integrations import Integration
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -21,6 +22,10 @@ def traces_sampler(sampling_context: dict):
             return 0.0
 
     return 1.0
+
+
+class DisablePreparedStatementConnection(Connection):
+    pass
 
 
 def bootup(
@@ -43,7 +48,10 @@ def bootup(
         enable_tracing=True,
     )
     app = Flask(name)
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
+
+    uri = os.environ["DATABASE_URL"]
+    app.config["SQLALCHEMY_DATABASE_URI"] = uri
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
 
     from seer.inference_models import cached
 

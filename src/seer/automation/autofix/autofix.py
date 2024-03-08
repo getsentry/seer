@@ -104,9 +104,12 @@ class Autofix:
                 return
 
             for repo in self.request.repos:
-                if not self.context.has_codebase_index(repo):
+                self.event_manager.send_codebase_indexing_repo_check_message(repo.full_name)
+                if self.context.has_codebase_index(repo):
+                    self.event_manager.send_codebase_indexing_repo_exists_message(repo.full_name)
+                else:
                     logger.info(f"Creating codebase index for repo {repo.name}")
-                    self.event_manager.send_codebase_creation_message()
+                    self.event_manager.send_codebase_index_creation_message(repo.full_name)
                     with sentry_sdk.start_span(
                         op="seer.automation.autofix.codebase_index.create",
                         description="Create codebase index",
@@ -114,14 +117,16 @@ class Autofix:
                         span.set_tag("repo", repo.name)
                         self.context.create_codebase_index(repo)
                     logger.info(f"Codebase index created for repo {repo.name}")
+                    self.event_manager.send_codebase_index_creation_complete_message(repo.full_name)
 
             for repo_id, codebase in self.context.codebases.items():
+                repo_full_name = codebase.repo_client.repo_full_name
                 if codebase.is_behind():
                     if self.context.diff_contains_stacktrace_files(repo_id, self.stacktrace):
                         logger.debug(
                             f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
                         )
-                        self.event_manager.send_codebase_indexing_message()
+                        self.event_manager.send_codebase_index_update_wait_message(repo_full_name)
                         with sentry_sdk.start_span(
                             op="seer.automation.autofix.codebase_index.update",
                             description="Update codebase index",
@@ -129,14 +134,19 @@ class Autofix:
                             span.set_tag("repo", codebase.repo_info.external_slug)
                             codebase.update()
                         logger.debug(f"Codebase index updated")
+                        self.event_manager.send_codebase_index_up_to_date_message(repo_full_name)
                     else:
                         update_codebase_index.apply_async(
                             (UpdateCodebaseTaskRequest(repo_id=repo_id).model_dump(),),
-                            countdown=3 * 60,
-                        )  # 3 minutes
+                            countdown=10 * 60,
+                        )  # 10 minutes
                         logger.info(f"Codebase indexing scheduled for later")
+                        self.event_manager.send_codebase_index_update_scheduled_message(
+                            repo_full_name
+                        )
                 else:
                     logger.debug(f"Codebase is up to date")
+                    self.event_manager.send_codebase_index_up_to_date_message(repo_full_name)
 
             if not self.context.codebases:
                 logger.warning(f"No codebase indexes")
@@ -350,10 +360,7 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=ProblemDiscoveryPrompt.format_system_msg(
-                        err_msg=self.request.issue.title,
-                        stack_str=self.stacktrace.to_str(),
-                    ),
+                    content=ProblemDiscoveryPrompt.format_system_msg(),
                 )
             ],
         )
@@ -365,7 +372,9 @@ class Autofix:
             raise NotImplementedError("Problem discovery feedback not implemented yet.")
         else:
             message = ProblemDiscoveryPrompt.format_default_msg(
-                additional_context=self.request.additional_context
+                err_msg=self.request.issue.title,
+                stack_str=self.stacktrace.to_str(),
+                additional_context=self.request.additional_context,
             )
 
         problem_discovery_response = problem_discovery_agent.run(message)
@@ -439,10 +448,7 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=PlanningPrompts.format_system_msg(
-                        err_msg=self.request.issue.title,
-                        stack_str=self.stacktrace.to_str(),
-                    ),
+                    content=PlanningPrompts.format_system_msg(),
                 )
             ],
         )
@@ -452,6 +458,8 @@ class Autofix:
         elif input.problem:
             # TODO: Remove this and also find how to address mismatches in the stack trace path and the actual filepaths
             message = PlanningPrompts.format_default_msg(
+                err_msg=self.request.issue.title,
+                stack_str=self.stacktrace.to_str(),
                 problem=input.problem,
                 additional_context=self.request.additional_context or "",
             )
@@ -542,16 +550,20 @@ class Autofix:
             memory=[
                 Message(
                     role="system",
-                    content=ExecutionPrompts.format_system_msg(
-                        context_dump,
-                        error_message=self.request.issue.title,
-                        stack_trace=self.stacktrace.to_str(),
-                    ),
+                    content=ExecutionPrompts.format_system_msg(),
                 ),
             ],
             stop_message="<DONE>",
         )
 
-        execution_agent.run(ExecutionPrompts.format_default_msg(plan_item=plan_item))
+        execution_agent.run(
+            ExecutionPrompts.format_default_msg(
+                context_dump,
+                error_message=self.request.issue.title,
+                stack_trace=self.stacktrace.to_str(),
+                plan_item=plan_item,
+            )
+        )
 
         self.usage += execution_agent.usage
+        self.usage += code_action_tools.usage

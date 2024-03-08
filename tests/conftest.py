@@ -5,24 +5,33 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from seer.bootup import CELERY_CONFIG
+from seer.bootup import CELERY_CONFIG, bootup
 from seer.db import Session, db
-from seer.tasks import AsyncSession
+
+
+@pytest.fixture(autouse=True, scope="session")
+def configure_environment():
+    os.environ["LANGCHAIN_TRACING_SAMPLING_RATE"] = "0"
+    os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].replace("db", "test-db")
 
 
 @pytest.fixture(autouse=True)
 def manage_db():
     # disables langsmith
-    os.environ["LANGCHAIN_TRACING_SAMPLING_RATE"] = "0"
 
     # Forces the initialization of the database
-    from seer.app import app
+    app = bootup(
+        __name__,
+        init_db=True,
+        init_migrations=False,
+        with_async=True,
+    )
 
     with app.app_context():
-        Session.configure(bind=db.engine)
-        AsyncSession.configure(bind=create_async_engine(db.engine.url))  # type: ignore
+        db.metadata.drop_all(bind=db.engine)
         with Session() as session:
             session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            session.commit()
         db.metadata.create_all(bind=db.engine)
     try:
         yield
@@ -30,10 +39,6 @@ def manage_db():
         with app.app_context():
             db.metadata.drop_all(bind=db.engine)
 
-
-# @pytest.fixture(autouse=True)
-# def manage_async_errors():
-# asyncio.events.get_event_loop().set_exception_handler()
 
 pytest_plugins = (
     "pytest_asyncio",
