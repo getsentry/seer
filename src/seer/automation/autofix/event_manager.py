@@ -195,7 +195,6 @@ class AutofixEventManager:
     def send_codebase_indexing_result(
         self, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR, AutofixStatus.CANCELLED]
     ):
-        # Update the status of step 2 to COMPLETED and step 3 to PROCESSING
         with self.state.update() as cur:
             indexing_step = cur.find_step(id=self.indexing_step.id)
             if indexing_step:
