@@ -1,4 +1,3 @@
-import contextlib
 import dataclasses
 import datetime
 import enum
@@ -9,9 +8,11 @@ import random
 import string
 import struct
 import typing
+import uuid
 import zlib
 from typing import Any, Iterator, TypeVar, get_type_hints
 
+import typing_extensions
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
@@ -25,11 +26,11 @@ _Tuple = TypeVar("_Tuple", bound=tuple)
 @dataclasses.dataclass
 class _RandomGenerator:
     r: random.Random = dataclasses.field(default_factory=lambda: random.Random())
-    max_count: int = 10000
+    max_count: int = 1000000
 
     def restart_at(self, seed: int) -> typing.Self:
         self.r = random.Random(seed)
-        self.max_count = 10000
+        self.max_count = 1000000
         return self
 
     def __next__(self) -> "random.Random":
@@ -126,6 +127,34 @@ datetimes = (
 positive_timedeltas = (
     datetime.timedelta(seconds=r.randint(0, 59), hours=r.randint(0, 23)) for r in gen
 )
+
+uuids = (uuid.UUID(int=r.getrandbits(128), version=4) for r in gen)
+uuid_hexes = (uid.hex for uid in uuids)
+
+extensions = gen.one_of((".jpg", ".png", ".gif", ".txt", ".py", ".ts", ".c", ".obj", ".ini", ""))
+path_segments = gen.one_of(
+    (
+        "tmp",
+        "",
+        "var",
+        "usr",
+        "Home",
+        "data",
+        "volumes",
+        "etc",
+        "tests",
+        "src",
+        "db",
+        "conf",
+        "events",
+        "utils",
+        "app",
+        "versions",
+        "models",
+    ),
+    uuid_hexes,
+)
+file_names = ("/".join([head, *segments]) for head, segments in zip(path_segments, zip()))
 
 
 def _pydantic_has_default(field: FieldInfo) -> bool:
@@ -334,7 +363,7 @@ def generate_dataclass_instances(context: GeneratorContext) -> Iterator[Any] | N
 
 
 def generate_dicts_from_typeddict(context: GeneratorContext) -> Iterator[Any] | None:
-    if typing.is_typeddict(context.source):
+    if typing.is_typeddict(context.source) or typing_extensions.is_typeddict(context.source):
         optional: list[str] = sorted(getattr(context.source, "__optional_keys__", frozenset()))
         hints = get_type_hints(context.source, include_extras=True)
         dicts = generate_dicts_for_annotations({k: v for k, v in hints.items()}, context)
@@ -447,6 +476,8 @@ def generate_primitives(context: GeneratorContext) -> typing.Iterator[Any] | Non
         return ints
     if source is str:
         return ascii_words
+    if source is uuid.UUID:
+        return uuids
     if source is bool:
         return bools
     if source is object:

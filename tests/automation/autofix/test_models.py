@@ -10,6 +10,8 @@ from seer.automation.autofix.models import (
     Stacktrace,
     StacktraceFrame,
 )
+from seer.generator import parameterize
+from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry
 
 
 class TestStacktraceHelpers(unittest.TestCase):
@@ -143,3 +145,15 @@ class TestAutofixRequest(unittest.TestCase):
             issue=issue_details,
         )
         self.assertEqual(len(autofix_request.repos), 2)
+
+
+@parameterize
+def test_event_get_stacktrace_invalid(event: SentryEvent, entry: InvalidEventEntry):
+    event.entries = [entry]
+    assert event.get_stacktrace() is None
+
+
+@parameterize
+def test_event_get_stacktrace_empty_frames(event: SentryEvent, entry: NoStacktraceExceptionEntry):
+    event.entries = [entry.model_dump()]
+    assert event.get_stacktrace() is None
