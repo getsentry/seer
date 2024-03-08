@@ -34,7 +34,9 @@ module = [
     "scipy.*",
     "openai_multi_tool_use_parallel_patch",
     "fsspec",
-    "unidiff"
+    "unidiff",
+    "tree_sitter_languages",
+    "tree_sitter"
 ]
 ignore_missing_imports = true
 

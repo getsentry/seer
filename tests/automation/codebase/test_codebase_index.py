@@ -491,13 +491,15 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
                 change_type="edit",
                 path="file1.py",
                 reference_snippet="""    y = 2 + 3""",
-                new_snippet="""    y = 2 + 4 # yes\n    z = 3 + 3""",
+                new_snippet="""    y = 2 + 4 # yes\n        z = 3 + 3""",
             ),
         ]
 
         # Execute
         patches = self.codebase_index.get_file_patches()
         patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
+
+        print(patches)
 
         # Assert
         self.assertEqual(len(patches), 1)

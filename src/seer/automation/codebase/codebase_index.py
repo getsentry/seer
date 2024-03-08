@@ -551,9 +551,9 @@ class CodebaseIndex:
                 section_header = hunk.section_header
                 if tree and document:
                     line_numbers = [
-                        line.source_line_no
+                        line.target_line_no
                         for line in lines
-                        if line.line_type != " " and line.source_line_no is not None
+                        if line.line_type != " " and line.target_line_no is not None
                     ]
                     first_line_no = line_numbers[0] if line_numbers else None
                     last_line_no = line_numbers[-1] if line_numbers else None
