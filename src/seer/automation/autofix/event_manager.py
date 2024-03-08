@@ -29,22 +29,19 @@ class AutofixEventManager:
             title="Preliminary Assessment",
         )
 
-    def _get_step(self, step_id: str, steps: Optional[list[ProgressItem | Step]] = None) -> Step:
-        steps_to_use = steps or self.steps
-        step = next(step for step in steps_to_use if isinstance(step, Step) and step.id == step_id)
-
-        return step
-
     def send_no_stacktrace_error(self):
         with self.state.update() as cur:
-            step = cur.find_or_add(self.problem_discovery_step)
+            step = self.problem_discovery_step
             step.description = "Error: Cannot fix issues without a stacktrace."
+            cur.steps = [step]
             cur.status = step.status = AutofixStatus.ERROR
 
     def send_initial_steps(self):
         with self.state.update() as cur:
-            step = cur.find_or_add(self.problem_discovery_step)
+            step = self.problem_discovery_step
+            cur.steps = [step]
             step.status = AutofixStatus.PROCESSING
+            cur.status = AutofixStatus.PROCESSING
 
     @property
     def indexing_step(self) -> Step:
@@ -80,6 +77,7 @@ class AutofixEventManager:
                 ]
             )
             problem_discovery_step.completedMessage = result.description
+
             cur.find_or_add(self.indexing_step)
             cur.find_or_add(self.plan_step)
 
@@ -87,21 +85,9 @@ class AutofixEventManager:
                 AutofixStatus.PROCESSING if result.status == "CONTINUE" else AutofixStatus.COMPLETED
             )
 
-    def send_codebase_creation_message(self):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-
-            indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.description = (
-                "Creating initial codebase index for project, this may take a while..."
-            )
-
-            cur.status = AutofixStatus.PROCESSING
-
     def send_codebase_indexing_repo_check_message(self, repo_full_name: str):
         with self.state.update() as cur:
             indexing_step = cur.find_or_add(self.indexing_step)
-
             indexing_step.status = AutofixStatus.PROCESSING
             indexing_step.progress.append(
                 ProgressItem(
@@ -110,12 +96,6 @@ class AutofixEventManager:
                     type=ProgressType.INFO,
                 )
             )
-
-    def send_codebase_indexing_message(self):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-            indexing_step.status = AutofixStatus.PROCESSING
-            cur.status = AutofixStatus.PROCESSING
 
     def send_codebase_indexing_repo_exists_message(self, repo_full_name: str):
         with self.state.update() as cur:

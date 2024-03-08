@@ -70,6 +70,11 @@ def run_autofix(
             **autofix_group_state,
         )
     )
+
+    # Process has no further work.
+    if continuation.status in AutofixStatus.terminal():
+        return
+
     state = CeleryProgressState(val=continuation, bind=self)
 
     request = AutofixRequest(**request_data)

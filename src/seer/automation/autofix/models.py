@@ -33,6 +33,10 @@ class AutofixStatus(enum.Enum):
     PROCESSING = "PROCESSING"
     CANCELLED = "CANCELLED"
 
+    @classmethod
+    def terminal(cls) -> "frozenset[AutofixStatus]":
+        return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
+
 
 class FileChange(BaseModel):
     change_type: Literal["create", "edit", "delete"]
@@ -278,8 +282,8 @@ class Step(BaseModel):
             return existing
 
         base_step = base_step.model_copy()
-        base_step.index = len(self.children)
-        self.children.append(base_step)
+        base_step.index = len(self.progress)
+        self.progress.append(base_step)
         return base_step
 
 
