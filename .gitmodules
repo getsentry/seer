@@ -1,0 +1,3 @@
+[submodule "sentry-data-schemas"]
+	path = sentry-data-schemas
+	url = https://github.com/getsentry/sentry-data-schemas
