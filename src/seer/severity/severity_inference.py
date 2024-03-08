@@ -1,10 +1,11 @@
+from typing import Optional
+
 import numpy as np
 import sentry_sdk
 import torch
 from joblib import load
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
-from typing import Optional
 
 
 class SeverityRequest(BaseModel):
