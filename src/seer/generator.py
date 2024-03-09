@@ -207,6 +207,7 @@ def generate_dicts_for_annotations(
         k: generate(context.step(v, k)) for k, v in annotations.items()
     }
 
+    sampled_keys: Iterator[list[str]]
     if context.include_defaults == "holes":
         sampled_keys = (r.sample(optional_keys, r.randint(0, len(optional_keys))) for r in gen)
     elif context.include_defaults:
