@@ -79,6 +79,6 @@ _async_task_factories: list[Callable[[], AsyncTaskFactory]] = []
 
 
 def async_task_factory(f: Callable[[], AsyncTaskFactory]) -> Callable[[], AsyncTaskFactory]:
-    logger.info(f"@async_task_factory called with {f}")
+    logger.info(f"@async_task_factory registering task factory: {f}")
     _async_task_factories.append(f)
     return f
