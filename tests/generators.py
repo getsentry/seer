@@ -19,10 +19,10 @@ SentryFrameDict = Annotated[
     SentryFrame,
     Examples(
         (
-            {**base_frame, **stacktrace_frame.model_dump(mode="json")}
+            {**base_frame, **stacktrace_frame.model_dump(mode="json", by_alias=True)}
             for base_frame, stacktrace_frame in zip(
                 generator.generate(SentryFrame, include_defaults="holes"),
-                generator.generate(StacktraceFrame, include_defaults="holes"),
+                generator.generate(StacktraceFrame, include_defaults=True),
             )
         ),
     ),

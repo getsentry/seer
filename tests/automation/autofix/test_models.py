@@ -170,6 +170,6 @@ def test_event_get_stacktrace_empty_frames(
     valid_frame: SentryFrameDict,
 ):
     sentry_data_value["stacktrace"]["frames"].append(valid_frame)
-    entry.data["values"].append(sentry_data_value)
+    entry.data["values"] = [sentry_data_value]
     event.entries = [invalid, entry.model_dump(mode="json")]
     assert StacktraceFrame.model_validate(valid_frame) in event.get_stacktrace().frames

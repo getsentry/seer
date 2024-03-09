@@ -90,8 +90,8 @@ class PlanningInput(BaseModel):
 class StacktraceFrame(BaseModel):
     model_config = ConfigDict(
         alias_generator=AliasGenerator(
-            validation_alias=lambda k: AliasChoices(to_snake(k), to_camel(k)),
-            serialization_alias=to_snake,
+            validation_alias=lambda k: AliasChoices(to_camel(k), to_snake(k)),
+            serialization_alias=to_camel,
         )
     )
 
@@ -178,12 +178,12 @@ class SentryEvent(BaseModel):
 
     def get_stacktrace(self) -> Stacktrace | None:
         exception_entry: SentryExceptionEntry | None = None
-        for entry in self.entries:
-            if entry.get("type") != "exception":
+        for value in self.entries:
+            if value.get("type") != "exception":
                 continue
 
             try:
-                exception_entry = SentryExceptionEntry.model_validate(entry)
+                exception_entry = SentryExceptionEntry.model_validate(value)
                 break
             except ValidationError:
                 sentry_sdk.capture_exception()
@@ -196,14 +196,14 @@ class SentryEvent(BaseModel):
         if not values:
             return None
 
-        for entry in values:
-            stack_trace = entry["stacktrace"]
+        for value in values:
+            stack_trace = value["stacktrace"]
             frames: list[StacktraceFrame] = []
 
             for frame in stack_trace["frames"]:
                 try:
                     frames.append(StacktraceFrame.model_validate(frame))
-                except ValidationError:
+                except ValidationError as e:
                     sentry_sdk.capture_exception()
                     continue
 

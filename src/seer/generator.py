@@ -256,9 +256,10 @@ def generate_call_args_for_argspec(
 
     arg_generators: list[Iterator[Any]] = []
     for i, argname in enumerate(source.args):
-        arg_generator = generate(context.step(source.annotations.get(argname, Any), argname))
         if i < (len(source.args) - num_arg_defaults) or context.include_defaults:
-            arg_generators.append(arg_generator)
+            arg_generators.append(
+                generate(context.step(source.annotations.get(argname, Any), argname))
+            )
 
     arg_generator: Iterator[tuple[Any, ...]]
     if arg_generators:
@@ -336,7 +337,7 @@ class GeneratorContext:
     origin: Any | None
     args: tuple[Any, ...]
     context: tuple[str, ...] = dataclasses.field(default_factory=tuple)
-    include_defaults: bool | typing.Literal["partial"] = False
+    include_defaults: bool | typing.Literal["holes"] = False
 
     generators: list[Generator] = dataclasses.field(
         default_factory=lambda: [
