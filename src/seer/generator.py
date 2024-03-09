@@ -51,7 +51,7 @@ class _RandomGenerator:
 
     @staticmethod
     def _normalize(i: typing.Iterable[_A]) -> typing.Iterator[_A]:
-        if isinstance(i, (list, tuple, set, frozenset)):
+        if not hasattr(i, "__next__"):
             i = list(i)
             return (r.choice(i) for r in gen)
         return iter(i)
@@ -204,8 +204,13 @@ def generate_dicts_for_annotations(
         return ({} for _ in gen)
 
     generators: dict[str, Iterator[Any]] = {
-        k: generate(context.step(v, k)) for k, v in annotations.items()
+        k: generate(context.step(v, k))
+        for k, v in annotations.items()
+        if context.include_defaults or k not in optional_keys
     }
+
+    for k, v in generators.items():
+        assert hasattr(v, "__next__")
 
     sampled_keys: Iterator[list[str]]
     if context.include_defaults == "holes":
@@ -219,7 +224,7 @@ def generate_dicts_for_annotations(
         dict(
             (k, v)
             for k, v in zip(generators.keys(), values)
-            if k not in optional_keys or k not in included_keys
+            if k not in optional_keys or k in included_keys
         )
         for values, included_keys in zip(zip(*generators.values()), sampled_keys)
     )
@@ -355,9 +360,9 @@ class GeneratorContext:
             generate_unions,
             generate_lists,
             generate_annotated,
-            generate_not_required,
             generate_primitives,
             generate_any,
+            generate_unexpected_annotation,
         ]
     )
 
@@ -469,8 +474,9 @@ def generate_lists(context: GeneratorContext) -> Iterator[Any] | None:
     return None
 
 
-def generate_not_required(context: GeneratorContext) -> typing.Iterator[Any] | None:
-    if context.origin is typing.NotRequired:
+def generate_unexpected_annotation(context: GeneratorContext) -> typing.Iterator[Any] | None:
+    # Assume that the first argument is the actual type to generate
+    if context.origin is not None and context.args is not None:
         annotated_inner = [*context.args, Any][0]
         return generate(context.step(annotated_inner))
     return None
