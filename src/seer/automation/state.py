@@ -83,4 +83,4 @@ class CeleryProgressState(State[_State]):
 
     def set(self, value: _State):
         self.val = value
-        self.bind.update_state("PROGRESS", meta={"value": value.model_dump()})
+        self.bind.update_state("PROGRESS", meta={"value": value.model_dump(mode="json")})

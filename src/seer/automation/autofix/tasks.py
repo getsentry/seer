@@ -13,7 +13,7 @@ from seer.automation.models import InitializationError
 from seer.automation.state import CeleryProgressState
 from seer.db import ProcessRequest
 from seer.rpc import RpcClient, SentryRpcClient
-from seer.tasks import AsyncTaskFactory, async_task_factory
+from seer.task_factory import AsyncTaskFactory, async_task_factory
 
 logger = logging.getLogger("autofix")
 

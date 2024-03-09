@@ -32,7 +32,7 @@ class AutofixEventManager:
     def send_no_stacktrace_error(self):
         with self.state.update() as cur:
             step = self.problem_discovery_step
-            step.description = "Error: Cannot fix issues without a stacktrace."
+            step.completedMessage = "Error: Cannot fix issues without a stacktrace."
             cur.steps = [step]
             cur.status = step.status = AutofixStatus.ERROR
 
@@ -60,7 +60,6 @@ class AutofixEventManager:
     def send_problem_discovery_result(self, result: ProblemDiscoveryResult):
         with self.state.update() as cur:
             problem_discovery_step = cur.find_or_add(self.problem_discovery_step)
-            problem_discovery_step.description = result.description
             problem_discovery_step.status = AutofixStatus.COMPLETED
             problem_discovery_step.progress.extend(
                 [
