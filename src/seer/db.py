@@ -91,7 +91,7 @@ class ProcessRequest(Base):
         scheduled_from -= expected_duration
 
         if isinstance(payload, BaseModel):
-            payload = payload.model_dump_json()
+            payload = payload.model_dump(mode="json")
 
         if isinstance(payload, (str, bytes)):
             payload = json.loads(payload)

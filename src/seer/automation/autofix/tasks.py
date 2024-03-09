@@ -46,15 +46,15 @@ class AutofixTaskFactory(AsyncTaskFactory):
                     "on_autofix_complete",
                     issue_id=continuation.request.issue.id,
                     status=continuation.status,
-                    steps=[step.model_dump() for step in continuation.steps],
-                    fix=continuation.fix.model_dump() if continuation.fix else None,
+                    steps=[step.model_dump(mode="json") for step in continuation.steps],
+                    fix=continuation.fix.model_dump(mode="json") if continuation.fix else None,
                 )
             else:
                 await self.rpc_client.acall(
                     "on_autofix_step_update",
                     issue_id=continuation.request.issue.id,
                     status=continuation.status,
-                    steps=[step.model_dump() for step in continuation.steps],
+                    steps=[step.model_dump(mode="json") for step in continuation.steps],
                 )
 
 

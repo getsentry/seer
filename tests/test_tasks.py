@@ -273,9 +273,7 @@ class ScheduleAsyncTest:
 async def test_next_schedule_async(test: ScheduleAsyncTest, now: Now):
     async with AsyncSession() as session:
         for name in [test.acceptable_name, test.unacceptable_name]:
-            await session.execute(
-                ProcessRequest.schedule_stmt(name, test.payload.model_dump(), when=now)
-            )
+            await session.execute(ProcessRequest.schedule_stmt(name, test.payload, when=now))
         await session.commit()
 
     process = await test.current_process_request_by_name(test.acceptable_name)

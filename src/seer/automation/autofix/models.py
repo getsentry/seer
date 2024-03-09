@@ -2,8 +2,20 @@ import datetime
 import enum
 from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+import sentry_sdk
+from pydantic import (
+    AliasChoices,
+    AliasGenerator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
+from pydantic.alias_generators import to_camel, to_snake
+from typing_extensions import NotRequired, TypedDict
 
+from seer import generator
 from seer.automation.agent.models import Usage
 from seer.automation.models import FilePatch
 from seer.generator import Examples
@@ -76,10 +88,16 @@ class PlanningInput(BaseModel):
 
 
 class StacktraceFrame(BaseModel):
-    function: str
+    model_config = ConfigDict(
+        alias_generator=AliasGenerator(
+            validation_alias=lambda k: AliasChoices(to_camel(k), to_snake(k)),
+            serialization_alias=to_camel,
+        )
+    )
 
-    filename: str
-    abs_path: str
+    function: Annotated[str, Examples(generator.ascii_words)]
+    filename: Annotated[str, Examples(generator.file_names)]
+    abs_path: Annotated[str, Examples(generator.file_paths)]
     line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]
@@ -109,33 +127,92 @@ class Stacktrace(BaseModel):
         return stack_str
 
 
+class SentryFrame(TypedDict):
+    absPath: Optional[str]
+    colNo: Optional[int]
+    context: list[tuple[int, str]]
+    filename: NotRequired[Optional[str]]
+    function: NotRequired[Optional[str]]
+    inApp: NotRequired[bool]
+    instructionAddr: NotRequired[Optional[str]]
+    lineNo: NotRequired[Optional[int]]
+    module: NotRequired[Optional[str]]
+    package: NotRequired[Optional[str]]
+    platform: NotRequired[Optional[str]]
+    rawFunction: NotRequired[Optional[str]]
+    symbol: NotRequired[Optional[str]]
+    symbolAddr: NotRequired[Optional[str]]
+    trust: NotRequired[Optional[Any]]
+    vars: NotRequired[Optional[dict[str, Any]]]
+    addrMode: NotRequired[Optional[str]]
+    isPrefix: NotRequired[bool]
+    isSentinel: NotRequired[bool]
+    lock: NotRequired[Optional[Any]]
+    map: NotRequired[Optional[str]]
+    mapUrl: NotRequired[Optional[str]]
+    minGroupingLevel: NotRequired[int]
+    origAbsPath: NotRequired[Optional[str]]
+    sourceLink: NotRequired[Optional[str]]
+    symbolicatorStatus: NotRequired[Optional[Any]]
+
+
+class SentryStacktrace(TypedDict):
+    frames: list[SentryFrame]
+
+
+class SentryEventEntryDataValue(TypedDict):
+    stacktrace: SentryStacktrace
+
+
+class SentryExceptionEventData(TypedDict):
+    values: list[SentryEventEntryDataValue]
+
+
+class SentryExceptionEntry(BaseModel):
+    type: Literal["exception"]
+    data: SentryExceptionEventData
+
+
 class SentryEvent(BaseModel):
     entries: list[dict]
 
-    def get_stacktrace(self):
-        exception_entry = next(
-            (entry for entry in self.entries if entry["type"] == "exception"),
-            None,
-        )
+    def get_stacktrace(self) -> Stacktrace | None:
+        exception_entry: SentryExceptionEntry | None = None
+        for entry in self.entries:
+            if entry.get("type") != "exception":
+                continue
+
+            try:
+                exception_entry = SentryExceptionEntry.model_validate(entry)
+                break
+            except ValidationError:
+                sentry_sdk.capture_exception()
+                continue
 
         if exception_entry is None:
             return None
 
-        frames: list[StacktraceFrame] = []
-        for frame in exception_entry["data"]["values"][0]["stacktrace"]["frames"]:
-            frames.append(
-                StacktraceFrame(
-                    function=frame["function"],
-                    filename=frame["filename"],
-                    line_no=frame["lineNo"],
-                    abs_path=frame["absPath"],
-                    col_no=frame["colNo"],
-                    context=frame["context"],
-                    in_app=frame["inApp"],
-                )
-            )
+        values = exception_entry.data["values"]
+        if not values:
+            return None
 
-        return Stacktrace(frames=frames)
+        v: SentryEventEntryDataValue
+        for v in values:
+            stack_trace = v["stacktrace"]
+            frames: list[StacktraceFrame] = []
+
+            for frame in stack_trace["frames"]:
+                try:
+                    frames.append(StacktraceFrame.model_validate(frame))
+                except ValidationError as e:
+                    sentry_sdk.capture_exception()
+                    continue
+
+            if not frames:
+                continue
+
+            return Stacktrace(frames=frames)
+        return None
 
 
 class IssueDetails(BaseModel):

@@ -13,6 +13,7 @@ from seer.db import Session, db
 def configure_environment():
     # disables langsmith
     os.environ["LANGCHAIN_TRACING_SAMPLING_RATE"] = "0"
+    os.environ["LANGCHAIN_ENDPOINT"] = "test"
     os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].replace("db", "test-db")
 
 

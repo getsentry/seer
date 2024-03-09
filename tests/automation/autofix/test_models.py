@@ -7,9 +7,13 @@ from seer.automation.autofix.models import (
     IssueDetails,
     RepoDefinition,
     SentryEvent,
+    SentryEventEntryDataValue,
+    SentryExceptionEntry,
     Stacktrace,
     StacktraceFrame,
 )
+from seer.generator import parameterize
+from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry, SentryFrameDict
 
 
 class TestStacktraceHelpers(unittest.TestCase):
@@ -143,3 +147,29 @@ class TestAutofixRequest(unittest.TestCase):
             issue=issue_details,
         )
         self.assertEqual(len(autofix_request.repos), 2)
+
+
+@parameterize
+def test_event_get_stacktrace_invalid(event: SentryEvent, entry: InvalidEventEntry):
+    event.entries = [entry]
+    assert event.get_stacktrace() is None
+
+
+@parameterize
+def test_event_get_stacktrace_empty_frames(event: SentryEvent, entry: NoStacktraceExceptionEntry):
+    event.entries = [entry]
+    assert event.get_stacktrace() is None
+
+
+@parameterize
+def test_event_get_stacktrace_empty_frames(
+    event: SentryEvent,
+    invalid: InvalidEventEntry,
+    entry: SentryExceptionEntry,
+    sentry_data_value: SentryEventEntryDataValue,
+    valid_frame: SentryFrameDict,
+):
+    sentry_data_value["stacktrace"]["frames"].append(valid_frame)
+    entry.data["values"] = [sentry_data_value]
+    event.entries = [invalid, entry.model_dump(mode="json")]
+    assert StacktraceFrame.model_validate(valid_frame) in event.get_stacktrace().frames
