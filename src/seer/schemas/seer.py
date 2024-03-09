@@ -145,7 +145,7 @@ SeverityRequest = typing_extensions.TypedDict(
         # default: 0
         "has_stacktrace": int,
         # default: False
-        "handled": bool,
+        "handled": typing.Optional[bool] = None,
         "trigger_timeout": typing.Union[bool, None],
         "trigger_error": typing.Union[bool, None],
     },
@@ -162,6 +162,7 @@ SeverityResponse = typing_extensions.TypedDict(
 )
 
 SimilarityResponse = typing_extensions.TypedDict(
+
     "SimilarityResponse",
     {
         "responses": typing.List["GroupingResponse"],
