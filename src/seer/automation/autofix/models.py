@@ -178,12 +178,12 @@ class SentryEvent(BaseModel):
 
     def get_stacktrace(self) -> Stacktrace | None:
         exception_entry: SentryExceptionEntry | None = None
-        for v in self.entries:
-            if v.get("type") != "exception":
+        for entry in self.entries:
+            if entry.get("type") != "exception":
                 continue
 
             try:
-                exception_entry = SentryExceptionEntry.model_validate(v)
+                exception_entry = SentryExceptionEntry.model_validate(entry)
                 break
             except ValidationError:
                 sentry_sdk.capture_exception()
@@ -196,6 +196,7 @@ class SentryEvent(BaseModel):
         if not values:
             return None
 
+        v: SentryEventEntryDataValue
         for v in values:
             stack_trace = v["stacktrace"]
             frames: list[StacktraceFrame] = []
