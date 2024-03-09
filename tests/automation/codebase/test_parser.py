@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 from tree_sitter import Node, Parser
 
 from seer.automation.codebase.models import BaseDocumentChunk
-from seer.automation.codebase.parser import Document, DocumentParser, ParentDeclaration, TempChunk
+from seer.automation.codebase.parser import Document, DocumentParser
 
 
 class TestDocumentParser(unittest.TestCase):

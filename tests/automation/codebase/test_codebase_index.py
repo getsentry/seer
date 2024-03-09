@@ -1,3 +1,4 @@
+import textwrap
 import unittest
 import uuid
 from unittest.mock import MagicMock, patch
@@ -5,7 +6,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import BaseDocumentChunk, EmbeddedDocumentChunk, RepositoryInfo
+from seer.automation.codebase.models import (
+    BaseDocumentChunk,
+    Document,
+    EmbeddedDocumentChunk,
+    RepositoryInfo,
+)
+from seer.automation.models import FileChange, FilePatch, Hunk, Line
 from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
 
 
@@ -312,3 +319,191 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunks = session.query(DbDocumentChunk).order_by("index").all()
             self.assertEqual(len(chunks), 1)
             self.assertEqual(chunks[0].hash, "file1.1")
+
+
+class TestCodebaseIndexGetFilePatches(unittest.TestCase):
+    def setUp(self):
+        self.organization = 1
+        self.project = 1
+        self.repo_definition = MagicMock()
+        self.run_id = uuid.uuid4()
+        self.repo_info = RepositoryInfo(
+            id=1, organization=1, project=1, provider="github", external_slug="test/repo", sha="sha"
+        )
+        self.repo_client = MagicMock()
+        self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
+        self.codebase_index = CodebaseIndex(
+            self.organization, self.project, self.repo_client, self.repo_info, self.run_id
+        )
+        self.mock_get_document = MagicMock()
+        self.codebase_index.get_document = self.mock_get_document
+
+    def test_get_file_patches(self):
+        def get_document_mock(file_path, ignore_local_changes=False):
+            if file_path == "file1.py":
+                return Document(
+                    path="file1.py",
+                    language="python",
+                    text=textwrap.dedent(
+                        """\
+                        def foo():
+                            x = 1 + 1
+                            y = 2 + 2
+                            return x + y"""
+                    ),
+                )
+            elif file_path == "file2.py":
+                return None
+            elif file_path == "file3.py":
+                return Document(
+                    path="file3.py",
+                    language="python",
+                    text=textwrap.dedent(
+                        """\
+                        def baz():
+                            a = 1 + 5
+                            return 'baz'
+                        """
+                    ),
+                )
+
+        self.mock_get_document.side_effect = get_document_mock
+
+        self.codebase_index.file_changes = [
+            FileChange(
+                change_type="edit",
+                path="file1.py",
+                reference_snippet="""    y = 2 + 2""",
+                new_snippet="""    y = 2 + 3""",
+            ),
+            FileChange(
+                change_type="edit",
+                path="file1.py",
+                reference_snippet="""    y = 2 + 3""",
+                new_snippet="""    y = 2 + 4 # yes\n    z = 3 + 3""",
+            ),
+            FileChange(
+                change_type="create",
+                path="file2.py",
+                new_snippet=textwrap.dedent(
+                    """\
+                    def bar():
+                        return 'bar'
+                    """
+                ),
+            ),
+            FileChange(
+                change_type="delete", path="file3.py", reference_snippet="""    a = 1 + 5\n"""
+            ),
+        ]
+
+        # Execute
+        patches = self.codebase_index.get_file_patches()
+        patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
+
+        # Assert
+        self.assertEqual(len(patches), 3)
+        self.assertEqual(patches[0].path, "file1.py")
+        self.assertEqual(patches[0].type, "M")
+        self.assertEqual(patches[0].added, 2)
+        self.assertEqual(patches[0].removed, 1)
+        self.assertEqual(patches[0].source_file, "file1.py")
+        self.assertEqual(patches[0].target_file, "file1.py")
+        self.assertEqual(len(patches[0].hunks), 1)
+
+        self.assertEqual(patches[1].path, "file2.py")
+        self.assertEqual(patches[1].type, "A")
+        self.assertEqual(patches[1].added, 2)
+        self.assertEqual(patches[1].removed, 0)
+        self.assertEqual(patches[1].source_file, "/dev/null")
+        self.assertEqual(patches[1].target_file, "file2.py")
+        self.assertEqual(len(patches[1].hunks), 1)
+
+        self.assertEqual(patches[2].path, "file3.py")
+        self.assertEqual(patches[2].type, "M")
+        self.assertEqual(patches[2].added, 0)
+        self.assertEqual(patches[2].removed, 1)
+        self.assertEqual(patches[2].source_file, "file3.py")
+        self.assertEqual(patches[2].target_file, "file3.py")
+        self.assertEqual(len(patches[2].hunks), 1)
+
+    def test_get_file_patches_with_full_delete(self):
+        self.mock_get_document.return_value = Document(
+            path="file_to_delete.py",
+            language="python",
+            text=textwrap.dedent(
+                """\
+                def baz():
+                    a = 1 + 5
+                    return 'baz'
+                """
+            ),
+        )
+        file_change = FileChange(
+            change_type="delete",
+            path="file_to_delete.py",
+            reference_snippet=textwrap.dedent(
+                """\
+                def baz():
+                    a = 1 + 5
+                    return 'baz'
+                """
+            ),
+            new_snippet=None,
+        )
+        self.codebase_index.file_changes = [file_change]
+
+        # Execute
+        patches = self.codebase_index.get_file_patches()
+
+        # Assert
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(patches[0].path, "file_to_delete.py")
+        self.assertEqual(patches[0].type, "D")
+        self.assertEqual(patches[0].added, 0)
+        self.assertEqual(patches[0].removed, 3)
+        self.assertEqual(patches[0].source_file, "file_to_delete.py")
+        self.assertEqual(patches[0].target_file, "/dev/null")
+
+    def test_section_header(self):
+        self.mock_get_document.return_value = Document(
+            path="file1.py",
+            language="python",
+            text=textwrap.dedent(
+                """\
+                class foo:
+                    a = 5
+                    def foobar(a: int):
+                        x = 1 + 1
+                        y = 2 + 2
+                        return x + y"""
+            ),
+        )
+
+        self.codebase_index.file_changes = [
+            FileChange(
+                change_type="edit",
+                path="file1.py",
+                reference_snippet="""    y = 2 + 2""",
+                new_snippet="""    y = 2 + 3""",
+            ),
+            FileChange(
+                change_type="edit",
+                path="file1.py",
+                reference_snippet="""    y = 2 + 3""",
+                new_snippet="""    y = 2 + 4 # yes\n        z = 3 + 3""",
+            ),
+        ]
+
+        # Execute
+        patches = self.codebase_index.get_file_patches()
+        patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
+
+        print(patches)
+
+        # Assert
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(patches[0].path, "file1.py")
+        self.assertEqual(patches[0].type, "M")
+        self.assertEqual(len(patches[0].hunks), 1)
+        self.assertEqual(patches[0].hunks[0].section_header, "def foobar(a: int):")

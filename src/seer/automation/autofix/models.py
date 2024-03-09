@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from seer.automation.agent.models import Usage
+from seer.automation.models import FilePatch
 from seer.generator import Examples
 
 
@@ -37,38 +38,6 @@ class AutofixStatus(enum.Enum):
     @classmethod
     def terminal(cls) -> "frozenset[AutofixStatus]":
         return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
-
-
-class FileChange(BaseModel):
-    change_type: Literal["create", "edit", "delete"]
-    path: str
-    reference_snippet: Optional[str] = None
-    new_snippet: Optional[str] = None
-    description: Optional[str] = None
-
-    def apply(self, file_contents: str | None) -> str | None:
-        if self.change_type == "create":
-            if file_contents is not None:
-                raise FileChangeError("Cannot create a file that already exists.")
-            if self.new_snippet is None:
-                raise FileChangeError("New snippet must be provided for creating a file.")
-            return self.new_snippet
-
-        if file_contents is None:
-            raise FileChangeError("File contents must be provided for non-create operations.")
-
-        if self.change_type == "edit":
-            if self.new_snippet is None:
-                raise FileChangeError("New snippet must be provided for editing a file.")
-            if self.reference_snippet is None:
-                raise FileChangeError("Reference snippet must be provided for editing a file.")
-            return file_contents.replace(self.reference_snippet, self.new_snippet)
-
-        # Delete
-        if self.reference_snippet is None:
-            return None
-
-        return file_contents.replace(self.reference_snippet, "")
 
 
 class PlanStep(BaseModel):
@@ -248,6 +217,7 @@ class AutofixOutput(BaseModel):
     pr_url: str
     pr_number: int
     repo_name: str
+    diff: Optional[list[FilePatch]] = []
     usage: Usage
 
 
@@ -259,6 +229,7 @@ class PullRequestResult(BaseModel):
     pr_number: int
     pr_url: str
     repo: RepoDefinition
+    diff: list[FilePatch]
 
 
 class Step(BaseModel):

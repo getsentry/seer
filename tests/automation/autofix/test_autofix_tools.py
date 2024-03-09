@@ -2,8 +2,8 @@ import textwrap
 import unittest
 from unittest.mock import MagicMock, patch
 
-from seer.automation.autofix.models import FileChange
 from seer.automation.autofix.tools import CodeActionTools
+from seer.automation.models import FileChange
 
 
 class TestReplaceSnippetWith(unittest.TestCase):
