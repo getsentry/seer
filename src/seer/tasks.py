@@ -65,11 +65,10 @@ class AsyncApp:
     end_event: asyncio.Event = dataclasses.field(default_factory=lambda: asyncio.Event())
     num_consumers: int = 10
     queue: asyncio.Queue = dataclasses.field(default_factory=lambda: asyncio.Queue())
+    task_factories: list[Callable[[], AsyncTaskFactory]] = dataclasses.field(
+        default_factory=lambda: _async_task_factories,
+    )
     consumer_sleep: int = 5
-
-    @property
-    def task_factories(self) -> list[Callable[[], AsyncTaskFactory]]:
-        return _async_task_factories
 
     async def run_or_end(self, c: Future[_A] | Coroutine[Any, Any, _A]) -> tuple[_A] | None:
         end_task = asyncio.create_task(self.end_event.wait())
