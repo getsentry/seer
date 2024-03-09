@@ -26,11 +26,11 @@ _Tuple = TypeVar("_Tuple", bound=tuple)
 @dataclasses.dataclass
 class _RandomGenerator:
     r: random.Random = dataclasses.field(default_factory=lambda: random.Random())
-    max_count: int = 1000000
+    max_count: int = 10000000
 
     def restart_at(self, seed: int) -> typing.Self:
         self.r = random.Random(seed)
-        self.max_count = 1000000
+        self.max_count = 10000000
         return self
 
     def __next__(self) -> "random.Random":
@@ -141,8 +141,9 @@ file_extensions = gen.one_of(
 )
 path_segments = gen.one_of(
     (
+        ".",
+        "..",
         "tmp",
-        "",
         "var",
         "usr",
         "Home",
@@ -162,8 +163,9 @@ path_segments = gen.one_of(
     uuid_hexes,
 )
 file_paths = (
-    "/".join(segment for _, segment in segments) + ext
-    for segments, ext in zip(
+    lead + "/".join(segment for _, segment in segments) + ext
+    for lead, segments, ext in zip(
+        gen.one_of(("", "/")),
         (zip(range(r.randint(1, 8)), path_segments) for r in gen),
         file_extensions,
     )
@@ -208,15 +210,15 @@ def generate_dicts_for_annotations(
     if context.include_defaults == "holes":
         sampled_keys = (r.sample(optional_keys, r.randint(0, len(optional_keys))) for r in gen)
     elif context.include_defaults:
-        sampled_keys = (optional_keys for _ in gen)
+        sampled_keys = itertools.repeat(optional_keys)
     else:
-        sampled_keys = ([] for _ in gen)
+        sampled_keys = itertools.repeat([])
 
     return (
         dict(
             (k, v)
             for k, v in zip(generators.keys(), values)
-            if k not in optional_keys or k in included_keys
+            if k not in optional_keys or k not in included_keys
         )
         for values, included_keys in zip(zip(*generators.values()), sampled_keys)
     )
@@ -453,7 +455,7 @@ def generate_tuples(context: GeneratorContext) -> Iterator[Any] | None:
 
 def generate_unions(context: GeneratorContext) -> Iterator[Any] | None:
     if context.origin is typing.Union and context.args:
-        return gen.one_of(generate(context.step(arg, f"|")) for arg in context.args)
+        return gen.one_of(*(generate(context.step(arg, f"|")) for arg in context.args))
     return None
 
 
@@ -461,10 +463,7 @@ def generate_lists(context: GeneratorContext) -> Iterator[Any] | None:
     if context.origin is list:
         arg = [*context.args, object][0]
         generator = generate(context.step(arg))
-        return (
-            [i for i, _ in zip(generator, range(length))]
-            for length in (r.randint(0, 10) for r in gen)
-        )
+        return ([i for i, _ in zip(generator, range(r.randint(0, 10)))] for r in gen)
     return None
 
 

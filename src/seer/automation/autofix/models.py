@@ -3,8 +3,16 @@ import enum
 from typing import Annotated, Any, Literal, Optional
 
 import sentry_sdk
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from pydantic.alias_generators import to_snake
+from pydantic import (
+    AliasChoices,
+    AliasGenerator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
+from pydantic.alias_generators import to_camel, to_snake
 from typing_extensions import NotRequired, TypedDict
 
 from seer import generator
@@ -80,7 +88,12 @@ class PlanningInput(BaseModel):
 
 
 class StacktraceFrame(BaseModel):
-    model_config = ConfigDict(alias_generator=to_snake)
+    model_config = ConfigDict(
+        alias_generator=AliasGenerator(
+            validation_alias=lambda k: AliasChoices(to_snake(k), to_camel(k)),
+            serialization_alias=to_snake,
+        )
+    )
 
     function: Annotated[str, Examples(generator.ascii_words)]
     filename: Annotated[str, Examples(generator.file_names)]
@@ -173,7 +186,7 @@ class SentryEvent(BaseModel):
                 exception_entry = SentryExceptionEntry.model_validate(entry)
                 break
             except ValidationError:
-                sentry_sdk.capture_event()
+                sentry_sdk.capture_exception()
                 continue
 
         if exception_entry is None:
@@ -182,21 +195,23 @@ class SentryEvent(BaseModel):
         values = exception_entry.data["values"]
         if not values:
             return None
-        stack_trace = values[0]["stacktrace"]
 
-        frames: list[StacktraceFrame] = []
+        for entry in values:
+            stack_trace = entry["stacktrace"]
+            frames: list[StacktraceFrame] = []
 
-        for frame in stack_trace["frames"]:
-            try:
-                frames.append(StacktraceFrame.model_validate(frame))
-            except ValidationError:
-                sentry_sdk.capture_event()
+            for frame in stack_trace["frames"]:
+                try:
+                    frames.append(StacktraceFrame.model_validate(frame))
+                except ValidationError:
+                    sentry_sdk.capture_exception()
+                    continue
+
+            if not frames:
                 continue
 
-        if not frames:
-            return None
-
-        return Stacktrace(frames=frames)
+            return Stacktrace(frames=frames)
+        return None
 
 
 class IssueDetails(BaseModel):

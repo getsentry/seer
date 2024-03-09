@@ -1,7 +1,6 @@
 import unittest
 
 from pydantic import ValidationError
-from pydantic.alias_generators import to_camel
 
 from seer.automation.autofix.models import (
     AutofixRequest,
@@ -10,12 +9,11 @@ from seer.automation.autofix.models import (
     SentryEvent,
     SentryEventEntryDataValue,
     SentryExceptionEntry,
-    SentryFrame,
     Stacktrace,
     StacktraceFrame,
 )
 from seer.generator import parameterize
-from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry
+from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry, SentryFrameDict
 
 
 class TestStacktraceHelpers(unittest.TestCase):
@@ -169,11 +167,9 @@ def test_event_get_stacktrace_empty_frames(
     invalid: InvalidEventEntry,
     entry: SentryExceptionEntry,
     sentry_data_value: SentryEventEntryDataValue,
-    valid_frame: StacktraceFrame,
+    valid_frame: SentryFrameDict,
 ):
-    sentry_data_value["stacktrace"]["frames"].append(
-        {to_camel(k): v for k, v in valid_frame.model_dump(mode="json").items()}
-    )
+    sentry_data_value["stacktrace"]["frames"].append(valid_frame)
     entry.data["values"].append(sentry_data_value)
     event.entries = [invalid, entry.model_dump(mode="json")]
-    assert event.get_stacktrace().frames[-1] == valid_frame
+    assert StacktraceFrame.model_validate(valid_frame) in event.get_stacktrace().frames
