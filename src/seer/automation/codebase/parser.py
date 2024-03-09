@@ -8,68 +8,23 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from tree_sitter import Node
 
+from seer.automation.codebase.ast import (
+    AstDeclaration,
+    extract_declaration,
+    first_child_with_type,
+    get_indent_start_byte,
+    index_with_node_type,
+    node_is_a_declaration,
+)
 from seer.automation.codebase.models import BaseDocumentChunk, Document
 from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger("autofix")
 
 
-def get_indent_start_byte(node: Node, root: Node) -> int:
-    if node.start_byte == 0:
-        return 0
-    newline_index = root.text.rfind(b"\n", 0, node.start_byte)
-    if newline_index == -1:
-        # No newline character found, return start_byte
-        return node.start_byte
-    line_start_byte = newline_index + 1
-    # Check if there are only spaces or tabs before the newline
-    if all(c in b" \t" for c in root.text[line_start_byte : node.start_byte]):
-        return line_start_byte
-    else:
-        return node.start_byte
-
-
-def index_with_node_type(node_type: str, node: Node, recursive=True):
-    for i, child in enumerate(node.children):
-        if child.type == node_type:
-            return i, child
-        if recursive:
-            descendant_result = index_with_node_type(node_type, child, recursive=True)
-            if descendant_result:
-                return i, descendant_result[1]
-    return None
-
-
-def first_child_with_type(node_types: set[str], node: Node):
-    for child in node.children:
-        if child.type in node_types:
-            return child
-    return None
-
-
-class ParentDeclaration(BaseModel):
-    id: int
-    declaration_byte_start: int
-    declaration_byte_end: int
-    content_indent: str
-
-    declaration_nodes: list[Node]
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def __eq__(self, other):
-        if isinstance(other, ParentDeclaration):
-            return self.id == other.id
-        return False
-
-    def __hash__(self):
-        return self.id
-
-
 class TempChunk(BaseModel):
     nodes: list[Node]
-    parent_declarations: list[ParentDeclaration]
+    parent_declarations: list[AstDeclaration]
 
     class Config:
         arbitrary_types_allowed = True
@@ -92,10 +47,10 @@ class TempChunk(BaseModel):
                 {content_indent}...
                 """
             ).format(
-                declaration=root.text[
-                    declaration.declaration_byte_start : declaration.declaration_byte_end
+                declaration=declaration.to_str(root, include_indent=True),
+                content_indent=root.text[
+                    declaration.indent_start_byte : declaration.declaration_start_byte
                 ].decode("utf-8"),
-                content_indent=declaration.content_indent,
             )
         return context_text
 
@@ -135,7 +90,7 @@ class DocumentParser:
         self,
         node: Node,
         language: str,
-        parent_declarations: list[ParentDeclaration] = [],
+        parent_declarations: list[AstDeclaration] = [],
         root_node: Node | None = None,
         last_end_byte=0,
     ) -> list[TempChunk]:
@@ -173,9 +128,9 @@ class DocumentParser:
             if token_count > self.break_chunks_at:
                 # Recursively chunk the children if the current node is too big or should be chunked
                 parent_declarations_for_children = parent_declarations.copy()
-                is_parent_declaration = self._node_is_a_declaration(children[i], language)
+                is_parent_declaration = node_is_a_declaration(children[i], language)
                 if is_parent_declaration:
-                    declaration = self._extract_declaration(children[i], root_node, language)
+                    declaration = extract_declaration(children[i], root_node, language)
                     if declaration:
                         parent_declarations_for_children.append(declaration)
 
@@ -232,82 +187,6 @@ class DocumentParser:
             ]
 
         return chunks
-
-    def _node_is_a_declaration(self, node: Node, language: str) -> bool:
-        if language == "python":
-            return node.type.endswith("_definition") or any(
-                [child.type == "block" for child in node.children]
-            )  # is a definition type node or has an immediate block child
-        if language in ["javascript", "typescript", "jsx", "tsx"]:
-            return node.type in [
-                "class_declaration",
-                "method_definition",
-                "function_declaration",
-                "lexical_declaration",
-            ] or any(
-                [child.type == "statement_block" for child in node.children]
-            )  # is a definition type node or has an immediate block child
-        return False
-
-    def _extract_declaration(
-        self, node: Node, root_node: Node, language: str
-    ) -> ParentDeclaration | None:
-        if language == "python":
-            result = index_with_node_type(":", node, recursive=False)
-            if result is None:
-                # Handle the case where there is no colon
-                return None
-            index_of_colon, _ = result
-
-            declaration_start_byte = get_indent_start_byte(node.children[0], root_node)
-            declaration_end_byte = node.children[index_of_colon].end_byte
-            content_indent = root_node.text[
-                get_indent_start_byte(node.children[index_of_colon + 1], root_node) : node.children[
-                    index_of_colon + 1
-                ].start_byte
-            ].decode("utf-8")
-
-            return ParentDeclaration(
-                id=node.id,
-                declaration_byte_start=declaration_start_byte,
-                declaration_byte_end=declaration_end_byte,
-                content_indent=content_indent,
-                declaration_nodes=node.children[: index_of_colon + 1],
-            )
-
-        if language in ["javascript", "typescript", "jsx", "tsx"]:
-            child = first_child_with_type(set(("class_body", "statement_block")), node)
-            if child is None:
-                return None
-
-            result = index_with_node_type("{", child, recursive=True)
-            if result is None:
-                return None
-            child_index, bracket_node = result
-
-            if bracket_node.next_sibling:
-                declaration_start_byte = get_indent_start_byte(node.children[0], root_node)
-                declaration_end_byte = bracket_node.end_byte
-                content_indent = root_node.text[
-                    get_indent_start_byte(
-                        bracket_node.next_sibling, root_node
-                    ) : bracket_node.next_sibling.start_byte
-                ].decode("utf-8")
-
-                declaration_nodes = node.children[:child_index]
-                if bracket_node.parent:
-                    # TODO: There probably are more levels to this...
-                    bracket_node_index = bracket_node.parent.children.index(bracket_node)
-                    declaration_nodes += bracket_node.parent.children[: bracket_node_index + 1]
-
-                return ParentDeclaration(
-                    id=node.id,
-                    declaration_byte_start=declaration_start_byte,
-                    declaration_byte_end=declaration_end_byte,
-                    content_indent=content_indent,
-                    declaration_nodes=declaration_nodes,
-                )
-        return None
 
     @class_method_lru_cache(maxsize=16)
     def _get_parser(self, language: str):

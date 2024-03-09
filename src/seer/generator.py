@@ -322,6 +322,12 @@ class Generator(typing.Protocol):
         ...
 
 
+def generate_literals(context: "GeneratorContext") -> Iterator[Any] | None:
+    if context.origin is typing.Literal:
+        return gen.one_of(context.args)
+    return None
+
+
 @dataclasses.dataclass
 class GeneratorContext:
     source: Any
@@ -332,6 +338,7 @@ class GeneratorContext:
 
     generators: list[Generator] = dataclasses.field(
         default_factory=lambda: [
+            generate_literals,
             generate_iterators,
             generate_pydantic_instances,
             generate_dataclass_instances,

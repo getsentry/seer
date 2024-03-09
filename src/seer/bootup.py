@@ -54,11 +54,6 @@ def bootup(
 
     from seer.inference_models import cached
 
-    if eager_load_inference_models:
-        for item in cached:
-            # Preload model
-            item()
-
     if init_db:
         db.init_app(app)
         if init_migrations:
@@ -71,6 +66,11 @@ def bootup(
                         db.engine.url, connect_args={"prepare_threshold": None}
                     )
                 )
+
+    if eager_load_inference_models:
+        for item in cached:
+            # Preload model
+            item()
 
     return app
 
