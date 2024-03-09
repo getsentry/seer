@@ -35,10 +35,10 @@ RUN rm -rf /var/lib/apt/lists/*
 COPY models/ models/
 
 # Copy setup files, requirements, and scripts
-COPY setup.py requirements.txt celeryworker.sh ./
+COPY setup.py requirements.txt celeryworker.sh asyncworker.sh ./
 
-# Make celeryworker.sh executable
-RUN chmod +x ./celeryworker.sh
+# Make celeryworker.sh and asyncworker.sh executable
+RUN chmod +x ./celeryworker.sh ./asyncworker.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==23.0.1
