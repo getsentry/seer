@@ -45,11 +45,16 @@ class _RandomGenerator:
     @staticmethod
     def one_of(*options: typing.Iterable[_A]) -> Iterator[_A]:
         composed_options: list[typing.Iterable[_A]] = [
-            (r.choice(i) for r in gen) if isinstance(i, list) else i
-            for i in options
-            for i in (list(i) if isinstance(i, (list, tuple, set, frozenset)) else i,)
+            _RandomGenerator._normalize(i) for i in options
         ]
         return (next(iter(r.choice(composed_options))) for r in gen)
+
+    @staticmethod
+    def _normalize(i: typing.Iterable[_A]) -> typing.Iterator[_A]:
+        if isinstance(i, (list, tuple, set, frozenset)):
+            i = list(i)
+            return (r.choice(i) for r in gen)
+        return iter(i)
 
 
 gen = _RandomGenerator()
@@ -158,8 +163,10 @@ path_segments = gen.one_of(
 )
 file_names = (
     "/".join(segment for _, segment in segments) + ext
-    for r in gen
-    for segments, ext in zip(zip(range(r.randint(1, 8)), path_segments), file_extensions)
+    for segments, ext in zip(
+        (zip(range(r.randint(1, 8)), path_segments) for r in gen),
+        file_extensions,
+    )
 )
 
 
@@ -186,7 +193,9 @@ class Examples:
 
 
 def generate_dicts_for_annotations(
-    annotations: typing.Mapping[str, Any], context: "GeneratorContext"
+    annotations: typing.Mapping[str, Any],
+    context: "GeneratorContext",
+    optional_keys: list[str],
 ) -> Iterator[dict[str, Any]]:
     if not annotations:
         return ({} for _ in gen)
@@ -195,9 +204,20 @@ def generate_dicts_for_annotations(
         k: generate(context.step(v, k)) for k, v in annotations.items()
     }
 
+    if context.include_defaults == "holes":
+        sampled_keys = (r.sample(optional_keys, r.randint(0, len(optional_keys))) for r in gen)
+    elif context.include_defaults:
+        sampled_keys = (optional_keys for _ in gen)
+    else:
+        sampled_keys = ([] for _ in gen)
+
     return (
-        dict((k, v) for k, v in zip(generators.keys(), values))
-        for values in zip(*generators.values())
+        dict(
+            (k, v)
+            for k, v in zip(generators.keys(), values)
+            if k not in optional_keys or k in included_keys
+        )
+        for values, included_keys in zip(zip(*generators.values()), sampled_keys)
     )
 
 
@@ -206,12 +226,11 @@ def generate_dicts_for_pydantic_model(
 ) -> Iterator[dict[str, Any]]:
     hints = get_type_hints(context.source, include_extras=True)
     return generate_dicts_for_annotations(
-        {
-            k: hints.get(k, Any)
-            for k, field in context.source.model_fields.items()
-            if context.include_defaults or not _pydantic_has_default(field)
-        },
+        {k: hints.get(k, Any) for k, field in context.source.model_fields.items()},
         context,
+        optional_keys=[
+            k for k, field in context.source.model_fields.items() if _pydantic_has_default(field)
+        ],
     )
 
 
@@ -221,12 +240,9 @@ def generate_dicts_for_dataclass_model(
     hints = get_type_hints(context.source, include_extras=True)
     fields = {f.name: f for f in dataclasses.fields(context.source)}
     return generate_dicts_for_annotations(
-        {
-            k: hints.get(k, Any)
-            for k, field in fields.items()
-            if context.include_defaults or not _dataclass_has_default(field)
-        },
+        {k: hints.get(k, Any) for k, field in fields.items()},
         context,
+        optional_keys=[k for k, field in fields.items() if _dataclass_has_default(field)],
     )
 
 
@@ -237,10 +253,9 @@ def generate_call_args_for_argspec(
 
     arg_generators: list[Iterator[Any]] = []
     for i, argname in enumerate(source.args):
-        if context.include_defaults or i < (len(source.args) - num_arg_defaults):
-            arg_generators.append(
-                generate(context.step(source.annotations.get(argname, Any), argname))
-            )
+        arg_generator = generate(context.step(source.annotations.get(argname, Any), argname))
+        if i < (len(source.args) - num_arg_defaults) or context.include_defaults:
+            arg_generators.append(arg_generator)
 
     arg_generator: Iterator[tuple[Any, ...]]
     if arg_generators:
@@ -372,15 +387,8 @@ def generate_dicts_from_typeddict(context: GeneratorContext) -> Iterator[Any] | 
     if typing.is_typeddict(context.source) or typing_extensions.is_typeddict(context.source):
         optional: list[str] = sorted(getattr(context.source, "__optional_keys__", frozenset()))
         hints = get_type_hints(context.source, include_extras=True)
-        dicts = generate_dicts_for_annotations({k: v for k, v in hints.items()}, context)
-        sampled_keys = (
-            (r.sample(optional, r.randint(0, len(optional))) for r in gen)
-            if context.include_defaults
-            else ([] for _ in gen)
-        )
-        return (
-            dict((k, v) for k, v in d.items() if k not in optional or k in optional_keys)
-            for d, optional_keys in zip(dicts, sampled_keys)
+        return generate_dicts_for_annotations(
+            {k: v for k, v in hints.items()}, context, optional_keys=list(optional)
         )
 
     return None
@@ -494,6 +502,8 @@ def generate_primitives(context: GeneratorContext) -> typing.Iterator[Any] | Non
         return datetimes
     if source is datetime.timedelta:
         return positive_timedeltas
+    if source is type(None):
+        return itertools.repeat(None)
     return None
 
 
@@ -519,21 +529,24 @@ def generate_sqlalchemy_instance(context: GeneratorContext) -> typing.Iterator[A
                 else hint
                 for c in inspection.c
                 for hint in (hints.get(c.key, Any),)
-                if context.include_defaults
-                or (
-                    not c.primary_key
-                    and not c.nullable
-                    and c.default is None
-                    and c.server_default is None
-                )
             },
             context,
+            optional_keys=[
+                c.key
+                for c in inspection.c
+                if (
+                    c.primary_key
+                    or c.nullable
+                    or c.default is not None
+                    or c.server_default is not None
+                )
+            ],
         )
+
         return (context.source(**d) for d in dict_generator)
     return None
 
 
-@typing.overload
 def generate(
     context: GeneratorContext | Any,
     include_defaults: bool | typing.Literal["holes"] = False,
@@ -590,6 +603,7 @@ def parameterize(
                     for k in injected_args
                 },
                 context,
+                optional_keys=[],
             )
 
             i = 0

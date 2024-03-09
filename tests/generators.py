@@ -15,7 +15,7 @@ Future = Annotated[
     datetime.datetime, Examples(_now + delta for delta in generator.positive_timedeltas if delta)
 ]
 
-NarrowSentryFrameWithFilename = Annotated[
+SentryFrameWithFilename = Annotated[
     SentryFrame,
     Examples(
         (
@@ -24,10 +24,11 @@ NarrowSentryFrameWithFilename = Annotated[
                     **base_frame,
                     filename: filename,
                 }
-                for base_frame, filename, r in zip(
-                    generator.generate(SentryFrame), generator.file_names, generator.gen
+                for base_frame, filename in zip(
+                    generator.generate(SentryFrame, include_defaults="holes"), generator.file_names
                 )
             ]
+            for r in generator.gen
         ),
     ),
 ]

@@ -66,7 +66,11 @@ def bootup(
         with app.app_context():
             Session.configure(bind=db.engine)
             if with_async:
-                AsyncSession.configure(bind=create_async_engine(db.engine.url))
+                AsyncSession.configure(
+                    bind=create_async_engine(
+                        db.engine.url, connect_args={"prepare_threshold": None}
+                    )
+                )
 
     return app
 

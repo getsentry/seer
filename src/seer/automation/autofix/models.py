@@ -109,7 +109,6 @@ class PlanningInput(BaseModel):
 
 class StacktraceFrame(BaseModel):
     function: str
-
     filename: str
     abs_path: str
     line_no: Optional[int]
@@ -219,6 +218,9 @@ class SentryEvent(BaseModel):
             except ValidationError:
                 sentry_sdk.capture_event()
                 continue
+
+        if not frames:
+            return None
 
         return Stacktrace(frames=frames)
 

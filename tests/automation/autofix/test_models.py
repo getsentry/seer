@@ -155,5 +155,5 @@ def test_event_get_stacktrace_invalid(event: SentryEvent, entry: InvalidEventEnt
 
 @parameterize
 def test_event_get_stacktrace_empty_frames(event: SentryEvent, entry: NoStacktraceExceptionEntry):
-    event.entries = [entry.model_dump_json()]
+    event.entries = [entry]
     assert event.get_stacktrace() is None
