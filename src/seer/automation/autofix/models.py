@@ -1,12 +1,15 @@
 import datetime
 import enum
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 import sentry_sdk
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic.alias_generators import to_snake
 from typing_extensions import NotRequired, TypedDict
 
+from seer import generator
 from seer.automation.agent.models import Usage
+from seer.generator import Examples
 
 
 class FileChangeError(Exception):
@@ -108,9 +111,11 @@ class PlanningInput(BaseModel):
 
 
 class StacktraceFrame(BaseModel):
-    function: str
-    filename: str
-    abs_path: str
+    model_config = ConfigDict(alias_generator=to_snake)
+
+    function: Annotated[str, Examples(generator.ascii_words)]
+    filename: Annotated[str, Examples(generator.file_names)]
+    abs_path: Annotated[str, Examples(generator.file_paths)]
     line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]

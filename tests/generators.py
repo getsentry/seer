@@ -2,7 +2,7 @@ import datetime
 from typing import Annotated
 
 from seer import generator
-from seer.automation.autofix.models import SentryExceptionEntry, SentryFrame
+from seer.automation.autofix.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
 from seer.generator import Examples
 
 _now = datetime.datetime(2023, 1, 1)
@@ -15,17 +15,15 @@ Future = Annotated[
     datetime.datetime, Examples(_now + delta for delta in generator.positive_timedeltas if delta)
 ]
 
-SentryFrameWithFilename = Annotated[
+SentryFrameDict = Annotated[
     SentryFrame,
     Examples(
         (
             [
-                {
-                    **base_frame,
-                    filename: filename,
-                }
-                for base_frame, filename in zip(
-                    generator.generate(SentryFrame, include_defaults="holes"), generator.file_names
+                {**base_frame, **stacktrace_frame.model_dump(mode="json")}
+                for base_frame, stacktrace_frame in zip(
+                    generator.generate(SentryFrame, include_defaults="holes"),
+                    generator.generate(StacktraceFrame, include_defaults="holes"),
                 )
             ]
             for r in generator.gen

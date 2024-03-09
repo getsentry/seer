@@ -161,13 +161,14 @@ path_segments = gen.one_of(
     ),
     uuid_hexes,
 )
-file_names = (
+file_paths = (
     "/".join(segment for _, segment in segments) + ext
     for segments, ext in zip(
         (zip(range(r.randint(1, 8)), path_segments) for r in gen),
         file_extensions,
     )
 )
+file_names = (segment + ext for segment, ext in zip(path_segments, file_extensions))
 
 
 def _pydantic_has_default(field: FieldInfo) -> bool:
