@@ -266,7 +266,7 @@ class AutofixRequest(BaseModel):
 
     @property
     def process_request_name(self) -> str:
-        return f"{self.organization_id}:{self.issue.id}"
+        return f"autofix:{self.organization_id}:{self.issue.id}"
 
     @property
     def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
