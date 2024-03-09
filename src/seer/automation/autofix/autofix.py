@@ -189,11 +189,6 @@ class Autofix:
 
                 self.event_manager.send_execution_step_result(step.id, AutofixStatus.COMPLETED)
 
-            logger.debug(
-                "File changes:",
-                [codebase.file_changes for codebase in self.context.codebases.values()],
-            )
-
             prs = self._create_prs(
                 planning_output.title, planning_output.description, planning_output.steps
             )
