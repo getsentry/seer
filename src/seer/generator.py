@@ -131,7 +131,9 @@ positive_timedeltas = (
 uuids = (uuid.UUID(int=r.getrandbits(128), version=4) for r in gen)
 uuid_hexes = (uid.hex for uid in uuids)
 
-extensions = gen.one_of((".jpg", ".png", ".gif", ".txt", ".py", ".ts", ".c", ".obj", ".ini", ""))
+file_extensions = gen.one_of(
+    (".jpg", ".png", ".gif", ".txt", ".py", ".ts", ".c", ".obj", ".ini", "")
+)
 path_segments = gen.one_of(
     (
         "tmp",
@@ -154,7 +156,11 @@ path_segments = gen.one_of(
     ),
     uuid_hexes,
 )
-file_names = ("/".join([head, *segments]) for head, segments in zip(path_segments, zip()))
+file_names = (
+    "/".join(segment for _, segment in segments) + ext
+    for r in gen
+    for segments, ext in zip(zip(range(r.randint(1, 8)), path_segments), file_extensions)
+)
 
 
 def _pydantic_has_default(field: FieldInfo) -> bool:
@@ -306,7 +312,7 @@ class GeneratorContext:
     origin: Any | None
     args: tuple[Any, ...]
     context: tuple[str, ...] = dataclasses.field(default_factory=tuple)
-    include_defaults: bool = False
+    include_defaults: bool | typing.Literal["partial"] = False
 
     generators: list[Generator] = dataclasses.field(
         default_factory=lambda: [
@@ -528,38 +534,19 @@ def generate_sqlalchemy_instance(context: GeneratorContext) -> typing.Iterator[A
 
 
 @typing.overload
-def generate(context: GeneratorContext | Any, count: None = ...) -> typing.Iterator[Any]:
-    ...
-
-
-@typing.overload
-def generate(context: GeneratorContext | Any, count: int) -> list[Any]:
-    ...
-
-
-@typing.overload
-def generate(context: typing.Callable[..., _A] | Any, count: int) -> list[_A]:
-    ...
-
-
 def generate(
-    context: GeneratorContext | Any, count: int | None = None
-) -> typing.Iterator[Any] | list[Any]:
+    context: GeneratorContext | Any,
+    include_defaults: bool | typing.Literal["holes"] = False,
+) -> typing.Iterator[Any]:
     if not isinstance(context, GeneratorContext):
         gen_context = GeneratorContext.from_source(context)
+        gen_context.include_defaults = include_defaults
     else:
         gen_context = context
 
     for generator in gen_context.generators:
         result = generator(gen_context)
         if result is not None:
-            if count is not None:
-                rv = [i for i, _ in zip(result, range(count))]
-                if len(rv) < count:
-                    raise ValueError(
-                        f"Failed to generator {count} values, check that constraint is not too strong."
-                    )
-                return rv
             return result
     raise TypeError(f"Could not generate for {' '.join(gen_context.context)} {gen_context.source}")
 
@@ -569,7 +556,7 @@ def parameterize(
     *,
     seed: int | None = None,
     count: int = 10,
-    include_defaults=False,
+    include_defaults: bool | typing.Literal["holes"] = False,
     arg_set: typing.Sequence[str] | None = None,
     generators: typing.Sequence[Generator] = (),
     **parameter_overrides: Any,
@@ -597,7 +584,6 @@ def parameterize(
             context = GeneratorContext.from_source(func)
             context.include_defaults = include_defaults
             context.generators = [*generators, *context.generators]
-            context.include_defaults = include_defaults
             call_args = generate_dicts_for_annotations(
                 {
                     k: parameter_overrides.get(k, argspec.annotations.get(k, Any))

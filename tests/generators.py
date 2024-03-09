@@ -15,10 +15,20 @@ Future = Annotated[
     datetime.datetime, Examples(_now + delta for delta in generator.positive_timedeltas if delta)
 ]
 
-ShortSentryFrames = Annotated[
-    list[SentryFrame],
+NarrowSentryFrameWithFilename = Annotated[
+    SentryFrame,
     Examples(
-        ([{} for base_frame, a in zip(generator.generate(SentryFrame), generator.file_names)]),
+        (
+            [
+                {
+                    **base_frame,
+                    filename: filename,
+                }
+                for base_frame, filename, r in zip(
+                    generator.generate(SentryFrame), generator.file_names, generator.gen
+                )
+            ]
+        ),
     ),
 ]
 
@@ -31,9 +41,16 @@ InvalidEventEntry = Annotated[
 ]
 
 NoStacktraceExceptionEntry = Annotated[
-    SentryExceptionEntry,
+    dict,
     Examples(
-        (SentryExceptionEntry(type="exception", data={"values": []}) for _ in generator.gen),
-        (SentryExceptionEntry(type="exception", data={"values": [{"stacktrace": {"frames": []}}]})),
+        (
+            SentryExceptionEntry(type="exception", data={"values": []}).model_dump(mode="json")
+            for _ in generator.gen
+        ),
+        (
+            SentryExceptionEntry(
+                type="exception", data={"values": [{"stacktrace": {"frames": []}}]}
+            ).model_dump(mode="json"),
+        ),
     ),
 ]
