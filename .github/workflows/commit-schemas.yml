@@ -45,7 +45,7 @@ jobs:
           cd sentry-data-schemas
           git add seer
 
-          git commit -m "getsentry/timeseries-analysis-service@$GITHUB_SHA"
+          git commit -m "getsentry/seer@$GITHUB_SHA"
 
           for i in 1 2 3 4 5; do
             echo "git push; Attempt $i"
