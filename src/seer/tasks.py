@@ -1,23 +1,20 @@
-import abc
 import asyncio
 import contextlib
 import dataclasses
 import datetime
 import hashlib
 import logging
+import threading
 from asyncio import Future, Task
-from concurrent.futures import ThreadPoolExecutor
-from queue import Empty, Full, Queue
+from queue import Queue
 from typing import Any, Callable, Coroutine, Protocol, TypeVar
 
-import celery.result
 import sqlalchemy
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-import seer.automation.autofix.tasks
 from seer.db import AsyncSession, ProcessRequest
 from seer.task_factory import AsyncTaskFactory, _async_task_factories
 
@@ -68,7 +65,9 @@ class AsyncApp:
     task_factories: list[Callable[[], AsyncTaskFactory]] = dataclasses.field(
         default_factory=lambda: _async_task_factories,
     )
+    completed_queue: Queue | None = None
     consumer_sleep: int = 5
+    fail_fast: bool = False
 
     async def run_or_end(self, c: Future[_A] | Coroutine[Any, Any, _A]) -> tuple[_A] | None:
         end_task = asyncio.create_task(self.end_event.wait())
@@ -138,33 +137,60 @@ class AsyncApp:
                 if accept:
                     result = await self.run_or_end(self.invoke_task(task, item))
 
-                    if result and item.id:
-                        async with AsyncSession() as session:
-                            logger.info("Marking process request completed.")
-                            await session.execute(item.mark_completed_stmt())
-                            await session.commit()
+                    if result:
+                        if item.id:
+                            async with AsyncSession() as session:
+                                logger.info("Marking process request completed.")
+                                await session.execute(item.mark_completed_stmt())
+                                await session.commit()
+                        if self.completed_queue:
+                            q = self.completed_queue
+                            await self.run_or_end(
+                                asyncio.get_event_loop().run_in_executor(None, lambda: q.put(item))
+                            )
 
-    async def run(self):
+    async def kill_event_task(self, kill_event: threading.Event | None):
+        if kill_event is None:
+            return
+
+        while not self.end_event.is_set():
+            acquired = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: kill_event.wait(1)
+            )
+            if acquired:
+                self.end_event.set()
+                break
+
+    async def run(self, kill_event: threading.Event | None = None):
+        # Force loading of tasks
+        from seer.automation.autofix import tasks  # noqa
+
+        kill_task = asyncio.create_task(self.kill_event_task(kill_event))
         producer_task = asyncio.create_task(self.producer_loop())
         consumer_tasks: list[asyncio.Task[Any]] = []
         while not self.end_event.is_set():
             if producer_task.done():
-                # Self terminate if the producer dies for any reason.
-                self.end_event.set()
+                if self.fail_fast:
+                    self.end_event.set()
+                else:
+                    logger.info("Unexpected producer death, restarting...")
+                    producer_task = asyncio.create_task(self.producer_loop())
                 continue
 
             task: asyncio.Task
             for task in [*consumer_tasks]:
                 if task.done():
-                    # Unexpected death of a task?  Reboot it.
-                    logger.info("Unexpected consumer death, restarting...")
-                    consumer_tasks.remove(task)
+                    if self.fail_fast:
+                        self.end_event.set()
+                    else:
+                        logger.info("Unexpected consumer death, restarting...")
+                        consumer_tasks.remove(task)
 
             while len(consumer_tasks) < self.num_consumers:
                 consumer_tasks.append(asyncio.create_task(self.consumer_loop()))
             await self.run_or_end(asyncio.sleep(1))
 
-        all_tasks = [producer_task, *consumer_tasks]
+        all_tasks = [producer_task, *consumer_tasks, kill_task]
         async with asyncio.timeout(10):
             await asyncio.gather(*all_tasks)
 

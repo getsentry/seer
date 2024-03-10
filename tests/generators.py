@@ -1,9 +1,14 @@
+import contextlib
+import dataclasses
 import datetime
-from typing import Annotated
+from typing import Annotated, Iterator
+from unittest import mock
 
 from seer import generator
+from seer.automation.agent.client import DummyGptClient, GptCompletionHandler
 from seer.automation.autofix.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
 from seer.generator import Examples
+from seer.rpc import DummyRpcClient, RpcClientHandler
 
 _now = datetime.datetime(2023, 1, 1)
 
@@ -50,3 +55,38 @@ NoStacktraceExceptionEntry = Annotated[
         ),
     ),
 ]
+
+
+@dataclasses.dataclass
+class RpcClientMock:
+    client: DummyRpcClient
+    mocked_path: str = "seer.automation.autofix.tasks.SentryRpcClient"
+
+    def _enabled(self, **handlers: RpcClientHandler) -> Iterator[DummyRpcClient]:
+        old_handlers = self.client.handlers
+        with mock.patch(self.mocked_path) as target:
+            target.return_value = self.client
+            self.client.handlers = {**old_handlers, **handlers}
+            try:
+                yield self.client
+            finally:
+                self.client.handlers = old_handlers
+
+    enabled = contextlib.contextmanager(_enabled)
+
+
+@dataclasses.dataclass
+class GptClientMock:
+    client: DummyGptClient
+    mocked_path: str = "seer.automation.agent.agent.GptClient"
+
+    @contextlib.contextmanager
+    def enabled(self, *handlers: GptCompletionHandler) -> Iterator[DummyGptClient]:
+        old_handlers = self.client.handlers
+        with mock.patch(self.mocked_path) as target:
+            target.return_value = self.client
+            self.client.handlers = [*old_handlers, *handlers]
+            try:
+                yield self.client
+            finally:
+                self.client.handlers = old_handlers

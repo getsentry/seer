@@ -67,8 +67,6 @@ class AsyncTaskFactory(abc.ABC):
                                             ),
                                         )
                                     raise e
-                            # if v['status'] == 'FAILURE':
-                            #     raise v['result']
             finally:
                 logger.info("async celery job completing")
                 loop.run_in_executor(pool, lambda: q.put_nowait(None))
