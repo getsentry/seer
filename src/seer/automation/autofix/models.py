@@ -216,7 +216,7 @@ class SentryEvent(BaseModel):
 
 
 class IssueDetails(BaseModel):
-    id: int
+    id: Annotated[int, Examples(generator.unsigned_ints)]
     title: str
     short_id: Optional[str] = None
     events: list[SentryEvent]
@@ -248,21 +248,23 @@ class RepoDefinition(BaseModel):
 
 
 class AutofixUserDetails(BaseModel):
-    id: int
+    id: Annotated[int, Examples(generator.unsigned_ints)]
     display_name: str
 
 
 class AutofixRequest(BaseModel):
-    organization_id: int
-    project_id: int
+    organization_id: Annotated[int, Examples(generator.unsigned_ints)]
+    project_id: Annotated[int, Examples(generator.unsigned_ints)]
     repos: list[RepoDefinition]
     issue: IssueDetails
     invoking_user: Optional[AutofixUserDetails] = None
 
-    base_commit_sha: Optional[str] = None
+    base_commit_sha: Optional[Annotated[str, Examples(generator.shas)]] = None
     additional_context: Optional[str] = None
-    timeout_secs: Optional[int] = None
-    last_updated: Optional[datetime.datetime] = None
+    timeout_secs: Optional[Annotated[int, Examples((60 * 5,))]] = None
+    last_updated: Optional[
+        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in generator.gen)]
+    ] = None
 
     @property
     def process_request_name(self) -> str:
@@ -373,3 +375,23 @@ class AutofixContinuation(BaseModel):
                             substep.status = AutofixStatus.ERROR
                         if substep.status == AutofixStatus.PENDING:
                             substep.status = AutofixStatus.CANCELLED
+
+
+class AutofixGroupState(BaseModel):
+    steps: list[Step] = Field(default_factory=list)
+    status: AutofixStatus = AutofixStatus.PENDING
+    fix: AutofixOutput | None = None
+    completedAt: datetime.datetime | None = None
+
+
+class AutofixCompleteArgs(BaseModel):
+    issue_id: int
+    status: AutofixStatus
+    steps: list[Step]
+    fix: AutofixOutput | None
+
+
+class AutofixStepUpdateArgs(BaseModel):
+    issue_id: int
+    status: AutofixStatus
+    steps: list[Step]

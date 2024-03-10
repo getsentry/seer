@@ -1,5 +1,6 @@
+import dataclasses
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 import openai_multi_tool_use_parallel_patch  # import applies the patch
 from langsmith import wrappers
@@ -50,3 +51,24 @@ class GptClient(LlmClient):
             usage.total_tokens += completion.usage.total_tokens
 
         return message, usage
+
+
+GptCompletionHandler = Callable[
+    [str, list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]
+]
+
+
+@dataclasses.dataclass
+class DummyGptClient(GptClient):
+    handlers: list[GptCompletionHandler] = dataclasses.field(default_factory=list)
+    missed_calls: list[tuple[str, list[Message], dict[str, Any]]] = dataclasses.field(
+        default_factory=list
+    )
+
+    def completion(self, model: str, messages: list[Message], **chat_completion_kwargs):
+        for handler in self.handlers:
+            result = handler(model, messages, chat_completion_kwargs)
+            if result:
+                return result
+        self.missed_calls.append((model, messages, chat_completion_kwargs))
+        return Message(), Usage()

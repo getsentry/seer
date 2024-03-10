@@ -1,6 +1,7 @@
 import dataclasses
 import datetime
 import enum
+import hashlib
 import inspect
 import itertools
 import math
@@ -171,6 +172,8 @@ file_paths = (
     )
 )
 file_names = (segment + ext for segment, ext in zip(path_segments, file_extensions))
+byte_strings = (s.encode("utf8") for s in printable_strings)
+shas = (hashlib.sha1(s).hexdigest() for s in byte_strings)
 
 
 def _pydantic_has_default(field: FieldInfo) -> bool:
@@ -200,14 +203,14 @@ def generate_dicts_for_annotations(
     context: "GeneratorContext",
     optional_keys: list[str],
 ) -> Iterator[dict[str, Any]]:
-    if not annotations:
-        return ({} for _ in gen)
-
     generators: dict[str, Iterator[Any]] = {
         k: generate(context.step(v, k))
         for k, v in annotations.items()
         if context.include_defaults or k not in optional_keys
     }
+
+    if not generators:
+        return ({} for _ in gen)
 
     for k, v in generators.items():
         assert hasattr(v, "__next__")
@@ -513,6 +516,8 @@ def generate_primitives(context: GeneratorContext) -> typing.Iterator[Any] | Non
         return objects
     if source is float:
         return floats
+    if source is bytes:
+        return byte_strings
     if source is datetime.datetime:
         return datetimes
     if source is datetime.timedelta:

@@ -1,16 +1,139 @@
+import contextlib
+import dataclasses
+import datetime
+import threading
 import unittest
+from queue import Queue
+from typing import Any, Iterator
 from unittest.mock import MagicMock, patch
 
+from flask.testing import FlaskClient
+from pydantic import ValidationError
+
+import seer.app
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.models import (
+    AutofixCompleteArgs,
+    AutofixGroupState,
     AutofixRequest,
+    AutofixStatus,
+    AutofixStepUpdateArgs,
     IssueDetails,
     PlanningOutput,
     ProblemDiscoveryOutput,
     ProblemDiscoveryResult,
     RepoDefinition,
     SentryEvent,
+    SentryEventEntryDataValue,
+    SentryExceptionEntry,
 )
+from seer.db import ProcessRequest
+from seer.generator import change_watcher, parameterize
+from seer.tasks import AsyncApp
+from seer.utils import closing_queue
+from tests.generators import GptClientMock, RpcClientMock, SentryFrameDict
+
+
+@dataclasses.dataclass
+class E2ETest:
+    rpc_client_mock: RpcClientMock
+    gpt_client_mock: GptClientMock
+    request: AutofixRequest
+    sentry_frames: tuple[SentryFrameDict, SentryFrameDict, SentryFrameDict]
+    event: SentryEvent
+    exception_entry: SentryExceptionEntry
+    event_entry_data_value: SentryEventEntryDataValue
+    autofix_group_state: AutofixGroupState
+    client: FlaskClient = dataclasses.field(default_factory=seer.app.app.test_client)
+    async_app: AsyncApp = dataclasses.field(default_factory=AsyncApp)
+
+    def __post_init__(self):
+        self.event_entry_data_value["stacktrace"]["frames"] = list(self.sentry_frames)
+        self.exception_entry.data["values"] = [self.event_entry_data_value]
+        self.event.entries = [self.exception_entry.model_dump(mode="json")]
+        self.request.issue.events = [self.event]
+
+    def send_autofix_request(self):
+        response = self.client.post(
+            "/v0/automation/autofix", json=self.request.model_dump(mode="json")
+        )
+        assert 200 <= response.status_code < 300
+
+    def get_autofix_state(
+        self, method_name: str, args: dict[str, Any]
+    ) -> dict[str, Any] | tuple[int, str]:
+        if args.get("issue_id") == self.request.issue.id:
+            return self.autofix_group_state.model_dump(mode="json")
+        return 404, "Not Found"
+
+    def on_autofix_complete(
+        self, method_name: str, args: dict[str, Any]
+    ) -> dict[str, Any] | tuple[int, str]:
+        if args.get("issue_id") != self.request.issue.id:
+            return 404, "Not Found"
+        try:
+            args = AutofixCompleteArgs.model_validate(args)
+        except ValidationError as e:
+            return 400, str(e)
+
+        self.autofix_group_state.model_copy(update=args.model_dump())
+        self.autofix_group_state.completedAt = datetime.datetime.now()
+
+        return {}
+
+    def on_autofix_step_update(
+        self, method_name: str, args: dict[str, Any]
+    ) -> dict[str, Any] | tuple[int, str]:
+        if args.get("issue_id") != self.request.issue.id:
+            return 404, "Not Found"
+        try:
+            args = AutofixStepUpdateArgs.model_validate(args)
+        except ValidationError as e:
+            return 400, str(e)
+
+        self.autofix_group_state.model_copy(update=args.model_dump())
+
+        return {}
+
+    def make_problem_assessment(self, messages: list[Message], args: dict[str, Any]):
+        pass
+
+    @contextlib.contextmanager
+    def enabled(self) -> Iterator[Queue]:
+        self.async_app.kill_event = threading.Event()
+        self.async_app.completed_queue = q
+        q = Queue()
+        kill_event = threading.Event()
+        async_app = threading.Thread(target=lambda: self.async_app.run(kill_event))
+        try:
+            with self.rpc_client_mock.enabled(
+                get_autofix_state=self.get_autofix_state,
+                on_autofix_complete=self.on_autofix_complete,
+                on_autofix_step_update=self.on_autofix_step_update,
+            ), self.gpt_client_mock.enabled(), closing_queue(q):
+                async_app.start()
+                yield q
+        finally:
+            kill_event.set()
+            async_app.join()
+
+
+@parameterize
+def test_e2e_runs(test_case: E2ETest):
+    steps_watcher = change_watcher(lambda: test_case.autofix_group_state.steps)
+    status_watcher = change_watcher(lambda: test_case.autofix_group_state.status)
+
+    with test_case.enabled() as processed_queue:
+        test_case.send_autofix_request()
+        with steps_watcher as steps_changed, status_watcher as status_changed:
+            processed: ProcessRequest = processed_queue.get()
+
+    assert processed.name == test_case.request.process_request_name
+    assert processed.payload == test_case.request.model_dump(mode="json")
+
+    assert steps_changed
+    assert status_changed
 
 
 class TestAutoFixRunFlow(unittest.TestCase):

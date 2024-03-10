@@ -5,10 +5,10 @@ from pydantic import BaseModel
 
 
 class Message(BaseModel):
-    content: Optional[str]
+    content: Optional[str] = None
     """The contents of the message."""
 
-    role: Literal["user", "assistant", "system", "tool", "model"]
+    role: Literal["user", "assistant", "system", "tool", "model"] = "tool"
     """The role of the author of this message."""
 
     tool_calls: Optional[list[ChatCompletionMessageToolCall]] = None

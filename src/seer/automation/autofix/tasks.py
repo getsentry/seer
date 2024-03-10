@@ -2,13 +2,20 @@ import logging
 from typing import Any
 
 import sentry_sdk
+from aiohttp import ClientResponseError
 from aiohttp.http_exceptions import HttpProcessingError
 from celery import Task
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.event_manager import AutofixEventManager
-from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, AutofixStatus
+from seer.automation.autofix.models import (
+    AutofixCompleteArgs,
+    AutofixContinuation,
+    AutofixRequest,
+    AutofixStatus,
+    AutofixStepUpdateArgs,
+)
 from seer.automation.models import InitializationError
 from seer.automation.state import CeleryProgressState
 from seer.db import ProcessRequest
@@ -30,10 +37,10 @@ class AutofixTaskFactory(AsyncTaskFactory):
             autofix_group_state = await self.rpc_client.acall(
                 "get_autofix_state", issue_id=process_request.payload["issue"]["id"]
             )
-        except HttpProcessingError as e:
+        except ClientResponseError as e:
             sentry_sdk.capture_exception(e)
             # The group does not exist anymore, let us ignore this issue.
-            if e.code == 404:
+            if e.status == 404:
                 return
 
         async for update in self.async_celery_job(
@@ -44,17 +51,21 @@ class AutofixTaskFactory(AsyncTaskFactory):
             if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
                 await self.rpc_client.acall(
                     "on_autofix_complete",
-                    issue_id=continuation.request.issue.id,
-                    status=continuation.status,
-                    steps=[step.model_dump(mode="json") for step in continuation.steps],
-                    fix=continuation.fix.model_dump(mode="json") if continuation.fix else None,
+                    **AutofixCompleteArgs(
+                        issue_id=continuation.request.issue.id,
+                        status=continuation.status,
+                        steps=continuation.steps,
+                        fix=continuation.fix,
+                    ).model_dump(mode="json"),
                 )
             else:
                 await self.rpc_client.acall(
                     "on_autofix_step_update",
-                    issue_id=continuation.request.issue.id,
-                    status=continuation.status,
-                    steps=[step.model_dump(mode="json") for step in continuation.steps],
+                    **AutofixStepUpdateArgs(
+                        issue_id=continuation.request.issue.id,
+                        status=continuation.status,
+                        steps=continuation.steps,
+                    ).model_dump(mode="json"),
                 )
 
 

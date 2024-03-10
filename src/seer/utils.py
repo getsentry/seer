@@ -1,7 +1,9 @@
+import contextlib
 import functools
 import json
 import weakref
 from enum import Enum
+from queue import Empty, Full, Queue
 from typing import Sequence
 
 from sqlalchemy.orm import DeclarativeBase, Session
@@ -49,3 +51,20 @@ def batch_save_to_db(session: Session, data: Sequence[DeclarativeBase], batch_si
 
         # Flush to move the data to the db transaction buffer
         session.flush()
+
+
+@contextlib.contextmanager
+def closing_queue(*queues: Queue):
+    try:
+        yield
+    finally:
+        for queue in queues:
+            try:
+                queue.put_nowait(None)
+            except Full:
+                pass
+
+            try:
+                queue.get_nowait()
+            except Empty:
+                pass
