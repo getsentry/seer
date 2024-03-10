@@ -217,7 +217,7 @@ class SentryEvent(BaseModel):
 
 class IssueDetails(BaseModel):
     id: Annotated[int, Examples(generator.unsigned_ints)]
-    title: str
+    title: Annotated[str, Examples(generator.ascii_words)]
     short_id: Optional[str] = None
     events: list[SentryEvent]
 

@@ -12,8 +12,7 @@ import aiohttp
 import requests
 from aiohttp import ContentTypeError
 from aiohttp.http_exceptions import HttpProcessingError
-from requests import HTTPError, JSONDecodeError
-from typing_extensions import TypedDict
+from requests import HTTPError
 
 from seer.utils import json_dumps
 
@@ -43,13 +42,11 @@ class FakeHttpResponse:
 RpcClientHandler = Callable[[str, dict[str, Any]], dict[str, Any] | tuple[int, str] | None]
 
 
+@dataclasses.dataclass
 class DummyRpcClient(RpcClient):
-    handlers: dict[str, RpcClientHandler]
-    missed_calls: list[tuple[str, dict[str, Any]]]
-
-    def __init__(self, should_log: bool = False):
-        self.should_log = should_log
-        self.handlers = {}
+    handlers: dict[str, RpcClientHandler] = dataclasses.field(default_factory=dict)
+    missed_calls: list[tuple[str, dict[str, Any]]] = dataclasses.field(default_factory=list)
+    should_log: bool = False
 
     def call(self, method: str, **kwargs) -> dict[str, Any] | None:
         result = self.handlers.get(method, self._default_call)(method, kwargs)

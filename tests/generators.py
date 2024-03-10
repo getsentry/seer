@@ -60,7 +60,7 @@ NoStacktraceExceptionEntry = Annotated[
 @dataclasses.dataclass
 class RpcClientMock:
     client: DummyRpcClient
-    mocked_path: str = "seer.rpc.SentryRpcClient"
+    mocked_path: str = "seer.automation.autofix.tasks.SentryRpcClient"
 
     def _enabled(self, **handlers: RpcClientHandler) -> Iterator[DummyRpcClient]:
         old_handlers = self.client.handlers
@@ -78,7 +78,7 @@ class RpcClientMock:
 @dataclasses.dataclass
 class GptClientMock:
     client: DummyGptClient
-    mocked_path: str = "seer.automation.agent.client.GptClient"
+    mocked_path: str = "seer.automation.agent.agent.GptClient"
 
     @contextlib.contextmanager
     def enabled(self, *handlers: GptCompletionHandler) -> Iterator[DummyGptClient]:

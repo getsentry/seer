@@ -67,6 +67,7 @@ class AsyncApp:
     )
     completed_queue: Queue | None = None
     consumer_sleep: int = 5
+    fail_fast: bool = False
 
     async def run_or_end(self, c: Future[_A] | Coroutine[Any, Any, _A]) -> tuple[_A] | None:
         end_task = asyncio.create_task(self.end_event.wait())
@@ -143,10 +144,9 @@ class AsyncApp:
                                 await session.execute(item.mark_completed_stmt())
                                 await session.commit()
                         if self.completed_queue:
+                            q = self.completed_queue
                             await self.run_or_end(
-                                asyncio.get_event_loop().run_in_executor(
-                                    None, lambda: self.completed_queue.put(item)
-                                )
+                                asyncio.get_event_loop().run_in_executor(None, lambda: q.put(item))
                             )
 
     async def kill_event_task(self, kill_event: threading.Event | None):
@@ -162,20 +162,29 @@ class AsyncApp:
                 break
 
     async def run(self, kill_event: threading.Event | None = None):
+        # Force loading of tasks
+        from seer.automation.autofix import tasks  # noqa
+
         kill_task = asyncio.create_task(self.kill_event_task(kill_event))
         producer_task = asyncio.create_task(self.producer_loop())
         consumer_tasks: list[asyncio.Task[Any]] = []
         while not self.end_event.is_set():
             if producer_task.done():
-                logger.info("Unexpected producer death, restarting...")
-                producer_task = asyncio.create_task(self.producer_loop())
+                if self.fail_fast:
+                    self.end_event.set()
+                else:
+                    logger.info("Unexpected producer death, restarting...")
+                    producer_task = asyncio.create_task(self.producer_loop())
                 continue
 
             task: asyncio.Task
             for task in [*consumer_tasks]:
                 if task.done():
-                    logger.info("Unexpected consumer death, restarting...")
-                    consumer_tasks.remove(task)
+                    if self.fail_fast:
+                        self.end_event.set()
+                    else:
+                        logger.info("Unexpected consumer death, restarting...")
+                        consumer_tasks.remove(task)
 
             while len(consumer_tasks) < self.num_consumers:
                 consumer_tasks.append(asyncio.create_task(self.consumer_loop()))

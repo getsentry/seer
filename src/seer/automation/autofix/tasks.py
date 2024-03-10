@@ -27,14 +27,13 @@ logger = logging.getLogger("autofix")
 
 @async_task_factory
 class AutofixTaskFactory(AsyncTaskFactory):
-    rpc_client: RpcClient = SentryRpcClient()
-
     def matches(self, process_request: ProcessRequest) -> bool:
         return process_request.name.startswith("autofix:")
 
     async def invoke(self, process_request: ProcessRequest):
+        rpc_client: RpcClient = SentryRpcClient()
         try:
-            autofix_group_state = await self.rpc_client.acall(
+            autofix_group_state = await rpc_client.acall(
                 "get_autofix_state", issue_id=process_request.payload["issue"]["id"]
             )
         except ClientResponseError as e:
@@ -49,7 +48,7 @@ class AutofixTaskFactory(AsyncTaskFactory):
             continuation = AutofixContinuation.model_validate(update["value"])
 
             if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
-                await self.rpc_client.acall(
+                await rpc_client.acall(
                     "on_autofix_complete",
                     **AutofixCompleteArgs(
                         issue_id=continuation.request.issue.id,
@@ -59,7 +58,7 @@ class AutofixTaskFactory(AsyncTaskFactory):
                     ).model_dump(mode="json"),
                 )
             else:
-                await self.rpc_client.acall(
+                await rpc_client.acall(
                     "on_autofix_step_update",
                     **AutofixStepUpdateArgs(
                         issue_id=continuation.request.issue.id,
@@ -73,8 +72,10 @@ class AutofixTaskFactory(AsyncTaskFactory):
 def run_autofix(
     self: Task,
     request_data: dict[str, Any],
-    autofix_group_state: dict[str, Any],
+    autofix_group_state: dict[str, Any] | None,
 ):
+    if autofix_group_state is None:
+        autofix_group_state = {}
     continuation = AutofixContinuation.model_validate(
         dict(
             request=request_data,
