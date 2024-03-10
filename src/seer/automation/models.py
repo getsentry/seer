@@ -2,6 +2,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 
+from seer.automation.agent.models import Usage
+
 
 class InitializationError(Exception):
     pass

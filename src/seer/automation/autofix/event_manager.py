@@ -1,13 +1,13 @@
 import dataclasses
 import logging
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal
 
+from seer.automation.autofix.components.planner.models import PlanStep
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixOutput,
     AutofixStatus,
-    PlanningOutput,
     ProblemDiscoveryResult,
     ProgressItem,
     ProgressType,
@@ -219,7 +219,7 @@ class AutofixEventManager:
                 AutofixStatus.PROCESSING if status != AutofixStatus.ERROR else AutofixStatus.ERROR
             )
 
-    def send_planning_result(self, result: PlanningOutput | None):
+    def send_planning_result(self, result: PlanStep | None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR

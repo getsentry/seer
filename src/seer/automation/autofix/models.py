@@ -21,72 +21,6 @@ from seer.automation.models import FilePatch
 from seer.generator import Examples
 
 
-class FileChangeError(Exception):
-    pass
-
-
-class ProgressType(enum.Enum):
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
-    USER_RESPONSE = "USER_RESPONSE"
-
-
-class ProgressItem(BaseModel):
-    timestamp: str
-    message: str
-    type: ProgressType
-    data: Any = None
-
-
-class AutofixStatus(enum.Enum):
-    COMPLETED = "COMPLETED"
-    ERROR = "ERROR"
-    PENDING = "PENDING"
-    PROCESSING = "PROCESSING"
-    CANCELLED = "CANCELLED"
-
-    @classmethod
-    def terminal(cls) -> "frozenset[AutofixStatus]":
-        return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
-
-
-class PlanStep(BaseModel):
-    id: int
-    title: str
-    text: str
-
-
-class PlanningOutput(BaseModel):
-    title: str
-    description: str
-    steps: list[PlanStep]
-
-
-class ProblemDiscoveryOutput(BaseModel):
-    description: str
-    reasoning: str
-    actionability_score: float
-
-
-class ProblemDiscoveryResult(BaseModel):
-    status: Literal["CONTINUE", "CANCELLED"]
-    description: str
-    reasoning: str
-
-
-class ProblemDiscoveryRequest(BaseModel):
-    message: str
-    previous_output: ProblemDiscoveryOutput
-
-
-class PlanningInput(BaseModel):
-    message: Optional[str] = None
-    previous_output: Optional[PlanningOutput] = None
-    problem: Optional[ProblemDiscoveryOutput] = None
-
-
 class StacktraceFrame(BaseModel):
     model_config = ConfigDict(
         alias_generator=AliasGenerator(
@@ -160,12 +94,19 @@ class SentryStacktrace(TypedDict):
     frames: list[SentryFrame]
 
 
-class SentryEventEntryDataValue(TypedDict):
-    stacktrace: SentryStacktrace
+class SentryException(BaseModel):
+    type: str
+    value: str
+    stacktrace: Stacktrace
+
+    @field_validator("stacktrace", mode="before")
+    @classmethod
+    def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace):
+        return Stacktrace.model_validate(sentry_stacktrace)
 
 
 class SentryExceptionEventData(TypedDict):
-    values: list[SentryEventEntryDataValue]
+    values: list[SentryException]
 
 
 class SentryExceptionEntry(BaseModel):
@@ -174,45 +115,28 @@ class SentryExceptionEntry(BaseModel):
 
 
 class SentryEvent(BaseModel):
+    title: str
     entries: list[dict]
 
-    def get_stacktrace(self) -> Stacktrace | None:
-        exception_entry: SentryExceptionEntry | None = None
-        for entry in self.entries:
-            if entry.get("type") != "exception":
-                continue
+    # Below fields are not present in the SentryEvent model, but are added for convenience
+    exceptions: list[SentryException] = Field(default_factory=list, exclude=True)
 
-            try:
-                exception_entry = SentryExceptionEntry.model_validate(entry)
-                break
-            except ValidationError:
-                sentry_sdk.capture_exception()
-                continue
+    @classmethod
+    def from_error_event(cls, error_event: dict):
+        exceptions: list[SentryException] = []
+        for entry in error_event.get("entries", []):
+            if entry.get("type") == "exception":
+                for exception in entry.get("data", {}).get("values", []):
+                    try:
+                        exceptions.append(SentryException.model_validate(exception))
+                    except ValidationError:
+                        sentry_sdk.capture_exception()
+                        continue
 
-        if exception_entry is None:
-            return None
+        if len(exceptions) == 0:
+            raise ValueError("No exceptions found in the event.")
 
-        values = exception_entry.data["values"]
-        if not values:
-            return None
-
-        v: SentryEventEntryDataValue
-        for v in values:
-            stack_trace = v["stacktrace"]
-            frames: list[StacktraceFrame] = []
-
-            for frame in stack_trace["frames"]:
-                try:
-                    frames.append(StacktraceFrame.model_validate(frame))
-                except ValidationError as e:
-                    sentry_sdk.capture_exception()
-                    continue
-
-            if not frames:
-                continue
-
-            return Stacktrace(frames=frames)
-        return None
+        return cls(**error_event, exceptions=exceptions)
 
 
 class IssueDetails(BaseModel):
@@ -220,6 +144,11 @@ class IssueDetails(BaseModel):
     title: Annotated[str, Examples(generator.ascii_words)]
     short_id: Optional[str] = None
     events: list[SentryEvent]
+
+    @field_validator("events", mode="before")
+    @classmethod
+    def validate_events(cls, events: list[dict]):
+        return [SentryEvent.from_error_event(event) for event in events]
 
 
 class RepoDefinition(BaseModel):
@@ -245,6 +174,43 @@ class RepoDefinition(BaseModel):
 
     def __hash__(self):
         return hash((self.provider, self.owner, self.name))
+
+
+class FileChangeError(Exception):
+    pass
+
+
+class ProgressType(enum.Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
+    USER_RESPONSE = "USER_RESPONSE"
+
+
+class ProgressItem(BaseModel):
+    timestamp: str
+    message: str
+    type: ProgressType
+    data: Any = None
+
+
+class AutofixStatus(enum.Enum):
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    CANCELLED = "CANCELLED"
+
+    @classmethod
+    def terminal(cls) -> "frozenset[AutofixStatus]":
+        return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
+
+
+class ProblemDiscoveryResult(BaseModel):
+    status: Literal["CONTINUE", "CANCELLED"]
+    description: str
+    reasoning: str
 
 
 class AutofixUserDetails(BaseModel):
@@ -343,6 +309,7 @@ class AutofixGroupState(BaseModel):
     status: AutofixStatus = AutofixStatus.PENDING
     fix: AutofixOutput | None = None
     completedAt: datetime.datetime | None = None
+    usage: Usage = Field(default_factory=Usage)
 
 
 class AutofixCompleteArgs(BaseModel):

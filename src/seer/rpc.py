@@ -69,14 +69,15 @@ class DummyRpcClient(RpcClient):
         return 404, "Not Found"
 
     async def acall(self, method: str, **kwargs) -> dict[str, Any] | None:
-        kwargs.pop("session", None)
-        result = self.handlers.get(method, self._default_call)(method, kwargs)
-        if result is None:
-            return None
-        if isinstance(result, dict):
-            return result
-        status, msg = result
-        raise HttpProcessingError(code=status, message=msg)
+        return {}
+        # kwargs.pop("session", None)
+        # result = self.handlers.get(method, self._default_call)(method, kwargs)
+        # if result is None:
+        #     return None
+        # if isinstance(result, dict):
+        #     return result
+        # status, msg = result
+        # raise HttpProcessingError(code=status, message=msg)
 
 
 class SentryRpcClient(RpcClient):
