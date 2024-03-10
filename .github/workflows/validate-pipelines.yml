@@ -49,6 +49,6 @@ jobs:
                 id_token_include_email: true
             - uses: getsentry/action-validate-gocd-pipelines@v1
               with:
-                configrepo: timeseries-analysis-service__main
+                configrepo: seer__main
                 gocd_access_token: ${{ secrets.GOCD_ACCESS_TOKEN }}
                 google_oidc_token: ${{ steps.auth.outputs.id_token }}
