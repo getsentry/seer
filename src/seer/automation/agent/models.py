@@ -8,7 +8,7 @@ class Message(BaseModel):
     content: Optional[str] = None
     """The contents of the message."""
 
-    role: Literal["user", "assistant", "system", "tool", "model"] = "tool"
+    role: Literal["user", "assistant", "system", "tool", "model"] = "user"
     """The role of the author of this message."""
 
     tool_calls: Optional[list[ChatCompletionMessageToolCall]] = None
