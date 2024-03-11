@@ -18,6 +18,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
         annotations = get_type_hints(implementation)
         try:
             assert len(spec.args) == 1
+
             request_annotation: Type[BaseModel] = annotations[spec.args[0]]
             response_annotation: Type[BaseModel] = annotations["return"]
             assert issubclass(request_annotation, BaseModel)
@@ -34,7 +35,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
                 raise BadRequest("Data is not an object")
 
             try:
-                result: BaseModel = implementation(request_annotation.model_validate(data))
+                result: BaseModel = request_annotation.parse_obj(data)
             except ValidationError as e:
                 sentry_sdk.capture_exception(e)
                 raise BadRequest(str(e))
@@ -51,4 +52,5 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
 
 def register_json_api_views(app: Flask) -> None:
     for url_rule, wrapper, _, _ in view_functions:
+
         app.add_url_rule(url_rule, view_func=wrapper, methods=["POST"])
