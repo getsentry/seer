@@ -24,7 +24,7 @@ logger = logging.getLogger("autofix")
 
 
 @dataclasses.dataclass
-class AutofixGroupState(State[AutofixContinuation]):
+class ContinuationState(State[AutofixContinuation]):
     request: AutofixRequest
     group_state: AutofixGroupState = dataclasses.field(default_factory=AutofixGroupState)
     rpc_client: RpcClient = dataclasses.field(default_factory=SentryRpcClient)
@@ -68,21 +68,23 @@ class AutofixGroupState(State[AutofixContinuation]):
 @celery_app.task(time_limit=60 * 60 * 5)  # 5 hour task timeout
 def run_autofix(
     request_data: dict[str, Any],
-    autofix_group_state: dict[str, Any] | None,
+    autofix_group_state: dict[str, Any] | None = None,
 ):
-    state = AutofixGroupState(request=AutofixRequest.model_validate(request_data))
+    state = ContinuationState(request=AutofixRequest.model_validate(request_data))
     request = AutofixRequest(**request_data)
     event_manager = AutofixEventManager(state)
 
     try:
-        # Process has no further work.
-        if state.status in AutofixStatus.terminal():
-            return
-
         if not state.reload_state_from_sentry():
             raise InitializationError("Group no longer exists")
 
-        if request.has_timed_out:
+        cur = state.get()
+
+        # Process has no further work.
+        if cur.status in AutofixStatus.terminal():
+            return
+
+        if cur.request.has_timed_out:
             raise InitializationError("Timeout while dealing with autofix request.")
 
         with sentry_sdk.start_span(
