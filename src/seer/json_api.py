@@ -52,3 +52,12 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
 def register_json_api_views(app: Flask) -> None:
     for url_rule, wrapper, _, _ in view_functions:
         app.add_url_rule(url_rule, view_func=wrapper, methods=["POST"])
+
+
+class BreakpointRequest(BaseModel):
+    data: Mapping[str, BreakpointTransaction]
+    sort: str = ""
+    allow_midpoint: str = "1"
+    validate_tail_hours: int = 0
+    trend_percentage: float = Field(default=0.1, alias="trend_percentage()")
+    min_change: float = Field(default=0.0, alias="min_change()")
