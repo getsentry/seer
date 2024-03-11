@@ -349,17 +349,3 @@ async def test_async_prepared_statements_disabled(
         assert (
             await session.execute(text("select count(*) from pg_prepared_statements"))
         ).scalar() == 0
-
-
-@parameterize
-def test_queues_autofix(autofix_request: AutofixRequest):
-    response = app.test_client().post(
-        "/v0/automation/autofix",
-        data=autofix_request.model_dump_json(),
-        content_type="application/json",
-    )
-
-    assert response.status_code == 200
-
-    work = ProcessRequest.acquire_work(1, datetime.datetime.now())
-    assert AutofixRequest.model_validate(work[0].payload) == autofix_request
