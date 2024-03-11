@@ -59,6 +59,7 @@ class ContinuationState(State[AutofixContinuation]):
                 "on_autofix_step_update",
                 **AutofixStepUpdateArgs(
                     issue_id=continuation.request.issue.id,
+
                     status=continuation.status,
                     steps=continuation.steps,
                 ).model_dump(mode="json"),
@@ -75,17 +76,17 @@ def run_autofix(
     event_manager = AutofixEventManager(state)
 
     try:
+        cur = state.get()
+
+        if cur.request.has_timed_out:
+            raise InitializationError("Timeout while dealing with autofix request.")
+
         if not state.reload_state_from_sentry():
             raise InitializationError("Group no longer exists")
-
-        cur = state.get()
 
         # Process has no further work.
         if cur.status in AutofixStatus.terminal():
             return
-
-        if cur.request.has_timed_out:
-            raise InitializationError("Timeout while dealing with autofix request.")
 
         with sentry_sdk.start_span(
             op="seer.automation.autofix",
