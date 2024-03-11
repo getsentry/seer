@@ -338,12 +338,28 @@ class Step(BaseModel):
         return base_step
 
 
-class AutofixContinuation(BaseModel):
-    request: AutofixRequest
+class AutofixGroupState(BaseModel):
     steps: list[Step] = Field(default_factory=list)
-    status: AutofixStatus = Field(default=AutofixStatus.PENDING)
+    status: AutofixStatus = AutofixStatus.PENDING
     fix: AutofixOutput | None = None
     completedAt: datetime.datetime | None = None
+
+
+class AutofixCompleteArgs(BaseModel):
+    issue_id: int
+    status: AutofixStatus
+    steps: list[Step]
+    fix: AutofixOutput | None
+
+
+class AutofixStepUpdateArgs(BaseModel):
+    issue_id: int
+    status: AutofixStatus
+    steps: list[Step]
+
+
+class AutofixContinuation(AutofixGroupState):
+    request: AutofixRequest
 
     def find_step(self, *, id: str) -> Step | None:
         for step in self.steps:
@@ -375,23 +391,3 @@ class AutofixContinuation(BaseModel):
                             substep.status = AutofixStatus.ERROR
                         if substep.status == AutofixStatus.PENDING:
                             substep.status = AutofixStatus.CANCELLED
-
-
-class AutofixGroupState(BaseModel):
-    steps: list[Step] = Field(default_factory=list)
-    status: AutofixStatus = AutofixStatus.PENDING
-    fix: AutofixOutput | None = None
-    completedAt: datetime.datetime | None = None
-
-
-class AutofixCompleteArgs(BaseModel):
-    issue_id: int
-    status: AutofixStatus
-    steps: list[Step]
-    fix: AutofixOutput | None
-
-
-class AutofixStepUpdateArgs(BaseModel):
-    issue_id: int
-    status: AutofixStatus
-    steps: list[Step]

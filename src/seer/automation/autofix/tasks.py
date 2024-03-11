@@ -17,31 +17,28 @@ from seer.automation.autofix.models import (
     AutofixStepUpdateArgs,
 )
 from seer.automation.models import InitializationError
-from seer.automation.state import State
+from seer.automation.state import LocalMemoryState, State
 from seer.rpc import RpcClient, SentryRpcClient
 
 logger = logging.getLogger("autofix")
 
 
 @dataclasses.dataclass
-class ContinuationState(State[AutofixContinuation]):
-    request: AutofixRequest
-    group_state: AutofixGroupState = dataclasses.field(default_factory=AutofixGroupState)
+class ContinuationState(LocalMemoryState[AutofixContinuation]):
     rpc_client: RpcClient = dataclasses.field(default_factory=SentryRpcClient)
 
     def reload_state_from_sentry(self) -> bool:
         try:
-            self.group_state = AutofixGroupState.model_validate(
-                self.rpc_client.call("get_autofix_state", issue_id=self.request.issue.id)
+            self.val = self.val.model_copy(
+                update=AutofixGroupState.model_validate(
+                    self.rpc_client.call("get_autofix_state", issue_id=self.val.request.issue.id)
+                ).model_dump()
             )
             return True
         except HTTPError as e:
             if e.response.status_code == 404:
                 return False
             raise e
-
-    def get(self) -> AutofixContinuation:
-        return AutofixContinuation(request=self.request, **self.group_state.model_dump())
 
     def set(self, continuation: AutofixContinuation):
         if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
@@ -63,6 +60,7 @@ class ContinuationState(State[AutofixContinuation]):
                     steps=continuation.steps,
                 ).model_dump(mode="json"),
             )
+        super().set(continuation)
 
 
 @celery_app.task(time_limit=60 * 60 * 5)  # 5 hour task timeout
@@ -70,7 +68,9 @@ def run_autofix(
     request_data: dict[str, Any],
     autofix_group_state: dict[str, Any] | None = None,
 ):
-    state = ContinuationState(request=AutofixRequest.model_validate(request_data))
+    state = ContinuationState(
+        val=AutofixContinuation(request=AutofixRequest.model_validate(request_data))
+    )
     request = AutofixRequest(**request_data)
     event_manager = AutofixEventManager(state)
 
