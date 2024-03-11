@@ -8,7 +8,8 @@ import pytest
 from celery import Celery, Task
 from celery.worker import WorkController
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 
 from seer.db import ProcessRequest, Session
 from seer.generator import (
@@ -20,7 +21,7 @@ from seer.generator import (
     positive_timedeltas,
     printable_strings,
 )
-from seer.tasks import AsyncApp, AsyncSession, AsyncTaskFactory
+from seer.tasks import AsyncApp, AsyncSession, AsyncTaskFactory, acquire_x_lock
 from tests.generators import Future, Now, Past
 
 
@@ -369,3 +370,27 @@ async def test_async_celery_job_generator_cancels(
 
     assert received_buff == list(iterations[:2])
     assert sent_buff == list(iterations[:2])
+
+
+@pytest.mark.asyncio
+@parameterize
+async def test_acquire_x_lock(names: tuple[str, str]):
+    async with AsyncSession() as session, acquire_x_lock(names[0], session) as a:
+        assert a is True
+        async with AsyncSession() as session2, acquire_x_lock(names[0], session2) as b:
+            assert b is False
+            async with AsyncSession() as session3, acquire_x_lock(names[1], session3) as c:
+                assert c is True
+    async with acquire_x_lock(names[0], session) as a:
+        assert a is True
+
+
+@pytest.mark.asyncio
+@parameterize(count=1)
+async def test_acquire_x_lock_failure(name: str):
+    with pytest.raises(OperationalError):
+        async with AsyncSession() as session:
+            async with acquire_x_lock(name, session) as a:
+                await session.execute(text("SET idle_in_transaction_session_timeout = '2s'"))
+                assert a
+                await asyncio.sleep(5)
