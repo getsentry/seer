@@ -148,7 +148,7 @@ class ProcessRequest(Base):
                 item.scheduled_for = item.next_schedule(now)
                 item.scheduled_from = now
                 session.add(item)
-
+            
             session.commit()
 
             return items
@@ -166,6 +166,7 @@ class DbRepositoryInfo(Base):
     project: Mapped[int] = mapped_column(Integer, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
+
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
     __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
 
