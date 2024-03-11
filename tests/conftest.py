@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from seer.bootup import CELERY_CONFIG, bootup
 from seer.db import Session, db
 
+create_async_engine(
+    os.environ["DATABASE_URL"],
+    echo=True,
+    pool_recycle=3600,  # Recycle connections every hour
+    pool_timeout=10,  # Close idle connections after 10 seconds
+)
 
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
