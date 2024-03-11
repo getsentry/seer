@@ -104,6 +104,7 @@ class AsyncApp:
                     logger.info(f"Picked up process request, running")
                     await self.run_or_end(self.queue.put(item))
                     logger.info(f"Process request completed successfully")
+
                     if self.end_event.is_set():
                         break
             else:
@@ -120,6 +121,17 @@ class AsyncApp:
             if acquired:
                 await session.execute(text("SET idle_in_transaction_session_timeout = '1h'"))
                 await task.invoke(process_request)
+                try:
+                    # Try to commit the changes
+                    await session.commit()
+                except Exception as e:
+                    # In case of any exception, rollback the session
+                    await session.rollback()
+                    # Log the exception
+                    logger.exception("Exception during session transaction", exc_info=e)
+                finally:
+                    # Ensure the session is closed after the transaction
+                    await session.close()
             return acquired
 
     async def consumer_loop(self):
