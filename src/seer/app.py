@@ -42,20 +42,22 @@ def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
 
 @json_api("/trends/breakpoint-detector")
 def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
-    # Ensure string fields are within their allowed values and apply defaults if missing
-    data.sort = data.get("sort", "")
-    if data.sort not in ["", "trend_percentage()", "-trend_percentage()"]:
-        data.sort = ""
+    """
+    Endpoint to detect trends and breakpoints in time series data.
 
-    data.allow_midpoint = data.get("allow_midpoint", "1")
-    if data.allow_midpoint not in ["0", "1"]:
-        data.allow_midpoint = "1"
+    Parameters:
+    - `data`: BreakpointRequest object containing the following fields:
+        - `data`: Mapping of transaction names to their respective data points.
+        - `sort`: Sort order for trend percentages. Accepted values are "", "trend_percentage()", or "-trend_percentage()". Default is "".
+        - `allow_midpoint`: A string indicating whether midpoint analysis is allowed. Accepted values are "0" (no) and "1" (yes). Default is "1".
+        - `validate_tail_hours`: An integer specifying the tail hours to validate. Should be non-negative. Default is 0.
+        - `trend_percentage`: The minimum trend percentage change to report. Default is 0.1.
+        - `min_change`: The minimum trend change to report. Default is 0.0.
 
-    # Ensure validate_tail_hours is a non-negative integer, default to 0 if not provided or invalid
-    try:
-        data.validate_tail_hours = int(data.get("validate_tail_hours", 0))
-    except ValueError:
-        data.validate_tail_hours = 0
+    Returns:
+    A `BreakpointResponse` object containing detected trends.
+
+    """
 
 @json_api("/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
