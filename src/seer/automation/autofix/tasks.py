@@ -75,12 +75,12 @@ def run_autofix(
     event_manager = AutofixEventManager(state)
 
     try:
-        if not state.reload_state_from_sentry():
-            raise InitializationError("Group no longer exists")
-
         # Process has no further work.
         if state.status in AutofixStatus.terminal():
-            raise InitializationError("Issue has been resolved")
+            return
+
+        if not state.reload_state_from_sentry():
+            raise InitializationError("Group no longer exists")
 
         if request.has_timed_out:
             raise InitializationError("Timeout while dealing with autofix request.")
