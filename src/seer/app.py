@@ -42,33 +42,20 @@ def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
 
 @json_api("/trends/breakpoint-detector")
 def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
-    txns_data = data.data
+    # Ensure string fields are within their allowed values and apply defaults if missing
+    data.sort = data.get("sort", "")
+    if data.sort not in ["", "trend_percentage()", "-trend_percentage()"]:
+        data.sort = ""
 
-    sort_function = data.sort
-    allow_midpoint = data.allow_midpoint == "1"
-    validate_tail_hours = data.validate_tail_hours
+    data.allow_midpoint = data.get("allow_midpoint", "1")
+    if data.allow_midpoint not in ["0", "1"]:
+        data.allow_midpoint = "1"
 
-    min_pct_change = data.trend_percentage
-    min_change = data.min_change
-
-    with sentry_sdk.start_span(
-        op="seer.breakpoint_detection",
-        description="Get the breakpoint and t-value for every transaction",
-    ) as span:
-        trend_percentage_list = find_trends(
-            txns_data,
-            sort_function,
-            allow_midpoint,
-            min_pct_change,
-            min_change,
-            validate_tail_hours,
-        )
-
-    trends = BreakpointResponse(data=[x[1] for x in trend_percentage_list])
-    app.logger.debug("Trend results: %s", trends)
-
-    return trends
-
+    # Ensure validate_tail_hours is a non-negative integer, default to 0 if not provided or invalid
+    try:
+        data.validate_tail_hours = int(data.get("validate_tail_hours", 0))
+    except ValueError:
+        data.validate_tail_hours = 0
 
 @json_api("/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
