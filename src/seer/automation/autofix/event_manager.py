@@ -267,4 +267,5 @@ class AutofixEventManager:
                 cur.mark_all_steps_completed()
             else:
                 cur.mark_running_steps_errored()
+            cur.fix = fix
             cur.status = AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR
