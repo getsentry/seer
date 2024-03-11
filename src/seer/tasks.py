@@ -12,7 +12,8 @@ from typing import Any, Callable, Coroutine, Protocol, TypeVar
 import sqlalchemy
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import DatabaseError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from seer.db import AsyncSession, ProcessRequest
@@ -119,6 +120,7 @@ class AsyncApp:
             process_request.name, session
         ) as acquired:
             if acquired:
+                await session.execute(text("SET idle_in_transaction_session_timeout = '1h'"))
                 await task.invoke(process_request)
             return acquired
 
@@ -199,17 +201,12 @@ class AsyncApp:
 async def acquire_x_lock(name: str, session: sqlalchemy.ext.asyncio.AsyncSession):
     m = hashlib.sha256()
     m.update(name.encode("utf8"))
-    key = int.from_bytes(m.digest()[:8], byteorder="big", signed=True)
+    key = int.from_bytes(m.digest()[:8], byteorder="big", signed=True) & 0xFFFFFFFF
 
     logger.info("Acquiring exclusive lock for %s", key)
-    rows = await session.execute(select(func.pg_try_advisory_lock(key)))
+    rows = await session.execute(select(func.pg_try_advisory_xact_lock(key)))
     acquired = next(rows)[0]
-    try:
-        yield acquired
-    finally:
-        if acquired:
-            logger.info("Releasing exclusive lock for %s", key)
-            await session.execute(select(func.pg_advisory_unlock(key)))
+    yield acquired
 
 
 def async_main():
