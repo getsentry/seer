@@ -13,7 +13,6 @@ import sqlalchemy
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import DatabaseError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from seer.db import AsyncSession, ProcessRequest
@@ -101,7 +100,6 @@ class AsyncApp:
                     )
                 )
             if result is not None and result[0]:
-                logger.info(f"Found {len(result[0])} process requests")
                 for item in result[0]:
                     logger.info(f"Picked up process request, running")
                     await self.run_or_end(self.queue.put(item))
@@ -209,7 +207,7 @@ async def acquire_x_lock(name: str, session: sqlalchemy.ext.asyncio.AsyncSession
     yield acquired
 
 
-def async_main():
+async def async_main():
     from seer.bootup import bootup
 
     bootup(
@@ -220,8 +218,8 @@ def async_main():
         eager_load_inference_models=False,
     )
     app = AsyncApp()
-    asyncio.run(app.run())
+    await app.run()
 
 
 if __name__ == "__main__":
-    async_main()
+    asyncio.run(async_main())
