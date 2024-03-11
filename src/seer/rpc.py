@@ -106,6 +106,7 @@ class SentryRpcClient(RpcClient):
         response = requests.post(endpoint, headers=headers, data=body_bytes)
         response.raise_for_status()
         if response.headers.get("Content-Type", "") != "application/json":
+            logger.warning("No application/json content type")
             return None
         return response.json()
 
