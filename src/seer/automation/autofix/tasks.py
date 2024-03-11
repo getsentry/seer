@@ -1,10 +1,9 @@
+import dataclasses
 import logging
 from typing import Any
 
 import sentry_sdk
-from aiohttp import ClientResponseError
-from aiohttp.http_exceptions import HttpProcessingError
-from celery import Task
+from requests import HTTPError
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix import Autofix
@@ -12,87 +11,80 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixCompleteArgs,
     AutofixContinuation,
+    AutofixGroupState,
     AutofixRequest,
     AutofixStatus,
     AutofixStepUpdateArgs,
 )
 from seer.automation.models import InitializationError
-from seer.automation.state import CeleryProgressState
-from seer.db import ProcessRequest
+from seer.automation.state import State
 from seer.rpc import RpcClient, SentryRpcClient
-from seer.task_factory import AsyncTaskFactory, async_task_factory
 
 logger = logging.getLogger("autofix")
 
 
-@async_task_factory
-class AutofixTaskFactory(AsyncTaskFactory):
-    def matches(self, process_request: ProcessRequest) -> bool:
-        return process_request.name.startswith("autofix:")
+@dataclasses.dataclass
+class ContinuationState(State[AutofixContinuation]):
+    request: AutofixRequest
+    group_state: AutofixGroupState = dataclasses.field(default_factory=AutofixGroupState)
+    rpc_client: RpcClient = dataclasses.field(default_factory=SentryRpcClient)
 
-    async def invoke(self, process_request: ProcessRequest):
-        rpc_client: RpcClient = SentryRpcClient()
+    def reload_state_from_sentry(self) -> bool:
         try:
-            autofix_group_state = await rpc_client.acall(
-                "get_autofix_state", issue_id=process_request.payload["issue"]["id"]
+            self.group_state = AutofixGroupState.model_validate(
+                self.rpc_client.call("get_autofix_state", issue_id=self.request.issue.id)
             )
-        except ClientResponseError as e:
-            sentry_sdk.capture_exception(e)
-            # The group does not exist anymore, let us ignore this issue.
-            if e.status == 404:
-                return
+            return True
+        except HTTPError as e:
+            if e.response.status_code == 404:
+                return False
+            raise e
 
-        async for update in self.async_celery_job(
-            lambda: run_autofix.delay(process_request.payload, autofix_group_state)
-        ):
-            continuation = AutofixContinuation.model_validate(update["value"])
+    def get(self) -> AutofixContinuation:
+        return AutofixContinuation(request=self.request, **self.group_state.model_dump())
 
-            if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
-                await rpc_client.acall(
-                    "on_autofix_complete",
-                    **AutofixCompleteArgs(
-                        issue_id=continuation.request.issue.id,
-                        status=continuation.status,
-                        steps=continuation.steps,
-                        fix=continuation.fix,
-                    ).model_dump(mode="json"),
-                )
-            else:
-                await rpc_client.acall(
-                    "on_autofix_step_update",
-                    **AutofixStepUpdateArgs(
-                        issue_id=continuation.request.issue.id,
-                        status=continuation.status,
-                        steps=continuation.steps,
-                    ).model_dump(mode="json"),
-                )
+    def set(self, continuation: AutofixContinuation):
+        if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
+            self.rpc_client.call(
+                "on_autofix_complete",
+                **AutofixCompleteArgs(
+                    issue_id=continuation.request.issue.id,
+                    status=continuation.status,
+                    steps=continuation.steps,
+                    fix=continuation.fix,
+                ).model_dump(mode="json"),
+            )
+        else:
+            self.rpc_client.call(
+                "on_autofix_step_update",
+                **AutofixStepUpdateArgs(
+                    issue_id=continuation.request.issue.id,
+                    status=continuation.status,
+                    steps=continuation.steps,
+                ).model_dump(mode="json"),
+            )
 
 
-@celery_app.task(bind=True, time_limit=60 * 60 * 5)  # 5 hour task timeout
+@celery_app.task(time_limit=60 * 60 * 5)  # 5 hour task timeout
 def run_autofix(
-    self: Task,
     request_data: dict[str, Any],
-    autofix_group_state: dict[str, Any] | None,
+    autofix_group_state: dict[str, Any] | None = None,
 ):
-    if autofix_group_state is None:
-        autofix_group_state = {}
-    continuation = AutofixContinuation.model_validate(
-        dict(
-            request=request_data,
-            **autofix_group_state,
-        )
-    )
-
-    # Process has no further work.
-    if continuation.status in AutofixStatus.terminal():
-        return
-
-    state = CeleryProgressState(val=continuation, bind=self)
-
+    state = ContinuationState(request=AutofixRequest.model_validate(request_data))
     request = AutofixRequest(**request_data)
     event_manager = AutofixEventManager(state)
+
     try:
-        if request.has_timed_out:
+        if not state.reload_state_from_sentry():
+            raise InitializationError("Group no longer exists")
+
+        cur = state.get()
+
+        # Process has no further work.
+        if cur.status in AutofixStatus.terminal():
+            return
+
+        if cur.request.has_timed_out:
             raise InitializationError("Timeout while dealing with autofix request.")
 
         with sentry_sdk.start_span(
