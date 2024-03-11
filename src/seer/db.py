@@ -32,7 +32,7 @@ class Base(DeclarativeBase):
 # Initialized in src/app.run
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
-Session = sessionmaker(autoflush=False, expire_on_commit=False)
+Session = sessionmaker(autoflush=True, expire_on_commit=False)
 AsyncSession = async_sessionmaker(expire_on_commit=False)
 
 
@@ -48,6 +48,7 @@ class ProcessRequest(Base):
     Note that there is no guarantee of single delivery / single processing of any particular request.  It is possible
     that multiple, concurrent attempts to process a request can occur, and ideally each is idempotent with respect to
     important side effects.
+
 
     When processing of a request fails, its scheduled_for is updated to an exponentially offset future.  When work is
     'obtained', its scheduled_from is updated as well.  Terminating work is done by deleting the row iff its scheduled
