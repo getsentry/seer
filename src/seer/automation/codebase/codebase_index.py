@@ -140,16 +140,29 @@ class CodebaseIndex:
                 embedded_chunks = cls._embed_chunks(chunks)
             logger.debug(f"Processed {len(chunks)} chunks")
 
+
             with Session() as session:
-                db_repo_info = DbRepositoryInfo(
-                    organization=organization,
-                    project=project,
-                    provider=repo_client.provider,
-                    external_slug=repo_client.repo.full_name,
-                    sha=head_sha,
-                )
-                session.add(db_repo_info)
-                session.flush()
+                # Check if a DbRepositoryInfo record exists and update it if so
+                db_repo_info = session.query(DbRepositoryInfo).filter(
+                    DbRepositoryInfo.organization == organization,
+                    DbRepositoryInfo.project == project,
+                    DbRepositoryInfo.provider == repo_client.provider,
+                    DbRepositoryInfo.external_slug == repo_client.repo.full_name,
+                ).one_or_none()
+
+                if db_repo_info:
+                    db_repo_info.sha = head_sha
+                else:
+                    # If no existing record, create a new DbRepositoryInfo
+                    db_repo_info = DbRepositoryInfo(
+                        organization=organization,
+                        project=project,
+                        provider=repo_client.provider,
+                        external_slug=repo_client.repo.full_name,
+                        sha=head_sha,
+                    )
+                    session.add(db_repo_info)
+                    session.flush()
 
                 db_chunks = [
                     chunk.to_db_model(repo_id=db_repo_info.id) for chunk in embedded_chunks
