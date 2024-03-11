@@ -231,6 +231,7 @@ class CodebaseIndex:
 
             with Session() as session:
                 session.query(DbDocumentChunk).filter(
+
                     DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
                 ).delete(synchronize_session=False)
 
@@ -247,8 +248,29 @@ class CodebaseIndex:
 
                 session.flush()
 
+                # Check for existing DbDocumentTombstone records that match repo_id, namespace, and path
+                existing_tombstones = session.query(DbDocumentTombstone).filter(
+                    DbDocumentTombstone.repo_id == self.repo_info.id,
+                    DbDocumentTombstone.path.in_([chunk.path for chunk in embedded_chunks_to_add]),
+                ).all()
+
+                # Map existing tombstones by path for efficient lookup
+                tombstone_map = {tombstone.path: tombstone for tombstone in existing_tombstones}
+
+                # Filter out chunks to add that already exist as tombstones, prepare update instead
+                chunks_to_add_filtered = []
+                for chunk in embedded_chunks_to_add:
+                    if chunk.path in tombstone_map:
+                        # Update the existing tombstone instead of adding a new chunk
+                        existing_tombstone = tombstone_map[chunk.path]
+                        existing_tombstone.namespace = chunk.namespace # Assuming namespace update is needed
+                        # Note: Other updates to the tombstone can be performed here based on requirements
+                    else:
+                        chunks_to_add_filtered.append(chunk)
+
+                # Proceed with adding new chunks after filtering
                 new_db_chunks = [
-                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks_to_add
+                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in chunks_to_add_filtered
                 ]
                 batch_save_to_db(session, new_db_chunks)
 
@@ -263,6 +285,7 @@ class CodebaseIndex:
                 if db_repo_info is None:
                     raise ValueError(f"Repository info with id {self.repo_info.id} not found")
                 db_repo_info.sha = head_sha
+
 
                 session.commit()
 
