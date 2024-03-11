@@ -7,6 +7,7 @@ import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
+from seer.automation.autofix.tasks import run_autofix
 from seer.bootup import bootup
 from seer.db import ProcessRequest, Session
 from seer.grouping.grouping import GroupingRequest, SimilarityResponse
@@ -78,16 +79,7 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
 
 @json_api("/v0/automation/autofix")
 def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    with Session() as session:
-        session.execute(
-            ProcessRequest.schedule_stmt(
-                name=data.process_request_name,
-                payload=data,
-                when=datetime.datetime.now(),
-            )
-        )
-        session.commit()
-
+    run_autofix.delay(data.model_dump(mode="json"))
     return AutofixEndpointResponse(started=True)
 
 
