@@ -15,8 +15,9 @@ from typing import Any, List, Literal, Mapping, Tuple, Union
 import numpy as np
 import pandas as pd
 import scipy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing_extensions import TypedDict
+from typing import List, Tuple, Mapping
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
 
@@ -35,6 +36,10 @@ class BreakpointTransaction(BaseModel):
     request_end: int
     data_start: int
     data_end: int
+
+    @validator('request_start', pre=True, always=True)
+    def convert_request_start_to_int(cls, v):
+        return int(v) if isinstance(v, float) else v
 
 
 class BreakpointRequest(BaseModel):
