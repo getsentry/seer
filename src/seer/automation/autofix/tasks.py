@@ -29,11 +29,11 @@ class ContinuationState(LocalMemoryState[AutofixContinuation]):
 
     def reload_state_from_sentry(self) -> bool:
         try:
-            self.val = self.val.model_copy(
-                update=AutofixGroupState.model_validate(
-                    self.rpc_client.call("get_autofix_state", issue_id=self.val.request.issue.id)
-                ).model_dump()
+            group_state = AutofixGroupState.model_validate(
+                self.rpc_client.call("get_autofix_state", issue_id=self.val.request.issue.id)
             )
+            logger.info(f"Loaded group_state: {group_state!r}")
+            self.val = self.val.model_copy(update=group_state.model_dump())
             return True
         except HTTPError as e:
             if e.response.status_code == 404:
@@ -82,6 +82,7 @@ def run_autofix(
 
         # Process has no further work.
         if cur.status in AutofixStatus.terminal():
+            logger.warning(f"Ignoring job, state {cur.status}")
             return
 
         if cur.request.has_timed_out:
