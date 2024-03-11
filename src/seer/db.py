@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+
     Integer,
     String,
     delete,
@@ -30,7 +31,7 @@ class Base(DeclarativeBase):
 
 
 # Initialized in src/app.run
-db: SQLAlchemy = SQLAlchemy(model_class=Base)
+db: SQLAlchemy = SQLAlchemy(model_class=Base, engine_options={"pool_size": 10, "max_overflow": 5, "pool_recycle": 3600})
 migrate = Migrate(directory="src/migrations")
 Session = sessionmaker(autoflush=False, expire_on_commit=False)
 AsyncSession = async_sessionmaker(expire_on_commit=False)
