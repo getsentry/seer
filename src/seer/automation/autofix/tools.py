@@ -127,7 +127,15 @@ class CodeActionTools(BaseTools):
         Replaces a snippet with the provided replacement.
         """
         logger.debug(
-            f"[CodeActionTools.replace_snippet_with] Replacing snippet\n```\n{reference_snippet}\n```\n with \n```\n{replacement_snippet}\n```\nin {file_path} in repo {repo_name}"
+            f"[CodeActionTools.replace_snippet_with] Replacing snippet
+```
+{reference_snippet}
+```
+ with 
+```
+{replacement_snippet}
+```
+in {file_path} in repo {repo_name}"
         )
 
         codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
@@ -140,7 +148,7 @@ class CodeActionTools(BaseTools):
         )
 
         if not result:
-            raise Exception("Reference snippet not found. Try again with an exact match.")
+            raise Exception("Reference snippet not found. Please ensure the reference matches exactly, including case sensitivity. If uncertain, provide a snippet that uniquely identifies the target area.")
 
         original_snippet, snippet_start_line, snippet_end_line = result
 
@@ -153,10 +161,11 @@ class CodeActionTools(BaseTools):
         chunk = "\n".join(chunk_lines).strip("\n") + "\n"  # Keep a newline at the end
 
         if not original_snippet:
-            raise Exception("Reference snippet not found. Try again with an exact match.")
+            raise Exception("Reference snippet not found. Please ensure the reference matches exactly, including case sensitivity. If uncertain, provide a snippet that uniquely identifies the target area.")
 
         prompt = ExecutionPrompts.format_snippet_replacement_msg(
             reference_snippet, replacement_snippet, chunk, commit_message
+
         )
 
         llm_result, message, usage = self.llm_client.completion_with_parser(
