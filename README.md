@@ -1,4 +1,4 @@
-# timeseries-analysis-service
+# seer
 
 ## Local Development
 
