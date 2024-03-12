@@ -23,7 +23,7 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest]):
         with self.context.state.update() as cur:
             gpt_client = GptClient()
 
-            exceptions = request.sentry_event.exceptions
+            exceptions = request.event_details.exceptions
 
             data, message, usage = gpt_client.json_completion(
                 [
@@ -34,7 +34,7 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest]):
                     Message(
                         role="user",
                         content=ProblemDiscoveryPrompts.format_default_msg(
-                            event_title=request.sentry_event.title,
+                            event_title=request.event_details.title,
                             exceptions=exceptions,
                             additional_context=request.additional_context,
                         ),

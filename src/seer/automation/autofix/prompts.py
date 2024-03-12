@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.autofix.models import SentryException
+from seer.automation.autofix.models import ExceptionDetails
 
 
 def format_additional_context(additional_context: str | None):
@@ -16,7 +16,7 @@ def format_additional_context(additional_context: str | None):
     )
 
 
-def format_exceptions(exceptions: list[SentryException]):
+def format_exceptions(exceptions: list[ExceptionDetails]):
     return "\n".join(
         textwrap.dedent(
             """\

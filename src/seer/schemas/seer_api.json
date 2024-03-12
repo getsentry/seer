@@ -463,7 +463,7 @@
                     },
                     "events": {
                         "items": {
-                            "$ref": "#/components/schemas/SentryEvent"
+                            "$ref": "#/components/schemas/EventDetails"
                         },
                         "type": "array",
                         "title": "Events"
@@ -492,7 +492,7 @@
                 "required": ["provider", "owner", "name"],
                 "title": "RepoDefinition"
             },
-            "SentryEvent": {
+            "EventDetails": {
                 "properties": {
                     "entries": {
                         "items": {
@@ -504,7 +504,7 @@
                 },
                 "type": "object",
                 "required": ["entries"],
-                "title": "SentryEvent"
+                "title": "EventDetails"
             },
             "SeverityRequest": {
                 "properties": {

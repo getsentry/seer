@@ -64,22 +64,20 @@ class GptClient(LlmClient):
         )
 
 
-GptCompletionHandler = Callable[
-    [str, list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]
-]
+GptCompletionHandler = Callable[[list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]]
 
 
 @dataclasses.dataclass
 class DummyGptClient(GptClient):
     handlers: list[GptCompletionHandler] = dataclasses.field(default_factory=list)
-    missed_calls: list[tuple[str, list[Message], dict[str, Any]]] = dataclasses.field(
+    missed_calls: list[tuple[list[Message], dict[str, Any]]] = dataclasses.field(
         default_factory=list
     )
 
-    def completion(self, model: str, messages: list[Message], **chat_completion_kwargs):
+    def completion(self, messages: list[Message], **chat_completion_kwargs):
         for handler in self.handlers:
-            result = handler(model, messages, chat_completion_kwargs)
+            result = handler(messages, chat_completion_kwargs)
             if result:
                 return result
-        self.missed_calls.append((model, messages, chat_completion_kwargs))
+        self.missed_calls.append((messages, chat_completion_kwargs))
         return Message(), Usage()

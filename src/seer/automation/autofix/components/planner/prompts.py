@@ -2,7 +2,7 @@ import textwrap
 from typing import Optional
 
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
-from seer.automation.autofix.models import SentryException
+from seer.automation.autofix.models import ExceptionDetails
 from seer.automation.autofix.prompts import format_additional_context, format_exceptions
 
 
@@ -10,7 +10,7 @@ class PlanningPrompts:
     @staticmethod
     def format_default_msg(
         err_msg: str,
-        exceptions: list[SentryException],
+        exceptions: list[ExceptionDetails],
         problem: ProblemDiscoveryOutput,
         additional_context: Optional[str] = None,
     ):

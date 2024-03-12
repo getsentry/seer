@@ -95,8 +95,8 @@ class PlanningComponent(BaseComponent):
             )
 
             message = PlanningPrompts.format_default_msg(
-                err_msg=request.sentry_event.title,
-                exceptions=request.sentry_event.exceptions,
+                err_msg=request.event_details.title,
+                exceptions=request.event_details.exceptions,
                 problem=request.problem,
                 additional_context=request.additional_context or "",
             )

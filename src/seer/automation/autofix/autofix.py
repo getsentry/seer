@@ -8,7 +8,8 @@ from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.assessment.component import ProblemDiscoveryComponent
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryRequest
-from seer.automation.autofix.components.executor.component import ExecutorComponent, ExecutorRequest
+from seer.automation.autofix.components.executor.component import ExecutorComponent
+from seer.automation.autofix.components.executor.models import ExecutorRequest
 from seer.automation.autofix.components.planner.component import PlanningComponent
 from seer.automation.autofix.components.planner.models import PlanningRequest, PlanStep
 from seer.automation.autofix.components.retriever import RetrieverComponent, RetrieverRequest
@@ -16,10 +17,10 @@ from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
     AutofixStatus,
+    EventDetails,
     ProblemDiscoveryResult,
     PullRequestResult,
     RepoDefinition,
-    SentryEvent,
 )
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.tasks import update_codebase_index
@@ -36,13 +37,15 @@ class Autofix(Pipeline):
     def invoke(self, request: AutofixRequest):
         try:
             autofix_logger.info(f"Beginning autofix for issue {request.issue.id}")
+            print("request", request)
 
             self.context.event_manager.send_initial_steps()
 
-            sentry_event = request.issue.events[0]
+            event_details = EventDetails.from_event(request.issue.events[0])
+            print("event_details", event_details)
             problem_discovery_output = ProblemDiscoveryComponent(self.context).invoke(
                 ProblemDiscoveryRequest(
-                    sentry_event=sentry_event,
+                    event_details=event_details,
                     additional_context=request.additional_context,
                 )
             )
@@ -67,6 +70,7 @@ class Autofix(Pipeline):
                 autofix_logger.info(f"Problem is not actionable")
                 return
 
+            print("request.repos", request.repos)
             for repo in request.repos:
                 self.context.event_manager.send_codebase_indexing_repo_check_message(repo.full_name)
                 if self.context.has_codebase_index(repo):
@@ -90,7 +94,7 @@ class Autofix(Pipeline):
             for repo_id, codebase in self.context.codebases.items():
                 repo_full_name = codebase.repo_client.repo_full_name
                 if codebase.is_behind():
-                    if self.context.diff_contains_stacktrace_files(repo_id, sentry_event):
+                    if self.context.diff_contains_stacktrace_files(repo_id, event_details):
                         autofix_logger.debug(
                             f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
                         )
@@ -132,11 +136,11 @@ class Autofix(Pipeline):
 
             self.context.event_manager.send_codebase_indexing_result(AutofixStatus.COMPLETED)
 
-            self.context.process_event_paths(sentry_event)
+            self.context.process_event_paths(event_details)
 
             try:
                 planning_output = PlanningComponent(self.context).invoke(
-                    PlanningRequest(sentry_event=sentry_event, problem=problem_discovery_output)
+                    PlanningRequest(event_details=event_details, problem=problem_discovery_output)
                 )
 
                 if not planning_output:
@@ -162,7 +166,7 @@ class Autofix(Pipeline):
 
                 autofix_logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
 
-                self.run_executor_with_retriever(retriever, executor, step, sentry_event)
+                self.run_executor_with_retriever(retriever, executor, step, event_details)
 
                 self.context.event_manager.send_execution_step_result(
                     step.id, AutofixStatus.COMPLETED
@@ -297,7 +301,7 @@ class Autofix(Pipeline):
         retriever: RetrieverComponent,
         executor: ExecutorComponent,
         step: PlanStep,
-        sentry_event: SentryEvent,
+        event_details: EventDetails,
     ):
         retriever_output = retriever.invoke(
             RetrieverRequest(
@@ -307,7 +311,7 @@ class Autofix(Pipeline):
 
         executor.invoke(
             ExecutorRequest(
-                sentry_event=sentry_event,
+                event_details=event_details,
                 retriever_dump=retriever_output.content if retriever_output else None,
                 task=step.text,
             )

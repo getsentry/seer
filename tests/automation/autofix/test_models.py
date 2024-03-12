@@ -4,9 +4,10 @@ from pydantic import ValidationError
 
 from seer.automation.autofix.models import (
     AutofixRequest,
+    EventDetails,
     IssueDetails,
     RepoDefinition,
-    SentryEvent,
+    SentryEventData,
     SentryEventEntryDataValue,
     SentryExceptionEntry,
     Stacktrace,
@@ -112,7 +113,9 @@ class TestRepoDefinition(unittest.TestCase):
 class TestAutofixRequest(unittest.TestCase):
     def test_autofix_request_handler(self):
         repo_def = RepoDefinition(provider="github", owner="seer", name="automation")
-        issue_details = IssueDetails(id=789, title="Test Issue", events=[SentryEvent(entries=[])])
+        issue_details = IssueDetails(
+            id=789, title="Test Issue", events=[SentryEventData(title="yes", entries=[])]
+        )
         autofix_request = AutofixRequest(
             organization_id=123,
             project_id=456,
@@ -133,13 +136,17 @@ class TestAutofixRequest(unittest.TestCase):
                 organization_id=123,
                 project_id=456,
                 repos=[repo_def1, repo_def2],
-                issue=IssueDetails(id=789, title="Test Issue", events=[SentryEvent(entries=[])]),
+                issue=IssueDetails(
+                    id=789, title="Test Issue", events=[SentryEventData(title="yes", entries=[])]
+                ),
             )
 
     def test_autofix_request_with_multiple_repos(self):
         repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
         repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation-tools")
-        issue_details = IssueDetails(id=789, title="Test Issue", events=[SentryEvent(entries=[])])
+        issue_details = IssueDetails(
+            id=789, title="Test Issue", events=[SentryEventData(title="yes", entries=[])]
+        )
         autofix_request = AutofixRequest(
             organization_id=123,
             project_id=456,
@@ -150,20 +157,24 @@ class TestAutofixRequest(unittest.TestCase):
 
 
 @parameterize
-def test_event_get_stacktrace_invalid(event: SentryEvent, entry: InvalidEventEntry):
-    event.entries = [entry]
-    assert event.get_stacktrace() is None
-
-
-@parameterize
-def test_event_get_stacktrace_empty_frames(event: SentryEvent, entry: NoStacktraceExceptionEntry):
-    event.entries = [entry]
-    assert event.get_stacktrace() is None
+def test_event_no_exception_events(event: SentryEventData, entry: InvalidEventEntry):
+    event["entries"] = [entry]
+    assert len(EventDetails.from_event(event).exceptions) is 0
 
 
 @parameterize
 def test_event_get_stacktrace_empty_frames(
-    event: SentryEvent,
+    event: SentryEventData, entry: NoStacktraceExceptionEntry
+):
+    event["entries"] = [entry]
+    event_details = EventDetails.from_event(event)
+    assert len(event_details.exceptions) == 1
+    assert len(event_details.exceptions[0].stacktrace.frames) == 0
+
+
+@parameterize
+def test_event_get_stacktrace_invalid_entry(
+    event: SentryEventData,
     invalid: InvalidEventEntry,
     entry: SentryExceptionEntry,
     sentry_data_value: SentryEventEntryDataValue,
@@ -171,5 +182,10 @@ def test_event_get_stacktrace_empty_frames(
 ):
     sentry_data_value["stacktrace"]["frames"].append(valid_frame)
     entry.data["values"] = [sentry_data_value]
-    event.entries = [invalid, entry.model_dump(mode="json")]
-    assert StacktraceFrame.model_validate(valid_frame) in event.get_stacktrace().frames
+    print("entry", entry)
+    event["entries"] = [invalid, entry.model_dump(mode="json")]
+    event_details = EventDetails.from_event(event)
+    assert len(event_details.exceptions) == 1
+    assert (
+        StacktraceFrame.model_validate(valid_frame) in event_details.exceptions[0].stacktrace.frames
+    )

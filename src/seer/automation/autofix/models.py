@@ -94,7 +94,27 @@ class SentryStacktrace(TypedDict):
     frames: list[SentryFrame]
 
 
-class SentryException(BaseModel):
+class SentryEventEntryDataValue(TypedDict):
+    type: str
+    value: str
+    stacktrace: SentryStacktrace
+
+
+class SentryExceptionEventData(TypedDict):
+    values: list[SentryEventEntryDataValue]
+
+
+class SentryExceptionEntry(BaseModel):
+    type: Literal["exception"]
+    data: SentryExceptionEventData
+
+
+class SentryEventData(TypedDict):
+    title: str
+    entries: list[dict]
+
+
+class ExceptionDetails(BaseModel):
     type: str
     value: str
     stacktrace: Stacktrace
@@ -105,50 +125,29 @@ class SentryException(BaseModel):
         return Stacktrace.model_validate(sentry_stacktrace)
 
 
-class SentryExceptionEventData(TypedDict):
-    values: list[SentryException]
-
-
-class SentryExceptionEntry(BaseModel):
-    type: Literal["exception"]
-    data: SentryExceptionEventData
-
-
-class SentryEvent(BaseModel):
+class EventDetails(BaseModel):
     title: str
-    entries: list[dict]
-
-    # Below fields are not present in the SentryEvent model, but are added for convenience
-    exceptions: list[SentryException] = Field(default_factory=list, exclude=True)
+    exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=True)
 
     @classmethod
-    def from_error_event(cls, error_event: dict):
-        exceptions: list[SentryException] = []
+    def from_event(cls, error_event: SentryEventData):
+        exceptions: list[ExceptionDetails] = []
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
                     try:
-                        exceptions.append(SentryException.model_validate(exception))
+                        exceptions.append(ExceptionDetails.model_validate(exception))
                     except ValidationError:
                         sentry_sdk.capture_exception()
-                        continue
 
-        if len(exceptions) == 0:
-            raise ValueError("No exceptions found in the event.")
-
-        return cls(**error_event, exceptions=exceptions)
+        return cls(title=error_event.get("title"), exceptions=exceptions)
 
 
 class IssueDetails(BaseModel):
     id: Annotated[int, Examples(generator.unsigned_ints)]
     title: Annotated[str, Examples(generator.ascii_words)]
     short_id: Optional[str] = None
-    events: list[SentryEvent]
-
-    @field_validator("events", mode="before")
-    @classmethod
-    def validate_events(cls, events: list[dict]):
-        return [SentryEvent.from_error_event(event) for event in events]
+    events: list[SentryEventData]
 
 
 class RepoDefinition(BaseModel):

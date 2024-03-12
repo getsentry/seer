@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import Any, Literal
 
-from seer.automation.autofix.components.planner.models import PlanStep
+from seer.automation.autofix.components.planner.models import PlanningOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixOutput,
@@ -219,7 +219,7 @@ class AutofixEventManager:
                 AutofixStatus.PROCESSING if status != AutofixStatus.ERROR else AutofixStatus.ERROR
             )
 
-    def send_planning_result(self, result: PlanStep | None):
+    def send_planning_result(self, result: PlanningOutput | None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
@@ -263,9 +263,13 @@ class AutofixEventManager:
 
     def send_autofix_complete(self, fix: AutofixOutput | None):
         with self.state.update() as cur:
+            logger.info(f"on_autofix_completed invoking...")
             if fix:
                 cur.mark_all_steps_completed()
+                logger.info(f"mark_all_steps_completed done...")
             else:
                 cur.mark_running_steps_errored()
             cur.fix = fix
             cur.status = AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR
+            logger.info(f"send_autofix_complete done...")
+        logger.info(f"send_autofix_complete done AFTER the with!")

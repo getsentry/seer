@@ -3,8 +3,8 @@ import uuid
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
+    EventDetails,
     RepoDefinition,
-    SentryEvent,
     Stacktrace,
 )
 from seer.automation.codebase.codebase_index import CodebaseIndex
@@ -130,8 +130,8 @@ class AutofixContext(PipelineContext):
 
         return None, None
 
-    def diff_contains_stacktrace_files(self, repo_id: int, sentry_event: SentryEvent) -> bool:
-        stacktraces = [exception.stacktrace for exception in sentry_event.exceptions]
+    def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
+        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
 
         stacktrace_files: set[str] = set()
         for stacktrace in stacktraces:
@@ -154,11 +154,10 @@ class AutofixContext(PipelineContext):
         for codebase in self.codebases.values():
             codebase.process_stacktrace(stacktrace)
 
-    def process_event_paths(self, event: SentryEvent):
+    def process_event_paths(self, event: EventDetails):
         """
         Annotate exceptions with the correct repo each frame is pointing to and fix the filenames
         """
-        exception = []
         for exception in event.exceptions:
             self._process_stacktrace_paths(exception.stacktrace)
 

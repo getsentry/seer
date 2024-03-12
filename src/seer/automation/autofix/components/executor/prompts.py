@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.autofix.models import SentryException
+from seer.automation.autofix.models import ExceptionDetails
 from seer.automation.autofix.prompts import format_exceptions
 
 
@@ -28,7 +28,7 @@ class ExecutionPrompts:
     def format_default_msg(
         retriever_dump: str | None,
         error_message: str | None,
-        exceptions: list[SentryException],
+        exceptions: list[ExceptionDetails],
         task: str,
     ):
         context_dump_str = (

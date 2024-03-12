@@ -1,7 +1,7 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.models import SentryException
+from seer.automation.autofix.models import ExceptionDetails
 from seer.automation.autofix.prompts import format_additional_context, format_exceptions
 
 
@@ -9,7 +9,7 @@ class ProblemDiscoveryPrompts:
     @staticmethod
     def format_default_msg(
         event_title: str,
-        exceptions: list[SentryException],
+        exceptions: list[ExceptionDetails],
         additional_context: Optional[str] = None,
     ):
         return textwrap.dedent(
