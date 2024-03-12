@@ -98,11 +98,11 @@ class StacktraceFrame(BaseModel):
     function: Annotated[str, Examples(generator.ascii_words)]
     filename: Annotated[str, Examples(generator.file_names)]
     abs_path: Annotated[str, Examples(generator.file_paths)]
-    line_no: Optional[int]
-    col_no: Optional[int]
-    context: list[tuple[int, str]]
-    repo_name: Optional[str] = None
-    repo_id: Optional[int] = None
+    line_no: Optional[int] = None  # Default value added
+    col_no: Optional[int] = None  # Default value added
+    context: list[tuple[int, str]] = []  # Default value added
+    repo_name: Optional[str] = None  # Default value added
+    repo_id: Optional[int] = None  # Default value added
     in_app: bool = False
 
 
