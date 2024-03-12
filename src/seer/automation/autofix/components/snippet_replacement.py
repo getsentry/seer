@@ -56,7 +56,9 @@ class SnippetReplacementPrompts:
         )
 
 
-class SnippetReplacementComponent(BaseComponent):
+class SnippetReplacementComponent(
+    BaseComponent[SnippetReplacementRequest, SnippetReplacementOutput]
+):
     def invoke(self, request: SnippetReplacementRequest) -> SnippetReplacementOutput | None:
         prompt = SnippetReplacementPrompts.format_default_msg(
             reference_snippet=request.reference_snippet,

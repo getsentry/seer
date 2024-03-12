@@ -3,13 +3,13 @@ from langsmith import traceable
 from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.executor.models import ExecutorRequest
+from seer.automation.autofix.components.executor.models import ExecutorOutput, ExecutorRequest
 from seer.automation.autofix.components.executor.prompts import ExecutionPrompts
 from seer.automation.autofix.tools import CodeActionTools
 from seer.automation.component import BaseComponent
 
 
-class ExecutorComponent(BaseComponent):
+class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
     context: AutofixContext
 
     def __init__(self, context: AutofixContext):

@@ -53,7 +53,7 @@ class RetrieverPrompts:
         ).format(text=text)
 
 
-class RetrieverComponent(BaseComponent):
+class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     context: AutofixContext
 
     def __init__(self, context: AutofixContext):

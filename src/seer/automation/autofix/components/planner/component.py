@@ -17,7 +17,7 @@ from seer.automation.autofix.utils import autofix_logger, escape_multi_xml
 from seer.automation.component import BaseComponent
 
 
-class PlanningComponent(BaseComponent):
+class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
     context: AutofixContext
 
     def __init__(self, context: AutofixContext):

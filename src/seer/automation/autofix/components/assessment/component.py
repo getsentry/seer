@@ -12,7 +12,7 @@ from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
 
 
-class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest]):
+class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDiscoveryOutput]):
     context: AutofixContext
 
     def __init__(self, context: AutofixContext):

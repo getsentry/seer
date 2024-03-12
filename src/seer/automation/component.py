@@ -16,14 +16,15 @@ class BaseComponentOutput(BaseModel):
 
 
 BCR = TypeVar("BCR", bound=BaseComponentRequest)
+BCO = TypeVar("BCO", bound=BaseComponentOutput)
 
 
-class BaseComponent(abc.ABC, Generic[BCR]):
+class BaseComponent(abc.ABC, Generic[BCR, BCO]):
     context: PipelineContext
 
     def __init__(self, context: PipelineContext):
         self.context = context
 
     @abc.abstractmethod
-    def invoke(self, request: BCR) -> BaseComponentOutput | None:
+    def invoke(self, request: BCR) -> BCO | None:
         pass
