@@ -40,27 +40,6 @@ class StacktraceFrame(BaseModel):
     in_app: bool = False
 
 
-class Stacktrace(BaseModel):
-    frames: list[StacktraceFrame]
-
-    def to_str(self, max_frames: int = 16):
-        stack_str = ""
-        for frame in reversed(self.frames[-max_frames:]):
-            col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
-            repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            line_no_str = (
-                f"[Line {frame.line_no}{col_no_str}]"
-                if frame.line_no is not None
-                else "[Line: Unknown]"
-            )
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
-            for ctx in frame.context:
-                is_suspect_line = ctx[0] == frame.line_no
-                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
-            stack_str += "------\n"
-        return stack_str
-
-
 class SentryFrame(TypedDict):
     absPath: Optional[str]
     colNo: Optional[int]
@@ -88,6 +67,43 @@ class SentryFrame(TypedDict):
     origAbsPath: NotRequired[Optional[str]]
     sourceLink: NotRequired[Optional[str]]
     symbolicatorStatus: NotRequired[Optional[Any]]
+
+
+class Stacktrace(BaseModel):
+    frames: list[StacktraceFrame]
+
+    @field_validator("frames", mode="before")
+    @classmethod
+    def validate_frames(cls, frames: list[StacktraceFrame | SentryFrame]):
+        stacktrace_frames = []
+        for frame in frames:
+            if isinstance(frame, dict):
+                try:
+                    stacktrace_frames.append(StacktraceFrame.model_validate(frame))
+                except ValidationError:
+                    sentry_sdk.capture_exception()
+                    continue
+            else:
+                stacktrace_frames.append(frame)
+
+        return stacktrace_frames
+
+    def to_str(self, max_frames: int = 16):
+        stack_str = ""
+        for frame in reversed(self.frames[-max_frames:]):
+            col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
+            repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
+            line_no_str = (
+                f"[Line {frame.line_no}{col_no_str}]"
+                if frame.line_no is not None
+                else "[Line: Unknown]"
+            )
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            for ctx in frame.context:
+                is_suspect_line = ctx[0] == frame.line_no
+                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
+            stack_str += "------\n"
+        return stack_str
 
 
 class SentryStacktrace(TypedDict):
@@ -121,8 +137,12 @@ class ExceptionDetails(BaseModel):
 
     @field_validator("stacktrace", mode="before")
     @classmethod
-    def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace):
-        return Stacktrace.model_validate(sentry_stacktrace)
+    def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace | Stacktrace):
+        return (
+            Stacktrace.model_validate(sentry_stacktrace)
+            if isinstance(sentry_stacktrace, dict)
+            else sentry_stacktrace
+        )
 
 
 class EventDetails(BaseModel):
@@ -135,10 +155,7 @@ class EventDetails(BaseModel):
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
-                    try:
-                        exceptions.append(ExceptionDetails.model_validate(exception))
-                    except ValidationError:
-                        sentry_sdk.capture_exception()
+                    exceptions.append(ExceptionDetails.model_validate(exception))
 
         return cls(title=error_event.get("title"), exceptions=exceptions)
 

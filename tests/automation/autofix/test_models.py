@@ -182,9 +182,9 @@ def test_event_get_stacktrace_invalid_entry(
 ):
     sentry_data_value["stacktrace"]["frames"].append(valid_frame)
     entry.data["values"] = [sentry_data_value]
-    print("entry", entry)
     event["entries"] = [invalid, entry.model_dump(mode="json")]
     event_details = EventDetails.from_event(event)
+
     assert len(event_details.exceptions) == 1
     assert (
         StacktraceFrame.model_validate(valid_frame) in event_details.exceptions[0].stacktrace.frames
