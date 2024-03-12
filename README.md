@@ -1,5 +1,7 @@
 # seer
 
+Seer is Sentry's AI/ML inference service. It is responsible for running inference on events and returning the results to the Sentry application.
+
 ## Local Development
 
 ### Setup
@@ -29,3 +31,19 @@ make dev # runs docker-compose up --build
 ```
 
 Port `9091` will be exposed which is what the local sentry application will look for to connect to the service.
+
+## Services
+
+Seer houses multiple AI/ML-powered services:
+
+### Autofix
+
+Autofix is an LLM pipeline that is responsible for automatically fixing Sentry issues. It takes a Sentry issue, its exceptions and its context and creates a fix for it with a Github PR.
+
+![Autofix v1 Diagram](docs/assets/autofix-v1-diagram.png)
+
+### Issue Severity
+
+### Issue Grouping
+
+### Breakpoint Detection
