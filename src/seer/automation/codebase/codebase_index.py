@@ -287,7 +287,6 @@ class CodebaseIndex:
             pool=pool,
             batch_size=batch_size,
             chunk_size=chunk_size,
-            normalize_embeddings=True,
         )
 
         get_embedding_model().stop_multi_process_pool(pool)
