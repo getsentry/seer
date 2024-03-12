@@ -40,7 +40,7 @@ class BreakpointTransaction(BaseModel):
 class BreakpointRequest(BaseModel):
     data: Mapping[str, BreakpointTransaction]
     sort: str = ""
-    allow_midpoint: str = "1"
+    allow_midpoint: Optional[str] = None
     validate_tail_hours: int = 0
     trend_percentage: float = Field(default=0.1, alias="trend_percentage()")
     min_change: float = Field(default=0.0, alias="min_change()")
