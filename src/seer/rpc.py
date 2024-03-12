@@ -49,14 +49,13 @@ class DummyRpcClient(RpcClient):
     should_log: bool = False
 
     def call(self, method: str, **kwargs) -> dict[str, Any] | None:
-        return {}
-        # result = self.handlers.get(method, self._default_call)(method, kwargs)
-        # if result is None:
-        #     return None
-        # if isinstance(result, dict):
-        #     return result
-        # status, msg = result
-        # raise HTTPError(response=FakeHttpResponse(status_code=status, content=msg.encode("utf-8")))
+        result = self.handlers.get(method, self._default_call)(method, kwargs)
+        if result is None:
+            return None
+        if isinstance(result, dict):
+            return result
+        status, msg = result
+        raise HTTPError(response=FakeHttpResponse(status_code=status, content=msg.encode("utf-8")))
 
     def _default_call(
         self, method: str, kwargs: dict[str, Any]
@@ -70,15 +69,14 @@ class DummyRpcClient(RpcClient):
         return 404, "Not Found"
 
     async def acall(self, method: str, **kwargs) -> dict[str, Any] | None:
-        return {}
-        # kwargs.pop("session", None)
-        # result = self.handlers.get(method, self._default_call)(method, kwargs)
-        # if result is None:
-        #     return None
-        # if isinstance(result, dict):
-        #     return result
-        # status, msg = result
-        # raise HttpProcessingError(code=status, message=msg)
+        kwargs.pop("session", None)
+        result = self.handlers.get(method, self._default_call)(method, kwargs)
+        if result is None:
+            return None
+        if isinstance(result, dict):
+            return result
+        status, msg = result
+        raise HttpProcessingError(code=status, message=msg)
 
 
 class SentryRpcClient(RpcClient):

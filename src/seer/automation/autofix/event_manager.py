@@ -263,13 +263,9 @@ class AutofixEventManager:
 
     def send_autofix_complete(self, fix: AutofixOutput | None):
         with self.state.update() as cur:
-            logger.info(f"on_autofix_completed invoking...")
             if fix:
                 cur.mark_all_steps_completed()
-                logger.info(f"mark_all_steps_completed done...")
             else:
                 cur.mark_running_steps_errored()
             cur.fix = fix
             cur.status = AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR
-            logger.info(f"send_autofix_complete done...")
-        logger.info(f"send_autofix_complete done AFTER the with!")

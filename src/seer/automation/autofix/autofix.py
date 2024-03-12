@@ -37,7 +37,6 @@ class Autofix(Pipeline):
     def invoke(self, request: AutofixRequest):
         try:
             autofix_logger.info(f"Beginning autofix for issue {request.issue.id}")
-            print("request", request)
 
             self.context.event_manager.send_initial_steps()
 
