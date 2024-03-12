@@ -185,6 +185,7 @@ class SentryEvent(BaseModel):
             try:
                 exception_entry = SentryExceptionEntry.model_validate(entry)
                 break
+
             except ValidationError:
                 sentry_sdk.capture_exception()
                 continue
@@ -202,8 +203,22 @@ class SentryEvent(BaseModel):
             frames: list[StacktraceFrame] = []
 
             for frame in stack_trace["frames"]:
+                # Validation Logic Starts Here
+                validated_frame = {
+                    "function": frame.get("function") if isinstance(frame.get("function"), str) else "Unknown Function",
+                    "filename": frame.get("filename") if isinstance(frame.get("filename"), str) else "Unknown Filename",
+                    "abs_path": frame.get("absPath") if isinstance(frame.get("absPath"), str) else "Unknown Path",
+                    "line_no": frame.get("lineNo") if isinstance(frame.get("lineNo"), int) else None,
+                    "col_no": frame.get("colNo") if isinstance(frame.get("colNo"), int) else None,
+                    "context": frame.get("context") if isinstance(frame.get("context"), list) else [],
+                    "repo_name": frame.get("repoName") if isinstance(frame.get("repoName"), str) else None,
+                    "repo_id": frame.get("repoId") if isinstance(frame.get("repoId"), int) else None,
+                    "in_app": frame.get("inApp") if isinstance(frame.get("inApp"), bool) else False,
+                }
+                # Validation Logic Ends Here
+
                 try:
-                    frames.append(StacktraceFrame.model_validate(frame))
+                    frames.append(StacktraceFrame.model_validate(validated_frame))
                 except ValidationError as e:
                     sentry_sdk.capture_exception()
                     continue
@@ -223,6 +238,7 @@ class IssueDetails(BaseModel):
 
 
 class RepoDefinition(BaseModel):
+
     provider: Annotated[str, Examples(("github", "integrations:github"))]
     owner: str
     name: str
