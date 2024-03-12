@@ -91,6 +91,7 @@ def find_first_parent_declaration(node: Node, language: str, max_depth=4) -> Nod
             return parent
         parent = parent.parent
         i += 1
+    return None
 
 
 def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclaration | None:
