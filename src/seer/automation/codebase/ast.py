@@ -83,11 +83,15 @@ def node_is_a_declaration(node: Node, language: str) -> bool:
     return False
 
 
-def find_first_parent_declaration(node: Node, language: str):
+def find_first_parent_declaration(node: Node, language: str, max_depth=4) -> Node | None:
     parent = node.parent
-    while parent:
+    i = 0
+    while parent and i < max_depth:
         if node_is_a_declaration(parent, language):
             return parent
+        parent = parent.parent
+        i += 1
+    return None
 
 
 def extract_declaration(node: Node, root_node: Node, language: str) -> AstDeclaration | None:
