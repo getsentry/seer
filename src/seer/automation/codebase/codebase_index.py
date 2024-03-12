@@ -273,18 +273,25 @@ class CodebaseIndex:
     @classmethod
     def _embed_chunks(cls, chunks: list[BaseDocumentChunk]) -> list[EmbeddedDocumentChunk]:
         logger.debug(f"Embedding {len(chunks)} chunks...")
-        embeddings_list: list[np.ndarray] = []
 
-        with tqdm(total=len(chunks)) as pbar:
-            for i in range(0, len(chunks), superchunk_size := 128):
-                batch_embeddings: np.ndarray = get_embedding_model().encode(
-                    [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=4,
-                    show_progress_bar=True,
-                )
-                embeddings_list.extend(batch_embeddings)
-                pbar.update(superchunk_size)
-        embeddings = np.array(embeddings_list)
+        batch_size = 4
+        chunk_size = 512
+
+        # NOTE: hardcoded to 4 gpus
+        pool = get_embedding_model().start_multi_process_pool(
+            ["cuda:0", "cuda:1", "cuda:2", "cuda:3"]
+        )
+
+        embeddings = get_embedding_model().encode_multi_process(
+            sentences=[chunk.get_dump_for_embedding() for chunk in chunks],
+            pool=pool,
+            batch_size=batch_size,
+            chunk_size=chunk_size,
+            normalize_embeddings=True,
+        )
+
+        get_embedding_model().stop_multi_process_pool(pool)
+
         logger.debug(f"Embedded {len(chunks)} chunks")
 
         embedded_chunks = []
