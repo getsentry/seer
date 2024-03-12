@@ -4,6 +4,7 @@ import uuid
 
 import numpy as np
 import sentry_sdk
+import torch
 import tree_sitter_languages
 from langsmith import traceable
 from sqlalchemy.orm import class_mapper
@@ -276,7 +277,7 @@ class CodebaseIndex:
         embeddings_list: list[np.ndarray] = []
 
         with tqdm(total=len(chunks)) as pbar:
-            for i in range(0, len(chunks), superchunk_size := 128):
+            for i in range(0, len(chunks), superchunk_size := 64):
                 batch_embeddings: np.ndarray = get_embedding_model().encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
                     batch_size=4,
@@ -284,6 +285,7 @@ class CodebaseIndex:
                 )
                 embeddings_list.extend(batch_embeddings)
                 pbar.update(superchunk_size)
+
         embeddings = np.array(embeddings_list)
         logger.debug(f"Embedded {len(chunks)} chunks")
 
@@ -295,6 +297,8 @@ class CodebaseIndex:
                     embedding=embeddings[i],
                 )
             )
+
+        torch.cuda.empty_cache()  # TODO: revisit - explicitly including this not a best practice
 
         return embedded_chunks
 
