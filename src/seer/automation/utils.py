@@ -1,10 +1,8 @@
 import functools
-import logging
 import os
 from typing import Any
 
 import torch
-import tree_sitter_languages
 from sentence_transformers import SentenceTransformer
 
 
