@@ -39,6 +39,8 @@ class GptClient(LlmClient):
         completion: ChatCompletion = self.openai_client.chat.completions.create(
             model=model,
             messages=messages,  # type: ignore
+            temperature=0.0,
+            seed=42,
             **chat_completion_kwargs,
         )
 
