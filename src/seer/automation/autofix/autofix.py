@@ -41,7 +41,6 @@ class Autofix(Pipeline):
             self.context.event_manager.send_initial_steps()
 
             event_details = EventDetails.from_event(request.issue.events[0])
-            print("event_details", event_details)
             problem_discovery_output = ProblemDiscoveryComponent(self.context).invoke(
                 ProblemDiscoveryRequest(
                     event_details=event_details,
