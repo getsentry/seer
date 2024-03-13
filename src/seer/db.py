@@ -171,7 +171,12 @@ class ProcessRequest(Base):
                 item.scheduled_from = now
                 session.add(item)
 
-            session.commit()
+            try:
+                session.commit()
+            except DataError as e:
+                logging.error(f"DataError encountered in acquire_work: {e}")
+                # Consider retrying the operation with adjusted values or skipping the problematic entry
+                return []
 
             return items
 
