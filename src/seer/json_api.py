@@ -38,6 +38,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
                 result: BaseModel = implementation(request_annotation.parse_obj(data))
             except ValidationError as e:
                 sentry_sdk.capture_exception(e)
+                sentry_sdk.capture_message(f"ValidationError details: {e.json()}")
                 raise BadRequest(str(e))
 
             return result.model_dump()
