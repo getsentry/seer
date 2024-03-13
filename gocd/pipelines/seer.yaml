@@ -3,21 +3,21 @@
 # - https://www.notion.so/sentry/GoCD-New-Service-Quickstart-6d8db7a6964049b3b0e78b8a4b52e25d
 format_version: 10
 pipelines:
-    deploy-timeseries-analysis-service:
+    deploy-seer:
         environment_variables:
             GCP_PROJECT: internal-sentry
             GKE_CLUSTER: zdpwkxst
             GKE_REGION: us-central1
             GKE_CLUSTER_ZONE: b
             GKE_BASTION_ZONE: b
-        group: timeseries-analysis-service
+        group: seer
         lock_behavior: unlockWhenFinished
         materials:
-            timeseries_analysis_service_repo:
-                git: git@github.com:getsentry/timeseries-analysis-service.git
+            seer_repo:
+                git: git@github.com:getsentry/seer.git
                 shallow_clone: true
                 branch: main
-                destination: timeseries-analysis-service
+                destination: seer
         stages:
             - checks:
                   approval:
@@ -28,23 +28,23 @@ pipelines:
                               # Required for checkruns.
                               GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
                           timeout: 1200
-                          elastic_profile_id: timeseries-analysis-service
+                          elastic_profile_id: seer
                           tasks:
                               - script: |
                                     /devinfra/scripts/checks/githubactions/checkruns.py \
-                                    getsentry/timeseries-analysis-service \
-                                    ${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO} \
+                                    getsentry/seer \
+                                    ${GO_REVISION_SEER_REPO} \
                                     build
                               - script: |
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
-                                    ${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO} \
+                                    ${GO_REVISION_SEER_REPO} \
                                     sentryio \
                                     "us.gcr.io/sentryio/seer"
             - deploy:
                   jobs:
                     run-migrations:
                       timeout: 1200
-                      elastic_profile_id: timeseries-analysis-service
+                      elastic_profile_id: seer
                       tasks:
                         - script: |
                             echo "running flask db upgrade" \
@@ -53,7 +53,7 @@ pipelines:
                             --container-name="seer" \
                             --label-selector="service=seer" \
                             "seer-run-migrations" \
-                            "us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
+                            "us.gcr.io/sentryio/seer:${GO_REVISION_SEER_REPO}" \
                             -- \
                             flask \
                             db \
@@ -61,17 +61,17 @@ pipelines:
 
                     deploy:
                         timeout: 1200
-                        elastic_profile_id: timeseries-analysis-service
+                        elastic_profile_id: seer
                         tasks:
                             - script: |
                                   /devinfra/scripts/k8s/k8stunnel \
                                   && /devinfra/scripts/k8s/k8s-deploy.py \
                                   --label-selector="service=seer" \
-                                  --image="us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
+                                  --image="us.gcr.io/sentryio/seer:${GO_REVISION_SEER_REPO}" \
                                   --container-name="seer"
                             - script: |
                                   /devinfra/scripts/k8s/k8stunnel \
                                   && /devinfra/scripts/k8s/k8s-deploy.py \
                                   --label-selector="service=seer-autofix" \
-                                  --image="us.gcr.io/sentryio/seer:${GO_REVISION_TIMESERIES_ANALYSIS_SERVICE_REPO}" \
+                                  --image="us.gcr.io/sentryio/seer:${GO_REVISION_SEER_REPO}" \
                                   --container-name="seer-autofix"

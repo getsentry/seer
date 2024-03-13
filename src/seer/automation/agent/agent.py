@@ -112,7 +112,7 @@ class GptAgent(LlmAgent):
         stop_message: str | None = None,
     ):
         super().__init__(tools, memory, name=name, stop_message=stop_message)
-        self.client = GptClient()
+        self.client = GptClient(model=self.model)
 
         self.chat_completion_kwargs = chat_completion_kwargs
 
@@ -123,7 +123,6 @@ class GptAgent(LlmAgent):
         # logger.debug(f"Messages: {messages}")
 
         message, usage = self.client.completion(
-            model=self.model,
             messages=messages,  # type: ignore
             tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),
             **self.chat_completion_kwargs,

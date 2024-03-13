@@ -8,10 +8,14 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.prompts import ExecutionPrompts
+from seer.automation.autofix.components.snippet_replacement import (
+    SnippetReplacementComponent,
+    SnippetReplacementRequest,
+)
 from seer.automation.autofix.utils import find_original_snippet
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.models import FileChange
+from seer.automation.state import State
 
 logger = logging.getLogger("autofix")
 
@@ -103,8 +107,6 @@ class CodeActionTools(BaseTools):
 
     def __init__(self, context: AutofixContext):
         super().__init__(context)
-        self.llm_client = GptClient()
-        self.usage = Usage()
 
     @traceable(run_type="tool", name="Store File Change")
     def store_file_change(self, codebase: CodebaseIndex, file_change: FileChange):
@@ -155,18 +157,17 @@ class CodeActionTools(BaseTools):
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
 
-        prompt = ExecutionPrompts.format_snippet_replacement_msg(
-            reference_snippet, replacement_snippet, chunk, commit_message
+        output = SnippetReplacementComponent(self.context).invoke(
+            SnippetReplacementRequest(
+                reference_snippet=original_snippet,
+                replacement_snippet=replacement_snippet,
+                chunk=chunk,
+                commit_message=commit_message,
+            )
         )
 
-        llm_result, message, usage = self.llm_client.completion_with_parser(
-            "gpt-4-0125-preview",
-            [Message(role="user", content=prompt)],
-            response_format={"type": "json_object"},
-            parser=lambda x: json.loads(str(x)),
-        )
-
-        self.usage += usage
+        if not output:
+            raise Exception("Snippet replacement failed.")
 
         self.store_file_change(
             codebase,
@@ -174,12 +175,12 @@ class CodeActionTools(BaseTools):
                 change_type="edit",
                 path=file_path,
                 reference_snippet=chunk,
-                new_snippet=llm_result["code"],
+                new_snippet=output.snippet,
                 description=commit_message,
             ),
         )
 
-        return f"success: Resulting code after replacement:\n```\n{llm_result['code']}\n```\n"
+        return f"success: Resulting code after replacement:\n```\n{output.snippet}\n```\n"
 
     @traceable(run_type="tool", name="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):

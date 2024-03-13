@@ -45,12 +45,17 @@ NoStacktraceExceptionEntry = Annotated[
     dict,
     Examples(
         (
-            SentryExceptionEntry(type="exception", data={"values": []}).model_dump(mode="json")
-            for _ in generator.gen
-        ),
-        (
             SentryExceptionEntry(
-                type="exception", data={"values": [{"stacktrace": {"frames": []}}]}
+                type="exception",
+                data={
+                    "values": [
+                        {
+                            "type": "SomeError",
+                            "value": "Yes im an error",
+                            "stacktrace": {"frames": []},
+                        }
+                    ]
+                },
             ).model_dump(mode="json"),
         ),
     ),

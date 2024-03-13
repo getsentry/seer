@@ -1,13 +1,13 @@
 import dataclasses
 import logging
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal
 
+from seer.automation.autofix.components.planner.models import PlanningOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixOutput,
     AutofixStatus,
-    PlanningOutput,
     ProblemDiscoveryResult,
     ProgressItem,
     ProgressType,
