@@ -29,8 +29,12 @@ class ContinuationState(LocalMemoryState[AutofixContinuation]):
 
     def reload_state_from_sentry(self) -> bool:
         try:
-            group_state = AutofixGroupState.model_validate(
-                self.rpc_client.call("get_autofix_state", issue_id=self.val.request.issue.id)
+            # group_state = AutofixGroupState.model_validate(
+            #     self.rpc_client.call("get_autofix_state", issue_id=self.val.request.issue.id)
+            # )
+            # TODO: This is only temp, remove this
+            group_state = AutofixGroupState(
+                status=AutofixStatus.PROCESSING, steps=[], fix=None, completedAt=None
             )
             logger.info(f"Loaded group_state: {group_state!r}")
             self.val = self.val.model_copy(update=group_state.model_dump())
