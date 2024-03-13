@@ -160,9 +160,9 @@ class ProcessRequest(Base):
 
 class DbRepositoryInfo(Base):
     __tablename__ = "repositories"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    organization: Mapped[int] = mapped_column(Integer, nullable=False)
-    project: Mapped[int] = mapped_column(Integer, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    project: Mapped[int] = mapped_column(BigInteger, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
