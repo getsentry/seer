@@ -2,7 +2,7 @@ name: Seer
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
 
 concurrency:
@@ -11,7 +11,6 @@ concurrency:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     # required for google auth
     permissions:
@@ -22,31 +21,31 @@ jobs:
       TEST: 1
 
     steps:
-    - uses: actions/checkout@v3
-    - id: 'auth'
-      uses: google-github-actions/auth@v1
-      with:
-        workload_identity_provider: 'projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool'
-        service_account: 'gha-seer-models@sac-prod-sa.iam.gserviceaccount.com'
-        token_format: 'id_token'
-        id_token_audience: '610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com'
-        id_token_include_email: true
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
-    - name: Fetch models + Build image
-      run: |
-        rm -rf ./models
-        gcloud storage cp -r gs://tmp_tillman/models ./
-    - name: Build image
-      run: |
-        make update
-    - name: Check schema
-      run: |
-        make schemas
-        if ! git diff --quiet --ignore-submodules --cached; then
-          echo "Error: Schema changes detected, run make schemas and commit those!"
-          exit 1
-        fi
-    - name: Test with pytest
-      run: |
-        make test
+      - uses: actions/checkout@v3
+      - id: "auth"
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
+          service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
+          token_format: "id_token"
+          id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
+          id_token_include_email: true
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Fetch models + Build image
+        run: |
+          rm -rf ./models
+          gcloud storage cp -r gs://sentry-ml/seer/models ./
+      - name: Build image
+        run: |
+          make update
+      - name: Check schema
+        run: |
+          make schemas
+          if ! git diff --quiet --ignore-submodules --cached; then
+            echo "Error: Schema changes detected, run make schemas and commit those!"
+            exit 1
+          fi
+      - name: Test with pytest
+        run: |
+          make test
