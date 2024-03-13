@@ -37,6 +37,8 @@ class BreakpointTransaction(BaseModel):
     data_end: int
 
 
+from pydantic import BaseModel, Field, validator
+
 class BreakpointRequest(BaseModel):
     data: Mapping[str, BreakpointTransaction]
     sort: str = ""
@@ -44,6 +46,43 @@ class BreakpointRequest(BaseModel):
     validate_tail_hours: int = 0
     trend_percentage: float = 0.1
     min_change: float = 0.0
+
+    @validator('data')
+    def validate_data(cls, v):
+        if not v:
+            raise ValueError('data field must not be empty')
+        return v
+
+    @validator('sort')
+    def validate_sort(cls, v):
+        allowed_values = ['trend_percentage()', '-trend_percentage()', '']
+        if v not in allowed_values:
+            raise ValueError(f'sort field must be among {allowed_values}')
+        return v
+
+    @validator('allow_midpoint')
+    def validate_allow_midpoint(cls, v):
+        if v not in [True, False]:
+            raise ValueError('allow_midpoint field must be either True or False')
+        return v
+
+    @validator('validate_tail_hours')
+    def validate_validate_tail_hours(cls, v):
+        if v < 0:
+            raise ValueError('validate_tail_hours must be non-negative')
+        return v
+
+    @validator('trend_percentage')
+    def validate_trend_percentage(cls, v):
+        if not (0 <= v <= 1):
+            raise ValueError('trend_percentage must be between 0 and 1')
+        return v
+
+    @validator('min_change')
+    def validate_min_change(cls, v):
+        if v < 0:
+            raise ValueError('min_change must be non-negative')
+        return v
 
 
 class BreakpointEntry(BaseModel):
