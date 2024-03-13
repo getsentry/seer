@@ -21,72 +21,6 @@ from seer.automation.models import FilePatch
 from seer.generator import Examples
 
 
-class FileChangeError(Exception):
-    pass
-
-
-class ProgressType(enum.Enum):
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
-    USER_RESPONSE = "USER_RESPONSE"
-
-
-class ProgressItem(BaseModel):
-    timestamp: str
-    message: str
-    type: ProgressType
-    data: Any = None
-
-
-class AutofixStatus(enum.Enum):
-    COMPLETED = "COMPLETED"
-    ERROR = "ERROR"
-    PENDING = "PENDING"
-    PROCESSING = "PROCESSING"
-    CANCELLED = "CANCELLED"
-
-    @classmethod
-    def terminal(cls) -> "frozenset[AutofixStatus]":
-        return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
-
-
-class PlanStep(BaseModel):
-    id: int
-    title: str
-    text: str
-
-
-class PlanningOutput(BaseModel):
-    title: str
-    description: str
-    steps: list[PlanStep]
-
-
-class ProblemDiscoveryOutput(BaseModel):
-    description: str
-    reasoning: str
-    actionability_score: float
-
-
-class ProblemDiscoveryResult(BaseModel):
-    status: Literal["CONTINUE", "CANCELLED"]
-    description: str
-    reasoning: str
-
-
-class ProblemDiscoveryRequest(BaseModel):
-    message: str
-    previous_output: ProblemDiscoveryOutput
-
-
-class PlanningInput(BaseModel):
-    message: Optional[str] = None
-    previous_output: Optional[PlanningOutput] = None
-    problem: Optional[ProblemDiscoveryOutput] = None
-
-
 class StacktraceFrame(BaseModel):
     model_config = ConfigDict(
         alias_generator=AliasGenerator(
@@ -104,27 +38,6 @@ class StacktraceFrame(BaseModel):
     repo_name: Optional[str] = None
     repo_id: Optional[int] = None
     in_app: bool = False
-
-
-class Stacktrace(BaseModel):
-    frames: list[StacktraceFrame]
-
-    def to_str(self, max_frames: int = 16):
-        stack_str = ""
-        for frame in reversed(self.frames[-max_frames:]):
-            col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
-            repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
-            line_no_str = (
-                f"[Line {frame.line_no}{col_no_str}]"
-                if frame.line_no is not None
-                else "[Line: Unknown]"
-            )
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
-            for ctx in frame.context:
-                is_suspect_line = ctx[0] == frame.line_no
-                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
-            stack_str += "------\n"
-        return stack_str
 
 
 class SentryFrame(TypedDict):
@@ -156,11 +69,50 @@ class SentryFrame(TypedDict):
     symbolicatorStatus: NotRequired[Optional[Any]]
 
 
+class Stacktrace(BaseModel):
+    frames: list[StacktraceFrame]
+
+    @field_validator("frames", mode="before")
+    @classmethod
+    def validate_frames(cls, frames: list[StacktraceFrame | SentryFrame]):
+        stacktrace_frames = []
+        for frame in frames:
+            if isinstance(frame, dict):
+                try:
+                    stacktrace_frames.append(StacktraceFrame.model_validate(frame))
+                except ValidationError:
+                    sentry_sdk.capture_exception()
+                    continue
+            else:
+                stacktrace_frames.append(frame)
+
+        return stacktrace_frames
+
+    def to_str(self, max_frames: int = 16):
+        stack_str = ""
+        for frame in reversed(self.frames[-max_frames:]):
+            col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
+            repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
+            line_no_str = (
+                f"[Line {frame.line_no}{col_no_str}]"
+                if frame.line_no is not None
+                else "[Line: Unknown]"
+            )
+            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            for ctx in frame.context:
+                is_suspect_line = ctx[0] == frame.line_no
+                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
+            stack_str += "------\n"
+        return stack_str
+
+
 class SentryStacktrace(TypedDict):
     frames: list[SentryFrame]
 
 
 class SentryEventEntryDataValue(TypedDict):
+    type: str
+    value: str
     stacktrace: SentryStacktrace
 
 
@@ -173,53 +125,46 @@ class SentryExceptionEntry(BaseModel):
     data: SentryExceptionEventData
 
 
-class SentryEvent(BaseModel):
+class SentryEventData(TypedDict):
+    title: str
     entries: list[dict]
 
-    def get_stacktrace(self) -> Stacktrace | None:
-        exception_entry: SentryExceptionEntry | None = None
-        for entry in self.entries:
-            if entry.get("type") != "exception":
-                continue
 
-            try:
-                exception_entry = SentryExceptionEntry.model_validate(entry)
-                break
-            except ValidationError:
-                sentry_sdk.capture_exception()
-                continue
+class ExceptionDetails(BaseModel):
+    type: str
+    value: str
+    stacktrace: Stacktrace
 
-        if exception_entry is None:
-            return None
+    @field_validator("stacktrace", mode="before")
+    @classmethod
+    def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace | Stacktrace):
+        return (
+            Stacktrace.model_validate(sentry_stacktrace)
+            if isinstance(sentry_stacktrace, dict)
+            else sentry_stacktrace
+        )
 
-        values = exception_entry.data["values"]
-        if not values:
-            return None
 
-        v: SentryEventEntryDataValue
-        for v in values:
-            stack_trace = v["stacktrace"]
-            frames: list[StacktraceFrame] = []
+class EventDetails(BaseModel):
+    title: str
+    exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=True)
 
-            for frame in stack_trace["frames"]:
-                try:
-                    frames.append(StacktraceFrame.model_validate(frame))
-                except ValidationError as e:
-                    sentry_sdk.capture_exception()
-                    continue
+    @classmethod
+    def from_event(cls, error_event: SentryEventData):
+        exceptions: list[ExceptionDetails] = []
+        for entry in error_event.get("entries", []):
+            if entry.get("type") == "exception":
+                for exception in entry.get("data", {}).get("values", []):
+                    exceptions.append(ExceptionDetails.model_validate(exception))
 
-            if not frames:
-                continue
-
-            return Stacktrace(frames=frames)
-        return None
+        return cls(title=error_event.get("title"), exceptions=exceptions)
 
 
 class IssueDetails(BaseModel):
     id: Annotated[int, Examples(generator.unsigned_ints)]
     title: Annotated[str, Examples(generator.ascii_words)]
     short_id: Optional[str] = None
-    events: list[SentryEvent]
+    events: list[SentryEventData]
 
 
 class RepoDefinition(BaseModel):
@@ -245,6 +190,43 @@ class RepoDefinition(BaseModel):
 
     def __hash__(self):
         return hash((self.provider, self.owner, self.name))
+
+
+class FileChangeError(Exception):
+    pass
+
+
+class ProgressType(enum.Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
+    USER_RESPONSE = "USER_RESPONSE"
+
+
+class ProgressItem(BaseModel):
+    timestamp: str
+    message: str
+    type: ProgressType
+    data: Any = None
+
+
+class AutofixStatus(enum.Enum):
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    CANCELLED = "CANCELLED"
+
+    @classmethod
+    def terminal(cls) -> "frozenset[AutofixStatus]":
+        return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
+
+
+class ProblemDiscoveryResult(BaseModel):
+    status: Literal["CONTINUE", "CANCELLED"]
+    description: str
+    reasoning: str
 
 
 class AutofixUserDetails(BaseModel):
@@ -343,6 +325,7 @@ class AutofixGroupState(BaseModel):
     status: AutofixStatus = AutofixStatus.PENDING
     fix: AutofixOutput | None = None
     completedAt: datetime.datetime | None = None
+    usage: Usage = Field(default_factory=Usage)
 
 
 class AutofixCompleteArgs(BaseModel):

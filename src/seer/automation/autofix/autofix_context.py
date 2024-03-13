@@ -1,20 +1,33 @@
 import uuid
 
-from seer.automation.autofix.models import RepoDefinition, Stacktrace
+from seer.automation.autofix.event_manager import AutofixEventManager
+from seer.automation.autofix.models import (
+    AutofixContinuation,
+    EventDetails,
+    RepoDefinition,
+    Stacktrace,
+)
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import StoredDocumentChunk
+from seer.automation.pipeline import PipelineContext
+from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
 
 
-class AutofixContext:
+class AutofixContext(PipelineContext):
+    state: State[AutofixContinuation]
+
     codebases: dict[int, CodebaseIndex]
+    event_manager: AutofixEventManager
 
     def __init__(
         self,
         organization_id: int,
         project_id: int,
         repos: list[RepoDefinition],
+        event_manager: AutofixEventManager,
+        state: State[AutofixContinuation],
     ):
         self.organization_id = organization_id
         self.project_id = project_id
@@ -28,6 +41,9 @@ class AutofixContext:
 
             if codebase_index:
                 self.codebases[codebase_index.repo_info.id] = codebase_index
+
+        self.event_manager = event_manager
+        self.state = state
 
     def has_codebase_index(self, repo: RepoDefinition) -> bool:
         return CodebaseIndex.has_repo_been_indexed(self.organization_id, self.project_id, repo)
@@ -114,23 +130,36 @@ class AutofixContext:
 
         return None, None
 
-    def diff_contains_stacktrace_files(self, repo_id: int, stacktrace: Stacktrace) -> bool:
+    def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
+        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
+
+        stacktrace_files: set[str] = set()
+        for stacktrace in stacktraces:
+            for frame in stacktrace.frames:
+                stacktrace_files.add(frame.filename)
+
         codebase = self.get_codebase(repo_id)
         changed_files, removed_files = codebase.repo_client.get_commit_file_diffs(
             codebase.repo_info.sha, codebase.repo_client.get_default_branch_head_sha()
         )
 
         change_files = set(changed_files + removed_files)
-        stacktrace_files = set([frame.filename for frame in stacktrace.frames])
 
         return bool(change_files.intersection(stacktrace_files))
 
-    def process_stacktrace(self, stacktrace: Stacktrace):
+    def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
         for codebase in self.codebases.values():
             codebase.process_stacktrace(stacktrace)
+
+    def process_event_paths(self, event: EventDetails):
+        """
+        Annotate exceptions with the correct repo each frame is pointing to and fix the filenames
+        """
+        for exception in event.exceptions:
+            self._process_stacktrace_paths(exception.stacktrace)
 
     def cleanup(self):
         for codebase in self.codebases.values():

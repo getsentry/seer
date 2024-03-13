@@ -114,7 +114,7 @@ IssueDetails = typing_extensions.TypedDict(
     {
         "id": int,
         "title": str,
-        "events": typing.List["SentryEvent"],
+        "events": typing.List["EventDetails"],
     },
     total=False,
 )
@@ -129,8 +129,8 @@ RepoDefinition = typing_extensions.TypedDict(
     total=False,
 )
 
-SentryEvent = typing_extensions.TypedDict(
-    "SentryEvent",
+EventDetails = typing_extensions.TypedDict(
+    "EventDetails",
     {
         "entries": typing.List[typing.Mapping[str, typing.Any]],
     },

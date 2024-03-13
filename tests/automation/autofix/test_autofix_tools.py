@@ -7,13 +7,12 @@ from seer.automation.models import FileChange
 
 
 class TestReplaceSnippetWith(unittest.TestCase):
-    @patch("seer.automation.autofix.tools.GptClient")
-    def setUp(self, mock_gpt_client):
-        self.mock_context = MagicMock()
-        self.mock_gpt_client = mock_gpt_client
-        self.code_action_tools = CodeActionTools(context=self.mock_context)
+    @patch("seer.automation.autofix.components.snippet_replacement.GptClient")
+    def test_replace_snippet_with_success(self, mock_gpt_client):
+        mock_context = MagicMock()
+        mock_gpt_client = mock_gpt_client
+        code_action_tools = CodeActionTools(context=mock_context)
 
-    def test_replace_snippet_with_success(self):
         # Setup
         original_snippet = "print('Hello, world!')"
         replacement_snippet = "print('Goodbye, world!')"
@@ -27,7 +26,7 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """
         )
         mock_codebase = MagicMock()
-        self.mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
+        mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(
@@ -38,9 +37,9 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """
         )
         completion_with_parser.return_value = ({"code": code}, MagicMock(), MagicMock())
-        self.mock_gpt_client.return_value.completion_with_parser = completion_with_parser
+        mock_gpt_client.return_value.json_completion = completion_with_parser
 
-        result = self.code_action_tools.replace_snippet_with(
+        result = code_action_tools.replace_snippet_with(
             file_path, "repo", original_snippet, replacement_snippet, "message"
         )
 

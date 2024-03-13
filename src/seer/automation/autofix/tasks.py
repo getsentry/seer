@@ -7,6 +7,7 @@ from requests import HTTPError
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix import Autofix
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixCompleteArgs,
@@ -17,7 +18,7 @@ from seer.automation.autofix.models import (
     AutofixStepUpdateArgs,
 )
 from seer.automation.models import InitializationError
-from seer.automation.state import LocalMemoryState, State
+from seer.automation.state import LocalMemoryState
 from seer.rpc import RpcClient, SentryRpcClient
 
 logger = logging.getLogger("autofix")
@@ -98,8 +99,15 @@ def run_autofix(
             op="seer.automation.autofix",
             description="Run autofix on an issue within celery task",
         ):
-            autofix = Autofix(request, event_manager)
-            autofix.run()
+            context = AutofixContext(
+                organization_id=request.organization_id,
+                project_id=request.project_id,
+                repos=request.repos,
+                event_manager=event_manager,
+                state=state,
+            )
+            autofix = Autofix(context)
+            autofix.invoke(request)
     except InitializationError as e:
         event_manager.send_autofix_complete(None)
         sentry_sdk.capture_exception(e)

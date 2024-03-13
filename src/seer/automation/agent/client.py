@@ -1,4 +1,5 @@
 import dataclasses
+import json
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
@@ -15,29 +16,29 @@ T = TypeVar("T")
 class LlmClient(ABC):
     @abstractmethod
     def completion(
-        self, model: str, messages: list[Message], **chat_completion_kwargs
+        self, messages: list[Message], **chat_completion_kwargs
     ) -> tuple[Message, Usage]:
         pass
 
     def completion_with_parser(
         self,
-        model: str,
         messages: list[Message],
         parser: Callable[[str | None], T],
         **chat_completion_kwargs,
     ) -> tuple[T, Message, Usage]:
-        message, usage = self.completion(model, messages, **chat_completion_kwargs)
+        message, usage = self.completion(messages, **chat_completion_kwargs)
 
         return parser(message.content), message, usage
 
 
 class GptClient(LlmClient):
-    def __init__(self):
+    def __init__(self, model: str = "gpt-4-0125-preview"):
+        self.model = model
         self.openai_client = wrappers.wrap_openai(OpenAI())
 
-    def completion(self, model: str, messages: list[Message], **chat_completion_kwargs):
+    def completion(self, messages: list[Message], **chat_completion_kwargs):
         completion: ChatCompletion = self.openai_client.chat.completions.create(
-            model=model,
+            model=self.model,
             messages=messages,  # type: ignore
             temperature=0.0,
             seed=42,
@@ -54,23 +55,31 @@ class GptClient(LlmClient):
 
         return message, usage
 
+    def json_completion(
+        self, messages: list[Message], **chat_completion_kwargs
+    ) -> tuple[dict[str, Any] | None, Message, Usage]:
+        return self.completion_with_parser(
+            messages,
+            parser=lambda x: json.loads(x) if x else None,
+            response_format={"type": "json_object"},
+            **chat_completion_kwargs,
+        )
 
-GptCompletionHandler = Callable[
-    [str, list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]
-]
+
+GptCompletionHandler = Callable[[list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]]
 
 
 @dataclasses.dataclass
 class DummyGptClient(GptClient):
     handlers: list[GptCompletionHandler] = dataclasses.field(default_factory=list)
-    missed_calls: list[tuple[str, list[Message], dict[str, Any]]] = dataclasses.field(
+    missed_calls: list[tuple[list[Message], dict[str, Any]]] = dataclasses.field(
         default_factory=list
     )
 
-    def completion(self, model: str, messages: list[Message], **chat_completion_kwargs):
+    def completion(self, messages: list[Message], **chat_completion_kwargs):
         for handler in self.handlers:
-            result = handler(model, messages, chat_completion_kwargs)
+            result = handler(messages, chat_completion_kwargs)
             if result:
                 return result
-        self.missed_calls.append((model, messages, chat_completion_kwargs))
+        self.missed_calls.append((messages, chat_completion_kwargs))
         return Message(), Usage()
