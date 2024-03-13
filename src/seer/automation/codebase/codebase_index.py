@@ -577,8 +577,11 @@ class CodebaseIndex:
                                 else None
                             )
                             section_header_str = declaration.to_str(tree.root_node, include_indent=False) if declaration else ''
-                            if section_header_str:
-                                section_header = section_header_str.splitlines()[0].strip()
+                            lines = section_header_str.splitlines()
+                            if lines:
+                                section_header = lines[0].strip()
+                            if not declaration:
+                                section_header = section_header
 
                 hunks.append(
                     Hunk(
@@ -595,6 +598,7 @@ class CodebaseIndex:
             )
             file_patches.append(
                 FilePatch(
+
 
                     type=patch_type,
                     path=patched_file.path,
