@@ -42,6 +42,8 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDi
                 ],
             )
 
+            print("cur", cur)
+
             cur.usage += usage
 
             if data is None:
