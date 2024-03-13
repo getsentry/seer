@@ -122,17 +122,22 @@ class ProcessRequest(Base):
             created_at=when,
         )
 
-        scheduled_for_update = func.least(insert_stmt.excluded.scheduled_for, cls.scheduled_for)
+        try:
+            scheduled_for_update = func.least(insert_stmt.excluded.scheduled_for, cls.scheduled_for)
 
-        return insert_stmt.on_conflict_do_update(
-            index_elements=[cls.name],
-            set_={
-                cls.payload: payload,
-                cls.scheduled_from: scheduled_for_update - expected_duration,
-                cls.scheduled_for: scheduled_for_update,
-                cls.created_at: when,
-            },
-        )
+            return insert_stmt.on_conflict_do_update(
+                index_elements=[cls.name],
+                set_={
+                    cls.payload: payload,
+                    cls.scheduled_from: scheduled_for_update - expected_duration,
+                    cls.scheduled_for: scheduled_for_update,
+                    cls.created_at: when,
+                },
+            )
+        except DataError as e:
+            logging.error(f"DataError encountered in schedule_stmt: {e}")
+            # Consider retrying the operation with adjusted values or skipping the problematic entry
+            return None
 
     @classmethod
     def peek_next_scheduled(
