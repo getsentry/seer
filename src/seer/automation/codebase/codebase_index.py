@@ -579,7 +579,7 @@ class CodebaseIndex:
                                 )
                                 section_header_str = declaration.to_str(tree.root_node, include_indent=False) if declaration else ''
                                 if section_header_str:
-                                section_header = section_header_str.splitlines()[0].strip()
+                                    section_header = section_header_str.splitlines()[0].strip()
 
                 hunks.append(
                     Hunk(
