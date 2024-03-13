@@ -22,6 +22,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
+import logging
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -38,6 +40,7 @@ AsyncSession = async_sessionmaker(expire_on_commit=False)
 
 class ProcessRequest(Base):
     """
+
     Stores durable work that is processed by the async.py worker, in contrast to the best effort queue backed
     celery worker.
 
