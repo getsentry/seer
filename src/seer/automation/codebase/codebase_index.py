@@ -543,6 +543,7 @@ class CodebaseIndex:
                 lines: list[Line] = []
                 for line in hunk:
                     lines.append(
+
                         Line(
                             source_line_no=line.source_line_no,
                             target_line_no=line.target_line_no,
@@ -559,8 +560,12 @@ class CodebaseIndex:
                         for line in lines
                         if line.line_type != " " and line.target_line_no is not None
                     ]
-                    first_line_no = line_numbers[0] if line_numbers else None
-                    last_line_no = line_numbers[-1] if line_numbers else None
+                    if line_numbers:
+                        first_line_no = line_numbers[0]
+                        last_line_no = line_numbers[-1]
+                    else:
+                        first_line_no = None
+                        last_line_no = None
                     if first_line_no is not None and last_line_no is not None:
                         node = tree.root_node.descendant_for_point_range(
                             (first_line_no, 0), (last_line_no, 0)
