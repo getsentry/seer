@@ -42,8 +42,8 @@ class BreakpointRequest(BaseModel):
     sort: str = ""
     allow_midpoint: bool = True
     validate_tail_hours: int = 0
-    trend_percentage: float = Field(default=0.1)
-    min_change: float = Field(default=0.0)
+    trend_percentage: float = 0.1
+    min_change: float = 0.0
 
 
 class BreakpointEntry(BaseModel):
