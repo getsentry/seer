@@ -1,6 +1,6 @@
 import functools
 import inspect
-from typing import Any, Callable, List, Tuple, Type, TypeVar, get_type_hints
+from typing import Any, Callable, List, Tuple, Type, TypeVar, get_type_hints, Mapping
 
 import sentry_sdk
 from flask import Flask, request
