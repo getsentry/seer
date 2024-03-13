@@ -90,11 +90,26 @@ class ProcessRequest(Base):
         # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.
         scheduled_from -= expected_duration
 
+        def validate_payload_integers(payload):
+            if isinstance(payload, dict):
+                for key, value in payload.items():
+                    if isinstance(value, int):
+                        if value < -2147483648 or value > 2147483647:
+                            # Log or adjust the value here
+                            pass
+                    elif isinstance(value, (dict, list)):
+                        validate_payload_integers(value)
+            elif isinstance(payload, list):
+                for item in payload:
+                    validate_payload_integers(item)
+
         if isinstance(payload, BaseModel):
             payload = payload.model_dump(mode="json")
 
         if isinstance(payload, (str, bytes)):
             payload = json.loads(payload)
+
+        validate_payload_integers(payload)
 
         insert_stmt = insert(cls).values(
             name=name,
