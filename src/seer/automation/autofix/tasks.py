@@ -34,6 +34,7 @@ class ContinuationState(LocalMemoryState[AutofixContinuation]):
             # )
             # TODO: This is only temp, remove this
             group_state = AutofixGroupState(status=AutofixStatus.PROCESSING)
+            logger.info(f"Loaded group_state: {group_state!r}")
             self.val = self.val.model_copy(update=dict(group_state))
             return True
         except HTTPError as e:
