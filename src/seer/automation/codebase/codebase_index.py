@@ -559,25 +559,26 @@ class CodebaseIndex:
                         for line in lines
                         if line.line_type != " " and line.target_line_no is not None
                     ]
-                    first_line_no = line_numbers[0] if line_numbers else None
-                    last_line_no = line_numbers[-1] if line_numbers else None
-                    if first_line_no is not None and last_line_no is not None:
-                        node = tree.root_node.descendant_for_point_range(
-                            (first_line_no, 0), (last_line_no, 0)
-                        )
-                        if node:
-                            parent_declaration_node = find_first_parent_declaration(
-                                node, document.language
+                    if line_numbers:
+                        first_line_no = line_numbers[0]
+                        last_line_no = line_numbers[-1]
+                        if first_line_no is not None and last_line_no is not None:
+                            node = tree.root_node.descendant_for_point_range(
+                                (first_line_no, 0), (last_line_no, 0)
                             )
-                            declaration = (
-                                extract_declaration(
-                                    parent_declaration_node, tree.root_node, document.language
+                            if node:
+                                parent_declaration_node = find_first_parent_declaration(
+                                    node, document.language
                                 )
-                                if parent_declaration_node
-                                else None
-                            )
-                            section_header_str = declaration.to_str(tree.root_node, include_indent=False) if declaration else ''
-                            if section_header_str:
+                                declaration = (
+                                    extract_declaration(
+                                        parent_declaration_node, tree.root_node, document.language
+                                    )
+                                    if parent_declaration_node
+                                    else None
+                                )
+                                section_header_str = declaration.to_str(tree.root_node, include_indent=False) if declaration else ''
+                                if section_header_str:
                                 section_header = section_header_str.splitlines()[0].strip()
 
                 hunks.append(
