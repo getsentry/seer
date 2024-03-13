@@ -1,9 +1,9 @@
 steps:
-  - name: "gcr.io/cloud-builders/gsutil"
-    args: ["cp", "-r", "gs://sentry-ml/seer/models/*", "./models"]
+- name: 'gcr.io/cloud-builders/gsutil'
+  args: ['cp', '-r', 'gs://sentry-ml/seer/models/*', './models']
 
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "us.gcr.io/sentryio/seer:$COMMIT_SHA", "."]
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'us.gcr.io/sentryio/seer:$COMMIT_SHA', '.' ]
 
 # This is needed for Freight to find matching builds
-images: ["us.gcr.io/sentryio/seer:$COMMIT_SHA"]
+images: ['us.gcr.io/sentryio/seer:$COMMIT_SHA']
