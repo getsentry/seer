@@ -68,7 +68,6 @@ class Autofix(Pipeline):
                 autofix_logger.info(f"Problem is not actionable")
                 return
 
-            print("request.repos", request.repos)
             for repo in request.repos:
                 self.context.event_manager.send_codebase_indexing_repo_check_message(repo.full_name)
                 if self.context.has_codebase_index(repo):

@@ -78,7 +78,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
             )
             return None
 
-    @traceable(name="Planning", run_type="llm", tags=["planning:v1.1"])
+    @traceable(name="Planning", run_type="llm", tags=["planning:v1.2"])
     def invoke(self, request: PlanningRequest) -> PlanningOutput | None:
         with self.context.state.update() as cur:
             planning_agent_tools = BaseTools(self.context)

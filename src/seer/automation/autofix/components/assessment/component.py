@@ -18,7 +18,7 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDi
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
-    @traceable(name="Problem Discovery", run_type="llm", tags=["problem_discovery:v1.1"])
+    @traceable(name="Problem Discovery", run_type="llm", tags=["problem_discovery:v1.2"])
     def invoke(self, request: ProblemDiscoveryRequest) -> ProblemDiscoveryOutput | None:
         with self.context.state.update() as cur:
             gpt_client = GptClient()

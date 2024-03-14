@@ -1,5 +1,7 @@
 import datetime
 import enum
+import json
+import textwrap
 from typing import Annotated, Any, Literal, Optional
 
 import sentry_sdk
@@ -38,6 +40,7 @@ class StacktraceFrame(BaseModel):
     repo_name: Optional[str] = None
     repo_id: Optional[int] = None
     in_app: bool = False
+    vars: Optional[dict[str, Any]] = None
 
 
 class SentryFrame(TypedDict):
@@ -102,6 +105,17 @@ class Stacktrace(BaseModel):
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
+            stack_str += (
+                textwrap.dedent(
+                    """\
+                ---
+                variables:
+                {vars_json_str}
+                """
+                ).format(vars_json_str=json.dumps(frame.vars, indent=2))
+                if frame.vars
+                else ""
+            )
             stack_str += "------\n"
         return stack_str
 

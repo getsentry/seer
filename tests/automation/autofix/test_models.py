@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from pydantic import ValidationError
@@ -189,3 +190,15 @@ def test_event_get_stacktrace_invalid_entry(
     assert (
         StacktraceFrame.model_validate(valid_frame) in event_details.exceptions[0].stacktrace.frames
     )
+
+
+@parameterize
+def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
+    stack_str = stacktrace.to_str()
+
+    for frame in stacktrace.frames:
+        if frame.vars:
+            vars_str = json.dumps(frame.vars, indent=2)
+            assert vars_str in stack_str
+        else:
+            assert "---\nvariables" not in stack_str
