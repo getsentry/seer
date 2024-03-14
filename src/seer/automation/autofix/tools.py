@@ -152,7 +152,7 @@ class CodeActionTools(BaseTools):
                 len(lines), snippet_end_line + self.chunk_padding
             )
         ]
-        chunk = "\n".join(chunk_lines).strip("\n") + "\n"  # Keep a newline at the end
+        chunk = "\n".join(chunk_lines).strip("\n")
 
         if not original_snippet:
             raise Exception("Reference snippet not found. Try again with an exact match.")
@@ -169,13 +169,20 @@ class CodeActionTools(BaseTools):
         if not output:
             raise Exception("Snippet replacement failed.")
 
+        # Add a trailing newline in the reference snippet, this is because we stripped all newlines from the chunk originally, we should add the trailing one back in.
+        reference_snippet = chunk + "\n"
+        new_snippet = output.snippet
+        # Add a trailing snippet to the new snippet to match the reference snippet if there isn't already one.
+        if not new_snippet.endswith("\n"):
+            new_snippet += "\n"
+
         self.store_file_change(
             codebase,
             FileChange(
                 change_type="edit",
                 path=file_path,
-                reference_snippet=chunk,
-                new_snippet=output.snippet,
+                reference_snippet=reference_snippet,
+                new_snippet=new_snippet,
                 description=commit_message,
             ),
         )
