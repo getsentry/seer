@@ -17,6 +17,7 @@ import pandas as pd
 import scipy
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
+from typing import List, Mapping, Tuple
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
 
@@ -30,11 +31,17 @@ SnubaTSEntry = Tuple[int, Tuple[SnubaMetadata]]
 
 
 class BreakpointTransaction(BaseModel):
+    from pydantic import validator
+
     data: List[SnubaTSEntry]
     request_start: int
     request_end: int
     data_start: int
     data_end: int
+
+    @validator('request_start', 'request_end', pre=True)
+    def round_to_nearest_int(cls, v):
+        return round(v)
 
 
 class BreakpointRequest(BaseModel):
