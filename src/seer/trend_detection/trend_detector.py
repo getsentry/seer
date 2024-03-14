@@ -15,8 +15,9 @@ from typing import Any, List, Literal, Mapping, Tuple, Union
 import numpy as np
 import pandas as pd
 import scipy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conint
 from typing_extensions import TypedDict
+from typing import List, Mapping, Tuple
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
 
@@ -31,10 +32,10 @@ SnubaTSEntry = Tuple[int, Tuple[SnubaMetadata]]
 
 class BreakpointTransaction(BaseModel):
     data: List[SnubaTSEntry]
-    request_start: int
-    request_end: int
-    data_start: int
-    data_end: int
+    request_start: conint(ge=0)  # Ensure this is a non-negative integer
+    request_end: conint(ge=0)    # Ensure this is a non-negative integer
+    data_start: conint(ge=0)     # Ensure this is a non-negative integer
+    data_end: conint(ge=0)       # Ensure this is a non-negative integer
 
 
 class BreakpointRequest(BaseModel):
