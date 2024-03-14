@@ -61,7 +61,7 @@ class BreakpointEntry(BaseModel):
     trend_difference: float
     breakpoint: int
     request_start: int
-    request_end: int
+    request_end: float
     data_start: int
     data_end: int
     change: Union[Literal["improvement"], Literal["regression"]]
@@ -75,7 +75,7 @@ def find_changepoint(
     change_points: List[CUSUMChangePoint],
     timestamps: List[int],
     req_start: int,
-    req_end: int,
+    req_end: float,
     allow_midpoint: bool,
 ) -> int | None:
     # if breakpoints are detected, get most recent changepoint
