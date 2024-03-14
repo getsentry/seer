@@ -31,10 +31,10 @@ SnubaTSEntry = Tuple[int, Tuple[SnubaMetadata]]
 
 class BreakpointTransaction(BaseModel):
     data: List[SnubaTSEntry]
-    request_start: int
-    request_end: int
-    data_start: int
-    data_end: int
+    request_start: float
+    request_end: float
+    data_start: float
+    data_end: float
 
 
 class BreakpointRequest(BaseModel):
