@@ -129,8 +129,8 @@ def find_trends(
         timestamps_zero_filled: List[int] = [ts_data[x][0] for x in range(len(ts_data))]
         metrics_zero_filled: List[float] = [ts_data[x][1][0]["count"] for x in range(len(ts_data))]
 
-        req_start = txn.request_start
-        req_end = txn.request_end
+        req_start = round(txn.request_start)
+        req_end = round(txn.request_end)
 
         # don't include transaction if there are less than three datapoints in non zero data OR
         # don't include transaction if there is no more data within request time period
