@@ -9,13 +9,14 @@ Trend Detection Logic:
 - If p-value > 0.01 and trend percentage > 5%, then the trend is surfaced
 
 """
+
 import datetime
-from typing import Any, List, Literal, Mapping, Tuple, Union
+from typing import List, Literal, Mapping, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import scipy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing_extensions import TypedDict
 
 from seer.trend_detection.detectors.cusum_detection import CUSUMChangePoint, CUSUMDetector
@@ -35,6 +36,11 @@ class BreakpointTransaction(BaseModel):
     request_end: int
     data_start: int
     data_end: int
+
+    @field_validator("request_start", "request_end", "data_start", "data_end", mode="before")
+    @classmethod
+    def validate_ints(cls, v):
+        return round(v)
 
 
 class BreakpointRequest(BaseModel):
