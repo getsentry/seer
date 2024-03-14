@@ -51,6 +51,13 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     min_pct_change = data.trend_percentage
     min_change = data.min_change
 
+    # Convert float fields to int
+    for txn_data in txns_data.values():
+        txn_data['request_start'] = int(txn_data['request_start'])
+        txn_data['request_end'] = int(txn_data['request_end'])
+        txn_data['data_start'] = int(txn_data['data_start'])
+        txn_data['data_end'] = int(txn_data['data_end'])
+
     with sentry_sdk.start_span(
         op="seer.breakpoint_detection",
         description="Get the breakpoint and t-value for every transaction",
@@ -78,8 +85,7 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
 
 
 @json_api("/v0/automation/autofix")
-def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    run_autofix.delay(data.model_dump(mode="json"))
+def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:    run_autofix.delay(data.model_dump(mode="json"))
     return AutofixEndpointResponse(started=True)
 
 
