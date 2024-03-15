@@ -102,8 +102,8 @@ class AutofixContext(PipelineContext):
                 populated_chunks.extend(codebase._populate_chunks(db_chunks))
 
             # Re-sort populated_chunks based on their original order in db_chunks
-            db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
-            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
+            db_chunk_order_for_codebase = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
+            populated_chunks.sort(key=lambda chunk: db_chunk_order_for_codebase[chunk.id])
 
         return populated_chunks
 
