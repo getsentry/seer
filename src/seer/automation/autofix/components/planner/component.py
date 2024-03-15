@@ -8,9 +8,6 @@ from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.planner.models import (
     PlanningOutput,
-    PlanningRequest,
-    PlanStep,
-)
 from seer.automation.autofix.components.planner.prompts import PlanningPrompts
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.autofix.utils import autofix_logger, escape_multi_xml, escape_xml_chars
@@ -24,9 +21,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
         super().__init__(context)
 
     def _parse(self, response: str) -> PlanningOutput | None:
-        parsed_output = ET.fromstring(
-            f'<response>{escape_multi_xml(response, ["title", "description", "step"])}'</response>'
-        )
+        parsed_output = ET.fromstring(escape_xml_chars(f'<response>{response}</response>'))
 
         try:
             title_element = parsed_output.find(".//*title")
