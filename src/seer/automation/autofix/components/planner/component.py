@@ -98,7 +98,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
                 err_msg=request.event_details.title,
                 exceptions=request.event_details.exceptions,
                 problem=request.problem,
-                additional_context=request.additional_context or "",
+                instruction=request.instruction,
             )
 
             planning_response = planning_agent.run(message)

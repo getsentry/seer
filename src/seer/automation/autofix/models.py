@@ -31,7 +31,7 @@ class StacktraceFrame(BaseModel):
         )
     )
 
-    function: Optional[Annotated[str, Examples(generator.ascii_words)]] = 'unknown_function'
+    function: Optional[Annotated[str, Examples(generator.ascii_words)]] = "unknown_function"
     filename: Annotated[str, Examples(generator.file_names)]
     abs_path: Annotated[str, Examples(generator.file_paths)]
     line_no: Optional[int]
@@ -81,8 +81,8 @@ class Stacktrace(BaseModel):
         stacktrace_frames = []
         for frame in frames:
             if isinstance(frame, dict):
-                if 'function' not in frame or frame['function'] is None:
-                    frame['function'] = 'unknown_function'
+                if "function" not in frame or frame["function"] is None:
+                    frame["function"] = "unknown_function"
                 try:
                     stacktrace_frames.append(StacktraceFrame.model_validate(frame))
                 except ValidationError:
@@ -258,7 +258,7 @@ class AutofixRequest(BaseModel):
     invoking_user: Optional[AutofixUserDetails] = None
 
     base_commit_sha: Optional[Annotated[str, Examples(generator.shas)]] = None
-    additional_context: Optional[str] = None
+    instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
     timeout_secs: Optional[Annotated[int, Examples((60 * 5,))]] = None
     last_updated: Optional[
         Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in generator.gen)]
@@ -286,6 +286,10 @@ class AutofixRequest(BaseModel):
             return repos
 
         raise ValueError("Not a list of repos.")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
 
 
 class AutofixOutput(BaseModel):

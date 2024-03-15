@@ -3,15 +3,15 @@ import textwrap
 from seer.automation.autofix.models import ExceptionDetails
 
 
-def format_additional_context(additional_context: str | None):
+def format_instruction(instruction: str | None):
     return textwrap.dedent(  # The leading newline is intentional
         f"""\
 
-        Additional context has been provided:
-        <additional_context>
-        {additional_context}
-        </additional_context>"""
-        if additional_context
+        Instructions have been provided. Please ensure that they are reflected in your work:
+        <instruction>
+        {instruction}
+        </instruction>"""
+        if instruction
         else ""
     )
 

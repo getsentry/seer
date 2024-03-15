@@ -3,7 +3,7 @@ from typing import Optional
 
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
 from seer.automation.autofix.models import ExceptionDetails
-from seer.automation.autofix.prompts import format_additional_context, format_exceptions
+from seer.automation.autofix.prompts import format_exceptions, format_instruction
 
 
 class PlanningPrompts:
@@ -12,7 +12,7 @@ class PlanningPrompts:
         err_msg: str,
         exceptions: list[ExceptionDetails],
         problem: ProblemDiscoveryOutput,
-        additional_context: Optional[str] = None,
+        instruction: Optional[str] = None,
     ):
         return textwrap.dedent(
             """\
@@ -27,14 +27,14 @@ class PlanningPrompts:
             The problem has been identified as:
 
             {problem_description}
-            {additional_context_str}
+            {instruction_str}
 
             Please generate a plan that fixes the above problems. DO NOT include any unit or integration tests in the plan. The shortest, simplest plan is needed."""
         ).format(
             err_msg=err_msg,
             exceptions_str=format_exceptions(exceptions),
             problem_description=problem.description,
-            additional_context_str=format_additional_context(additional_context),
+            instruction_str=format_instruction(instruction),
         )
 
     @staticmethod

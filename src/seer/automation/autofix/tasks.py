@@ -80,7 +80,6 @@ def run_autofix(
     )
     request = AutofixRequest(**request_data)
     event_manager = AutofixEventManager(state)
-
     try:
         if not state.reload_state_from_sentry():
             raise InitializationError("Group no longer exists")

@@ -8,7 +8,7 @@ class ProblemDiscoveryRequest(BaseComponentRequest):
     event_details: EventDetails
 
     previous_output: Optional[str] = None
-    additional_context: Optional[str] = None
+    instruction: Optional[str] = None
 
 
 class ProblemDiscoveryOutput(BaseComponentOutput):
