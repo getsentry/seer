@@ -44,7 +44,7 @@ class Autofix(Pipeline):
             problem_discovery_output = ProblemDiscoveryComponent(self.context).invoke(
                 ProblemDiscoveryRequest(
                     event_details=event_details,
-                    additional_context=request.additional_context,
+                    instruction=request.instruction,
                 )
             )
 
@@ -137,7 +137,11 @@ class Autofix(Pipeline):
 
             try:
                 planning_output = PlanningComponent(self.context).invoke(
-                    PlanningRequest(event_details=event_details, problem=problem_discovery_output)
+                    PlanningRequest(
+                        event_details=event_details,
+                        problem=problem_discovery_output,
+                        instruction=request.instruction,
+                    )
                 )
 
                 if not planning_output:

@@ -10,7 +10,7 @@ from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 class PlanningRequest(BaseComponentRequest):
     event_details: EventDetails
     problem: ProblemDiscoveryOutput
-    additional_context: Optional[str] = None
+    instruction: Optional[str] = None
 
 
 class PlanStep(BaseModel):

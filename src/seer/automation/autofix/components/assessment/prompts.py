@@ -2,7 +2,7 @@ import textwrap
 from typing import Optional
 
 from seer.automation.autofix.models import ExceptionDetails
-from seer.automation.autofix.prompts import format_additional_context, format_exceptions
+from seer.automation.autofix.prompts import format_exceptions, format_instruction
 
 
 class ProblemDiscoveryPrompts:
@@ -10,7 +10,7 @@ class ProblemDiscoveryPrompts:
     def format_default_msg(
         event_title: str,
         exceptions: list[ExceptionDetails],
-        additional_context: Optional[str] = None,
+        instruction: Optional[str] = None,
     ):
         return textwrap.dedent(
             """\
@@ -30,7 +30,7 @@ class ProblemDiscoveryPrompts:
         ).format(
             issue_title=event_title,
             exception_strs=format_exceptions(exceptions),
-            additional_context_str=format_additional_context(additional_context),
+            additional_context_str=format_instruction(instruction),
         )
 
     @staticmethod

@@ -36,7 +36,7 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDi
                         content=ProblemDiscoveryPrompts.format_default_msg(
                             event_title=request.event_details.title,
                             exceptions=exceptions,
-                            additional_context=request.additional_context,
+                            instruction=request.instruction,
                         ),
                     ),
                 ],
