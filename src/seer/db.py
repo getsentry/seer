@@ -171,7 +171,7 @@ class DbRepositoryInfo(Base):
 
 class DbDocumentChunk(Base):
     __tablename__ = "document_chunks"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     language: Mapped[str] = mapped_column(String, nullable=False)
@@ -207,7 +207,7 @@ class DbDocumentChunk(Base):
 
 class DbDocumentTombstone(Base):
     __tablename__ = "document_tombstones"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     namespace: Mapped[str] = mapped_column(String(36), nullable=False)

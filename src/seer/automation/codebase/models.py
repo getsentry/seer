@@ -41,6 +41,18 @@ class BaseDocumentChunk(BaseModel):
             content=self.content,
         )
 
+    def to_partial_db_model(self, repo_id: int, namespace: str | None = None) -> DbDocumentChunk:
+        return DbDocumentChunk(
+            id=self.id,
+            repo_id=repo_id,
+            path=self.path,
+            index=self.index,
+            hash=self.hash,
+            token_count=self.token_count,
+            language=self.language,
+            namespace=namespace,
+        )
+
     def __str__(self):
         return textwrap.dedent(
             """\
@@ -59,17 +71,10 @@ class BaseDocumentChunk(BaseModel):
 class EmbeddedDocumentChunk(BaseDocumentChunk):
     embedding: np.ndarray
 
-    def to_db_model(self, repo_id: int) -> DbDocumentChunk:
-        return DbDocumentChunk(
-            id=self.id,
-            repo_id=repo_id,
-            path=self.path,
-            index=self.index,
-            hash=self.hash,
-            token_count=self.token_count,
-            embedding=self.embedding,
-            language=self.language,
-        )
+    def to_db_model(self, repo_id: int, namespace: str | None = None) -> DbDocumentChunk:
+        db_chunk = self.to_partial_db_model(repo_id, namespace)
+        db_chunk.embedding = self.embedding
+        return db_chunk
 
     class Config:
         arbitrary_types_allowed = True

@@ -37,7 +37,7 @@ from seer.automation.codebase.utils import (
 )
 from seer.automation.models import FileChange, FilePatch, Hunk, Line
 from seer.automation.utils import get_embedding_model
-from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
+from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Session
 from seer.utils import batch_save_to_db, class_method_lru_cache
 
 logger = logging.getLogger("autofix")
@@ -169,16 +169,16 @@ class CodebaseIndex:
             cleanup_dir(tmp_dir)
 
     @traceable(name="Updating codebase index")
-    def update(self):
+    def update(self, sha: str | None = None, is_temporary: bool = False):
         """
         Updates the codebase index to the latest state of the default branch if needed
         """
         if not self.repo_info:
             raise ValueError("Repository info is not set")
 
-        head_sha = self.repo_client.get_default_branch_head_sha()
+        target_sha = sha or self.repo_client.get_default_branch_head_sha()
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
-            self.repo_info.sha, head_sha
+            self.repo_info.sha, target_sha
         )
 
         if not changed_files and not removed_files:
@@ -188,7 +188,7 @@ class CodebaseIndex:
             f"Updating codebase index with {len(changed_files)} changed files and {len(removed_files)} removed files..."
         )
 
-        tmp_dir, tmp_repo_dir = self.repo_client.load_repo_to_tmp_dir(head_sha)
+        tmp_dir, tmp_repo_dir = self.repo_client.load_repo_to_tmp_dir(target_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
         try:
@@ -218,52 +218,83 @@ class CodebaseIndex:
                     chunks_ids_that_no_longer_exist.add(db_chunk.id)
 
             chunks_to_add: list[BaseDocumentChunk] = []
-            chunks_indexes_to_update: list[tuple[int, int]] = []
+            chunks_to_update: list[tuple[DbDocumentChunk, BaseDocumentChunk]] = []
             for chunk in chunks:
                 if chunk.hash not in db_chunk_hash_map:
                     chunks_to_add.append(chunk)
                 else:
                     db_chunk = db_chunk_hash_map[chunk.hash]
-                    chunks_indexes_to_update.append((db_chunk.id, chunk.index))
+                    chunks_to_update.append((db_chunk, chunk))
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
                 embedded_chunks_to_add = self._embed_chunks(chunks_to_add)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
-                session.query(DbDocumentChunk).filter(
-                    DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
-                ).delete(synchronize_session=False)
+                if not is_temporary:
+                    session.query(DbDocumentChunk).filter(
+                        DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
+                    ).delete(synchronize_session=False)
 
                 session.flush()
 
                 # Bulk update indices of the chunks that already exist
-                session.bulk_update_mappings(
-                    class_mapper(DbDocumentChunk),
-                    [
-                        {"id": db_chunk_id, "index": new_index}
-                        for db_chunk_id, new_index in chunks_indexes_to_update
-                    ],
-                )
+                if not is_temporary:
+                    session.bulk_update_mappings(
+                        class_mapper(DbDocumentChunk),
+                        [
+                            {"id": db_chunk.id, "index": chunk.index}
+                            for db_chunk, chunk in chunks_to_update
+                        ],
+                    )
+                else:
+                    # Copy the chunks over to the temporary namespace
+                    db_chunks_with_namespace = []
+                    for db_chunk, chunk in chunks_to_update:
+                        new_db_chunk = chunk.to_partial_db_model(
+                            repo_id=self.repo_info.id, namespace=str(self.run_id)
+                        )
+                        new_db_chunk.embedding = db_chunk.embedding
+                        db_chunks_with_namespace.append(new_db_chunk)
+
+                    session.add_all(db_chunks_with_namespace)
 
                 session.flush()
 
                 new_db_chunks = [
-                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks_to_add
+                    chunk.to_db_model(
+                        repo_id=self.repo_info.id,
+                        namespace=str(self.run_id) if is_temporary else None,
+                    )
+                    for chunk in embedded_chunks_to_add
                 ]
                 batch_save_to_db(session, new_db_chunks)
 
                 if removed_files:
-                    session.query(DbDocumentChunk).filter(
-                        DbDocumentChunk.repo_id == self.repo_info.id,
-                        DbDocumentChunk.path.in_(removed_files),
-                    ).delete(synchronize_session=False)
+                    if is_temporary:
+                        document_tombstones = [
+                            DbDocumentTombstone(
+                                repo_id=self.repo_info.id,
+                                path=removed_file_path,
+                                namespace=str(self.run_id),
+                            )
+                            for removed_file_path in removed_files
+                        ]
 
-                self.repo_info.sha = head_sha
-                db_repo_info = session.get(DbRepositoryInfo, self.repo_info.id)
-                if db_repo_info is None:
-                    raise ValueError(f"Repository info with id {self.repo_info.id} not found")
-                db_repo_info.sha = head_sha
+                        batch_save_to_db(session, document_tombstones)
+                    else:
+                        session.query(DbDocumentChunk).filter(
+                            DbDocumentChunk.repo_id == self.repo_info.id,
+                            DbDocumentChunk.path.in_(removed_files),
+                        ).delete(synchronize_session=False)
+
+                self.repo_info.sha = target_sha
+
+                if not is_temporary:
+                    db_repo_info = session.get(DbRepositoryInfo, self.repo_info.id)
+                    if db_repo_info is None:
+                        raise ValueError(f"Repository info with id {self.repo_info.id} not found")
+                    db_repo_info.sha = target_sha
 
                 session.commit()
 
@@ -576,7 +607,11 @@ class CodebaseIndex:
                                 if parent_declaration_node
                                 else None
                             )
-                            section_header_str = declaration.to_str(tree.root_node, include_indent=False) if declaration else ''
+                            section_header_str = (
+                                declaration.to_str(tree.root_node, include_indent=False)
+                                if declaration
+                                else ""
+                            )
                             if section_header_str:
                                 section_header_lines = section_header_str.splitlines()
                                 if section_header_lines:
@@ -597,7 +632,6 @@ class CodebaseIndex:
             )
             file_patches.append(
                 FilePatch(
-
                     type=patch_type,
                     path=patched_file.path,
                     added=patched_file.added,
