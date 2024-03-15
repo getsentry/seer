@@ -17,9 +17,10 @@ from seer.db import DbDocumentChunk, Session
 
 class AutofixContext(PipelineContext):
     state: State[AutofixContinuation]
-
     codebases: dict[int, CodebaseIndex]
     event_manager: AutofixEventManager
+
+    commit_changes: bool = True
 
     def __init__(
         self,

@@ -218,78 +218,93 @@ class Autofix(Pipeline):
         prs: list[PullRequestResult] = []
         for codebase in self.context.codebases.values():
             if codebase.file_changes:
-                branch_ref = codebase.repo_client.create_branch_from_changes(
-                    pr_title=title, file_changes=codebase.file_changes
-                )
-
-                if branch_ref is None:
-                    autofix_logger.warning(f"Failed to create branch from changes")
-                    return None
-
-                pr_title = f"""🤖 {title}"""
-
-                issue_url = f"https://sentry.io/organizations/sentry/issues/{request.issue.id}/"
-                issue_link = (
-                    f"[{request.issue.short_id}]({issue_url})"
-                    if request.issue.short_id
-                    else issue_url
-                )
-
-                pr_description = textwrap.dedent(
-                    """\
-                    👋 Hi there! This PR was automatically generated 🤖
-                    {user_line}
-
-                    Fixes {issue_link}
-
-                    {description}
-
-                    #### The steps that were performed:
-                    {steps}
-
-                    ### 📣 Instructions for the reviewer which is you, yes **you**:
-                    - **If these changes were incorrect, please close this PR and comment explaining why.**
-                    - **If these changes were incomplete, please continue working on this PR then merge it.**
-                    - **If you are feeling confident in my changes, please merge this PR.**
-
-                    This will greatly help us improve the autofix system. Thank you! 🙏
-
-                    If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#proj-autofix](https://sentry.slack.com/archives/C06904P7Z6E)
-
-                    ### 🤓 Stats for the nerds:
-                    Prompt tokens: **{prompt_tokens}**
-                    Completion tokens: **{completion_tokens}**
-                    Total tokens: **{total_tokens}**"""
-                ).format(
-                    user_line=(
-                        f"\nTriggered by {request.invoking_user.display_name}"
-                        if request.invoking_user
-                        else ""
-                    ),
-                    description=description,
-                    issue_link=issue_link,
-                    steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
-                    prompt_tokens=state.usage.prompt_tokens,
-                    completion_tokens=state.usage.completion_tokens,
-                    total_tokens=state.usage.total_tokens,
-                )
-
-                pr = codebase.repo_client.create_pr_from_branch(
-                    branch_ref, pr_title, pr_description
-                )
-
-                prs.append(
-                    PullRequestResult(
-                        pr_number=pr.number,
-                        pr_url=pr.html_url,
-                        repo=RepoDefinition(
-                            provider=codebase.repo_client.provider,
-                            owner=codebase.repo_client.repo_owner,
-                            name=codebase.repo_client.repo_name,
-                        ),
-                        diff=codebase.get_file_patches(),
+                if self.context.commit_changes:
+                    branch_ref = codebase.repo_client.create_branch_from_changes(
+                        pr_title=title, file_changes=codebase.file_changes
                     )
-                )
+
+                    if branch_ref is None:
+                        autofix_logger.warning(f"Failed to create branch from changes")
+                        return None
+
+                    pr_title = f"""🤖 {title}"""
+
+                    issue_url = f"https://sentry.io/organizations/sentry/issues/{request.issue.id}/"
+                    issue_link = (
+                        f"[{request.issue.short_id}]({issue_url})"
+                        if request.issue.short_id
+                        else issue_url
+                    )
+
+                    pr_description = textwrap.dedent(
+                        """\
+                        👋 Hi there! This PR was automatically generated 🤖
+                        {user_line}
+
+                        Fixes {issue_link}
+
+                        {description}
+
+                        #### The steps that were performed:
+                        {steps}
+
+                        ### 📣 Instructions for the reviewer which is you, yes **you**:
+                        - **If these changes were incorrect, please close this PR and comment explaining why.**
+                        - **If these changes were incomplete, please continue working on this PR then merge it.**
+                        - **If you are feeling confident in my changes, please merge this PR.**
+
+                        This will greatly help us improve the autofix system. Thank you! 🙏
+
+                        If there are any questions, please reach out to the [AI/ML Team](https://github.com/orgs/getsentry/teams/machine-learning-ai) on [#proj-autofix](https://sentry.slack.com/archives/C06904P7Z6E)
+
+                        ### 🤓 Stats for the nerds:
+                        Prompt tokens: **{prompt_tokens}**
+                        Completion tokens: **{completion_tokens}**
+                        Total tokens: **{total_tokens}**"""
+                    ).format(
+                        user_line=(
+                            f"\nTriggered by {request.invoking_user.display_name}"
+                            if request.invoking_user
+                            else ""
+                        ),
+                        description=description,
+                        issue_link=issue_link,
+                        steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
+                        prompt_tokens=state.usage.prompt_tokens,
+                        completion_tokens=state.usage.completion_tokens,
+                        total_tokens=state.usage.total_tokens,
+                    )
+
+                    pr = codebase.repo_client.create_pr_from_branch(
+                        branch_ref, pr_title, pr_description
+                    )
+
+                    prs.append(
+                        PullRequestResult(
+                            pr_number=pr.number,
+                            pr_url=pr.html_url,
+                            repo=RepoDefinition(
+                                provider=codebase.repo_client.provider,
+                                owner=codebase.repo_client.repo_owner,
+                                name=codebase.repo_client.repo_name,
+                            ),
+                            diff=codebase.get_file_patches(),
+                        )
+                    )
+                else:
+                    # Dry no-commit run
+                    prs.append(
+                        PullRequestResult(
+                            pr_number=0,
+                            pr_url="https://dry-run",
+                            repo=RepoDefinition(
+                                provider=codebase.repo_client.provider,
+                                owner=codebase.repo_client.repo_owner,
+                                name=codebase.repo_client.repo_name,
+                            ),
+                            diff=codebase.get_file_patches(),
+                        )
+                    )
 
                 # TODO: Support more than 1 PR
                 return prs
