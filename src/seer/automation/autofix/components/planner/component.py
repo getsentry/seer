@@ -13,7 +13,7 @@ from seer.automation.autofix.components.planner.models import (
 )
 from seer.automation.autofix.components.planner.prompts import PlanningPrompts
 from seer.automation.autofix.tools import BaseTools
-from seer.automation.autofix.utils import autofix_logger, escape_multi_xml
+from seer.automation.autofix.utils import autofix_logger, escape_multi_xml, escape_xml_chars
 from seer.automation.component import BaseComponent
 
 
@@ -25,7 +25,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
 
     def _parse(self, response: str) -> PlanningOutput | None:
         parsed_output = ET.fromstring(
-            f'<response>{escape_multi_xml(response, ["title", "description", "step"])}</response>'
+            f'<response>{escape_multi_xml(response, ["title", "description", "step"])}'</response>'
         )
 
         try:
