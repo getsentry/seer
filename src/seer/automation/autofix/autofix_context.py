@@ -97,12 +97,15 @@ class AutofixContext(PipelineContext):
                 chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
 
             populated_chunks: list[StoredDocumentChunk] = []
+            db_chunk_order = {}
+            for _repo_id, _db_chunks in chunks_by_repo_id.items():
+                for index, db_chunk in enumerate(_db_chunks):
+                    db_chunk_order[db_chunk.id] = index
+
             for _repo_id, db_chunks in chunks_by_repo_id.items():
                 codebase = self.get_codebase(_repo_id)
                 populated_chunks.extend(codebase._populate_chunks(db_chunks))
 
-            # Re-sort populated_chunks based on their original order in db_chunks
-            db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
             populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
 
         return populated_chunks
