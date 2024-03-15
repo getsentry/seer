@@ -86,6 +86,7 @@ class AutofixContext(PipelineContext):
                     DbDocumentChunk.repo_id.in_(repo_ids),
                     (DbDocumentChunk.namespace == str(self.run_id))
                     | (DbDocumentChunk.namespace.is_(None)),
+
                 )
                 .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
                 .limit(top_k)
@@ -100,10 +101,9 @@ class AutofixContext(PipelineContext):
             for _repo_id, db_chunks in chunks_by_repo_id.items():
                 codebase = self.get_codebase(_repo_id)
                 populated_chunks.extend(codebase._populate_chunks(db_chunks))
-
-            # Re-sort populated_chunks based on their original order in db_chunks
-            db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
-            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
+                # Move db_chunk_order population and sorting inside the loop
+                db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
+                populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
 
         return populated_chunks
 
