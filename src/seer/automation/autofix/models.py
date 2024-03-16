@@ -299,6 +299,7 @@ class AutofixOutput(BaseModel):
     pr_number: int
     repo_name: str
     diff: Optional[list[FilePatch]] = []
+    diff_str: Optional[str] = None
     usage: Usage
 
 
@@ -311,6 +312,7 @@ class PullRequestResult(BaseModel):
     pr_url: str
     repo: RepoDefinition
     diff: list[FilePatch]
+    diff_str: Optional[str] = None
 
 
 class Step(BaseModel):

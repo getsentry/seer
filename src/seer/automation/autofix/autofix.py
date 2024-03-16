@@ -208,6 +208,7 @@ class Autofix(Pipeline):
                     repo_name=f"{pr.repo.owner}/{pr.repo.name}",
                     pr_number=pr.pr_number,
                     diff=pr.diff,
+                    diff_str=pr.diff_str,
                     usage=self.context.state.get().usage,
                 )
                 self.context.event_manager.send_autofix_complete(output)
@@ -296,6 +297,7 @@ class Autofix(Pipeline):
                         branch_ref, pr_title, pr_description
                     )
 
+                    diff, diff_str = codebase.get_file_patches()
                     prs.append(
                         PullRequestResult(
                             pr_number=pr.number,
@@ -305,11 +307,13 @@ class Autofix(Pipeline):
                                 owner=codebase.repo_client.repo_owner,
                                 name=codebase.repo_client.repo_name,
                             ),
-                            diff=codebase.get_file_patches(),
+                            diff=diff,
+                            diff_str=diff_str,
                         )
                     )
                 else:
                     # Dry no-commit run
+                    diff, diff_str = codebase.get_file_patches()
                     prs.append(
                         PullRequestResult(
                             pr_number=0,
@@ -319,7 +323,8 @@ class Autofix(Pipeline):
                                 owner=codebase.repo_client.repo_owner,
                                 name=codebase.repo_client.repo_name,
                             ),
-                            diff=codebase.get_file_patches(),
+                            diff=diff,
+                            diff_str=diff_str,
                         )
                     )
 

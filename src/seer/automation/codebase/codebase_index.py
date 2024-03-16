@@ -547,7 +547,7 @@ class CodebaseIndex:
 
         return matched_chunks
 
-    def get_file_patches(self) -> list[FilePatch]:
+    def get_file_patches(self) -> tuple[list[FilePatch], str]:
         document_paths = list(set([file_change.path for file_change in self.file_changes]))
 
         original_documents = [
@@ -675,4 +675,4 @@ class CodebaseIndex:
                 )
             )
 
-        return file_patches
+        return file_patches, combined_diff
