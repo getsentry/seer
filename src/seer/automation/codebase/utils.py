@@ -128,8 +128,13 @@ def read_specific_files(repo_path: str, files: list[str]) -> list[Document]:
         if not language:
             continue
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            text = f.read()
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                text = f.read()
+        except FileNotFoundError:
+            logger.warning(f"File not found: {file_path}")
+            documents.append(Document(path=file, text="", language=language))
+            continue
 
         documents.append(Document(path=file, text=text, language=language))
     return documents

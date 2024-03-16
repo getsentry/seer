@@ -60,6 +60,7 @@ class CodebaseIndex:
         self.file_changes: list[FileChange] = []
         self.run_id = run_id
         self.embedding_model = embedding_model
+        self.working_sha = self.repo_client.get_default_branch_head_sha()
 
         logger.info(
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
@@ -206,6 +207,7 @@ class CodebaseIndex:
             raise ValueError("Repository info is not set")
 
         target_sha = sha or self.repo_client.get_default_branch_head_sha()
+        self.working_sha = target_sha
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
             self.repo_info.sha, target_sha
         )
@@ -341,7 +343,7 @@ class CodebaseIndex:
         embeddings_list: list[np.ndarray] = []
 
         with tqdm(total=len(chunks)) as pbar:
-            for i in range(0, len(chunks), superchunk_size := 64):
+            for i in range(0, len(chunks), superchunk_size := 256):
                 batch_embeddings: np.ndarray = embedding_model.encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
                     batch_size=4,
@@ -414,7 +416,7 @@ class CodebaseIndex:
     def get_document(self, path: str, ignore_local_changes=False) -> Document | None:
         assert self.repo_info is not None, "Repository info is not set"
 
-        document_content = self._get_file_content_with_cache(path, self.repo_info.sha)
+        document_content = self._get_file_content_with_cache(path, self.working_sha)
 
         if document_content is None:
             return None
