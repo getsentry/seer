@@ -7,6 +7,7 @@ import sentry_sdk
 import torch
 import tree_sitter_languages
 from langsmith import traceable
+from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import class_mapper
 from tqdm import tqdm
 from tree_sitter import Tree
@@ -36,7 +37,6 @@ from seer.automation.codebase.utils import (
     read_specific_files,
 )
 from seer.automation.models import FileChange, FilePatch, Hunk, Line
-from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Session
 from seer.utils import batch_save_to_db, class_method_lru_cache
 
@@ -51,6 +51,7 @@ class CodebaseIndex:
         repo_client: RepoClient,
         repo_info: RepositoryInfo,
         run_id: uuid.UUID,
+        embedding_model: SentenceTransformer,
     ):
         self.repo_client = repo_client
         self.organization = organization
@@ -58,6 +59,7 @@ class CodebaseIndex:
         self.repo_info = repo_info
         self.file_changes: list[FileChange] = []
         self.run_id = run_id
+        self.embedding_model = embedding_model
 
         logger.info(
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
@@ -80,7 +82,12 @@ class CodebaseIndex:
 
     @classmethod
     def from_repo_definition(
-        cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID
+        cls,
+        organization: int,
+        project: int,
+        repo: RepoDefinition,
+        run_id: uuid.UUID,
+        embedding_model: SentenceTransformer,
     ):
         db_repo_info = (
             Session()
@@ -96,12 +103,19 @@ class CodebaseIndex:
         if db_repo_info:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             repo_client = RepoClient(repo.provider, repo.owner, repo.name)
-            return cls(organization, project, repo_client, repo_info, run_id)
+            return cls(
+                organization,
+                project,
+                repo_client,
+                repo_info,
+                run_id,
+                embedding_model=embedding_model,
+            )
 
         return None
 
     @classmethod
-    def from_repo_id(cls, repo_id: int):
+    def from_repo_id(cls, repo_id: int, embedding_model: SentenceTransformer):
         db_repo_info = Session().get(DbRepositoryInfo, repo_id)
 
         if db_repo_info:
@@ -114,13 +128,21 @@ class CodebaseIndex:
                 RepoClient(repo_info.provider, repo_owner, repo_name),
                 repo_info,
                 run_id=uuid.uuid4(),
+                embedding_model=embedding_model,
             )
 
         raise ValueError(f"Repository with id {repo_id} not found")
 
     @classmethod
     @traceable(name="Creating codebase index")
-    def create(cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID):
+    def create(
+        cls,
+        organization: int,
+        project: int,
+        repo: RepoDefinition,
+        run_id: uuid.UUID,
+        embedding_model: SentenceTransformer,
+    ):
         repo_client = RepoClient(repo.provider, repo.owner, repo.name)
 
         head_sha = repo_client.get_default_branch_head_sha()
@@ -134,11 +156,11 @@ class CodebaseIndex:
             for language, docs in documents_by_language.items():
                 logger.debug(f"  {language}: {len(docs)}")
 
-            doc_parser = DocumentParser(get_embedding_model())
+            doc_parser = DocumentParser(embedding_model)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
                 chunks = doc_parser.process_documents(documents)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
-                embedded_chunks = cls._embed_chunks(chunks)
+                embedded_chunks = cls._embed_chunks(chunks, embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
@@ -164,7 +186,14 @@ class CodebaseIndex:
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
-            return cls(organization, project, repo_client, repo_info, run_id)
+            return cls(
+                organization,
+                project,
+                repo_client,
+                repo_info,
+                run_id,
+                embedding_model=embedding_model,
+            )
         finally:
             cleanup_dir(tmp_dir)
 
@@ -194,7 +223,7 @@ class CodebaseIndex:
         try:
             documents = read_specific_files(tmp_repo_dir, changed_files)
 
-            doc_parser = DocumentParser(get_embedding_model())
+            doc_parser = DocumentParser(self.embedding_model)
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.process_documents"):
                 chunks = doc_parser.process_documents(documents)
@@ -227,7 +256,9 @@ class CodebaseIndex:
                     chunks_to_update.append((db_chunk, chunk))
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
-                embedded_chunks_to_add = self._embed_chunks(chunks_to_add)
+                embedded_chunks_to_add = self._embed_chunks(
+                    chunks_to_add, embedding_model=self.embedding_model
+                )
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
@@ -303,13 +334,15 @@ class CodebaseIndex:
             cleanup_dir(tmp_dir)
 
     @classmethod
-    def _embed_chunks(cls, chunks: list[BaseDocumentChunk]) -> list[EmbeddedDocumentChunk]:
+    def _embed_chunks(
+        cls, chunks: list[BaseDocumentChunk], embedding_model: SentenceTransformer
+    ) -> list[EmbeddedDocumentChunk]:
         logger.debug(f"Embedding {len(chunks)} chunks...")
         embeddings_list: list[np.ndarray] = []
 
         with tqdm(total=len(chunks)) as pbar:
             for i in range(0, len(chunks), superchunk_size := 64):
-                batch_embeddings: np.ndarray = get_embedding_model().encode(
+                batch_embeddings: np.ndarray = embedding_model.encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
                     batch_size=4,
                     show_progress_bar=True,
@@ -344,7 +377,7 @@ class CodebaseIndex:
     def query(self, query: str, top_k: int = 4):
         assert self.repo_info is not None, "Repository info is not set"
 
-        embedding = get_embedding_model().encode(query, show_progress_bar=False)
+        embedding = self.embedding_model.encode(query, show_progress_bar=False)
 
         with Session() as session:
             db_chunks = (
@@ -427,9 +460,9 @@ class CodebaseIndex:
                 DbDocumentChunk.namespace == str(self.run_id),
             ).delete(synchronize_session=False)
 
-            doc_parser = DocumentParser(get_embedding_model())
+            doc_parser = DocumentParser(self.embedding_model)
             chunks = doc_parser.process_document(document)
-            embedded_chunks = self._embed_chunks(chunks)
+            embedded_chunks = self._embed_chunks(chunks, self.embedding_model)
 
             db_chunks: list[DbDocumentChunk] = []
             for chunk in embedded_chunks:
@@ -473,7 +506,7 @@ class CodebaseIndex:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
-        doc_parser = DocumentParser(get_embedding_model())
+        doc_parser = DocumentParser(self.embedding_model)
 
         matched_chunks: list[StoredDocumentChunk] = []
         for chunk in chunks:

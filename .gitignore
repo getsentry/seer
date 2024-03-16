@@ -138,3 +138,6 @@ models
 
 # Mac specific
 .DS_Store
+
+# Evaluation Data
+data/

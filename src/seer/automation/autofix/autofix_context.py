@@ -1,5 +1,7 @@
 import uuid
 
+from sentence_transformers import SentenceTransformer
+
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -29,15 +31,18 @@ class AutofixContext(PipelineContext):
         repos: list[RepoDefinition],
         event_manager: AutofixEventManager,
         state: State[AutofixContinuation],
+        embedding_model: SentenceTransformer | None = None,
     ):
         self.organization_id = organization_id
         self.project_id = project_id
         self.run_id = uuid.uuid4()
         self.codebases = {}
 
+        self.embedding_model = embedding_model or get_embedding_model()
+
         for repo in repos:
             codebase_index = CodebaseIndex.from_repo_definition(
-                organization_id, project_id, repo, self.run_id
+                organization_id, project_id, repo, self.run_id, embedding_model=self.embedding_model
             )
 
             if codebase_index:
@@ -51,7 +56,11 @@ class AutofixContext(PipelineContext):
 
     def create_codebase_index(self, repo: RepoDefinition):
         codebase_index = CodebaseIndex.create(
-            self.organization_id, self.project_id, repo, self.run_id
+            self.organization_id,
+            self.project_id,
+            repo,
+            self.run_id,
+            embedding_model=self.embedding_model,
         )
         self.codebases[codebase_index.repo_info.id] = codebase_index
 
@@ -78,7 +87,7 @@ class AutofixContext(PipelineContext):
 
         repo_ids = [repo_id] if repo_id is not None else list(self.codebases.keys())
 
-        embedding = get_embedding_model().encode(query)
+        embedding = self.embedding_model.encode(query)
 
         with Session() as session:
             db_chunks = (
