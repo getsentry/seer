@@ -58,6 +58,7 @@ class TestAutofixPipeline(unittest.TestCase):
 
         request: AutofixRequest = next(generate(AutofixRequest))
         request.repos = [next(generate(RepoDefinition)), next(generate(RepoDefinition))]
+        request.issue.events = [next(generate(SentryEventData))]
         autofix = Autofix(mock_autofix_context)
 
         mock_problem_discovery_component.return_value.invoke.return_value = ProblemDiscoveryOutput(
