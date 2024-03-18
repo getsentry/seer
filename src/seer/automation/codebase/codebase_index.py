@@ -7,6 +7,7 @@ import sentry_sdk
 import torch
 import tree_sitter_languages
 from langsmith import traceable
+from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import class_mapper
 from tqdm import tqdm
 from tree_sitter import Tree
@@ -36,8 +37,7 @@ from seer.automation.codebase.utils import (
     read_specific_files,
 )
 from seer.automation.models import FileChange, FilePatch, Hunk, Line
-from seer.automation.utils import get_embedding_model
-from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
+from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Session
 from seer.utils import batch_save_to_db, class_method_lru_cache
 
 logger = logging.getLogger("autofix")
@@ -51,6 +51,7 @@ class CodebaseIndex:
         repo_client: RepoClient,
         repo_info: RepositoryInfo,
         run_id: uuid.UUID,
+        embedding_model: SentenceTransformer,
     ):
         self.repo_client = repo_client
         self.organization = organization
@@ -58,6 +59,8 @@ class CodebaseIndex:
         self.repo_info = repo_info
         self.file_changes: list[FileChange] = []
         self.run_id = run_id
+        self.embedding_model = embedding_model
+        self.working_sha = self.repo_client.get_default_branch_head_sha()
 
         logger.info(
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
@@ -80,7 +83,12 @@ class CodebaseIndex:
 
     @classmethod
     def from_repo_definition(
-        cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID
+        cls,
+        organization: int,
+        project: int,
+        repo: RepoDefinition,
+        run_id: uuid.UUID,
+        embedding_model: SentenceTransformer,
     ):
         db_repo_info = (
             Session()
@@ -96,12 +104,19 @@ class CodebaseIndex:
         if db_repo_info:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             repo_client = RepoClient(repo.provider, repo.owner, repo.name)
-            return cls(organization, project, repo_client, repo_info, run_id)
+            return cls(
+                organization,
+                project,
+                repo_client,
+                repo_info,
+                run_id,
+                embedding_model=embedding_model,
+            )
 
         return None
 
     @classmethod
-    def from_repo_id(cls, repo_id: int):
+    def from_repo_id(cls, repo_id: int, embedding_model: SentenceTransformer):
         db_repo_info = Session().get(DbRepositoryInfo, repo_id)
 
         if db_repo_info:
@@ -114,13 +129,21 @@ class CodebaseIndex:
                 RepoClient(repo_info.provider, repo_owner, repo_name),
                 repo_info,
                 run_id=uuid.uuid4(),
+                embedding_model=embedding_model,
             )
 
         raise ValueError(f"Repository with id {repo_id} not found")
 
     @classmethod
     @traceable(name="Creating codebase index")
-    def create(cls, organization: int, project: int, repo: RepoDefinition, run_id: uuid.UUID):
+    def create(
+        cls,
+        organization: int,
+        project: int,
+        repo: RepoDefinition,
+        run_id: uuid.UUID,
+        embedding_model: SentenceTransformer,
+    ):
         repo_client = RepoClient(repo.provider, repo.owner, repo.name)
 
         head_sha = repo_client.get_default_branch_head_sha()
@@ -134,11 +157,11 @@ class CodebaseIndex:
             for language, docs in documents_by_language.items():
                 logger.debug(f"  {language}: {len(docs)}")
 
-            doc_parser = DocumentParser(get_embedding_model())
+            doc_parser = DocumentParser(embedding_model)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
                 chunks = doc_parser.process_documents(documents)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
-                embedded_chunks = cls._embed_chunks(chunks)
+                embedded_chunks = cls._embed_chunks(chunks, embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
@@ -164,21 +187,29 @@ class CodebaseIndex:
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
-            return cls(organization, project, repo_client, repo_info, run_id)
+            return cls(
+                organization,
+                project,
+                repo_client,
+                repo_info,
+                run_id,
+                embedding_model=embedding_model,
+            )
         finally:
             cleanup_dir(tmp_dir)
 
     @traceable(name="Updating codebase index")
-    def update(self):
+    def update(self, sha: str | None = None, is_temporary: bool = False):
         """
         Updates the codebase index to the latest state of the default branch if needed
         """
         if not self.repo_info:
             raise ValueError("Repository info is not set")
 
-        head_sha = self.repo_client.get_default_branch_head_sha()
+        target_sha = sha or self.repo_client.get_default_branch_head_sha()
+        self.working_sha = target_sha
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
-            self.repo_info.sha, head_sha
+            self.repo_info.sha, target_sha
         )
 
         if not changed_files and not removed_files:
@@ -188,13 +219,13 @@ class CodebaseIndex:
             f"Updating codebase index with {len(changed_files)} changed files and {len(removed_files)} removed files..."
         )
 
-        tmp_dir, tmp_repo_dir = self.repo_client.load_repo_to_tmp_dir(head_sha)
+        tmp_dir, tmp_repo_dir = self.repo_client.load_repo_to_tmp_dir(target_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
         try:
             documents = read_specific_files(tmp_repo_dir, changed_files)
 
-            doc_parser = DocumentParser(get_embedding_model())
+            doc_parser = DocumentParser(self.embedding_model)
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.process_documents"):
                 chunks = doc_parser.process_documents(documents)
@@ -218,52 +249,83 @@ class CodebaseIndex:
                     chunks_ids_that_no_longer_exist.add(db_chunk.id)
 
             chunks_to_add: list[BaseDocumentChunk] = []
-            chunks_indexes_to_update: list[tuple[int, int]] = []
+            chunks_to_update: list[tuple[DbDocumentChunk, BaseDocumentChunk]] = []
             for chunk in chunks:
                 if chunk.hash not in db_chunk_hash_map:
                     chunks_to_add.append(chunk)
                 else:
                     db_chunk = db_chunk_hash_map[chunk.hash]
-                    chunks_indexes_to_update.append((db_chunk.id, chunk.index))
+                    chunks_to_update.append((db_chunk, chunk))
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
-                embedded_chunks_to_add = self._embed_chunks(chunks_to_add)
+                embedded_chunks_to_add = self._embed_chunks(chunks_to_add, self.embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
-                session.query(DbDocumentChunk).filter(
-                    DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
-                ).delete(synchronize_session=False)
+                if not is_temporary:
+                    session.query(DbDocumentChunk).filter(
+                        DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
+                    ).delete(synchronize_session=False)
 
                 session.flush()
 
                 # Bulk update indices of the chunks that already exist
-                session.bulk_update_mappings(
-                    class_mapper(DbDocumentChunk),
-                    [
-                        {"id": db_chunk_id, "index": new_index}
-                        for db_chunk_id, new_index in chunks_indexes_to_update
-                    ],
-                )
+                if not is_temporary:
+                    session.bulk_update_mappings(
+                        class_mapper(DbDocumentChunk),
+                        [
+                            {"id": db_chunk.id, "index": chunk.index}
+                            for db_chunk, chunk in chunks_to_update
+                        ],
+                    )
+                else:
+                    # Copy the chunks over to the temporary namespace
+                    db_chunks_with_namespace = []
+                    for db_chunk, chunk in chunks_to_update:
+                        new_db_chunk = chunk.to_partial_db_model(
+                            repo_id=self.repo_info.id, namespace=str(self.run_id)
+                        )
+                        new_db_chunk.embedding = db_chunk.embedding
+                        db_chunks_with_namespace.append(new_db_chunk)
+
+                    session.add_all(db_chunks_with_namespace)
 
                 session.flush()
 
                 new_db_chunks = [
-                    chunk.to_db_model(repo_id=self.repo_info.id) for chunk in embedded_chunks_to_add
+                    chunk.to_db_model(
+                        repo_id=self.repo_info.id,
+                        namespace=str(self.run_id) if is_temporary else None,
+                    )
+                    for chunk in embedded_chunks_to_add
                 ]
                 batch_save_to_db(session, new_db_chunks)
 
                 if removed_files:
-                    session.query(DbDocumentChunk).filter(
-                        DbDocumentChunk.repo_id == self.repo_info.id,
-                        DbDocumentChunk.path.in_(removed_files),
-                    ).delete(synchronize_session=False)
+                    if is_temporary:
+                        document_tombstones = [
+                            DbDocumentTombstone(
+                                repo_id=self.repo_info.id,
+                                path=removed_file_path,
+                                namespace=str(self.run_id),
+                            )
+                            for removed_file_path in removed_files
+                        ]
 
-                self.repo_info.sha = head_sha
-                db_repo_info = session.get(DbRepositoryInfo, self.repo_info.id)
-                if db_repo_info is None:
-                    raise ValueError(f"Repository info with id {self.repo_info.id} not found")
-                db_repo_info.sha = head_sha
+                        batch_save_to_db(session, document_tombstones)
+                    else:
+                        session.query(DbDocumentChunk).filter(
+                            DbDocumentChunk.repo_id == self.repo_info.id,
+                            DbDocumentChunk.path.in_(removed_files),
+                        ).delete(synchronize_session=False)
+
+                self.repo_info.sha = target_sha
+
+                if not is_temporary:
+                    db_repo_info = session.get(DbRepositoryInfo, self.repo_info.id)
+                    if db_repo_info is None:
+                        raise ValueError(f"Repository info with id {self.repo_info.id} not found")
+                    db_repo_info.sha = target_sha
 
                 session.commit()
 
@@ -272,13 +334,15 @@ class CodebaseIndex:
             cleanup_dir(tmp_dir)
 
     @classmethod
-    def _embed_chunks(cls, chunks: list[BaseDocumentChunk]) -> list[EmbeddedDocumentChunk]:
+    def _embed_chunks(
+        cls, chunks: list[BaseDocumentChunk], embedding_model: SentenceTransformer
+    ) -> list[EmbeddedDocumentChunk]:
         logger.debug(f"Embedding {len(chunks)} chunks...")
         embeddings_list: list[np.ndarray] = []
 
         with tqdm(total=len(chunks)) as pbar:
-            for i in range(0, len(chunks), superchunk_size := 64):
-                batch_embeddings: np.ndarray = get_embedding_model().encode(
+            for i in range(0, len(chunks), superchunk_size := 256):
+                batch_embeddings: np.ndarray = embedding_model.encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
                     batch_size=4,
                     show_progress_bar=True,
@@ -313,7 +377,7 @@ class CodebaseIndex:
     def query(self, query: str, top_k: int = 4):
         assert self.repo_info is not None, "Repository info is not set"
 
-        embedding = get_embedding_model().encode(query, show_progress_bar=False)
+        embedding = self.embedding_model.encode(query, show_progress_bar=False)
 
         with Session() as session:
             db_chunks = (
@@ -350,7 +414,7 @@ class CodebaseIndex:
     def get_document(self, path: str, ignore_local_changes=False) -> Document | None:
         assert self.repo_info is not None, "Repository info is not set"
 
-        document_content = self._get_file_content_with_cache(path, self.repo_info.sha)
+        document_content = self._get_file_content_with_cache(path, self.working_sha)
 
         if document_content is None:
             return None
@@ -396,9 +460,9 @@ class CodebaseIndex:
                 DbDocumentChunk.namespace == str(self.run_id),
             ).delete(synchronize_session=False)
 
-            doc_parser = DocumentParser(get_embedding_model())
+            doc_parser = DocumentParser(self.embedding_model)
             chunks = doc_parser.process_document(document)
-            embedded_chunks = self._embed_chunks(chunks)
+            embedded_chunks = self._embed_chunks(chunks, self.embedding_model)
 
             db_chunks: list[DbDocumentChunk] = []
             for chunk in embedded_chunks:
@@ -442,7 +506,7 @@ class CodebaseIndex:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
-        doc_parser = DocumentParser(get_embedding_model())
+        doc_parser = DocumentParser(self.embedding_model)
 
         matched_chunks: list[StoredDocumentChunk] = []
         for chunk in chunks:
@@ -483,7 +547,7 @@ class CodebaseIndex:
 
         return matched_chunks
 
-    def get_file_patches(self) -> list[FilePatch]:
+    def get_file_patches(self) -> tuple[list[FilePatch], str]:
         document_paths = list(set([file_change.path for file_change in self.file_changes]))
 
         original_documents = [
@@ -576,7 +640,11 @@ class CodebaseIndex:
                                 if parent_declaration_node
                                 else None
                             )
-                            section_header_str = declaration.to_str(tree.root_node, include_indent=False) if declaration else ''
+                            section_header_str = (
+                                declaration.to_str(tree.root_node, include_indent=False)
+                                if declaration
+                                else ""
+                            )
                             if section_header_str:
                                 section_header_lines = section_header_str.splitlines()
                                 if section_header_lines:
@@ -597,7 +665,6 @@ class CodebaseIndex:
             )
             file_patches.append(
                 FilePatch(
-
                     type=patch_type,
                     path=patched_file.path,
                     added=patched_file.added,
@@ -608,4 +675,4 @@ class CodebaseIndex:
                 )
             )
 
-        return file_patches
+        return file_patches, combined_diff

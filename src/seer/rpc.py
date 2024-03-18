@@ -47,6 +47,7 @@ class DummyRpcClient(RpcClient):
     handlers: dict[str, RpcClientHandler] = dataclasses.field(default_factory=dict)
     missed_calls: list[tuple[str, dict[str, Any]]] = dataclasses.field(default_factory=list)
     should_log: bool = False
+    dry_run: bool = False
 
     def call(self, method: str, **kwargs) -> dict[str, Any] | None:
         result = self.handlers.get(method, self._default_call)(method, kwargs)
@@ -60,6 +61,9 @@ class DummyRpcClient(RpcClient):
     def _default_call(
         self, method: str, kwargs: dict[str, Any]
     ) -> dict[str, Any] | tuple[int, str] | None:
+        if self.dry_run:
+            return None
+
         self.missed_calls.append((method, kwargs))
         body_dict = {"args": kwargs}
         json_dump = json_dumps(body_dict, separators=(",", ":"))

@@ -4,7 +4,11 @@
 
 ### Setup
 
-Use `direnv` or a similar tool that sources `.envrc`.  It will check your python version and setup virtualenv for you.
+Use `direnv` or a similar tool that sources `.envrc`.  It will check your python version and setup virtualenv for you:
+
+```bash
+direnv allow
+```
 
 Recommended to use `pyenv` or similar python environment manager so as to be able to use differing python versions between sentry projects.
 
@@ -29,3 +33,31 @@ make dev # runs docker-compose up --build
 ```
 
 Port `9091` will be exposed which is what the local sentry application will look for to connect to the service.
+
+### Database Stuff
+
+#### Applying Migrations
+
+```bash
+make update
+```
+
+This will apply all migrations to the database and create new image.
+
+#### Creating Migrations
+
+```bash
+make migration
+```
+
+### Running Tests
+
+```bash
+make test
+```
+
+### Opening a shell
+
+```bash
+make shell
+```
