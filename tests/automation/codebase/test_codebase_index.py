@@ -1,6 +1,7 @@
 import textwrap
 import unittest
 import uuid
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -28,8 +29,16 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.repo_client = MagicMock()
         self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
         self.codebase_index = CodebaseIndex(
-            self.organization, self.project, self.repo_client, self.repo_info, self.run_id
+            self.organization,
+            self.project,
+            self.repo_client,
+            self.repo_info,
+            self.run_id,
+            embedding_model=MagicMock(),
         )
+
+    def mock_embed_chunks(self, chunks: list[BaseDocumentChunk], embedding_model: Any):
+        return [EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks]
 
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.Session")
@@ -56,10 +65,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    @patch("seer.automation.codebase.codebase_index.get_embedding_model")
     def test_update_with_simple_chunk_add(
         self,
-        mock_get_embedding_model,
         mock_document_parser,
         mock_read_specific_files,
         mock_cleanup_dir,
@@ -68,8 +75,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
         mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_embedding_model = MagicMock()
-        mock_get_embedding_model.return_value = mock_embedding_model
         mock_document_parser.return_value.process_documents = MagicMock()
 
         with Session() as session:
@@ -123,10 +128,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    @patch("seer.automation.codebase.codebase_index.get_embedding_model")
     def test_update_with_chunk_replacement(
         self,
-        mock_get_embedding_model,
         mock_document_parser,
         mock_read_specific_files,
         mock_cleanup_dir,
@@ -135,8 +138,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
         mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_embedding_model = MagicMock()
-        mock_get_embedding_model.return_value = mock_embedding_model
         mock_document_parser.return_value.process_documents = MagicMock()
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
@@ -209,9 +210,7 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             session.commit()
 
         self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.side_effect = lambda chunks: [
-            EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks
-        ]
+        self.codebase_index._embed_chunks.side_effect = self.mock_embed_chunks
 
         # Execute
         self.codebase_index.update()
@@ -238,10 +237,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    @patch("seer.automation.codebase.codebase_index.get_embedding_model")
     def test_update_with_removed_file(
         self,
-        mock_get_embedding_model,
         mock_document_parser,
         mock_read_specific_files,
         mock_cleanup_dir,
@@ -250,8 +247,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=([], ["file2.py"]))
         mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_embedding_model = MagicMock()
-        mock_get_embedding_model.return_value = mock_embedding_model
         mock_document_parser.return_value.process_documents = MagicMock()
         mock_document_parser.return_value.process_documents.return_value = []
 
@@ -296,9 +291,7 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             session.commit()
 
         self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.side_effect = lambda chunks: [
-            EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks
-        ]
+        self.codebase_index._embed_chunks.side_effect = self.mock_embed_chunks
 
         # Execute
         self.codebase_index.update()
@@ -317,10 +310,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    @patch("seer.automation.codebase.codebase_index.get_embedding_model")
     def test_update_with_temporary_chunk_replacement(
         self,
-        mock_get_embedding_model,
         mock_document_parser,
         mock_read_specific_files,
         mock_cleanup_dir,
@@ -329,8 +320,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
         mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_embedding_model = MagicMock()
-        mock_get_embedding_model.return_value = mock_embedding_model
         mock_document_parser.return_value.process_documents = MagicMock()
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
@@ -403,9 +392,7 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             session.commit()
 
         self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.side_effect = lambda chunks: [
-            EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks
-        ]
+        self.codebase_index._embed_chunks.side_effect = self.mock_embed_chunks
 
         # Execute
         self.codebase_index.update(is_temporary=True)
@@ -461,7 +448,12 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.repo_client = MagicMock()
         self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
         self.codebase_index = CodebaseIndex(
-            self.organization, self.project, self.repo_client, self.repo_info, self.run_id
+            self.organization,
+            self.project,
+            self.repo_client,
+            self.repo_info,
+            self.run_id,
+            embedding_model=MagicMock(),
         )
         self.mock_get_document = MagicMock()
         self.codebase_index.get_document = self.mock_get_document
@@ -526,7 +518,7 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         ]
 
         # Execute
-        patches = self.codebase_index.get_file_patches()
+        patches, diff_str = self.codebase_index.get_file_patches()
         patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
 
         # Assert
@@ -582,7 +574,7 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.codebase_index.file_changes = [file_change]
 
         # Execute
-        patches = self.codebase_index.get_file_patches()
+        patches, diff_str = self.codebase_index.get_file_patches()
 
         # Assert
         self.assertEqual(len(patches), 1)
@@ -624,7 +616,7 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         ]
 
         # Execute
-        patches = self.codebase_index.get_file_patches()
+        patches, diff_str = self.codebase_index.get_file_patches()
         patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
 
         print(patches)

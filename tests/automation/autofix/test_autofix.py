@@ -11,7 +11,7 @@ from seer.automation.autofix.models import (
     RepoDefinition,
     SentryEventData,
 )
-from seer.automation.models import FileChange
+from seer.automation.models import FileChange, FilePatch
 from seer.generator import generate
 
 
@@ -211,6 +211,10 @@ class TestAutofixPipeline(unittest.TestCase):
 
         mock_codebase_index = MagicMock()
         mock_codebase_index.file_changes = [next(generate(FileChange))]
+        mock_codebase_index.get_file_patches.return_value = (
+            [next(generate(FilePatch))],
+            "@@ 1,1 1,1 @@\n-Test\n+Test\n",
+        )
 
         mock_repo_client = mock_codebase_index.repo_client
         mock_repo_client.provider = "github"
@@ -244,7 +248,7 @@ class TestAutofixPipeline(unittest.TestCase):
         assert mock_executor_component.return_value.invoke.call_count == 2
         mock_event_manager.send_autofix_complete.assert_called_once()
 
-        # Make sure that nothing was commited
+        # Make sure that nothing was committed
         mock_repo_client.create_branch_from_changes.assert_not_called()
         mock_repo_client.create_pr_from_branch.assert_not_called()
 
@@ -252,3 +256,4 @@ class TestAutofixPipeline(unittest.TestCase):
         assert autofix_result is not None
         assert len(autofix_result["outputs"]) == 1
         assert autofix_result["outputs"][0].diff is not None
+        assert autofix_result["outputs"][0].diff_str is not None

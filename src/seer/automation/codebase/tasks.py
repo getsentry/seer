@@ -6,6 +6,7 @@ import sentry_sdk
 from celery_app.app import app as celery_app
 from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.automation.utils import get_embedding_model
 
 logger = logging.getLogger("autofix")
 
@@ -15,7 +16,7 @@ def update_codebase_index(data: dict[str, Any]) -> None:
     request = UpdateCodebaseTaskRequest(**data)
     logger.info("Updating codebase index for repo: %s", request.repo_id)
 
-    codebase = CodebaseIndex.from_repo_id(request.repo_id)
+    codebase = CodebaseIndex.from_repo_id(request.repo_id, embedding_model=get_embedding_model())
 
     with sentry_sdk.start_span(
         op="seer.automation.background.update_codebase_index",

@@ -258,9 +258,7 @@ class CodebaseIndex:
                     chunks_to_update.append((db_chunk, chunk))
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
-                embedded_chunks_to_add = self._embed_chunks(
-                    chunks_to_add, embedding_model=self.embedding_model
-                )
+                embedded_chunks_to_add = self._embed_chunks(chunks_to_add, self.embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
