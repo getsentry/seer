@@ -81,7 +81,7 @@ class Stacktrace(BaseModel):
         stacktrace_frames = []
         for frame in frames:
             if isinstance(frame, dict):
-                if "function" not in frame or frame["function"] is None:
+                if frame.get("function") is None:
                     frame["function"] = "unknown_function"
                 try:
                     stacktrace_frames.append(StacktraceFrame.model_validate(frame))
