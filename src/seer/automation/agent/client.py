@@ -3,6 +3,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
+import anthropic
 import openai_multi_tool_use_parallel_patch  # import applies the patch
 from langsmith import wrappers
 from openai import OpenAI
@@ -51,6 +52,43 @@ class GptClient(LlmClient):
             usage.completion_tokens += completion.usage.completion_tokens
             usage.prompt_tokens += completion.usage.prompt_tokens
             usage.total_tokens += completion.usage.total_tokens
+
+        return message, usage
+
+    def json_completion(
+        self, messages: list[Message], **chat_completion_kwargs
+    ) -> tuple[dict[str, Any] | None, Message, Usage]:
+        return self.completion_with_parser(
+            messages,
+            parser=lambda x: json.loads(x) if x else None,
+            response_format={"type": "json_object"},
+            **chat_completion_kwargs,
+        )
+
+
+class ClaudeClient(LlmClient):
+    def __init__(self, model: str = "claude-3-opus-20240229"):
+        self.model = model
+        self.client = anthropic.Anthropic()
+
+    def completion(self, messages: list[Message], **completion_kwargs):
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=4000,
+            temperature=0,
+            messages=[message.to_anthropic_message() for message in messages],
+        )
+
+        message = Message(
+            content=response.content[0].text,
+            role="assistant",
+        )
+
+        usage = Usage()
+        if response.usage:
+            usage.completion_tokens += response.usage.output_tokens
+            usage.prompt_tokens += response.usage.input_tokens
+            usage.total_tokens += response.usage.output_tokens + response.usage.input_tokens
 
         return message, usage
 

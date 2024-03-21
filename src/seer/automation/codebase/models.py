@@ -1,6 +1,6 @@
 import hashlib
 import textwrap
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import numpy as np
 from johen import gen
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from pydantic_xml import attr
 
 from seer.automation.models import PromptXmlModel
-from seer.db import DbDocumentChunk, DbRepositoryInfo
+from seer.db import DbCodebaseNamespace, DbDocumentChunk, DbRepositoryInfo
 
 
 class Document(BaseModel):
@@ -30,6 +30,12 @@ class DocumentChunkPromptXml(PromptXmlModel, tag="chunk", skip_empty=True):
     path: str = attr()
     repo: str = attr()
     content: str
+
+
+class ChunkQueryResult(BaseModel):
+    hash: str
+    path: str
+    language: str
 
 
 class BaseDocumentChunk(BaseModel):
@@ -81,6 +87,15 @@ class BaseDocumentChunk(BaseModel):
             namespace=namespace,
         )
 
+    def get_db_metadata(self) -> dict[str, Any]:
+        return dict(
+            path=self.path,
+            index=self.index,
+            hash=self.hash,
+            token_count=self.token_count,
+            language=self.language,
+        )
+
     def __str__(self):
         return textwrap.dedent(
             """\
@@ -94,6 +109,14 @@ class BaseDocumentChunk(BaseModel):
 
     def __repr__(self):
         return self.__str__()
+
+
+class StoredDocumentChunk(BaseDocumentChunk):
+    repo_id: int
+
+
+class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
+    repo_name: str
 
 
 class EmbeddedDocumentChunk(BaseDocumentChunk):
@@ -111,34 +134,13 @@ class EmbeddedDocumentChunk(BaseDocumentChunk):
         }
 
 
-class StoredDocumentChunk(EmbeddedDocumentChunk):
-    id: int
-    repo_id: int
-
-
-class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
-    repo_name: str
-
-    def get_dump_for_llm(
-        self, repo_name: str | None = None, include_short_hash_as_id: bool = False
-    ):
-        return super().get_dump_for_llm(
-            repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
-        )
-
-    def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
-        return super().get_prompt_xml(
-            repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
-        )
-
-
 class RepositoryInfo(BaseModel):
     id: int
     organization: int
     project: int
     provider: str
     external_slug: str
-    sha: str
+    default_namespace: int
 
     @classmethod
     def from_db(cls, db_repo: DbRepositoryInfo) -> "RepositoryInfo":
@@ -148,5 +150,39 @@ class RepositoryInfo(BaseModel):
             project=db_repo.project,
             provider=db_repo.provider,
             external_slug=db_repo.external_slug,
-            sha=db_repo.sha,
+            default_namespace=db_repo.default_namespace,
+        )
+
+    def to_db_model(self) -> DbRepositoryInfo:
+        return DbRepositoryInfo(
+            id=self.id,
+            organization=self.organization,
+            project=self.project,
+            provider=self.provider,
+            external_slug=self.external_slug,
+            default_namespace=self.default_namespace,
+        )
+
+
+class CodebaseNamespace(BaseModel):
+    id: int
+    repo_id: int
+    sha: str
+    tracking_branch: Optional[str]
+
+    @classmethod
+    def from_db(cls, db_namespace: DbCodebaseNamespace) -> "CodebaseNamespace":
+        return cls(
+            id=db_namespace.id,
+            repo_id=db_namespace.repo_id,
+            sha=db_namespace.sha,
+            tracking_branch=db_namespace.tracking_branch,
+        )
+
+    def to_db_model(self) -> DbCodebaseNamespace:
+        return DbCodebaseNamespace(
+            id=self.id,
+            repo_id=self.repo_id,
+            sha=self.sha,
+            tracking_branch=self.tracking_branch,
         )

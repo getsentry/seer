@@ -16,6 +16,24 @@ class Message(BaseModel):
 
     tool_call_id: Optional[str] = None
 
+    @classmethod
+    def from_anthropic_message(cls, message: dict) -> "Message":
+        return cls(
+            content=message["content"]["text"],
+            role=message["role"],
+            tool_calls=message.get("tool_calls"),
+            tool_call_id=message.get("tool_call_id"),
+        )
+
+    def to_anthropic_message(self) -> dict:
+        return dict(
+            role=self.role,
+            content=dict(
+                type="text",
+                text=self.content,
+            ),
+        )
+
 
 class ToolCall(BaseModel):
     id: Optional[str] = None

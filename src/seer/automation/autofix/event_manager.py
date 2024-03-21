@@ -220,23 +220,24 @@ class AutofixEventManager:
             )
 
     def send_planning_result(self, result: PlanningOutput | None):
-        with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
-            plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
-            if result:
-                plan_step.title = "Execute Plan"
-                for child_step in result.steps:
-                    plan_step.find_or_add_child(
-                        Step(
-                            id=str(child_step.id),
-                            title=child_step.title,
-                        )
-                    )
+        pass
+        # with self.state.update() as cur:
+        #     plan_step = cur.find_or_add(self.plan_step)
+        #     plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+        #     if result:
+        #         plan_step.title = "Execute Plan"
+        #         for child_step in result.steps:
+        #             plan_step.find_or_add_child(
+        #                 Step(
+        #                     id=str(child_step.id),
+        #                     title=child_step.title,
+        #                 )
+        #             )
 
-            if len(plan_step.progress) > 0:
-                plan_step.progress[0].status = AutofixStatus.PROCESSING
+        #     if len(plan_step.progress) > 0:
+        #         plan_step.progress[0].status = AutofixStatus.PROCESSING
 
-            cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+        #     cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
     def send_execution_step_start(self, execution_id: int):
         with self.state.update() as cur:
