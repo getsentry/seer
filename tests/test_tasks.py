@@ -7,20 +7,15 @@ from typing import Annotated, Callable, Self
 import pytest
 from celery import Celery, Task
 from celery.worker import WorkController
+from johen import change_watcher
+from johen.examples import Examples
+from johen.generators import specialized
+from johen.pytest import parametrize
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
 from seer.db import ProcessRequest, Session
-from seer.generator import (
-    Examples,
-    ascii_words,
-    change_watcher,
-    ints,
-    parameterize,
-    positive_timedeltas,
-    printable_strings,
-)
 from seer.tasks import AsyncApp, AsyncSession, AsyncTaskFactory, acquire_x_lock
 from tests.generators import Future, Now, Past
 
@@ -28,7 +23,7 @@ from tests.generators import Future, Now, Past
 @dataclasses.dataclass
 class ScheduledWork:
     process_request: ProcessRequest
-    name: Annotated[str, Examples(s for s in ascii_words if s)]
+    name: Annotated[str, Examples(s for s in specialized.ascii_words if s)]
     payload: dict[str, str]
     now: Now
 
@@ -87,7 +82,7 @@ class UpdatedWork:
             return self
 
 
-@parameterize
+@parametrize
 def test_schedule_prefers_urgency(updated: UpdatedWork, future: Future, past: Past):
     updated.scheduled_work.save()
 
@@ -113,7 +108,9 @@ def test_schedule_prefers_urgency(updated: UpdatedWork, future: Future, past: Pa
     assert payload_changes.to_value(updated.new_payload)
 
 
-@parameterize(duration=(d for d in positive_timedeltas if d > datetime.timedelta(minutes=1)))
+@parametrize(
+    duration=(d for d in specialized.positive_timedeltas if d > datetime.timedelta(minutes=1))
+)
 def test_schedule_preserves_expected_duration(
     updated: UpdatedWork, future: Future, duration: datetime.timedelta
 ):
@@ -145,7 +142,7 @@ def test_mark_complete_does_not_erase_concurrent_work(updated: UpdatedWork):
     assert updated.current_process_request_by_name is None
 
 
-@parameterize
+@parametrize
 def test_next_schedule(
     scheduled: tuple[ScheduledWork, ScheduledWork, ScheduledWork, ScheduledWork]
 ):
@@ -179,7 +176,7 @@ def test_next_schedule(
     )
 
 
-@parameterize
+@parametrize
 def test_next_schedule(scheduled: ScheduledWork):
     scheduled.save()
     proc = scheduled.process_request
@@ -199,7 +196,7 @@ def test_next_schedule(scheduled: ScheduledWork):
     assert changed.to_value(datetime.timedelta(minutes=8))
 
 
-@parameterize
+@parametrize
 def test_peek_scheduled(scheduled: ScheduledWork, future: Future):
     peek_watcher = change_watcher(ProcessRequest.peek_next_scheduled)
 
@@ -237,7 +234,13 @@ class ScheduleAsyncTest:
     acceptable_name: Annotated[str, Examples(TestAsyncTaskFactory.acceptible_names)]
     unacceptable_name: Annotated[
         str,
-        Examples((s for s in printable_strings if s not in TestAsyncTaskFactory.acceptible_names)),
+        Examples(
+            (
+                s
+                for s in specialized.printable_strings
+                if s not in TestAsyncTaskFactory.acceptible_names
+            )
+        ),
     ]
     payload: TestRequest
     side_effect_calls: list[str] = dataclasses.field(default_factory=list)
@@ -270,7 +273,7 @@ class ScheduleAsyncTest:
 
 
 @pytest.mark.asyncio
-@parameterize
+@parametrize
 async def test_next_schedule_async(test: ScheduleAsyncTest, now: Now):
     async with AsyncSession() as session:
         for name in [test.acceptable_name, test.unacceptable_name]:
@@ -296,7 +299,7 @@ async def test_next_schedule_async(test: ScheduleAsyncTest, now: Now):
 
 
 @pytest.mark.asyncio
-@parameterize(arg_set=("test_value", "error_msg"))
+@parametrize(arg_set=("test_value", "error_msg"))
 async def test_async_celery_job_failure(
     test_value: int, error_msg: str, celery_app: Celery, celery_worker: WorkController
 ):
@@ -318,7 +321,7 @@ async def test_async_celery_job_failure(
 
 
 @pytest.mark.asyncio
-@parameterize(arg_set=("iterations",))
+@parametrize(arg_set=("iterations",))
 async def test_async_celery_job_generator(
     iterations: tuple[int, int, int], celery_app: Celery, celery_worker: WorkController
 ):
@@ -339,7 +342,7 @@ async def test_async_celery_job_generator(
 
 
 @pytest.mark.asyncio
-@parameterize(arg_set=("iterations", "err_msg"))
+@parametrize(arg_set=("iterations", "err_msg"))
 async def test_async_celery_job_generator_cancels(
     iterations: tuple[int, int, int],
     err_msg: str,
@@ -373,7 +376,7 @@ async def test_async_celery_job_generator_cancels(
 
 
 @pytest.mark.asyncio
-@parameterize
+@parametrize
 async def test_acquire_x_lock(names: tuple[str, str]):
     async with AsyncSession() as session, acquire_x_lock(names[0], session) as a:
         assert a is True
@@ -386,7 +389,7 @@ async def test_acquire_x_lock(names: tuple[str, str]):
 
 
 @pytest.mark.asyncio
-@parameterize(count=1)
+@parametrize(count=1)
 async def test_acquire_x_lock_failure(name: str):
     with pytest.raises(OperationalError):
         async with AsyncSession() as session:

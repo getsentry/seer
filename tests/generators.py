@@ -1,23 +1,26 @@
 import contextlib
 import dataclasses
 import datetime
+import hashlib
 from typing import Annotated, Iterator
 from unittest import mock
 
-from seer import generator
+from johen import generate
+from johen.examples import Examples
+from johen.generators import specialized
+
 from seer.automation.agent.client import DummyGptClient, GptCompletionHandler
 from seer.automation.autofix.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
-from seer.generator import Examples
 from seer.rpc import DummyRpcClient, RpcClientHandler
 
 _now = datetime.datetime(2023, 1, 1)
 
 Now = Annotated[datetime.datetime, Examples([_now])]
 Past = Annotated[
-    datetime.datetime, Examples(_now - delta for delta in generator.positive_timedeltas if delta)
+    datetime.datetime, Examples(_now - delta for delta in specialized.positive_timedeltas if delta)
 ]
 Future = Annotated[
-    datetime.datetime, Examples(_now + delta for delta in generator.positive_timedeltas if delta)
+    datetime.datetime, Examples(_now + delta for delta in specialized.positive_timedeltas if delta)
 ]
 
 SentryFrameDict = Annotated[
@@ -26,8 +29,8 @@ SentryFrameDict = Annotated[
         (
             {**base_frame, **stacktrace_frame.model_dump(mode="json", by_alias=True)}
             for base_frame, stacktrace_frame in zip(
-                generator.generate(SentryFrame, include_defaults="holes"),
-                generator.generate(StacktraceFrame, include_defaults=False),
+                generate(SentryFrame, generate_defaults="holes"),
+                generate(StacktraceFrame, generate_defaults=False),
             )
         ),
     ),
@@ -36,8 +39,8 @@ SentryFrameDict = Annotated[
 InvalidEventEntry = Annotated[
     dict,
     Examples(
-        ({"type": "not-a-valid-type", "data": {k: "hello"}} for k in generator.printable_strings),
-        ({"blah": v} for v in generator.ints),
+        ({"type": "not-a-valid-type", "data": {k: "hello"}} for k in specialized.printable_strings),
+        ({"blah": v} for v in specialized.ints),
     ),
 ]
 

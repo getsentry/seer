@@ -1,10 +1,14 @@
 import datetime
 import enum
+import hashlib
 import json
 import textwrap
 from typing import Annotated, Any, Literal, Optional
 
 import sentry_sdk
+from johen import gen
+from johen.examples import Examples
+from johen.generators import specialized
 from pydantic import (
     AliasChoices,
     AliasGenerator,
@@ -17,10 +21,8 @@ from pydantic import (
 from pydantic.alias_generators import to_camel, to_snake
 from typing_extensions import NotRequired, TypedDict
 
-from seer import generator
 from seer.automation.agent.models import Usage
 from seer.automation.models import FilePatch
-from seer.generator import Examples
 
 
 class StacktraceFrame(BaseModel):
@@ -31,9 +33,9 @@ class StacktraceFrame(BaseModel):
         )
     )
 
-    function: Optional[Annotated[str, Examples(generator.ascii_words)]] = "unknown_function"
-    filename: Annotated[str, Examples(generator.file_names)]
-    abs_path: Annotated[str, Examples(generator.file_paths)]
+    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
+    filename: Annotated[str, Examples(specialized.file_names)]
+    abs_path: Annotated[str, Examples(specialized.file_paths)]
     line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]
@@ -177,8 +179,8 @@ class EventDetails(BaseModel):
 
 
 class IssueDetails(BaseModel):
-    id: Annotated[int, Examples(generator.unsigned_ints)]
-    title: Annotated[str, Examples(generator.ascii_words)]
+    id: Annotated[int, Examples(specialized.unsigned_ints)]
+    title: Annotated[str, Examples(specialized.ascii_words)]
     short_id: Optional[str] = None
     events: list[SentryEventData]
 
@@ -246,22 +248,24 @@ class ProblemDiscoveryResult(BaseModel):
 
 
 class AutofixUserDetails(BaseModel):
-    id: Annotated[int, Examples(generator.unsigned_ints)]
+    id: Annotated[int, Examples(specialized.unsigned_ints)]
     display_name: str
 
 
 class AutofixRequest(BaseModel):
-    organization_id: Annotated[int, Examples(generator.unsigned_ints)]
-    project_id: Annotated[int, Examples(generator.unsigned_ints)]
+    organization_id: Annotated[int, Examples(specialized.unsigned_ints)]
+    project_id: Annotated[int, Examples(specialized.unsigned_ints)]
     repos: list[RepoDefinition]
     issue: IssueDetails
     invoking_user: Optional[AutofixUserDetails] = None
 
-    base_commit_sha: Optional[Annotated[str, Examples(generator.shas)]] = None
+    base_commit_sha: Optional[
+        Annotated[str, Examples(hashlib.sha1(s).hexdigest() for s in specialized.byte_strings)]
+    ] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
     timeout_secs: Optional[Annotated[int, Examples((60 * 5,))]] = None
     last_updated: Optional[
-        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in generator.gen)]
+        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
     ] = None
 
     @property
