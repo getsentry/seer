@@ -31,7 +31,7 @@ class StacktraceFrame(BaseModel):
         )
     )
 
-    function: Optional[Annotated[str, Examples(generator.ascii_words)]] = "unknown_function"
+    function: Optional[str] = "unknown_function"
     filename: Annotated[str, Examples(generator.file_names)]
     abs_path: Annotated[str, Examples(generator.file_paths)]
     line_no: Optional[int]
