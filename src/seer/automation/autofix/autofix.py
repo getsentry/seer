@@ -2,7 +2,7 @@ import textwrap
 from typing import Any
 
 import sentry_sdk
-from langsmith import RunTree, traceable
+from langsmith import traceable
 
 from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -350,7 +350,9 @@ class Autofix(Pipeline):
         executor.invoke(
             ExecutorRequest(
                 event_details=event_details,
-                retriever_dump=retriever_output.content if retriever_output else None,
+                retriever_dump=(
+                    retriever_output.to_xml().to_prompt_str() if retriever_output else None
+                ),
                 task=step.text,
             )
         )

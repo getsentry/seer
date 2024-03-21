@@ -8,6 +8,10 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.retriever import RetrieverRequest
+from seer.automation.autofix.components.retriever_with_reranker import (
+    RetrieverWithRerankerComponent,
+)
 from seer.automation.autofix.components.snippet_replacement import (
     SnippetReplacementComponent,
     SnippetReplacementRequest,
@@ -27,18 +31,15 @@ class BaseTools:
         self.context = context
 
     @traceable(run_type="tool", name="Codebase Search")
-    def codebase_retriever(self, query: str, repo_name: str | None = None):
-        chunks = self.context.query(query, repo_name=repo_name)
+    def codebase_retriever(self, query: str):
+        component = RetrieverWithRerankerComponent(self.context)
 
-        content = ""
-        for chunk in chunks:
-            content += (
-                chunk.get_dump_for_llm(
-                    self.context.get_codebase(chunk.repo_id).repo_info.external_slug
-                )
-                + "\n\n"
-            )
-        return content
+        output = component.invoke(RetrieverRequest(text=query, repo_top_k=16))
+
+        if not output:
+            return "No results found."
+
+        return output.to_xml().to_prompt_str()
 
     @traceable(run_type="tool", name="Expand Document")
     def expand_document(self, input: str, repo_name: str | None = None):
@@ -55,28 +56,13 @@ class BaseTools:
                 name="codebase_search",
                 description=textwrap.dedent(
                     """\
-                    Search for code snippets.
-                    - You can search for code using either a code snippet or the path.
-                    - The codebase is large, so you will need to be very specific with your query.
-                    - If the path contains relative paths such as ../, you will need to remove them.
-                    - If "code" in "file" search does not work, try searching just the code snippet.
-
-                    Example Queries:
-                    - Search for a code snippet: "foo"
-                    - Search for a file: "sentry/data/issueTypeConfig/index.tsx"
-                    - Search for a function: "getIssueTypeConfig("
-                    """
+                    Search for code snippets in the codebase. Providing long and detailed queries with entire code snippets will yield better results."""
                 ),
                 parameters=[
                     {
                         "name": "query",
                         "type": "string",
                         "description": "The query to search for.",
-                    },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
                 fn=self.codebase_retriever,

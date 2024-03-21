@@ -41,7 +41,6 @@ class GptClient(LlmClient):
             model=self.model,
             messages=messages,  # type: ignore
             temperature=0.0,
-            seed=42,
             **chat_completion_kwargs,
         )
 

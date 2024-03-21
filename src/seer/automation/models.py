@@ -1,12 +1,36 @@
 from typing import List, Literal, Optional
+from xml.etree import ElementTree as ET
 
 from pydantic import BaseModel
+from pydantic_xml import BaseXmlModel
 
 from seer.automation.agent.models import Usage
 
 
 class InitializationError(Exception):
     pass
+
+
+class PromptXmlModel(BaseXmlModel):
+    def _pad_with_newlines(self, tree: ET.Element) -> None:
+        for elem in tree.iter():
+            if elem.text:
+                stripped = elem.text.strip("\n")
+                if stripped:
+                    elem.text = "\n" + stripped + "\n"
+            if elem.tail:
+                stripped = elem.tail.strip("\n")
+                if stripped:
+                    elem.tail = "\n" + stripped + "\n"
+
+    def to_prompt_str(self) -> str:
+        tree: ET.Element = self.to_xml_tree()
+
+        ET.indent(tree, space="", level=0)
+
+        self._pad_with_newlines(tree)
+
+        return ET.tostring(tree, encoding="unicode")
 
 
 class Line(BaseModel):
