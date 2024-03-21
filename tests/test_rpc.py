@@ -79,9 +79,11 @@ class TestRpcHttpServer:
             thread.join()
 
 
-@parametrize(args=gen.one_of(generate(AutofixCompleteArgs), generate(AutofixStepUpdateArgs)))
+@parametrize
 def test_rpc_call_200_json(
-    test_server: TestRpcHttpServer, args: BaseModel, expected_result: dict[str, int]
+    test_server: TestRpcHttpServer,
+    args: AutofixCompleteArgs | AutofixStepUpdateArgs,
+    expected_result: dict[str, int],
 ):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
@@ -142,9 +144,11 @@ def test_rpc_call_404(test_server: TestRpcHttpServer):
 
 
 @pytest.mark.asyncio
-@parametrize(args=gen.one_of(generate(AutofixCompleteArgs), generate(AutofixStepUpdateArgs)))
+@parametrize
 async def test_rpc_acall_200_json(
-    test_server: TestRpcHttpServer, args: BaseModel, expected_result: dict[str, int]
+    test_server: TestRpcHttpServer,
+    args: AutofixCompleteArgs | AutofixStepUpdateArgs,
+    expected_result: dict[str, int],
 ):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 

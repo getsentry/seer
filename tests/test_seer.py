@@ -1,18 +1,13 @@
-import datetime
 import json
-import os
 import unittest
 from unittest import mock
 
 import pytest
-from flask import Flask
-from flask.cli import ScriptInfo
+from johen.pytest import parametrize
 from sqlalchemy import text
 
 from seer.app import app
-from seer.automation.autofix.models import AutofixRequest
 from seer.db import AsyncSession, ProcessRequest, Session
-from seer.generator import parameterize
 
 
 @pytest.fixture(autouse=True)
@@ -308,7 +303,7 @@ class TestSeer(unittest.TestCase):
         assert output == {"data": []}
 
 
-@parameterize(count=1)
+@parametrize(count=1)
 def test_prepared_statements_disabled(
     requests: tuple[
         ProcessRequest,
@@ -329,7 +324,7 @@ def test_prepared_statements_disabled(
 
 
 @pytest.mark.asyncio
-@parameterize(count=1)
+@parametrize(count=1)
 async def test_async_prepared_statements_disabled(
     requests: tuple[
         ProcessRequest,

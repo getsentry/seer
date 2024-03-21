@@ -48,7 +48,7 @@ class ScheduledWork:
 @dataclasses.dataclass
 class UpdatedWork:
     scheduled_work: ScheduledWork
-    new_payload: Annotated[dict, Examples(({"this-unique-payload": i} for i in ints))]
+    new_payload: Annotated[dict, Examples(({"this-unique-payload": i} for i in specialized.ints))]
 
     @property
     def original_process_request(self):
@@ -127,7 +127,7 @@ def test_schedule_preserves_expected_duration(
     assert delay_changes.to_value(duration)
 
 
-@parameterize
+@parametrize
 def test_mark_complete_does_not_erase_concurrent_work(updated: UpdatedWork):
     updated.save(datetime.datetime.now() + datetime.timedelta(seconds=1))
     with Session() as session:

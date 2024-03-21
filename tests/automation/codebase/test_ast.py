@@ -1,9 +1,9 @@
 from typing import Any, Literal
 
+from johen.pytest import parametrize
 from pydantic import BaseModel
 
 from seer.automation.codebase.ast import find_first_parent_declaration
-from seer.generator import parameterize
 
 
 class FakeNode(BaseModel):
@@ -24,7 +24,7 @@ class FakeNode(BaseModel):
     children: list[Any] = []
 
 
-@parameterize
+@parametrize
 def test_find_first_parent_declaration_js_declaration(
     root: FakeNode,
     parents: list[FakeNode],
@@ -47,7 +47,7 @@ def test_find_first_parent_declaration_js_declaration(
     assert parent == first_parent
 
 
-@parameterize
+@parametrize
 def test_find_first_parent_declaration_py_declaration(
     root: FakeNode,
     parents: list[FakeNode],
@@ -65,7 +65,7 @@ def test_find_first_parent_declaration_py_declaration(
     assert parent == first_parent
 
 
-@parameterize
+@parametrize
 def test_max_depth(
     root: FakeNode,
     parents: list[FakeNode],

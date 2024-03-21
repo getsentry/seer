@@ -2,6 +2,8 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
+from johen import generate
+
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
 from seer.automation.autofix.components.planner.models import PlanningOutput, PlanStep
 from seer.automation.autofix.components.retriever import RetrieverOutput
@@ -12,7 +14,6 @@ from seer.automation.autofix.models import (
     SentryEventData,
 )
 from seer.automation.models import FileChange, FilePatch
-from seer.generator import generate
 
 
 class TestAutofixPipeline(unittest.TestCase):
