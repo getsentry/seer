@@ -21,7 +21,7 @@ Set the environment variables that are in `.env.example` with the actual values,
 You will need model artifacts to run inference in seer, get them from gcs by:
 
 ```bash
-gsutil cp -r gs://tmp_tillman/models ./models
+gsutil cp -r gs://sentry-ml/seer/models ./models
 ```
 
 ### Running
