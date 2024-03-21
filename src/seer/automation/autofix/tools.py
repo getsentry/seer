@@ -26,9 +26,11 @@ logger = logging.getLogger("autofix")
 
 class BaseTools:
     context: AutofixContext
+    retrieval_top_k: int
 
-    def __init__(self, context: AutofixContext):
+    def __init__(self, context: AutofixContext, retrieval_top_k: int = 8):
         self.context = context
+        self.retrieval_top_k = retrieval_top_k
 
     @traceable(run_type="tool", name="Codebase Search")
     def codebase_retriever(self, query: str):

@@ -32,7 +32,7 @@ class DocumentChunkPromptXml(PromptXmlModel, tag="chunk", skip_empty=True):
     content: str
 
 
-class BaseDocumentChunk(BaseModel):
+class BaseDocumentChunk(PromptXmlModel):
     id: Optional[int] = None
     content: Annotated[str, Examples(lorem_ipsum)]
     context: Optional[str]
@@ -126,6 +126,11 @@ class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
     def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
         return super().get_prompt_xml(
             repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
+        )
+
+    def get_prompt_xml(self, include_short_hash_as_id: bool = False):
+        return self._get_prompt_xml(
+            self.repo_name, include_short_hash_as_id=include_short_hash_as_id
         )
 
 

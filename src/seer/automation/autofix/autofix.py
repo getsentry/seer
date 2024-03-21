@@ -6,22 +6,23 @@ from langsmith import traceable
 
 from celery_app.models import UpdateCodebaseTaskRequest
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.assessment.component import ProblemDiscoveryComponent
-from seer.automation.autofix.components.assessment.models import ProblemDiscoveryRequest
-from seer.automation.autofix.components.executor.component import ExecutorComponent
-from seer.automation.autofix.components.executor.models import ExecutorRequest
 from seer.automation.autofix.components.planner.component import PlanningComponent
-from seer.automation.autofix.components.planner.models import PlanningRequest, PlanStep
-from seer.automation.autofix.components.retriever import RetrieverComponent, RetrieverRequest
+from seer.automation.autofix.components.planner.models import (
+    CreateFilePromptXml,
+    PlanningRequest,
+    ReplaceCodePromptXml,
+)
+from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
 from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
     AutofixStatus,
     EventDetails,
-    ProblemDiscoveryResult,
     PullRequestResult,
     RepoDefinition,
 )
+from seer.automation.autofix.tools import CodeActionTools
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.tasks import update_codebase_index
 from seer.automation.pipeline import Pipeline
@@ -33,7 +34,7 @@ class Autofix(Pipeline):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
-    @traceable(name="Autofix Run", tags=["autofix:v1.1"])
+    @traceable(name="Autofix Run", tags=["autofix:v2"])
     def invoke(self, request: AutofixRequest):
         try:
             autofix_logger.info(f"Beginning autofix for issue {request.issue.id}")
@@ -41,32 +42,6 @@ class Autofix(Pipeline):
             self.context.event_manager.send_initial_steps()
 
             event_details = EventDetails.from_event(request.issue.events[0])
-            problem_discovery_output = ProblemDiscoveryComponent(self.context).invoke(
-                ProblemDiscoveryRequest(
-                    event_details=event_details,
-                    instruction=request.instruction,
-                )
-            )
-
-            if not problem_discovery_output:
-                autofix_logger.warning(f"Problem discovery agent did not return a valid response")
-                return
-
-            problem_discovery_payload = ProblemDiscoveryResult(
-                status=(
-                    "CONTINUE"
-                    if problem_discovery_output.actionability_score >= 0.6
-                    else "CANCELLED"
-                ),
-                description=problem_discovery_output.description,
-                reasoning=problem_discovery_output.reasoning,
-            )
-
-            self.context.event_manager.send_problem_discovery_result(problem_discovery_payload)
-
-            if problem_discovery_payload.status == "CANCELLED":
-                autofix_logger.info(f"Problem is not actionable")
-                return
 
             for repo in request.repos:
                 self.context.event_manager.send_codebase_indexing_repo_check_message(repo.full_name)
@@ -152,11 +127,23 @@ class Autofix(Pipeline):
 
             self.context.process_event_paths(event_details)
 
+            root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
+                RootCauseAnalysisRequest(
+                    event_details=event_details,
+                    instruction=request.instruction,
+                )
+            )
+
+            if not root_cause_output or not root_cause_output.causes:
+                autofix_logger.warning(f"Root cause agent did not return a valid response")
+                self.context.event_manager.send_autofix_complete(None)
+                return
+
             try:
                 planning_output = PlanningComponent(self.context).invoke(
                     PlanningRequest(
                         event_details=event_details,
-                        problem=problem_discovery_output,
+                        root_cause=root_cause_output.causes[0],
                         instruction=request.instruction,
                     )
                 )
@@ -169,7 +156,7 @@ class Autofix(Pipeline):
                 self.context.event_manager.send_planning_result(planning_output)
 
                 autofix_logger.info(
-                    f"Planning complete; there are {len(planning_output.steps)} steps in the plan to execute."
+                    f"Planning complete; there are {len(planning_output.tasks)} steps in the plan to execute."
                 )
             except Exception as e:
                 autofix_logger.error(f"Failed to plan: {e}")
@@ -177,23 +164,28 @@ class Autofix(Pipeline):
                 self.context.event_manager.send_planning_result(None)
                 return
 
-            retriever = RetrieverComponent(self.context)
-            executor = ExecutorComponent(self.context)
-            for i, step in enumerate(planning_output.steps):
-                self.context.event_manager.send_execution_step_start(step.id)
-
-                autofix_logger.info(f"Executing step: {i}/{len(planning_output.steps)}")
-
-                self.run_executor_with_retriever(retriever, executor, step, event_details)
-
-                self.context.event_manager.send_execution_step_result(
-                    step.id, AutofixStatus.COMPLETED
-                )
+            execution_tools = CodeActionTools(self.context)
+            for i, task in enumerate(planning_output.tasks):
+                if isinstance(task, ReplaceCodePromptXml):
+                    execution_tools.replace_snippet_with(
+                        task.file_path,
+                        task.repo_name,
+                        task.reference_snippet,
+                        task.new_snippet,
+                        task.commit_message,
+                    )
+                elif isinstance(task, CreateFilePromptXml):
+                    execution_tools.create_file(
+                        task.file_path,
+                        task.repo_name,
+                        task.snippet,
+                        task.commit_message,
+                    )
 
             prs = self._create_prs(
-                planning_output.title,
-                planning_output.description,
-                planning_output.steps,
+                "test",
+                "test",
+                [],
                 request,
             )
 
@@ -202,8 +194,8 @@ class Autofix(Pipeline):
                 # TODO: Support more than 1 PR...
                 pr = prs[0]
                 output = AutofixOutput(
-                    title=planning_output.title,
-                    description=planning_output.description,
+                    title="test",
+                    description="test",
                     pr_url=pr.pr_url,
                     repo_name=f"{pr.repo.owner}/{pr.repo.name}",
                     pr_number=pr.pr_number,
@@ -332,27 +324,3 @@ class Autofix(Pipeline):
                 return prs
 
         return prs
-
-    @traceable(name="Executor with Retriever", run_type="llm")
-    def run_executor_with_retriever(
-        self,
-        retriever: RetrieverComponent,
-        executor: ExecutorComponent,
-        step: PlanStep,
-        event_details: EventDetails,
-    ):
-        retriever_output = retriever.invoke(
-            RetrieverRequest(
-                text=step.text,
-            )
-        )
-
-        executor.invoke(
-            ExecutorRequest(
-                event_details=event_details,
-                retriever_dump=(
-                    retriever_output.to_xml().to_prompt_str() if retriever_output else None
-                ),
-                task=step.text,
-            )
-        )
