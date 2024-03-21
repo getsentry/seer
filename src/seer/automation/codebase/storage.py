@@ -47,10 +47,10 @@ class CodebaseIndexStorage:
         )
         session.execute(insert_stmt)
 
-    def _local_paths_of(self, chunks: list[BaseDocumentChunk]) -> list[str]:
+    def _local_paths_of(self, chunks: Sequence[BaseDocumentChunk]) -> list[str]:
         return list(set(chunk.path for chunk in chunks))
 
-    def _remove_chunks(self, chunks: list[BaseDocumentChunk], session: sqlalchemy.orm.Session):
+    def _remove_chunks(self, chunks: Sequence[BaseDocumentChunk], session: sqlalchemy.orm.Session):
         session.query(DbDocumentChunk).filter(
             DbDocumentChunk.repo_id == self.repo_id,
             DbDocumentChunk.namespace == self.namespace,
@@ -209,7 +209,7 @@ class CodebaseIndexStorage:
             except IntegrityError as e:
                 session.rollback()
 
-                db_info = (
+                maybe_db_info = (
                     session.query(DbRepositoryInfo)
                     .where(
                         DbRepositoryInfo.organization == organization,
@@ -219,9 +219,10 @@ class CodebaseIndexStorage:
                     )
                     .one_or_none()
                 )
-                if db_info is None:
+                if maybe_db_info is None:
                     # If we can't recover the existing repository info, the original
                     # integrity error has the most context on why, so raise that.
                     raise e
+                db_info = maybe_db_info
 
             return cls(repo_id=db_info.id, namespace=namespace)
