@@ -157,9 +157,8 @@ class GroupingLookup:
                 .limit(issue.k)
                 .all()
             )
-            # If no existing groups within the threshold, insert the request as a new GroupingRecord
-            if not any(distance <= issue.threshold for _, distance in results):
-                self.insert_new_grouping_record(session, issue, embedding)
+
+            self.insert_new_grouping_record(session, issue, embedding)
 
             session.commit()
 
