@@ -2,6 +2,8 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
+from johen import generate
+
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
 from seer.automation.autofix.components.planner.models import PlanningOutput, PlanStep
 from seer.automation.autofix.components.retriever import RetrieverOutput
@@ -12,7 +14,6 @@ from seer.automation.autofix.models import (
     SentryEventData,
 )
 from seer.automation.models import FileChange, FilePatch
-from seer.generator import generate
 
 
 class TestAutofixPipeline(unittest.TestCase):
@@ -118,8 +119,11 @@ class TestAutofixPipeline(unittest.TestCase):
     ):
         from seer.automation.autofix.autofix import Autofix
 
-        request: AutofixRequest = next(generate(AutofixRequest))
-        request.repos = [next(generate(RepoDefinition)), next(generate(RepoDefinition))]
+        request: AutofixRequest = next(generate(AutofixRequest, seed=0))
+        request.repos = [
+            next(generate(RepoDefinition, seed=0)),
+            next(generate(RepoDefinition, seed=0)),
+        ]
         autofix = Autofix(mock_autofix_context)
 
         mock_problem_discovery_component.return_value.invoke.return_value = ProblemDiscoveryOutput(

@@ -1,7 +1,11 @@
+import hashlib
 import textwrap
-from typing import Optional
+from typing import Annotated, Optional
 
 import numpy as np
+from johen import gen
+from johen.examples import Examples
+from johen.generators import specialized
 from pydantic import BaseModel
 
 from seer.db import DbDocumentChunk, DbRepositoryInfo
@@ -13,13 +17,17 @@ class Document(BaseModel):
     language: str
 
 
+lorem_ipsum_parts = "lLorem ipsum dolor sit amet, consectetur adipiscing elit.".split()
+lorem_ipsum = (" ".join(r.choice(lorem_ipsum_parts) for _ in range(r.randint(15, 90))) for r in gen)
+
+
 class BaseDocumentChunk(BaseModel):
     id: Optional[int] = None
-    content: str
+    content: Annotated[str, Examples(lorem_ipsum)]
     context: Optional[str]
-    language: str
-    hash: str
-    path: str
+    language: Annotated[str, Examples(("python",))]
+    hash: Annotated[str, Examples(hashlib.sha1(s).hexdigest() for s in specialized.byte_strings)]
+    path: Annotated[str, Examples(specialized.file_paths)]
     index: int
     token_count: int
 
@@ -69,7 +77,7 @@ class BaseDocumentChunk(BaseModel):
 
 
 class EmbeddedDocumentChunk(BaseDocumentChunk):
-    embedding: np.ndarray
+    embedding: Annotated[np.ndarray, Examples(np.full(768, r.random()) for r in gen)]
 
     def to_db_model(self, repo_id: int, namespace: str | None = None) -> DbDocumentChunk:
         db_chunk = self.to_partial_db_model(repo_id, namespace)
