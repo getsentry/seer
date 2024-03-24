@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import os
 from typing import Any
 
 import sentry_sdk
@@ -17,16 +18,17 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     AutofixStepUpdateArgs,
 )
+from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
 from seer.automation.state import LocalMemoryState
-from seer.rpc import RpcClient, SentryRpcClient
+from seer.rpc import RpcClient
 
 logger = logging.getLogger("autofix")
 
 
 @dataclasses.dataclass
 class ContinuationState(LocalMemoryState[AutofixContinuation]):
-    rpc_client: RpcClient = dataclasses.field(default_factory=SentryRpcClient)
+    rpc_client: RpcClient = dataclasses.field(default_factory=get_sentry_client)
 
     def reload_state_from_sentry(self) -> bool:
         try:

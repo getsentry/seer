@@ -1,9 +1,12 @@
 import difflib
 import logging
+import os
 import random
 import re
 from typing import List
 from xml.etree import ElementTree as ET
+
+from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
 
 autofix_logger = logging.getLogger("autofix")
 
@@ -195,3 +198,12 @@ def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
         return (el.text or "").strip()
 
     return None
+
+
+def get_sentry_client() -> RpcClient:
+    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+        rpc_client: DummyRpcClient = DummyRpcClient()
+        rpc_client.dry_run = True
+        return rpc_client
+    else:
+        return SentryRpcClient()
