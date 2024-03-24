@@ -90,8 +90,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             )
             session.commit()
 
-        self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.return_value = [
+        self.codebase_index.embed_chunks = MagicMock()
+        self.codebase_index.embed_chunks.return_value = [
             EmbeddedDocumentChunk(
                 id=1,
                 context="context",
@@ -209,8 +209,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
 
             session.commit()
 
-        self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.side_effect = self.mock_embed_chunks
+        self.codebase_index.embed_chunks = MagicMock()
+        self.codebase_index.embed_chunks.side_effect = self.mock_embed_chunks
 
         # Execute
         self.codebase_index.update()
@@ -290,8 +290,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
 
             session.commit()
 
-        self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.side_effect = self.mock_embed_chunks
+        self.codebase_index.embed_chunks = MagicMock()
+        self.codebase_index.embed_chunks.side_effect = self.mock_embed_chunks
 
         # Execute
         self.codebase_index.update()
@@ -391,8 +391,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
 
             session.commit()
 
-        self.codebase_index._embed_chunks = MagicMock()
-        self.codebase_index._embed_chunks.side_effect = self.mock_embed_chunks
+        self.codebase_index.embed_chunks = MagicMock()
+        self.codebase_index.embed_chunks.side_effect = self.mock_embed_chunks
 
         # Execute
         self.codebase_index.update(is_temporary=True)
