@@ -124,7 +124,7 @@ class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
         )
 
     def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
-        return self.get_prompt_xml(
+        return super().get_prompt_xml(
             repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
         )
 
