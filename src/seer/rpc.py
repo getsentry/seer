@@ -121,6 +121,7 @@ class SentryRpcClient(RpcClient):
         body_bytes, endpoint, headers = self._prepare_request(method, kwargs)
         async with contextlib.AsyncExitStack() as stack:
             if session is None:
+
                 session = aiohttp.ClientSession()
             await stack.enter_async_context(session)
             response = await stack.enter_async_context(
@@ -137,7 +138,7 @@ class SentryRpcClient(RpcClient):
         url_path = f"/api/0/internal/seer-rpc/{method}/"
         endpoint = f"{self.base_url}{url_path}"
         body_dict = {"args": kwargs}
-        body = json_dumps(body_dict, separators=(",", ":"))
+        body = json.dumps(body_dict, cls=SeerJSONEncoder, separators=(",", ":"))
         body_bytes = body.encode("utf-8")
         signature = self._generate_request_signature(url_path, body_bytes)
         headers = {
