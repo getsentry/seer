@@ -49,3 +49,14 @@ pytest_plugins = (
 @pytest.fixture(scope="session")
 def celery_config():
     return CELERY_CONFIG
+
+
+import johen
+from johen.generators import pydantic, sqlalchemy
+
+johen.global_config["matchers"].extend(
+    [
+        pydantic.generate_pydantic_instances,
+        sqlalchemy.generate_sqlalchemy_instance,
+    ]
+)

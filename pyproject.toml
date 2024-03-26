@@ -36,7 +36,9 @@ module = [
     "fsspec",
     "unidiff",
     "tree_sitter_languages",
-    "tree_sitter"
+    "tree_sitter",
+    "johen.*",
+    "johen",
 ]
 ignore_missing_imports = true
 

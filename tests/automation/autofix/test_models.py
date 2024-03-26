@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from johen.pytest import parametrize
 from pydantic import ValidationError
 
 from seer.automation.autofix.models import (
@@ -14,7 +15,6 @@ from seer.automation.autofix.models import (
     Stacktrace,
     StacktraceFrame,
 )
-from seer.generator import parameterize
 from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry, SentryFrameDict
 
 
@@ -157,13 +157,13 @@ class TestAutofixRequest(unittest.TestCase):
         self.assertEqual(len(autofix_request.repos), 2)
 
 
-@parameterize
+@parametrize
 def test_event_no_exception_events(event: SentryEventData, entry: InvalidEventEntry):
     event["entries"] = [entry]
     assert len(EventDetails.from_event(event).exceptions) is 0
 
 
-@parameterize
+@parametrize
 def test_event_get_stacktrace_empty_frames(
     event: SentryEventData, entry: NoStacktraceExceptionEntry
 ):
@@ -173,7 +173,7 @@ def test_event_get_stacktrace_empty_frames(
     assert len(event_details.exceptions[0].stacktrace.frames) == 0
 
 
-@parameterize
+@parametrize
 def test_event_get_stacktrace_invalid_entry(
     event: SentryEventData,
     invalid: InvalidEventEntry,
@@ -192,7 +192,7 @@ def test_event_get_stacktrace_invalid_entry(
     )
 
 
-@parameterize
+@parametrize
 def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
     stack_str = stacktrace.to_str()
 

@@ -36,7 +36,7 @@ jobs:
     - name: Fetch models + Build image
       run: |
         rm -rf ./models
-        gcloud storage cp -r gs://tmp_tillman/models ./
+        gcloud storage cp -r gs://sentry-ml/seer/models ./
     - name: Build image
       run: |
         make update

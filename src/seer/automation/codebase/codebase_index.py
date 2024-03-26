@@ -161,7 +161,7 @@ class CodebaseIndex:
             with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
                 chunks = doc_parser.process_documents(documents)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
-                embedded_chunks = cls._embed_chunks(chunks, embedding_model)
+                embedded_chunks = cls.embed_chunks(chunks, embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
@@ -258,7 +258,7 @@ class CodebaseIndex:
                     chunks_to_update.append((db_chunk, chunk))
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
-                embedded_chunks_to_add = self._embed_chunks(chunks_to_add, self.embedding_model)
+                embedded_chunks_to_add = self.embed_chunks(chunks_to_add, self.embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
             with Session() as session:
@@ -334,7 +334,7 @@ class CodebaseIndex:
             cleanup_dir(tmp_dir)
 
     @classmethod
-    def _embed_chunks(
+    def embed_chunks(
         cls, chunks: list[BaseDocumentChunk], embedding_model: SentenceTransformer
     ) -> list[EmbeddedDocumentChunk]:
         logger.debug(f"Embedding {len(chunks)} chunks...")
@@ -462,7 +462,7 @@ class CodebaseIndex:
 
             doc_parser = DocumentParser(self.embedding_model)
             chunks = doc_parser.process_document(document)
-            embedded_chunks = self._embed_chunks(chunks, self.embedding_model)
+            embedded_chunks = self.embed_chunks(chunks, self.embedding_model)
 
             db_chunks: list[DbDocumentChunk] = []
             for chunk in embedded_chunks:

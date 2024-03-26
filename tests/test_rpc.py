@@ -8,16 +8,16 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from queue import Queue
-from typing import Annotated, Iterator, Type
+from typing import Iterator, Type
 
 import pytest
 from aiohttp import ClientResponseError
-from aiohttp.http_exceptions import HttpProcessingError
+from johen import gen
+from johen.pytest import parametrize
 from pydantic import BaseModel
 from requests.models import HTTPError
 
 from seer.automation.autofix.models import AutofixCompleteArgs, AutofixStepUpdateArgs
-from seer.generator import Examples, gen, generate, parameterize
 from seer.rpc import SentryRpcClient
 from seer.utils import closing_queue
 
@@ -79,9 +79,11 @@ class TestRpcHttpServer:
             thread.join()
 
 
-@parameterize(args=gen.one_of(generate(AutofixCompleteArgs), generate(AutofixStepUpdateArgs)))
+@parametrize
 def test_rpc_call_200_json(
-    test_server: TestRpcHttpServer, args: BaseModel, expected_result: dict[str, int]
+    test_server: TestRpcHttpServer,
+    args: AutofixCompleteArgs | AutofixStepUpdateArgs,
+    expected_result: dict[str, int],
 ):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
@@ -101,7 +103,7 @@ def test_rpc_call_200_json(
         future.result()
 
 
-@parameterize
+@parametrize
 def test_rpc_call_200_empty(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
@@ -122,7 +124,7 @@ def test_rpc_call_200_empty(test_server: TestRpcHttpServer):
         future.result()
 
 
-@parameterize(count=1)
+@parametrize(count=1)
 def test_rpc_call_404(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
@@ -142,9 +144,11 @@ def test_rpc_call_404(test_server: TestRpcHttpServer):
 
 
 @pytest.mark.asyncio
-@parameterize(args=gen.one_of(generate(AutofixCompleteArgs), generate(AutofixStepUpdateArgs)))
+@parametrize
 async def test_rpc_acall_200_json(
-    test_server: TestRpcHttpServer, args: BaseModel, expected_result: dict[str, int]
+    test_server: TestRpcHttpServer,
+    args: AutofixCompleteArgs | AutofixStepUpdateArgs,
+    expected_result: dict[str, int],
 ):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
@@ -165,7 +169,7 @@ async def test_rpc_acall_200_json(
 
 
 @pytest.mark.asyncio
-@parameterize
+@parametrize
 async def test_rpc_acall_200_empty(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
@@ -187,7 +191,7 @@ async def test_rpc_acall_200_empty(test_server: TestRpcHttpServer):
 
 
 @pytest.mark.asyncio
-@parameterize(count=1)
+@parametrize(count=1)
 async def test_rpc_acall_404(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
