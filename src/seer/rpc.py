@@ -15,6 +15,7 @@ from aiohttp.http_exceptions import HttpProcessingError
 from requests import HTTPError
 
 from seer.utils import json_dumps
+from seer.utils import SeerJSONEncoder
 
 logger = logging.getLogger(__name__)
 
