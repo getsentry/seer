@@ -128,11 +128,6 @@ class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
             repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
         )
 
-    def get_prompt_xml(self, include_short_hash_as_id: bool = False):
-        return self._get_prompt_xml(
-            self.repo_name, include_short_hash_as_id=include_short_hash_as_id
-        )
-
 
 class RepositoryInfo(BaseModel):
     id: int
