@@ -51,19 +51,18 @@ class BaseDocumentChunk(BaseModel):
             content=self.content,
         )
 
-    def get_dump_for_llm(self, repo_name: str, include_short_hash_as_id: bool = False):
-        xml_chunk = self._get_prompt_xml(repo_name, include_short_hash_as_id)
+    def get_dump_for_llm(
+        self, repo_name: str | None = None, include_short_hash_as_id: bool = False
+    ):
+        xml_chunk = self.get_prompt_xml(repo_name or "", include_short_hash_as_id)
 
         return xml_chunk.to_prompt_str()
 
-    def get_prompt_xml(self, repo_name: str, include_short_hash_as_id: bool = False):
-        return self._get_prompt_xml(repo_name, include_short_hash_as_id)
-
-    def _get_prompt_xml(self, repo_name: str, include_short_hash_as_id: bool = False):
+    def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
         return DocumentChunkPromptXml(
             id=self.hash[:SHORT_HASH_LENGTH] if include_short_hash_as_id else None,
             path=self.path,
-            repo=repo_name,
+            repo=repo_name or "",
             content=(self.context if self.context else "") + self.content,
         )
 
@@ -117,14 +116,16 @@ class StoredDocumentChunk(EmbeddedDocumentChunk):
 class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
     repo_name: str
 
-    def get_dump_for_llm(self, include_short_hash_as_id: bool = False):
+    def get_dump_for_llm(
+        self, repo_name: str | None = None, include_short_hash_as_id: bool = False
+    ):
         return super().get_dump_for_llm(
-            self.repo_name, include_short_hash_as_id=include_short_hash_as_id
+            repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
         )
 
-    def get_prompt_xml(self, include_short_hash_as_id: bool = False):
-        return self._get_prompt_xml(
-            self.repo_name, include_short_hash_as_id=include_short_hash_as_id
+    def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
+        return self.get_prompt_xml(
+            repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
         )
 
 
