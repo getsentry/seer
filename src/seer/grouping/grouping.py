@@ -145,7 +145,7 @@ class GroupingLookup:
         """
         return self.model.encode(stacktrace)
 
-    def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1000) -> np.array:
+    def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1000) -> np.ndarray:
         """
         Encodes multiple stacktraces in batches using the sentence transformer model.
 
