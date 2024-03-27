@@ -1,5 +1,6 @@
 import dataclasses
 import itertools
+import json
 import logging
 from collections import defaultdict
 from typing import Self, Sequence
@@ -20,6 +21,60 @@ logger = logging.getLogger("autofix")
 class CodebaseIndexStorage:
     repo_id: int
     namespace: str
+
+    def dump_namespace_to_json(self, session: sqlalchemy.orm.Session, output_file: str):
+        """
+        Dumps all DbDocumentChunks in the current namespace to a JSON file.
+
+        Args:
+            session (sqlalchemy.orm.Session): The database session to use for querying.
+            output_file (str): The path to the output JSON file.
+        """
+        # Query all document chunks in the current namespace
+        chunks = (
+            session.query(DbDocumentChunk).filter(DbDocumentChunk.repo_id == self.repo_id).all()
+        )
+
+        # Convert the chunks to a list of dictionaries
+        chunks_data = [dataclasses.asdict(chunk) for chunk in chunks]  # type: ignore
+
+        # Write the data to the specified JSON file
+        with open(output_file, "w") as f:
+            json.dump(chunks_data, f, indent=4)
+
+        logger.info(f"Dumped {len(chunks)} document chunks to '{output_file}'")
+
+    def load_namespace_from_json(self, session: sqlalchemy.orm.Session, input_file: str):
+        """
+        Loads document chunks from a JSON file into the current namespace.
+
+        Args:
+            session (sqlalchemy.orm.Session): The database session to use for querying.
+            input_file (str): The path to the input JSON file.
+        """
+        # Read the data from the specified JSON file
+        with open(input_file, "r") as f:
+            chunks_data = json.load(f)
+
+        session.query(DbDocumentChunk).filter(DbDocumentChunk.repo_id == self.repo_id).delete()
+
+        # Insert the chunks into the database
+        chunks = [
+            DbDocumentChunk(
+                repo_id=self.repo_id,
+                path=chunk["path"],
+                language=chunk["language"],
+                index=chunk["index"],
+                hash=chunk["hash"],
+                token_count=chunk["token_count"],
+                embedding=chunk["embedding"],
+                namespace=self.namespace,
+            )
+            for chunk in chunks_data
+        ]
+        session.add_all(chunks)
+
+        logger.info(f"Loaded {len(chunks)} document chunks from '{input_file}'")
 
     def delete_paths(self, paths: list[str], session: sqlalchemy.orm.Session):
         if not paths:
