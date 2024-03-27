@@ -25,6 +25,7 @@ from seer.automation.codebase.models import (
     EmbeddedDocumentChunk,
     RepositoryInfo,
     StoredDocumentChunk,
+    StoredDocumentChunkWithRepoName,
 )
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
@@ -502,13 +503,15 @@ class CodebaseIndex:
                             frame.filename = valid_path
                             break
 
-    def _populate_chunks(self, chunks: list[DbDocumentChunk]) -> list[StoredDocumentChunk]:
+    def _populate_chunks(
+        self, chunks: list[DbDocumentChunk]
+    ) -> list[StoredDocumentChunkWithRepoName]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)
 
-        matched_chunks: list[StoredDocumentChunk] = []
+        matched_chunks: list[StoredDocumentChunkWithRepoName] = []
         for chunk in chunks:
             content = self._get_file_content_with_cache(chunk.path, self.repo_info.sha)
 
@@ -530,20 +533,21 @@ class CodebaseIndex:
                 logger.warning(f"Failed to match chunk with hash {chunk.hash}")
                 continue
 
-            matched_chunks.append(
-                StoredDocumentChunk(
-                    id=chunk.id,
-                    path=chunk.path,
-                    index=chunk.index,
-                    hash=chunk.hash,
-                    token_count=chunk.token_count,
-                    embedding=np.array(chunk.embedding),
-                    content=matched_chunk.content,
-                    context=matched_chunk.context,
-                    repo_id=chunk.repo_id,
-                    language=chunk.language,
-                )
+            populated_chunk = StoredDocumentChunkWithRepoName(
+                id=chunk.id,
+                path=chunk.path,
+                index=chunk.index,
+                hash=chunk.hash,
+                token_count=chunk.token_count,
+                embedding=np.array(chunk.embedding),
+                content=matched_chunk.content,
+                context=matched_chunk.context,
+                repo_id=chunk.repo_id,
+                language=chunk.language,
+                repo_name=self.repo_info.external_slug,
             )
+
+            matched_chunks.append(populated_chunk)
 
         return matched_chunks
 
