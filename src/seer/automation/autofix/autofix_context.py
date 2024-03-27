@@ -78,7 +78,6 @@ class AutofixContext(PipelineContext):
         repo_name: str | None = None,
         repo_id: int | None = None,
         top_k: int = 8,
-        expand=False,
     ) -> list[StoredDocumentChunkWithRepoName]:
         if repo_name:
             repo_id = next(
@@ -114,9 +113,7 @@ class AutofixContext(PipelineContext):
             populated_chunks: list[StoredDocumentChunkWithRepoName] = []
             for _repo_id, db_chunks_for_codebase in chunks_by_repo_id.items():
                 codebase = self.get_codebase(_repo_id)
-                populated_chunks.extend(
-                    codebase._populate_chunks(db_chunks_for_codebase, expand=expand)
-                )
+                populated_chunks.extend(codebase._populate_chunks(db_chunks_for_codebase))
 
             # Re-sort populated_chunks based on their original order in db_chunks
             db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}

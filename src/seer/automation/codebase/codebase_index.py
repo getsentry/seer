@@ -504,7 +504,7 @@ class CodebaseIndex:
                             break
 
     def _populate_chunks(
-        self, chunks: list[DbDocumentChunk], expand=False
+        self, chunks: list[DbDocumentChunk]
     ) -> list[StoredDocumentChunkWithRepoName]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
@@ -546,13 +546,6 @@ class CodebaseIndex:
                 language=chunk.language,
                 repo_name=self.repo_info.external_slug,
             )
-            if expand:
-                if chunk.index > 0:
-                    prev_neighbor = doc_chunks[chunk.index - 1]
-                    populated_chunk.content = prev_neighbor.content + "\n" + populated_chunk.content
-                if chunk.index < len(doc_chunks) - 1:
-                    next_neighbor = doc_chunks[chunk.index + 1]
-                    populated_chunk.content = populated_chunk.content + "\n" + next_neighbor.content
 
             matched_chunks.append(populated_chunk)
 
