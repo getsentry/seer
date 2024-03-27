@@ -42,8 +42,11 @@ class BaseDocumentChunk(BaseModel):
     index: int
     token_count: int
 
+    def get_short_hash(self) -> str:
+        return self.hash[:SHORT_HASH_LENGTH]
+
     def matches_short_hash(self, short_hash: str) -> bool:
-        return self.hash[:SHORT_HASH_LENGTH] == short_hash
+        return self.get_short_hash() == short_hash
 
     def get_dump_for_embedding(self):
         return """{context}{content}""".format(

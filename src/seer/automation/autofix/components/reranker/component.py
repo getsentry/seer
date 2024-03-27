@@ -1,3 +1,4 @@
+import sentry_sdk
 from langsmith import traceable
 
 from seer.automation.agent.client import GptClient
@@ -40,6 +41,11 @@ class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
             snippet_ids = RawRerankerResult.from_xml(
                 f"<research_result>{completion_result.content}</research_result>"
             ).snippet_ids
+
+            # Sanity log if we ever get a hash collision
+            all_snippet_ids = [chunk.get_short_hash() for chunk in request.chunks]
+            if len(all_snippet_ids) != len(set(all_snippet_ids)):
+                sentry_sdk.capture_message(f"Hash collision in reranker: {all_snippet_ids}")
 
             relevant_chunks = []
             for short_snippet_hash in snippet_ids:
