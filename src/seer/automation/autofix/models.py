@@ -17,7 +17,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
-)
+
 from pydantic.alias_generators import to_camel, to_snake
 from typing_extensions import NotRequired, TypedDict
 
@@ -33,7 +33,7 @@ class StacktraceFrame(BaseModel):
         )
     )
 
-    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
+    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = None
     filename: Annotated[str, Examples(specialized.file_names)]
     abs_path: Annotated[str, Examples(specialized.file_paths)]
     line_no: Optional[int]
