@@ -173,6 +173,13 @@ class EventDetails(BaseModel):
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
+                    if isinstance(exception, str):
+                        try:
+                            exception = json.loads(exception)
+                        except json.JSONDecodeError:
+                            continue
+                    if not isinstance(exception, dict):
+                        continue
                     exceptions.append(ExceptionDetails.model_validate(exception))
 
         return cls(title=error_event.get("title"), exceptions=exceptions)
