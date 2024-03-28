@@ -180,7 +180,10 @@ class EventDetails(BaseModel):
                             continue
                     if not isinstance(exception, dict):
                         continue
-                    exceptions.append(ExceptionDetails.model_validate(exception))
+                    try:
+                        exceptions.append(ExceptionDetails.model_validate(exception))
+                    except ValidationError as e:
+                        logger.error(f"Skipped exception due to invalid format: {e}")
 
         return cls(title=error_event.get("title"), exceptions=exceptions)
 
