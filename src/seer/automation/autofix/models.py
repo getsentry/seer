@@ -139,7 +139,7 @@ class SentryExceptionEventData(TypedDict):
 
 
 class SentryExceptionEntry(BaseModel):
-    type: Literal["exception"]
+type: Literal["exception"]
     data: SentryExceptionEventData
 
 
@@ -156,6 +156,7 @@ class ExceptionDetails(BaseModel):
     @field_validator("stacktrace", mode="before")
     @classmethod
     def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace | Stacktrace):
+        if sentry_stacktrace is None: return None
         return (
             Stacktrace.model_validate(sentry_stacktrace)
             if isinstance(sentry_stacktrace, dict)
