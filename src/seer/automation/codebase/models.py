@@ -7,7 +7,9 @@ from johen import gen
 from johen.examples import Examples
 from johen.generators import specialized
 from pydantic import BaseModel
+from pydantic_xml import attr
 
+from seer.automation.models import PromptXmlModel
 from seer.db import DbDocumentChunk, DbRepositoryInfo
 
 
@@ -20,6 +22,15 @@ class Document(BaseModel):
 lorem_ipsum_parts = "lLorem ipsum dolor sit amet, consectetur adipiscing elit.".split()
 lorem_ipsum = (" ".join(r.choice(lorem_ipsum_parts) for _ in range(r.randint(15, 90))) for r in gen)
 
+SHORT_HASH_LENGTH = 6
+
+
+class DocumentChunkPromptXml(PromptXmlModel, tag="chunk", skip_empty=True):
+    id: Optional[str] = attr(default=None)
+    path: str = attr()
+    repo: str = attr()
+    content: str
+
 
 class BaseDocumentChunk(BaseModel):
     id: Optional[int] = None
@@ -31,22 +42,31 @@ class BaseDocumentChunk(BaseModel):
     index: int
     token_count: int
 
+    def get_short_hash(self) -> str:
+        return self.hash[:SHORT_HASH_LENGTH]
+
+    def matches_short_hash(self, short_hash: str) -> bool:
+        return self.get_short_hash() == short_hash
+
     def get_dump_for_embedding(self):
         return """{context}{content}""".format(
             context=self.context if self.context else "",
             content=self.content,
         )
 
-    def get_dump_for_llm(self, repo_name: str):
-        return textwrap.dedent(
-            """\
-            ["{path}" in repo "{repo_name}"]
-            {context}{content}"""
-        ).format(
+    def get_dump_for_llm(
+        self, repo_name: str | None = None, include_short_hash_as_id: bool = False
+    ):
+        xml_chunk = self.get_prompt_xml(repo_name or "", include_short_hash_as_id)
+
+        return xml_chunk.to_prompt_str()
+
+    def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
+        return DocumentChunkPromptXml(
+            id=self.hash[:SHORT_HASH_LENGTH] if include_short_hash_as_id else None,
             path=self.path,
-            repo_name=repo_name,
-            context=self.context if self.context else "",
-            content=self.content,
+            repo=repo_name or "",
+            content=(self.context if self.context else "") + self.content,
         )
 
     def to_partial_db_model(self, repo_id: int, namespace: str | None = None) -> DbDocumentChunk:
@@ -94,6 +114,22 @@ class EmbeddedDocumentChunk(BaseDocumentChunk):
 class StoredDocumentChunk(EmbeddedDocumentChunk):
     id: int
     repo_id: int
+
+
+class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
+    repo_name: str
+
+    def get_dump_for_llm(
+        self, repo_name: str | None = None, include_short_hash_as_id: bool = False
+    ):
+        return super().get_dump_for_llm(
+            repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
+        )
+
+    def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
+        return super().get_prompt_xml(
+            repo_name or self.repo_name, include_short_hash_as_id=include_short_hash_as_id
+        )
 
 
 class RepositoryInfo(BaseModel):

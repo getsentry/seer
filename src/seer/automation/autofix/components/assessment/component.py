@@ -15,9 +15,6 @@ from seer.automation.component import BaseComponent
 class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDiscoveryOutput]):
     context: AutofixContext
 
-    def __init__(self, context: AutofixContext):
-        super().__init__(context)
-
     @traceable(name="Problem Discovery", run_type="llm", tags=["problem_discovery:v1.2"])
     def invoke(self, request: ProblemDiscoveryRequest) -> ProblemDiscoveryOutput | None:
         with self.context.state.update() as cur:
