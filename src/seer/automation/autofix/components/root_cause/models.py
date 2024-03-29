@@ -28,7 +28,7 @@ class RootCauseSuggestedFixSnippet(BaseModel):
 class RootCauseSuggestedFix(BaseModel):
     title: str
     description: str
-    snippet: RootCauseSuggestedFixSnippet
+    snippet: Optional[RootCauseSuggestedFixSnippet] = None
 
 
 class RootCauseSuggestedFixPromptXml(PromptXmlModel, tag="suggested_fix", skip_empty=True):
