@@ -6,7 +6,7 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.utils import autofix_logger
-from seer.automation.codebase.models import DocumentChunkPromptXml, StoredDocumentChunkWithRepoName
+from seer.automation.codebase.models import BaseDocumentChunk, DocumentChunkPromptXml
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import PromptXmlModel
 
@@ -22,7 +22,7 @@ class RetrieverOutputPromptXml(PromptXmlModel, tag="chunks"):
 
 
 class RetrieverOutput(BaseComponentOutput):
-    chunks: list[StoredDocumentChunkWithRepoName]
+    chunks: list[BaseDocumentChunk]
 
     def to_xml(self) -> RetrieverOutputPromptXml:
         return RetrieverOutputPromptXml(chunks=[chunk.get_prompt_xml() for chunk in self.chunks])
@@ -96,8 +96,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
             queries = data["queries"]
             autofix_logger.debug(f"Search queries: {queries}")
 
-            context_dump = ""
-            unique_chunks: dict[str, StoredDocumentChunkWithRepoName] = {}
+            unique_chunks: dict[str, BaseDocumentChunk] = {}
             for query in queries:
                 retrived_chunks = self.context.query(query, top_k=request.repo_top_k)
                 for chunk in retrived_chunks:
@@ -105,8 +104,5 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
             chunks = list(unique_chunks.values())
 
             autofix_logger.debug(f"Retrieved {len(chunks)} unique chunks.")
-
-            for chunk in chunks:
-                context_dump += f"\n\n{chunk.get_dump_for_llm(include_short_hash_as_id=request.include_short_hash_as_id)}"
 
             return RetrieverOutput(chunks=chunks)

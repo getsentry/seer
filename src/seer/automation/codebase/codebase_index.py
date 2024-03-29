@@ -21,14 +21,15 @@ from seer.automation.codebase.ast import (
 )
 from seer.automation.codebase.models import (
     BaseDocumentChunk,
+    ChunkQueryResult,
+    CodebaseNamespace,
     Document,
     EmbeddedDocumentChunk,
     RepositoryInfo,
-    StoredDocumentChunk,
-    StoredDocumentChunkWithRepoName,
 )
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.storage import CodebaseIndexStorage
 from seer.automation.codebase.utils import (
     cleanup_dir,
     get_language_from_path,
@@ -38,7 +39,13 @@ from seer.automation.codebase.utils import (
     read_specific_files,
 )
 from seer.automation.models import FileChange, FilePatch, Hunk, Line
-from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Session
+from seer.db import (
+    DbCodebaseNamespace,
+    DbDocumentChunk,
+    DbDocumentTombstone,
+    DbRepositoryInfo,
+    Session,
+)
 from seer.utils import batch_save_to_db, class_method_lru_cache
 
 logger = logging.getLogger("autofix")
@@ -50,22 +57,29 @@ class CodebaseIndex:
         organization: int,
         project: int,
         repo_client: RepoClient,
-        repo_info: RepositoryInfo,
         run_id: uuid.UUID,
+        storage: CodebaseIndexStorage,
         embedding_model: SentenceTransformer,
     ):
         self.repo_client = repo_client
         self.organization = organization
         self.project = project
-        self.repo_info = repo_info
         self.file_changes: list[FileChange] = []
         self.run_id = run_id
         self.embedding_model = embedding_model
-        self.working_sha = self.repo_client.get_default_branch_head_sha()
+        self.storage = storage
 
         logger.info(
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
         )
+
+    @property
+    def repo_info(self) -> RepositoryInfo:
+        return self.storage.repo_info
+
+    @property
+    def namespace(self) -> CodebaseNamespace:
+        return self.storage.namespace
 
     @staticmethod
     def has_repo_been_indexed(organization: int, project: int, repo: RepoDefinition):
@@ -88,29 +102,27 @@ class CodebaseIndex:
         organization: int,
         project: int,
         repo: RepoDefinition,
+        sha: str | None,
+        tracking_branch: str | None,
         run_id: uuid.UUID,
         embedding_model: SentenceTransformer,
     ):
-        db_repo_info = (
-            Session()
-            .query(DbRepositoryInfo)
-            .filter(
-                DbRepositoryInfo.organization == organization,
-                DbRepositoryInfo.project == project,
-                DbRepositoryInfo.provider == repo.provider,
-                DbRepositoryInfo.external_slug == f"{repo.owner}/{repo.name}",
-            )
-            .one_or_none()
+        storage = CodebaseIndexStorage.load_workspace_for_repo_definition(
+            organization=organization,
+            project=project,
+            repo=repo,
+            sha=sha,
+            tracking_branch=tracking_branch,
         )
-        if db_repo_info:
-            repo_info = RepositoryInfo.from_db(db_repo_info)
+
+        if storage:
             repo_client = RepoClient(repo.provider, repo.owner, repo.name)
             return cls(
                 organization,
                 project,
                 repo_client,
-                repo_info,
                 run_id,
+                storage=storage,
                 embedding_model=embedding_model,
             )
 
@@ -144,10 +156,21 @@ class CodebaseIndex:
         repo: RepoDefinition,
         run_id: uuid.UUID,
         embedding_model: SentenceTransformer,
+        tracking_branch: str | None = None,
+        sha: str | None = None,
     ):
         repo_client = RepoClient(repo.provider, repo.owner, repo.name)
 
-        head_sha = repo_client.get_default_branch_head_sha()
+        head_sha = sha
+        branch = None
+
+        if tracking_branch:
+            branch = tracking_branch
+            head_sha = repo_client.get_branch_head_sha(branch)
+        elif not head_sha:
+            branch = repo_client.get_default_branch()
+            head_sha = repo_client.get_branch_head_sha(branch)
+
         tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
         try:
@@ -165,26 +188,16 @@ class CodebaseIndex:
                 embedded_chunks = cls.embed_chunks(chunks, embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
-            with Session() as session:
-                db_repo_info = DbRepositoryInfo(
-                    organization=organization,
-                    project=project,
-                    provider=repo_client.provider,
-                    external_slug=repo_client.repo.full_name,
-                    sha=head_sha,
-                )
-                session.add(db_repo_info)
-                session.flush()
-
-                db_chunks = [
-                    chunk.to_db_model(repo_id=db_repo_info.id) for chunk in embedded_chunks
-                ]
-
-                batch_save_to_db(session, db_chunks)
-
-                session.commit()
-
-                repo_info = RepositoryInfo.from_db(db_repo_info)
+            storage = CodebaseIndexStorage.get_or_create_namespace_for_repo(
+                organization=organization,
+                project=project,
+                provider=repo.provider,
+                external_slug=repo_client.repo.full_name,
+                head_sha=head_sha,
+                tracking_branch=branch,
+            )
+            storage.insert_chunks(embedded_chunks)
+            storage.save()
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
@@ -192,15 +205,18 @@ class CodebaseIndex:
                 organization,
                 project,
                 repo_client,
-                repo_info,
                 run_id,
+                storage=storage,
                 embedding_model=embedding_model,
             )
         finally:
             cleanup_dir(tmp_dir)
 
+    def save(self):
+        self.storage.save()
+
     @traceable(name="Updating codebase index")
-    def update(self, sha: str | None = None, is_temporary: bool = False):
+    def update(self, sha: str | None = None):
         """
         Updates the codebase index to the latest state of the default branch if needed
         """
@@ -208,9 +224,8 @@ class CodebaseIndex:
             raise ValueError("Repository info is not set")
 
         target_sha = sha or self.repo_client.get_default_branch_head_sha()
-        self.working_sha = target_sha
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
-            self.repo_info.sha, target_sha
+            self.storage.namespace.sha, target_sha
         )
 
         if not changed_files and not removed_files:
@@ -231,104 +246,32 @@ class CodebaseIndex:
             with sentry_sdk.start_span(op="seer.automation.codebase.update.process_documents"):
                 chunks = doc_parser.process_documents(documents)
 
-            with Session() as session:
-                existing_chunks: list[DbDocumentChunk] = (
-                    session.query(DbDocumentChunk)
-                    .filter(
-                        DbDocumentChunk.repo_id == self.repo_info.id,
-                        DbDocumentChunk.path.in_(changed_files),
-                    )
-                    .all()
-                )
+            existing_chunks = self.storage.get_chunks_for_paths(changed_files)
 
-            db_chunk_hash_map = {chunk.hash: chunk for chunk in existing_chunks}
+            db_chunk_hashes = set(chunk.hash for chunk in existing_chunks)
             new_chunk_hashes = set([chunk.hash for chunk in chunks])
 
-            chunks_ids_that_no_longer_exist: set[int] = set()
-            for db_chunk in existing_chunks:
-                if db_chunk.hash not in new_chunk_hashes:
-                    chunks_ids_that_no_longer_exist.add(db_chunk.id)
+            chunks_hashes_that_no_longer_exist: set[str] = set()
+            for chunk_result in existing_chunks:
+                if chunk_result.hash not in new_chunk_hashes:
+                    chunks_hashes_that_no_longer_exist.add(chunk_result.hash)
 
             chunks_to_add: list[BaseDocumentChunk] = []
-            chunks_to_update: list[tuple[DbDocumentChunk, BaseDocumentChunk]] = []
+            chunks_to_update: list[BaseDocumentChunk] = []
             for chunk in chunks:
-                if chunk.hash not in db_chunk_hash_map:
+                if chunk.hash not in db_chunk_hashes:
                     chunks_to_add.append(chunk)
                 else:
-                    db_chunk = db_chunk_hash_map[chunk.hash]
-                    chunks_to_update.append((db_chunk, chunk))
+                    chunks_to_update.append(chunk)
 
             with sentry_sdk.start_span(op="seer.automation.codebase.update.embed_chunks"):
                 embedded_chunks_to_add = self.embed_chunks(chunks_to_add, self.embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
-            with Session() as session:
-                if not is_temporary:
-                    session.query(DbDocumentChunk).filter(
-                        DbDocumentChunk.id.in_(chunks_ids_that_no_longer_exist)
-                    ).delete(synchronize_session=False)
-
-                session.flush()
-
-                # Bulk update indices of the chunks that already exist
-                if not is_temporary:
-                    session.bulk_update_mappings(
-                        class_mapper(DbDocumentChunk),
-                        [
-                            {"id": db_chunk.id, "index": chunk.index}
-                            for db_chunk, chunk in chunks_to_update
-                        ],
-                    )
-                else:
-                    # Copy the chunks over to the temporary namespace
-                    db_chunks_with_namespace = []
-                    for db_chunk, chunk in chunks_to_update:
-                        new_db_chunk = chunk.to_partial_db_model(
-                            repo_id=self.repo_info.id, namespace=str(self.run_id)
-                        )
-                        new_db_chunk.embedding = db_chunk.embedding
-                        db_chunks_with_namespace.append(new_db_chunk)
-
-                    session.add_all(db_chunks_with_namespace)
-
-                session.flush()
-
-                new_db_chunks = [
-                    chunk.to_db_model(
-                        repo_id=self.repo_info.id,
-                        namespace=str(self.run_id) if is_temporary else None,
-                    )
-                    for chunk in embedded_chunks_to_add
-                ]
-                batch_save_to_db(session, new_db_chunks)
-
-                if removed_files:
-                    if is_temporary:
-                        document_tombstones = [
-                            DbDocumentTombstone(
-                                repo_id=self.repo_info.id,
-                                path=removed_file_path,
-                                namespace=str(self.run_id),
-                            )
-                            for removed_file_path in removed_files
-                        ]
-
-                        batch_save_to_db(session, document_tombstones)
-                    else:
-                        session.query(DbDocumentChunk).filter(
-                            DbDocumentChunk.repo_id == self.repo_info.id,
-                            DbDocumentChunk.path.in_(removed_files),
-                        ).delete(synchronize_session=False)
-
-                self.repo_info.sha = target_sha
-
-                if not is_temporary:
-                    db_repo_info = session.get(DbRepositoryInfo, self.repo_info.id)
-                    if db_repo_info is None:
-                        raise ValueError(f"Repository info with id {self.repo_info.id} not found")
-                    db_repo_info.sha = target_sha
-
-                session.commit()
+            self.storage.delete_chunks(list(chunks_hashes_that_no_longer_exist))
+            self.storage.update_chunks_metadata(chunks_to_update)
+            self.storage.insert_chunks(embedded_chunks_to_add)
+            self.storage.delete_paths(removed_files)
 
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
@@ -342,11 +285,11 @@ class CodebaseIndex:
         embeddings_list: list[np.ndarray] = []
 
         with tqdm(total=len(chunks)) as pbar:
-            for i in range(0, len(chunks), superchunk_size := 256):
+            for i in range(0, len(chunks), superchunk_size := 1024):
                 batch_embeddings: np.ndarray = embedding_model.encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=4,
-                    show_progress_bar=True,
+                    batch_size=8,
+                    show_progress_bar=False,
                 )
                 embeddings_list.extend(batch_embeddings)
                 pbar.update(superchunk_size)
@@ -371,33 +314,27 @@ class CodebaseIndex:
         if not self.repo_info:
             raise ValueError("Repository info is not set")
 
-        head_sha = self.repo_client.get_default_branch_head_sha()
+        if self.namespace.tracking_branch:
+            head_sha = self.repo_client.get_branch_head_sha(self.namespace.tracking_branch)
+            return self.repo_client.compare(self.namespace.sha, head_sha).ahead_by > 0
 
-        return self.repo_client.compare(self.repo_info.sha, head_sha).ahead_by > 0
+        return False
 
     def query(self, query: str, top_k: int = 4):
         assert self.repo_info is not None, "Repository info is not set"
 
         embedding = self.embedding_model.encode(query, show_progress_bar=False)
 
-        with Session() as session:
-            db_chunks = (
-                session.query(DbDocumentChunk)
-                .filter(
-                    DbDocumentChunk.repo_id == self.repo_info.id,
-                    (DbDocumentChunk.namespace == str(self.run_id))
-                    | (DbDocumentChunk.namespace.is_(None)),
-                )
-                .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
-                .limit(top_k)
-                .all()
-            )
+        hashes = self.storage.query_chunks(embedding, top_k)
 
-            return self._populate_chunks(db_chunks)
+        return self._get_chunks(hashes)
 
     @class_method_lru_cache(maxsize=32)
     def _get_file_content_with_cache(self, path: str, sha: str):
-        return self.repo_client.get_file_content(path, sha)
+        try:
+            return self.repo_client.get_file_content(path, sha)
+        except Exception as e:
+            return None
 
     def _copy_document_with_local_changes(self, document: Document) -> Document | None:
         content: str | None = document.text
@@ -415,10 +352,7 @@ class CodebaseIndex:
     def get_document(self, path: str, ignore_local_changes=False) -> Document | None:
         assert self.repo_info is not None, "Repository info is not set"
 
-        document_content = self._get_file_content_with_cache(path, self.working_sha)
-
-        if document_content is None:
-            return None
+        document_content = self._get_file_content_with_cache(path, self.namespace.sha)
 
         language = get_language_from_path(path)
 
@@ -426,7 +360,7 @@ class CodebaseIndex:
             logger.warning(f"Unsupported language for {path}")
             return None
 
-        document = Document(path=path, text=document_content, language=language)
+        document = Document(path=path, text=document_content or "", language=language)
 
         if not ignore_local_changes:
             return self._copy_document_with_local_changes(document)
@@ -436,60 +370,40 @@ class CodebaseIndex:
     def store_file_change(self, file_change: FileChange):
         self.file_changes.append(file_change)
 
-        document = self.get_document(file_change.path)
-        if document is None:
-            logger.warning(
-                f"Failed to get document for {file_change.path} when storing file change..."
+        document = None
+        if file_change.change_type != "create":
+            document = self.get_document(file_change.path)
+            if document is None:
+                logger.warning(
+                    f"Failed to get document for {file_change.path} when storing file change..."
+                )
+                return
+        else:
+            document = Document(
+                path=file_change.path,
+                text="",
+                language=get_language_from_path(file_change.path) or "unknown",
             )
-            return
 
         new_content = file_change.apply(document.text)
 
+        self.storage.delete_paths([document.path])
+
         if new_content is not None:
-            self.update_document_temporarily(document)
-
-        # TODO: How to handle deleting documents temporarily?
-
-    def update_document_temporarily(self, document: Document):
-        assert self.repo_info is not None, "Repository info is not set"
-
-        with Session() as session:
-            # Delete the entire document from the temporary chunks if it exists
-            session.query(DbDocumentChunk).filter(
-                DbDocumentChunk.repo_id == self.repo_info.id,
-                DbDocumentChunk.path == document.path,
-                DbDocumentChunk.namespace == str(self.run_id),
-            ).delete(synchronize_session=False)
+            document.text = new_content
 
             doc_parser = DocumentParser(self.embedding_model)
-            chunks = doc_parser.process_document(document)
-            embedded_chunks = self.embed_chunks(chunks, self.embedding_model)
+            doc_chunks = doc_parser.process_document(document)
 
-            db_chunks: list[DbDocumentChunk] = []
-            for chunk in embedded_chunks:
-                db_chunk = chunk.to_db_model(repo_id=self.repo_info.id)
-                db_chunk.namespace = str(self.run_id)
+            embedded_chunks = self.embed_chunks(doc_chunks, self.embedding_model)
 
-            batch_save_to_db(session, db_chunks)
-
-            session.commit()
+            self.storage.insert_chunks(embedded_chunks)
 
     def cleanup(self):
-        with Session() as session:
-            rows_to_delete = session.query(DbDocumentChunk).filter(
-                DbDocumentChunk.namespace == str(self.run_id)
-            )
-            rows_to_delete.delete(synchronize_session=False)
-            session.commit()
-
-            logger.debug(
-                f"Deleted {rows_to_delete.count()} rows from document_chunks for run_id {self.run_id}"
-            )
-
-        logger.info(f"Cleaned up temporary data for run_id {self.run_id}")
+        self.storage.cleanup()
 
     def process_stacktrace(self, stacktrace: Stacktrace):
-        valid_file_paths = self.repo_client.get_valid_file_paths(self.repo_info.sha)
+        valid_file_paths = self.repo_client.get_valid_file_paths(self.namespace.sha)
         for frame in stacktrace.frames:
             if frame.in_app and frame.repo_id is None:
                 if frame.filename in valid_file_paths:
@@ -503,51 +417,29 @@ class CodebaseIndex:
                             frame.filename = valid_path
                             break
 
-    def _populate_chunks(
-        self, chunks: list[DbDocumentChunk]
-    ) -> list[StoredDocumentChunkWithRepoName]:
+    def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[BaseDocumentChunk]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)
 
-        matched_chunks: list[StoredDocumentChunkWithRepoName] = []
-        for chunk in chunks:
-            content = self._get_file_content_with_cache(chunk.path, self.repo_info.sha)
+        matched_chunks: list[BaseDocumentChunk] = []
+        for chunk_result in chunk_results:
+            document = self.get_document(chunk_result.path)
 
-            if content is None:
-                logger.warning(f"Failed to get content for {chunk.path}")
+            if document is None:
+                logger.warning(f"Failed to get content for {chunk_result.path}")
                 # TODO: How to handle this?
                 continue
 
-            doc_chunks = doc_parser.process_document(
-                Document(
-                    path=chunk.path,
-                    text=content,
-                    language=chunk.language,
-                )
-            )
-            matched_chunk = next((c for c in doc_chunks if c.hash == chunk.hash), None)
+            doc_chunks = doc_parser.process_document(document)
+            matched_chunk = next((c for c in doc_chunks if c.hash == chunk_result.hash), None)
 
             if matched_chunk is None:
-                logger.warning(f"Failed to match chunk with hash {chunk.hash}")
+                logger.warning(f"Failed to match chunk with hash {chunk_result.hash}")
                 continue
 
-            populated_chunk = StoredDocumentChunkWithRepoName(
-                id=chunk.id,
-                path=chunk.path,
-                index=chunk.index,
-                hash=chunk.hash,
-                token_count=chunk.token_count,
-                embedding=np.array(chunk.embedding),
-                content=matched_chunk.content,
-                context=matched_chunk.context,
-                repo_id=chunk.repo_id,
-                language=chunk.language,
-                repo_name=self.repo_info.external_slug,
-            )
-
-            matched_chunks.append(populated_chunk)
+            matched_chunks.append(matched_chunk)
 
         return matched_chunks
 

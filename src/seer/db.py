@@ -165,8 +165,22 @@ class DbRepositoryInfo(Base):
     project: Mapped[int] = mapped_column(BigInteger, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
-    sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    sha: Mapped[str] = mapped_column(String(40), nullable=True)
+    default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
     __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
+
+
+class DbCodebaseNamespace(Base):
+    __tablename__ = "codebase_namespaces"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
+    sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("repo_id", "sha"),
+        db.UniqueConstraint("repo_id", "tracking_branch"),
+    )
 
 
 class DbDocumentChunk(Base):
