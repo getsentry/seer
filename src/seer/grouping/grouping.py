@@ -261,6 +261,7 @@ class GroupingLookup:
                 project_id=entry.project_id,
                 message=entry.message,
                 stacktrace_embedding=embeddings[i].astype("float32"),
+                stacktrace_hash=None,
             ).to_db_model()
             records.append(new_record)
         return records
@@ -291,7 +292,7 @@ class GroupingLookup:
                 stacktrace_hash=issue.stacktrace_hash,
             ).to_db_model()
             session.add(new_record)
-                        session.commit()
+            session.commit()
             return new_record.id
 
         return existing_record.id
