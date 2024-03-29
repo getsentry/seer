@@ -10,7 +10,7 @@ from seer.automation.autofix.components.root_cause.models import (
 )
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.tools import BaseTools
-from seer.automation.autofix.utils import autofix_logger
+from seer.automation.autofix.utils import autofix_logger, escape_multi_xml
 from seer.automation.component import BaseComponent
 
 
@@ -43,7 +43,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
                 return None
 
-            xml_response = MultipleRootCauseAnalysisOutputPromptXml.from_xml(response)
+            xml_response = MultipleRootCauseAnalysisOutputPromptXml.from_xml(escape_multi_xml(response, ['snippet']))
 
             return RootCauseAnalysisOutput(
                 causes=[cause.to_model() for cause in xml_response.causes]

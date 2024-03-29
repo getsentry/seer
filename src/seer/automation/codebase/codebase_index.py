@@ -25,9 +25,7 @@ from seer.automation.codebase.models import (
     CodebaseNamespace,
     Document,
     EmbeddedDocumentChunk,
-    RepositoryInfo,
-    StoredDocumentChunk,
-    StoredDocumentChunkWithRepoName,
+    RepositoryInfo
 )
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
@@ -389,8 +387,7 @@ class CodebaseIndex:
 
         new_content = file_change.apply(document.text)
 
-        if document:
-            self.storage.delete_paths([document.path])
+        self.storage.delete_paths([document.path])
 
         if new_content is not None:
             document.text = new_content

@@ -266,6 +266,17 @@ class CodebaseIndexStorage:
             namespace = CodebaseNamespace.from_db(db_namespace)
 
         return cls(repo_info, namespace)
+    
+    def chunk_hashes_exist(self, hashes: list[str]):
+        collection = self.client.get_collection("chunks")
+
+        results = collection.get(
+            ids=hashes,
+        )
+
+        ids = results["ids"]
+
+        return ids
 
     def insert_chunks(self, chunks: list[EmbeddedDocumentChunk]):
         collection = self.client.get_or_create_collection(

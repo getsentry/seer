@@ -10,7 +10,7 @@ from seer.automation.autofix.models import (
     Stacktrace,
 )
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import StoredDocumentChunk, StoredDocumentChunkWithRepoName
+from seer.automation.codebase.models import BaseDocumentChunk
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
@@ -79,7 +79,7 @@ class AutofixContext(PipelineContext):
         repo_name: str | None = None,
         repo_id: int | None = None,
         top_k: int = 8,
-    ) -> list[StoredDocumentChunkWithRepoName]:
+    ) -> list[BaseDocumentChunk]:
         if repo_name:
             repo_id = next(
                 (
@@ -92,35 +92,18 @@ class AutofixContext(PipelineContext):
 
         repo_ids = [repo_id] if repo_id is not None else list(self.codebases.keys())
 
-        embedding = self.embedding_model.encode(query)
+        codebases = [self.get_codebase(repo_id) for repo_id in repo_ids]
+        chunks = []
+        for codebase in codebases:
+            codebase_chunks = codebase.query(query, top_k=top_k)
 
-        with Session() as session:
-            db_chunks = (
-                session.query(DbDocumentChunk)
-                .filter(
-                    DbDocumentChunk.repo_id.in_(repo_ids),
-                    (DbDocumentChunk.namespace == str(self.run_id))
-                    | (DbDocumentChunk.namespace.is_(None)),
-                )
-                .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
-                .limit(top_k)
-                .all()
-            )
+            for chunk in codebase_chunks:
+                chunk.repo_name = codebase.repo_info.external_slug
+            
+            chunks.extend(codebase_chunks)
+        
+        return chunks
 
-            chunks_by_repo_id: dict[int, list[DbDocumentChunk]] = {}
-            for db_chunk in db_chunks:
-                chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
-
-            populated_chunks: list[StoredDocumentChunkWithRepoName] = []
-            for _repo_id, db_chunks_for_codebase in chunks_by_repo_id.items():
-                codebase = self.get_codebase(_repo_id)
-                populated_chunks.extend(codebase._populate_chunks(db_chunks_for_codebase))
-
-            # Re-sort populated_chunks based on their original order in db_chunks
-            db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
-            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
-
-        return populated_chunks
 
     def get_document_and_codebase(
         self, path: str, repo_name: str | None = None, repo_id: int | None = None

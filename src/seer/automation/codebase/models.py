@@ -47,6 +47,7 @@ class BaseDocumentChunk(BaseModel):
     path: Annotated[str, Examples(specialized.file_paths)]
     index: int
     token_count: int
+    repo_name: Optional[str] = None
 
     def get_short_hash(self) -> str:
         return self.hash[:SHORT_HASH_LENGTH]
@@ -61,17 +62,17 @@ class BaseDocumentChunk(BaseModel):
         )
 
     def get_dump_for_llm(
-        self, repo_name: str | None = None, include_short_hash_as_id: bool = False
+        self, include_short_hash_as_id: bool = False
     ):
-        xml_chunk = self.get_prompt_xml(repo_name or "", include_short_hash_as_id)
+        xml_chunk = self.get_prompt_xml(include_short_hash_as_id)
 
         return xml_chunk.to_prompt_str()
 
-    def get_prompt_xml(self, repo_name: str | None = None, include_short_hash_as_id: bool = False):
+    def get_prompt_xml(self, include_short_hash_as_id: bool = False):
         return DocumentChunkPromptXml(
             id=self.hash[:SHORT_HASH_LENGTH] if include_short_hash_as_id else None,
             path=self.path,
-            repo=repo_name or "",
+            repo=self.repo_name or "",
             content=(self.context if self.context else "") + self.content,
         )
 
@@ -113,10 +114,6 @@ class BaseDocumentChunk(BaseModel):
 
 class StoredDocumentChunk(BaseDocumentChunk):
     repo_id: int
-
-
-class StoredDocumentChunkWithRepoName(StoredDocumentChunk):
-    repo_name: str
 
 
 class EmbeddedDocumentChunk(BaseDocumentChunk):
