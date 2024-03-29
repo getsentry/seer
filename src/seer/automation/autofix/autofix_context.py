@@ -31,6 +31,7 @@ class AutofixContext(PipelineContext):
         repos: list[RepoDefinition],
         event_manager: AutofixEventManager,
         state: State[AutofixContinuation],
+        sha: str,
         embedding_model: SentenceTransformer | None = None,
     ):
         self.organization_id = organization_id
@@ -42,7 +43,7 @@ class AutofixContext(PipelineContext):
 
         for repo in repos:
             codebase_index = CodebaseIndex.from_repo_definition(
-                organization_id, project_id, repo, self.run_id, embedding_model=self.embedding_model
+                organization_id, project_id, repo, sha, None, self.run_id, embedding_model=self.embedding_model
             )
 
             if codebase_index:

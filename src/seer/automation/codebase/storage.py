@@ -43,13 +43,13 @@ class CodebaseIndexStorage:
         return f"../data/chroma/workspaces/{repo_id}/{namespace_id}"
 
     @staticmethod
-    def get_storage_location(repo_id: int, namespace_id: int):
-        return f"../data/chroma/storage/{repo_id}/{namespace_id}"
+    def get_storage_location(repo_id: int, namespace_slug: str):
+        return f"../data/chroma/storage/{repo_id}/{namespace_slug}"
 
     @staticmethod
-    def copy_to_workspace(repo_id: int, namespace_id: int):
+    def copy_to_workspace(repo_id: int, namespace_id: int, namespace_slug: str):
         workspace_path = CodebaseIndexStorage.get_workspace_location(repo_id, namespace_id)
-        storage_path = CodebaseIndexStorage.get_storage_location(repo_id, namespace_id)
+        storage_path = CodebaseIndexStorage.get_storage_location(repo_id, namespace_slug)
 
         if os.path.exists(storage_path):
             shutil.copytree(storage_path, workspace_path, dirs_exist_ok=True)
@@ -115,8 +115,8 @@ class CodebaseIndexStorage:
 
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
-
-        did_copy = cls.copy_to_workspace(namespace.repo_id, namespace.id)
+        
+        did_copy = cls.copy_to_workspace(namespace.repo_id, namespace.id, namespace.slug)
         if did_copy:
             return cls(repo_info, namespace)
         return None
@@ -137,7 +137,7 @@ class CodebaseIndexStorage:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        did_copy = cls.copy_to_workspace(namespace.repo_id, namespace.id)
+        did_copy = cls.copy_to_workspace(namespace.repo_id, namespace.id, namespace.slug)
         if did_copy:
             return cls(repo_info, namespace)
         return None
@@ -272,19 +272,25 @@ class CodebaseIndexStorage:
             "chunks", metadata={"hnsw:space": "cosine"}
         )
 
+        BATCH_SIZE = 32768
+
         ids: list[str] = []
         embeddings: list[list[float]] = []
         metadatas: list[dict] = []
+
         for chunk in chunks:
             ids.append(chunk.hash)
             embeddings.append(chunk.embedding.tolist())
             metadatas.append(chunk.get_db_metadata())
 
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            metadatas=metadatas,
-        )
+            if len(ids) == BATCH_SIZE:
+                collection.add(ids=ids, embeddings=embeddings, metadatas=metadatas)
+                ids = []
+                embeddings = []
+                metadatas = []
+
+        if ids:
+            collection.add(ids=ids, embeddings=embeddings, metadatas=metadatas)
 
     def delete_paths(self, paths: list[str]):
         collection = self.client.get_collection("chunks")
@@ -346,7 +352,7 @@ class CodebaseIndexStorage:
 
     def save(self):
         workspace_path = self.get_workspace_location(self.namespace.repo_id, self.namespace.id)
-        storage_path = self.get_storage_location(self.namespace.repo_id, self.namespace.id)
+        storage_path = self.get_storage_location(self.namespace.repo_id, self.namespace.slug)
         shutil.copytree(workspace_path, storage_path, dirs_exist_ok=True)
 
         with Session() as session:

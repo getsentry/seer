@@ -141,3 +141,5 @@ models
 
 # Evaluation Data
 data/
+
+gcs

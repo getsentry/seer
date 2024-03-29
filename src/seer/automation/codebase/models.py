@@ -170,6 +170,12 @@ class CodebaseNamespace(BaseModel):
     sha: str
     tracking_branch: Optional[str]
 
+    @property
+    def slug(self):
+        if self.tracking_branch:
+            return self.tracking_branch
+        return self.sha
+
     @classmethod
     def from_db(cls, db_namespace: DbCodebaseNamespace) -> "CodebaseNamespace":
         return cls(
