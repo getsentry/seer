@@ -10,6 +10,7 @@ from seer.automation.autofix.models import (
     StacktraceFrame,
 )
 from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.rpc import DummyRpcClient
 
 
 class TestAutofixContext(unittest.TestCase):
@@ -18,6 +19,7 @@ class TestAutofixContext(unittest.TestCase):
         self.mock_repo_client = MagicMock()
         self.mock_codebase_index.repo_client = self.mock_repo_client
         self.autofix_context = AutofixContext(
+            DummyRpcClient(),
             1,
             1,
             [],

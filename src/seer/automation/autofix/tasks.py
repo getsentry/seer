@@ -100,7 +100,9 @@ def run_autofix(
             op="seer.automation.autofix",
             description="Run autofix on an issue within celery task",
         ):
+            rpc_client: RpcClient = get_sentry_client()
             context = AutofixContext(
+                sentry_client=rpc_client,
                 organization_id=request.organization_id,
                 project_id=request.project_id,
                 repos=request.repos,
