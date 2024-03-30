@@ -164,6 +164,7 @@ class ExceptionDetails(BaseModel):
 
 
 class EventDetails(BaseModel):
+
     title: str
     exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=True)
 
@@ -180,7 +181,7 @@ class EventDetails(BaseModel):
 
 class IssueDetails(BaseModel):
     id: Annotated[int, Examples(specialized.unsigned_ints)]
-    title: Annotated[str, Examples(specialized.ascii_words)]
+    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
     short_id: Optional[str] = None
     events: list[SentryEventData]
 
