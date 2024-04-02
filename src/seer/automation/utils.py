@@ -5,6 +5,7 @@ from typing import Any
 import torch
 from sentence_transformers import SentenceTransformer
 
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
 
 def get_torch_device():
     if torch.cuda.is_available():
