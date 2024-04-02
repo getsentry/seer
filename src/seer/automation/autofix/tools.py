@@ -115,12 +115,21 @@ class CodeActionTools(BaseTools):
         Replaces a snippet with the provided replacement.
         """
         logger.debug(
-            f"[CodeActionTools.replace_snippet_with] Replacing snippet\n```\n{reference_snippet}\n```\n with \n```\n{replacement_snippet}\n```\nin {file_path} in repo {repo_name}"
+            f"[CodeActionTools.replace_snippet_with] Replacing snippet
+```
+{reference_snippet}
+```
+ with 
+```
+{replacement_snippet}
+```
+in {file_path} in repo {repo_name}"
         )
 
         codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
 
         if not document or not codebase:
+            logger.error(f"File not found or was deleted: file_path={file_path}, repo_name={repo_name}")
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         result = find_original_snippet(
