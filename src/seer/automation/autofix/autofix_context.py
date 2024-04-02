@@ -138,13 +138,18 @@ class AutofixContext(PipelineContext):
             )
         if repo_id:
             codebase = self.get_codebase(repo_id)
-            return codebase, codebase.get_document(path)
+            document = codebase.get_document(path)
+            if codebase is None and document is None:
+                raise FileNotFoundError(f"File '{path}' could not be found in the specified repository '{repo_name}'.")
+            return codebase, document
 
         for codebase in self.codebases.values():
             document = codebase.get_document(path)
             if document:
                 return codebase, document
 
+        if codebase is None and document is None:
+            raise FileNotFoundError(f"File '{path}' could not be found in the specified repository '{repo_name}'.")
         return None, None
 
     def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
