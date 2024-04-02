@@ -1,67 +1,66 @@
 [build-system]
-requires = ["setuptools>=40.2.0,<64.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
+    requires = ["setuptools>=40.2.0,<64.0.0", "wheel"]
+    build-backend = "setuptools.build_meta"
 
 [tool.black]
-# File filtering is taken care of in pre-commit.
-line-length = 100
-target-version = ['py38']
+    # File filtering is taken care of in pre-commit.
+    line-length = 100
+    target-version = ['py38']
 
 [tool.isort]
-profile = "black"
-line_length = 100
-lines_between_sections = 1
+    profile = "black"
+    line_length = 100
+    lines_between_sections = 1
 
 [tool.mypy]
-python_version = "3.11"
-mypy_path = []
-plugins = ["pydantic.mypy"]
-files = ["src/"]
+    python_version = "3.11"
+    mypy_path = []
+    plugins = ["pydantic.mypy"]
+    files = ["src/"]
 
-# minimal strictness settings
-check_untyped_defs = true
-no_implicit_reexport = true
-warn_unreachable = true
-warn_unused_configs = true
-warn_unused_ignores = true
-warn_redundant_casts = true
+    # minimal strictness settings
+    check_untyped_defs = true
+    no_implicit_reexport = true
+    warn_unreachable = true
+    warn_unused_configs = true
+    warn_unused_ignores = true
+    warn_redundant_casts = true
 
-[[tool.mypy.overrides]]
-module = [
-    "matplotlib.*",
-    "joblib.*",
-    "sentence_transformers.*",
-    "scipy.*",
-    "openai_multi_tool_use_parallel_patch",
-    "fsspec",
-    "unidiff",
-    "tree_sitter_languages",
-    "tree_sitter",
-    "johen.*",
-    "johen",
-]
-ignore_missing_imports = true
+    [[tool.mypy.overrides]]
+        module = [
+            "matplotlib.*",
+            "joblib.*",
+            "sentence_transformers.*",
+            "scipy.*",
+            "openai_multi_tool_use_parallel_patch",
+            "fsspec",
+            "unidiff",
+            "tree_sitter_languages",
+            "tree_sitter",
+            "johen.*",
+            "johen",
+        ]
+        ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = [
-]
-disable_error_code = [
-    "arg-type",
-    "assignment",
-    "attr-defined",
-    "call-arg",
-    "call-overload",
-    "dict-item",
-    "has-type",
-    "index",
-    "list-item",
-    "misc",
-    "operator",
-    "override",
-    "return-value",
-    "typeddict-item",
-    "typeddict-unknown-key",
-    "union-attr",
-    "unreachable",
-    "var-annotated",
-]
+    [[tool.mypy.overrides]]
+        module = []
+        disable_error_code = [
+            "arg-type",
+            "assignment",
+            "attr-defined",
+            "call-arg",
+            "call-overload",
+            "dict-item",
+            "has-type",
+            "index",
+            "list-item",
+            "misc",
+            "operator",
+            "override",
+            "return-value",
+            "typeddict-item",
+            "typeddict-unknown-key",
+            "union-attr",
+            "unreachable",
+            "var-annotated",
+        ]
