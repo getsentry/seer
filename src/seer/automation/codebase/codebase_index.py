@@ -363,8 +363,7 @@ class CodebaseIndex:
                 )
             )
 
-        torch.cuda.empty_cache()  # TODO: revisit - explicitly including this not a best practice
-
+        torch.cuda.empty_cache()
         return embedded_chunks
 
     def is_behind(self):
