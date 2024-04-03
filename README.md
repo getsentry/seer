@@ -4,7 +4,7 @@
 
 ### Setup
 
-Use `direnv` or a similar tool that sources `.envrc`. It will:
+Use [`direnv`](https://github.com/direnv/direnv#getting-started) or a similar tool that sources `.envrc`. It will:
 
 - Check your Python version, and install the required version if necessary
 - Check for required system packages, and install any missing ones
@@ -15,7 +15,7 @@ Use `direnv` or a similar tool that sources `.envrc`. It will:
 direnv allow
 ```
 
-Recommended to use `pyenv` or similar python environment manager so as to be able to use differing python versions between sentry projects.
+It is recommended to use `pyenv` or a similar python environment manager so as to be able to use differing python versions between sentry projects.
 
 ### Environment variables
 
