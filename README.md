@@ -4,7 +4,10 @@
 
 ### Setup
 
-Use `direnv` or a similar tool that sources `.envrc`. It will check your python version and setup virtualenv for you:
+Use `direnv` or a similar tool that sources `.envrc`. It will:
+
+- Check your Python version, and install the required version if necessary
+- Check for a virtualenv, and set one up for you if it doesn't find one
 
 ```bash
 direnv allow
