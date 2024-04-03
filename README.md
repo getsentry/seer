@@ -9,6 +9,7 @@ Use `direnv` or a similar tool that sources `.envrc`. It will:
 - Check your Python version, and install the required version if necessary
 - Check for required system packages, and install any missing ones
 - Check for a virtualenv, and set one up for you if it doesn't find one
+- Check for pre-commit hooks, and install them if not found
 
 ```bash
 direnv allow
