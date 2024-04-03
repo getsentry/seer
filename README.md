@@ -16,8 +16,6 @@ direnv allow
 
 Recommended to use `pyenv` or similar python environment manager so as to be able to use differing python versions between sentry projects.
 
-> You will need pyenv installed and configured for python 3.11 before running `direnv allow`.
-
 ### Environment variables
 
 Set the environment variables that are in `.env.example` with the actual values, save this as `.env` in the root of the project.
