@@ -98,6 +98,8 @@ class Stacktrace(BaseModel):
     def to_str(self, max_frames: int = 16):
         stack_str = ""
         for frame in reversed(self.frames[-max_frames:]):
+            if "function" not in frame or frame["function"] is None:
+                frame["function"] = "unknown_function"
             col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
             line_no_str = (
