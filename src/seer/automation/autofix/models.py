@@ -83,9 +83,8 @@ class Stacktrace(BaseModel):
     def validate_frames(cls, frames: list[StacktraceFrame | SentryFrame]):
         stacktrace_frames = []
         for frame in frames:
-            if isinstance(frame, dict):
-                if "function" not in frame or frame["function"] is None:
-                    frame["function"] = "unknown_function"
+            if isinstance(frame, dict) and ("function" not in frame or frame["function"] is None):
+                frame["function"] = "unknown_function"
                 try:
                     stacktrace_frames.append(StacktraceFrame.model_validate(frame))
                 except ValidationError:
