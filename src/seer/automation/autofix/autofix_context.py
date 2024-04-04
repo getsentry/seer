@@ -94,6 +94,8 @@ class AutofixContext(PipelineContext):
 
         repo_ids = [repo_id] if repo_id is not None else list(self.codebases.keys())
 
+        # By defaut the returned embeddings are numpy arrays stored on CPU memory. If we want
+        # them to be loaded in the GPU memory then pass appropriate parameters to encode.
         embedding = self.embedding_model.encode(query)
 
         with Session() as session:
