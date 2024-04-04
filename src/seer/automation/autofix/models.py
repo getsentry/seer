@@ -70,7 +70,7 @@ class SentryFrame(TypedDict):
     mapUrl: NotRequired[Optional[str]]
     minGroupingLevel: NotRequired[int]
     origAbsPath: NotRequired[Optional[str]]
-    sourceLink: NotRequired[Optional[str]]
+sourceLink: NotRequired[Optional[str]]
     symbolicatorStatus: NotRequired[Optional[Any]]
 
 
