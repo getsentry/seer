@@ -17,6 +17,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
+    validator,
 )
 from pydantic.alias_generators import to_camel, to_snake
 from typing_extensions import NotRequired, TypedDict
@@ -43,6 +44,10 @@ class StacktraceFrame(BaseModel):
     repo_id: Optional[int] = None
     in_app: bool = False
     vars: Optional[dict[str, Any]] = None
+
+    @validator('function', pre=True, always=True)
+    def set_function_default(cls, v):
+        return v or "unknown_function"
 
 
 class SentryFrame(TypedDict):
