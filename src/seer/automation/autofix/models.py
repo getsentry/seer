@@ -17,7 +17,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
-)
+
 from pydantic.alias_generators import to_camel, to_snake
 from typing_extensions import NotRequired, TypedDict
 
