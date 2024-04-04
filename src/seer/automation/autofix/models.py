@@ -85,13 +85,7 @@ class Stacktrace(BaseModel):
             if isinstance(frame, dict):
                 if "function" not in frame or frame["function"] is None:
                     frame["function"] = "unknown_function"
-                try:
-                    stacktrace_frames.append(StacktraceFrame.model_validate(frame))
-                except ValidationError:
-                    sentry_sdk.capture_exception()
-                    continue
-            else:
-                stacktrace_frames.append(frame)
+            stacktrace_frames.append(StacktraceFrame.model_validate(frame))
 
         return stacktrace_frames
 
