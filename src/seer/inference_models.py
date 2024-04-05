@@ -49,7 +49,7 @@ def grouping_lookup() -> GroupingLookup:
 
 LoadingResult = Literal["pending"] | Literal["loading"] | Literal["done"] | Literal["failed"]
 
-_loading_lock: threading.Lock = threading.RLock()
+_loading_lock: threading.RLock = threading.RLock()
 _loading_thread: threading.Thread | None = None
 _loading_result: LoadingResult = "pending"
 
