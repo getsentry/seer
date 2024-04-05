@@ -2,6 +2,7 @@ import textwrap
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 
 
@@ -59,6 +60,8 @@ class SnippetReplacementPrompts:
 class SnippetReplacementComponent(
     BaseComponent[SnippetReplacementRequest, SnippetReplacementOutput]
 ):
+    context: AutofixContext
+
     def invoke(self, request: SnippetReplacementRequest) -> SnippetReplacementOutput | None:
         prompt = SnippetReplacementPrompts.format_default_msg(
             reference_snippet=request.reference_snippet,
@@ -70,6 +73,9 @@ class SnippetReplacementComponent(
         data, message, usage = GptClient().json_completion(
             [Message(role="user", content=prompt)],
         )
+
+        with self.context.state.update() as cur:
+            cur.usage += usage
 
         if data is None:
             return None

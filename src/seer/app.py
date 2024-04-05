@@ -3,8 +3,22 @@ import time
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
-from seer.automation.autofix.tasks import run_autofix
+from seer.automation.autofix.models import (
+    AutofixEndpointResponse,
+    AutofixRequest,
+    AutofixStateRequest,
+    AutofixStateResponse,
+    AutofixUpdateRequest,
+    AutofixUpdateType,
+)
+from seer.automation.autofix.tasks import (
+    get_autofix_state,
+    run_autofix_create_pr,
+    run_autofix_execution,
+    run_autofix_root_cause,
+)
+from seer.automation.codebase.models import CreateCodebaseTaskRequest
+from seer.automation.codebase.tasks import create_codebase_index
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityResponse
 from seer.inference_models import embeddings_model, grouping_lookup
@@ -73,10 +87,36 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     return similar_issues
 
 
-@json_api("/v0/automation/autofix")
-def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    run_autofix.delay(data.model_dump(mode="json"))
+@json_api("/v1/automation/codebase/index/create")
+def create_codebase_index_endpoint(data: CreateCodebaseTaskRequest) -> AutofixEndpointResponse:
+    create_codebase_index.delay(data.model_dump(mode="json"))
     return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/autofix/start")
+def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    run_autofix_root_cause.delay(data.model_dump(mode="json"))
+    return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/autofix/update")
+def autofix_update_endpoint(
+    data: AutofixUpdateRequest,
+) -> AutofixEndpointResponse:
+    if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
+        run_autofix_execution.delay(data.model_dump(mode="json"))
+    elif data.payload.type == AutofixUpdateType.CREATE_PR:
+        run_autofix_create_pr.delay(data.model_dump(mode="json"))
+    return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/autofix/state")
+def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
+    state = get_autofix_state(data.group_id)
+
+    return AutofixStateResponse(
+        group_id=data.group_id, state=state.model_dump(mode="json") if state else None
+    )
 
 
 @app.route("/health/live", methods=["GET"])

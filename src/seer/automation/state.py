@@ -2,10 +2,12 @@ import abc
 import contextlib
 import dataclasses
 import functools
-from typing import Any, ContextManager, Generic, Iterator, TypeVar
+from typing import Any, Callable, Generic, Iterator, Type, TypeVar, cast
 
 from celery import Task
 from pydantic import BaseModel
+
+from seer.db import DbRunState, Session
 
 _State = TypeVar("_State", bound=BaseModel)
 
@@ -42,6 +44,47 @@ class LocalMemoryState(State[_State]):
         self.val = value
 
     val: _State
+
+
+@dataclasses.dataclass
+class DbState(State[_State]):
+    """
+    State that is stored in postgres: DbRunState model.
+    """
+
+    id: int
+    model: Type[BaseModel]
+
+    @classmethod
+    def new(cls, value: _State, *, group_id: int | None = None) -> "DbState[_State]":
+        with Session() as session:
+            db_state = DbRunState(value=value.model_dump(mode="json"), group_id=group_id)
+            session.add(db_state)
+            session.flush()
+            value.run_id = db_state.id
+            db_state.value = value.model_dump(mode="json")
+            session.merge(db_state)
+            session.commit()
+            return cls(id=db_state.id, model=value.__class__)
+
+    @classmethod
+    def from_id(cls, id: int, model: Type[BaseModel]) -> "DbState[_State]":
+        return cls(id=id, model=model)
+
+    def get(self) -> _State:
+        with Session() as session:
+            db_state = session.get(DbRunState, self.id)
+
+            if db_state is None:
+                raise ValueError(f"No state found for id {self.id}")
+
+            return cast(_State, self.model.model_validate(db_state.value))
+
+    def set(self, value: _State):
+        with Session() as session:
+            db_state = DbRunState(id=self.id, value=value.model_dump(mode="json"))
+            session.merge(db_state)
+            session.commit()
 
 
 @functools.total_ordering

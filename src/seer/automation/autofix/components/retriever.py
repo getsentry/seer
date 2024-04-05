@@ -71,42 +71,37 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
 
     @traceable(name="Retriever", run_type="retriever", tags=["retriever:v1.2"])
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
-        with self.context.state.update() as cur:
-            # Identify good search queries for the plan item
-            data, message, usage = GptClient().json_completion(
-                messages=[
-                    Message(
-                        role="system", content=RetrieverPrompts.format_plan_item_query_system_msg()
-                    ),
-                    Message(
-                        role="user",
-                        content=RetrieverPrompts.format_plan_item_query_default_msg(
-                            text=request.text
-                        ),
-                    ),
-                ]
-            )
+        # Identify good search queries for the plan item
+        data, message, usage = GptClient().json_completion(
+            messages=[
+                Message(
+                    role="system", content=RetrieverPrompts.format_plan_item_query_system_msg()
+                ),
+                Message(
+                    role="user",
+                    content=RetrieverPrompts.format_plan_item_query_default_msg(text=request.text),
+                ),
+            ]
+        )
 
+        with self.context.state.update() as cur:
             cur.usage += usage
 
-            if data is None or "queries" not in data:
-                autofix_logger.warning(f"No search queries found for instruction: '{request.text}'")
-                return None
+        if data is None or "queries" not in data:
+            autofix_logger.warning(f"No search queries found for instruction: '{request.text}'")
+            return None
 
-            queries = data["queries"]
-            autofix_logger.debug(f"Search queries: {queries}")
+        queries = data["queries"]
+        autofix_logger.debug(f"Search queries: {queries}")
+        self.context.event_manager.log_tool_use(f"Searching with queries: {queries}")
 
-            context_dump = ""
-            unique_chunks: dict[str, QueryResultDocumentChunk] = {}
-            for query in queries:
-                retrived_chunks = self.context.query_all_codebases(query, top_k=request.top_k)
-                for chunk in retrived_chunks:
-                    unique_chunks[chunk.hash] = chunk
-            chunks = list(unique_chunks.values())
+        unique_chunks: dict[str, QueryResultDocumentChunk] = {}
+        for query in queries:
+            retrived_chunks = self.context.query_all_codebases(query, top_k=request.top_k)
+            for chunk in retrived_chunks:
+                unique_chunks[chunk.hash] = chunk
+        chunks = list(unique_chunks.values())
 
-            autofix_logger.debug(f"Retrieved {len(chunks)} unique chunks.")
+        autofix_logger.debug(f"Retrieved {len(chunks)} unique chunks.")
 
-            for chunk in chunks:
-                context_dump += f"\n\n{chunk.get_dump_for_llm(include_short_hash_as_id=request.include_short_hash_as_id)}"
-
-            return RetrieverOutput(chunks=chunks)
+        return RetrieverOutput(chunks=chunks)

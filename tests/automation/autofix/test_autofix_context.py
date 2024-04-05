@@ -4,10 +4,17 @@ from unittest.mock import MagicMock
 from johen import generate
 
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.automation.autofix.models import AutofixContinuation, AutofixRequest
 from seer.automation.codebase.models import QueryResultDocumentChunk
-from seer.automation.models import EventDetails, ExceptionDetails, Stacktrace, StacktraceFrame
-from seer.rpc import DummyRpcClient
+from seer.automation.models import (
+    EventDetails,
+    ExceptionDetails,
+    IssueDetails,
+    SentryEventData,
+    Stacktrace,
+    StacktraceFrame,
+)
+from seer.automation.state import LocalMemoryState
 
 
 class TestAutofixContext(unittest.TestCase):
@@ -15,11 +22,19 @@ class TestAutofixContext(unittest.TestCase):
         self.mock_codebase_index = MagicMock()
         self.mock_repo_client = MagicMock()
         self.mock_codebase_index.repo_client = self.mock_repo_client
+        error_event = next(generate(SentryEventData))
+        self.state = LocalMemoryState(
+            AutofixContinuation(
+                request=AutofixRequest(
+                    organization_id=1,
+                    project_id=1,
+                    repos=[],
+                    issue=IssueDetails(id=0, title="", events=[error_event]),
+                )
+            )
+        )
         self.autofix_context = AutofixContext(
-            DummyRpcClient(),
-            1,
-            1,
-            [],
+            self.state,
             MagicMock(),
             MagicMock(),
         )

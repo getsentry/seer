@@ -1,17 +1,19 @@
 import dataclasses
 import logging
-from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from seer.automation.autofix.components.planner.models import PlanningOutput
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
-    AutofixOutput,
     AutofixStatus,
-    ProblemDiscoveryResult,
+    ChangesStep,
+    CodebaseChange,
+    DefaultStep,
     ProgressItem,
     ProgressType,
-    Step,
+    RootCauseSelection,
+    RootCauseStep,
 )
 from seer.automation.state import State
 
@@ -23,218 +25,141 @@ class AutofixEventManager:
     state: State[AutofixContinuation]
 
     @property
-    def problem_discovery_step(self) -> Step:
-        return Step(
-            id="problem_discovery",
-            title="Preliminary Assessment",
+    def root_cause_analysis_processing_step(self) -> DefaultStep:
+        return DefaultStep(
+            id="root_cause_analysis_processing",
+            title="Analyze Issue",
         )
 
-    def send_no_stacktrace_error(self):
-        with self.state.update() as cur:
-            step = self.problem_discovery_step
-            step.completedMessage = "Error: Cannot fix issues without a stacktrace."
-            cur.steps = [step]
-            cur.status = step.status = AutofixStatus.ERROR
-
-    def send_initial_steps(self):
-        with self.state.update() as cur:
-            step = self.problem_discovery_step
-            cur.steps = [step]
-            step.status = AutofixStatus.PROCESSING
-            cur.status = AutofixStatus.PROCESSING
+    @property
+    def root_cause_analysis_step(self) -> RootCauseStep:
+        return RootCauseStep(
+            id="root_cause_analysis",
+            title="Root Cause Analysis",
+        )
 
     @property
-    def indexing_step(self) -> Step:
-        return Step(
+    def indexing_step(self) -> DefaultStep:
+        return DefaultStep(
             id="codebase_indexing",
             title="Codebase Indexing",
         )
 
     @property
-    def plan_step(self) -> Step:
-        return Step(
+    def plan_step(self) -> DefaultStep:
+        return DefaultStep(
             id="plan",
-            title="Execution Plan",
+            title="Create Fix",
         )
 
-    def send_problem_discovery_result(self, result: ProblemDiscoveryResult):
+    @property
+    def changes_step(self) -> ChangesStep:
+        return ChangesStep(
+            id="changes",
+            title="Changes",
+            changes=[],
+        )
+
+    def send_root_cause_analysis_pending(self):
         with self.state.update() as cur:
-            problem_discovery_step = cur.find_or_add(self.problem_discovery_step)
-            problem_discovery_step.status = AutofixStatus.COMPLETED
-            problem_discovery_step.progress.extend(
-                [
-                    ProgressItem(
-                        timestamp=datetime.now().isoformat(),
-                        message=result.reasoning,
-                        type=ProgressType.INFO,
-                    ),
-                    ProgressItem(
-                        timestamp=datetime.now().isoformat(),
-                        message=result.description,
-                        type=ProgressType.INFO,
-                    ),
-                ]
-            )
-            problem_discovery_step.completedMessage = result.description
-
-            cur.find_or_add(self.indexing_step)
-            cur.find_or_add(self.plan_step)
-
-            cur.status = (
-                AutofixStatus.PROCESSING if result.status == "CONTINUE" else AutofixStatus.COMPLETED
-            )
-
-    def send_codebase_indexing_repo_check_message(self, repo_full_name: str):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-            indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.progress.append(
-                ProgressItem(
-                    timestamp=datetime.now().isoformat(),
-                    message=f"Checking if {repo_full_name} is indexed...",
-                    type=ProgressType.INFO,
-                )
-            )
-
-    def send_codebase_indexing_repo_exists_message(self, repo_full_name: str):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-
-            indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.progress.append(
-                ProgressItem(
-                    timestamp=datetime.now().isoformat(),
-                    message=f"{repo_full_name} is indexed.",
-                    type=ProgressType.INFO,
-                )
-            )
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_codebase_index_creation_message(self, repo_full_name: str):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-
-            indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.progress.extend(
-                [
-                    ProgressItem(
-                        timestamp=datetime.now().isoformat(),
-                        message=f"Indexing {repo_full_name}...",
-                        type=ProgressType.INFO,
-                    ),
-                    ProgressItem(
-                        timestamp=datetime.now().isoformat(),
-                        message=f"Because this is the first time indexing {repo_full_name}, this may take a while...",
-                        type=ProgressType.INFO,
-                    ),
-                ]
-            )
+            root_cause_step = cur.find_or_add(self.root_cause_analysis_processing_step)
+            root_cause_step.status = AutofixStatus.PENDING
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_codebase_index_creation_complete_message(self, repo_full_name: str):
+    def send_root_cause_analysis_start(self):
+        with self.state.update() as cur:
+            root_cause_step = cur.find_or_add(self.root_cause_analysis_processing_step)
+            root_cause_step.status = AutofixStatus.PROCESSING
+
+            cur.status = AutofixStatus.PROCESSING
+
+    def send_root_cause_analysis_result(self, root_cause_output: RootCauseAnalysisOutput | None):
+        with self.state.update() as cur:
+            root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
+            root_cause_processing_step.status = AutofixStatus.COMPLETED
+            root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
+            if root_cause_output and root_cause_output.causes:
+                root_cause_step.status = AutofixStatus.COMPLETED
+                root_cause_step.causes = root_cause_output.causes
+
+                cur.status = AutofixStatus.NEED_MORE_INFORMATION
+            else:
+                root_cause_step.status = AutofixStatus.ERROR
+                cur.status = AutofixStatus.ERROR
+
+    def send_codebase_indexing_start_for_repo(self, repo_name: str):
         with self.state.update() as cur:
             indexing_step = cur.find_or_add(self.indexing_step)
-
             indexing_step.status = AutofixStatus.PROCESSING
+            indexing_step.title = f"Codebase Indexing"
             indexing_step.progress.append(
                 ProgressItem(
-                    timestamp=datetime.now().isoformat(),
-                    message=f"Indexing {repo_full_name} complete.",
+                    message=f"Updating codebase index for {repo_name}",
                     type=ProgressType.INFO,
                 )
             )
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_codebase_index_up_to_date_message(self, repo_full_name: str):
+    def send_codebase_indexing_complete_for_repo(self, repo_name: str):
         with self.state.update() as cur:
             indexing_step = cur.find_or_add(self.indexing_step)
+            indexing_step.status = AutofixStatus.COMPLETED
+            indexing_step.title = f"Codebase Indexing"
 
-            indexing_step.status = AutofixStatus.PROCESSING
             indexing_step.progress.append(
                 ProgressItem(
-                    timestamp=datetime.now().isoformat(),
-                    message=f"{repo_full_name} is up to date.",
+                    message=f"Successfully updated codebase index for {repo_name}",
                     type=ProgressType.INFO,
                 )
             )
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_codebase_index_update_wait_message(self, repo_full_name: str):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-
-            indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.progress.append(
-                ProgressItem(
-                    timestamp=datetime.now().isoformat(),
-                    message=f"{repo_full_name} needs to be updated. Waiting for the update to complete...",
-                    type=ProgressType.INFO,
-                )
-            )
-
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_codebase_index_update_scheduled_message(self, repo_full_name: str):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-            indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.progress.append(
-                ProgressItem(
-                    timestamp=datetime.now().isoformat(),
-                    message=f"{repo_full_name} will be updated in the background.",
-                    type=ProgressType.INFO,
-                )
-            )
-
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_codebase_indexing_result(
-        self, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR, AutofixStatus.CANCELLED]
-    ):
+    def send_codebase_indexing_complete_if_exists(self):
         with self.state.update() as cur:
             indexing_step = cur.find_step(id=self.indexing_step.id)
+
             if indexing_step:
-                indexing_step.status = status
-                indexing_step.completedMessage = None
-                indexing_step.progress.append(
-                    ProgressItem(
-                        timestamp=datetime.now().isoformat(),
-                        message="Codebase indexing complete.",
-                        type=ProgressType.INFO,
-                    )
-                )
+                indexing_step.status = AutofixStatus.COMPLETED
 
-            plan_step = cur.find_step(id=self.plan_step.id)
-            if plan_step:
-                plan_step.status = (
-                    AutofixStatus.PROCESSING
-                    if status != AutofixStatus.ERROR
-                    else AutofixStatus.CANCELLED
-                )
+    def set_selected_root_cause(self, selection: RootCauseSelection):
+        with self.state.update() as cur:
+            root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
+            root_cause_step.selection = selection
 
-            cur.status = (
-                AutofixStatus.PROCESSING if status != AutofixStatus.ERROR else AutofixStatus.ERROR
-            )
+            cur.status = AutofixStatus.PROCESSING
+
+    def send_planning_pending(self):
+        with self.state.update() as cur:
+            root_cause_step = cur.find_or_add(self.plan_step)
+            root_cause_step.status = AutofixStatus.PENDING
+
+            cur.status = AutofixStatus.PROCESSING
+
+    def send_planning_start(self):
+        with self.state.update() as cur:
+            plan_step = cur.find_or_add(self.plan_step)
+            plan_step.status = AutofixStatus.PROCESSING
+
+            cur.status = AutofixStatus.PROCESSING
 
     def send_planning_result(self, result: PlanningOutput | None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+
             if result:
-                plan_step.title = "Execute Plan"
-                for child_step in result.steps:
-                    plan_step.find_or_add_child(
-                        Step(
-                            id=str(child_step.id),
-                            title=child_step.title,
+                for i, child_step in enumerate(result.tasks):
+                    step = plan_step.find_or_add_child(
+                        DefaultStep(
+                            id=str(i),
+                            title=child_step.commit_message,
                         )
                     )
 
-            if len(plan_step.progress) > 0:
-                plan_step.progress[0].status = AutofixStatus.PROCESSING
+                    step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
@@ -261,11 +186,49 @@ class AutofixEventManager:
                 else AutofixStatus.ERROR
             )
 
-    def send_autofix_complete(self, fix: AutofixOutput | None):
+    def send_execution_complete(self, codebase_changes: list[CodebaseChange]):
         with self.state.update() as cur:
-            if fix:
-                cur.mark_all_steps_completed()
-            else:
-                cur.mark_running_steps_errored()
-            cur.fix = fix
-            cur.status = AutofixStatus.COMPLETED if fix else AutofixStatus.ERROR
+            cur.mark_all_steps_completed()
+
+            changes_step = cur.find_or_add(self.changes_step)
+            changes_step.status = AutofixStatus.COMPLETED
+            changes_step.changes = codebase_changes
+
+            cur.status = AutofixStatus.COMPLETED
+
+    def send_pr_creation_start(self):
+        with self.state.update() as cur:
+            changes_step = cur.find_or_add(self.changes_step)
+            changes_step.status = AutofixStatus.PROCESSING
+            cur.status = AutofixStatus.PROCESSING
+
+    def send_pr_creation_complete(self):
+        with self.state.update() as cur:
+            changes_step = cur.find_or_add(self.changes_step)
+            changes_step.status = AutofixStatus.COMPLETED
+            cur.status = AutofixStatus.COMPLETED
+
+    def log_tool_use(self, message: str):
+        with self.state.update() as cur:
+            step = cur.steps[-1]
+            if step.status == AutofixStatus.PROCESSING:
+                # If the current step is the planning step, and an execution step is running, we log it there instead.
+                if step.id == self.plan_step.id and step.progress:
+                    execution_step = step.progress[-1]
+                    if (
+                        isinstance(execution_step, DefaultStep)
+                        and execution_step.status == AutofixStatus.PROCESSING
+                    ):
+                        execution_step.progress.append(
+                            ProgressItem(
+                                message=message,
+                                type=ProgressType.INFO,
+                            )
+                        )
+                        return
+                step.progress.append(
+                    ProgressItem(
+                        message=message,
+                        type=ProgressType.INFO,
+                    )
+                )
