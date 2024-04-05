@@ -47,7 +47,7 @@ def grouping_lookup() -> GroupingLookup:
     )
 
 
-LoadingResult = Literal["pending"] | Literal["loading"] | Literal["done"] | Literal["failed"]
+LoadingResult = Literal["pending", "loading", "done", "failed"]
 
 _loading_lock: threading.RLock = threading.RLock()
 _loading_thread: threading.Thread | None = None

@@ -67,7 +67,8 @@ def bootup(
                     )
                 )
 
-    start_loading(async_load_models)
+    if async_load_models:
+        start_loading(async_load_models)
 
     return app
 
