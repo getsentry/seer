@@ -15,7 +15,7 @@ from sqlalchemy.sql.functions import count
 
 from seer.automation.autofix.models import RepoDefinition
 from seer.automation.codebase.models import BaseDocumentChunk, EmbeddedDocumentChunk
-from seer.automation.codebase.storage import CodebaseIndexStorage
+from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Session
 
 
@@ -63,7 +63,7 @@ class CodebaseWithEdits:
         )
 
     def ensure(self):
-        return CodebaseIndexStorage.ensure_codebase(
+        return CodebaseNamespaceManager.ensure_codebase(
             organization=self.organization_id,
             project=self.project_id,
             repo_definition=self.repo_definition,

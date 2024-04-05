@@ -165,64 +165,21 @@ class DbRepositoryInfo(Base):
     project: Mapped[int] = mapped_column(BigInteger, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
-    sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    sha: Mapped[str] = mapped_column(String(40), nullable=True)
+    default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
     __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
 
 
-class DbDocumentChunk(Base):
-    __tablename__ = "document_chunks"
+class DbCodebaseNamespace(Base):
+    __tablename__ = "codebase_namespaces"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
-    path: Mapped[str] = mapped_column(String, nullable=False)
-    language: Mapped[str] = mapped_column(String, nullable=False)
-    index: Mapped[int] = mapped_column(Integer, nullable=False)
-    hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-    namespace: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
 
     __table_args__ = (
-        Index(
-            "idx_repo_id_namespace_path",
-            "repo_id",
-            "namespace",
-            "path",
-            "index",
-            unique=True,
-            postgresql_where=namespace.isnot(None),
-        ),
-        Index(
-            "idx_repo_path",
-            "repo_id",
-            "path",
-            "index",
-            unique=True,
-            postgresql_where=namespace.is_(None),
-        ),
-    )
-
-
-class DbDocumentTombstone(Base):
-    __tablename__ = "document_tombstones"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
-    path: Mapped[str] = mapped_column(String, nullable=False)
-    namespace: Mapped[str] = mapped_column(String(36), nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        Index(
-            "idx_repo_namespace_path",
-            "repo_id",
-            "namespace",
-            "path",
-            unique=True,
-        ),
+        db.UniqueConstraint("repo_id", "sha"),
+        db.UniqueConstraint("repo_id", "tracking_branch"),
     )
 
 

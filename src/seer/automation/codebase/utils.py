@@ -3,8 +3,8 @@ import logging
 import os
 import shutil
 
-from seer.automation.autofix.models import StacktraceFrame
 from seer.automation.codebase.models import Document
+from seer.automation.models import StacktraceFrame
 
 logger = logging.getLogger(__name__)
 
