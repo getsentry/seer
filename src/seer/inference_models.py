@@ -64,7 +64,9 @@ def start_loading(load_async: bool):
 
     with _loading_lock:
         if _loading_result != "pending":
-            return
+            raise RuntimeError(
+                "start_loading invoked, but loading already started.  call reset_loading_state"
+            )
         _loading_result = "loading"
 
     def load():
