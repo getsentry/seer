@@ -20,7 +20,7 @@ app = bootup(
     __name__,
     [FlaskIntegration()],
     init_migrations=True,
-    eager_load_inference_models=os.environ.get("LAZY_INFERENCE_MODELS") != "1",
+    async_load_models=True,
 )
 
 
@@ -85,12 +85,23 @@ def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
 
 @app.route("/health/live", methods=["GET"])
 def health_check():
+    from seer.inference_models import models_loading_status
+
+    if models_loading_status() == "failed":
+        return "Models failed to load", 500
     return "", 200
 
 
 @app.route("/health/ready", methods=["GET"])
 def ready_check():
-    return "", 200
+    from seer.inference_models import models_loading_status
+
+    status = models_loading_status()
+    if status == "failed":
+        return "", 500
+    if status == "done":
+        return "", 200
+    return "", 503
 
 
 register_json_api_views(app)

@@ -1,4 +1,5 @@
 import json
+import time
 import unittest
 from unittest import mock
 
@@ -8,6 +9,7 @@ from sqlalchemy import text
 
 from seer.app import app
 from seer.db import AsyncSession, ProcessRequest, Session
+from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 
 
 @pytest.fixture(autouse=True)
@@ -298,7 +300,6 @@ class TestSeer(unittest.TestCase):
             data=json.dumps(input_data),
             content_type="application/json",
         )
-
         output = json.loads(response.get_data(as_text=True))
         assert output == {"data": []}
 
@@ -344,3 +345,43 @@ async def test_async_prepared_statements_disabled(
         assert (
             await session.execute(text("select count(*) from pg_prepared_statements"))
         ).scalar() == 0
+
+
+def test_async_loading():
+    reset_loading_state()
+    response = app.test_client().get("/health/live")
+    assert response.status_code == 200
+    response = app.test_client().get("/health/ready")
+    assert response.status_code == 503
+
+    with dummy_deferred(lambda: time.sleep(1)):
+        start_loading(True)
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 200
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 503
+
+        time.sleep(2)
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 200
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 200
+
+    def failed_loader():
+        time.sleep(1)
+        raise Exception("Dummy loading failure!")
+
+    reset_loading_state()
+
+    with dummy_deferred(failed_loader):
+        start_loading(True)
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 200
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 503
+
+        time.sleep(2)
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 500
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 500
