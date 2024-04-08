@@ -3,18 +3,12 @@ import uuid
 from sentence_transformers import SentenceTransformer
 
 from seer.automation.autofix.event_manager import AutofixEventManager
-from seer.automation.autofix.models import (
-    AutofixContinuation,
-    EventDetails,
-    RepoDefinition,
-    Stacktrace,
-)
+from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import StoredDocumentChunk, StoredDocumentChunkWithRepoName
+from seer.automation.models import EventDetails, InitializationError, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
-from seer.db import Session
 from seer.rpc import RpcClient
 
 
@@ -33,6 +27,8 @@ class AutofixContext(PipelineContext):
         repos: list[RepoDefinition],
         event_manager: AutofixEventManager,
         state: State[AutofixContinuation],
+        sha: str | None = None,
+        tracking_branch: str | None = None,
         embedding_model: SentenceTransformer | None = None,
     ):
         self.sentry_client = sentry_client
@@ -45,11 +41,18 @@ class AutofixContext(PipelineContext):
 
         for repo in repos:
             codebase_index = CodebaseIndex.from_repo_definition(
-                organization_id, project_id, repo, self.run_id, embedding_model=self.embedding_model
+                organization_id,
+                project_id,
+                repo,
+                sha,
+                tracking_branch,
+                embedding_model=self.embedding_model,
             )
 
             if codebase_index:
                 self.codebases[codebase_index.repo_info.id] = codebase_index
+            else:
+                raise InitializationError(f"Failed to load codebase index for repo {repo}")
 
         self.event_manager = event_manager
         self.state = state
@@ -62,7 +65,6 @@ class AutofixContext(PipelineContext):
             self.organization_id,
             self.project_id,
             repo,
-            self.run_id,
             embedding_model=self.embedding_model,
         )
         self.codebases[codebase_index.repo_info.id] = codebase_index
@@ -98,6 +100,13 @@ class AutofixContext(PipelineContext):
 
         return None, None
 
+    def query_all_codebases(self, query: str, repo_top_k: int = 4):
+        chunks = []
+        for codebase in self.codebases.values():
+            chunks.extend(codebase.query(query, top_k=repo_top_k))
+
+        return chunks
+
     def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
         stacktraces = [exception.stacktrace for exception in event_details.exceptions]
 
@@ -108,7 +117,7 @@ class AutofixContext(PipelineContext):
 
         codebase = self.get_codebase(repo_id)
         changed_files, removed_files = codebase.repo_client.get_commit_file_diffs(
-            codebase.repo_info.sha, codebase.repo_client.get_default_branch_head_sha()
+            codebase.namespace.sha, codebase.repo_client.get_default_branch_head_sha()
         )
 
         change_files = set(changed_files + removed_files)

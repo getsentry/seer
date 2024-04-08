@@ -17,7 +17,8 @@ class StorageAdapter(abc.ABC):
 
     @staticmethod
     def get_workspace_location(repo_id: int, namespace_id: int):
-        return os.path.abspath(f"data/chroma/workspaces/{repo_id}/{namespace_id}")
+        workspace_dir = os.getenv("CODEBASE_WORKSPACE_DIR", "data/chroma/workspaces")
+        return os.path.abspath(os.path.join(workspace_dir, f"{repo_id}/{namespace_id}"))
 
     @abc.abstractmethod
     def copy_to_workspace(self) -> bool:
@@ -44,17 +45,16 @@ class FilesystemStorageAdapter(StorageAdapter):
 
     @staticmethod
     def get_storage_location(repo_id: int, namespace_slug: str):
-        return os.path.abspath(f"data/chroma/storage/{repo_id}/{namespace_slug}")
+        storage_dir = os.getenv("CODEBASE_STORAGE_DIR", "data/chroma/storage")
+        return os.path.abspath(os.path.join(storage_dir, f"{repo_id}/{namespace_slug}"))
 
     def copy_to_workspace(self):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
         storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
 
-        if os.path.exists(storage_path):
-            shutil.copytree(storage_path, workspace_path, dirs_exist_ok=True)
-            return True
+        shutil.copytree(storage_path, workspace_path, dirs_exist_ok=True)
 
-        return False
+        return True
 
     def save_to_storage(self):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
@@ -74,8 +74,8 @@ class GcsStorageAdapter(StorageAdapter):
 
     @staticmethod
     def get_storage_prefix(repo_id: int, namespace_slug: str):
-        storage_path = os.getenv("GCS_STORAGE_PATH", "tmp_jenn/dev/chroma/storage")
-        return os.path.join(storage_path, f"{repo_id}/{namespace_slug}")
+        storage_dir = os.getenv("CODEBASE_GCS_STORAGE_DIR", "tmp_jenn/dev/chroma/storage")
+        return os.path.join(storage_dir, f"{repo_id}/{namespace_slug}")
 
     def copy_to_workspace(self) -> bool:
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)

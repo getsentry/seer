@@ -17,13 +17,13 @@ from seer.automation.autofix.models import (
     AutofixOutput,
     AutofixRequest,
     AutofixStatus,
-    EventDetails,
     ProblemDiscoveryResult,
     PullRequestResult,
     RepoDefinition,
 )
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.tasks import update_codebase_index
+from seer.automation.models import EventDetails
 from seer.automation.pipeline import Pipeline
 
 
@@ -90,24 +90,7 @@ class Autofix(Pipeline):
 
             for repo_id, codebase in self.context.codebases.items():
                 repo_full_name = codebase.repo_client.repo_full_name
-                if request.base_commit_sha:
-                    autofix_logger.info(
-                        f"Updating codebase index for repo {repo_full_name} to {request.base_commit_sha}"
-                    )
-                    self.context.event_manager.send_codebase_index_update_wait_message(
-                        repo_full_name
-                    )
-                    with sentry_sdk.start_span(
-                        op="seer.automation.autofix.codebase_index.update",
-                        description="Update codebase index",
-                    ) as span:
-                        span.set_tag("repo", codebase.repo_info.external_slug)
-                        codebase.update(request.base_commit_sha, is_temporary=True)
-                    self.context.event_manager.send_codebase_index_up_to_date_message(
-                        repo_full_name
-                    )
-
-                elif codebase.is_behind():
+                if codebase.is_behind():
                     if self.context.diff_contains_stacktrace_files(repo_id, event_details):
                         autofix_logger.debug(
                             f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"

@@ -1,5 +1,40 @@
 # seer
 
+## Using Seer
+
+### Autofix
+
+#### Codebase Index Storage
+
+Autofix creates and uses a ChromaDB for every separate codebase. This can either be stored in a Google Cloud Storage (GCS) bucket, in your local filesystem, or you can make your own storage adapter.
+
+You can set the location in filesystem where Autofix will use as a workspace with `CODEBASE_WORKSPACE_DIR`.
+
+##### Google Cloud Storage
+
+To use GCS, you need to set the following environment variables:
+
+```txt
+GOOGLE_APPLICATION_CREDENTIALS=<path to your GCS credentials file>
+GOOGLE_CLOUD_PROJECT=<your GCS project ID>
+```
+
+Then, you can define your storage bucket with:
+
+```txt
+CODEBASE_STORAGE_TYPE=gcs
+CODEBASE_GCS_STORAGE_DIR=<your GCS bucket name>
+```
+
+##### Local Filesystem
+
+To use local filesystem, you can set the following environment variable:
+
+```txt
+CODEBASE_STORAGE_TYPE=filesystem
+CODEBASE_STORAGE_DIR=<path to your local directory>
+```
+
 ## Local Development
 
 ### Setup

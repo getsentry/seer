@@ -2,8 +2,8 @@ import textwrap
 from typing import Optional
 
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
-from seer.automation.autofix.models import ExceptionDetails
 from seer.automation.autofix.prompts import format_exceptions, format_instruction
+from seer.automation.models import ExceptionDetails
 
 
 class PlanningPrompts:
