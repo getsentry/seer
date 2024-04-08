@@ -50,6 +50,7 @@ class TestGrouping(unittest.TestCase):
                 project_id=1,
                 message="message " + str(i),
                 stacktrace_embedding=embedding,
+                stacktrace_hash=None,
             ).to_db_model()
             records.append(new_record)
 

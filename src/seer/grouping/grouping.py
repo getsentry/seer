@@ -9,7 +9,7 @@ import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 
-from seer.db import DbGroupingRecord, Session
+from seer.db import AsyncSession, DbGroupingRecord, Session
 
 logger = logging.getLogger("grouping")
 
