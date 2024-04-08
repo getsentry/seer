@@ -33,7 +33,7 @@ def bootup(
     init_migrations=False,
     init_db=True,
     with_async=False,
-    eager_load_inference_models=False,
+    async_load_models=False,
 ) -> Flask:
     from seer.grouping.grouping import logger as grouping_logger
 
@@ -52,7 +52,7 @@ def bootup(
     app.config["SQLALCHEMY_DATABASE_URI"] = uri
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
 
-    from seer.inference_models import cached
+    from seer.inference_models import start_loading
 
     if init_db:
         db.init_app(app)
@@ -67,10 +67,8 @@ def bootup(
                     )
                 )
 
-    if eager_load_inference_models:
-        for item in cached:
-            # Preload model
-            item()
+    if async_load_models:
+        start_loading(async_load_models)
 
     return app
 

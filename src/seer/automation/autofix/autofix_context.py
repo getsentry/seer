@@ -15,6 +15,7 @@ from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
 from seer.db import DbDocumentChunk, Session
+from seer.rpc import RpcClient
 
 
 class AutofixContext(PipelineContext):
@@ -26,6 +27,7 @@ class AutofixContext(PipelineContext):
 
     def __init__(
         self,
+        sentry_client: RpcClient,
         organization_id: int,
         project_id: int,
         repos: list[RepoDefinition],
@@ -33,6 +35,7 @@ class AutofixContext(PipelineContext):
         state: State[AutofixContinuation],
         embedding_model: SentenceTransformer | None = None,
     ):
+        self.sentry_client = sentry_client
         self.organization_id = organization_id
         self.project_id = project_id
         self.run_id = uuid.uuid4()
@@ -91,6 +94,8 @@ class AutofixContext(PipelineContext):
 
         repo_ids = [repo_id] if repo_id is not None else list(self.codebases.keys())
 
+        # By defaut the returned embeddings are numpy arrays stored on CPU memory. If we want
+        # them to be loaded in the GPU memory then pass appropriate parameters to encode.
         embedding = self.embedding_model.encode(query)
 
         with Session() as session:

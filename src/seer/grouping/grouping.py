@@ -96,6 +96,7 @@ class GroupingLookup:
         :param model_path: Path to the sentence transformer model.
         """
         model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        logger.info(f"Loading transformer model to device {model_device}")
         self.model = SentenceTransformer(
             model_path,
             trust_remote_code=True,

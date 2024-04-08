@@ -190,10 +190,13 @@ class Autofix(Pipeline):
                     step.id, AutofixStatus.COMPLETED
                 )
 
+            slug_id: str | None = self._get_slug_id(request.organization_id)
+
             prs = self._create_prs(
                 planning_output.title,
                 planning_output.description,
                 planning_output.steps,
+                slug_id,
                 request,
             )
 
@@ -231,7 +234,14 @@ class Autofix(Pipeline):
             self.context.cleanup()
             autofix_logger.info(f"Autofix complete for issue {request.issue.id}")
 
-    def _create_prs(self, title: str, description: str, steps: list[Any], request: AutofixRequest):
+    def _create_prs(
+        self,
+        title: str,
+        description: str,
+        steps: list[Any],
+        slug_id: str | None,
+        request: AutofixRequest,
+    ):
         state = self.context.state.get()
         prs: list[PullRequestResult] = []
         for codebase in self.context.codebases.values():
@@ -247,20 +257,24 @@ class Autofix(Pipeline):
 
                     pr_title = f"""🤖 {title}"""
 
-                    issue_url = f"https://sentry.io/organizations/sentry/issues/{request.issue.id}/"
-                    issue_link = (
-                        f"[{request.issue.short_id}]({issue_url})"
-                        if request.issue.short_id
-                        else issue_url
-                    )
+                    ref_note = ""
+                    if slug_id:
+                        issue_url = (
+                            f"https://sentry.io/organizations/{slug_id}/issues/{request.issue.id}/"
+                        )
+                        issue_link = (
+                            f"[{request.issue.short_id}]({issue_url})"
+                            if request.issue.short_id
+                            else issue_url
+                        )
+                        ref_note = f"Fixes {issue_link}\n"
 
                     pr_description = textwrap.dedent(
                         """\
                         👋 Hi there! This PR was automatically generated 🤖
                         {user_line}
 
-                        Fixes {issue_link}
-
+                        {ref_note}
                         {description}
 
                         #### The steps that were performed:
@@ -285,8 +299,8 @@ class Autofix(Pipeline):
                             if request.invoking_user
                             else ""
                         ),
+                        ref_note=ref_note,
                         description=description,
-                        issue_link=issue_link,
                         steps="\n".join([f"{i + 1}. {step.title}" for i, step in enumerate(steps)]),
                         prompt_tokens=state.usage.prompt_tokens,
                         completion_tokens=state.usage.completion_tokens,
@@ -332,6 +346,24 @@ class Autofix(Pipeline):
                 return prs
 
         return prs
+
+    def _get_slug_id(self, organization_id: int) -> str | None:
+        slug: str | None = None
+        try:
+            response = self.context.sentry_client.call(
+                "get_organization_slug", org_id=organization_id
+            )
+            slug = None if response is None else response.get("slug", None)
+            if slug == None:
+                autofix_logger.warn(
+                    f"Slug lookup call for organization {organization_id} succeeded but returned value None."
+                )
+        except Exception as e:
+            autofix_logger.warn(f"Failed to get slug for organization {organization_id}")
+            autofix_logger.exception(e)
+            sentry_sdk.capture_exception(e)
+            slug = None
+        return slug
 
     @traceable(name="Executor with Retriever", run_type="llm")
     def run_executor_with_retriever(

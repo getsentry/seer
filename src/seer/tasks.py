@@ -215,7 +215,6 @@ async def async_main():
         [AsyncioIntegration()],
         init_db=True,
         with_async=True,
-        eager_load_inference_models=False,
     )
     app = AsyncApp()
     await app.run()
