@@ -23,10 +23,18 @@ class SeverityResponse(BaseModel):
 class SeverityInference:
     def __init__(self, embeddings_path, classifier_path):
         """Initialize the inference class with pre-trained models and tokenizer."""
-        self.embeddings_model = SentenceTransformer(
-            embeddings_path,
-            device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
-        )
+
+        def init_embeddings_model(path: str):
+            """Initialize embeddings model."""
+            embeddings_model = SentenceTransformer(
+                path,
+                device=(torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")),
+            )
+            test_str = """Error: [GraphQL error]: Message: "Not a team repl", Location: [{"line":2,"column":3}], Path: ["startTeamReplPresenceSession"]..."""
+            _ = embeddings_model.encode(test_str, convert_to_numpy=True)  # Ensure warm start
+            return embeddings_model
+
+        self.embeddings_model = init_embeddings_model(embeddings_path)
         self.classifier = load(classifier_path)
 
     def get_embeddings(self, text) -> np.ndarray:
