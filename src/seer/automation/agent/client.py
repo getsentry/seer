@@ -32,7 +32,7 @@ class LlmClient(ABC):
 
 
 class GptClient(LlmClient):
-    def __init__(self, model: str = "gpt-4-0125-preview"):
+    def __init__(self, model: str = "gpt-4-turbo-2024-04-09"):
         self.model = model
         self.openai_client = wrappers.wrap_openai(OpenAI())
 

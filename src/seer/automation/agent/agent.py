@@ -98,7 +98,7 @@ class LlmAgent(ABC):
 
 
 class GptAgent(LlmAgent):
-    model: str = "gpt-4-0125-preview"
+    model: str = "gpt-4-turbo-2024-04-09"
 
     chat_completion_kwargs: dict[str, Any] = {}
 
