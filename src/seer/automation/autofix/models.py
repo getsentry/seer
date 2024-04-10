@@ -20,6 +20,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel, to_snake
 from typing_extensions import NotRequired, TypedDict
+from sentry_sdk import capture_exception, capture_message
 
 from seer.automation.agent.models import Usage
 from seer.automation.models import FilePatch
