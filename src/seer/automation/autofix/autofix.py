@@ -19,11 +19,10 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     ProblemDiscoveryResult,
     PullRequestResult,
-    RepoDefinition,
 )
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.tasks import update_codebase_index
-from seer.automation.models import EventDetails
+from seer.automation.models import EventDetails, RepoDefinition
 from seer.automation.pipeline import Pipeline
 
 

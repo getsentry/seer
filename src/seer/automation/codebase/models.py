@@ -1,7 +1,7 @@
 import datetime
 import hashlib
 import textwrap
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Mapping, Optional
 
 import numpy as np
 from johen import gen
@@ -51,7 +51,6 @@ class ChunkQueryResult(BaseModel):
 
 
 class BaseDocumentChunk(BaseModel):
-    id: Optional[int] = None
     content: Annotated[str, Examples(lorem_ipsum)]
     context: Optional[str]
     language: Annotated[str, Examples(("python",))]
@@ -86,7 +85,7 @@ class BaseDocumentChunk(BaseModel):
             content=(self.context if self.context else "") + self.content,
         )
 
-    def get_db_metadata(self) -> dict[str, Any]:
+    def get_db_metadata(self) -> Mapping[str, Any]:
         return dict(
             path=self.path,
             index=self.index,
@@ -108,10 +107,6 @@ class BaseDocumentChunk(BaseModel):
 
     def __repr__(self):
         return self.__str__()
-
-
-class StoredDocumentChunk(BaseDocumentChunk):
-    repo_id: int
 
 
 class EmbeddedDocumentChunk(BaseDocumentChunk):

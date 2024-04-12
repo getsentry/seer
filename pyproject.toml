@@ -39,6 +39,7 @@
             "tree_sitter",
             "johen.*",
             "johen",
+            "google-cloud-storage",
         ]
         ignore_missing_imports = true
 

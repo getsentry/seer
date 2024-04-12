@@ -53,7 +53,6 @@ class TestCodebaseIndexCreate(unittest.TestCase):
         ]
         mock_embed_chunks.return_value = [
             EmbeddedDocumentChunk(
-                id=1,
                 context="def foo():",
                 content="x = 1 + 1",
                 language="python",
@@ -115,7 +114,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.namespace.insert_chunks(
             [
                 EmbeddedDocumentChunk(
-                    id=1,
                     context="def foo():",
                     content="x = 1 + 1",
                     language="python",
@@ -126,7 +124,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                     embedding=np.ones((768)),
                 ),
                 EmbeddedDocumentChunk(
-                    id=1,
                     context="def foo():",
                     content="return x",
                     language="python",
@@ -170,7 +167,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
-                id=1,
                 context="context",
                 index=0,
                 path="file1.py",
@@ -180,7 +176,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=1,
                 context="def foo():",
                 content="return x",
                 language="python",
@@ -232,7 +227,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
-                id=1,
                 context="context",
                 index=0,
                 path="file1.py",
@@ -242,7 +236,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=2,
                 context="context",
                 index=1,
                 path="file1.py",
@@ -252,7 +245,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=3,
                 context="context",
                 index=2,
                 path="file1.py",
@@ -304,7 +296,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
-                id=1,
                 context="context",
                 index=0,
                 path="file1.py",
@@ -314,7 +305,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=2,
                 context="context",
                 index=1,
                 path="file1.py",
@@ -324,7 +314,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=3,
                 context="context",
                 index=2,
                 path="file1.py",
@@ -376,7 +365,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
-                id=1,
                 context="context",
                 index=0,
                 path="file1.py",
@@ -386,7 +374,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=4,
                 context="context",
                 index=1,
                 path="file1.py",
@@ -396,7 +383,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
                 content="content",
             ),
             BaseDocumentChunk(
-                id=2,
                 context="context",
                 index=2,
                 path="file1.py",

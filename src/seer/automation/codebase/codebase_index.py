@@ -175,6 +175,9 @@ class CodebaseIndex:
             branch = repo_client.get_default_branch()
             head_sha = repo_client.get_branch_head_sha(branch)
 
+        if not head_sha:
+            raise ValueError("Failed to get head sha")
+
         tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
         try:

@@ -74,7 +74,7 @@ class RepoClient:
     def repo_full_name(self):
         return self.repo.full_name
 
-    def get_default_branch(self):
+    def get_default_branch(self) -> str:
         return self.repo.default_branch
 
     def get_branch_head_sha(self, branch: str):

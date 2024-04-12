@@ -10,7 +10,7 @@ from johen.examples import Examples
 from johen.generators import specialized
 
 from seer.automation.agent.client import DummyGptClient, GptCompletionHandler
-from seer.automation.autofix.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
+from seer.automation.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
 from seer.rpc import DummyRpcClient, RpcClientHandler
 
 _now = datetime.datetime(2023, 1, 1)

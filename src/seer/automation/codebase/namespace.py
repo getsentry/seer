@@ -1,5 +1,5 @@
 import datetime
-from typing import Self
+from typing import Mapping, Self
 
 import chromadb
 import numpy as np
@@ -288,7 +288,7 @@ class CodebaseNamespaceManager:
 
         ids: list[str] = []
         embeddings: list[list[float]] = []
-        metadatas: list[dict] = []
+        metadatas: list[Mapping] = []
 
         for chunk in chunks:
             ids.append(chunk.hash)
@@ -326,7 +326,7 @@ class CodebaseNamespaceManager:
 
         collection = self.client.get_collection("chunks")
 
-        metadatas = []
+        metadatas: list[Mapping] = []
         for chunk in chunks:
             metadatas.append(chunk.get_db_metadata())
 

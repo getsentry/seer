@@ -6,7 +6,7 @@ Create Date: 2024-04-05 23:46:05.734585
 
 """
 
-import pgvector.sqlalchemy
+import pgvector.sqlalchemy  # type: ignore
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql

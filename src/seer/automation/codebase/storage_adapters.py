@@ -3,7 +3,7 @@ import dataclasses
 import os
 import shutil
 
-from google.cloud import storage
+from google.cloud import storage  # type: ignore
 
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.utils import cleanup_dir
