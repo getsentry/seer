@@ -145,7 +145,8 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
     def mock_embed_chunks(self, chunks: list[BaseDocumentChunk], embedding_model: Any):
         return [EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks]
 
-    def test_update_no_changes(self):
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
+    def test_update_no_changes(self, mock_repo_client):
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=([], []))
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
@@ -155,12 +156,18 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         self.repo_client.load_repo_to_tmp_dir.assert_not_called()
         self.assertEqual(codebase_index.workspace.namespace.sha, "sha")
 
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
     @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
     def test_update_with_simple_chunk_add(
-        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+        self,
+        mock_dt,
+        mock_document_parser,
+        mock_read_specific_files,
+        mock_cleanup_dir,
+        mock_repo_client,
     ):
         self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
@@ -215,12 +222,18 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
             self.assertEqual(chunk_hashes, ["file1new", "file1.1"])
 
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
     @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
     def test_update_with_chunk_addition(
-        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+        self,
+        mock_dt,
+        mock_document_parser,
+        mock_read_specific_files,
+        mock_cleanup_dir,
+        mock_repo_client,
     ):
         self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
@@ -284,12 +297,18 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
             self.assertEqual(chunk_hashes, ["file1", "file1.1new", "file1.2new"])
 
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
     @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
     def test_update_with_complete_chunk_replacement(
-        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+        self,
+        mock_dt,
+        mock_document_parser,
+        mock_read_specific_files,
+        mock_cleanup_dir,
+        mock_repo_client,
     ):
         self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
@@ -353,12 +372,18 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
             self.assertEqual(chunk_hashes, ["file1new", "file1.1new", "file1.2new"])
 
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
     @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
     def test_update_with_index_change(
-        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+        self,
+        mock_dt,
+        mock_document_parser,
+        mock_read_specific_files,
+        mock_cleanup_dir,
+        mock_repo_client,
     ):
         self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
@@ -422,12 +447,18 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
             self.assertEqual(chunk_hashes, ["file1", "file1.0.1new", "file1.1"])
 
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
     @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
     def test_update_with_full_delete(
-        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+        self,
+        mock_dt,
+        mock_document_parser,
+        mock_read_specific_files,
+        mock_cleanup_dir,
+        mock_repo_client,
     ):
         self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
