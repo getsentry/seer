@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import textwrap
 from typing import Annotated, Any, Optional
@@ -46,6 +47,7 @@ class ChunkQueryResult(BaseModel):
     hash: str
     path: str
     language: str
+    index: int
 
 
 class BaseDocumentChunk(BaseModel):
@@ -158,6 +160,9 @@ class CodebaseNamespace(BaseModel):
     sha: str
     tracking_branch: Optional[str]
 
+    updated_at: datetime.datetime
+    accessed_at: datetime.datetime
+
     @property
     def slug(self):
         if self.tracking_branch:
@@ -171,6 +176,8 @@ class CodebaseNamespace(BaseModel):
             repo_id=db_namespace.repo_id,
             sha=db_namespace.sha,
             tracking_branch=db_namespace.tracking_branch,
+            updated_at=db_namespace.updated_at,
+            accessed_at=db_namespace.accessed_at,
         )
 
     def to_db_model(self) -> DbCodebaseNamespace:
@@ -179,4 +186,6 @@ class CodebaseNamespace(BaseModel):
             repo_id=self.repo_id,
             sha=self.sha,
             tracking_branch=self.tracking_branch,
+            updated_at=self.updated_at,
+            accessed_at=self.accessed_at,
         )

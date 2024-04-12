@@ -16,9 +16,19 @@ class StorageAdapter(abc.ABC):
     namespace_slug: str
 
     @staticmethod
-    def get_workspace_location(repo_id: int, namespace_id: int):
+    def get_workspace_dir():
         workspace_dir = os.getenv("CODEBASE_WORKSPACE_DIR", "data/chroma/workspaces")
-        return os.path.abspath(os.path.join(workspace_dir, f"{repo_id}/{namespace_id}"))
+        return os.path.abspath(workspace_dir)
+
+    @staticmethod
+    def get_workspace_location(repo_id: int, namespace_id: int):
+        workspace_dir = StorageAdapter.get_workspace_dir()
+        return os.path.join(workspace_dir, f"{repo_id}/{namespace_id}")
+
+    @staticmethod
+    def clear_all_workspaces():
+        workspace_dir = StorageAdapter.get_workspace_dir()
+        shutil.rmtree(workspace_dir, ignore_errors=True)
 
     @abc.abstractmethod
     def copy_to_workspace(self) -> bool:
@@ -44,9 +54,19 @@ class FilesystemStorageAdapter(StorageAdapter):
     """
 
     @staticmethod
-    def get_storage_location(repo_id: int, namespace_slug: str):
+    def get_storage_dir():
         storage_dir = os.getenv("CODEBASE_STORAGE_DIR", "data/chroma/storage")
-        return os.path.abspath(os.path.join(storage_dir, f"{repo_id}/{namespace_slug}"))
+        return os.path.abspath(storage_dir)
+
+    @staticmethod
+    def get_storage_location(repo_id: int, namespace_slug: str):
+        storage_dir = FilesystemStorageAdapter.get_storage_dir()
+        return os.path.join(storage_dir, f"{repo_id}/{namespace_slug}")
+
+    @staticmethod
+    def clear_all_storage():
+        storage_dir = FilesystemStorageAdapter.get_storage_dir()
+        shutil.rmtree(storage_dir, ignore_errors=True)
 
     def copy_to_workspace(self):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
@@ -69,8 +89,9 @@ class GcsStorageAdapter(StorageAdapter):
     A storage adapter designed to store database files in Google Cloud Storage.
     """
 
-    storage_client = storage.Client(project="super-big-data")
-    bucket = storage_client.bucket("sentry-ml")
+    @staticmethod
+    def get_bucket():
+        return storage.Client().bucket(os.getenv("CODEBASE_GCS_STORAGE_BUCKET", "sentry-ml"))
 
     @staticmethod
     def get_storage_prefix(repo_id: int, namespace_slug: str):
@@ -81,9 +102,8 @@ class GcsStorageAdapter(StorageAdapter):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
         storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
 
-        blobs = self.bucket.list_blobs(prefix=storage_prefix)
+        blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
         blobs_list = list(blobs)
-        print("LISTED BLOBS:", blobs_list)
         for blob in blobs_list:
             filename = blob.name.replace(storage_prefix + "/", "")
             download_path = os.path.join(workspace_path, filename)
@@ -104,7 +124,7 @@ class GcsStorageAdapter(StorageAdapter):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
         storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
 
-        blobs = self.bucket.list_blobs(prefix=storage_prefix)
+        blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
         for blob in blobs:
             blob.delete()
 
@@ -113,7 +133,7 @@ class GcsStorageAdapter(StorageAdapter):
                 file_path = os.path.join(root, file)
                 relative_path = os.path.relpath(file_path, workspace_path)
                 blob_path = f"{storage_prefix}/{relative_path}"
-                blob = self.bucket.blob(blob_path)
+                blob = self.get_bucket().blob(blob_path)
                 blob.upload_from_filename(file_path)
 
         autofix_logger.debug(f"Uploaded files from workspace: {workspace_path} to {storage_prefix}")

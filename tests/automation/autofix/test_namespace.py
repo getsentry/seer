@@ -1,8 +1,6 @@
 import contextlib
 import dataclasses
 import hashlib
-from functools import cached_property
-from random import Random
 from typing import Annotated
 
 from johen import change_watcher, gen
@@ -14,9 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.sql.functions import count
 
 from seer.automation.autofix.models import RepoDefinition
-from seer.automation.codebase.models import BaseDocumentChunk, EmbeddedDocumentChunk
+from seer.automation.codebase.models import EmbeddedDocumentChunk
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
-from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Session
+from seer.db import DbRepositoryInfo, Session
 
 
 @dataclasses.dataclass

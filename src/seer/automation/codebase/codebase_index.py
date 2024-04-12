@@ -178,13 +178,14 @@ class CodebaseIndex:
         tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
         try:
-            documents = read_directory(tmp_repo_dir)[:5]
+            documents = read_directory(tmp_repo_dir)
 
             logger.debug(f"Read {len(documents)} documents:")
             documents_by_language = group_documents_by_language(documents)
             for language, docs in documents_by_language.items():
                 logger.debug(f"  {language}: {len(docs)}")
 
+            print("documents", documents)
             doc_parser = DocumentParser(embedding_model)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
                 chunks = doc_parser.process_documents(documents)
@@ -192,7 +193,7 @@ class CodebaseIndex:
                 embedded_chunks = cls.embed_chunks(chunks, embedding_model)
             logger.debug(f"Processed {len(chunks)} chunks")
 
-            workspace = CodebaseNamespaceManager.get_or_create_namespace_for_repo(
+            workspace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
                 organization=organization,
                 project=project,
                 provider=repo.provider,
@@ -226,7 +227,22 @@ class CodebaseIndex:
         if not self.repo_info:
             raise ValueError("Repository info is not set")
 
-        target_sha = sha or self.repo_client.get_default_branch_head_sha()
+        target_sha = None
+        if self.workspace.namespace.tracking_branch:
+            target_sha = self.repo_client.get_branch_head_sha(
+                self.workspace.namespace.tracking_branch
+            )
+
+        elif sha:
+            target_sha = sha
+
+        if not target_sha:
+            raise ValueError("Provide a sha or run update on a namespace tracking a branch")
+
+        if self.workspace.namespace.sha == target_sha:
+            logger.info("Codebase index is up to date")
+            return
+
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
             self.workspace.namespace.sha, target_sha
         )
@@ -276,6 +292,10 @@ class CodebaseIndex:
             self.workspace.insert_chunks(embedded_chunks_to_add)
             self.workspace.delete_paths(removed_files)
 
+            self.workspace.namespace.sha = target_sha
+
+            self.workspace.save()
+
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
             cleanup_dir(tmp_dir)
@@ -296,7 +316,7 @@ class CodebaseIndex:
                 )
                 embeddings_list.extend(batch_embeddings)
                 pbar.update(superchunk_size)
-
+        print("embeddings_list", chunks, embeddings_list)
         embeddings = np.array(embeddings_list)
         logger.debug(f"Embedded {len(chunks)} chunks")
 

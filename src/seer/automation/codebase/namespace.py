@@ -1,4 +1,5 @@
-from typing import Literal, Self
+import datetime
+from typing import Self
 
 import chromadb
 import numpy as np
@@ -18,6 +19,16 @@ from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
 
 
 class CodebaseNamespaceManager:
+    """
+    Manages the namespace operations within a codebase, interfacing with both the storage layer and the Chroma database.
+
+    Attributes:
+        repo_info (RepositoryInfo): Information about the repository associated with this namespace.
+        namespace (CodebaseNamespace): The specific namespace within the codebase being managed.
+        client (ChromaClient): Client for interacting with the Chroma database.
+        storage_adapter (StorageAdapter): Adapter handling the storage operations for the namespace.
+    """
+
     repo_info: RepositoryInfo
     namespace: CodebaseNamespace
     client: ChromaClient
@@ -35,6 +46,11 @@ class CodebaseNamespaceManager:
         self.client = chromadb.PersistentClient(
             path=storage_adapter.get_workspace_location(namespace.repo_id, namespace.id)
         )
+
+        self._log_accessed_at()
+
+    def __del__(self):
+        self.cleanup()
 
     @classmethod
     def load_workspace(cls, namespace_id: int):
@@ -157,7 +173,7 @@ class CodebaseNamespaceManager:
         return cls(repo_info, namespace, storage_adapter)
 
     @classmethod
-    def get_or_create_namespace_for_repo(
+    def create_namespace_with_new_or_existing_repo(
         cls,
         organization: int,
         project: int,
@@ -246,6 +262,9 @@ class CodebaseNamespaceManager:
         return cls(repo_info, namespace, storage_adapter)
 
     def chunk_hashes_exist(self, hashes: list[str]):
+        if not hashes:
+            return []
+
         collection = self.client.get_collection("chunks")
 
         results = collection.get(
@@ -257,6 +276,9 @@ class CodebaseNamespaceManager:
         return ids
 
     def insert_chunks(self, chunks: list[EmbeddedDocumentChunk]):
+        if not chunks:
+            return
+
         collection = self.client.get_or_create_collection(
             "chunks", metadata={"hnsw:space": "cosine"}
         )
@@ -283,16 +305,25 @@ class CodebaseNamespaceManager:
             collection.add(ids=ids, embeddings=embeddings, metadatas=metadatas)  # type: ignore
 
     def delete_paths(self, paths: list[str]):
+        if not paths:
+            return
+
         collection = self.client.get_collection("chunks")
 
         collection.delete(where={"path": {"$in": paths}})  # type: ignore
 
     def delete_chunks(self, chunk_hashes: list[str]):
+        if not chunk_hashes:
+            return
+
         collection = self.client.get_collection("chunks")
 
         collection.delete(ids=chunk_hashes)
 
     def update_chunks_metadata(self, chunks: list[BaseDocumentChunk]):
+        if not chunks:
+            return
+
         collection = self.client.get_collection("chunks")
 
         metadatas = []
@@ -305,33 +336,16 @@ class CodebaseNamespaceManager:
         )
 
     def get_chunks_for_paths(self, paths: list[str]) -> list[ChunkQueryResult]:
+        if not paths:
+            return []
+
         collection = self.client.get_collection("chunks")
 
-        results = collection.query(
+        results = collection.get(
             where={"path": {"$in": paths}},  # type: ignore
         )
 
-        return self._get_chunk_query_results(results)
-
-    def _get_chunk_query_results(
-        self, query_results: chromadb.QueryResult
-    ) -> list[ChunkQueryResult]:
-        if not query_results["ids"]:
-            return []
-
-        hashes = query_results["ids"][0]  # Assumes a single query
-        metadatas = query_results["metadatas"]
-
-        if not metadatas:
-            return []
-
-        paths = [str(metadata["path"]) for metadata in metadatas[0]]
-        languages = [str(metadata["language"]) for metadata in metadatas[0]]
-
-        return [
-            ChunkQueryResult(path=path, hash=hash, language=language)
-            for path, hash, language in zip(paths, hashes, languages)
-        ]
+        return self._get_chunk_get_results(results)
 
     def query_chunks(self, query_embedding: np.ndarray, top_k: int = 10) -> list[ChunkQueryResult]:
         collection = self.client.get_collection("chunks")
@@ -352,6 +366,9 @@ class CodebaseNamespaceManager:
             db_repo_info = self.repo_info.to_db_model()
             db_namespace = self.namespace.to_db_model()
 
+            db_namespace.updated_at = datetime.datetime.now()
+            db_namespace.accessed_at = datetime.datetime.now()
+
             session.merge(db_repo_info)
             session.merge(db_namespace)
             session.commit()
@@ -363,5 +380,49 @@ class CodebaseNamespaceManager:
 
         autofix_logger.info(f"Cleaned up workspace for namespace {self.namespace.id}")
 
-    def __del__(self):
-        self.cleanup()
+    def _log_accessed_at(self):
+        with Session() as session:
+            self.namespace.accessed_at = datetime.datetime.now()
+            db_namespace = self.namespace.to_db_model()
+            session.merge(db_namespace)
+            session.commit()
+
+    def _get_chunk_query_results(
+        self, query_results: chromadb.QueryResult
+    ) -> list[ChunkQueryResult]:
+        if not query_results["ids"]:
+            return []
+
+        hashes = query_results["ids"][0]  # Assumes a single query
+        metadatas = query_results["metadatas"]
+
+        if not metadatas:
+            return []
+
+        paths = [str(metadata["path"]) for metadata in metadatas[0]]
+        indicies = [int(metadata["index"]) for metadata in metadatas[0]]
+        languages = [str(metadata["language"]) for metadata in metadatas[0]]
+
+        return [
+            ChunkQueryResult(path=path, hash=hash, language=language, index=index)
+            for path, hash, language, index in zip(paths, hashes, languages, indicies)
+        ]
+
+    def _get_chunk_get_results(self, query_results: chromadb.GetResult) -> list[ChunkQueryResult]:
+        if not query_results["ids"]:
+            return []
+
+        hashes = query_results["ids"]  # Assumes a single query
+        metadatas = query_results["metadatas"]
+
+        if not metadatas:
+            return []
+
+        paths = [str(metadata["path"]) for metadata in metadatas]
+        indicies = [int(metadata["index"]) for metadata in metadatas]
+        languages = [str(metadata["language"]) for metadata in metadatas]
+
+        return [
+            ChunkQueryResult(path=path, hash=hash, language=language, index=index)
+            for path, hash, language, index in zip(paths, hashes, languages, indicies)
+        ]

@@ -7,13 +7,8 @@ from johen import generate
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
 from seer.automation.autofix.components.planner.models import PlanningOutput, PlanStep
 from seer.automation.autofix.components.retriever import RetrieverOutput
-from seer.automation.autofix.models import (
-    AutofixContinuation,
-    AutofixRequest,
-    RepoDefinition,
-    SentryEventData,
-)
-from seer.automation.models import FileChange, FilePatch
+from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, RepoDefinition
+from seer.automation.models import FileChange, FilePatch, SentryEventData
 
 
 class TestAutofixPipeline(unittest.TestCase):

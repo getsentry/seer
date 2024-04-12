@@ -2,14 +2,8 @@ import unittest
 from unittest.mock import MagicMock
 
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.models import (
-    EventDetails,
-    ExceptionDetails,
-    RepoDefinition,
-    Stacktrace,
-    StacktraceFrame,
-)
 from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.automation.models import EventDetails, ExceptionDetails, Stacktrace, StacktraceFrame
 from seer.rpc import DummyRpcClient
 
 

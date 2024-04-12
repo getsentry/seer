@@ -1,439 +1,480 @@
+import datetime
+import os
 import textwrap
 import unittest
-import uuid
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import (
-    BaseDocumentChunk,
-    Document,
-    EmbeddedDocumentChunk,
-    RepositoryInfo,
-)
-from seer.automation.models import FileChange, FilePatch, Hunk, Line
-from seer.db import DbDocumentChunk, DbRepositoryInfo, Session
+from seer.automation.codebase.models import BaseDocumentChunk, Document, EmbeddedDocumentChunk
+from seer.automation.codebase.namespace import CodebaseNamespaceManager
+from seer.automation.codebase.storage_adapters import FilesystemStorageAdapter
+from seer.automation.models import FileChange, RepoDefinition
+from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
+
+
+class TestCodebaseIndexCreate(unittest.TestCase):
+    def setUp(self):
+        os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
+        os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
+        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
+
+        self.repo_client = MagicMock()
+        self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
+        self.repo_client.repo.full_name = "getsentry/seer"
+
+    def tearDown(self) -> None:
+        FilesystemStorageAdapter.clear_all_storage()
+        FilesystemStorageAdapter.clear_all_workspaces()
+        return super().tearDown()
+
+    @patch("seer.automation.codebase.codebase_index.CodebaseIndex.embed_chunks")
+    @patch("seer.automation.codebase.codebase_index.read_directory")
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
+    def test_simple_create(self, mock_repo_client, mock_read_directory, mock_embed_chunks):
+        mock_repo_client.return_value = self.repo_client
+        self.repo_client.get_branch_head_sha = MagicMock(return_value="sha")
+
+        mock_read_directory.return_value = [
+            Document(
+                path="file1.py",
+                language="python",
+                text=textwrap.dedent(
+                    """\
+                    def foo():
+                        x = 1 + 1
+                        y = 2 + 2
+                        return x + y
+                    """
+                ),
+            )
+        ]
+        mock_embed_chunks.return_value = [
+            EmbeddedDocumentChunk(
+                id=1,
+                context="def foo():",
+                content="x = 1 + 1",
+                language="python",
+                path="file1.py",
+                hash="file1",
+                token_count=1,
+                index=0,
+                embedding=np.ones((768)),
+            )
+        ]
+
+        codebase_index = CodebaseIndex.create(
+            organization=1,
+            project=1,
+            repo=RepoDefinition(provider="github", owner="getsentry", name="seer"),
+            embedding_model=MagicMock(),
+            tracking_branch="main",
+        )
+
+        self.assertEqual(codebase_index.namespace.tracking_branch, "main")
+
+        with Session() as session:
+            repo_info = session.query(DbRepositoryInfo).first()
+            self.assertIsNotNone(repo_info)
+            if repo_info:
+                self.assertEqual(repo_info.external_slug, "getsentry/seer")
+                self.assertEqual(repo_info.provider, "github")
+                self.assertEqual(repo_info.organization, 1)
+                self.assertEqual(repo_info.project, 1)
+
+            namespace = session.query(DbCodebaseNamespace).first()
+            self.assertIsNotNone(namespace)
+            if namespace:
+                self.assertEqual(namespace.tracking_branch, "main")
+                self.assertEqual(namespace.sha, "sha")
+
+                workspace = CodebaseNamespaceManager.load_workspace(namespace.id)
+                self.assertIsNotNone(workspace)
+                if workspace:
+                    self.assertEqual(workspace.namespace.id, namespace.id)
 
 
 class TestCodebaseIndexUpdate(unittest.TestCase):
     def setUp(self):
-        self.organization = 1
-        self.project = 1
-        self.repo_definition = MagicMock()
-        self.run_id = uuid.uuid4()
-        self.repo_info = RepositoryInfo(
-            id=1, organization=1, project=1, provider="github", external_slug="test/repo", sha="sha"
-        )
+        os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
+        os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
+        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
+
         self.repo_client = MagicMock()
         self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
-        self.codebase_index = CodebaseIndex(
-            self.organization,
-            self.project,
-            self.repo_client,
-            self.repo_info,
-            self.run_id,
-            embedding_model=MagicMock(),
+        self.repo_client.repo.full_name = "getsentry/seer"
+
+        self.embedding_model = MagicMock()
+        self.embedding_model.encode.return_value = [np.ones((768))]
+
+        self.namespace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
+            1, 1, "github", "getsentry/seer", "sha", "main"
         )
+        self.namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    id=1,
+                    context="def foo():",
+                    content="x = 1 + 1",
+                    language="python",
+                    path="file1.py",
+                    hash="file1",
+                    token_count=1,
+                    index=0,
+                    embedding=np.ones((768)),
+                ),
+                EmbeddedDocumentChunk(
+                    id=1,
+                    context="def foo():",
+                    content="return x",
+                    language="python",
+                    path="file1.py",
+                    hash="file1.1",
+                    token_count=1,
+                    index=1,
+                    embedding=np.ones((768)),
+                ),
+            ]
+        )
+        self.namespace.save()
+
+    def tearDown(self) -> None:
+        FilesystemStorageAdapter.clear_all_storage()
+        FilesystemStorageAdapter.clear_all_workspaces()
+        return super().tearDown()
 
     def mock_embed_chunks(self, chunks: list[BaseDocumentChunk], embedding_model: Any):
         return [EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks]
 
-    @patch("seer.automation.codebase.codebase_index.cleanup_dir")
-    @patch("seer.automation.codebase.codebase_index.Session")
-    @patch("seer.automation.codebase.codebase_index.read_specific_files")
-    @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    def test_update_no_changes(
-        self, mock_document_parser, mock_read_specific_files, mock_session, mock_cleanup_dir
-    ):
-        # Setup
-        self.repo_client.get_default_branch_head_sha = MagicMock(return_value="sha")
+    def test_update_no_changes(self):
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=([], []))
 
-        # Execute
-        self.codebase_index.update()
+        codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
+        codebase_index.repo_client = self.repo_client
+        codebase_index.update()
 
-        # Assert
         self.repo_client.load_repo_to_tmp_dir.assert_not_called()
-        mock_read_specific_files.assert_not_called()
-        mock_document_parser.assert_not_called()
-        mock_session.assert_not_called()
-        mock_cleanup_dir.assert_not_called()
-        self.assertEqual(self.codebase_index.repo_info.sha, "sha")
+        self.assertEqual(codebase_index.workspace.namespace.sha, "sha")
 
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
+    @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
     def test_update_with_simple_chunk_add(
-        self,
-        mock_document_parser,
-        mock_read_specific_files,
-        mock_cleanup_dir,
+        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
     ):
-        # Setup
-        self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
+        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
         self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
         mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_document_parser.return_value.process_documents = MagicMock()
-
-        with Session() as session:
-            session.add(
-                DbRepositoryInfo(
-                    id=1,
-                    organization=1,
-                    project=1,
-                    provider="github",
-                    external_slug="test/repo",
-                    sha="sha",
-                )
-            )
-            session.commit()
-
-        self.codebase_index.embed_chunks = MagicMock()
-        self.codebase_index.embed_chunks.return_value = [
-            EmbeddedDocumentChunk(
+        mock_document_parser.return_value.process_documents.return_value = [
+            BaseDocumentChunk(
                 id=1,
                 context="context",
+                index=0,
+                path="file1.py",
+                hash="file1new",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+            BaseDocumentChunk(
+                id=1,
+                context="def foo():",
+                content="return x",
+                language="python",
+                path="file1.py",
+                hash="file1.1",
+                token_count=1,
                 index=1,
+            ),
+        ]
+
+        mock_date = datetime.datetime(2022, 1, 1, 12, 0)
+        mock_dt.now.return_value = mock_date
+
+        codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
+        codebase_index.repo_client = self.repo_client
+        codebase_index.embed_chunks = self.mock_embed_chunks
+
+        codebase_index.update()
+
+        mock_read_specific_files.assert_called_once()
+        mock_document_parser.return_value.process_documents.assert_called_once()
+        mock_cleanup_dir.assert_called_once()
+
+        with Session() as session:
+            db_namespace = session.get(DbCodebaseNamespace, 1)
+            self.assertIsNotNone(db_namespace)
+            if db_namespace:
+                self.assertEqual(db_namespace.sha, "new_sha")
+                self.assertEqual(db_namespace.accessed_at, mock_date)
+                self.assertEqual(db_namespace.updated_at, mock_date)
+
+        workspace = CodebaseNamespaceManager.load_workspace(1)
+
+        self.assertIsNotNone(workspace)
+        if workspace:
+            chunks = workspace.get_chunks_for_paths(["file1.py"])
+            chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
+            self.assertEqual(chunk_hashes, ["file1new", "file1.1"])
+
+    @patch("seer.automation.codebase.codebase_index.cleanup_dir")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
+    @patch("seer.automation.codebase.codebase_index.DocumentParser")
+    @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
+    def test_update_with_chunk_addition(
+        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+    ):
+        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
+        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_read_specific_files.return_value = {"file1.py": "content"}
+        mock_document_parser.return_value.process_documents.return_value = [
+            BaseDocumentChunk(
+                id=1,
+                context="context",
+                index=0,
                 path="file1.py",
                 hash="file1",
                 language="python",
                 token_count=1,
                 content="content",
-                embedding=np.ones((768)),
-            )
-        ]
-
-        # Execute
-        self.codebase_index.update()
-
-        # Assert
-        mock_read_specific_files.assert_called_once()
-        mock_document_parser.return_value.process_documents.assert_called_once()
-        mock_cleanup_dir.assert_called_once()
-        self.assertEqual(self.codebase_index.repo_info.sha, "new_sha")
-
-        with Session() as session:
-            updated_repo_info = session.get(DbRepositoryInfo, 1)
-            self.assertIsNotNone(updated_repo_info)
-            if updated_repo_info:
-                self.assertEqual(updated_repo_info.sha, "new_sha")
-                added_chunks = (
-                    session.query(DbDocumentChunk).filter(DbDocumentChunk.hash == "file1").all()
-                )
-                self.assertEqual(len(added_chunks), 1)
-                self.assertEqual(added_chunks[0].hash, "file1")
-
-    @patch("seer.automation.codebase.codebase_index.cleanup_dir")
-    @patch("seer.automation.codebase.codebase_index.read_specific_files")
-    @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    def test_update_with_chunk_replacement(
-        self,
-        mock_document_parser,
-        mock_read_specific_files,
-        mock_cleanup_dir,
-    ):
-        # Setup
-        self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
-        mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_document_parser.return_value.process_documents = MagicMock()
-        mock_document_parser.return_value.process_documents.return_value = [
+            ),
             BaseDocumentChunk(
+                id=2,
                 context="context",
                 index=1,
                 path="file1.py",
-                hash="file1.1.1",
+                hash="file1.1new",
                 language="python",
                 token_count=1,
                 content="content",
             ),
             BaseDocumentChunk(
+                id=3,
                 context="context",
                 index=2,
                 path="file1.py",
-                hash="file1.2.1",
-                language="python",
-                token_count=1,
-                content="content",
-            ),
-            BaseDocumentChunk(
-                context="context",
-                index=3,
-                path="file1.py",
-                hash="file1.2",
+                hash="file1.2new",
                 language="python",
                 token_count=1,
                 content="content",
             ),
         ]
 
-        with Session() as session:
-            session.add(
-                DbRepositoryInfo(
-                    id=1,
-                    organization=1,
-                    project=1,
-                    provider="github",
-                    external_slug="test/repo",
-                    sha="sha",
-                )
-            )
+        mock_date = datetime.datetime(2022, 1, 1, 12, 0)
+        mock_dt.now.return_value = mock_date
 
-            session.flush()
-            session.add_all(
-                [
-                    EmbeddedDocumentChunk(
-                        context="context",
-                        index=1,
-                        path="file1.py",
-                        hash="file1.1",
-                        language="python",
-                        token_count=1,
-                        content="content",
-                        embedding=np.ones((768)),
-                    ).to_db_model(1),
-                    EmbeddedDocumentChunk(
-                        context="context",
-                        index=2,
-                        path="file1.py",
-                        hash="file1.2",
-                        language="python",
-                        token_count=1,
-                        content="content",
-                        embedding=np.ones((768)),
-                    ).to_db_model(1),
-                ]
-            )
+        codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
+        codebase_index.repo_client = self.repo_client
+        codebase_index.embed_chunks = self.mock_embed_chunks
 
-            session.commit()
+        codebase_index.update()
 
-        self.codebase_index.embed_chunks = MagicMock()
-        self.codebase_index.embed_chunks.side_effect = self.mock_embed_chunks
-
-        # Execute
-        self.codebase_index.update()
-
-        # Assert
         mock_read_specific_files.assert_called_once()
         mock_document_parser.return_value.process_documents.assert_called_once()
         mock_cleanup_dir.assert_called_once()
-        self.assertEqual(self.codebase_index.repo_info.sha, "new_sha")
 
         with Session() as session:
-            chunks = (
-                session.query(DbDocumentChunk)
-                .where(DbDocumentChunk.path == "file1.py")
-                .order_by("index")
-                .all()
-            )
-            self.assertEqual(len(chunks), 3)
-            self.assertEqual(chunks[0].hash, "file1.1.1")
-            self.assertEqual(chunks[1].hash, "file1.2.1")
-            self.assertEqual(chunks[2].hash, "file1.2")
-            self.assertEqual(chunks[2].index, 3)
+            db_namespace = session.get(DbCodebaseNamespace, 1)
+            self.assertIsNotNone(db_namespace)
+            if db_namespace:
+                self.assertEqual(db_namespace.sha, "new_sha")
+                self.assertEqual(db_namespace.accessed_at, mock_date)
+                self.assertEqual(db_namespace.updated_at, mock_date)
+
+        workspace = CodebaseNamespaceManager.load_workspace(1)
+
+        self.assertIsNotNone(workspace)
+        if workspace:
+            chunks = workspace.get_chunks_for_paths(["file1.py"])
+            chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
+            self.assertEqual(chunk_hashes, ["file1", "file1.1new", "file1.2new"])
 
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    def test_update_with_removed_file(
-        self,
-        mock_document_parser,
-        mock_read_specific_files,
-        mock_cleanup_dir,
+    @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
+    def test_update_with_complete_chunk_replacement(
+        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
     ):
-        # Setup
-        self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=([], ["file2.py"]))
+        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
+        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
         mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_document_parser.return_value.process_documents = MagicMock()
+        mock_document_parser.return_value.process_documents.return_value = [
+            BaseDocumentChunk(
+                id=1,
+                context="context",
+                index=0,
+                path="file1.py",
+                hash="file1new",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+            BaseDocumentChunk(
+                id=2,
+                context="context",
+                index=1,
+                path="file1.py",
+                hash="file1.1new",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+            BaseDocumentChunk(
+                id=3,
+                context="context",
+                index=2,
+                path="file1.py",
+                hash="file1.2new",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+        ]
+
+        mock_date = datetime.datetime(2022, 1, 1, 12, 0)
+        mock_dt.now.return_value = mock_date
+
+        codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
+        codebase_index.repo_client = self.repo_client
+        codebase_index.embed_chunks = self.mock_embed_chunks
+
+        codebase_index.update()
+
+        mock_read_specific_files.assert_called_once()
+        mock_document_parser.return_value.process_documents.assert_called_once()
+        mock_cleanup_dir.assert_called_once()
+
+        with Session() as session:
+            db_namespace = session.get(DbCodebaseNamespace, 1)
+            self.assertIsNotNone(db_namespace)
+            if db_namespace:
+                self.assertEqual(db_namespace.sha, "new_sha")
+                self.assertEqual(db_namespace.accessed_at, mock_date)
+                self.assertEqual(db_namespace.updated_at, mock_date)
+
+        workspace = CodebaseNamespaceManager.load_workspace(1)
+
+        self.assertIsNotNone(workspace)
+        if workspace:
+            chunks = workspace.get_chunks_for_paths(["file1.py"])
+            chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
+            self.assertEqual(chunk_hashes, ["file1new", "file1.1new", "file1.2new"])
+
+    @patch("seer.automation.codebase.codebase_index.cleanup_dir")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
+    @patch("seer.automation.codebase.codebase_index.DocumentParser")
+    @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
+    def test_update_with_index_change(
+        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+    ):
+        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
+        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_read_specific_files.return_value = {"file1.py": "content"}
+        mock_document_parser.return_value.process_documents.return_value = [
+            BaseDocumentChunk(
+                id=1,
+                context="context",
+                index=0,
+                path="file1.py",
+                hash="file1",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+            BaseDocumentChunk(
+                id=4,
+                context="context",
+                index=1,
+                path="file1.py",
+                hash="file1.0.1new",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+            BaseDocumentChunk(
+                id=2,
+                context="context",
+                index=2,
+                path="file1.py",
+                hash="file1.1",
+                language="python",
+                token_count=1,
+                content="content",
+            ),
+        ]
+
+        mock_date = datetime.datetime(2022, 1, 1, 12, 0)
+        mock_dt.now.return_value = mock_date
+
+        codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
+        codebase_index.repo_client = self.repo_client
+        codebase_index.embed_chunks = self.mock_embed_chunks
+
+        codebase_index.update()
+
+        mock_read_specific_files.assert_called_once()
+        mock_document_parser.return_value.process_documents.assert_called_once()
+        mock_cleanup_dir.assert_called_once()
+
+        with Session() as session:
+            db_namespace = session.get(DbCodebaseNamespace, 1)
+            self.assertIsNotNone(db_namespace)
+            if db_namespace:
+                self.assertEqual(db_namespace.sha, "new_sha")
+                self.assertEqual(db_namespace.accessed_at, mock_date)
+                self.assertEqual(db_namespace.updated_at, mock_date)
+
+        workspace = CodebaseNamespaceManager.load_workspace(1)
+
+        self.assertIsNotNone(workspace)
+        if workspace:
+            chunks = workspace.get_chunks_for_paths(["file1.py"])
+            chunk_hashes = [chunk.hash for chunk in sorted(chunks, key=lambda x: x.index)]
+            self.assertEqual(chunk_hashes, ["file1", "file1.0.1new", "file1.1"])
+
+    @patch("seer.automation.codebase.codebase_index.cleanup_dir")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
+    @patch("seer.automation.codebase.codebase_index.DocumentParser")
+    @patch("seer.automation.codebase.namespace.datetime.datetime", wraps=datetime.datetime)
+    def test_update_with_full_delete(
+        self, mock_dt, mock_document_parser, mock_read_specific_files, mock_cleanup_dir
+    ):
+        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
+        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = []
 
-        with Session() as session:
-            session.add(
-                DbRepositoryInfo(
-                    id=1,
-                    organization=1,
-                    project=1,
-                    provider="github",
-                    external_slug="test/repo",
-                    sha="sha",
-                )
-            )
+        mock_date = datetime.datetime(2022, 1, 1, 12, 0)
+        mock_dt.now.return_value = mock_date
 
-            session.flush()
-            session.add_all(
-                [
-                    EmbeddedDocumentChunk(
-                        context="context",
-                        index=2,
-                        path="file1.py",
-                        hash="file1.1",
-                        language="python",
-                        token_count=1,
-                        content="content",
-                        embedding=np.ones((768)),
-                    ).to_db_model(1),
-                    EmbeddedDocumentChunk(
-                        context="context",
-                        index=2,
-                        path="file2.py",
-                        hash="file2.1",
-                        language="python",
-                        token_count=1,
-                        content="content",
-                        embedding=np.ones((768)),
-                    ).to_db_model(1),
-                ]
-            )
+        codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
+        codebase_index.repo_client = self.repo_client
+        codebase_index.embed_chunks = self.mock_embed_chunks
 
-            session.commit()
+        codebase_index.update()
 
-        self.codebase_index.embed_chunks = MagicMock()
-        self.codebase_index.embed_chunks.side_effect = self.mock_embed_chunks
-
-        # Execute
-        self.codebase_index.update()
-
-        # Assert
         mock_read_specific_files.assert_called_once()
         mock_document_parser.return_value.process_documents.assert_called_once()
         mock_cleanup_dir.assert_called_once()
-        self.assertEqual(self.codebase_index.repo_info.sha, "new_sha")
 
         with Session() as session:
-            chunks = session.query(DbDocumentChunk).order_by("index").all()
-            self.assertEqual(len(chunks), 1)
-            self.assertEqual(chunks[0].hash, "file1.1")
+            db_namespace = session.get(DbCodebaseNamespace, 1)
+            self.assertIsNotNone(db_namespace)
+            if db_namespace:
+                self.assertEqual(db_namespace.sha, "new_sha")
+                self.assertEqual(db_namespace.accessed_at, mock_date)
+                self.assertEqual(db_namespace.updated_at, mock_date)
 
-    @patch("seer.automation.codebase.codebase_index.cleanup_dir")
-    @patch("seer.automation.codebase.codebase_index.read_specific_files")
-    @patch("seer.automation.codebase.codebase_index.DocumentParser")
-    def test_update_with_temporary_chunk_replacement(
-        self,
-        mock_document_parser,
-        mock_read_specific_files,
-        mock_cleanup_dir,
-    ):
-        # Setup
-        self.repo_client.get_default_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
-        mock_read_specific_files.return_value = {"file1.py": "content"}
-        mock_document_parser.return_value.process_documents = MagicMock()
-        mock_document_parser.return_value.process_documents.return_value = [
-            BaseDocumentChunk(
-                context="context",
-                index=1,
-                path="file1.py",
-                hash="file1.1.1",
-                language="python",
-                token_count=1,
-                content="content",
-            ),
-            BaseDocumentChunk(
-                context="context",
-                index=2,
-                path="file1.py",
-                hash="file1.2.1",
-                language="python",
-                token_count=1,
-                content="content",
-            ),
-            BaseDocumentChunk(
-                context="context",
-                index=3,
-                path="file1.py",
-                hash="file1.2",
-                language="python",
-                token_count=1,
-                content="content",
-            ),
-        ]
+        workspace = CodebaseNamespaceManager.load_workspace(1)
 
-        with Session() as session:
-            session.add(
-                DbRepositoryInfo(
-                    id=1,
-                    organization=1,
-                    project=1,
-                    provider="github",
-                    external_slug="test/repo",
-                    sha="sha",
-                )
-            )
-
-            session.flush()
-            session.add_all(
-                [
-                    EmbeddedDocumentChunk(
-                        context="context",
-                        index=1,
-                        path="file1.py",
-                        hash="file1.1",
-                        language="python",
-                        token_count=1,
-                        content="content",
-                        embedding=np.ones((768)),
-                    ).to_db_model(1),
-                    EmbeddedDocumentChunk(
-                        context="context",
-                        index=2,
-                        path="file1.py",
-                        hash="file1.2",
-                        language="python",
-                        token_count=1,
-                        content="content",
-                        embedding=np.ones((768)),
-                    ).to_db_model(1),
-                ]
-            )
-
-            session.commit()
-
-        self.codebase_index.embed_chunks = MagicMock()
-        self.codebase_index.embed_chunks.side_effect = self.mock_embed_chunks
-
-        # Execute
-        self.codebase_index.update(is_temporary=True)
-
-        # Assert
-        mock_read_specific_files.assert_called_once()
-        mock_document_parser.return_value.process_documents.assert_called_once()
-        mock_cleanup_dir.assert_called_once()
-        self.assertEqual(self.codebase_index.repo_info.sha, "new_sha")
-
-        with Session() as session:
-            db_repo_info = session.get(DbRepositoryInfo, 1)
-            self.assertIsNotNone(db_repo_info)
-            if db_repo_info:
-                self.assertEqual(db_repo_info.sha, "sha")
-
-            chunks = (
-                session.query(DbDocumentChunk)
-                .where(DbDocumentChunk.path == "file1.py")
-                .where(DbDocumentChunk.namespace == None)
-                .order_by("index")
-                .all()
-            )
-            self.assertEqual(len(chunks), 2)
-            self.assertEqual(chunks[0].hash, "file1.1")
-            self.assertEqual(chunks[1].hash, "file1.2")
-            self.assertEqual(chunks[1].index, 2)
-
-            namespaced_chunks = (
-                session.query(DbDocumentChunk)
-                .where(DbDocumentChunk.path == "file1.py")
-                .where(DbDocumentChunk.namespace == str(self.run_id))
-                .order_by("index")
-                .all()
-            )
-
-            self.assertEqual(len(namespaced_chunks), 3)
-            self.assertEqual(namespaced_chunks[0].hash, "file1.1.1")
-            self.assertEqual(namespaced_chunks[1].hash, "file1.2.1")
-            self.assertEqual(namespaced_chunks[2].hash, "file1.2")
-            self.assertEqual(namespaced_chunks[2].index, 3)
+        self.assertIsNotNone(workspace)
+        if workspace:
+            chunks = workspace.get_chunks_for_paths(["file1.py"])
+            self.assertEqual(chunks, [])
 
 
 class TestCodebaseIndexGetFilePatches(unittest.TestCase):
@@ -441,22 +482,27 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.organization = 1
         self.project = 1
         self.repo_definition = MagicMock()
-        self.run_id = uuid.uuid4()
-        self.repo_info = RepositoryInfo(
-            id=1, organization=1, project=1, provider="github", external_slug="test/repo", sha="sha"
-        )
         self.repo_client = MagicMock()
         self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
+
+        self.namespace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
+            1, 1, "github", "getsentry/seer", "sha", "main"
+        )
+
         self.codebase_index = CodebaseIndex(
             self.organization,
             self.project,
             self.repo_client,
-            self.repo_info,
-            self.run_id,
+            self.namespace,
             embedding_model=MagicMock(),
         )
         self.mock_get_document = MagicMock()
         self.codebase_index.get_document = self.mock_get_document
+
+    def tearDown(self) -> None:
+        FilesystemStorageAdapter.clear_all_storage()
+        FilesystemStorageAdapter.clear_all_workspaces()
+        return super().tearDown()
 
     def test_get_file_patches(self):
         def get_document_mock(file_path, ignore_local_changes=False):

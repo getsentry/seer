@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     delete,
     func,
     select,
@@ -167,7 +168,16 @@ class DbRepositoryInfo(Base):
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
     sha: Mapped[str] = mapped_column(String(40), nullable=True)
     default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
-    __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
+    __table_args__ = (
+        UniqueConstraint("organization", "project", "provider", "external_slug"),
+        Index(
+            "ix_repository_organization_project_provider_slug",
+            "organization",
+            "project",
+            "provider",
+            "external_slug",
+        ),
+    )
 
 
 class DbCodebaseNamespace(Base):
@@ -176,10 +186,18 @@ class DbCodebaseNamespace(Base):
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
     tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    accessed_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
 
     __table_args__ = (
-        db.UniqueConstraint("repo_id", "sha"),
-        db.UniqueConstraint("repo_id", "tracking_branch"),
+        UniqueConstraint("repo_id", "sha"),
+        UniqueConstraint("repo_id", "tracking_branch"),
+        Index("ix_codebase_namespace_repo_id_sha", "repo_id", "sha"),
+        Index("ix_codebase_namespace_repo_id_tracking_branch", "repo_id", "tracking_branch"),
     )
 
 
