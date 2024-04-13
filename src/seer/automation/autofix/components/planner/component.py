@@ -7,6 +7,7 @@ from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.planner.models import (
+
     PlanningOutput,
     PlanningRequest,
     PlanStep,
@@ -24,9 +25,20 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
         super().__init__(context)
 
     def _parse(self, response: str) -> PlanningOutput | None:
-        parsed_output = ET.fromstring(
-            f'<response>{escape_multi_xml(response, ["title", "description", "step"])}</response>'
-        )
+        # Validation function to check for well-formed XML
+        def validate_xml(xml_str):
+            try:
+                ET.fromstring(xml_str)
+            except ET.ParseError as e:
+                autofix_logger.error(f"Invalid XML format: {e}")
+                return False
+            return True
+
+        xml_content = f'<response>{escape_multi_xml(response, ["title", "description", "step"])}</response>'
+        if not validate_xml(xml_content):
+            return None
+
+        parsed_output = ET.fromstring(xml_content)
 
         try:
             title_element = parsed_output.find(".//*title")
