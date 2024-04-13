@@ -158,6 +158,7 @@ def generate_random_string(n=6) -> str:
 def escape_xml_chars(s: str) -> str:
     return (
         s.replace("&", "&amp;")
+
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
@@ -175,10 +176,7 @@ def escape_xml(s: str, tag: str) -> str:
 
 
 def escape_multi_xml(s: str, tags: List[str]) -> str:
-    for tag in tags:
-        s = escape_xml(s, tag)
-
-    return s
+    return escape_xml_chars(s)
 
 
 def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
