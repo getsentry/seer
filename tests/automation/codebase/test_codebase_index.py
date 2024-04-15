@@ -133,10 +133,10 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         )
         self.namespace.save()
 
-    # def tearDown(self) -> None:
-    #     FilesystemStorageAdapter.clear_all_storage()
-    #     FilesystemStorageAdapter.clear_all_workspaces()
-    #     return super().tearDown()
+    def tearDown(self) -> None:
+        FilesystemStorageAdapter.clear_all_storage()
+        FilesystemStorageAdapter.clear_all_workspaces()
+        return super().tearDown()
 
     def mock_embed_chunks(self, chunks: list[BaseDocumentChunk], embedding_model: Any):
         return [EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks]
@@ -151,7 +151,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
 
         mock_repo_client.return_value.load_repo_to_tmp_dir.assert_not_called()
         self.assertEqual(codebase_index.workspace.namespace.sha, "sha")
-        print("This finished")
 
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
