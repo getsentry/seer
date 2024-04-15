@@ -484,7 +484,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_dt.now.return_value = mock_date
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
-        codebase_index.repo_client = self.repo_client
         codebase_index.embed_chunks = self.mock_embed_chunks
 
         codebase_index.update()
