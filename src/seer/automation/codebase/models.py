@@ -56,13 +56,15 @@ class ChunkQueryResult(ChunkResult):
 
 class BaseDocumentChunk(BaseModel):
     content: Annotated[str, Examples(lorem_ipsum)]
-    context: Optional[str]
+    context: Annotated[Optional[str], Examples(lorem_ipsum)]
     language: Annotated[str, Examples(("python",))]
     hash: Annotated[str, Examples(hashlib.sha1(s).hexdigest() for s in specialized.byte_strings)]
     path: Annotated[str, Examples(specialized.file_paths)]
-    index: int
-    token_count: int
-    repo_name: Optional[str] = None
+    index: Annotated[int, Examples(specialized.ints)]
+    token_count: Annotated[int, Examples(specialized.ints)]
+    repo_name: Annotated[
+        Optional[str], Examples(("getsentry/seer", "corps/johen", "getsentry/seer-automation"))
+    ]
 
     def get_short_hash(self) -> str:
         return self.hash[:SHORT_HASH_LENGTH]
@@ -114,7 +116,7 @@ class BaseDocumentChunk(BaseModel):
 
 
 class QueryResultDocumentChunk(BaseDocumentChunk):
-    distance: float
+    distance: Annotated[float, Examples(r.randrange(0, 100, 1) / 100 for r in gen)]
 
 
 class EmbeddedDocumentChunk(BaseDocumentChunk):
