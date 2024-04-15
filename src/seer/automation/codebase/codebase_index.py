@@ -188,7 +188,6 @@ class CodebaseIndex:
             for language, docs in documents_by_language.items():
                 logger.debug(f"  {language}: {len(docs)}")
 
-            print("documents", documents)
             doc_parser = DocumentParser(embedding_model)
             with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
                 chunks = doc_parser.process_documents(documents)
@@ -319,7 +318,6 @@ class CodebaseIndex:
                 )
                 embeddings_list.extend(batch_embeddings)
                 pbar.update(superchunk_size)
-        print("embeddings_list", chunks, embeddings_list)
         embeddings = np.array(embeddings_list)
         logger.debug(f"Embedded {len(chunks)} chunks")
 

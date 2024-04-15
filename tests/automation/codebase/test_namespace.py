@@ -142,7 +142,6 @@ class TestNamespaceManager(unittest.TestCase):
         )
 
         chunks = namespace.query_chunks(np.ones((768)) * 0.99, top_k=2)
-        print("chunks", chunks)
 
         self.assertEqual(len(chunks), 2)
         self.assertEqual(chunks[0].hash, "chunk2hash")

@@ -101,10 +101,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
         os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
 
-        self.repo_client = MagicMock()
-        self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
-        self.repo_client.repo.full_name = "getsentry/seer"
-
         self.embedding_model = MagicMock()
         self.embedding_model.encode.return_value = [np.ones((768))]
 
@@ -137,24 +133,25 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         )
         self.namespace.save()
 
-    def tearDown(self) -> None:
-        FilesystemStorageAdapter.clear_all_storage()
-        FilesystemStorageAdapter.clear_all_workspaces()
-        return super().tearDown()
+    # def tearDown(self) -> None:
+    #     FilesystemStorageAdapter.clear_all_storage()
+    #     FilesystemStorageAdapter.clear_all_workspaces()
+    #     return super().tearDown()
 
     def mock_embed_chunks(self, chunks: list[BaseDocumentChunk], embedding_model: Any):
         return [EmbeddedDocumentChunk(**dict(chunk), embedding=np.ones((768))) for chunk in chunks]
 
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     def test_update_no_changes(self, mock_repo_client):
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=([], []))
+        mock_repo_client.return_value.get_commit_file_diffs.return_value = ([], [])
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
-        codebase_index.repo_client = self.repo_client
+        codebase_index.embed_chunks = self.mock_embed_chunks
         codebase_index.update()
 
-        self.repo_client.load_repo_to_tmp_dir.assert_not_called()
+        mock_repo_client.return_value.load_repo_to_tmp_dir.assert_not_called()
         self.assertEqual(codebase_index.workspace.namespace.sha, "sha")
+        print("This finished")
 
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
@@ -169,8 +166,13 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_cleanup_dir,
         mock_repo_client,
     ):
-        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+            "tmp_dir",
+            "tmp_dir/repo",
+        )
+        mock_repo_client.return_value.get_branch_head_sha.return_value = "new_sha"
+        mock_repo_client.return_value.get_commit_file_diffs.return_value = (["file1.py"], [])
+
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
@@ -197,7 +199,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_dt.now.return_value = mock_date
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
-        codebase_index.repo_client = self.repo_client
         codebase_index.embed_chunks = self.mock_embed_chunks
 
         codebase_index.update()
@@ -235,8 +236,13 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_cleanup_dir,
         mock_repo_client,
     ):
-        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+            "tmp_dir",
+            "tmp_dir/repo",
+        )
+        mock_repo_client.return_value.get_branch_head_sha.return_value = "new_sha"
+        mock_repo_client.return_value.get_commit_file_diffs.return_value = (["file1.py"], [])
+
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
@@ -272,7 +278,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_dt.now.return_value = mock_date
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
-        codebase_index.repo_client = self.repo_client
         codebase_index.embed_chunks = self.mock_embed_chunks
 
         codebase_index.update()
@@ -310,8 +315,12 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_cleanup_dir,
         mock_repo_client,
     ):
-        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+            "tmp_dir",
+            "tmp_dir/repo",
+        )
+        mock_repo_client.return_value.get_branch_head_sha.return_value = "new_sha"
+        mock_repo_client.return_value.get_commit_file_diffs.return_value = (["file1.py"], [])
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
@@ -347,7 +356,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_dt.now.return_value = mock_date
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
-        codebase_index.repo_client = self.repo_client
         codebase_index.embed_chunks = self.mock_embed_chunks
 
         codebase_index.update()
@@ -385,8 +393,12 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_cleanup_dir,
         mock_repo_client,
     ):
-        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+            "tmp_dir",
+            "tmp_dir/repo",
+        )
+        mock_repo_client.return_value.get_branch_head_sha.return_value = "new_sha"
+        mock_repo_client.return_value.get_commit_file_diffs.return_value = (["file1.py"], [])
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = [
             BaseDocumentChunk(
@@ -422,7 +434,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_dt.now.return_value = mock_date
 
         codebase_index = CodebaseIndex.from_repo_id(1, embedding_model=self.embedding_model)
-        codebase_index.repo_client = self.repo_client
         codebase_index.embed_chunks = self.mock_embed_chunks
 
         codebase_index.update()
@@ -460,8 +471,12 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
         mock_cleanup_dir,
         mock_repo_client,
     ):
-        self.repo_client.get_branch_head_sha = MagicMock(return_value="new_sha")
-        self.repo_client.get_commit_file_diffs = MagicMock(return_value=(["file1.py"], []))
+        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+            "tmp_dir",
+            "tmp_dir/repo",
+        )
+        mock_repo_client.return_value.get_branch_head_sha.return_value = "new_sha"
+        mock_repo_client.return_value.get_commit_file_diffs.return_value = (["file1.py"], [])
         mock_read_specific_files.return_value = {"file1.py": "content"}
         mock_document_parser.return_value.process_documents.return_value = []
 
@@ -681,8 +696,6 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         # Execute
         patches, diff_str = self.codebase_index.get_file_patches()
         patches.sort(key=lambda p: p.path)  # Sort patches by path to make the test deterministic
-
-        print(patches)
 
         # Assert
         self.assertEqual(len(patches), 1)
