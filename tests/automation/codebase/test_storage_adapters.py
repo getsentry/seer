@@ -106,6 +106,8 @@ class TestGcsStorageAdapter(unittest.TestCase):
         self.assertTrue(adapter.copy_to_workspace())
         self.assertTrue(os.path.exists(workspace_location))
         mock_blob.download_to_filename.assert_called_once()
+        self.assertIsNotNone(mock_blob.custom_time)
+        mock_blob.patch.assert_called_once()
 
     @patch("seer.automation.codebase.storage_adapters.storage.Client")
     def test_save_to_storage(self, mock_gcs_client):
@@ -128,4 +130,5 @@ class TestGcsStorageAdapter(unittest.TestCase):
 
         # Verify that the blob upload method was called with the correct path
         mock_bucket.blob.assert_called_with(f"{storage_prefix}/test_file.txt")
+        self.assertIsNotNone(mock_blob.custom_time)
         mock_blob.upload_from_filename.assert_called_with(test_file_path)

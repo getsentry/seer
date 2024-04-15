@@ -1,8 +1,10 @@
 import abc
 import dataclasses
+import datetime
 import os
 import shutil
 
+# Why is this all good on pylance but mypy is complaining?
 from google.cloud import storage  # type: ignore
 
 from seer.automation.autofix.utils import autofix_logger
@@ -103,16 +105,22 @@ class GcsStorageAdapter(StorageAdapter):
         storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
 
         blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
-        blobs_list = list(blobs)
+        blobs_list: list[storage.Blob] = list(blobs)
         for blob in blobs_list:
-            filename = blob.name.replace(storage_prefix + "/", "")
-            download_path = os.path.join(workspace_path, filename)
+            if blob.name:
+                filename = blob.name.replace(storage_prefix + "/", "")
+                download_path = os.path.join(workspace_path, filename)
 
-            if not os.path.exists(os.path.dirname(download_path)):
-                os.makedirs(os.path.dirname(download_path))
+                if not os.path.exists(os.path.dirname(download_path)):
+                    os.makedirs(os.path.dirname(download_path))
 
-            blob.download_to_filename(download_path)
-            print("downloaded file:", filename, "to", download_path)
+                blob.download_to_filename(download_path)
+
+                # Update the custom time of the blob to the current time
+                # We use custom time to track when the file was last used
+                # This is to manage the lifecycle of the files in the storage
+                blob.custom_time = datetime.datetime.now()
+                blob.patch()
 
         autofix_logger.debug(
             f"Downloaded files from {storage_prefix} to workspace: {workspace_path}"
@@ -126,6 +134,7 @@ class GcsStorageAdapter(StorageAdapter):
 
         blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
         for blob in blobs:
+            # Delete the existing blobs in the storage prefix
             blob.delete()
 
         for root, dirs, files in os.walk(workspace_path):
@@ -133,7 +142,14 @@ class GcsStorageAdapter(StorageAdapter):
                 file_path = os.path.join(root, file)
                 relative_path = os.path.relpath(file_path, workspace_path)
                 blob_path = f"{storage_prefix}/{relative_path}"
+
                 blob = self.get_bucket().blob(blob_path)
+
+                # Update the custom time of the blob to the current time
+                # We use custom time to track when the file was last used
+                # This is to manage the lifecycle of the files in the storage
+                blob.custom_time = datetime.datetime.now()
+
                 blob.upload_from_filename(file_path)
 
         autofix_logger.debug(f"Uploaded files from workspace: {workspace_path} to {storage_prefix}")
