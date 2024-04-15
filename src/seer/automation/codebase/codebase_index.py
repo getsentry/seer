@@ -22,6 +22,7 @@ from seer.automation.codebase.models import (
     CodebaseNamespace,
     Document,
     EmbeddedDocumentChunk,
+    QueryResultDocumentChunk,
     RepositoryInfo,
 )
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
@@ -344,14 +345,14 @@ class CodebaseIndex:
 
         return False
 
-    def query(self, query: str, top_k: int = 4):
+    def query(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
         assert self.repo_info is not None, "Repository info is not set"
 
         embedding = self.embedding_model.encode(query, show_progress_bar=False)
 
-        hashes = self.workspace.query_chunks(embedding, top_k)
+        query_results = self.workspace.query_chunks(embedding, top_k)
 
-        return self._get_chunks(hashes)
+        return self._get_chunks(query_results)
 
     @class_method_lru_cache(maxsize=32)
     def _get_file_content_with_cache(self, path: str, sha: str):
@@ -441,13 +442,13 @@ class CodebaseIndex:
                             frame.filename = valid_path
                             break
 
-    def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[BaseDocumentChunk]:
+    def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[QueryResultDocumentChunk]:
         ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)
 
-        matched_chunks: list[BaseDocumentChunk] = []
+        matched_chunks: list[QueryResultDocumentChunk] = []
         for chunk_result in chunk_results:
             document = self.get_document(chunk_result.path)
 
@@ -463,7 +464,11 @@ class CodebaseIndex:
                 logger.warning(f"Failed to match chunk with hash {chunk_result.hash}")
                 continue
 
-            matched_chunks.append(matched_chunk)
+            matched_chunks.append(
+                QueryResultDocumentChunk.model_validate(
+                    dict(**dict(matched_chunk), distance=chunk_result.distance)
+                )
+            )
 
         return matched_chunks
 

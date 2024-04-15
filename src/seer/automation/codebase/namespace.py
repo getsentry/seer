@@ -9,6 +9,7 @@ from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.models import (
     BaseDocumentChunk,
     ChunkQueryResult,
+    ChunkResult,
     CodebaseNamespace,
     EmbeddedDocumentChunk,
     RepositoryInfo,
@@ -335,7 +336,7 @@ class CodebaseNamespaceManager:
             metadatas=metadatas,
         )
 
-    def get_chunks_for_paths(self, paths: list[str]) -> list[ChunkQueryResult]:
+    def get_chunks_for_paths(self, paths: list[str]) -> list[ChunkResult]:
         if not paths:
             return []
 
@@ -390,10 +391,12 @@ class CodebaseNamespaceManager:
     def _get_chunk_query_results(
         self, query_results: chromadb.QueryResult
     ) -> list[ChunkQueryResult]:
-        if not query_results["ids"]:
+        if not query_results["ids"] or not query_results["distances"]:
             return []
 
         hashes = query_results["ids"][0]  # Assumes a single query
+        distances = query_results["distances"][0]
+
         metadatas = query_results["metadatas"]
 
         if not metadatas:
@@ -404,11 +407,15 @@ class CodebaseNamespaceManager:
         languages = [str(metadata["language"]) for metadata in metadatas[0]]
 
         return [
-            ChunkQueryResult(path=path, hash=hash, language=language, index=index)
-            for path, hash, language, index in zip(paths, hashes, languages, indicies)
+            ChunkQueryResult(
+                path=path, hash=hash, language=language, index=index, distance=distance
+            )
+            for path, hash, language, index, distance in zip(
+                paths, hashes, languages, indicies, distances
+            )
         ]
 
-    def _get_chunk_get_results(self, query_results: chromadb.GetResult) -> list[ChunkQueryResult]:
+    def _get_chunk_get_results(self, query_results: chromadb.GetResult) -> list[ChunkResult]:
         if not query_results["ids"]:
             return []
 
@@ -423,6 +430,6 @@ class CodebaseNamespaceManager:
         languages = [str(metadata["language"]) for metadata in metadatas]
 
         return [
-            ChunkQueryResult(path=path, hash=hash, language=language, index=index)
+            ChunkResult(path=path, hash=hash, language=language, index=index)
             for path, hash, language, index in zip(paths, hashes, languages, indicies)
         ]

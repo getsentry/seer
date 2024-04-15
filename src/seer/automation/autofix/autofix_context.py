@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.codebase.codebase_index import CodebaseIndex
+from seer.automation.codebase.models import QueryResultDocumentChunk
 from seer.automation.models import EventDetails, InitializationError, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
@@ -101,9 +102,11 @@ class AutofixContext(PipelineContext):
         return None, None
 
     def query_all_codebases(self, query: str, repo_top_k: int = 4):
-        chunks = []
+        chunks: list[QueryResultDocumentChunk] = []
         for codebase in self.codebases.values():
             chunks.extend(codebase.query(query, top_k=repo_top_k))
+
+        chunks.sort(key=lambda x: x.distance)
 
         return chunks
 

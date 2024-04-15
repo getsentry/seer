@@ -43,11 +43,15 @@ class DocumentChunkPromptXml(PromptXmlModel, tag="chunk", skip_empty=True):
     content: str
 
 
-class ChunkQueryResult(BaseModel):
+class ChunkResult(BaseModel):
     hash: str
     path: str
     language: str
     index: int
+
+
+class ChunkQueryResult(ChunkResult):
+    distance: float
 
 
 class BaseDocumentChunk(BaseModel):
@@ -107,6 +111,10 @@ class BaseDocumentChunk(BaseModel):
 
     def __repr__(self):
         return self.__str__()
+
+
+class QueryResultDocumentChunk(BaseDocumentChunk):
+    distance: float
 
 
 class EmbeddedDocumentChunk(BaseDocumentChunk):
