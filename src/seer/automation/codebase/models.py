@@ -64,7 +64,7 @@ class BaseDocumentChunk(BaseModel):
     token_count: Annotated[int, Examples(specialized.ints)]
     repo_name: Annotated[
         Optional[str], Examples(("getsentry/seer", "corps/johen", "getsentry/seer-automation"))
-    ]
+    ] = None
 
     def get_short_hash(self) -> str:
         return self.hash[:SHORT_HASH_LENGTH]

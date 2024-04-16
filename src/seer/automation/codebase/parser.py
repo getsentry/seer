@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import textwrap
-import time
 
 import tree_sitter_languages
 from pydantic import BaseModel
@@ -12,9 +11,7 @@ from tree_sitter import Node
 from seer.automation.codebase.ast import (
     AstDeclaration,
     extract_declaration,
-    first_child_with_type,
     get_indent_start_byte,
-    index_with_node_type,
     node_is_a_declaration,
 )
 from seer.automation.codebase.models import BaseDocumentChunk, Document
