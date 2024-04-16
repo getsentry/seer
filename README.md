@@ -39,7 +39,7 @@ gsutil cp -r gs://sentry-ml/seer/models ./models
 To run for development locally in one ago including building the docker image and rabbitmq container:
 
 ```bash
-make dev # runs docker-compose up --build
+make dev # runs docker compose up --build
 ```
 
 Port `9091` will be exposed which is what the local sentry application will look for to connect to the service.
@@ -77,6 +77,6 @@ make shell
 If you run into any data issue or connection issue and want to start from scratch, run the following set of commands from the command shell inside the seer repo:
 
 ```
-docker-compose down --volumes
+docker compose down --volumes
 make update && make dev
 ```

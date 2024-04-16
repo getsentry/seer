@@ -16,26 +16,26 @@ pip: # Runs pip install with the requirements.txt file
 
 .PHONY: shell
 shell: .env # Opens a bash shell in the context of the project
-	docker-compose run app bash
+	docker compose run app bash
 
 .PHONY: update
-update: .env # Updates the project's docker-compose image.
-	docker-compose build
-	docker-compose run app flask db upgrade
+update: .env # Updates the project's docker compose image.
+	docker compose build
+	docker compose run app flask db upgrade
 
 .PHONY: dev
 dev: .env # Starts the webserver based on the current src on port 9091
-	docker-compose up --build
+	docker compose up --build
 
 .PHONY: dev-cuda
 dev-cuda: .env # Starts the webserver based on the current src on port 9091 with cuda enabled
-	docker-compose -f docker-compose.yml -f docker-compose.cuda.yml up --build
+	docker compose -f docker-compose.yml -f docker-compose.cuda.yml up --build
 
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
-	docker-compose up -d test-db
-	docker-compose run app mypy
-	docker-compose run app pytest
+	docker compose up -d test-db
+	docker compose run app mypy
+	docker compose run app pytest
 
 .PHONY: mypy
 mypy: # Runs mypy type checking
@@ -44,7 +44,7 @@ mypy: # Runs mypy type checking
 .PHONY: schemas
 schemas: # Generates json files
 	#docker run --rm -v ./src/seer/schemas:/app/src/seer/schemas $(project_name):latest python src/seer/generate_schemas.py
-	docker-compose run app python src/seer/generate_schemas.py
+	docker compose run app python src/seer/generate_schemas.py
 	git clone --depth 1 https://github.com/getsentry/sentry-data-schemas.git $(tmpdir)
 	docker run --rm -t \
 	  -v $(tmpdir):/sentry-data-schemas:ro \
@@ -53,11 +53,11 @@ schemas: # Generates json files
 
 .PHONY: migration
 migration: .env
-	docker-compose run app flask db migrate -m 'Migration'
+	docker compose run app flask db migrate -m 'Migration'
 
 .PHONY: merge-migrations
 merge-migrations: .env
-	docker-compose run app flask db merge heads
+	docker compose run app flask db merge heads
 
 .env:
 	cp .env.example .env
