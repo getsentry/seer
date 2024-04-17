@@ -177,7 +177,7 @@ class GroupingLookup:
                     DbGroupingRecord.project_id == issue.project_id,
                     DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= 0.15,
                     DbGroupingRecord.group_id != issue.group_id,
-                    DbGroupingRecord.group_id != None,
+                    DbGroupingRecord.group_id is not None,
                 )
                 .order_by("distance")
                 .limit(issue.k)
