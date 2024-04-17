@@ -122,6 +122,7 @@ def find_original_snippet(
         else:
             ellipsis_found = False
             if similarity < threshold:
+                snippet_index = 0
                 file_line_index += 1
             else:
                 snippet_index += 1
