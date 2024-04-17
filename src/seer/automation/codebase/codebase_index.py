@@ -21,6 +21,7 @@ from seer.automation.codebase.models import (
     ChunkQueryResult,
     CodebaseNamespace,
     Document,
+    DraftDocument,
     EmbeddedDocumentChunk,
     QueryResultDocumentChunk,
     RepositoryInfo,
@@ -361,7 +362,9 @@ class CodebaseIndex:
         except Exception as e:
             return None
 
-    def _copy_document_with_local_changes(self, document: Document) -> Document | None:
+    def _copy_document_with_local_changes(
+        self, document: DraftDocument | Document
+    ) -> Document | None:
         content: str | None = document.text
         # Make sure the changes are applied in order!
         changes = list(filter(lambda x: x.path == document.path, self.file_changes))
@@ -380,17 +383,22 @@ class CodebaseIndex:
         document_content = self._get_file_content_with_cache(path, self.namespace.sha)
 
         language = get_language_from_path(path)
-
         if language is None:
             logger.warning(f"Unsupported language for {path}")
             return None
 
-        document = Document(path=path, text=document_content or "", language=language)
+        if document_content is None:
+            if ignore_local_changes:
+                return None
+            document = DraftDocument(path=path, language=language)
+        else:
+            document = Document(path=path, text=document_content, language=language)
 
-        if not ignore_local_changes:
-            return self._copy_document_with_local_changes(document)
-
-        return document
+        return (
+            self._copy_document_with_local_changes(document)
+            if not ignore_local_changes
+            else document
+        )
 
     def store_file_change(self, file_change: FileChange):
         self.file_changes.append(file_change)

@@ -30,6 +30,10 @@ class Document(BaseModel):
     language: str
 
 
+class DraftDocument(Document):
+    text: str | None = None
+
+
 lorem_ipsum_parts = "lLorem ipsum dolor sit amet, consectetur adipiscing elit.".split()
 lorem_ipsum = (" ".join(r.choice(lorem_ipsum_parts) for _ in range(r.randint(15, 90))) for r in gen)
 
