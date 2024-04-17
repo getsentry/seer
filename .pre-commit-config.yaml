@@ -57,9 +57,5 @@ repos:
       - id: check-symlinks
       - id: check-yaml
       - id: end-of-file-fixer
-        exclude_types: [svg]
-        exclude: ^fixtures/
       - id: trailing-whitespace
-        exclude_types: [svg]
-        exclude: ^(fixtures/|scripts/patches/)
       - id: debug-statements
