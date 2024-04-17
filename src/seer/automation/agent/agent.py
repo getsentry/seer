@@ -107,13 +107,13 @@ class GptAgent(LlmAgent):
         tools: list[FunctionTool] | None = None,
         memory: list[Message] | None = None,
         name="GptAgent",
-        chat_completion_kwargs={},
+        chat_completion_kwargs=None,
         stop_message: str | None = None,
     ):
         super().__init__(tools, memory, name=name, stop_message=stop_message)
         self.client = GptClient(model=self.model)
 
-        self.chat_completion_kwargs = chat_completion_kwargs
+        self.chat_completion_kwargs = chat_completion_kwargs or {}
 
     def run_iteration(self):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")

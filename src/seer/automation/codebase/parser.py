@@ -90,7 +90,7 @@ class DocumentParser:
         self,
         node: Node,
         language: str,
-        parent_declarations: list[AstDeclaration] = [],
+        parent_declarations: list[AstDeclaration] | None = None,
         root_node: Node | None = None,
         last_end_byte=0,
     ) -> list[TempChunk]:
@@ -105,6 +105,9 @@ class DocumentParser:
         Returns:
         List[List[Node]]: A list of lists, where each sublist contains touching nodes.
         """
+        if parent_declarations is None:
+            parent_declarations = []
+
         children = node.children
         root_node = root_node or node
 
