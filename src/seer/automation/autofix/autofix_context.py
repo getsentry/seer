@@ -101,14 +101,17 @@ class AutofixContext(PipelineContext):
 
         return None, None
 
-    def query_all_codebases(self, query: str, repo_top_k: int = 4):
+    def query_all_codebases(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
+        """
+        Queries all codebases for top_k chunks matching the specified query and returns the only the overall top_k closest matches.
+        """
         chunks: list[QueryResultDocumentChunk] = []
         for codebase in self.codebases.values():
-            chunks.extend(codebase.query(query, top_k=repo_top_k))
+            chunks.extend(codebase.query(query, top_k=2 * top_k))
 
         chunks.sort(key=lambda x: x.distance)
 
-        return chunks
+        return chunks[:top_k]
 
     def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
         stacktraces = [exception.stacktrace for exception in event_details.exceptions]

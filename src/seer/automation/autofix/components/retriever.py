@@ -13,7 +13,7 @@ from seer.automation.models import PromptXmlModel
 
 class RetrieverRequest(BaseComponentRequest):
     text: str
-    repo_top_k: int = 4
+    top_k: int = 8
     include_short_hash_as_id: bool = False
 
 
@@ -99,9 +99,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
             context_dump = ""
             unique_chunks: dict[str, BaseDocumentChunk] = {}
             for query in queries:
-                retrived_chunks = self.context.query_all_codebases(
-                    query, repo_top_k=request.repo_top_k
-                )
+                retrived_chunks = self.context.query_all_codebases(query, top_k=request.top_k)
                 for chunk in retrived_chunks:
                     unique_chunks[chunk.hash] = chunk
             chunks = list(unique_chunks.values())

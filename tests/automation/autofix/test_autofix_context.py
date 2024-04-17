@@ -37,7 +37,7 @@ class TestAutofixContext(unittest.TestCase):
         }
 
         sorted_chunks = sorted(chunks, key=lambda x: x.distance)
-        result_chunks = self.autofix_context.query_all_codebases("test")
+        result_chunks = self.autofix_context.query_all_codebases("test", top_k=8)
 
         self.assertEqual(result_chunks, sorted_chunks)
 
