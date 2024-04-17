@@ -390,15 +390,15 @@ class CodebaseIndex:
         if document_content is None:
             if ignore_local_changes:
                 return None
-            document = DraftDocument(path=path, language=language)
-        else:
-            document = Document(path=path, text=document_content, language=language)
+            return self._copy_document_with_local_changes(
+                DraftDocument(path=path, language=language)
+            )
 
-        return (
-            self._copy_document_with_local_changes(document)
-            if not ignore_local_changes
-            else document
-        )
+        document = Document(path=path, text=document_content, language=language)
+
+        if ignore_local_changes:
+            return document
+        return self._copy_document_with_local_changes(document)
 
     def store_file_change(self, file_change: FileChange):
         self.file_changes.append(file_change)

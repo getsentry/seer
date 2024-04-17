@@ -30,8 +30,10 @@ class Document(BaseModel):
     language: str
 
 
-class DraftDocument(Document):
-    text: str | None = None
+class DraftDocument(BaseModel):
+    path: str
+    text: Optional[str] = None
+    language: str
 
 
 lorem_ipsum_parts = "lLorem ipsum dolor sit amet, consectetur adipiscing elit.".split()
