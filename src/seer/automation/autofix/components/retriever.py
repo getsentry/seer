@@ -69,7 +69,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
-    @traceable(name="Retriever", run_type="retriever", tags=["retriever:v1.1"])
+    @traceable(name="Retriever", run_type="retriever", tags=["retriever:v1.2"])
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         with self.context.state.update() as cur:
             # Identify good search queries for the plan item
