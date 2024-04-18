@@ -20,14 +20,14 @@ def _get_torch_device_name():
             try:
                 index: int = billiard.process.current_process().index
                 if index < 0 or index >= EXPECTED_CUDA_DEVICES:
-                    logger.warn(
+                    logger.warning(
                         f"CUDA device selection: invalid process index {index}. Defaulting to active GPU."
                     )
                     device = "cuda"
                 else:
                     device = f"cuda:{index}"
             except Exception as e:
-                logger.warn(
+                logger.warning(
                     "CUDA device selection: unable to look up celery process index. Defaulting to active GPU.",
                     exc_info=e,
                 )

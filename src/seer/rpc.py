@@ -50,7 +50,7 @@ class DummyRpcClient(RpcClient):
     dry_run: bool = False
 
     def call(self, method: str, **kwargs) -> dict[str, Any] | None:
-        logger.warn(f"Call to Sentry autofix API {method} handled by DummyRpcClient")
+        logger.warning(f"Call to Sentry autofix API {method} handled by DummyRpcClient")
         result = self.handlers.get(method, self._default_call)(method, kwargs)
         if result is None:
             return None
