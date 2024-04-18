@@ -21,7 +21,7 @@ from seer.db import DbDocumentChunk, DbDocumentTombstone, DbRepositoryInfo, Sess
 
 @dataclasses.dataclass
 class EmbeddedDocumentFactory:
-    _chunks: tuple[EmbeddedDocumentChunk, EmbeddedDocumentChunk, ...]
+    _chunks: tuple[EmbeddedDocumentChunk, ...]
 
     def as_embedded_chunks(self, file_path: str) -> list[EmbeddedDocumentChunk]:
         assert self._chunks
@@ -170,7 +170,7 @@ class CanonicalCodebaseIndex:
 
 @dataclasses.dataclass
 class FollowupUpdates:
-    changes: tuple[FollowupUpdate, FollowupUpdate, FollowupUpdate, ...]
+    changes: tuple[FollowupUpdate, ...]
     deletes: list[str] = dataclasses.field(default_factory=list)
     updates: dict[str, list[EmbeddedDocumentChunk]] = dataclasses.field(default_factory=dict)
     new_documents: dict[str, list[EmbeddedDocumentChunk]] = dataclasses.field(default_factory=dict)
