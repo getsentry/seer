@@ -412,7 +412,7 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunks = (
                 session.query(DbDocumentChunk)
                 .where(DbDocumentChunk.path == "file1.py")
-                .where(DbDocumentChunk.namespace is None)
+                .where(DbDocumentChunk.namespace == None)
                 .order_by("index")
                 .all()
             )
