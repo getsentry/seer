@@ -463,22 +463,19 @@ class CUSUMDetector:
         Returns:
             A list of CUSUMChangePoint.
         """
-        defaultArgs = CUSUMDefaultArgs()
         # Extract all arg values or assign defaults from default vals constant
-        threshold = kwargs.get("threshold", defaultArgs.threshold)
-        max_iter = kwargs.get("max_iter", defaultArgs.max_iter)
-        delta_std_ratio = kwargs.get("delta_std_ratio", defaultArgs.delta_std_ratio)
-        min_abs_change = kwargs.get("min_abs_change", defaultArgs.min_abs_change)
-        start_point = kwargs.get("start_point", defaultArgs.start_point)
-        change_directions = kwargs.get("change_directions", defaultArgs.change_directions)
-        interest_window = kwargs.get("interest_window", defaultArgs.interest_window)
-        magnitude_quantile = kwargs.get("magnitude_quantile", defaultArgs.magnitude_quantile)
-        magnitude_ratio = kwargs.get("magnitude_ratio", defaultArgs.magnitude_ratio)
-        magnitude_comparable_day = kwargs.get(
-            "magnitude_comparable_day", defaultArgs.magnitude_comparable_day
-        )
+        default_args = CUSUMDefaultArgs()
+        threshold = kwargs.get("threshold", default_args.threshold)
+        max_iter = kwargs.get("max_iter", default_args.max_iter)
+        delta_std_ratio = kwargs.get("delta_std_ratio", default_args.delta_std_ratio)
+        min_abs_change = kwargs.get("min_abs_change", default_args.min_abs_change)
+        start_point = kwargs.get("start_point", default_args.start_point)
+        change_directions = kwargs.get("change_directions", default_args.change_directions)
+        interest_window = kwargs.get("interest_window", default_args.interest_window)
+        magnitude_quantile = kwargs.get("magnitude_quantile", default_args.magnitude_quantile)
+        magnitude_ratio = kwargs.get("magnitude_ratio", default_args.magnitude_ratio)
         return_all_changepoints = kwargs.get(
-            "return_all_changepoints", defaultArgs.return_all_changepoints
+            "return_all_changepoints", default_args.return_all_changepoints
         )
 
         self.interest_window = interest_window
