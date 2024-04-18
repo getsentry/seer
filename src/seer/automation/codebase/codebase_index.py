@@ -506,7 +506,8 @@ class CodebaseIndex:
     def _populate_chunks(
         self, chunks: list[DbDocumentChunk]
     ) -> list[StoredDocumentChunkWithRepoName]:
-        ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
+        # This seems awfully wasteful to chunk and hash a document for each returned chunk but I
+        # guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)
