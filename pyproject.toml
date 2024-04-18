@@ -41,9 +41,6 @@
             "johen",
         ]
         ignore_missing_imports = true
-
-    [[tool.mypy.overrides]]
-        module = []
         disable_error_code = [
             "arg-type",
             "assignment",
