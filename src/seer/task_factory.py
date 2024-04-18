@@ -53,20 +53,19 @@ class AsyncTaskFactory(abc.ABC):
                     await asyncio.wait([get, complete], return_when=asyncio.FIRST_COMPLETED)
                     if get.done():
                         v = await get
-                        if v:
-                            if v["status"] == "PROGRESS":
-                                try:
-                                    yield v["result"]
-                                except Exception as e:
-                                    if not complete.done():
-                                        logger.warning("SIGUSR1 on job, generator failed")
-                                        await loop.run_in_executor(
-                                            pool,
-                                            lambda: ar.revoke(
-                                                terminate=True, signal="SIGUSR1", wait=False
-                                            ),
-                                        )
-                                    raise e
+                        if v and v["status"] == "PROGRESS":
+                            try:
+                                yield v["result"]
+                            except Exception as e:
+                                if not complete.done():
+                                    logger.warning("SIGUSR1 on job, generator failed")
+                                    await loop.run_in_executor(
+                                        pool,
+                                        lambda: ar.revoke(
+                                            terminate=True, signal="SIGUSR1", wait=False
+                                        ),
+                                    )
+                                raise e
             finally:
                 logger.info("async celery job completing")
                 loop.run_in_executor(pool, lambda: q.put_nowait(None))
