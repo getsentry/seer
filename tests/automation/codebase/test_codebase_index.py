@@ -412,7 +412,7 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
             chunks = (
                 session.query(DbDocumentChunk)
                 .where(DbDocumentChunk.path == "file1.py")
-                .where(DbDocumentChunk.namespace == None)
+                .where(DbDocumentChunk.namespace == None)  # noqa - sqlalchemy can't parse `is`
                 .order_by("index")
                 .all()
             )

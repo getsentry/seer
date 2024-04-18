@@ -354,7 +354,7 @@ class Autofix(Pipeline):
                 "get_organization_slug", org_id=organization_id
             )
             slug = None if response is None else response.get("slug", None)
-            if slug == None:
+            if slug is None:
                 autofix_logger.warn(
                     f"Slug lookup call for organization {organization_id} succeeded but returned value None."
                 )
