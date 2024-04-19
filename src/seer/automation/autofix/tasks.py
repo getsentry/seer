@@ -48,7 +48,7 @@ def get_autofix_state(group_id: int) -> AutofixContinuation | None:
         return continuation.get()
 
 
-@celery_app.task(time_limit=60 * 15)  # 15 minute task timeout
+@celery_app.task(time_limit=60 * 30)  # 30 minute task timeout
 def run_autofix_root_cause(
     request_data: dict[str, Any],
     autofix_group_state: dict[str, Any] | None = None,

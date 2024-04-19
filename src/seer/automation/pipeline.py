@@ -12,8 +12,10 @@ class PipelineContext(abc.ABC):
 
 
 class PipelineSideEffect(abc.ABC):
+    context: PipelineContext
+
     @abc.abstractmethod
-    def invoke(self, context: PipelineContext):
+    def invoke(self):
         pass
 
 
@@ -26,7 +28,7 @@ class Pipeline(abc.ABC):
 
     def invoke_side_effects(self):
         for side_effect in self.side_effects:
-            side_effect.invoke(self.context)
+            side_effect.invoke()
 
     @abc.abstractmethod
     def invoke(self, request: Any) -> Any:

@@ -84,17 +84,11 @@ class CodebaseIndex:
 
     @staticmethod
     def has_repo_been_indexed(organization: int, project: int, repo: RepoDefinition):
-        return (
-            Session()
-            .query(DbRepositoryInfo)
-            .filter(
-                DbRepositoryInfo.organization == organization,
-                DbRepositoryInfo.project == project,
-                DbRepositoryInfo.provider == repo.provider,
-                DbRepositoryInfo.external_slug == f"{repo.owner}/{repo.name}",
-            )
-            .count()
-            > 0
+        return CodebaseNamespaceManager.does_repo_exist(
+            organization=organization,
+            project=project,
+            provider=repo.provider,
+            external_slug=repo.full_name,
         )
 
     @classmethod
@@ -180,6 +174,8 @@ class CodebaseIndex:
         embedding_model: SentenceTransformer,
         tracking_branch: str | None = None,
         sha: str | None = None,
+        state: State | None = None,
+        state_manager_class: Type[CodebaseStateManager] | None = None,
     ):
         repo_client = RepoClient(repo.provider, repo.owner, repo.name)
 
@@ -231,7 +227,11 @@ class CodebaseIndex:
                 project,
                 repo_client,
                 workspace=workspace,
-                state_manager=DummyCodebaseStateManager(),
+                state_manager=(
+                    state_manager_class(repo_id=workspace.repo_info.id, state=state)
+                    if state and state_manager_class
+                    else DummyCodebaseStateManager()
+                ),
                 embedding_model=embedding_model,
             )
         finally:

@@ -276,6 +276,11 @@ class AutofixContinuation(AutofixGroupState):
         self.steps.append(base_step)
         return base_step
 
+    def make_step_latest(self, step: Step):
+        if step in self.steps:
+            self.steps.remove(step)
+            self.steps.append(step)
+
     def mark_all_steps_completed(self):
         for step in self.steps:
             step.status = AutofixStatus.COMPLETED

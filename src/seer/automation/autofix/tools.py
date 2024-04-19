@@ -45,7 +45,7 @@ class BaseTools:
 
     @traceable(run_type="tool", name="Expand Document")
     def expand_document(self, input: str, repo_name: str | None = None):
-        self.context.event_manager.log_tool_use(
+        self.context.event_manager.add_log(
             f"Taking a look at the document at {input} in {repo_name}."
         )
 
@@ -110,7 +110,7 @@ class CodeActionTools(BaseTools):
             codebase.store_file_change(file_change)
             cur.codebases[codebase.repo_info.id].file_changes.append(file_change)
 
-        self.context.event_manager.log_tool_use(
+        self.context.event_manager.add_log(
             f"Made a code change in {file_change.path} in {codebase.repo_info.external_slug}."
         )
 

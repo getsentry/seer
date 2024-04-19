@@ -34,6 +34,6 @@ class RetrieverWithRerankerComponent(BaseComponent[RetrieverRequest, RetrieverOu
         file_names = set()
         for chunk in reranker_output.chunks:
             file_names.add(chunk.path)
-        self.context.event_manager.log_tool_use(f"Retrieved code from files: {file_names}")
+        self.context.event_manager.add_log(f"Retrieved code from files: {file_names}")
 
         return RetrieverOutput(chunks=reranker_output.chunks)

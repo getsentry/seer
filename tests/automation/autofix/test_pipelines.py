@@ -24,8 +24,40 @@ from seer.automation.autofix.pipelines import (
     AutofixExecution,
     AutofixRootCause,
     CheckCodebaseForUpdatesSideEffect,
+    CreateAnyMissingCodebaseIndexesSideEffect,
 )
 from seer.automation.models import EventDetails, IssueDetails, SentryEventData
+
+
+class TestCreateAnyMissingCodebaseIndexesSideEffect(unittest.TestCase):
+    @patch("seer.automation.autofix.pipelines.AutofixContext")
+    def test_invoke_creation_not_needed(self, mock_context):
+        # Setup
+        mock_context.return_value.has_missing_codebase_indexes.return_value = False
+        side_effect = CreateAnyMissingCodebaseIndexesSideEffect(mock_context())
+
+        # Test
+        side_effect.invoke()
+
+        # Verify
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_not_called()
+        mock_context.return_value.event_manager.create_codebase_index.assert_not_called()
+
+    @patch("seer.automation.autofix.pipelines.AutofixContext")
+    def test_invoke_creation_needed(self, mock_context):
+        # Setup
+        mock_context.return_value.has_missing_codebase_indexes.return_value = True
+        mock_context.return_value.repos = [MagicMock()]
+        mock_context.return_value.has_codebase_index.return_value = False
+        side_effect = CreateAnyMissingCodebaseIndexesSideEffect(mock_context())
+
+        # Test
+        side_effect.invoke()
+
+        # Verify
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_called_once()
+        mock_context.return_value.create_codebase_index.assert_called_once()
+        mock_context.return_value.event_manager.send_codebase_indexing_complete_if_exists.assert_called_once()
 
 
 class TestCheckCodebaseForUpdatesSideEffect(unittest.TestCase):
@@ -50,18 +82,57 @@ class TestCheckCodebaseForUpdatesSideEffect(unittest.TestCase):
                 issue=IssueDetails(id=0, title="", events=[error_event]),
             )
         )
-        side_effect = CheckCodebaseForUpdatesSideEffect()
+        mock_context.return_value.has_codebase_indexing_run.return_value = False
+
+        side_effect = CheckCodebaseForUpdatesSideEffect(mock_context())
 
         # Test
-        side_effect.invoke(mock_context())
-        print("codebases", codebases)
+        side_effect.invoke()
+
         # Verify
-        mock_context.return_value.event_manager.send_codebase_indexing_start_for_repo.assert_called()
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_called()
         mock_start_span.assert_called()
         codebases[1].update.assert_called()
         codebases[2].update.assert_not_called()
-        mock_context.return_value.event_manager.send_codebase_indexing_complete_for_repo.assert_called()
         mock_context.return_value.event_manager.send_codebase_indexing_complete_if_exists.assert_called()
+
+    @patch("seer.automation.autofix.pipelines.AutofixContext")
+    @patch("seer.automation.autofix.pipelines.update_codebase_index.apply_async")
+    @patch("seer.automation.autofix.pipelines.sentry_sdk.start_span")
+    def test_invoke_does_not_run_if_already_indexed(
+        self, mock_start_span, mock_apply_async, mock_context
+    ):
+        # Setup
+        codebases = {
+            1: MagicMock(is_behind=MagicMock(return_value=True)),
+            2: MagicMock(is_behind=MagicMock(return_value=False)),
+        }
+        mock_context.return_value.codebases = codebases
+        mock_context.return_value.diff_contains_stacktrace_files = MagicMock(return_value=True)
+        mock_context.return_value.event_manager = MagicMock()
+        error_event = next(generate(SentryEventData))
+        mock_context.return_value.state.get.return_value = AutofixContinuation(
+            request=AutofixRequest(
+                organization_id=1,
+                project_id=1,
+                repos=[],
+                issue=IssueDetails(id=0, title="", events=[error_event]),
+            )
+        )
+        mock_context.return_value.has_codebase_indexing_run.return_value = True
+
+        side_effect = CheckCodebaseForUpdatesSideEffect(mock_context())
+
+        # Test
+        side_effect.invoke()
+
+        # Verify
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_not_called()
+        mock_start_span.assert_not_called()
+        codebases[1].update.assert_not_called()
+        codebases[2].update.assert_not_called()
+        mock_context.return_value.event_manager.send_codebase_indexing_complete_for_repo.assert_not_called()
+        mock_context.return_value.event_manager.send_codebase_indexing_complete_if_exists.assert_not_called()
 
     @patch("seer.automation.autofix.pipelines.update_codebase_index")
     @patch("seer.automation.autofix.pipelines.AutofixContext")
@@ -87,13 +158,15 @@ class TestCheckCodebaseForUpdatesSideEffect(unittest.TestCase):
                 issue=IssueDetails(id=0, title="", events=[error_event]),
             )
         )
-        side_effect = CheckCodebaseForUpdatesSideEffect()
+        mock_context.return_value.has_codebase_indexing_run.return_value = False
+
+        side_effect = CheckCodebaseForUpdatesSideEffect(mock_context())
 
         # Test
-        side_effect.invoke(mock_context())
+        side_effect.invoke()
         print("codebases", codebases)
         # Verify
-        mock_context.return_value.event_manager.send_codebase_indexing_start_for_repo.assert_not_called()
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_not_called()
         mock_start_span.assert_not_called()
         codebases[1].update.assert_not_called()
         codebases[2].update.assert_not_called()
@@ -121,14 +194,16 @@ class TestCheckCodebaseForUpdatesSideEffect(unittest.TestCase):
                 issue=IssueDetails(id=0, title="", events=[error_event]),
             )
         )
-        side_effect = CheckCodebaseForUpdatesSideEffect()
+        mock_context.return_value.has_codebase_indexing_run.return_value = False
+
+        side_effect = CheckCodebaseForUpdatesSideEffect(mock_context())
 
         # Test
-        side_effect.invoke(mock_context())
+        side_effect.invoke()
 
         # Verify
         mock_apply_async.assert_not_called()
-        mock_context.return_value.event_manager.send_codebase_indexing_start_for_repo.assert_not_called()
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_not_called()
         codebases[1].update.assert_not_called()
         codebases[2].update.assert_not_called()
         mock_context.return_value.event_manager.send_codebase_indexing_complete_for_repo.assert_not_called()
@@ -142,6 +217,7 @@ class TestRootCausePipeline(unittest.TestCase):
     def test_invoke(self, mock_context, mock_update_side_effect, mock_root_cause_component):
         error_event = next(generate(SentryEventData))
 
+        mock_context.return_value.has_missing_codebase_indexes.return_value = False
         mock_context.return_value.state.get.return_value = AutofixContinuation(
             request=AutofixRequest(
                 organization_id=1,
@@ -194,6 +270,7 @@ class TestAutofixExecutionPipeline(unittest.TestCase):
             ],
         )
         mock_context.return_value.state.get.return_value = mock_state
+        mock_context.return_value.has_missing_codebase_indexes.return_value = False
 
         # Setup PlanningComponent to return a planning output
         mock_planning_output = PlanningOutput(

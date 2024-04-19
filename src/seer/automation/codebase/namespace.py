@@ -262,6 +262,21 @@ class CodebaseNamespaceManager:
 
         return cls(repo_info, namespace, storage_adapter)
 
+    @staticmethod
+    def does_repo_exist(organization: int, project: int, provider: str, external_slug: str):
+        with Session() as session:
+            return (
+                session.query(DbRepositoryInfo)
+                .filter(
+                    DbRepositoryInfo.organization == organization,
+                    DbRepositoryInfo.project == project,
+                    DbRepositoryInfo.provider == provider,
+                    DbRepositoryInfo.external_slug == external_slug,
+                )
+                .count()
+                > 0
+            )
+
     def chunk_hashes_exist(self, hashes: list[str]):
         if not hashes:
             return []
