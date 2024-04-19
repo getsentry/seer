@@ -4,7 +4,6 @@ from typing import cast
 import sentry_sdk
 from sentence_transformers import SentenceTransformer
 
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -14,15 +13,9 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import BaseDocumentChunk, QueryResultDocumentChunk
+from seer.automation.codebase.models import QueryResultDocumentChunk
 from seer.automation.codebase.state import CodebaseStateManager
-from seer.automation.models import (
-    EventDetails,
-    FileChange,
-    InitializationError,
-    RepoDefinition,
-    Stacktrace,
-)
+from seer.automation.models import EventDetails, FileChange, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
@@ -95,7 +88,11 @@ class AutofixContext(PipelineContext):
         self.state = state
 
     def has_codebase_index(self, repo: RepoDefinition) -> bool:
-        return CodebaseIndex.has_repo_been_indexed(self.organization_id, self.project_id, repo)
+        for codebase in self.codebases.values():
+            if codebase.repo_info.external_slug == repo.full_name:
+                return True
+
+        return False
 
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
@@ -107,12 +104,16 @@ class AutofixContext(PipelineContext):
         return self.state.get().find_step(id=self.event_manager.indexing_step.id) is not None
 
     def create_codebase_index(self, repo: RepoDefinition) -> CodebaseIndex:
-        return CodebaseIndex.create(
+        codebase_index = CodebaseIndex.create(
             self.organization_id,
             self.project_id,
             repo,
             embedding_model=self.embedding_model,
         )
+
+        self.codebases[codebase_index.repo_info.id] = codebase_index
+
+        return codebase_index
 
     def get_codebase(self, repo_id: int) -> CodebaseIndex:
         codebase = self.codebases[repo_id]
