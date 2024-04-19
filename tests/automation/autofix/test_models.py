@@ -4,11 +4,9 @@ import unittest
 from johen.pytest import parametrize
 from pydantic import ValidationError
 
-from seer.automation.autofix.models import (
-    AutofixRequest,
+from seer.automation.autofix.models import AutofixRequest, IssueDetails, RepoDefinition
+from seer.automation.models import (
     EventDetails,
-    IssueDetails,
-    RepoDefinition,
     SentryEventData,
     SentryEventEntryDataValue,
     SentryExceptionEntry,

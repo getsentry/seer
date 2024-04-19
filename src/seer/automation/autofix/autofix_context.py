@@ -3,18 +3,13 @@ import uuid
 from sentence_transformers import SentenceTransformer
 
 from seer.automation.autofix.event_manager import AutofixEventManager
-from seer.automation.autofix.models import (
-    AutofixContinuation,
-    EventDetails,
-    RepoDefinition,
-    Stacktrace,
-)
+from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import StoredDocumentChunk, StoredDocumentChunkWithRepoName
+from seer.automation.codebase.models import QueryResultDocumentChunk
+from seer.automation.models import EventDetails, InitializationError, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
-from seer.db import DbDocumentChunk, Session
 from seer.rpc import RpcClient
 
 
@@ -33,6 +28,8 @@ class AutofixContext(PipelineContext):
         repos: list[RepoDefinition],
         event_manager: AutofixEventManager,
         state: State[AutofixContinuation],
+        sha: str | None = None,
+        tracking_branch: str | None = None,
         embedding_model: SentenceTransformer | None = None,
     ):
         self.sentry_client = sentry_client
@@ -45,11 +42,18 @@ class AutofixContext(PipelineContext):
 
         for repo in repos:
             codebase_index = CodebaseIndex.from_repo_definition(
-                organization_id, project_id, repo, self.run_id, embedding_model=self.embedding_model
+                organization_id,
+                project_id,
+                repo,
+                sha,
+                tracking_branch,
+                embedding_model=self.embedding_model,
             )
 
             if codebase_index:
                 self.codebases[codebase_index.repo_info.id] = codebase_index
+            else:
+                raise InitializationError(f"Failed to load codebase index for repo {repo}")
 
         self.event_manager = event_manager
         self.state = state
@@ -62,7 +66,6 @@ class AutofixContext(PipelineContext):
             self.organization_id,
             self.project_id,
             repo,
-            self.run_id,
             embedding_model=self.embedding_model,
         )
         self.codebases[codebase_index.repo_info.id] = codebase_index
@@ -74,57 +77,6 @@ class AutofixContext(PipelineContext):
             raise ValueError(f"Codebase with id {repo_id} not found")
 
         return codebase
-
-    def query(
-        self,
-        query: str,
-        repo_name: str | None = None,
-        repo_id: int | None = None,
-        top_k: int = 8,
-    ) -> list[StoredDocumentChunkWithRepoName]:
-        if repo_name:
-            repo_id = next(
-                (
-                    repo_id
-                    for repo_id, codebase in self.codebases.items()
-                    if codebase.repo_info.external_slug == repo_name
-                ),
-                None,
-            )
-
-        repo_ids = [repo_id] if repo_id is not None else list(self.codebases.keys())
-
-        # By defaut the returned embeddings are numpy arrays stored on CPU memory. If we want
-        # them to be loaded in the GPU memory then pass appropriate parameters to encode.
-        embedding = self.embedding_model.encode(query)
-
-        with Session() as session:
-            db_chunks = (
-                session.query(DbDocumentChunk)
-                .filter(
-                    DbDocumentChunk.repo_id.in_(repo_ids),
-                    (DbDocumentChunk.namespace == str(self.run_id))
-                    | (DbDocumentChunk.namespace.is_(None)),
-                )
-                .order_by(DbDocumentChunk.embedding.cosine_distance(embedding))
-                .limit(top_k)
-                .all()
-            )
-
-            chunks_by_repo_id: dict[int, list[DbDocumentChunk]] = {}
-            for db_chunk in db_chunks:
-                chunks_by_repo_id.setdefault(db_chunk.repo_id, []).append(db_chunk)
-
-            populated_chunks: list[StoredDocumentChunkWithRepoName] = []
-            for _repo_id, db_chunks_for_codebase in chunks_by_repo_id.items():
-                codebase = self.get_codebase(_repo_id)
-                populated_chunks.extend(codebase._populate_chunks(db_chunks_for_codebase))
-
-            # Re-sort populated_chunks based on their original order in db_chunks
-            db_chunk_order = {db_chunk.id: index for index, db_chunk in enumerate(db_chunks)}
-            populated_chunks.sort(key=lambda chunk: db_chunk_order[chunk.id])
-
-        return populated_chunks
 
     def get_document_and_codebase(
         self, path: str, repo_name: str | None = None, repo_id: int | None = None
@@ -149,6 +101,18 @@ class AutofixContext(PipelineContext):
 
         return None, None
 
+    def query_all_codebases(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
+        """
+        Queries all codebases for top_k chunks matching the specified query and returns the only the overall top_k closest matches.
+        """
+        chunks: list[QueryResultDocumentChunk] = []
+        for codebase in self.codebases.values():
+            chunks.extend(codebase.query(query, top_k=2 * top_k))
+
+        chunks.sort(key=lambda x: x.distance)
+
+        return chunks[:top_k]
+
     def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
         stacktraces = [exception.stacktrace for exception in event_details.exceptions]
 
@@ -159,7 +123,7 @@ class AutofixContext(PipelineContext):
 
         codebase = self.get_codebase(repo_id)
         changed_files, removed_files = codebase.repo_client.get_commit_file_diffs(
-            codebase.repo_info.sha, codebase.repo_client.get_default_branch_head_sha()
+            codebase.namespace.sha, codebase.repo_client.get_default_branch_head_sha()
         )
 
         change_files = set(changed_files + removed_files)

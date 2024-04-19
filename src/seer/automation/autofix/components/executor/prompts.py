@@ -1,7 +1,7 @@
 import textwrap
 
-from seer.automation.autofix.models import ExceptionDetails
 from seer.automation.autofix.prompts import format_exceptions
+from seer.automation.models import ExceptionDetails
 
 
 class ExecutionPrompts:

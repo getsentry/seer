@@ -6,14 +6,14 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.utils import autofix_logger
-from seer.automation.codebase.models import DocumentChunkPromptXml, StoredDocumentChunkWithRepoName
+from seer.automation.codebase.models import DocumentChunkPromptXml, QueryResultDocumentChunk
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import PromptXmlModel
 
 
 class RetrieverRequest(BaseComponentRequest):
     text: str
-    repo_top_k: int = 4
+    top_k: int = 8
     include_short_hash_as_id: bool = False
 
 
@@ -22,7 +22,7 @@ class RetrieverOutputPromptXml(PromptXmlModel, tag="chunks"):
 
 
 class RetrieverOutput(BaseComponentOutput):
-    chunks: list[StoredDocumentChunkWithRepoName]
+    chunks: list[QueryResultDocumentChunk]
 
     def to_xml(self) -> RetrieverOutputPromptXml:
         return RetrieverOutputPromptXml(chunks=[chunk.get_prompt_xml() for chunk in self.chunks])
@@ -97,9 +97,9 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
             autofix_logger.debug(f"Search queries: {queries}")
 
             context_dump = ""
-            unique_chunks: dict[str, StoredDocumentChunkWithRepoName] = {}
+            unique_chunks: dict[str, QueryResultDocumentChunk] = {}
             for query in queries:
-                retrived_chunks = self.context.query(query, top_k=request.repo_top_k)
+                retrived_chunks = self.context.query_all_codebases(query, top_k=request.top_k)
                 for chunk in retrived_chunks:
                     unique_chunks[chunk.hash] = chunk
             chunks = list(unique_chunks.values())

@@ -47,7 +47,6 @@ class ContinuationState(LocalMemoryState[AutofixContinuation]):
 
     def set(self, continuation: AutofixContinuation):
         if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
-            logger.info(f"on_autofix_completed invoking...")
             self.rpc_client.call(
                 "on_autofix_complete",
                 **AutofixCompleteArgs(
@@ -57,9 +56,7 @@ class ContinuationState(LocalMemoryState[AutofixContinuation]):
                     fix=continuation.fix,
                 ).model_dump(mode="json"),
             )
-            logger.info(f"on_autofix_completed done")
         else:
-            logger.info(f"on_autofix_step_update invoking...")
             self.rpc_client.call(
                 "on_autofix_step_update",
                 **AutofixStepUpdateArgs(
@@ -68,7 +65,6 @@ class ContinuationState(LocalMemoryState[AutofixContinuation]):
                     steps=continuation.steps,
                 ).model_dump(mode="json"),
             )
-            logger.info(f"on_autofix_step_update done")
         super().set(continuation)
 
 

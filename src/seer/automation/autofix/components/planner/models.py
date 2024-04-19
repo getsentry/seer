@@ -3,8 +3,8 @@ from typing import Optional
 from pydantic import BaseModel
 
 from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
-from seer.automation.autofix.models import EventDetails
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
+from seer.automation.models import EventDetails
 
 
 class PlanningRequest(BaseComponentRequest):

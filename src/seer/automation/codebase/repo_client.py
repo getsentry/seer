@@ -74,11 +74,14 @@ class RepoClient:
     def repo_full_name(self):
         return self.repo.full_name
 
-    def get_default_branch(self):
+    def get_default_branch(self) -> str:
         return self.repo.default_branch
 
+    def get_branch_head_sha(self, branch: str):
+        return self.repo.get_branch(branch).commit.sha
+
     def get_default_branch_head_sha(self):
-        return self.repo.get_branch(self.get_default_branch()).commit.sha
+        return self.get_branch_head_sha(self.get_default_branch())
 
     def compare(self, base: str, head: str):
         return self.repo.compare(base, head)

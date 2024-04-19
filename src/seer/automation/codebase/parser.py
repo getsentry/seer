@@ -1,19 +1,17 @@
 import hashlib
 import logging
 import textwrap
-import time
 
 import tree_sitter_languages
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 from tree_sitter import Node
 
 from seer.automation.codebase.ast import (
     AstDeclaration,
     extract_declaration,
-    first_child_with_type,
     get_indent_start_byte,
-    index_with_node_type,
     node_is_a_declaration,
 )
 from seer.automation.codebase.models import BaseDocumentChunk, Document
@@ -226,18 +224,14 @@ class DocumentParser:
         """
         Process a document by chunking it into smaller pieces and extracting metadata about each chunk.
         """
-        start_start = time.time()
-        chunks = self._chunk_document(document)
-        logger.debug(f"Document chunking took {time.time() - start_start:.2f} seconds")
-
-        return chunks
+        return self._chunk_document(document)
 
     def process_documents(self, documents: list[Document]) -> list[BaseDocumentChunk]:
         """
         Process a list of documents by chunking them into smaller pieces and extracting metadata about each chunk.
         """
         chunks = []
-        for i, document in enumerate(documents):
+
+        for i, document in tqdm(enumerate(documents), total=len(documents)):
             chunks.extend(self.process_document(document))
-            logger.debug(f"Processed document {i + 1}/{len(documents)}")
         return chunks
