@@ -93,7 +93,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
 
         queries = data["queries"]
         autofix_logger.debug(f"Search queries: {queries}")
-        self.context.event_manager.log_tool_use(f"Searching with queries: {queries}")
+        self.context.event_manager.add_log(f"Searching with queries: {queries}")
 
         unique_chunks: dict[str, QueryResultDocumentChunk] = {}
         for query in queries:

@@ -1,3 +1,5 @@
+import dataclasses
+
 import sentry_sdk
 from langsmith import traceable
 
@@ -25,6 +27,43 @@ from seer.automation.models import EventDetails
 from seer.automation.pipeline import Pipeline, PipelineSideEffect
 
 
+@dataclasses.dataclass
+class CreateAnyMissingCodebaseIndexesSideEffect(PipelineSideEffect):
+    """
+    Side effect that creates any missing codebase indexes for the repositories in the context.
+
+    Typically will not be called because codebase indexing would be performed separate from the autofix run.
+    """
+
+    context: AutofixContext
+
+    def invoke(self):
+        if self.context.has_missing_codebase_indexes():
+            self.context.event_manager.send_codebase_indexing_start()
+            for repo in self.context.repos:
+                if not self.context.has_codebase_index(repo):
+                    self.context.event_manager.add_log(
+                        f"Creating codebase index for repo: {repo.full_name}"
+                    )
+                    with sentry_sdk.start_span(
+                        op="seer.automation.autofix.codebase_index.create",
+                        description="Create codebase index",
+                    ) as span:
+                        span.set_tag("repo", repo.full_name)
+                        self.context.create_codebase_index(repo)
+                    self.context.event_manager.add_log(
+                        f"Created codebase index for repo: {repo.full_name}"
+                    )
+
+                else:
+                    self.context.event_manager.add_log(
+                        f"Codebase index already exists for repo: {repo.full_name}"
+                    )
+
+            self.context.event_manager.send_codebase_indexing_complete_if_exists()
+
+
+@dataclasses.dataclass
 class CheckCodebaseForUpdatesSideEffect(PipelineSideEffect):
     """
     A side effect in the pipeline that checks for updates in the codebase.
@@ -36,18 +75,24 @@ class CheckCodebaseForUpdatesSideEffect(PipelineSideEffect):
     it schedules an update for later.
     """
 
-    # (violates the Liskov substitution principle)
-    def invoke(self, context: AutofixContext):  # type: ignore[override]
-        event_details = EventDetails.from_event(context.state.get().request.issue.events[0])
+    context: AutofixContext
 
-        for repo_id, codebase in context.codebases.items():
+    def invoke(self):
+        if self.context.has_codebase_indexing_run():
+            autofix_logger.info("Codebase indexing already performed, update side effect skipped.")
+            return
+
+        event_details = EventDetails.from_event(self.context.state.get().request.issue.events[0])
+
+        for repo_id, codebase in self.context.codebases.items():
             if codebase.is_behind():
-                if context.diff_contains_stacktrace_files(repo_id, event_details):
+                if self.context.diff_contains_stacktrace_files(repo_id, event_details):
                     autofix_logger.debug(
                         f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
                     )
-                    context.event_manager.send_codebase_indexing_start_for_repo(
-                        codebase.repo_info.external_slug
+                    self.context.event_manager.send_codebase_indexing_start()
+                    self.context.event_manager.add_log(
+                        f"Creating codebase index for repo: {codebase.repo_info.external_slug}"
                     )
                     with sentry_sdk.start_span(
                         op="seer.automation.autofix.codebase_index.update",
@@ -56,8 +101,8 @@ class CheckCodebaseForUpdatesSideEffect(PipelineSideEffect):
                         span.set_tag("repo", codebase.repo_info.external_slug)
                         codebase.update()
                     autofix_logger.debug(f"Codebase index updated")
-                    context.event_manager.send_codebase_indexing_complete_for_repo(
-                        codebase.repo_info.external_slug
+                    self.context.event_manager.add_log(
+                        f"Created codebase index for repo: {codebase.repo_info.external_slug}"
                     )
                 else:
                     update_codebase_index.apply_async(
@@ -66,7 +111,7 @@ class CheckCodebaseForUpdatesSideEffect(PipelineSideEffect):
                     )  # 10 minutes
                     autofix_logger.info(f"Codebase indexing scheduled for later")
 
-        context.event_manager.send_codebase_indexing_complete_if_exists()
+        self.context.event_manager.send_codebase_indexing_complete_if_exists()
 
 
 class AutofixRootCause(Pipeline):
@@ -80,12 +125,18 @@ class AutofixRootCause(Pipeline):
 
     def __init__(self, context: AutofixContext):
         super().__init__(context)
-        self.side_effects = [CheckCodebaseForUpdatesSideEffect()]
+        self.side_effects = [
+            CreateAnyMissingCodebaseIndexesSideEffect(context),
+            CheckCodebaseForUpdatesSideEffect(context),
+        ]
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
     def invoke(self):
         self.context.event_manager.send_root_cause_analysis_start()
         self.invoke_side_effects()
+
+        if self.context.has_missing_codebase_indexes():
+            raise ValueError("Codebase indexes must be created before root cause analysis")
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])
@@ -111,12 +162,15 @@ class AutofixExecution(Pipeline):
 
     def __init__(self, context: AutofixContext):
         super().__init__(context)
-        self.side_effects = [CheckCodebaseForUpdatesSideEffect()]
+        self.side_effects = [CheckCodebaseForUpdatesSideEffect(context)]
 
     @traceable(name="Execution", tags=["autofix:v2"])
     def invoke(self):
         self.context.event_manager.send_planning_start()
         self.invoke_side_effects()
+
+        if self.context.has_missing_codebase_indexes():
+            raise ValueError("Codebase indexes must be created before planning")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()

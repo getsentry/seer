@@ -61,6 +61,8 @@ class AutofixContext(PipelineContext):
 
         self.organization_id = request.organization_id
         self.project_id = request.project_id
+        self.repos = request.repos
+
         self.codebases = {}
 
         self.sentry_client = sentry_client
@@ -88,22 +90,29 @@ class AutofixContext(PipelineContext):
                                 namespace_id=codebase_index.namespace.id,
                                 file_changes=[],
                             )
-                else:
-                    raise InitializationError(f"Failed to load codebase index for repo {repo}")
+
         self.event_manager = event_manager
         self.state = state
 
     def has_codebase_index(self, repo: RepoDefinition) -> bool:
         return CodebaseIndex.has_repo_been_indexed(self.organization_id, self.project_id, repo)
 
-    def create_codebase_index(self, repo: RepoDefinition):
-        codebase_index = CodebaseIndex.create(
+    def has_missing_codebase_indexes(self) -> bool:
+        for repo in self.repos:
+            if not self.has_codebase_index(repo):
+                return True
+        return False
+
+    def has_codebase_indexing_run(self) -> bool:
+        return self.state.get().find_step(id=self.event_manager.indexing_step.id) is not None
+
+    def create_codebase_index(self, repo: RepoDefinition) -> CodebaseIndex:
+        return CodebaseIndex.create(
             self.organization_id,
             self.project_id,
             repo,
             embedding_model=self.embedding_model,
         )
-        self.codebases[codebase_index.repo_info.id] = codebase_index
 
     def get_codebase(self, repo_id: int) -> CodebaseIndex:
         codebase = self.codebases[repo_id]

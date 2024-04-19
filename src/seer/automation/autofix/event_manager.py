@@ -88,32 +88,10 @@ class AutofixEventManager:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
 
-    def send_codebase_indexing_start_for_repo(self, repo_name: str):
+    def send_codebase_indexing_start(self):
         with self.state.update() as cur:
             indexing_step = cur.find_or_add(self.indexing_step)
             indexing_step.status = AutofixStatus.PROCESSING
-            indexing_step.title = f"Codebase Indexing"
-            indexing_step.progress.append(
-                ProgressItem(
-                    message=f"Updating codebase index for {repo_name}",
-                    type=ProgressType.INFO,
-                )
-            )
-
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_codebase_indexing_complete_for_repo(self, repo_name: str):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-            indexing_step.status = AutofixStatus.COMPLETED
-            indexing_step.title = f"Codebase Indexing"
-
-            indexing_step.progress.append(
-                ProgressItem(
-                    message=f"Successfully updated codebase index for {repo_name}",
-                    type=ProgressType.INFO,
-                )
-            )
 
             cur.status = AutofixStatus.PROCESSING
 
@@ -208,7 +186,7 @@ class AutofixEventManager:
             changes_step.status = AutofixStatus.COMPLETED
             cur.status = AutofixStatus.COMPLETED
 
-    def log_tool_use(self, message: str):
+    def add_log(self, message: str):
         with self.state.update() as cur:
             step = cur.steps[-1]
             if step.status == AutofixStatus.PROCESSING:
