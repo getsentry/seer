@@ -14,6 +14,7 @@ from github.Repository import Repository
 from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
+from seer.automation.codebase.models import RepositoryInfo
 from seer.automation.models import FileChange, InitializationError
 from seer.utils import class_method_lru_cache
 
@@ -69,6 +70,11 @@ class RepoClient:
 
         self.repo_owner = repo_owner
         self.repo_name = repo_name
+
+    @classmethod
+    def from_repo_info(cls, repo_info: RepositoryInfo):
+        repo_owner, repo_name = repo_info.external_slug.split("/")
+        return cls(repo_provider=repo_info.provider, repo_owner=repo_owner, repo_name=repo_name)
 
     @property
     def repo_full_name(self):

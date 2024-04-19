@@ -14,7 +14,8 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import BaseDocumentChunk, QueryResultDocumentChunk
+from seer.automation.codebase.models import QueryResultDocumentChunk
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.models import (
     EventDetails,
@@ -196,8 +197,14 @@ class AutofixContext(PipelineContext):
                         None,
                     )
                     if codebase_state.file_changes and change_state:
-                        codebase = self.get_codebase(codebase_state.repo_id)
-                        branch_ref = codebase.repo_client.create_branch_from_changes(
+                        repo_info = CodebaseIndex.get_repo_info_from_db(codebase_state.repo_id)
+                        if repo_info is None:
+                            raise ValueError(
+                                f"Repo info not found for repo id {codebase_state.repo_id}"
+                            )
+
+                        repo_client = RepoClient.from_repo_info(repo_info)
+                        branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,
                             file_changes=codebase_state.file_changes,
                         )
@@ -253,9 +260,7 @@ class AutofixContext(PipelineContext):
                             total_tokens=state.usage.total_tokens,
                         )
 
-                        pr = codebase.repo_client.create_pr_from_branch(
-                            branch_ref, pr_title, pr_description
-                        )
+                        pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
 
                         change_state.pull_request = CommittedPullRequestDetails(
                             pr_number=pr.number, pr_url=pr.html_url
