@@ -77,6 +77,12 @@ class CodebaseIndex:
         return self.workspace.namespace
 
     @staticmethod
+    def get_repo_info_from_db(repo_id: int):
+        db_repo_info = Session().get(DbRepositoryInfo, repo_id)
+
+        return RepositoryInfo.from_db(db_repo_info) if db_repo_info else None
+
+    @staticmethod
     def has_repo_been_indexed(organization: int, project: int, repo: RepoDefinition):
         return CodebaseNamespaceManager.does_repo_exist(
             organization=organization,
@@ -134,12 +140,9 @@ class CodebaseIndex:
         state_manager_class: Type[CodebaseStateManager] | None = None,
         namespace_id: int | None = None,
     ):
-        db_repo_info = Session().get(DbRepositoryInfo, repo_id)
+        repo_info = cls.get_repo_info_from_db(repo_id)
 
-        if db_repo_info:
-            repo_info = RepositoryInfo.from_db(db_repo_info)
-            repo_owner, repo_name = db_repo_info.external_slug.split("/")
-
+        if repo_info:
             workspace = CodebaseNamespaceManager.load_workspace(
                 namespace_id=namespace_id or repo_info.default_namespace
             )
@@ -153,7 +156,7 @@ class CodebaseIndex:
                 return cls(
                     organization=repo_info.organization,
                     project=repo_info.project,
-                    repo_client=RepoClient(repo_info.provider, repo_owner, repo_name),
+                    repo_client=RepoClient.from_repo_info(repo_info),
                     workspace=workspace,
                     state_manager=state_manager,
                     embedding_model=embedding_model,
