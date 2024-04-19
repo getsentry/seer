@@ -132,8 +132,9 @@ class AutofixRootCause(Pipeline):
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
     def invoke(self):
-        self.context.event_manager.send_root_cause_analysis_start()
         self.invoke_side_effects()
+
+        self.context.event_manager.send_root_cause_analysis_start()
 
         if self.context.has_missing_codebase_indexes():
             raise ValueError("Codebase indexes must be created before root cause analysis")
@@ -166,8 +167,9 @@ class AutofixExecution(Pipeline):
 
     @traceable(name="Execution", tags=["autofix:v2"])
     def invoke(self):
-        self.context.event_manager.send_planning_start()
         self.invoke_side_effects()
+
+        self.context.event_manager.send_planning_start()
 
         if self.context.has_missing_codebase_indexes():
             raise ValueError("Codebase indexes must be created before planning")

@@ -71,6 +71,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_processing_step)
             root_cause_step.status = AutofixStatus.PROCESSING
+            cur.make_step_latest(root_cause_step)
 
             cur.status = AutofixStatus.PROCESSING
 
