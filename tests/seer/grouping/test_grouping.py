@@ -28,7 +28,7 @@ class TestGrouping(unittest.TestCase):
             project_id=1,
             stacktrace=b"stacktrace",
             message="message",
-            group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            group_hash="13501807435378261861369456856144",
             k=1,
             threshold=0.01,
         )
@@ -66,7 +66,7 @@ class TestGrouping(unittest.TestCase):
             project_id=1,
             stacktrace=b"stacktrace",
             message="message",
-            group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            group_hash="13501807435378261861369456856144",
             k=1,
             threshold=0.01,
         )

@@ -8,6 +8,7 @@ import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
+from sqlalchemy import or_
 
 from seer.db import DbGroupingRecord, Session
 
@@ -145,27 +146,6 @@ class GroupingLookup:
                  stacktrace similarity scores, message similarity scores, and grouping flags.
         """
         with Session() as session:
-            # If an exact match of the hash is found, return this record
-            if issue.group_hash:
-                existing_record = (
-                    session.query(DbGroupingRecord).filter_by(group_hash=issue.group_hash).first()
-                )
-
-                if existing_record:
-                    similarity_response = SimilarityResponse(responses=[])
-                    similarity_response.responses.append(
-                        GroupingResponse(
-                            parent_group_id=existing_record.group_id
-                            if hasattr(existing_record, "group_id")
-                            else None,
-                            parent_group_hash=existing_record.group_hash,
-                            stacktrace_distance=0.00,
-                            message_distance=0.00,
-                            should_group=True,
-                        )
-                    )
-                    return similarity_response
-
             embedding = self.encode_text(issue.stacktrace).astype("float32")
 
             results = (
@@ -178,7 +158,12 @@ class GroupingLookup:
                 .filter(
                     DbGroupingRecord.project_id == issue.project_id,
                     DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= 0.15,
-                    DbGroupingRecord.group_id != issue.group_id,
+                    or_(
+                        DbGroupingRecord.group_id != issue.group_id,
+                        DbGroupingRecord.group_id == None,
+                    ),
+                    # TODO We will return the group itself as a similar group if it exists in the old table with no group_hash
+                    DbGroupingRecord.group_hash != issue.group_hash,
                 )
                 .order_by("distance")
                 .limit(issue.k)
