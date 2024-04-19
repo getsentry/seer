@@ -27,7 +27,8 @@ Then, you can define your storage bucket with:
 
 ```txt
 CODEBASE_STORAGE_TYPE=gcs
-CODEBASE_GCS_STORAGE_DIR=<your GCS bucket name>
+CODEBASE_GCS_STORAGE_BUCKET=<your GCS bucket name>
+CODEBASE_GCS_STORAGE_DIR=<path within gcs bucket>
 ```
 
 ##### Local Filesystem
