@@ -1,5 +1,6 @@
 import difflib
 import logging
+from typing import Type
 
 import numpy as np
 import sentry_sdk
@@ -29,6 +30,7 @@ from seer.automation.codebase.models import (
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.parser import DocumentParser
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.state import CodebaseStateManager, DummyCodebaseStateManager
 from seer.automation.codebase.utils import (
     cleanup_dir,
     get_language_from_path,
@@ -52,14 +54,15 @@ class CodebaseIndex:
         project: int,
         repo_client: RepoClient,
         workspace: CodebaseNamespaceManager,
+        state_manager: CodebaseStateManager,
         embedding_model: SentenceTransformer,
     ):
         self.repo_client = repo_client
         self.organization = organization
         self.project = project
-        self.file_changes: list[FileChange] = []
         self.embedding_model = embedding_model
         self.workspace = workspace
+        self.state_manager = state_manager
 
         logger.info(
             f"Loaded codebase index for {repo_client.repo.full_name}, {'with existing data' if self.repo_info else 'without existing data'}"
@@ -96,6 +99,8 @@ class CodebaseIndex:
         repo: RepoDefinition,
         sha: str | None,
         tracking_branch: str | None,
+        state: State,
+        state_manager_class: Type[CodebaseStateManager],
         embedding_model: SentenceTransformer,
     ):
         logger.debug(f"Loading workspace for {repo.full_name} ({sha or tracking_branch})")
@@ -120,6 +125,7 @@ class CodebaseIndex:
                 project,
                 repo_client,
                 workspace=workspace,
+                state_manager=state_manager_class(workspace.repo_info.id, state),
                 embedding_model=embedding_model,
             )
 
@@ -131,6 +137,7 @@ class CodebaseIndex:
         repo_id: int,
         embedding_model: SentenceTransformer,
         state: State | None = None,
+        state_manager_class: Type[CodebaseStateManager] | None = None,
         namespace_id: int | None = None,
     ):
         db_repo_info = Session().get(DbRepositoryInfo, repo_id)
@@ -144,11 +151,17 @@ class CodebaseIndex:
             )
 
             if workspace:
+                state_manager = (
+                    state_manager_class(workspace.repo_info.id, state)
+                    if state_manager_class and state
+                    else DummyCodebaseStateManager()
+                )
                 return cls(
                     organization=repo_info.organization,
                     project=repo_info.project,
                     repo_client=RepoClient(repo_info.provider, repo_owner, repo_name),
                     workspace=workspace,
+                    state_manager=state_manager,
                     embedding_model=embedding_model,
                 )
 
@@ -215,6 +228,7 @@ class CodebaseIndex:
                 project,
                 repo_client,
                 workspace=workspace,
+                state_manager=DummyCodebaseStateManager(),
                 embedding_model=embedding_model,
             )
         finally:
@@ -367,7 +381,9 @@ class CodebaseIndex:
     ) -> Document | None:
         content: str | None = document.text
         # Make sure the changes are applied in order!
-        changes = list(filter(lambda x: x.path == document.path, self.file_changes))
+        changes = list(
+            filter(lambda x: x.path == document.path, self.state_manager.get_file_changes())
+        )
         if changes:
             for change in changes:
                 content = change.apply(content)
@@ -401,7 +417,7 @@ class CodebaseIndex:
         return self._copy_document_with_local_changes(document)
 
     def store_file_change(self, file_change: FileChange):
-        self.file_changes.append(file_change)
+        self.state_manager.store_file_change(file_change)
 
         document = None
         if file_change.change_type != "create":
@@ -472,6 +488,7 @@ class CodebaseIndex:
                 logger.warning(f"Failed to match chunk with hash {chunk_result.hash}")
                 continue
 
+            matched_chunk.repo_name = self.repo_info.external_slug
             matched_chunks.append(
                 QueryResultDocumentChunk.model_validate(
                     dict(**dict(matched_chunk), distance=chunk_result.distance)
@@ -481,7 +498,9 @@ class CodebaseIndex:
         return matched_chunks
 
     def get_file_patches(self) -> tuple[list[FilePatch], str]:
-        document_paths = list(set([file_change.path for file_change in self.file_changes]))
+        document_paths = list(
+            set([file_change.path for file_change in self.state_manager.get_file_changes()])
+        )
 
         original_documents = [
             self.get_document(path, ignore_local_changes=True) for path in document_paths

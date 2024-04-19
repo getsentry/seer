@@ -35,7 +35,7 @@ class RerankerPrompts:
             </task>
             you must return all relevant code snippet ids in order of relevance.
 
-            Think out loud step-by-step then output all relevant code snippet IDs in the JSON."""
+            Think out loud step-by-step in a <thoughts> block then output all relevant code snippet IDs in the JSON inside a <code_snippet_ids> block."""
         ).format(
             code_dump=code_dump,
             task_instruction=task_instruction,

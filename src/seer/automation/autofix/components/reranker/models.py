@@ -14,7 +14,8 @@ class RerankerRequest(BaseComponentRequest):
     chunks: list[BaseDocumentChunk]
 
 
-class RawRerankerResult(PromptXmlModel, tag="research_result"):
+class RawRerankerResult(PromptXmlModel, tag="reranker_result"):
+    thoughts: str = element()
     raw_snippet_ids: str = element(tag="code_snippet_ids")
 
     @property

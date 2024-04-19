@@ -1,7 +1,7 @@
 import datetime
 import enum
 import hashlib
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
 from johen.examples import Examples
@@ -9,7 +9,8 @@ from johen.generators import specialized
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from seer.automation.agent.models import Usage
-from seer.automation.models import FilePatch, IssueDetails, RepoDefinition
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
 
 
 class FileChangeError(Exception):
@@ -25,7 +26,7 @@ class ProgressType(enum.Enum):
 
 
 class ProgressItem(BaseModel):
-    timestamp: str
+    timestamp: str = Field(default_factory=lambda: datetime.datetime.now().isoformat())
     message: str
     type: ProgressType
     data: Any = None
@@ -36,6 +37,7 @@ class AutofixStatus(enum.Enum):
     ERROR = "ERROR"
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
+    NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
     CANCELLED = "CANCELLED"
 
     @classmethod
@@ -52,6 +54,139 @@ class ProblemDiscoveryResult(BaseModel):
 class AutofixUserDetails(BaseModel):
     id: Annotated[int, Examples(specialized.unsigned_ints)]
     display_name: str
+
+
+class AutofixExecutionComplete(BaseModel):
+    title: str
+    description: str
+    diff: Optional[list[FilePatch]] = []
+    diff_str: Optional[str] = None
+
+
+class AutofixOutput(AutofixExecutionComplete):
+    usage: Usage
+
+
+class AutofixEndpointResponse(BaseModel):
+    started: bool
+
+
+class CustomRootCauseSelection(BaseModel):
+    custom_root_cause: str
+
+
+class SuggestedFixRootCauseSelection(BaseModel):
+    cause_id: int
+    fix_id: int
+
+
+RootCauseSelection = Union[CustomRootCauseSelection, SuggestedFixRootCauseSelection]
+
+
+class CommittedPullRequestDetails(BaseModel):
+    pr_number: int
+    pr_url: str
+
+
+class CodebaseChange(BaseModel):
+    repo_id: int
+    repo_name: str
+    title: str
+    description: str
+    diff: list[FilePatch] = []
+    diff_str: Optional[str] = None
+    pull_request: Optional[CommittedPullRequestDetails] = None
+
+
+class StepType(str, enum.Enum):
+    ROOT_CAUSE_ANALYSIS = "root_cause_analysis"
+    CHANGES = "changes"
+    DEFAULT = "default"
+
+
+class BaseStep(BaseModel):
+    id: str
+    title: str
+    type: StepType = StepType.DEFAULT
+
+    status: AutofixStatus = AutofixStatus.PENDING
+
+    index: int = -1
+    progress: list["ProgressItem | Step"] = Field(default_factory=list)
+    completedMessage: Optional[str] = None
+
+    def find_child(self, *, id: str) -> "Step | None":
+        for step in self.progress:
+            if isinstance(step, (DefaultStep, RootCauseStep, ChangesStep)) and step.id == id:
+                return step
+        return None
+
+    def find_or_add_child(self, base_step: "Step") -> "Step":
+        existing = self.find_child(id=base_step.id)
+        if existing:
+            return existing
+
+        base_step = base_step.model_copy()
+        base_step.index = len(self.progress)
+        self.progress.append(base_step)
+        return base_step
+
+
+class DefaultStep(BaseStep):
+    type: Literal[StepType.DEFAULT] = StepType.DEFAULT
+
+
+class RootCauseStep(BaseStep):
+    type: Literal[StepType.ROOT_CAUSE_ANALYSIS] = StepType.ROOT_CAUSE_ANALYSIS
+
+    causes: list[RootCauseAnalysisItem] = []
+    selection: RootCauseSelection | None = None
+
+
+class ChangesStep(BaseStep):
+    type: Literal[StepType.CHANGES] = StepType.CHANGES
+
+    changes: list[CodebaseChange]
+
+
+Step = Union[DefaultStep, RootCauseStep, ChangesStep]
+
+
+class CodebaseState(BaseModel):
+    repo_id: int
+    namespace_id: int
+    file_changes: list[FileChange] = []
+
+
+class AutofixGroupState(BaseModel):
+    run_id: int = -1
+    steps: list[Step] = Field(default_factory=list)
+    status: AutofixStatus = AutofixStatus.PENDING
+    codebases: dict[int, CodebaseState] = Field(default_factory=dict)
+    completedAt: datetime.datetime | None = None
+    usage: Usage = Field(default_factory=Usage)
+
+
+class AutofixStateRequest(BaseModel):
+    group_id: int
+
+
+class AutofixStateResponse(BaseModel):
+    group_id: int
+    state: dict | None
+
+
+class AutofixCompleteArgs(BaseModel):
+    issue_id: int
+    status: AutofixStatus
+    steps: list[Step]
+    fix: AutofixOutput | None
+
+
+class AutofixStepUpdateArgs(BaseModel):
+    issue_id: int
+    status: AutofixStatus
+    steps: list[Step]
 
 
 class AutofixRequest(BaseModel):
@@ -98,75 +233,28 @@ class AutofixRequest(BaseModel):
     )
 
 
-class AutofixOutput(BaseModel):
-    title: str
-    description: str
-    pr_url: str
-    pr_number: int
-    repo_name: str
-    diff: Optional[list[FilePatch]] = []
-    diff_str: Optional[str] = None
-    usage: Usage
+class AutofixUpdateType(str, enum.Enum):
+    SELECT_ROOT_CAUSE = "select_root_cause"
+    CREATE_PR = "create_pr"
 
 
-class AutofixEndpointResponse(BaseModel):
-    started: bool
+class AutofixRootCauseUpdatePayload(BaseModel):
+    type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
+    cause_id: int | None = None
+    fix_id: int | None = None
+    custom_root_cause: str | None = None
 
 
-class PullRequestResult(BaseModel):
-    pr_number: int
-    pr_url: str
-    repo: RepoDefinition
-    diff: list[FilePatch]
-    diff_str: Optional[str] = None
+class AutofixCreatePrUpdatePayload(BaseModel):
+    type: Literal[AutofixUpdateType.CREATE_PR]
+    repo_id: int | None = None
 
 
-class Step(BaseModel):
-    id: str
-    title: str
-
-    status: AutofixStatus = AutofixStatus.PENDING
-
-    index: int = -1
-    progress: list["ProgressItem | Step"] = Field(default_factory=list)
-    completedMessage: Optional[str] = None
-
-    def find_child(self, *, id: str) -> "Step | None":
-        for step in self.progress:
-            if isinstance(step, Step) and step.id == id:
-                return step
-        return None
-
-    def find_or_add_child(self, base_step: "Step") -> "Step":
-        existing = self.find_child(id=base_step.id)
-        if existing:
-            return existing
-
-        base_step = base_step.model_copy()
-        base_step.index = len(self.progress)
-        self.progress.append(base_step)
-        return base_step
-
-
-class AutofixGroupState(BaseModel):
-    steps: list[Step] = Field(default_factory=list)
-    status: AutofixStatus = AutofixStatus.PENDING
-    fix: AutofixOutput | None = None
-    completedAt: datetime.datetime | None = None
-    usage: Usage = Field(default_factory=Usage)
-
-
-class AutofixCompleteArgs(BaseModel):
-    issue_id: int
-    status: AutofixStatus
-    steps: list[Step]
-    fix: AutofixOutput | None
-
-
-class AutofixStepUpdateArgs(BaseModel):
-    issue_id: int
-    status: AutofixStatus
-    steps: list[Step]
+class AutofixUpdateRequest(BaseModel):
+    run_id: int
+    payload: Union[AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload] = Field(
+        discriminator="type"
+    )
 
 
 class AutofixContinuation(AutofixGroupState):
@@ -197,8 +285,35 @@ class AutofixContinuation(AutofixGroupState):
             if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.ERROR
                 for substep in step.progress:
-                    if isinstance(substep, Step):
+                    if isinstance(substep, (DefaultStep, RootCauseStep, ChangesStep)):
                         if substep.status == AutofixStatus.PROCESSING:
                             substep.status = AutofixStatus.ERROR
                         if substep.status == AutofixStatus.PENDING:
                             substep.status = AutofixStatus.CANCELLED
+
+    def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
+        root_cause_step = self.find_step(id="root_cause_analysis")
+        if root_cause_step and isinstance(root_cause_step, RootCauseStep):
+            if root_cause_step.selection:
+                if isinstance(root_cause_step.selection, SuggestedFixRootCauseSelection):
+                    cause = next(
+                        cause
+                        for cause in root_cause_step.causes
+                        if cause.id == root_cause_step.selection.cause_id
+                    )
+
+                    if cause.suggested_fixes:
+                        fix = next(
+                            fix
+                            for fix in cause.suggested_fixes
+                            if fix.id == root_cause_step.selection.fix_id
+                        )
+
+                        cause = cause.model_copy()
+
+                        cause.suggested_fixes = [fix]
+
+                        return cause
+                elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
+                    return root_cause_step.selection.custom_root_cause
+        return None

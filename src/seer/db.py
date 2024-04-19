@@ -166,7 +166,6 @@ class DbRepositoryInfo(Base):
     project: Mapped[int] = mapped_column(BigInteger, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
-    sha: Mapped[str] = mapped_column(String(40), nullable=True)
     default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
     __table_args__ = (
         UniqueConstraint("organization", "project", "provider", "external_slug"),
@@ -199,6 +198,13 @@ class DbCodebaseNamespace(Base):
         Index("ix_codebase_namespace_repo_id_sha", "repo_id", "sha"),
         Index("ix_codebase_namespace_repo_id_tracking_branch", "repo_id", "tracking_branch"),
     )
+
+
+class DbRunState(Base):
+    __tablename__ = "run_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    value: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 class DbGroupingRecord(Base):
