@@ -141,7 +141,7 @@ class RepositoryInfo(BaseModel):
     project: int
     provider: str
     external_slug: str
-    default_namespace: int
+    default_namespace: Optional[int] = None
 
     @classmethod
     def from_db(cls, db_repo: DbRepositoryInfo) -> "RepositoryInfo":

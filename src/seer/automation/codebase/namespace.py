@@ -256,6 +256,10 @@ class CodebaseNamespaceManager:
             session.commit()
 
             repo_info = RepositoryInfo.from_db(db_repo_info)
+
+            if repo_info.default_namespace is None:
+                repo_info.default_namespace = db_namespace.id
+
             namespace = CodebaseNamespace.from_db(db_namespace)
 
         storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)

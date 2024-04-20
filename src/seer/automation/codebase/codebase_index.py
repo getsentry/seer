@@ -143,9 +143,12 @@ class CodebaseIndex:
         repo_info = cls.get_repo_info_from_db(repo_id)
 
         if repo_info:
-            workspace = CodebaseNamespaceManager.load_workspace(
-                namespace_id=namespace_id or repo_info.default_namespace
-            )
+            namespace_id = namespace_id or repo_info.default_namespace
+
+            if not namespace_id:
+                raise ValueError(f"Repository with id {repo_id} does not have a default namespace")
+
+            workspace = CodebaseNamespaceManager.load_workspace(namespace_id=namespace_id)
 
             if workspace:
                 state_manager = (
