@@ -184,11 +184,13 @@ class CodebaseIndex:
 
         head_sha = sha
         branch = None
+        is_default_branch = False
 
         if tracking_branch:
             branch = tracking_branch
             head_sha = repo_client.get_branch_head_sha(branch)
         elif not head_sha:
+            is_default_branch = True
             branch = repo_client.get_default_branch()
             head_sha = repo_client.get_branch_head_sha(branch)
 
@@ -219,6 +221,7 @@ class CodebaseIndex:
                 external_slug=repo_client.repo.full_name,
                 head_sha=head_sha,
                 tracking_branch=branch,
+                should_set_as_default=is_default_branch,
             )
             workspace.insert_chunks(embedded_chunks)
             workspace.save()
