@@ -23,7 +23,13 @@ class TestNamespaceManager(unittest.TestCase):
 
     def test_create_repo(self):
         namespace = CodebaseNamespaceManager.create_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            "github",
+            "getsentry/seer",
+            "sha",
+            tracking_branch="main",
+            should_set_as_default=True,
         )
         namespace.save()
 
@@ -59,7 +65,10 @@ class TestNamespaceManager(unittest.TestCase):
     ):
         with Session() as session:
             db_repo_info = DbRepositoryInfo(
-                organization=1, project=1337, external_slug="getsentry/seer", provider="github"
+                organization=1,
+                project=1337,
+                external_slug="getsentry/seer",
+                provider="github",
             )
             session.add(db_repo_info)
             session.commit()
@@ -88,7 +97,13 @@ class TestNamespaceManager(unittest.TestCase):
 
     def test_insert_chunks(self):
         namespace = CodebaseNamespaceManager.create_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            "github",
+            "getsentry/seer",
+            "sha",
+            tracking_branch="main",
+            should_set_as_default=True,
         )
 
         namespace.insert_chunks(
@@ -113,7 +128,13 @@ class TestNamespaceManager(unittest.TestCase):
 
     def test_query_chunks(self):
         namespace = CodebaseNamespaceManager.create_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            "github",
+            "getsentry/seer",
+            "sha",
+            tracking_branch="main",
+            should_set_as_default=True,
         )
 
         namespace.insert_chunks(
@@ -149,7 +170,13 @@ class TestNamespaceManager(unittest.TestCase):
 
     def test_save(self):
         namespace = CodebaseNamespaceManager.create_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            "github",
+            "getsentry/seer",
+            "sha",
+            tracking_branch="main",
+            should_set_as_default=True,
         )
 
         namespace.save()
@@ -191,38 +218,38 @@ class TestNamespaceManager(unittest.TestCase):
             self.assertEqual(chunks[0].hash, "chunk1hash")
             self.assertEqual(loaded_namespace.namespace.sha, "newsha")
 
-        def test_chunk_hashes_exist(self):
-            namespace = CodebaseNamespaceManager.create_repo(
-                1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
-            )
+    def test_chunk_hashes_exist(self):
+        namespace = CodebaseNamespaceManager.create_repo(
+            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+        )
 
-            namespace.insert_chunks(
-                [
-                    EmbeddedDocumentChunk(
-                        context="chunk1context",
-                        content="chunk1",
-                        hash="chunk1hash",
-                        path="path1",
-                        index=0,
-                        token_count=0,
-                        language="python",
-                        embedding=np.ones((768)),
-                    ),
-                    EmbeddedDocumentChunk(
-                        context="chunk2context",
-                        content="chunk2",
-                        hash="chunk2hash",
-                        path="path1",
-                        index=2,
-                        token_count=0,
-                        language="python",
-                        embedding=np.ones((768)),
-                    ),
-                ]
-            )
+        namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                ),
+                EmbeddedDocumentChunk(
+                    context="chunk2context",
+                    content="chunk2",
+                    hash="chunk2hash",
+                    path="path1",
+                    index=2,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                ),
+            ]
+        )
 
-            chunk_hashes = namespace.chunk_hashes_exist(["path1"])
+        chunk_hashes = namespace.chunk_hashes_exist(["chunk1hash", "chunk2hash"])
 
-            self.assertEqual(len(chunk_hashes), 2)
-            self.assertTrue("chunk1hash" in chunk_hashes)
-            self.assertTrue("chunk2hash" in chunk_hashes)
+        self.assertEqual(len(chunk_hashes), 2)
+        self.assertTrue("chunk1hash" in chunk_hashes)
+        self.assertTrue("chunk2hash" in chunk_hashes)
