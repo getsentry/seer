@@ -205,14 +205,14 @@ class CodebaseNamespaceManager:
                     tracking_branch=tracking_branch,
                 )
 
-            return cls.create_namespace_for_repo(
+            return cls.create_or_get_namespace_for_repo(
                 repo_id=db_repo_info.id,
                 sha=head_sha,
                 tracking_branch=tracking_branch,
             )
 
     @classmethod
-    def create_namespace_for_repo(
+    def create_or_get_namespace_for_repo(
         cls,
         repo_id: int,
         sha: str,
@@ -236,24 +236,22 @@ class CodebaseNamespaceManager:
                     .one_or_none()
                 )
 
-            if existing_namespace:
-                raise ValueError(
-                    f"Namespace for repository {repo_id} with sha {sha} and tracking branch {tracking_branch} already exists"
-                )
-
             db_repo_info = session.get(DbRepositoryInfo, repo_id)
 
             if db_repo_info is None:
                 raise ValueError(f"Repository with id {repo_id} not found")
 
-            db_namespace = DbCodebaseNamespace(
-                repo_id=repo_id,
-                sha=sha,
-                tracking_branch=tracking_branch,
-            )
+            if existing_namespace:
+                db_namespace = existing_namespace
+            else:
+                db_namespace = DbCodebaseNamespace(
+                    repo_id=repo_id,
+                    sha=sha,
+                    tracking_branch=tracking_branch,
+                )
 
-            session.add(db_namespace)
-            session.commit()
+                session.add(db_namespace)
+                session.commit()
 
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
