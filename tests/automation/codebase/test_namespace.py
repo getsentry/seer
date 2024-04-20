@@ -53,7 +53,9 @@ class TestNamespaceManager(unittest.TestCase):
                     self.assertTrue(os.path.exists(storage_location_path))
 
     @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_repo")
-    @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_namespace_for_repo")
+    @patch(
+        "seer.automation.codebase.namespace.CodebaseNamespaceManager.create_or_get_namespace_for_repo"
+    )
     def test_get_or_create_namespace_for_repo_existing(
         self, mock_create_namespace_for_repo, mock_create_repo
     ):
@@ -65,17 +67,19 @@ class TestNamespaceManager(unittest.TestCase):
             session.commit()
 
         CodebaseNamespaceManager.create_repo = MagicMock()
-        CodebaseNamespaceManager.create_namespace_for_repo = MagicMock()
+        CodebaseNamespaceManager.create_or_get_namespace_for_repo = MagicMock()
 
         CodebaseNamespaceManager.create_repo.assert_not_called()
         CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
             1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
         )
 
-        CodebaseNamespaceManager.create_namespace_for_repo.assert_called_once()
+        CodebaseNamespaceManager.create_or_get_namespace_for_repo.assert_called_once()
 
     @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_repo")
-    @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_namespace_for_repo")
+    @patch(
+        "seer.automation.codebase.namespace.CodebaseNamespaceManager.create_or_get_namespace_for_repo"
+    )
     def test_get_or_create_namespace_for_repo_new(
         self, mock_create_namespace_for_repo, mock_create_repo
     ):
@@ -83,7 +87,7 @@ class TestNamespaceManager(unittest.TestCase):
             1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
         )
 
-        CodebaseNamespaceManager.create_namespace_for_repo.assert_not_called()
+        CodebaseNamespaceManager.create_or_get_namespace_for_repo.assert_not_called()
         CodebaseNamespaceManager.create_repo.assert_called_once()
 
     def test_insert_chunks(self):
