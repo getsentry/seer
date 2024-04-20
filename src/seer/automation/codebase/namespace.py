@@ -142,6 +142,7 @@ class CodebaseNamespaceManager:
         external_slug: str,
         head_sha: str,
         tracking_branch: str | None = None,
+        should_set_as_default: bool = False,
     ):
         with Session() as session:
             db_repo_info = DbRepositoryInfo(
@@ -162,7 +163,8 @@ class CodebaseNamespaceManager:
             session.add(db_namespace)
             session.flush()
 
-            db_repo_info.default_namespace = db_namespace.id
+            if should_set_as_default:
+                db_repo_info.default_namespace = db_namespace.id
 
             session.commit()
 
@@ -182,6 +184,7 @@ class CodebaseNamespaceManager:
         external_slug: str,
         head_sha: str,
         tracking_branch: str | None = None,
+        should_set_as_default: bool = False,
     ):
         with Session() as session:
             db_repo_info = (
@@ -203,12 +206,14 @@ class CodebaseNamespaceManager:
                     external_slug=external_slug,
                     head_sha=head_sha,
                     tracking_branch=tracking_branch,
+                    should_set_as_default=should_set_as_default,
                 )
 
             return cls.create_or_get_namespace_for_repo(
                 repo_id=db_repo_info.id,
                 sha=head_sha,
                 tracking_branch=tracking_branch,
+                should_set_as_default=should_set_as_default,
             )
 
     @classmethod
@@ -217,6 +222,7 @@ class CodebaseNamespaceManager:
         repo_id: int,
         sha: str,
         tracking_branch: str | None = None,
+        should_set_as_default: bool = False,
     ):
         with Session() as session:
             existing_namespace = None
@@ -254,6 +260,10 @@ class CodebaseNamespaceManager:
                 session.commit()
 
             repo_info = RepositoryInfo.from_db(db_repo_info)
+
+            if should_set_as_default:
+                repo_info.default_namespace = db_namespace.id
+
             namespace = CodebaseNamespace.from_db(db_namespace)
 
         storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
