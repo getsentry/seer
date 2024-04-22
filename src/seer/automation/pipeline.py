@@ -26,10 +26,22 @@ class Pipeline(abc.ABC):
     def __init__(self, context: PipelineContext):
         self.context = context
 
-    def invoke_side_effects(self):
+    def _invoke_side_effects(self):
         for side_effect in self.side_effects:
             side_effect.invoke()
 
+    def invoke(self) -> Any:
+        try:
+            self._invoke_side_effects()
+            return self._invoke()
+        except Exception as e:
+            self._handle_exception(e)
+            raise e
+
     @abc.abstractmethod
-    def invoke(self, request: Any) -> Any:
+    def _handle_exception(self, exception: Exception):
+        pass
+
+    @abc.abstractmethod
+    def _invoke(self) -> Any:
         pass

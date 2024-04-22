@@ -277,16 +277,30 @@ class AutofixContinuation(AutofixGroupState):
         for step in self.steps:
             step.status = AutofixStatus.COMPLETED
 
-    def mark_running_steps_errored(self):
+    def _mark_steps_errored(self, status_condition: AutofixStatus):
+        did_mark = False
         for step in self.steps:
-            if step.status == AutofixStatus.PROCESSING:
+            if step.status == status_condition:
                 step.status = AutofixStatus.ERROR
+                did_mark = True
                 for substep in step.progress:
                     if isinstance(substep, (DefaultStep, RootCauseStep, ChangesStep)):
                         if substep.status == AutofixStatus.PROCESSING:
                             substep.status = AutofixStatus.ERROR
                         if substep.status == AutofixStatus.PENDING:
                             substep.status = AutofixStatus.CANCELLED
+
+        return did_mark
+
+    def mark_running_steps_errored(self):
+        did_mark = self._mark_steps_errored(AutofixStatus.PROCESSING)
+
+        if not did_mark:
+            self._mark_steps_errored(AutofixStatus.PENDING)
+
+    def set_last_step_completed_message(self, message: str):
+        if self.steps:
+            self.steps[-1].completedMessage = message
 
     def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
         root_cause_step = self.find_step(id="root_cause_analysis")

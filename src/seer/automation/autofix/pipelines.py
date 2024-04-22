@@ -131,9 +131,7 @@ class AutofixRootCause(Pipeline):
         ]
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
-    def invoke(self):
-        self.invoke_side_effects()
-
+    def _invoke(self):
         self.context.event_manager.send_root_cause_analysis_start()
 
         if self.context.has_missing_codebase_indexes():
@@ -152,6 +150,9 @@ class AutofixRootCause(Pipeline):
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
 
+    def _handle_exception(self, exception: Exception):
+        self.context.event_manager.on_error()
+
 
 class AutofixExecution(Pipeline):
     """
@@ -166,9 +167,7 @@ class AutofixExecution(Pipeline):
         self.side_effects = [CheckCodebaseForUpdatesSideEffect(context)]
 
     @traceable(name="Execution", tags=["autofix:v2"])
-    def invoke(self):
-        self.invoke_side_effects()
-
+    def _invoke(self):
         self.context.event_manager.send_planning_start()
 
         if self.context.has_missing_codebase_indexes():
@@ -228,6 +227,9 @@ class AutofixExecution(Pipeline):
             codebase_changes.append(change)
 
         self.context.event_manager.send_execution_complete(codebase_changes)
+
+    def _handle_exception(self, exception: Exception):
+        self.context.event_manager.on_error()
 
     @traceable(name="Executor with Retriever", run_type="llm")
     def _run_executor_with_retriever(
