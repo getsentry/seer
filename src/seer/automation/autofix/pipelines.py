@@ -208,23 +208,24 @@ class AutofixExecution(Pipeline):
         for codebase in self.context.codebases.values():
             diff, diff_str = codebase.get_file_patches()
 
-            change_description = change_describer.invoke(
-                ChangeDescriptionRequest(
-                    hint="Describe the code changes in the following branch for a pull request.",
-                    change_dump=diff_str,
+            if diff:
+                change_description = change_describer.invoke(
+                    ChangeDescriptionRequest(
+                        hint="Describe the code changes in the following branch for a pull request.",
+                        change_dump=diff_str,
+                    )
                 )
-            )
 
-            change = CodebaseChange(
-                repo_id=codebase.repo_info.id,
-                repo_name=codebase.repo_info.external_slug,
-                title=change_description.title if change_description else "Code Changes",
-                description=change_description.description if change_description else "",
-                diff=diff,
-                diff_str=diff_str,
-            )
+                change = CodebaseChange(
+                    repo_id=codebase.repo_info.id,
+                    repo_name=codebase.repo_info.external_slug,
+                    title=change_description.title if change_description else "Code Changes",
+                    description=change_description.description if change_description else "",
+                    diff=diff,
+                    diff_str=diff_str,
+                )
 
-            codebase_changes.append(change)
+                codebase_changes.append(change)
 
         self.context.event_manager.send_execution_complete(codebase_changes)
 
