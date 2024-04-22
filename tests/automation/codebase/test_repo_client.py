@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import InitializationError, RepoDefinition
 
@@ -20,17 +22,11 @@ class TestRepoClient(unittest.TestCase):
         )
         self.assertEqual(client.provider, "github")
 
-    @patch("seer.automation.codebase.repo_client.get_github_auth")
-    def test_repo_client_rejects_unsupported_provider(self, mock_get_github_auth):
-        mock_get_github_auth.return_value = (
-            None  # Assuming get_github_auth returns None for simplicity
-        )
-        with self.assertRaises(InitializationError):
-            RepoClient(
-                RepoDefinition(
-                    provider="unsupported_provider",
-                    owner="getsentry",
-                    name="seer",
-                    external_id="123",
-                )
+    def test_repo_definition_rejects_unsupported_provider(self):
+        with self.assertRaises(ValidationError):
+            RepoDefinition(
+                provider="unsupported_provider",
+                owner="getsentry",
+                name="seer",
+                external_id="123",
             )
