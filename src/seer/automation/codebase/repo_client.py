@@ -3,8 +3,6 @@ import os
 import shutil
 import tarfile
 import tempfile
-import textwrap
-from typing import Optional, TypedDict
 
 import requests
 import sentry_sdk
@@ -41,13 +39,6 @@ def get_github_auth(repo_owner: str, repo_name: str):
         github_auth = app_auth.get_installation_auth(installation.id)
 
     return github_auth
-
-
-class RepoInitializer(TypedDict):
-    provider: str
-    owner: str
-    name: str
-    external_id: str
 
 
 class RepoClient:
