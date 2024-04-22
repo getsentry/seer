@@ -12,6 +12,7 @@ from seer.automation.autofix.models import (
     AutofixUpdateType,
 )
 from seer.automation.autofix.tasks import (
+    check_and_mark_if_timed_out,
     get_autofix_state,
     run_autofix_create_pr,
     run_autofix_execution,
@@ -114,8 +115,11 @@ def autofix_update_endpoint(
 def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
     state = get_autofix_state(data.group_id)
 
+    if state:
+        check_and_mark_if_timed_out(state)
+
     return AutofixStateResponse(
-        group_id=data.group_id, state=state.model_dump(mode="json") if state else None
+        group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None
     )
 
 

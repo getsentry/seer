@@ -163,8 +163,15 @@ class AutofixGroupState(BaseModel):
     steps: list[Step] = Field(default_factory=list)
     status: AutofixStatus = AutofixStatus.PENDING
     codebases: dict[int, CodebaseState] = Field(default_factory=dict)
-    completedAt: datetime.datetime | None = None
     usage: Usage = Field(default_factory=Usage)
+    run_timeout_secs: Optional[Annotated[int, Examples((60 * 5,))]] = None
+    last_triggered_at: Optional[
+        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
+    ] = None
+    updated_at: Optional[
+        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
+    ] = None
+    completed_at: datetime.datetime | None = None
 
 
 class AutofixStateRequest(BaseModel):
@@ -195,27 +202,14 @@ class AutofixRequest(BaseModel):
     repos: list[RepoDefinition]
     issue: IssueDetails
     invoking_user: Optional[AutofixUserDetails] = None
-
     base_commit_sha: Optional[
         Annotated[str, Examples(hashlib.sha1(s).hexdigest() for s in specialized.byte_strings)]
     ] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
-    timeout_secs: Optional[Annotated[int, Examples((60 * 5,))]] = None
-    last_updated: Optional[
-        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
-    ] = None
 
     @property
     def process_request_name(self) -> str:
         return f"autofix:{self.organization_id}:{self.issue.id}"
-
-    @property
-    def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
-        if self.timeout_secs and self.last_updated:
-            if now is None:
-                now = datetime.datetime.now()
-            return self.last_updated + datetime.timedelta(seconds=self.timeout_secs) < now
-        return False
 
     @field_validator("repos", mode="after")
     @classmethod
@@ -228,9 +222,7 @@ class AutofixRequest(BaseModel):
 
         raise ValueError("Not a list of repos.")
 
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
 class AutofixUpdateType(str, enum.Enum):
@@ -322,3 +314,17 @@ class AutofixContinuation(AutofixGroupState):
                 elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
                     return root_cause_step.selection.custom_root_cause
         return None
+
+    def mark_triggered(self):
+        self.last_triggered_at = datetime.datetime.now()
+
+    def mark_updated(self):
+        self.updated_at = datetime.datetime.now()
+
+    @property
+    def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
+        if self.run_timeout_secs and self.updated_at:
+            if now is None:
+                now = datetime.datetime.now()
+            return self.updated_at + datetime.timedelta(seconds=self.run_timeout_secs) < now
+        return False
