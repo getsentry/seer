@@ -85,7 +85,7 @@ class ProcessRequest(Base):
         name: str,
         payload: dict | str | bytes | BaseModel,
         when: datetime.datetime,
-        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),
+        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),  # noqa
     ) -> sqlalchemy.UpdateBase:
         scheduled_from = scheduled_for = when
         # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.

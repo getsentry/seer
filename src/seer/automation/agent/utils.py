@@ -7,7 +7,7 @@ import tree_sitter_languages
 
 def replace_newlines_not_in_quotes(value):
     # Split the string by both single and double quotes, replace \n outside quotes, and reassemble
-    parts = re.split(r'(["\'].*?["\'])', value)
+    parts = re.split(r'(["\'][^"\']*["\'])', value)
     for i, part in enumerate(parts):
         if i % 2 == 0:  # Not inside quotes
             part = part.replace("\\n", "\n")

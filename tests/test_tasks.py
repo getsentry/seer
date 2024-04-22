@@ -66,7 +66,7 @@ class UpdatedWork:
     def save(
         self,
         now: datetime.datetime,
-        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),
+        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),  # noqa
     ) -> Self:
         self.scheduled_work.save()
         with Session() as session:
