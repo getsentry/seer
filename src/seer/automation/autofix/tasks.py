@@ -3,6 +3,7 @@ import logging
 from typing import Any, cast
 
 import sentry_sdk
+from pydantic import BaseModel
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -34,7 +35,7 @@ logger = logging.getLogger("autofix")
 @dataclasses.dataclass
 class ContinuationState(DbState[AutofixContinuation]):
     @classmethod
-    def from_id(cls, id: int, model: type[AutofixContinuation]) -> "ContinuationState":
+    def from_id(cls, id: int, model: type[BaseModel]) -> "ContinuationState":
         return cast(ContinuationState, super().from_id(id, model))
 
     def set(self, state: AutofixContinuation):
