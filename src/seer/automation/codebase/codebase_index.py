@@ -511,6 +511,9 @@ class CodebaseIndex:
             set([file_change.path for file_change in self.state_manager.get_file_changes()])
         )
 
+        if not document_paths:
+            return [], ""
+
         original_documents = [
             self.get_document(path, ignore_local_changes=True) for path in document_paths
         ]
