@@ -1,6 +1,6 @@
 import datetime
 import time
-from typing import Mapping, Self
+from typing import Mapping, Optional, Self
 
 import chromadb
 import numpy as np
@@ -205,6 +205,9 @@ class CodebaseNamespaceManager:
             )
 
             if db_repo_info is None:
+                autofix_logger.debug(
+                    f"Failed to get repo info for org {organization}, project {project}, external_id {repo.external_id}"
+                )
                 return None
 
             db_namespace = None
@@ -230,6 +233,9 @@ class CodebaseNamespaceManager:
                 db_namespace = session.get(DbCodebaseNamespace, db_repo_info.default_namespace)
 
             if db_namespace is None:
+                autofix_logger.debug(
+                    f"Failed to get namespace info for org {organization}, project {project}, external_id {repo.external_id}"
+                )
                 return None
 
             repo_info = RepositoryInfo.from_db(db_repo_info)
@@ -384,9 +390,11 @@ class CodebaseNamespaceManager:
         return cls(repo_info, namespace, storage_adapter)
 
     @staticmethod
-    def does_repo_exist(organization: int, project: int, provider: str, external_id: str):
+    def does_repo_exist(
+        organization: int, project: int, provider: str, external_id: str, sha: Optional[str] = None
+    ):
         with Session() as session:
-            return (
+            repo = (
                 session.query(DbRepositoryInfo)
                 .filter(
                     DbRepositoryInfo.organization == organization,
@@ -394,9 +402,20 @@ class CodebaseNamespaceManager:
                     DbRepositoryInfo.provider == provider,
                     DbRepositoryInfo.external_id == external_id,
                 )
-                .count()
-                > 0
+                .one_or_none()
             )
+            if repo is None:
+                return False
+
+            if sha:
+                return (
+                    session.query(DbCodebaseNamespace)
+                    .filter(DbCodebaseNamespace.repo_id == repo.id, DbCodebaseNamespace.sha == sha)
+                    .count()
+                    > 0
+                )
+
+            return True
 
     def chunk_hashes_exist(self, hashes: list[str]):
         if not hashes:

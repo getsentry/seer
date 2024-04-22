@@ -9,7 +9,7 @@ import tree_sitter_languages
 from langsmith import traceable
 from sentence_transformers import SentenceTransformer
 from sentry_sdk.ai_analytics import ai_track
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from tree_sitter import Tree
 from unidiff import PatchSet
 
@@ -84,12 +84,15 @@ class CodebaseIndex:
         return RepositoryInfo.from_db(db_repo_info) if db_repo_info else None
 
     @staticmethod
-    def has_repo_been_indexed(organization: int, project: int, repo: RepoDefinition):
+    def has_repo_been_indexed(
+        organization: int, project: int, repo: RepoDefinition, sha: str | None
+    ):
         return CodebaseNamespaceManager.does_repo_exist(
             organization=organization,
             project=project,
             provider=repo.provider,
             external_id=repo.external_id,
+            sha=sha,
         )
 
     @classmethod
@@ -116,7 +119,7 @@ class CodebaseIndex:
         logger.debug(
             f"Loaded workspace for {repo.full_name} ({sha or tracking_branch})"
             if workspace
-            else "Failed to load workspace"
+            else f"Failed to load workspace for {organization}.{project}.{repo.external_id} ({repo.full_name} {sha or tracking_branch})"
         )
 
         if workspace:
@@ -204,7 +207,7 @@ class CodebaseIndex:
         try:
             documents = read_directory(tmp_repo_dir)
 
-            logger.debug(f"Read {len(documents)} documents:")
+            logger.debug(f"Read {len(documents)} documents from repo {repo.full_name}#{sha}:")
             documents_by_language = group_documents_by_language(documents)
             for language, docs in documents_by_language.items():
                 logger.debug(f"  {language}: {len(docs)}")
@@ -336,11 +339,11 @@ class CodebaseIndex:
         logger.debug(f"Embedding {len(chunks)} chunks...")
         embeddings_list: list[np.ndarray] = []
 
-        with tqdm(total=len(chunks)) as pbar:
+        with tqdm(total=len(chunks), desc="Embedding chunk") as pbar:
             for i in range(0, len(chunks), superchunk_size := 256):
                 batch_embeddings: np.ndarray = embedding_model.encode(
                     [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=4,
+                    batch_size=4,  # Batch size of 24 works best on a2-ultragpu-1g instance.
                     show_progress_bar=False,
                 )
                 embeddings_list.extend(batch_embeddings)

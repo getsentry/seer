@@ -5,7 +5,7 @@ import textwrap
 import tree_sitter_languages
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from tree_sitter import Node
 
 from seer.automation.codebase.ast import (
@@ -235,6 +235,8 @@ class DocumentParser:
         """
         chunks = []
 
-        for i, document in tqdm(enumerate(documents), total=len(documents)):
+        for i, document in tqdm(
+            enumerate(documents), total=len(documents), desc="Chunking Document"
+        ):
             chunks.extend(self.process_document(document))
         return chunks
