@@ -211,3 +211,10 @@ class AutofixEventManager:
                         type=ProgressType.INFO,
                     )
                 )
+
+    def on_error(self, error_msg: str = "Something went wrong"):
+        with self.state.update() as cur:
+            cur.mark_running_steps_errored()
+            cur.set_last_step_completed_message(error_msg)
+
+            cur.status = AutofixStatus.ERROR
