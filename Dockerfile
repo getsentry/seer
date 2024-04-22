@@ -41,7 +41,7 @@ COPY setup.py requirements.txt celeryworker.sh asyncworker.sh ./
 RUN chmod +x ./celeryworker.sh ./asyncworker.sh
 
 # Install dependencies
-RUN pip install --upgrade pip==23.0.1
+RUN pip install --upgrade pip==24.0
 RUN pip install -r requirements.txt
 
 # Copy source code
