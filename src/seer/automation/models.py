@@ -203,7 +203,7 @@ class RepoDefinition(BaseModel):
         return cleaned_provider
 
     def __hash__(self):
-        return hash((self.provider, self.owner, self.name))
+        return hash((self.provider, self.owner, self.name, self.external_id))
 
 
 class InitializationError(Exception):
