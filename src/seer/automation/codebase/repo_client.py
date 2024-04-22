@@ -58,7 +58,11 @@ class RepoClient:
             )
 
         self.github = Github(auth=get_github_auth(repo_definition.owner, repo_definition.name))
-        self.repo = self.github.get_repo(int(repo_definition.external_id))
+        self.repo = self.github.get_repo(
+            int(repo_definition.external_id)
+            if repo_definition.external_id.isdigit()
+            else repo_definition.full_name
+        )
 
         self.provider = repo_definition.provider
         self.repo_owner = repo_definition.owner
