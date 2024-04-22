@@ -141,6 +141,7 @@ class RepositoryInfo(BaseModel):
     project: int
     provider: str
     external_slug: str
+    external_id: str
     default_namespace: Optional[int] = None
 
     @classmethod
@@ -151,6 +152,7 @@ class RepositoryInfo(BaseModel):
             project=db_repo.project,
             provider=db_repo.provider,
             external_slug=db_repo.external_slug,
+            external_id=db_repo.external_id,
             default_namespace=db_repo.default_namespace,
         )
 
@@ -161,7 +163,16 @@ class RepositoryInfo(BaseModel):
             project=self.project,
             provider=self.provider,
             external_slug=self.external_slug,
+            external_id=self.external_id,
             default_namespace=self.default_namespace,
+        )
+
+    def to_repo_definition(self) -> RepoDefinition:
+        return RepoDefinition(
+            provider=self.provider,
+            owner=self.external_slug.split("/")[0],
+            name=self.external_slug.split("/")[1],
+            external_id=self.external_id,
         )
 
 

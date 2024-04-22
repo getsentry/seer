@@ -90,7 +90,7 @@ class AutofixContext(PipelineContext):
 
     def has_codebase_index(self, repo: RepoDefinition) -> bool:
         for codebase in self.codebases.values():
-            if codebase.repo_info.external_slug == repo.full_name:
+            if codebase.repo_info.external_id == repo.external_id:
                 return True
 
         return False

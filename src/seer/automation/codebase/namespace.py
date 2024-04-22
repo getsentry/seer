@@ -91,7 +91,7 @@ class CodebaseNamespaceManager:
                     DbRepositoryInfo.organization == organization,
                     DbRepositoryInfo.project == project,
                     DbRepositoryInfo.provider == repo.provider,
-                    DbRepositoryInfo.external_slug == repo.full_name,
+                    DbRepositoryInfo.external_id == repo.external_id,
                 )
                 .one_or_none()
             )
@@ -138,8 +138,7 @@ class CodebaseNamespaceManager:
         cls,
         organization: int,
         project: int,
-        provider: str,
-        external_slug: str,
+        repo: RepoDefinition,
         head_sha: str,
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
@@ -148,8 +147,9 @@ class CodebaseNamespaceManager:
             db_repo_info = DbRepositoryInfo(
                 organization=organization,
                 project=project,
-                provider=provider,
-                external_slug=external_slug,
+                provider=repo.provider,
+                external_slug=repo.full_name,
+                external_id=repo.external_id,
             )
             session.add(db_repo_info)
             session.flush()
@@ -180,8 +180,7 @@ class CodebaseNamespaceManager:
         cls,
         organization: int,
         project: int,
-        provider: str,
-        external_slug: str,
+        repo: RepoDefinition,
         head_sha: str,
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
@@ -192,8 +191,8 @@ class CodebaseNamespaceManager:
                 .filter(
                     DbRepositoryInfo.organization == organization,
                     DbRepositoryInfo.project == project,
-                    DbRepositoryInfo.provider == provider,
-                    DbRepositoryInfo.external_slug == external_slug,
+                    DbRepositoryInfo.provider == repo.provider,
+                    DbRepositoryInfo.external_id == repo.external_id,
                 )
                 .one_or_none()
             )
@@ -202,8 +201,7 @@ class CodebaseNamespaceManager:
                 return cls.create_repo(
                     organization=organization,
                     project=project,
-                    provider=provider,
-                    external_slug=external_slug,
+                    repo=repo,
                     head_sha=head_sha,
                     tracking_branch=tracking_branch,
                     should_set_as_default=should_set_as_default,
@@ -271,7 +269,7 @@ class CodebaseNamespaceManager:
         return cls(repo_info, namespace, storage_adapter)
 
     @staticmethod
-    def does_repo_exist(organization: int, project: int, provider: str, external_slug: str):
+    def does_repo_exist(organization: int, project: int, provider: str, external_id: str):
         with Session() as session:
             return (
                 session.query(DbRepositoryInfo)
@@ -279,7 +277,7 @@ class CodebaseNamespaceManager:
                     DbRepositoryInfo.organization == organization,
                     DbRepositoryInfo.project == project,
                     DbRepositoryInfo.provider == provider,
-                    DbRepositoryInfo.external_slug == external_slug,
+                    DbRepositoryInfo.external_id == external_id,
                 )
                 .count()
                 > 0
