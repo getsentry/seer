@@ -1,6 +1,7 @@
 import dataclasses
 
 import sentry_sdk
+from seer.automation.autofix.components.codebase_indexer import create_missing_codebase_indexes
 from langsmith import traceable
 
 from seer.automation.autofix.autofix_context import AutofixContext
