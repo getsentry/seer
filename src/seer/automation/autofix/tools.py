@@ -3,6 +3,7 @@ import logging
 import textwrap
 
 from langsmith import traceable
+from sentry_sdk.ai_analytics import ai_track
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
@@ -33,6 +34,7 @@ class BaseTools:
         self.retrieval_top_k = retrieval_top_k
 
     @traceable(run_type="tool", name="Codebase Search")
+    @ai_track(description="Codebase Search")
     def codebase_retriever(self, query: str):
         component = RetrieverWithRerankerComponent(self.context)
 
@@ -44,6 +46,7 @@ class BaseTools:
         return output.to_xml().to_prompt_str()
 
     @traceable(run_type="tool", name="Expand Document")
+    @ai_track(description="Expand Document")
     def expand_document(self, input: str, repo_name: str | None = None):
         self.context.event_manager.add_log(
             f"Taking a look at the document at {input} in {repo_name}."
@@ -101,6 +104,7 @@ class CodeActionTools(BaseTools):
         super().__init__(context)
 
     @traceable(run_type="tool", name="Store File Change")
+    @ai_track(description="Store File Change")
     def store_file_change(self, codebase: CodebaseIndex, file_change: FileChange):
         """
         Stores a file change to a codebase index.
@@ -115,6 +119,7 @@ class CodeActionTools(BaseTools):
         )
 
     @traceable(run_type="tool", name="Replace Snippet")
+    @ai_track(description="Replace Snippet")
     def replace_snippet_with(
         self,
         file_path: str,
@@ -188,6 +193,7 @@ class CodeActionTools(BaseTools):
         return f"success: Resulting code after replacement:\n```\n{output.snippet}\n```\n"
 
     @traceable(run_type="tool", name="Delete Snippet")
+    @ai_track(description="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
         Deletes a snippet.
@@ -276,6 +282,7 @@ class CodeActionTools(BaseTools):
     #     return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
     @traceable(run_type="tool", name="Create File")
+    @ai_track(description="Create File")
     def create_file(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
         Creates a file with the provided snippet.
@@ -304,6 +311,7 @@ class CodeActionTools(BaseTools):
         return "success"
 
     @traceable(run_type="tool", name="Delete File")
+    @ai_track(description="Delete File")
     def delete_file(self, file_path: str, repo_name: str, commit_message: str):
         """
         Deletes a file.

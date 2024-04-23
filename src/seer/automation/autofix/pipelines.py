@@ -2,6 +2,7 @@ import dataclasses
 
 import sentry_sdk
 from langsmith import traceable
+from sentry_sdk.ai_analytics import ai_track
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.change_describer import (
@@ -131,6 +132,7 @@ class AutofixRootCause(Pipeline):
         ]
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
+    @ai_track(description="Root Cause")
     def _invoke(self):
         self.context.event_manager.send_root_cause_analysis_start()
 
@@ -167,6 +169,7 @@ class AutofixExecution(Pipeline):
         self.side_effects = [CheckCodebaseForUpdatesSideEffect(context)]
 
     @traceable(name="Execution", tags=["autofix:v2"])
+    @ai_track(description="Execution")
     def _invoke(self):
         self.context.event_manager.send_planning_start()
 
@@ -233,6 +236,7 @@ class AutofixExecution(Pipeline):
         self.context.event_manager.on_error()
 
     @traceable(name="Executor with Retriever", run_type="llm")
+    @ai_track(description="Executor with Retriever")
     def _run_executor_with_retriever(
         self,
         retriever: RetrieverComponent,

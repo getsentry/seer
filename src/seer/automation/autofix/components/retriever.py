@@ -1,6 +1,7 @@
 import textwrap
 
 from langsmith import traceable
+from sentry_sdk.ai_analytics import ai_track
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
@@ -70,6 +71,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
         super().__init__(context)
 
     @traceable(name="Retriever", run_type="retriever", tags=["retriever:v1.2"])
+    @ai_track(description="Retriever")
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         # Identify good search queries for the plan item
         data, message, usage = GptClient().json_completion(
