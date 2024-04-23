@@ -88,7 +88,7 @@ class CodebaseIndex:
             organization=organization,
             project=project,
             provider=repo.provider,
-            external_slug=repo.full_name,
+            external_id=repo.external_id,
         )
 
     @classmethod
@@ -119,7 +119,7 @@ class CodebaseIndex:
         )
 
         if workspace:
-            repo_client = RepoClient(repo.provider, repo.owner, repo.name)
+            repo_client = RepoClient(repo)
             return cls(
                 organization,
                 project,
@@ -180,7 +180,7 @@ class CodebaseIndex:
         state: State | None = None,
         state_manager_class: Type[CodebaseStateManager] | None = None,
     ):
-        repo_client = RepoClient(repo.provider, repo.owner, repo.name)
+        repo_client = RepoClient(repo)
 
         head_sha = sha
         branch = None
@@ -217,8 +217,7 @@ class CodebaseIndex:
             workspace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
                 organization=organization,
                 project=project,
-                provider=repo.provider,
-                external_slug=repo_client.repo.full_name,
+                repo=repo,
                 head_sha=head_sha,
                 tracking_branch=branch,
                 should_set_as_default=is_default_branch,

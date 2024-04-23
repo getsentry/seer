@@ -166,15 +166,16 @@ class DbRepositoryInfo(Base):
     project: Mapped[int] = mapped_column(BigInteger, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
+    external_id: Mapped[str] = mapped_column(String, nullable=False)
     default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
     __table_args__ = (
-        UniqueConstraint("organization", "project", "provider", "external_slug"),
+        UniqueConstraint("organization", "project", "provider", "external_id"),
         Index(
             "ix_repository_organization_project_provider_slug",
             "organization",
             "project",
             "provider",
-            "external_slug",
+            "external_id",
         ),
     )
 

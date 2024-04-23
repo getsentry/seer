@@ -7,6 +7,7 @@ import numpy as np
 from seer.automation.codebase.models import CodebaseNamespace, EmbeddedDocumentChunk
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.storage_adapters import FilesystemStorageAdapter
+from seer.automation.models import RepoDefinition
 from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
 
 
@@ -25,8 +26,7 @@ class TestNamespaceManager(unittest.TestCase):
         namespace = CodebaseNamespaceManager.create_repo(
             1,
             1337,
-            "github",
-            "getsentry/seer",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
             "sha",
             tracking_branch="main",
             should_set_as_default=True,
@@ -70,6 +70,7 @@ class TestNamespaceManager(unittest.TestCase):
                 organization=1,
                 project=1337,
                 external_slug="getsentry/seer",
+                external_id="123",
                 provider="github",
             )
             session.add(db_repo_info)
@@ -80,7 +81,11 @@ class TestNamespaceManager(unittest.TestCase):
 
         CodebaseNamespaceManager.create_repo.assert_not_called()
         CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
         )
 
         CodebaseNamespaceManager.create_or_get_namespace_for_repo.assert_called_once()
@@ -93,7 +98,11 @@ class TestNamespaceManager(unittest.TestCase):
         self, mock_create_namespace_for_repo, mock_create_repo
     ):
         CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
         )
 
         CodebaseNamespaceManager.create_or_get_namespace_for_repo.assert_not_called()
@@ -103,8 +112,7 @@ class TestNamespaceManager(unittest.TestCase):
         namespace = CodebaseNamespaceManager.create_repo(
             1,
             1337,
-            "github",
-            "getsentry/seer",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
             "sha",
             tracking_branch="main",
             should_set_as_default=True,
@@ -134,8 +142,7 @@ class TestNamespaceManager(unittest.TestCase):
         namespace = CodebaseNamespaceManager.create_repo(
             1,
             1337,
-            "github",
-            "getsentry/seer",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
             "sha",
             tracking_branch="main",
             should_set_as_default=True,
@@ -176,8 +183,7 @@ class TestNamespaceManager(unittest.TestCase):
         namespace = CodebaseNamespaceManager.create_repo(
             1,
             1337,
-            "github",
-            "getsentry/seer",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
             "sha",
             tracking_branch="main",
             should_set_as_default=True,
@@ -224,7 +230,11 @@ class TestNamespaceManager(unittest.TestCase):
 
     def test_chunk_hashes_exist(self):
         namespace = CodebaseNamespaceManager.create_repo(
-            1, 1337, "github", "getsentry/seer", "sha", tracking_branch="main"
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
         )
 
         namespace.insert_chunks(
