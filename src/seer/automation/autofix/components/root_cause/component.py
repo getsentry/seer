@@ -44,7 +44,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             return None
 
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(response, ['snippet'])}</root>"
+            f"<root>{escape_multi_xml(response, ['thoughts', 'snippet', 'title', 'description'])}</root>"
         )
 
         # Assign the ids to be the numerical indices of the causes and suggested fixes
