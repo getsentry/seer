@@ -45,6 +45,8 @@ def bootup(
         traces_sampler=traces_sampler,
         profiles_sample_rate=1.0,
         enable_tracing=True,
+        traces_sample_rate=1.0,
+        send_default_pii=True,
     )
     app = Flask(name)
 
