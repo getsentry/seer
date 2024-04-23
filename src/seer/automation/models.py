@@ -152,6 +152,7 @@ class ExceptionDetails(BaseModel):
     @classmethod
     def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace | Stacktrace):
         return (
+
             Stacktrace.model_validate(sentry_stacktrace)
             if isinstance(sentry_stacktrace, dict)
             else sentry_stacktrace
@@ -168,7 +169,8 @@ class EventDetails(BaseModel):
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
-                    exceptions.append(ExceptionDetails.model_validate(exception))
+                    import json
+                    exceptions.append(ExceptionDetails.model_validate(json.loads(exception)))
 
         return cls(title=error_event.get("title"), exceptions=exceptions)
 
