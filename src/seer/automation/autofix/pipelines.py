@@ -39,28 +39,7 @@ class CreateAnyMissingCodebaseIndexesSideEffect(PipelineSideEffect):
 
     def invoke(self):
         if self.context.has_missing_codebase_indexes():
-            self.context.event_manager.send_codebase_indexing_start()
-            for repo in self.context.repos:
-                if not self.context.has_codebase_index(repo):
-                    self.context.event_manager.add_log(
-                        f"Creating codebase index for repo: {repo.full_name}"
-                    )
-                    with sentry_sdk.start_span(
-                        op="seer.automation.autofix.codebase_index.create",
-                        description="Create codebase index",
-                    ) as span:
-                        span.set_tag("repo", repo.full_name)
-                        self.context.create_codebase_index(repo)
-                    self.context.event_manager.add_log(
-                        f"Created codebase index for repo: {repo.full_name}"
-                    )
-
-                else:
-                    self.context.event_manager.add_log(
-                        f"Codebase index already exists for repo: {repo.full_name}"
-                    )
-
-            self.context.event_manager.send_codebase_indexing_complete_if_exists()
+            self.context.create_missing_codebase_indexes()
 
 
 @dataclasses.dataclass
@@ -135,7 +114,7 @@ class AutofixRootCause(Pipeline):
         self.context.event_manager.send_root_cause_analysis_start()
 
         if self.context.has_missing_codebase_indexes():
-            raise ValueError("Codebase indexes must be created before root cause analysis")
+            self.context.create_missing_codebase_indexes()
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])
