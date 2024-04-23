@@ -66,6 +66,10 @@ class SimilarityResponse(BaseModel):
     token: Optional[int]
 
 
+class SimilarityBenchmarkResponse(BaseModel):
+    embedding: List[float]
+
+
 class GroupingLookup:
     """Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
 

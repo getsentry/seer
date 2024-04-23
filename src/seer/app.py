@@ -21,7 +21,7 @@ from seer.automation.autofix.tasks import (
 from seer.automation.codebase.models import CreateCodebaseTaskRequest
 from seer.automation.codebase.tasks import create_codebase_index
 from seer.bootup import bootup
-from seer.grouping.grouping import GroupingRequest, SimilarityResponse
+from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
 from seer.inference_models import embeddings_model, grouping_lookup
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
@@ -86,6 +86,17 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
+
+
+@json_api("/v0/issues/similarity-embedding-benchmark")
+def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> SimilarityBenchmarkResponse:
+    start_time = time.time()
+    embedding = grouping_lookup().encode_text(data.stacktrace).astype("float32")
+    embedding_list = embedding.tolist()
+    end_time = time.time()
+    app.logger.debug(f"Embedding generation time: {end_time - start_time} seconds")
+
+    return SimilarityBenchmarkResponse(embedding=embedding_list)
 
 
 @json_api("/v1/automation/codebase/index/create")
