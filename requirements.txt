@@ -44,7 +44,7 @@ scikit-learn==1.3.0
 scipy==1.11.2
 seaborn==0.12.2
 sentence_transformers==2.3.1
-sentry-sdk @ git+https://github.com/getsentry/sentry-python.git@langchain-2.0
+sentry-sdk @ git+https://github.com/getsentry/sentry-python.git@c675239ced6927ebefae8305c2c7b1d310079f0a
 simdkalman==1.0.2
 six==1.16.0
 statsmodels==0.14.0
