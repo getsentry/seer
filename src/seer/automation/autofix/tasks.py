@@ -88,7 +88,7 @@ def run_autofix_root_cause(
         return
 
     event_manager = AutofixEventManager(state)
-    event_manager.send_root_cause_analysis_pending()
+    event_manager.send_root_cause_analysis_start()
     try:
         with sentry_sdk.start_span(
             op="seer.automation.autofix",
@@ -119,7 +119,7 @@ def run_autofix_execution(
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
-    event_manager.send_planning_pending()
+    event_manager.send_planning_start()
 
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
 
