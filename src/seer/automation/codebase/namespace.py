@@ -90,10 +90,12 @@ class CodebaseNamespaceManager:
             if (
                 namespace_mutex is not None
                 and datetime.datetime.now() - namespace_mutex
-                > datetime.timedelta(minutes=NAMESPACE_MUTEX_TIMEOUT_MINUTES)
+                > datetime.timedelta(
+                    minutes=CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES
+                )
             ):
                 autofix_logger.warning(
-                    f"Mutex for namespace {namespace_id} has been held for more than {NAMESPACE_MUTEX_TIMEOUT_MINUTES} minutes"
+                    f"Mutex for namespace {namespace_id} has been held for more than {CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES} minutes"
                 )
                 CodebaseNamespaceManager._clear_mutex(namespace_id)
                 break
