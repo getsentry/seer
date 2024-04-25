@@ -1,4 +1,5 @@
 import datetime
+import time
 from typing import Mapping, Self
 
 import chromadb
@@ -16,7 +17,7 @@ from seer.automation.codebase.models import (
 )
 from seer.automation.codebase.storage_adapters import StorageAdapter, get_storage_adapter_class
 from seer.automation.models import RepoDefinition
-from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
+from seer.db import DbCodebaseNamespace, DbCodebaseNamespaceMutex, DbRepositoryInfo, Session
 
 
 class CodebaseNamespaceManager:
@@ -34,6 +35,8 @@ class CodebaseNamespaceManager:
     namespace: CodebaseNamespace
     client: ChromaClient
     storage_adapter: StorageAdapter
+
+    NAMESPACE_MUTEX_TIMEOUT_MINUTES = 2
 
     def __init__(
         self,
@@ -53,6 +56,102 @@ class CodebaseNamespaceManager:
     def __del__(self):
         self.cleanup()
 
+    @staticmethod
+    def get_mutex(namespace_id: int) -> datetime.datetime | None:
+        with Session() as session:
+            namespace_mutex = (
+                session.query(DbCodebaseNamespaceMutex)
+                .filter_by(namespace_id=namespace_id)
+                .one_or_none()
+            )
+
+            return namespace_mutex.created_at if namespace_mutex else None
+
+    @staticmethod
+    def _clear_mutex(namespace_id: int):
+        autofix_logger.debug(f"Mutex for namespace {namespace_id} is being cleared...")
+        with Session() as session:
+            session.query(DbCodebaseNamespaceMutex).filter_by(namespace_id=namespace_id).delete()
+            session.commit()
+
+    @staticmethod
+    def _set_mutex(namespace_id: int):
+        autofix_logger.debug(f"Mutex for namespace {namespace_id} is being set...")
+        with Session() as session:
+            mutex = DbCodebaseNamespaceMutex(
+                namespace_id=namespace_id, created_at=datetime.datetime.now()
+            )
+            session.add(mutex)
+            session.commit()
+
+    @staticmethod
+    def _wait_for_mutex_clear(namespace_id: int):
+        while namespace_mutex := CodebaseNamespaceManager.get_mutex(namespace_id):
+            if (
+                namespace_mutex is not None
+                and datetime.datetime.now() - namespace_mutex
+                > datetime.timedelta(minutes=NAMESPACE_MUTEX_TIMEOUT_MINUTES)
+            ):
+                autofix_logger.warning(
+                    f"Mutex for namespace {namespace_id} has been held for more than {NAMESPACE_MUTEX_TIMEOUT_MINUTES} minutes"
+                )
+                CodebaseNamespaceManager._clear_mutex(namespace_id)
+                break
+
+            autofix_logger.debug(f"Mutex for namespace {namespace_id} is held, waiting...")
+            time.sleep(1)
+
+    @staticmethod
+    def get_namespace(
+        organization: int,
+        project: int,
+        repo: RepoDefinition,
+        sha: str | None,
+        tracking_branch: str | None,
+    ):
+        with Session() as session:
+            db_repo_info = (
+                session.query(DbRepositoryInfo)
+                .filter(
+                    DbRepositoryInfo.organization == organization,
+                    DbRepositoryInfo.project == project,
+                    DbRepositoryInfo.provider == repo.provider,
+                    DbRepositoryInfo.external_id == repo.external_id,
+                )
+                .one_or_none()
+            )
+
+            if db_repo_info is None:
+                return None
+
+            db_namespace = None
+            if sha is None and tracking_branch is None:
+                db_namespace = session.get(DbCodebaseNamespace, db_repo_info.default_namespace)
+            elif sha is not None:
+                db_namespace = (
+                    session.query(DbCodebaseNamespace)
+                    .filter(
+                        DbCodebaseNamespace.repo_id == db_repo_info.id,
+                        DbCodebaseNamespace.sha == sha,
+                    )
+                    .one_or_none()
+                )
+
+            elif tracking_branch is not None:
+                db_namespace = (
+                    session.query(DbCodebaseNamespace)
+                    .filter(
+                        DbCodebaseNamespace.repo_id == db_repo_info.id,
+                        DbCodebaseNamespace.tracking_branch == tracking_branch,
+                    )
+                    .one_or_none()
+                )
+
+            if db_namespace is None:
+                return None
+
+            return CodebaseNamespace.from_db(db_namespace)
+
     @classmethod
     def load_workspace(cls, namespace_id: int):
         with Session() as session:
@@ -70,7 +169,14 @@ class CodebaseNamespaceManager:
             namespace = CodebaseNamespace.from_db(db_namespace)
 
         storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+
+        cls._wait_for_mutex_clear(namespace.id)
+        cls._set_mutex(namespace.id)
+
         did_copy = storage_adapter.copy_to_workspace()
+
+        cls._clear_mutex(namespace.id)
+
         if did_copy:
             return cls(repo_info, namespace, storage_adapter)
         return None
@@ -128,7 +234,14 @@ class CodebaseNamespaceManager:
             namespace = CodebaseNamespace.from_db(db_namespace)
 
         storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+
+        cls._wait_for_mutex_clear(namespace.id)
+        cls._set_mutex(namespace.id)
+
         did_copy = storage_adapter.copy_to_workspace()
+
+        cls._clear_mutex(namespace.id)
+
         if did_copy:
             return cls(repo_info, namespace, storage_adapter)
         return None
@@ -380,6 +493,9 @@ class CodebaseNamespaceManager:
         return self._get_chunk_query_results(results)
 
     def save(self):
+        self._wait_for_mutex_clear(self.namespace.id)
+        self._set_mutex(self.namespace.id)
+
         if not self.storage_adapter.save_to_storage():
             autofix_logger.error(f"Failed to save workspace for namespace {self.namespace.id}")
             return
@@ -394,6 +510,8 @@ class CodebaseNamespaceManager:
             session.merge(db_repo_info)
             session.merge(db_namespace)
             session.commit()
+
+        self._clear_mutex(self.namespace.id)
 
         autofix_logger.info(f"Saved workspace for namespace {self.namespace.id}")
 
