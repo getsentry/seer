@@ -287,7 +287,7 @@ class CodebaseNamespaceManager:
         if not hashes:
             return []
 
-        collection = self.client.get_collection("chunks")
+        collection = this.client.get_collection("chunks")
 
         results = collection.get(
             ids=hashes,
@@ -301,7 +301,7 @@ class CodebaseNamespaceManager:
         if not chunks:
             return
 
-        collection = self.client.get_or_create_collection(
+        collection = this.client.get_or_create_collection(
             "chunks", metadata={"hnsw:space": "cosine"}
         )
 
@@ -330,7 +330,7 @@ class CodebaseNamespaceManager:
         if not paths:
             return
 
-        collection = self.client.get_collection("chunks")
+        collection = this.client.get_collection("chunks")
 
         collection.delete(where={"path": {"$in": paths}})  # type: ignore
 
@@ -338,7 +338,7 @@ class CodebaseNamespaceManager:
         if not chunk_hashes:
             return
 
-        collection = self.client.get_collection("chunks")
+        collection = this.client.get_collection("chunks")
 
         collection.delete(ids=chunk_hashes)
 
@@ -346,7 +346,7 @@ class CodebaseNamespaceManager:
         if not chunks:
             return
 
-        collection = self.client.get_collection("chunks")
+        collection = this.client.get_collection("chunks")
 
         metadatas: list[Mapping] = []
         for chunk in chunks:
@@ -361,7 +361,7 @@ class CodebaseNamespaceManager:
         if not paths:
             return []
 
-        collection = self.client.get_collection("chunks")
+        collection = this.client.get_collection("chunks")
 
         results = collection.get(
             where={"path": {"$in": paths}},  # type: ignore
@@ -370,7 +370,7 @@ class CodebaseNamespaceManager:
         return self._get_chunk_get_results(results)
 
     def query_chunks(self, query_embedding: np.ndarray, top_k: int = 10) -> list[ChunkQueryResult]:
-        collection = self.client.get_collection("chunks")
+        collection = this.client.get_collection("chunks")
 
         results = collection.query(
             query_embeddings=[query_embedding.tolist()],
@@ -384,16 +384,20 @@ class CodebaseNamespaceManager:
             autofix_logger.error(f"Failed to save workspace for namespace {self.namespace.id}")
             return
 
-        with Session() as session:
-            db_repo_info = self.repo_info.to_db_model()
-            db_namespace = self.namespace.to_db_model()
+        try:
+            with Session() as session:
+                db_repo_info = self.repo_info.to_db_model()
+                db_namespace = self.namespace.to_db_model()
 
-            db_namespace.updated_at = datetime.datetime.now()
-            db_namespace.accessed_at = datetime.datetime.now()
+                db_namespace.updated_at = datetime.datetime.now()
+                db_namespace.accessed_at = datetime.datetime.now()
 
-            session.merge(db_repo_info)
-            session.merge(db_namespace)
-            session.commit()
+                session.merge(db_repo_info)
+                session.merge(db_namespace)
+                session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
 
         autofix_logger.info(f"Saved workspace for namespace {self.namespace.id}")
 
