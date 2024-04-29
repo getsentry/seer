@@ -542,7 +542,6 @@ class CodebaseNamespaceManager:
 
         if not self.storage_adapter.delete_from_storage():
             autofix_logger.error(f"Failed to delete workspace for namespace {self.namespace.id}")
-            return
 
         with Session() as session:
             session.query(DbCodebaseNamespaceMutex).filter_by(

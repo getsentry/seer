@@ -4,8 +4,10 @@ import datetime
 import os
 import shutil
 
+import sentry_sdk  # type: ignore
+
 # Why is this all good on pylance but mypy is complaining?
-from google.cloud import storage  # type: ignore
+from google.cloud import storage
 
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.utils import cleanup_dir
@@ -30,7 +32,8 @@ class StorageAdapter(abc.ABC):
     @staticmethod
     def clear_all_workspaces():
         workspace_dir = StorageAdapter.get_workspace_dir()
-        shutil.rmtree(workspace_dir, ignore_errors=True)
+        if os.path.exists(workspace_dir):
+            shutil.rmtree(workspace_dir, ignore_errors=False)
 
     @abc.abstractmethod
     def copy_to_workspace(self) -> bool:
@@ -91,7 +94,13 @@ class FilesystemStorageAdapter(StorageAdapter):
 
     def delete_from_storage(self):
         storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
-        shutil.rmtree(storage_path, ignore_errors=True)
+
+        if os.path.exists(storage_path):
+            try:
+                shutil.rmtree(storage_path, ignore_errors=False)
+            except Exception as e:
+                autofix_logger.exception(e)
+                return False
 
         return True
 
@@ -169,8 +178,12 @@ class GcsStorageAdapter(StorageAdapter):
     def delete_from_storage(self) -> bool:
         storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
 
-        blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
-        self.get_bucket().delete_blobs(blobs)
+        try:
+            blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
+            self.get_bucket().delete_blobs(blobs)
+        except Exception as e:
+            autofix_logger.exception(e)
+            return False
 
         return True
 
