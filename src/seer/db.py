@@ -186,6 +186,7 @@ class DbCodebaseNamespace(Base):
     repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
     tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
+
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
@@ -198,6 +199,17 @@ class DbCodebaseNamespace(Base):
         UniqueConstraint("repo_id", "tracking_branch"),
         Index("ix_codebase_namespace_repo_id_sha", "repo_id", "sha"),
         Index("ix_codebase_namespace_repo_id_tracking_branch", "repo_id", "tracking_branch"),
+    )
+
+
+class DbCodebaseNamespaceMutex(Base):
+    __tablename__ = "codebase_namespace_mutex"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(DbCodebaseNamespace.id), nullable=False
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
 
 
