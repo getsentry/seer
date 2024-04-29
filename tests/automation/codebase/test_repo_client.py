@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from github import UnknownObjectException
 from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
@@ -30,3 +31,20 @@ class TestRepoClient(unittest.TestCase):
                 name="seer",
                 external_id="123",
             )
+
+    @patch(
+        "seer.automation.codebase.repo_client.get_github_auth",
+        side_effect=UnknownObjectException(404, "Not Found"),
+    )
+    def test_repo_access_check_failed(self, mock_get_github_auth):
+        result = RepoClient.check_repo_access(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        self.assertFalse(result)
+
+    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    def test_repo_access_check_success(self, mock_get_github_auth):
+        result = RepoClient.check_repo_access(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        self.assertTrue(result)

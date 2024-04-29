@@ -18,8 +18,15 @@ from seer.automation.autofix.tasks import (
     run_autofix_execution,
     run_autofix_root_cause,
 )
-from seer.automation.codebase.models import CreateCodebaseTaskRequest
-from seer.automation.codebase.tasks import create_codebase_index
+from seer.automation.codebase.models import (
+    CreateCodebaseTaskRequest,
+    RepoAccessCheckRequest,
+    RepoAccessCheckResponse,
+)
+from seer.automation.codebase.tasks import (
+    check_repo_access,
+    create_codebase_index,
+)
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
 from seer.inference_models import embeddings_model, grouping_lookup
@@ -103,6 +110,11 @@ def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> Similarity
 def create_codebase_index_endpoint(data: CreateCodebaseTaskRequest) -> AutofixEndpointResponse:
     create_codebase_index.delay(data.model_dump(mode="json"))
     return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/codebase/repo/check-access")
+def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
+    return RepoAccessCheckResponse(has_access=check_repo_access(data.repo))
 
 
 @json_api("/v1/automation/autofix/start")

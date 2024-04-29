@@ -68,6 +68,14 @@ class RepoClient:
         self.repo_owner = repo_definition.owner
         self.repo_name = repo_definition.name
 
+    @staticmethod
+    def check_repo_access(repo: RepoDefinition):
+        try:
+            get_github_auth(repo.owner, repo.name)
+            return True
+        except UnknownObjectException:
+            return False
+
     @classmethod
     def from_repo_info(cls, repo_info: RepositoryInfo):
         return cls(repo_info.to_repo_definition())
