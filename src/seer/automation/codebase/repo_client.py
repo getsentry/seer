@@ -19,24 +19,31 @@ from seer.utils import class_method_lru_cache
 logger = logging.getLogger("autofix")
 
 
-def get_github_auth(repo_owner: str, repo_name: str):
+def get_app_installation(repo_owner: str, repo_name: str):
     app_id = os.environ.get("GITHUB_APP_ID")
     private_key = os.environ.get("GITHUB_PRIVATE_KEY")
-    github_token = os.environ.get("GITHUB_TOKEN")
 
-    if github_token is None and (app_id is None or private_key is None):
-        raise ValueError(
-            "Need either GITHUB_TOKEN or (GITHUB_APP_ID and GITHUB_PRIVATE_KEY) to be set."
+    if app_id is None or private_key is None:
+        raise InitializationError(
+            "GITHUB_APP_ID and GITHUB_PRIVATE_KEY environment variables must be set for app authentication."
         )
+
+    app_auth = Auth.AppAuth(app_id, private_key=private_key)  # type: ignore
+    gi = GithubIntegration(auth=app_auth)
+    installation = gi.get_repo_installation(repo_owner, repo_name)
+    github_auth = app_auth.get_installation_auth(installation.id)
+
+    return github_auth, installation
+
+
+def get_github_auth(repo_owner: str, repo_name: str):
+    github_token = os.environ.get("GITHUB_TOKEN")
 
     github_auth: Auth.Token | Auth.AppInstallationAuth
     if github_token is not None:
         github_auth = Auth.Token(github_token)
     else:
-        app_auth = Auth.AppAuth(app_id, private_key=private_key)  # type: ignore
-        gi = GithubIntegration(auth=app_auth)
-        installation = gi.get_repo_installation(repo_owner, repo_name)
-        github_auth = app_auth.get_installation_auth(installation.id)
+        github_auth, _ = get_app_installation(repo_owner, repo_name)
 
     return github_auth
 
@@ -71,8 +78,17 @@ class RepoClient:
     @staticmethod
     def check_repo_access(repo: RepoDefinition):
         try:
-            get_github_auth(repo.owner, repo.name)
-            return True
+            _, installation = get_app_installation(repo.owner, repo.name)
+
+            permissions = installation.raw_data.get("permissions", {})
+
+            if (
+                permissions.get("contents") == "write"
+                and permissions.get("pull_requests") == "write"
+            ):
+                return True
+
+            return False
         except UnknownObjectException:
             return False
 
