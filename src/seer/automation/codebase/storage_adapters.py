@@ -40,6 +40,10 @@ class StorageAdapter(abc.ABC):
     def save_to_storage(self) -> bool:
         pass
 
+    @abc.abstractmethod
+    def delete_from_storage(self) -> bool:
+        pass
+
     def cleanup(self):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
 
@@ -82,6 +86,12 @@ class FilesystemStorageAdapter(StorageAdapter):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
         storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
         shutil.copytree(workspace_path, storage_path, dirs_exist_ok=True)
+
+        return True
+
+    def delete_from_storage(self):
+        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        shutil.rmtree(storage_path, ignore_errors=True)
 
         return True
 
@@ -153,6 +163,14 @@ class GcsStorageAdapter(StorageAdapter):
                 blob.upload_from_filename(file_path)
 
         autofix_logger.debug(f"Uploaded files from workspace: {workspace_path} to {storage_prefix}")
+
+        return True
+
+    def delete_from_storage(self) -> bool:
+        storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
+
+        blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
+        self.get_bucket().delete_blobs(blobs)
 
         return True
 

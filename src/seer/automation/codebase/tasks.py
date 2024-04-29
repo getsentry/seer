@@ -5,7 +5,13 @@ import sentry_sdk
 
 from celery_app.app import app as celery_app
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import CreateCodebaseTaskRequest, UpdateCodebaseTaskRequest
+from seer.automation.codebase.models import (
+    CodebaseIndexStatus,
+    CodebaseNamespaceStatus,
+    CreateCodebaseTaskRequest,
+    UpdateCodebaseTaskRequest,
+)
+from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
 from seer.automation.utils import get_embedding_model
@@ -53,3 +59,23 @@ def check_repo_access(
     repo: RepoDefinition,
 ) -> bool:
     return RepoClient.check_repo_access(repo)
+
+
+def get_codebase_index_status(
+    organization_id: int,
+    project_id: int,
+    repo: RepoDefinition,
+    sha: str | None = None,
+    tracking_branch: str | None = None,
+) -> CodebaseIndexStatus:
+    namespace = CodebaseNamespaceManager.get_namespace(
+        organization_id, project_id, repo, sha, tracking_branch
+    )
+
+    if namespace:
+        if namespace.status == CodebaseNamespaceStatus.PENDING:
+            return CodebaseIndexStatus.INDEXING
+
+        return CodebaseIndexStatus.UP_TO_DATE
+
+    return CodebaseIndexStatus.NOT_INDEXED

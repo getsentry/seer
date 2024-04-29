@@ -1,4 +1,5 @@
 import datetime
+import enum
 import hashlib
 import textwrap
 from typing import Annotated, Any, Mapping, Optional
@@ -176,11 +177,19 @@ class RepositoryInfo(BaseModel):
         )
 
 
+class CodebaseNamespaceStatus(str, enum.Enum):
+    CREATED = "created"
+    PENDING = "pending"
+    UPDATING = "updating"
+
+
 class CodebaseNamespace(BaseModel):
     id: int
     repo_id: int
     sha: str
     tracking_branch: Optional[str]
+
+    status: CodebaseNamespaceStatus
 
     updated_at: datetime.datetime
     accessed_at: datetime.datetime
@@ -198,6 +207,7 @@ class CodebaseNamespace(BaseModel):
             repo_id=db_namespace.repo_id,
             sha=db_namespace.sha,
             tracking_branch=db_namespace.tracking_branch,
+            status=CodebaseNamespaceStatus(db_namespace.status),
             updated_at=db_namespace.updated_at,
             accessed_at=db_namespace.accessed_at,
         )
@@ -208,12 +218,24 @@ class CodebaseNamespace(BaseModel):
             repo_id=self.repo_id,
             sha=self.sha,
             tracking_branch=self.tracking_branch,
+            status=self.status,
             updated_at=self.updated_at,
             accessed_at=self.accessed_at,
         )
 
 
+class CodebaseIndexStatus(str, enum.Enum):
+    UP_TO_DATE = "up_to_date"
+    INDEXING = "indexing"
+    OUT_OF_DATE = "out_of_date"
+    NOT_INDEXED = "not_indexed"
+
+
 class RepoAccessCheckRequest(BaseModel):
+    repo: RepoDefinition
+
+
+class CodebaseStatusCheckRequest(BaseModel):
     organization_id: int
     project_id: int
     repo: RepoDefinition
@@ -221,3 +243,7 @@ class RepoAccessCheckRequest(BaseModel):
 
 class RepoAccessCheckResponse(BaseModel):
     has_access: bool
+
+
+class CodebaseStatusCheckResponse(BaseModel):
+    status: CodebaseIndexStatus

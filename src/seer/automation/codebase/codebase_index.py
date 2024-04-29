@@ -22,6 +22,7 @@ from seer.automation.codebase.models import (
     BaseDocumentChunk,
     ChunkQueryResult,
     CodebaseNamespace,
+    CodebaseNamespaceStatus,
     Document,
     DraftDocument,
     EmbeddedDocumentChunk,
@@ -205,20 +206,6 @@ class CodebaseIndex:
         tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
         try:
-            documents = read_directory(tmp_repo_dir)
-
-            logger.debug(f"Read {len(documents)} documents from repo {repo.full_name}#{sha}:")
-            documents_by_language = group_documents_by_language(documents)
-            for language, docs in documents_by_language.items():
-                logger.debug(f"  {language}: {len(docs)}")
-
-            doc_parser = DocumentParser(embedding_model)
-            with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
-                chunks = doc_parser.process_documents(documents)
-            with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
-                embedded_chunks = cls.embed_chunks(chunks, embedding_model)
-            logger.debug(f"Processed {len(chunks)} chunks")
-
             workspace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
                 organization=organization,
                 project=project,
@@ -227,8 +214,29 @@ class CodebaseIndex:
                 tracking_branch=branch,
                 should_set_as_default=is_default_branch,
             )
-            workspace.insert_chunks(embedded_chunks)
-            workspace.save()
+
+            try:
+                documents = read_directory(tmp_repo_dir)
+
+                logger.debug(f"Read {len(documents)} documents:")
+                documents_by_language = group_documents_by_language(documents)
+                for language, docs in documents_by_language.items():
+                    logger.debug(f"  {language}: {len(docs)}")
+
+                doc_parser = DocumentParser(embedding_model)
+                with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
+                    chunks = doc_parser.process_documents(documents)
+                with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
+                    embedded_chunks = cls.embed_chunks(chunks, embedding_model)
+                logger.debug(f"Processed {len(chunks)} chunks")
+
+                workspace.insert_chunks(embedded_chunks)
+                workspace.namespace.status = CodebaseNamespaceStatus.CREATED
+                workspace.save()
+            except Exception as e:
+                logger.error(f"Failed to create codebase index: {e}")
+                workspace.delete()
+                raise
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
@@ -289,6 +297,9 @@ class CodebaseIndex:
         tmp_dir, tmp_repo_dir = self.repo_client.load_repo_to_tmp_dir(target_sha)
         logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
+        self.workspace.namespace.status = CodebaseNamespaceStatus.UPDATING
+        self.workspace.save()
+
         try:
             documents = read_specific_files(tmp_repo_dir, changed_files)
 
@@ -326,10 +337,11 @@ class CodebaseIndex:
 
             self.workspace.namespace.sha = target_sha
 
-            self.workspace.save()
-
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
+            self.workspace.namespace.status = CodebaseNamespaceStatus.CREATED
+            self.workspace.save()
+
             cleanup_dir(tmp_dir)
 
     @classmethod
