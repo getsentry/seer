@@ -160,7 +160,7 @@ class ExceptionDetails(BaseModel):
 
 class EventDetails(BaseModel):
     title: str
-    exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=True)
+    exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=False)
 
     @classmethod
     def from_event(cls, error_event: SentryEventData):
