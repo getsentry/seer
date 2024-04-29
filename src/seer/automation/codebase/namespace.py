@@ -545,10 +545,10 @@ class CodebaseNamespaceManager:
             return
 
         with Session() as session:
-            session.delete(self.namespace.to_db_model())
             session.query(DbCodebaseNamespaceMutex).filter_by(
                 namespace_id=self.namespace.id
             ).delete()
+            session.query(DbCodebaseNamespace).filter_by(id=self.namespace.id).delete()
             session.commit()
 
         autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")

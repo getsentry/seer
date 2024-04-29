@@ -235,8 +235,13 @@ class CodebaseIndex:
                 workspace.save()
             except Exception as e:
                 logger.error(f"Failed to create codebase index: {e}")
-                workspace.delete()
-                raise
+
+                try:
+                    workspace.delete()
+                except Exception as ex:
+                    sentry_sdk.capture_exception(ex)
+
+                raise e
 
             logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
