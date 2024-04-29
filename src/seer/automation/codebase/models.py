@@ -246,4 +246,4 @@ class RepoAccessCheckResponse(BaseModel):
 
 
 class CodebaseStatusCheckResponse(BaseModel):
-    status: CodebaseIndexStatus
+    status: str  # CodebaseIndexStatus, but not using the enum here because it breaks JSON schema generation
