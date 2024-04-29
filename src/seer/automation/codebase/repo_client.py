@@ -28,7 +28,7 @@ def get_app_installation(repo_owner: str, repo_name: str):
             "GITHUB_APP_ID and GITHUB_PRIVATE_KEY environment variables must be set for app authentication."
         )
 
-    app_auth = Auth.AppAuth(app_id, private_key=private_key)  # type: ignore
+    app_auth = Auth.AppAuth(app_id, private_key=private_key)
     gi = GithubIntegration(auth=app_auth)
     installation = gi.get_repo_installation(repo_owner, repo_name)
     github_auth = app_auth.get_installation_auth(installation.id)
