@@ -23,10 +23,7 @@ from seer.automation.codebase.models import (
     RepoAccessCheckRequest,
     RepoAccessCheckResponse,
 )
-from seer.automation.codebase.tasks import (
-    check_repo_access,
-    create_codebase_index,
-)
+from seer.automation.codebase.tasks import check_repo_access, create_codebase_index
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
 from seer.inference_models import embeddings_model, grouping_lookup
