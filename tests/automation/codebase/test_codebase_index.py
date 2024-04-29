@@ -692,7 +692,6 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.assertEqual(len(patches[2].hunks), 1)
 
     def test_get_file_patches_with_full_delete(self):
-        print("starting test_get_file_patches_with_full_delete")
         self.mock_get_document.return_value = Document(
             path="file_to_delete.py",
             language="python",
