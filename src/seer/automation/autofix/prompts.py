@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.autofix.models import ExceptionDetails
+from seer.automation.models import ExceptionDetails
 
 
 def format_instruction(instruction: str | None):

@@ -41,9 +41,9 @@ repos:
         files: requirements-.*\.txt$
         additional_dependencies: [packaging==21.3]
       - id: prevent-push
-        name: prevent pushing master
+        name: prevent pushing to main
         stages: [push]
-        entry: bash -c 'test "$PRE_COMMIT_REMOTE_BRANCH" != "refs/heads/master"'
+        entry: bash -c 'test "$PRE_COMMIT_REMOTE_BRANCH" != "refs/heads/main"'
         always_run: true
         pass_filenames: false
         language: system
@@ -57,9 +57,5 @@ repos:
       - id: check-symlinks
       - id: check-yaml
       - id: end-of-file-fixer
-        exclude_types: [svg]
-        exclude: ^fixtures/
       - id: trailing-whitespace
-        exclude_types: [svg]
-        exclude: ^(fixtures/|scripts/patches/)
       - id: debug-statements

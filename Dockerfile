@@ -22,14 +22,12 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 &
 RUN ln -s /usr/bin/python /usr/local/bin/python && \
     ln -s /usr/bin/python3 /usr/local/bin/python3
 
-# Install supervisord
-RUN apt-get install -y supervisor
-
-# Install libpq-dev for psycopg
-RUN apt-get update && apt-get install -y libpq-dev
-
-# Clean up
-RUN rm -rf /var/lib/apt/lists/*
+# Install libpq-dev for psycopg & git for 'sentry-sdk @ git://' in requirements.txt
+RUN apt-get update && \
+    apt-get install -y supervisor \
+      libpq-dev \
+      git && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
@@ -41,7 +39,7 @@ COPY setup.py requirements.txt celeryworker.sh asyncworker.sh ./
 RUN chmod +x ./celeryworker.sh ./asyncworker.sh
 
 # Install dependencies
-RUN pip install --upgrade pip==23.0.1
+RUN pip install --upgrade pip==24.0
 RUN pip install -r requirements.txt
 
 # Copy source code
