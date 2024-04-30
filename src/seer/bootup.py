@@ -72,10 +72,11 @@ def bootup(
     if async_load_models:
         start_loading(async_load_models)
 
-    if os.environ.get("TORCH_NUM_THREADS"):
+    torch_num_threads = os.environ.get("TORCH_NUM_THREADS")
+    if torch_num_threads:
         import torch
 
-        torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS")))
+        torch.set_num_threads(int(torch_num_threads))
 
     return app
 
