@@ -211,3 +211,13 @@ class CodebaseNamespace(BaseModel):
             updated_at=self.updated_at,
             accessed_at=self.accessed_at,
         )
+
+
+class RepoAccessCheckRequest(BaseModel):
+    organization_id: int
+    project_id: int
+    repo: RepoDefinition
+
+
+class RepoAccessCheckResponse(BaseModel):
+    has_access: bool
