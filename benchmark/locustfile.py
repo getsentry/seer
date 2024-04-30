@@ -8,13 +8,41 @@ from locust import HttpUser, task
 class SeerBenchmarkUser(HttpUser):
     @task
     def similarity_embedding(self):
-        random_stacktrace = "".join(random.choices(string.ascii_letters + string.digits, k=500))
+        def generate_stacktrace(depth):
+            filenames = ["main.py", "utils.py", "handler.py", "database.sql"]
+            functions = [
+                "initializeApp",
+                "fetchData",
+                "processData",
+                "saveToDatabase",
+                "logError",
+                "sendNotification",
+                "validateUserInput",
+            ]
+            errors = [
+                "SyntaxError: invalid syntax",
+                "NameError: name 'undefined_var' is not defined",
+                "TypeError: unsupported operand type(s) for +: 'int' and 'str'",
+            ]
+
+            stacktrace = ""
+            for i in range(depth):
+                file = random.choice(filenames)
+                function = random.choice(functions)
+                error = errors[i % len(errors)] if i == depth - 1 else ""
+                line = random.randint(1, 100)
+                stacktrace += f'  File "{file}", line {line}\n    {function}\n'
+                if error:
+                    stacktrace += f"    {error}\n"
+            return stacktrace.strip()
+
+        real_looking_stacktrace = generate_stacktrace(10)
         self.client.post(
             "/v0/issues/similarity-embedding-benchmark",
             json={
                 "group_id": 2,
                 "project_id": 1,
-                "stacktrace": random_stacktrace,
+                "stacktrace": real_looking_stacktrace,
                 "message": "message",
                 "stacktrace_hash": "QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                 "k": 1,
