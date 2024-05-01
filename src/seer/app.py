@@ -21,7 +21,8 @@ from seer.automation.autofix.tasks import (
 from seer.automation.codebase.models import (
     CodebaseStatusCheckRequest,
     CodebaseStatusCheckResponse,
-    CreateCodebaseTaskRequest,
+    CreateCodebaseRequest,
+    IndexNamespaceTaskRequest,
     RepoAccessCheckRequest,
     RepoAccessCheckResponse,
 )
@@ -29,6 +30,7 @@ from seer.automation.codebase.tasks import (
     check_repo_access,
     create_codebase_index,
     get_codebase_index_status,
+    index_namespace,
 )
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
@@ -110,8 +112,15 @@ def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> Similarity
 
 
 @json_api("/v1/automation/codebase/index/create")
-def create_codebase_index_endpoint(data: CreateCodebaseTaskRequest) -> AutofixEndpointResponse:
-    create_codebase_index.delay(data.model_dump(mode="json"))
+def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
+    namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
+
+    index_namespace.delay(
+        IndexNamespaceTaskRequest(
+            namespace_id=namespace_id,
+        ).model_dump(mode="json")
+    )
+
     return AutofixEndpointResponse(started=True)
 
 

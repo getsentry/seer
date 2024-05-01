@@ -20,7 +20,7 @@ from seer.automation.models import FileChange, RepoDefinition
 from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
 
 
-class TestCodebaseIndexCreate(unittest.TestCase):
+class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
     def setUp(self):
         os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
         os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
@@ -31,19 +31,55 @@ class TestCodebaseIndexCreate(unittest.TestCase):
         FilesystemStorageAdapter.clear_all_workspaces()
         return super().tearDown()
 
+    @patch("seer.automation.codebase.codebase_index.RepoClient")
+    def test_simple_create(self, mock_repo_client):
+        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
+        namespace_id = CodebaseIndex.create(
+            organization=1,
+            project=1,
+            repo=RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="1"),
+            tracking_branch="main",
+        )
+
+        with Session() as session:
+            repo_info = session.query(DbRepositoryInfo).first()
+            self.assertIsNotNone(repo_info)
+            if repo_info:
+                self.assertEqual(repo_info.external_slug, "getsentry/seer")
+                self.assertEqual(repo_info.provider, "github")
+                self.assertEqual(repo_info.organization, 1)
+                self.assertEqual(repo_info.project, 1)
+
+            namespace = session.query(DbCodebaseNamespace).first()
+            self.assertIsNotNone(namespace)
+            if namespace:
+                self.assertEqual(namespace.id, namespace_id)
+                self.assertEqual(namespace.tracking_branch, "main")
+                self.assertEqual(namespace.sha, "sha")
+                self.assertEqual(namespace.status, CodebaseNamespaceStatus.PENDING)
+
+                workspace = CodebaseNamespaceManager.load_workspace(namespace.id, skip_copy=True)
+                self.assertIsNotNone(workspace)
+                if workspace:
+                    self.assertEqual(workspace.namespace.id, namespace.id)
+
     @patch("seer.automation.codebase.codebase_index.CodebaseIndex.embed_chunks")
     @patch("seer.automation.codebase.codebase_index.read_directory")
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
-    def test_simple_create(
-        self, mock_cleanup_dir, mock_repo_client, mock_read_directory, mock_embed_chunks
+    def test_simple_create_and_index(
+        self,
+        mock_cleanup_dir,
+        mock_repo_client,
+        mock_read_directory,
+        mock_embed_chunks,
     ):
         mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
-        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+        mock_repo_client.from_repo_info.return_value.load_repo_to_tmp_dir.return_value = (
             "tmp_dir",
             "tmp_dir/repo",
         )
-        mock_repo_client.return_value.repo.full_name = "getsentry/seer"
+        mock_repo_client.from_repo_info.return_value.repo.full_name = "getsentry/seer"
 
         mock_read_directory.return_value = [
             Document(
@@ -72,12 +108,16 @@ class TestCodebaseIndexCreate(unittest.TestCase):
             )
         ]
 
-        codebase_index = CodebaseIndex.create(
+        namespace_id = CodebaseIndex.create(
             organization=1,
             project=1,
             repo=RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="1"),
-            embedding_model=MagicMock(),
             tracking_branch="main",
+        )
+
+        codebase_index = CodebaseIndex.index(
+            namespace_id=namespace_id,
+            embedding_model=MagicMock(),
         )
 
         self.assertEqual(codebase_index.namespace.tracking_branch, "main")
@@ -107,15 +147,15 @@ class TestCodebaseIndexCreate(unittest.TestCase):
     @patch("seer.automation.codebase.codebase_index.read_directory")
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
-    def test_failing_create(
+    def test_failing_create_and_index(
         self, mock_cleanup_dir, mock_repo_client, mock_read_directory, mock_embed_chunks
     ):
         mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
-        mock_repo_client.return_value.load_repo_to_tmp_dir.return_value = (
+        mock_repo_client.from_repo_info.return_value.load_repo_to_tmp_dir.return_value = (
             "tmp_dir",
             "tmp_dir/repo",
         )
-        mock_repo_client.return_value.repo.full_name = "getsentry/seer"
+        mock_repo_client.from_repo_info.return_value.repo.full_name = "getsentry/seer"
 
         mock_read_directory.return_value = [
             Document(
@@ -133,15 +173,17 @@ class TestCodebaseIndexCreate(unittest.TestCase):
         ]
         mock_embed_chunks.side_effect = Exception("Error during embedding")
 
+        namespace_id = CodebaseIndex.create(
+            organization=1,
+            project=1,
+            repo=RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="1"),
+            tracking_branch="main",
+        )
+
         with self.assertRaises(Exception) as context:
-            CodebaseIndex.create(
-                organization=1,
-                project=1,
-                repo=RepoDefinition(
-                    provider="github", owner="getsentry", name="seer", external_id="1"
-                ),
+            CodebaseIndex.index(
+                namespace_id=namespace_id,
                 embedding_model=MagicMock(),
-                tracking_branch="main",
             )
             self.assertEqual(str(context.exception), "Error during embedding")
 

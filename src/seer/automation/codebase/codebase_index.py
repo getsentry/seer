@@ -41,7 +41,15 @@ from seer.automation.codebase.utils import (
     read_directory,
     read_specific_files,
 )
-from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition, Stacktrace
+from seer.automation.models import (
+    FileChange,
+    FilePatch,
+    Hunk,
+    InitializationError,
+    Line,
+    RepoDefinition,
+    Stacktrace,
+)
 from seer.automation.state import State
 from seer.db import DbRepositoryInfo, Session
 from seer.utils import class_method_lru_cache
@@ -170,22 +178,16 @@ class CodebaseIndex:
                     embedding_model=embedding_model,
                 )
 
-        raise ValueError(f"Repository with id {repo_id} not found")
+        return None
 
-    @classmethod
-    @traceable(name="Creating codebase index")
-    @ai_track(description="Creating codebase index")
+    @staticmethod
     def create(
-        cls,
         organization: int,
         project: int,
         repo: RepoDefinition,
-        embedding_model: SentenceTransformer,
         tracking_branch: str | None = None,
         sha: str | None = None,
-        state: State | None = None,
-        state_manager_class: Type[CodebaseStateManager] | None = None,
-    ):
+    ) -> int:
         repo_client = RepoClient(repo)
 
         head_sha = sha
@@ -203,17 +205,37 @@ class CodebaseIndex:
         if not head_sha:
             raise ValueError("Failed to get head sha")
 
-        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(head_sha)
-        logger.debug(f"Loaded repository to {tmp_repo_dir}")
+        workspace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
+            organization=organization,
+            project=project,
+            repo=repo,
+            head_sha=head_sha,
+            tracking_branch=branch,
+            should_set_as_default=is_default_branch,
+        )
+
+        return workspace.namespace.id
+
+    @classmethod
+    @traceable(name="Indexing namespace")
+    @ai_track(description="Indexing namespace")
+    def index(
+        cls,
+        namespace_id: int,
+        embedding_model: SentenceTransformer,
+        state: State | None = None,
+        state_manager_class: Type[CodebaseStateManager] | None = None,
+    ):
+        workspace = CodebaseNamespaceManager.load_workspace(namespace_id, skip_copy=True)
+
+        if not workspace:
+            raise InitializationError("Failed to load workspace for namespace_id")
+
         try:
-            workspace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
-                organization=organization,
-                project=project,
-                repo=repo,
-                head_sha=head_sha,
-                tracking_branch=branch,
-                should_set_as_default=is_default_branch,
-            )
+            repo_client = RepoClient.from_repo_info(workspace.repo_info)
+
+            tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(workspace.namespace.sha)
+            logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
             try:
                 documents = read_directory(tmp_repo_dir)
@@ -233,32 +255,32 @@ class CodebaseIndex:
                 workspace.insert_chunks(embedded_chunks)
                 workspace.namespace.status = CodebaseNamespaceStatus.CREATED
                 workspace.save()
-            except Exception as e:
-                logger.error(f"Failed to create codebase index: {e}")
 
-                try:
-                    workspace.delete()
-                except Exception as ex:
-                    sentry_sdk.capture_exception(ex)
+                logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
 
-                raise e
+                return cls(
+                    workspace.repo_info.organization,
+                    workspace.repo_info.project,
+                    repo_client,
+                    workspace=workspace,
+                    state_manager=(
+                        state_manager_class(repo_id=workspace.repo_info.id, state=state)
+                        if state and state_manager_class
+                        else DummyCodebaseStateManager()
+                    ),
+                    embedding_model=embedding_model,
+                )
+            finally:
+                cleanup_dir(tmp_dir)
+        except Exception as e:
+            logger.error(f"Failed to create codebase index: {e}")
 
-            logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
+            try:
+                workspace.delete()
+            except Exception as ex:
+                sentry_sdk.capture_exception(ex)
 
-            return cls(
-                organization,
-                project,
-                repo_client,
-                workspace=workspace,
-                state_manager=(
-                    state_manager_class(repo_id=workspace.repo_info.id, state=state)
-                    if state and state_manager_class
-                    else DummyCodebaseStateManager()
-                ),
-                embedding_model=embedding_model,
-            )
-        finally:
-            cleanup_dir(tmp_dir)
+            raise e
 
     def save(self):
         self.workspace.save()
