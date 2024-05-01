@@ -41,7 +41,15 @@ from seer.automation.codebase.utils import (
     read_directory,
     read_specific_files,
 )
-from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition, Stacktrace
+from seer.automation.models import (
+    FileChange,
+    FilePatch,
+    Hunk,
+    InitializationError,
+    Line,
+    RepoDefinition,
+    Stacktrace,
+)
 from seer.automation.state import State
 from seer.db import DbRepositoryInfo, Session
 from seer.utils import class_method_lru_cache
@@ -221,7 +229,7 @@ class CodebaseIndex:
         workspace = CodebaseNamespaceManager.load_workspace(namespace_id, skip_copy=True)
 
         if not workspace:
-            raise ValueError("Failed to load workspace")
+            raise InitializationError("Failed to load workspace for namespace_id")
 
         try:
             repo_client = RepoClient.from_repo_info(workspace.repo_info)
