@@ -155,7 +155,7 @@ def autofix_update_endpoint(
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
         run_autofix_execution.delay(data.model_dump(mode="json"))
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        run_autofix_create_pr.apply(data.model_dump(mode="json"))
+        run_autofix_create_pr.apply(args=[data.model_dump(mode="json")])
     return AutofixEndpointResponse(started=True)
 
 
