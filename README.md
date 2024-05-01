@@ -16,6 +16,14 @@ You can set the location in filesystem where Autofix will use as a workspace wit
 
 ##### Google Cloud Storage
 
+## Error Explanation
+
+### RuntimeError: Invalid Device
+
+This error occurs when the application attempts to access a device using an invalid or unrecognized device ID. In the provided stack trace, the error is raised explicitly in the `crash()` function within `example.py`. The function attempts to raise a `RuntimeError` with a hardcoded device ID, which is not valid or recognized by the system. This is a critical issue as it prevents the application from executing further and handling other operations.
+
+To resolve this issue, ensure that the device ID provided in the `crash()` function is valid and recognized by the system. Additionally, implement error handling to manage such exceptions gracefully without crashing the entire application.
+
 To use GCS, you need to set the following environment variables:
 
 ```txt
