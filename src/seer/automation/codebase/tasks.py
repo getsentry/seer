@@ -13,7 +13,7 @@ from seer.automation.codebase.models import (
 )
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import RepoDefinition
+from seer.automation.models import InitializationError, RepoDefinition
 from seer.automation.utils import get_embedding_model
 
 logger = logging.getLogger("autofix")
@@ -49,6 +49,9 @@ def update_codebase_index(data: dict[str, Any]) -> None:
     logger.info("Updating codebase index for repo: %s", request.repo_id)
 
     codebase = CodebaseIndex.from_repo_id(request.repo_id, embedding_model=get_embedding_model())
+
+    if not codebase:
+        raise InitializationError(f"Codebase not found for repo: {request.repo_id}")
 
     with sentry_sdk.start_span(
         op="seer.automation.background.update_codebase_index",

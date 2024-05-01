@@ -178,7 +178,7 @@ class CodebaseIndex:
                     embedding_model=embedding_model,
                 )
 
-        raise ValueError(f"Repository with id {repo_id} not found")
+        return None
 
     @staticmethod
     def create(
