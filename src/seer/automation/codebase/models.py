@@ -15,10 +15,14 @@ from seer.automation.models import PromptXmlModel, RepoDefinition
 from seer.db import DbCodebaseNamespace, DbRepositoryInfo
 
 
-class CreateCodebaseTaskRequest(BaseModel):
+class CreateCodebaseRequest(BaseModel):
     organization_id: int
     project_id: int
     repo: RepoDefinition
+
+
+class IndexNamespaceTaskRequest(BaseModel):
+    namespace_id: int
 
 
 class UpdateCodebaseTaskRequest(BaseModel):

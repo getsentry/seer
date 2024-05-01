@@ -105,10 +105,13 @@ class AutofixContext(PipelineContext):
         return self.state.get().find_step(id=self.event_manager.indexing_step.id) is not None
 
     def create_codebase_index(self, repo: RepoDefinition) -> CodebaseIndex:
-        codebase_index = CodebaseIndex.create(
+        namespace_id = CodebaseIndex.create(
             self.organization_id,
             self.project_id,
             repo,
+        )
+        codebase_index = CodebaseIndex.index(
+            namespace_id,
             embedding_model=self.embedding_model,
         )
 
