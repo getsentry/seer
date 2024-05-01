@@ -1,0 +1,66 @@
+#cloud-config
+
+users:
+- name: myuser
+  uid: 2000
+
+write_files:
+  - path: /etc/systemd/system/install-gpu.service
+    permissions: 0644
+    owner: root
+    content: |
+      [Unit]
+      Description=Install GPU drivers
+      Wants=gcr-online.target docker.socket
+      After=gcr-online.target docker.socket
+
+      [Service]
+      User=root
+      Type=oneshot
+      ExecStart=cos-extensions install gpu
+      StandardOutput=journal+console
+      StandardError=journal+console
+  - path: /etc/systemd/system/seer.service
+    permissions: 0644
+    owner: root
+    content: |
+      [Unit]
+      Description=Run a seer GPU application container
+      Requires=install-gpu.service
+      After=install-gpu.service
+
+      [Service]
+      Environment="HOME=/home/cloudservice"
+      RemainAfterExit=true
+      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev
+      ExecStart=/usr/bin/docker run --rm \
+                                   -u 2000 \
+                                   --name=seer \
+                                   --device /dev/nvidia0:/dev/nvidia0 \
+                                   --device /dev/nvidia-uvm:/dev/nvidia-uvm \
+                                   --device /dev/nvidiactl:/dev/nvidiactl \
+                                   --volume /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 \
+                                   --volume /var/lib/nvidia/bin:/usr/local/nvidia/bin \
+                                   -v /mnt/disks/mydir2:/app/data \
+                                   -e SEVERITY_ENABLED=true \
+                                   -e GROUPING_ENABLED=true \
+                                   -e PORT=80 \
+                                   -e SENTRY_BASE_URL=values.sentry_base_url \
+                                   -e DATABASE_URL=postgresql+psycopg://root:seer@10.128.0.7/seer \
+                                   -e TRANSFORMERS_CACHE='/app/data/.cache' \
+                                   -e HF_HOME='/app/data/.cache' \
+                                   -p 80:80 \
+                                   us-central1-docker.pkg.dev/ml-ai-420606/seer-benchmar/benchmark@sha256:785f775f9192ae094e6585734a8ccb05124ae2583ac3de15e187896b4e7d6cc8
+      StandardOutput=journal+console
+      StandardError=journal+console
+
+bootcmd:
+  - fsck.ext4 -tvy /dev/myvol2
+  - mkdir -p /mnt/disks/mydir2
+  - mount -t ext4 -o defaults /dev/myvol2 /mnt/disks/mydir2
+  - chmod a=rwX /mnt/disks/mydir2
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl start install-gpu.service
+  - systemctl start seer.service
