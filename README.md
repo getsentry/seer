@@ -118,5 +118,22 @@ If you run into any data issue or connection issue and want to start from scratc
 
 ```
 docker compose down --volumes
-make update && make dev
+make update & make dev
+```
+
+## Bug Explanation
+
+### RuntimeError: Invalid Device
+
+In the application, there is a specific bug that causes a `RuntimeError` with the message "Invalid device: A949AE01EBB07300D62AE0178F0944DD21F8C98C". This error is raised when the application attempts to use an unrecognized device identifier. The error originates from the `crash()` function in `example.py`, where the device ID is hardcoded and does not match any valid device IDs in the system.
+
+This issue can be traced back to the following lines in the code:
+
+```python
+def crash():
+    print('raising now')
+    raise RuntimeError('Invalid device: d/123456789012')
+```
+
+To resolve this issue, ensure that the device ID provided to the `crash()` function is valid and recognized by the system. This may involve checking the device registration process or updating the list of valid device IDs.
 ```
