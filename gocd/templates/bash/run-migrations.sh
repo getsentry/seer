@@ -1,6 +1,7 @@
 #!/bin/bash
 
 echo "running flask db upgrade" \
+  && eval "$(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")" \
   && /devinfra/scripts/k8s/k8stunnel \
   && /devinfra/scripts/k8s/k8s-spawn-job.py \
   --container-name="seer" \
