@@ -106,6 +106,12 @@ make migration
 make test
 ```
 
+### Error Explanation
+
+#### RuntimeError: Invalid Device
+
+This error occurs when the system tries to access a device with an invalid or unrecognized device ID. In the context of the application, this is raised explicitly in the `crash()` function when an invalid device ID is detected. Ensure that the device ID provided is correct and registered in the system before attempting operations.
+
 ### Opening a shell
 
 ```bash
