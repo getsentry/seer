@@ -536,6 +536,22 @@ class CodebaseNamespaceManager:
 
         autofix_logger.info(f"Saved workspace for namespace {self.namespace.id}")
 
+    def delete(self):
+        self._wait_for_mutex_clear(self.namespace.id)
+        self._set_mutex(self.namespace.id)
+
+        if not self.storage_adapter.delete_from_storage():
+            autofix_logger.error(f"Failed to delete workspace for namespace {self.namespace.id}")
+
+        with Session() as session:
+            session.query(DbCodebaseNamespaceMutex).filter_by(
+                namespace_id=self.namespace.id
+            ).delete()
+            session.query(DbCodebaseNamespace).filter_by(id=self.namespace.id).delete()
+            session.commit()
+
+        autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")
+
     def cleanup(self):
         self.storage_adapter.cleanup()
 

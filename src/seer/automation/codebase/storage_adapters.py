@@ -4,6 +4,8 @@ import datetime
 import os
 import shutil
 
+import sentry_sdk
+
 # Why is this all good on pylance but mypy is complaining?
 from google.cloud import storage  # type: ignore
 
@@ -30,7 +32,8 @@ class StorageAdapter(abc.ABC):
     @staticmethod
     def clear_all_workspaces():
         workspace_dir = StorageAdapter.get_workspace_dir()
-        shutil.rmtree(workspace_dir, ignore_errors=True)
+        if os.path.exists(workspace_dir):
+            shutil.rmtree(workspace_dir, ignore_errors=False)
 
     @abc.abstractmethod
     def copy_to_workspace(self) -> bool:
@@ -38,6 +41,10 @@ class StorageAdapter(abc.ABC):
 
     @abc.abstractmethod
     def save_to_storage(self) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def delete_from_storage(self) -> bool:
         pass
 
     def cleanup(self):
@@ -82,6 +89,18 @@ class FilesystemStorageAdapter(StorageAdapter):
         workspace_path = self.get_workspace_location(self.repo_id, self.namespace_id)
         storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
         shutil.copytree(workspace_path, storage_path, dirs_exist_ok=True)
+
+        return True
+
+    def delete_from_storage(self):
+        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+
+        if os.path.exists(storage_path):
+            try:
+                shutil.rmtree(storage_path, ignore_errors=False)
+            except Exception as e:
+                autofix_logger.exception(e)
+                return False
 
         return True
 
@@ -153,6 +172,18 @@ class GcsStorageAdapter(StorageAdapter):
                 blob.upload_from_filename(file_path)
 
         autofix_logger.debug(f"Uploaded files from workspace: {workspace_path} to {storage_prefix}")
+
+        return True
+
+    def delete_from_storage(self) -> bool:
+        storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
+
+        try:
+            blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
+            self.get_bucket().delete_blobs(blobs)
+        except Exception as e:
+            autofix_logger.exception(e)
+            return False
 
         return True
 

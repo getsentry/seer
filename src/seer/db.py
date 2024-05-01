@@ -187,6 +187,8 @@ class DbCodebaseNamespace(Base):
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
     tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
 
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )

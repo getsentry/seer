@@ -19,11 +19,17 @@ from seer.automation.autofix.tasks import (
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
+    CodebaseStatusCheckRequest,
+    CodebaseStatusCheckResponse,
     CreateCodebaseTaskRequest,
     RepoAccessCheckRequest,
     RepoAccessCheckResponse,
 )
-from seer.automation.codebase.tasks import check_repo_access, create_codebase_index
+from seer.automation.codebase.tasks import (
+    check_repo_access,
+    create_codebase_index,
+    get_codebase_index_status,
+)
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
 from seer.inference_models import embeddings_model, grouping_lookup
@@ -112,6 +118,19 @@ def create_codebase_index_endpoint(data: CreateCodebaseTaskRequest) -> AutofixEn
 @json_api("/v1/automation/codebase/repo/check-access")
 def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
     return RepoAccessCheckResponse(has_access=check_repo_access(data.repo))
+
+
+@json_api("/v1/automation/codebase/index/status")
+def get_codebase_index_status_endpoint(
+    data: CodebaseStatusCheckRequest,
+) -> CodebaseStatusCheckResponse:
+    return CodebaseStatusCheckResponse(
+        status=get_codebase_index_status(
+            organization_id=data.organization_id,
+            project_id=data.project_id,
+            repo=data.repo,
+        )
+    )
 
 
 @json_api("/v1/automation/autofix/start")
