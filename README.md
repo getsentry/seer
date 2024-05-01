@@ -106,6 +106,14 @@ make migration
 make test
 ```
 
+### Error Handling
+
+#### RuntimeError: Invalid Device
+
+If you encounter a `RuntimeError` with the message "Invalid device: A949AE01EBB07300D62AE0178F0944DD21F8C98C", this indicates an issue with device recognition in the system. This error typically occurs when the device ID provided does not match any known or registered device IDs in our database.
+
+To resolve this issue, ensure that the device ID is correctly entered and registered in the system. If the problem persists, contact support for further assistance.
+
 ### Opening a shell
 
 ```bash
