@@ -4,10 +4,10 @@ import datetime
 import os
 import shutil
 
-import sentry_sdk  # type: ignore
+import sentry_sdk
 
 # Why is this all good on pylance but mypy is complaining?
-from google.cloud import storage
+from google.cloud import storage  # type: ignore
 
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.utils import cleanup_dir
