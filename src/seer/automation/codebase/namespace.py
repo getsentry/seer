@@ -12,6 +12,7 @@ from seer.automation.codebase.models import (
     ChunkQueryResult,
     ChunkResult,
     CodebaseNamespace,
+    CodebaseNamespaceStatus,
     EmbeddedDocumentChunk,
     RepositoryInfo,
 )
@@ -155,7 +156,7 @@ class CodebaseNamespaceManager:
             return CodebaseNamespace.from_db(db_namespace)
 
     @classmethod
-    def load_workspace(cls, namespace_id: int):
+    def load_workspace(cls, namespace_id: int, skip_copy: bool = False):
         with Session() as session:
             db_repo_info = session.get(DbRepositoryInfo, namespace_id)
 
@@ -172,14 +173,16 @@ class CodebaseNamespaceManager:
 
         storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
 
-        cls._wait_for_mutex_clear(namespace.id)
-        cls._set_mutex(namespace.id)
+        did_copy = False
+        if not skip_copy:
+            cls._wait_for_mutex_clear(namespace.id)
+            cls._set_mutex(namespace.id)
 
-        did_copy = storage_adapter.copy_to_workspace()
+            did_copy = storage_adapter.copy_to_workspace()
 
-        cls._clear_mutex(namespace.id)
+            cls._clear_mutex(namespace.id)
 
-        if did_copy:
+        if skip_copy or did_copy:
             return cls(repo_info, namespace, storage_adapter)
         return None
 
@@ -279,6 +282,7 @@ class CodebaseNamespaceManager:
                 repo_id=db_repo_info.id,
                 sha=head_sha,
                 tracking_branch=tracking_branch,
+                status=CodebaseNamespaceStatus.PENDING,
             )
 
             session.add(db_namespace)
@@ -373,6 +377,7 @@ class CodebaseNamespaceManager:
                     repo_id=repo_id,
                     sha=sha,
                     tracking_branch=tracking_branch,
+                    status=CodebaseNamespaceStatus.PENDING,
                 )
 
                 session.add(db_namespace)
@@ -535,6 +540,22 @@ class CodebaseNamespaceManager:
         self._clear_mutex(self.namespace.id)
 
         autofix_logger.info(f"Saved workspace for namespace {self.namespace.id}")
+
+    def delete(self):
+        self._wait_for_mutex_clear(self.namespace.id)
+        self._set_mutex(self.namespace.id)
+
+        if not self.storage_adapter.delete_from_storage():
+            autofix_logger.error(f"Failed to delete workspace for namespace {self.namespace.id}")
+
+        with Session() as session:
+            session.query(DbCodebaseNamespaceMutex).filter_by(
+                namespace_id=self.namespace.id
+            ).delete()
+            session.query(DbCodebaseNamespace).filter_by(id=self.namespace.id).delete()
+            session.commit()
+
+        autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")
 
     def cleanup(self):
         self.storage_adapter.cleanup()

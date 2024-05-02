@@ -18,8 +18,20 @@ from seer.automation.autofix.tasks import (
     run_autofix_execution,
     run_autofix_root_cause,
 )
-from seer.automation.codebase.models import CreateCodebaseTaskRequest
-from seer.automation.codebase.tasks import create_codebase_index
+from seer.automation.codebase.models import (
+    CodebaseStatusCheckRequest,
+    CodebaseStatusCheckResponse,
+    CreateCodebaseRequest,
+    IndexNamespaceTaskRequest,
+    RepoAccessCheckRequest,
+    RepoAccessCheckResponse,
+)
+from seer.automation.codebase.tasks import (
+    check_repo_access,
+    create_codebase_index,
+    get_codebase_index_status,
+    index_namespace,
+)
 from seer.bootup import bootup
 from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
 from seer.inference_models import embeddings_model, grouping_lookup
@@ -100,9 +112,34 @@ def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> Similarity
 
 
 @json_api("/v1/automation/codebase/index/create")
-def create_codebase_index_endpoint(data: CreateCodebaseTaskRequest) -> AutofixEndpointResponse:
-    create_codebase_index.delay(data.model_dump(mode="json"))
+def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
+    namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
+
+    index_namespace.delay(
+        IndexNamespaceTaskRequest(
+            namespace_id=namespace_id,
+        ).model_dump(mode="json")
+    )
+
     return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/codebase/repo/check-access")
+def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
+    return RepoAccessCheckResponse(has_access=check_repo_access(data.repo))
+
+
+@json_api("/v1/automation/codebase/index/status")
+def get_codebase_index_status_endpoint(
+    data: CodebaseStatusCheckRequest,
+) -> CodebaseStatusCheckResponse:
+    return CodebaseStatusCheckResponse(
+        status=get_codebase_index_status(
+            organization_id=data.organization_id,
+            project_id=data.project_id,
+            repo=data.repo,
+        )
+    )
 
 
 @json_api("/v1/automation/autofix/start")
@@ -118,7 +155,7 @@ def autofix_update_endpoint(
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
         run_autofix_execution.delay(data.model_dump(mode="json"))
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        run_autofix_create_pr.delay(data.model_dump(mode="json"))
+        run_autofix_create_pr.apply(args=[data.model_dump(mode="json")])
     return AutofixEndpointResponse(started=True)
 
 
