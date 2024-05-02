@@ -232,7 +232,7 @@ class DbGroupingRecord(Base):
     stacktrace_hash: Mapped[Optional[str]] = deferred(
         mapped_column(String(32).evaluates_none(), nullable=True)
     )
-    group_hash: Mapped[str] = mapped_column(
+    hash: Mapped[str] = mapped_column(
         String(32), nullable=False, default="00000000000000000000000000000000"
     )
 

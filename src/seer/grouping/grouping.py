@@ -19,7 +19,7 @@ class GroupingRequest(BaseModel):
     project_id: int
     stacktrace: str
     message: str
-    group_hash: str
+    hash: str
     group_id: Optional[int] = None
     k: int = 1
     threshold: float = 0.01
@@ -37,7 +37,7 @@ class GroupingRecord(BaseModel):
     project_id: int
     message: str
     stacktrace_embedding: np.ndarray
-    group_hash: str
+    hash: str
 
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
@@ -45,7 +45,7 @@ class GroupingRecord(BaseModel):
             project_id=self.project_id,
             message=self.message,
             stacktrace_embedding=self.stacktrace_embedding,
-            group_hash=self.group_hash,
+            hash=self.hash,
         )
 
     class Config:
@@ -57,7 +57,7 @@ class GroupingRecord(BaseModel):
 
 class GroupingResponse(BaseModel):
     parent_group_id: Optional[int]
-    parent_group_hash: str
+    parent_hash: str
     stacktrace_distance: float
     message_distance: float
     should_group: bool
@@ -167,7 +167,7 @@ class GroupingLookup:
                         DbGroupingRecord.group_id == None,
                     ),
                     # TODO We will return the group itself as a similar group if it exists in the old table with no group_hash
-                    DbGroupingRecord.group_hash != issue.group_hash,
+                    DbGroupingRecord.hash != issue.hash,
                 )
                 .order_by("distance")
                 .limit(issue.k)
@@ -189,7 +189,7 @@ class GroupingLookup:
             similarity_response.responses.append(
                 GroupingResponse(
                     parent_group_id=record.group_id if hasattr(record, "group_id") else None,
-                    parent_group_hash=record.group_hash,
+                    parent_hash=record.hash,
                     stacktrace_distance=distance,
                     message_distance=1.0 - message_similarity_score,
                     should_group=should_group,
@@ -209,9 +209,7 @@ class GroupingLookup:
         :param issue: The issue to insert as a new GroupingRecord.
         :param embedding: The embedding of the stacktrace.
         """
-        existing_record = (
-            session.query(DbGroupingRecord).filter_by(group_hash=issue.group_hash).first()
-        )
+        existing_record = session.query(DbGroupingRecord).filter_by(hash=issue.hash).first()
 
         if existing_record is None:
             new_record = GroupingRecord(
@@ -219,6 +217,6 @@ class GroupingLookup:
                 project_id=issue.project_id,
                 message=issue.message,
                 stacktrace_embedding=embedding,
-                group_hash=issue.group_hash,
+                hash=issue.hash,
             ).to_db_model()
             session.add(new_record)

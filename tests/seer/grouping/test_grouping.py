@@ -8,7 +8,7 @@ from seer.inference_models import grouping_lookup
 class TestGrouping(unittest.TestCase):
     def test_get_nearest_neighbors_has_neighbor(self):
         """
-        Tests get_nearest_neighbors when the request has a group hash and this hash matches
+        Tests get_nearest_neighbors when the request has a hash and this hash matches
         an existing record (ie. the neighbor exists within the threshold)
         """
         with Session() as session:
@@ -18,7 +18,7 @@ class TestGrouping(unittest.TestCase):
                 project_id=1,
                 stacktrace="stacktrace",
                 message="message",
-                group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
             session.commit()
@@ -28,7 +28,7 @@ class TestGrouping(unittest.TestCase):
             project_id=1,
             stacktrace=b"stacktrace",
             message="message",
-            group_hash="13501807435378261861369456856144",
+            hash="13501807435378261861369456856144",
             k=1,
             threshold=0.01,
         )
@@ -38,7 +38,7 @@ class TestGrouping(unittest.TestCase):
             responses=[
                 GroupingResponse(
                     parent_group_id=1,
-                    parent_group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+                    parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                     stacktrace_distance=0.0,
                     message_distance=0.0,
                     should_group=True,
@@ -57,7 +57,7 @@ class TestGrouping(unittest.TestCase):
                 project_id=1,
                 stacktrace="stacktrace",
                 message="message",
-                group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
             session.commit()
@@ -66,7 +66,7 @@ class TestGrouping(unittest.TestCase):
             project_id=1,
             stacktrace=b"stacktrace",
             message="message",
-            group_hash="13501807435378261861369456856144",
+            hash="13501807435378261861369456856144",
             k=1,
             threshold=0.01,
         )
@@ -76,7 +76,7 @@ class TestGrouping(unittest.TestCase):
             responses=[
                 GroupingResponse(
                     parent_group_id=None,
-                    parent_group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+                    parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                     stacktrace_distance=0.0,
                     message_distance=0.0,
                     should_group=True,
@@ -90,7 +90,7 @@ class TestGrouping(unittest.TestCase):
         the group hash was added.
         """
         grouping_request = GroupingRequest(
-            group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             project_id=1,
             stacktrace=b"stacktrace",
             message="message",
@@ -102,7 +102,7 @@ class TestGrouping(unittest.TestCase):
         with Session() as session:
             new_record = (
                 session.query(DbGroupingRecord)
-                .filter_by(group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
+                .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
                 .first()
             )
 
@@ -120,7 +120,7 @@ class TestGrouping(unittest.TestCase):
                 project_id=1,
                 stacktrace="stacktrace",
                 message="message",
-                group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
             grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
@@ -130,7 +130,7 @@ class TestGrouping(unittest.TestCase):
             session.commit()
             new_record = (
                 session.query(DbGroupingRecord)
-                .filter_by(group_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
+                .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
                 .all()
             )
             assert len(new_record) == 1
