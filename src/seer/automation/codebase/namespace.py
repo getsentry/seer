@@ -48,9 +48,7 @@ class CodebaseNamespaceManager:
         self.repo_info = repo_info
         self.namespace = namespace
         self.storage_adapter = storage_adapter
-        self.client = chromadb.PersistentClient(
-            path=storage_adapter.get_workspace_location(namespace.repo_id, namespace.id)
-        )
+        self.client = chromadb.PersistentClient(path=storage_adapter.tmpdir)
 
         self._log_accessed_at()
 
@@ -171,7 +169,9 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         did_copy = False
         if not skip_copy:
@@ -244,7 +244,9 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         cls._wait_for_mutex_clear(namespace.id)
         cls._set_mutex(namespace.id)
@@ -296,7 +298,9 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         return cls(repo_info, namespace, storage_adapter)
 
@@ -390,7 +394,9 @@ class CodebaseNamespaceManager:
 
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         return cls(repo_info, namespace, storage_adapter)
 
@@ -558,7 +564,7 @@ class CodebaseNamespaceManager:
         autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")
 
     def cleanup(self):
-        self.storage_adapter.cleanup()
+        self.storage_adapter.clear_workspace()
 
         autofix_logger.info(f"Cleaned up workspace for namespace {self.namespace.id}")
 

@@ -21,7 +21,6 @@ class TestNamespaceManager(unittest.TestCase):
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
-        FilesystemStorageAdapter.clear_all_workspaces()
         return super().tearDown()
 
     def test_create_repo(self):

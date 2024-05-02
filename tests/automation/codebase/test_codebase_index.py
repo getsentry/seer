@@ -28,7 +28,6 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
-        FilesystemStorageAdapter.clear_all_workspaces()
         return super().tearDown()
 
     @patch("seer.automation.codebase.codebase_index.RepoClient")
@@ -245,7 +244,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
-        FilesystemStorageAdapter.clear_all_workspaces()
         return super().tearDown()
 
     def mock_embed_chunks(self, chunks: list[BaseDocumentChunk], embedding_model: Any):
@@ -635,7 +633,6 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
-        FilesystemStorageAdapter.clear_all_workspaces()
         return super().tearDown()
 
     def test_get_file_patches(self):
