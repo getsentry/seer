@@ -428,6 +428,22 @@ class CodebaseNamespaceManager:
 
             return True
 
+    def is_ready(self):
+        """
+        Tries to check if the namespace is ready for use. This is a best-effort check and may not be 100% accurate.
+        The idea behind this is to check to make sure the namespace is not corrupt and actually loaded.
+        """
+        try:
+            collection = self.client.get_collection("chunks")
+
+            if collection.count() == 0:
+                return False
+
+            return True
+        except Exception as e:
+            autofix_logger.exception(e)
+            return False
+
     def chunk_hashes_exist(self, hashes: list[str]):
         if not hashes:
             return []
