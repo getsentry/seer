@@ -45,6 +45,8 @@ def bootup(
         traces_sampler=traces_sampler,
         profiles_sample_rate=1.0,
         enable_tracing=True,
+        traces_sample_rate=1.0,
+        send_default_pii=True,
     )
     app = Flask(name)
 
@@ -69,6 +71,12 @@ def bootup(
 
     if async_load_models:
         start_loading(async_load_models)
+
+    torch_num_threads = os.environ.get("TORCH_NUM_THREADS")
+    if torch_num_threads:
+        import torch
+
+        torch.set_num_threads(int(torch_num_threads))
 
     return app
 

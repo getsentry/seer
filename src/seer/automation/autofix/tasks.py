@@ -1,91 +1,144 @@
 import dataclasses
 import logging
-import os
-from typing import Any
+from typing import Any, cast
 
 import sentry_sdk
-from requests import HTTPError
+from pydantic import BaseModel
 
 from celery_app.app import app as celery_app
-from seer.automation.autofix.autofix import Autofix
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.config import (
+    AUTOFIX_CREATE_PR_TIMEOUT_SECS,
+    AUTOFIX_EXECUTION_TIMEOUT_SECS,
+    AUTOFIX_ROOT_CAUSE_TIMEOUT_SECS,
+)
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
-    AutofixCompleteArgs,
     AutofixContinuation,
-    AutofixGroupState,
+    AutofixCreatePrUpdatePayload,
     AutofixRequest,
+    AutofixRootCauseUpdatePayload,
     AutofixStatus,
-    AutofixStepUpdateArgs,
+    AutofixUpdateRequest,
+    CustomRootCauseSelection,
+    SuggestedFixRootCauseSelection,
 )
+from seer.automation.autofix.pipelines import AutofixExecution, AutofixRootCause
 from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
-from seer.automation.state import LocalMemoryState
-from seer.rpc import RpcClient
+from seer.automation.state import DbState
+from seer.db import DbRunState, Session
 
 logger = logging.getLogger("autofix")
 
 
 @dataclasses.dataclass
-class ContinuationState(LocalMemoryState[AutofixContinuation]):
-    rpc_client: RpcClient = dataclasses.field(default_factory=get_sentry_client)
+class ContinuationState(DbState[AutofixContinuation]):
+    @classmethod
+    def from_id(cls, id: int, model: type[BaseModel]) -> "ContinuationState":
+        return cast(ContinuationState, super().from_id(id, model))
 
-    def reload_state_from_sentry(self) -> bool:
-        try:
-            # group_state = AutofixGroupState.model_validate(
-            #     self.rpc_client.call("get_autofix_state", issue_id=self.val.request.issue.id)
-            # )
-            # TODO: This is only temp, remove this
-            group_state = AutofixGroupState(status=AutofixStatus.PROCESSING)
-            logger.info(f"Loaded group_state: {group_state!r}")
-            self.val = self.val.model_copy(update=dict(group_state))
-            return True
-        except HTTPError as e:
-            if e.response.status_code == 404:
-                return False
-            raise e
-
-    def set(self, continuation: AutofixContinuation):
-        if continuation.status in {AutofixStatus.ERROR, AutofixStatus.COMPLETED}:
-            logger.info(f"on_autofix_completed invoking...")
-            self.rpc_client.call(
-                "on_autofix_complete",
-                **AutofixCompleteArgs(
-                    issue_id=continuation.request.issue.id,
-                    status=continuation.status,
-                    steps=continuation.steps,
-                    fix=continuation.fix,
-                ).model_dump(mode="json"),
-            )
-            logger.info(f"on_autofix_completed done")
-        else:
-            logger.info(f"on_autofix_step_update invoking...")
-            self.rpc_client.call(
-                "on_autofix_step_update",
-                **AutofixStepUpdateArgs(
-                    issue_id=continuation.request.issue.id,
-                    status=continuation.status,
-                    steps=continuation.steps,
-                ).model_dump(mode="json"),
-            )
-            logger.info(f"on_autofix_step_update done")
-        super().set(continuation)
+    def set(self, state: AutofixContinuation):
+        state.mark_updated()
+        super().set(state)
 
 
-@celery_app.task(time_limit=60 * 60 * 5)  # 5 hour task timeout
-def run_autofix(
+def get_autofix_state(group_id: int) -> ContinuationState | None:
+    with Session() as session:
+        run_state = (
+            session.query(DbRunState)
+            .filter(DbRunState.group_id == group_id)
+            .order_by(DbRunState.id.desc())
+            .first()
+        )
+        if run_state is None:
+            return None
+
+        continuation = ContinuationState.from_id(run_state.id, AutofixContinuation)
+
+        return continuation
+
+
+def check_and_mark_if_timed_out(state: ContinuationState):
+    with state.update() as cur:
+        if cur.has_timed_out:
+            cur.mark_running_steps_errored()
+            cur.status = AutofixStatus.ERROR
+
+
+@celery_app.task(time_limit=AUTOFIX_ROOT_CAUSE_TIMEOUT_SECS)
+def run_autofix_root_cause(
     request_data: dict[str, Any],
     autofix_group_state: dict[str, Any] | None = None,
 ):
-    state = ContinuationState(
-        val=AutofixContinuation(request=AutofixRequest.model_validate(request_data))
+    request = AutofixRequest.model_validate(request_data)
+    state = ContinuationState.new(
+        AutofixContinuation(request=request),
+        group_id=request.issue.id,
     )
-    request = AutofixRequest(**request_data)
-    event_manager = AutofixEventManager(state)
-    try:
-        if not state.reload_state_from_sentry():
-            raise InitializationError("Group no longer exists")
 
+    with state.update() as cur:
+        cur.run_timeout_secs = AUTOFIX_ROOT_CAUSE_TIMEOUT_SECS
+        cur.mark_triggered()
+    cur = state.get()
+
+    # Process has no further work.
+    if cur.status in AutofixStatus.terminal():
+        logger.warning(f"Ignoring job, state {cur.status}")
+        return
+
+    event_manager = AutofixEventManager(state)
+    event_manager.send_root_cause_analysis_start()
+    try:
+        with sentry_sdk.start_span(
+            op="seer.automation.autofix",
+            description="Run autofix on an issue within celery task",
+        ):
+            context = AutofixContext(
+                event_manager=event_manager,
+                sentry_client=get_sentry_client(),
+                state=state,
+            )
+            autofix_root_cause = AutofixRootCause(context)
+            autofix_root_cause.invoke()
+    except InitializationError as e:
+        sentry_sdk.capture_exception(e)
+        raise e
+
+
+@celery_app.task(time_limit=AUTOFIX_EXECUTION_TIMEOUT_SECS)
+def run_autofix_execution(
+    request_data: dict[str, Any],
+    autofix_group_state: dict[str, Any] | None = None,
+):
+    request = AutofixUpdateRequest.model_validate(request_data)
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+
+    with state.update() as cur:
+        cur.run_timeout_secs = AUTOFIX_EXECUTION_TIMEOUT_SECS
+        cur.mark_triggered()
+
+    event_manager = AutofixEventManager(state)
+    event_manager.send_planning_start()
+
+    payload = cast(AutofixRootCauseUpdatePayload, request.payload)
+
+    try:
+        root_cause: CustomRootCauseSelection | SuggestedFixRootCauseSelection | None = None
+        if payload.custom_root_cause:
+            root_cause = CustomRootCauseSelection(
+                custom_root_cause=payload.custom_root_cause,
+            )
+        elif payload.cause_id is not None and payload.fix_id is not None:
+            root_cause = SuggestedFixRootCauseSelection(
+                cause_id=payload.cause_id,
+                fix_id=payload.fix_id,
+            )
+
+        if root_cause is None:
+            raise ValueError("Invalid root cause update payload")
+
+        event_manager.set_selected_root_cause(root_cause)
         cur = state.get()
 
         # Process has no further work.
@@ -93,25 +146,45 @@ def run_autofix(
             logger.warning(f"Ignoring job, state {cur.status}")
             return
 
-        if cur.request.has_timed_out:
-            raise InitializationError("Timeout while dealing with autofix request.")
-
         with sentry_sdk.start_span(
-            op="seer.automation.autofix",
+            op="seer.automation.autofix_execution",
             description="Run autofix on an issue within celery task",
         ):
-            rpc_client: RpcClient = get_sentry_client()
             context = AutofixContext(
-                sentry_client=rpc_client,
-                organization_id=request.organization_id,
-                project_id=request.project_id,
-                repos=request.repos,
                 event_manager=event_manager,
+                sentry_client=get_sentry_client(),
                 state=state,
             )
-            autofix = Autofix(context)
-            autofix.invoke(request)
+            autofix_execution = AutofixExecution(context)
+            autofix_execution.invoke()
     except InitializationError as e:
-        event_manager.send_autofix_complete(None)
         sentry_sdk.capture_exception(e)
         raise e
+
+
+@celery_app.task(time_limit=AUTOFIX_CREATE_PR_TIMEOUT_SECS)
+def run_autofix_create_pr(request_data: dict[str, Any]):
+    request = AutofixUpdateRequest.model_validate(request_data)
+
+    if not isinstance(request.payload, AutofixCreatePrUpdatePayload):
+        raise ValueError("Invalid payload type for create_pr")
+
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+
+    with state.update() as cur:
+        cur.run_timeout_secs = AUTOFIX_CREATE_PR_TIMEOUT_SECS
+        cur.mark_triggered()
+
+    event_manager = AutofixEventManager(state)
+    context = AutofixContext(
+        state=state,
+        sentry_client=get_sentry_client(),
+        event_manager=event_manager,
+        skip_loading_codebase=True,
+    )
+
+    event_manager.send_pr_creation_start()
+
+    context.commit_changes(repo_id=request.payload.repo_id)
+
+    event_manager.send_pr_creation_complete()

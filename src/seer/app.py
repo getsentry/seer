@@ -4,14 +4,42 @@ from typing import List
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from seer.automation.autofix.models import AutofixEndpointResponse, AutofixRequest
-from seer.automation.autofix.tasks import run_autofix
+from seer.automation.autofix.models import (
+    AutofixEndpointResponse,
+    AutofixRequest,
+    AutofixStateRequest,
+    AutofixStateResponse,
+    AutofixUpdateRequest,
+    AutofixUpdateType,
+)
+from seer.automation.autofix.tasks import (
+    check_and_mark_if_timed_out,
+    get_autofix_state,
+    run_autofix_create_pr,
+    run_autofix_execution,
+    run_autofix_root_cause,
+)
+from seer.automation.codebase.models import (
+    CodebaseStatusCheckRequest,
+    CodebaseStatusCheckResponse,
+    CreateCodebaseRequest,
+    IndexNamespaceTaskRequest,
+    RepoAccessCheckRequest,
+    RepoAccessCheckResponse,
+)
+from seer.automation.codebase.tasks import (
+    check_repo_access,
+    create_codebase_index,
+    get_codebase_index_status,
+    index_namespace,
+)
 from seer.bootup import bootup
 from seer.db import ProcessRequest, Session
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
     GroupingRequest,
+    SimilarityBenchmarkResponse,
     SimilarityResponse,
 )
 from seer.inference_models import embeddings_model, grouping_lookup
@@ -91,10 +119,75 @@ def similarity_grouping_record_endpoint(
     return success
 
 
-@json_api("/v0/automation/autofix")
-def autofix_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    run_autofix.delay(data.model_dump(mode="json"))
+@json_api("/v0/issues/similarity-embedding-benchmark")
+def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> SimilarityBenchmarkResponse:
+    start_time = time.time()
+    embedding = grouping_lookup().encode_text(data.stacktrace).astype("float32")
+    embedding_list = embedding.tolist()
+    end_time = time.time()
+    app.logger.debug(f"Embedding generation time: {end_time - start_time} seconds")
+
+    return SimilarityBenchmarkResponse(embedding=embedding_list)
+
+
+@json_api("/v1/automation/codebase/index/create")
+def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
+    namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
+
+    index_namespace.delay(
+        IndexNamespaceTaskRequest(
+            namespace_id=namespace_id,
+        ).model_dump(mode="json")
+    )
+
     return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/codebase/repo/check-access")
+def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
+    return RepoAccessCheckResponse(has_access=check_repo_access(data.repo))
+
+
+@json_api("/v1/automation/codebase/index/status")
+def get_codebase_index_status_endpoint(
+    data: CodebaseStatusCheckRequest,
+) -> CodebaseStatusCheckResponse:
+    return CodebaseStatusCheckResponse(
+        status=get_codebase_index_status(
+            organization_id=data.organization_id,
+            project_id=data.project_id,
+            repo=data.repo,
+        )
+    )
+
+
+@json_api("/v1/automation/autofix/start")
+def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    run_autofix_root_cause.delay(data.model_dump(mode="json"))
+    return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/autofix/update")
+def autofix_update_endpoint(
+    data: AutofixUpdateRequest,
+) -> AutofixEndpointResponse:
+    if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
+        run_autofix_execution.delay(data.model_dump(mode="json"))
+    elif data.payload.type == AutofixUpdateType.CREATE_PR:
+        run_autofix_create_pr.apply(args=[data.model_dump(mode="json")])
+    return AutofixEndpointResponse(started=True)
+
+
+@json_api("/v1/automation/autofix/state")
+def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
+    state = get_autofix_state(data.group_id)
+
+    if state:
+        check_and_mark_if_timed_out(state)
+
+    return AutofixStateResponse(
+        group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None
+    )
 
 
 @app.route("/health/live", methods=["GET"])

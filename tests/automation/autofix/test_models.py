@@ -4,11 +4,9 @@ import unittest
 from johen.pytest import parametrize
 from pydantic import ValidationError
 
-from seer.automation.autofix.models import (
-    AutofixRequest,
+from seer.automation.autofix.models import AutofixRequest, IssueDetails, RepoDefinition
+from seer.automation.models import (
     EventDetails,
-    IssueDetails,
-    RepoDefinition,
     SentryEventData,
     SentryEventEntryDataValue,
     SentryExceptionEntry,
@@ -80,30 +78,45 @@ class TestStacktraceHelpers(unittest.TestCase):
 
 class TestRepoDefinition(unittest.TestCase):
     def test_repo_definition_creation(self):
-        repo_def = RepoDefinition(provider="github", owner="seer", name="automation")
+        repo_def = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
         self.assertEqual(repo_def.provider, "github")
         self.assertEqual(repo_def.owner, "seer")
         self.assertEqual(repo_def.name, "automation")
+        self.assertEqual(repo_def.external_id, "123")
 
     def test_repo_definition_uniqueness(self):
-        repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation")
+        repo_def1 = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
+        repo_def2 = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
         self.assertEqual(hash(repo_def1), hash(repo_def2))
 
     def test_multiple_repos(self):
-        repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation-tools")
+        repo_def1 = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
+        repo_def2 = RepoDefinition(
+            provider="github", owner="seer", name="automation-tools", external_id="123"
+        )
         self.assertNotEqual(hash(repo_def1), hash(repo_def2))
 
     def test_repo_with_provider_processing(self):
-        repo_def = RepoDefinition(provider="integrations:github", owner="seer", name="automation")
+        repo_def = RepoDefinition(
+            provider="integrations:github", owner="seer", name="automation", external_id="123"
+        )
         self.assertEqual(repo_def.provider, "github")
         self.assertEqual(repo_def.owner, "seer")
         self.assertEqual(repo_def.name, "automation")
 
     def test_repo_with_invalid_provider(self):
         with self.assertRaises(ValidationError):
-            RepoDefinition(provider="invalid_provider", owner="seer", name="automation")
+            RepoDefinition(
+                provider="invalid_provider", owner="seer", name="automation", external_id="123"
+            )
 
     def test_repo_with_none_provider(self):
         repo_dict = {"provider": None, "owner": "seer", "name": "automation"}
@@ -113,7 +126,9 @@ class TestRepoDefinition(unittest.TestCase):
 
 class TestAutofixRequest(unittest.TestCase):
     def test_autofix_request_handler(self):
-        repo_def = RepoDefinition(provider="github", owner="seer", name="automation")
+        repo_def = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
         issue_details = IssueDetails(
             id=789, title="Test Issue", events=[SentryEventData(title="yes", entries=[])]
         )
@@ -130,8 +145,12 @@ class TestAutofixRequest(unittest.TestCase):
         self.assertEqual(autofix_request.issue.title, "Test Issue")
 
     def test_autofix_request_with_duplicate_repos(self):
-        repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation")
+        repo_def1 = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
+        repo_def2 = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
         with self.assertRaises(ValidationError):
             AutofixRequest(
                 organization_id=123,
@@ -143,8 +162,12 @@ class TestAutofixRequest(unittest.TestCase):
             )
 
     def test_autofix_request_with_multiple_repos(self):
-        repo_def1 = RepoDefinition(provider="github", owner="seer", name="automation")
-        repo_def2 = RepoDefinition(provider="github", owner="seer", name="automation-tools")
+        repo_def1 = RepoDefinition(
+            provider="github", owner="seer", name="automation", external_id="123"
+        )
+        repo_def2 = RepoDefinition(
+            provider="github", owner="seer", name="automation-tools", external_id="123"
+        )
         issue_details = IssueDetails(
             id=789, title="Test Issue", events=[SentryEventData(title="yes", entries=[])]
         )

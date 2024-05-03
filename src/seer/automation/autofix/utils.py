@@ -120,11 +120,13 @@ def find_original_snippet(
         if ellipsis_found and similarity < threshold:
             file_line_index += 1
         else:
-            if similarity < threshold:
-                return None
             ellipsis_found = False
-            snippet_index += 1
-            file_line_index += 1
+            if similarity < threshold:
+                snippet_index = 0
+                file_line_index += 1
+            else:
+                snippet_index += 1
+                file_line_index += 1
     final_file_snippet = "\n".join(file_lines[snippet_start:file_line_index])
 
     # Ensure the last line of the file is at least `threshold` similar to the last line of the snippet
@@ -166,12 +168,10 @@ def escape_xml_chars(s: str) -> str:
 
 
 def escape_xml(s: str, tag: str) -> str:
-    match = re.search(rf"<{tag}(\s+[^>]*)?>((.|\n)*?)</{tag}>", s, re.DOTALL)
+    def replace_content(match):
+        return match.group(0).replace(match.group(2), escape_xml_chars(match.group(2)))
 
-    if match:
-        return s.replace(match.group(2), escape_xml_chars(match.group(2)))
-
-    return s
+    return re.sub(rf"<{tag}(\s+[^>]*)?>((.|\n)*?)</{tag}>", replace_content, s, flags=re.DOTALL)
 
 
 def escape_multi_xml(s: str, tags: List[str]) -> str:
@@ -179,6 +179,31 @@ def escape_multi_xml(s: str, tags: List[str]) -> str:
         s = escape_xml(s, tag)
 
     return s
+
+
+def extract_text_inside_tags(content: str, tag: str, strip_newlines: bool = True) -> str:
+    """
+    Extract the text inside the specified XML tag.
+
+    Args:
+        content (str): The XML content.
+        tag (str): The tag to extract the text from.
+
+    Returns:
+        str: The text inside the specified XML tag.
+    """
+    start_tag = f"<{tag}>"
+    end_tag = f"</{tag}>"
+
+    start_index = content.find(start_tag)
+    end_index = content.find(end_tag)
+
+    if start_index == -1 or end_index == -1:
+        return ""
+
+    text = content[start_index + len(start_tag) : end_index]
+
+    return text.strip("\n") if strip_newlines else text
 
 
 def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:

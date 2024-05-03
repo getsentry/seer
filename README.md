@@ -1,5 +1,45 @@
 # seer
 
+## Using Seer
+
+### Autofix
+
+#### Codebase Index Storage
+
+Autofix creates and uses a ChromaDB for every separate codebase. This can either be stored in a Google Cloud Storage (GCS) bucket, in your local filesystem, or you can make your own storage adapter.
+
+##### Local Workspace
+
+Autofix will need a local folder to use as its workspace, by default it uses `data/chroma/workspaces`.
+
+You can set the location in filesystem where Autofix will use as a workspace with `CODEBASE_WORKSPACE_DIR`.
+
+##### Google Cloud Storage
+
+To use GCS, you need to set the following environment variables:
+
+```txt
+GOOGLE_APPLICATION_CREDENTIALS=<path to your GCS credentials file>
+GOOGLE_CLOUD_PROJECT=<your GCS project ID>
+```
+
+Then, you can define your storage bucket with:
+
+```txt
+CODEBASE_STORAGE_TYPE=gcs
+CODEBASE_GCS_STORAGE_BUCKET=<your GCS bucket name>
+CODEBASE_GCS_STORAGE_DIR=<path within gcs bucket>
+```
+
+##### Local Filesystem
+
+To use local filesystem, you can set the following environment variable:
+
+```txt
+CODEBASE_STORAGE_TYPE=filesystem
+CODEBASE_STORAGE_DIR=<path to your local directory>
+```
+
 ## Local Development
 
 ### Setup
@@ -39,7 +79,7 @@ gsutil cp -r gs://sentry-ml/seer/models ./models
 To run for development locally in one ago including building the docker image and rabbitmq container:
 
 ```bash
-make dev # runs docker-compose up --build
+make dev # runs docker compose up --build
 ```
 
 Port `9091` will be exposed which is what the local sentry application will look for to connect to the service.
@@ -77,6 +117,6 @@ make shell
 If you run into any data issue or connection issue and want to start from scratch, run the following set of commands from the command shell inside the seer repo:
 
 ```
-docker-compose down --volumes
+docker compose down --volumes
 make update && make dev
 ```

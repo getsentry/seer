@@ -140,3 +140,7 @@ models
 
 # Evaluation Data
 data/
+
+# GoCD
+/gocd/templates/vendor/
+/gocd/generated-pipelines/

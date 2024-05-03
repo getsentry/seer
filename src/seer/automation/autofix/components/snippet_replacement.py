@@ -2,6 +2,8 @@ import textwrap
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
+from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.utils import extract_text_inside_tags
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 
 
@@ -47,7 +49,7 @@ class SnippetReplacementPrompts:
             Make sure you fix any errors in the code and ensure it is working as expected to the intent of the change.
             Do not make extraneous changes to the code or whitespace that are not related to the intent of the change.
 
-            You MUST return the code result under the "code": key in the response JSON object."""
+            You MUST return the code result inside a <code></code> tag."""
         ).format(
             reference_snippet=reference_snippet,
             replacement_snippet=replacement_snippet,
@@ -59,6 +61,11 @@ class SnippetReplacementPrompts:
 class SnippetReplacementComponent(
     BaseComponent[SnippetReplacementRequest, SnippetReplacementOutput]
 ):
+    context: AutofixContext
+
+    def _parser(self, text: str | None):
+        return extract_text_inside_tags(text, "code", strip_newlines=True) if text else None
+
     def invoke(self, request: SnippetReplacementRequest) -> SnippetReplacementOutput | None:
         prompt = SnippetReplacementPrompts.format_default_msg(
             reference_snippet=request.reference_snippet,
@@ -67,11 +74,14 @@ class SnippetReplacementComponent(
             commit_message=request.commit_message,
         )
 
-        data, message, usage = GptClient().json_completion(
-            [Message(role="user", content=prompt)],
+        data, message, usage = GptClient().completion_with_parser(
+            [Message(role="user", content=prompt)], parser=self._parser
         )
+
+        with self.context.state.update() as cur:
+            cur.usage += usage
 
         if data is None:
             return None
 
-        return SnippetReplacementOutput(snippet=data["code"])
+        return SnippetReplacementOutput(snippet=data)

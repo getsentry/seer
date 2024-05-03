@@ -1,5 +1,5 @@
-from seer.automation.autofix.models import EventDetails
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
+from seer.automation.models import EventDetails
 
 
 class ExecutorRequest(BaseComponentRequest):

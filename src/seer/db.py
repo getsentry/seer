@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     delete,
     func,
     select,
@@ -84,7 +85,7 @@ class ProcessRequest(Base):
         name: str,
         payload: dict | str | bytes | BaseModel,
         when: datetime.datetime,
-        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),
+        expected_duration: datetime.timedelta = datetime.timedelta(seconds=0),  # noqa
     ) -> sqlalchemy.UpdateBase:
         scheduled_from = scheduled_for = when
         # This increases last_delay.  When the item is scheduled, the 'next' schedule will be double this.
@@ -165,65 +166,60 @@ class DbRepositoryInfo(Base):
     project: Mapped[int] = mapped_column(BigInteger, nullable=False)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     external_slug: Mapped[str] = mapped_column(String, nullable=False)
+    external_id: Mapped[str] = mapped_column(String, nullable=False)
+    default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
+    __table_args__ = (
+        UniqueConstraint("organization", "project", "provider", "external_id"),
+        Index(
+            "ix_repository_organization_project_provider_slug",
+            "organization",
+            "project",
+            "provider",
+            "external_id",
+        ),
+    )
+
+
+class DbCodebaseNamespace(Base):
+    __tablename__ = "codebase_namespaces"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
     sha: Mapped[str] = mapped_column(String(40), nullable=False)
-    __table_args__ = (db.UniqueConstraint("organization", "project", "provider", "external_slug"),)
+    tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
 
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
 
-class DbDocumentChunk(Base):
-    __tablename__ = "document_chunks"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
-    path: Mapped[str] = mapped_column(String, nullable=False)
-    language: Mapped[str] = mapped_column(String, nullable=False)
-    index: Mapped[int] = mapped_column(Integer, nullable=False)
-    hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-    namespace: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    accessed_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
 
     __table_args__ = (
-        Index(
-            "idx_repo_id_namespace_path",
-            "repo_id",
-            "namespace",
-            "path",
-            "index",
-            unique=True,
-            postgresql_where=namespace.isnot(None),
-        ),
-        Index(
-            "idx_repo_path",
-            "repo_id",
-            "path",
-            "index",
-            unique=True,
-            postgresql_where=namespace.is_(None),
-        ),
+        UniqueConstraint("repo_id", "sha"),
+        UniqueConstraint("repo_id", "tracking_branch"),
+        Index("ix_codebase_namespace_repo_id_sha", "repo_id", "sha"),
+        Index("ix_codebase_namespace_repo_id_tracking_branch", "repo_id", "tracking_branch"),
     )
 
 
-class DbDocumentTombstone(Base):
-    __tablename__ = "document_tombstones"
+class DbCodebaseNamespaceMutex(Base):
+    __tablename__ = "codebase_namespace_mutex"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
-    path: Mapped[str] = mapped_column(String, nullable=False)
-    namespace: Mapped[str] = mapped_column(String(36), nullable=False)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(DbCodebaseNamespace.id), nullable=False
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
 
-    __table_args__ = (
-        Index(
-            "idx_repo_namespace_path",
-            "repo_id",
-            "namespace",
-            "path",
-            unique=True,
-        ),
-    )
+
+class DbRunState(Base):
+    __tablename__ = "run_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    value: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 class DbGroupingRecord(Base):

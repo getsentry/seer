@@ -4,17 +4,18 @@ import textwrap
 from pydantic import BaseModel
 from pydantic_xml import element
 
-from seer.automation.codebase.models import StoredDocumentChunkWithRepoName
+from seer.automation.codebase.models import BaseDocumentChunk
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import PromptXmlModel
 
 
 class RerankerRequest(BaseComponentRequest):
     query: str
-    chunks: list[StoredDocumentChunkWithRepoName]
+    chunks: list[BaseDocumentChunk]
 
 
-class RawRerankerResult(PromptXmlModel, tag="research_result"):
+class RawRerankerResult(PromptXmlModel, tag="reranker_result"):
+    thoughts: str = element()
     raw_snippet_ids: str = element(tag="code_snippet_ids")
 
     @property
@@ -23,4 +24,4 @@ class RawRerankerResult(PromptXmlModel, tag="research_result"):
 
 
 class RerankerOutput(BaseComponentOutput):
-    chunks: list[StoredDocumentChunkWithRepoName]
+    chunks: list[BaseDocumentChunk]
