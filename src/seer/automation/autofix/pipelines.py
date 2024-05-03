@@ -39,29 +39,37 @@ class CreateAnyMissingCodebaseIndexesSideEffect(PipelineSideEffect):
     context: AutofixContext
 
     def invoke(self):
-        if self.context.has_missing_codebase_indexes():
-            self.context.event_manager.send_codebase_indexing_start()
-            for repo in self.context.repos:
-                if not self.context.has_codebase_index(repo):
-                    self.context.event_manager.add_log(
-                        f"Creating codebase index for repo: {repo.full_name}"
-                    )
-                    with sentry_sdk.start_span(
-                        op="seer.automation.autofix.codebase_index.create",
-                        description="Create codebase index",
-                    ) as span:
-                        span.set_tag("repo", repo.full_name)
-                        self.context.create_codebase_index(repo)
-                    self.context.event_manager.add_log(
-                        f"Created codebase index for repo: {repo.full_name}"
-                    )
+        for repo in self.context.repos:
+            codebase = self.context.get_codebase_from_external_id(repo.external_id)
 
-                else:
-                    self.context.event_manager.add_log(
-                        f"Codebase index already exists for repo: {repo.full_name}"
-                    )
+            # If a codebase is not ready, delete it and recreate it.
+            if codebase and not codebase.workspace.is_ready():
+                sentry_sdk.capture_message(
+                    f"Codebase workspace was not ready for repo: {repo.full_name}, recreating"
+                )
+                codebase.workspace.delete()
+                codebase = None
 
-            self.context.event_manager.send_codebase_indexing_complete_if_exists()
+            if not codebase:
+                self.context.event_manager.send_codebase_indexing_start()  # This should only create the step once and get every next time it's called...
+                self.context.event_manager.add_log(
+                    f"Creating codebase index for repo: {repo.full_name}"
+                )
+                with sentry_sdk.start_span(
+                    op="seer.automation.autofix.codebase_index.create",
+                    description="Create codebase index",
+                ) as span:
+                    span.set_tag("repo", repo.full_name)
+                    self.context.create_codebase_index(repo)
+                self.context.event_manager.add_log(
+                    f"Created codebase index for repo: {repo.full_name}"
+                )
+            else:
+                self.context.event_manager.add_log(
+                    f"Codebase index already exists for repo: {repo.full_name}"
+                )
+
+        self.context.event_manager.send_codebase_indexing_complete_if_exists()
 
 
 @dataclasses.dataclass
