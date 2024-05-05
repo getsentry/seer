@@ -179,7 +179,8 @@ class GcsStorageAdapter(StorageAdapter):
 
         try:
             blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
-            self.get_bucket().delete_blobs(blobs)
+            blobs_list = list(blobs)  # Convert HTTPIterator to list
+            self.get_bucket().delete_blobs(blobs_list)
         except Exception as e:
             autofix_logger.exception(e)
             return False
