@@ -93,6 +93,10 @@ CELERY_CONFIG = dict(
             "exchange": "seer",
             "routing_key": "seer",
         },
+        "seer-cuda": {
+            "exchange": "seer-cuda",
+            "routing_key": "seer-cuda",
+        },
     },
     result_backend="rpc://",
 )

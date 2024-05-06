@@ -13,9 +13,15 @@ EXPECTED_CUDA_DEVICES = 4
 logger = logging.getLogger("autofix")
 
 
+def _use_cuda():
+    return os.getenv("USE_CUDA", "false").lower() in ("true", "t", "1")
+
+
 def _get_torch_device_name():
     device: str = "cpu"
-    if torch.cuda.is_available():
+    cuda = _use_cuda()
+    logger.debug(f"env USE_CUDA set to: {cuda}")
+    if cuda and torch.cuda.is_available():
         if torch.cuda.device_count() >= EXPECTED_CUDA_DEVICES:
             try:
                 index: int = billiard.process.current_process().index
