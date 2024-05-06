@@ -4,6 +4,7 @@ import sentry_sdk
 from langsmith import traceable
 from sentry_sdk.ai_analytics import ai_track
 
+from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.change_describer import (
     ChangeDescriptionComponent,
@@ -117,6 +118,7 @@ class CheckCodebaseForUpdatesSideEffect(PipelineSideEffect):
                     update_codebase_index.apply_async(
                         (UpdateCodebaseTaskRequest(repo_id=repo_id).model_dump(),),
                         countdown=10 * 60,
+                        queue=CeleryQueues.CUDA,
                     )  # 10 minutes
                     autofix_logger.info(f"Codebase indexing scheduled for later")
 

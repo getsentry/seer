@@ -9,6 +9,7 @@ from psycopg import Connection
 from sentry_sdk.integrations import Integration
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from celery_app.config import CeleryQueues
 from seer.db import AsyncSession, Session, db, migrate
 
 logger = logging.getLogger(__name__)
@@ -87,15 +88,15 @@ CELERY_CONFIG = dict(
     result_serializer="json",
     accept_content=["json"],
     enable_utc=True,
-    task_default_queue="seer",
+    task_default_queue=CeleryQueues.DEFAULT,
     task_queues={
-        "seer": {
-            "exchange": "seer",
-            "routing_key": "seer",
+        CeleryQueues.DEFAULT: {
+            "exchange": CeleryQueues.DEFAULT,
+            "routing_key": CeleryQueues.DEFAULT,
         },
-        "seer-cuda": {
-            "exchange": "seer-cuda",
-            "routing_key": "seer-cuda",
+        CeleryQueues.CUDA: {
+            "exchange": CeleryQueues.CUDA,
+            "routing_key": CeleryQueues.CUDA,
         },
     },
     result_backend="rpc://",
