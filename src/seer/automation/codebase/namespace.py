@@ -233,6 +233,9 @@ class CodebaseNamespaceManager:
                     .one_or_none()
                 )
             else:
+                if not db_repo_info.default_namespace:
+                    return None
+
                 db_namespace = session.get(DbCodebaseNamespace, db_repo_info.default_namespace)
 
             if db_namespace is None:
