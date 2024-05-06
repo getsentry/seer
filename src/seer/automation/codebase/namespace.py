@@ -272,6 +272,9 @@ class CodebaseNamespaceManager:
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
     ):
+        autofix_logger.debug(
+            f"Creating new repo for {organization}/{project}/{repo.external_id} (repo: {repo.full_name})"
+        )
         with Session() as session:
             db_repo_info = DbRepositoryInfo(
                 organization=organization,
@@ -380,6 +383,9 @@ class CodebaseNamespaceManager:
             if existing_namespace:
                 db_namespace = existing_namespace
             else:
+                autofix_logger.debug(
+                    f"Creating namespace with existing repo for {db_repo_info.organization}/{db_repo_info.project}/{db_repo_info.external_id} (repo: {db_repo_info.external_slug})"
+                )
                 db_namespace = DbCodebaseNamespace(
                     repo_id=repo_id,
                     sha=sha,
