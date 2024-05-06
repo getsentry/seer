@@ -178,7 +178,7 @@ class GcsStorageAdapter(StorageAdapter):
         storage_prefix = self.get_storage_prefix(self.repo_id, self.namespace_slug)
 
         try:
-            blobs = self.get_bucket().list_blobs(prefix=storage_prefix)
+            blobs = list(self.get_bucket().list_blobs(prefix=storage_prefix))
             self.get_bucket().delete_blobs(blobs)
         except Exception as e:
             autofix_logger.exception(e)
