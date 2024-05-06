@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import MagicMock, patch
 
 from seer.automation.codebase.storage_adapters import (
     FilesystemStorageAdapter,
@@ -147,3 +147,16 @@ class TestGcsStorageAdapter(unittest.TestCase):
         mock_bucket.blob.assert_called_with(f"{storage_prefix}/test_file.txt")
         self.assertIsNotNone(mock_blob.custom_time)
         mock_blob.upload_from_filename.assert_called_with(test_file_path)
+
+    @patch("seer.automation.codebase.storage_adapters.storage.Client")
+    def test_delete_from_storage(self, mock_storage_client):
+        mock_bucket = mock_storage_client.return_value.bucket.return_value
+        mock_blob_list = [MagicMock(), MagicMock(), MagicMock()]
+        mock_iterator = MagicMock()
+        mock_iterator.__iter__.return_value = iter(mock_blob_list)
+        mock_bucket.list_blobs.return_value = mock_iterator
+
+        adapter = GcsStorageAdapter(1, "test")
+
+        self.assertTrue(adapter.delete_from_storage())
+        mock_bucket.delete_blobs.assert_called_once_with(mock_blob_list)
