@@ -96,6 +96,24 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
         self.assertTrue(os.path.exists(storage_location))
         self.assertTrue(os.path.exists(os.path.join(storage_location, "test.txt")))
 
+    def test_save_to_storage_overwrites_existing_files(self):
+        adapter = FilesystemStorageAdapter(1, "test")
+        storage_location = adapter.get_storage_location(1, "test")
+
+        os.makedirs(adapter.tmpdir, exist_ok=True)
+        with open(os.path.join(adapter.tmpdir, "test.txt"), "w") as f:
+            f.write("test")
+
+        storage_location = adapter.get_storage_location(1, "test")
+        os.makedirs(storage_location, exist_ok=True)
+        with open(os.path.join(storage_location, "bad.txt"), "w") as f:
+            f.write("bad")
+
+        self.assertTrue(adapter.save_to_storage())
+        self.assertTrue(os.path.exists(storage_location))
+        self.assertTrue(os.path.exists(os.path.join(storage_location, "test.txt")))
+        self.assertFalse(os.path.exists(os.path.join(storage_location, "bad.txt")))
+
 
 class TestGcsStorageAdapter(unittest.TestCase):
     def setUp(self) -> None:
@@ -147,6 +165,34 @@ class TestGcsStorageAdapter(unittest.TestCase):
         mock_bucket.blob.assert_called_with(f"{storage_prefix}/test_file.txt")
         self.assertIsNotNone(mock_blob.custom_time)
         mock_blob.upload_from_filename.assert_called_with(test_file_path)
+
+    @patch("seer.automation.codebase.storage_adapters.storage.Client")
+    def test_save_to_storage_overwrites_existing_files(self, mock_gcs_client):
+        mock_bucket = mock_gcs_client.return_value.bucket.return_value
+        mock_blob = MagicMock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_blob.upload_from_filename.return_value = None
+
+        adapter = GcsStorageAdapter(1, "test")
+        storage_prefix = adapter.get_storage_prefix(1, "test")
+
+        # Simulate files in the workspace
+        os.makedirs(adapter.tmpdir, exist_ok=True)
+        test_file_path = os.path.join(adapter.tmpdir, "test_file.txt")
+        with open(test_file_path, "w") as f:
+            f.write("This is a test file.")
+
+        # Simulate existing files in the storage
+        mock_bucket.list_blobs.return_value = [mock_blob]
+        mock_blob.name = f"{storage_prefix}/bad_file.txt"
+
+        self.assertTrue(adapter.save_to_storage())
+
+        # Verify that the blob upload method was called with the correct path
+        mock_bucket.blob.assert_called_with(f"{storage_prefix}/test_file.txt")
+        self.assertIsNotNone(mock_blob.custom_time)
+        mock_blob.upload_from_filename.assert_called_with(test_file_path)
+        mock_blob.delete.assert_called_once()
 
     @patch("seer.automation.codebase.storage_adapters.storage.Client")
     def test_delete_from_storage(self, mock_storage_client):
