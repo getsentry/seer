@@ -156,15 +156,15 @@ class CodebaseNamespaceManager:
     @classmethod
     def load_workspace(cls, namespace_id: int, skip_copy: bool = False):
         with Session() as session:
-            db_repo_info = session.get(DbRepositoryInfo, namespace_id)
-
-            if db_repo_info is None:
-                raise ValueError(f"Repository with id {namespace_id} not found")
-
             db_namespace = session.get(DbCodebaseNamespace, namespace_id)
 
             if db_namespace is None:
                 raise ValueError(f"Repository namespace with id {namespace_id} not found")
+
+            db_repo_info = session.get(DbRepositoryInfo, db_namespace.repo_id)
+
+            if db_repo_info is None:
+                raise ValueError(f"Repository with id {db_namespace.repo_id} not found")
 
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
