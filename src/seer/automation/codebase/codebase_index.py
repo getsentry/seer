@@ -128,7 +128,7 @@ class CodebaseIndex:
         logger.debug(
             f"Loaded workspace for {repo.full_name} ({sha or tracking_branch})"
             if workspace
-            else f"Failed to load workspace for {organization} {project} {repo.external_id} ({repo.full_name} {sha or tracking_branch})"
+            else f"Failed to load workspace for {organization}/{project}/{repo.external_id} (repo: {repo.full_name} {sha or tracking_branch})"
         )
 
         if workspace:
