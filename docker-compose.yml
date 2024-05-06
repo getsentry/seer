@@ -54,7 +54,7 @@ services:
             - GROUPING_ENABLED=1
             - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
             - GOOGLE_CLOUD_PROJECT=super-big-data
-            - CODEBASE_STORAGE_TYPE=gcs
+            - CODEBASE_STORAGE_TYPE=filesystem
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:
