@@ -168,7 +168,10 @@ class EventDetails(BaseModel):
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
-                    exceptions.append(ExceptionDetails.model_validate(exception))
+                    if isinstance(exception, dict):
+                        exceptions.append(ExceptionDetails.model_validate(exception))
+                    else:
+                        autofix_logger.error(f"Invalid data format for exception: {exception}")
 
         return cls(title=error_event.get("title"), exceptions=exceptions)
 
