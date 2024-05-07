@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Type
 
 import sentry_sdk
 
@@ -16,15 +16,17 @@ class CodebaseIndexingStepRequest(PipelineStepTaskRequest):
 
 
 @celery_app.task()
-def create_index_task(request: Any):
+def create_index_task(*args, request: Any):
     CreateIndexStep(request).invoke()
 
 
 class CreateIndexStep(AutofixPipelineStep):
-    request_class = CodebaseIndexingStepRequest
-
     request: CodebaseIndexingStepRequest
     context: AutofixContext
+
+    @staticmethod
+    def _get_request_class():
+        return CodebaseIndexingStepRequest
 
     @staticmethod
     def get_task():

@@ -1,5 +1,7 @@
 from typing import Any
 
+from celery import signature
+
 from celery_app.app import app as celery_app
 from seer.automation.autofix.steps.step import AutofixPipelineStep
 from seer.automation.autofix.utils import autofix_logger
@@ -12,14 +14,16 @@ class CheckIndexingDoneStepRequest(PipelineStepTaskRequest):
 
 
 @celery_app.task()
-def check_indexing_done_task(request: Any, *args):
+def check_indexing_done_task(*args, request: Any):
     CheckIndexingDoneStep(request).invoke()
 
 
 class CheckIndexingDoneStep(AutofixPipelineStep):
-    request_class = CheckIndexingDoneStepRequest
-
     request: CheckIndexingDoneStepRequest
+
+    @staticmethod
+    def _get_request_class():
+        return CheckIndexingDoneStepRequest
 
     @staticmethod
     def get_task():
@@ -32,7 +36,7 @@ class CheckIndexingDoneStep(AutofixPipelineStep):
             return
 
         autofix_logger.debug(f"Codebase indexing done for all repos")
-        self.request.success_link.apply_async()
+        signature(self.request.success_link).apply_async()
 
     def _handle_exception(self, exception: Exception):
         pass

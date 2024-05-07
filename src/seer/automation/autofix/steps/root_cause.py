@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Type
 
 from langsmith import traceable
 from sentry_sdk.ai_analytics import ai_track
@@ -16,7 +16,7 @@ class RootCauseStepRequest(PipelineStepTaskRequest):
 
 
 @celery_app.task()
-def root_cause_task(request: Any):
+def root_cause_task(*args, request: Any):
     return RootCauseStep(request).invoke()
 
 
@@ -29,6 +29,10 @@ class RootCauseStep(AutofixPipelineStep):
     @staticmethod
     def get_task():
         return root_cause_task
+
+    @staticmethod
+    def _get_request_class():
+        return RootCauseStepRequest
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
     @ai_track(description="Root Cause")

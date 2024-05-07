@@ -21,7 +21,7 @@ from seer.automation.pipeline import PipelineChain, PipelineStep, PipelineStepTa
 
 
 @celery_app.task()
-def create_missing_indexes_task(request: Any):
+def create_missing_indexes_task(*args, request: Any):
     CreateMissingIndexesStep(request).invoke()
 
 
@@ -30,9 +30,11 @@ class CreateAnyMissingCodebaseIndexesStepRequest(PipelineStepTaskRequest):
 
 
 class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
-    request_class = CreateAnyMissingCodebaseIndexesStepRequest
-
     request: CreateAnyMissingCodebaseIndexesStepRequest
+
+    @staticmethod
+    def _get_request_class():
+        return CreateAnyMissingCodebaseIndexesStepRequest
 
     @staticmethod
     def get_task():

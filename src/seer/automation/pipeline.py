@@ -74,7 +74,9 @@ class PipelineStep(abc.ABC):
 
     @classmethod
     def get_signature(cls, request: PipelineStepTaskRequest, **kwargs) -> Any:
-        return cls.get_task().signature((request.model_dump(mode="json"),), **kwargs)
+        return cls.get_task().signature(
+            kwargs={"request": request.model_dump(mode="json")}, **kwargs
+        )
 
     @classmethod
     @abc.abstractmethod
