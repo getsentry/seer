@@ -172,6 +172,7 @@ class AutofixGroupState(BaseModel):
         Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
     ] = None
     completed_at: datetime.datetime | None = None
+    signals: list[str] = Field(default_factory=list)
 
 
 class AutofixStateRequest(BaseModel):

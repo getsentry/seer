@@ -6,6 +6,7 @@ import sentry_sdk
 from pydantic import BaseModel
 
 from celery_app.app import app as celery_app
+from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.config import (
     AUTOFIX_CREATE_PR_TIMEOUT_SECS,
@@ -23,24 +24,18 @@ from seer.automation.autofix.models import (
     CustomRootCauseSelection,
     SuggestedFixRootCauseSelection,
 )
-from seer.automation.autofix.pipelines import AutofixExecution, AutofixRootCause
+from seer.automation.autofix.pipelines import AutofixExecution
+from seer.automation.autofix.state import ContinuationState
+from seer.automation.autofix.steps.create_missing_indexes import (
+    CreateAnyMissingCodebaseIndexesStepRequest,
+    CreateMissingIndexesStep,
+)
 from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
 from seer.automation.state import DbState
 from seer.db import DbRunState, Session
 
 logger = logging.getLogger("autofix")
-
-
-@dataclasses.dataclass
-class ContinuationState(DbState[AutofixContinuation]):
-    @classmethod
-    def from_id(cls, id: int, model: type[BaseModel]) -> "ContinuationState":
-        return cast(ContinuationState, super().from_id(id, model))
-
-    def set(self, state: AutofixContinuation):
-        state.mark_updated()
-        super().set(state)
 
 
 def get_autofix_state(group_id: int) -> ContinuationState | None:
@@ -66,12 +61,9 @@ def check_and_mark_if_timed_out(state: ContinuationState):
             cur.status = AutofixStatus.ERROR
 
 
-@celery_app.task(time_limit=AUTOFIX_ROOT_CAUSE_TIMEOUT_SECS)
 def run_autofix_root_cause(
-    request_data: dict[str, Any],
-    autofix_group_state: dict[str, Any] | None = None,
+    request: AutofixRequest,
 ):
-    request = AutofixRequest.model_validate(request_data)
     state = ContinuationState.new(
         AutofixContinuation(request=request),
         group_id=request.issue.id,
@@ -87,23 +79,13 @@ def run_autofix_root_cause(
         logger.warning(f"Ignoring job, state {cur.status}")
         return
 
-    event_manager = AutofixEventManager(state)
-    event_manager.send_root_cause_analysis_start()
-    try:
-        with sentry_sdk.start_span(
-            op="seer.automation.autofix",
-            description="Run autofix on an issue within celery task",
-        ):
-            context = AutofixContext(
-                event_manager=event_manager,
-                sentry_client=get_sentry_client(),
-                state=state,
-            )
-            autofix_root_cause = AutofixRootCause(context)
-            autofix_root_cause.invoke()
-    except InitializationError as e:
-        sentry_sdk.capture_exception(e)
-        raise e
+    CreateMissingIndexesStep.get_signature(
+        CreateAnyMissingCodebaseIndexesStepRequest(
+            run_id=cur.run_id,
+            next_step_name="RootCauseStep",
+        ),
+        queue=CeleryQueues.DEFAULT,
+    ).apply_async()
 
 
 @celery_app.task(time_limit=AUTOFIX_EXECUTION_TIMEOUT_SECS)
@@ -160,6 +142,11 @@ def run_autofix_execution(
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
+
+
+@celery_app.task(time_limit=AUTOFIX_EXECUTION_TIMEOUT_SECS)
+def run_autofix_create_missing_codebase_indexes(request_data: dict[str, Any]):
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
 
 
 @celery_app.task(time_limit=AUTOFIX_CREATE_PR_TIMEOUT_SECS)

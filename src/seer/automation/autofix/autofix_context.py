@@ -11,7 +11,8 @@ from seer.automation.autofix.models import (
     CodebaseState,
     CommittedPullRequestDetails,
 )
-from seer.automation.autofix.utils import autofix_logger
+from seer.automation.autofix.state import ContinuationState
+from seer.automation.autofix.utils import autofix_logger, get_sentry_client
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import Document, QueryResultDocumentChunk
 from seer.automation.codebase.repo_client import RepoClient
@@ -88,6 +89,21 @@ class AutofixContext(PipelineContext):
         self.event_manager = event_manager
         self.state = state
 
+    @classmethod
+    def from_run_id(cls, run_id: int):
+        state = ContinuationState.from_id(run_id, model=AutofixContinuation)
+        with state.update() as cur:
+            cur.run_timeout_secs = 10000  # TODO
+            cur.mark_triggered()
+
+        event_manager = AutofixEventManager(state)
+
+        return cls(state, get_sentry_client(), event_manager)
+
+    @property
+    def run_id(self) -> int:
+        return self.state.get().run_id
+
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
             codebase = self.get_codebase_from_external_id(repo.external_id)
@@ -161,27 +177,6 @@ class AutofixContext(PipelineContext):
         chunks.sort(key=lambda x: x.distance)
 
         return chunks[:top_k]
-
-    def diff_contains_stacktrace_files(self, repo_id: int, event_details: EventDetails) -> bool:
-        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
-
-        stacktrace_files: set[str] = set()
-        for stacktrace in stacktraces:
-            for frame in stacktrace.frames:
-                stacktrace_files.add(frame.filename)
-
-        codebase = self.get_codebase(repo_id)
-
-        if codebase is None:
-            raise ValueError(f"Codebase with repo_id {repo_id} not found")
-
-        changed_files, removed_files = codebase.repo_client.get_commit_file_diffs(
-            codebase.namespace.sha, codebase.repo_client.get_default_branch_head_sha()
-        )
-
-        change_files = set(changed_files + removed_files)
-
-        return bool(change_files.intersection(stacktrace_files))
 
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """

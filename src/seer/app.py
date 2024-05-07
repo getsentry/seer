@@ -148,7 +148,7 @@ def get_codebase_index_status_endpoint(
 
 @json_api("/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    run_autofix_root_cause.apply_async((data.model_dump(mode="json"),), queue=CeleryQueues.DEFAULT)
+    run_autofix_root_cause(data)
     return AutofixEndpointResponse(started=True)
 
 
