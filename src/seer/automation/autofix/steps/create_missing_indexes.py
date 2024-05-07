@@ -6,18 +6,15 @@ import sentry_sdk
 from celery_app.app import app as celery_app
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.steps.check_indexing_done import (
-    CheckIndexingDoneStep,
-    CheckIndexingDoneStepRequest,
-)
 from seer.automation.autofix.steps.create_index_step import (
     CodebaseIndexingStepRequest,
     CreateIndexStep,
 )
 from seer.automation.autofix.steps.root_cause import RootCauseStep
-from seer.automation.autofix.steps.step import AutofixPipelineStep
+from seer.automation.autofix.steps.steps import AutofixParallelizedChainStep, AutofixPipelineStep
 from seer.automation.models import EventDetails, RepoDefinition
-from seer.automation.pipeline import PipelineChain, PipelineStep, PipelineStepTaskRequest
+from seer.automation.pipeline import PipelineChain, PipelineStep, PipelineStepTaskRequest, Signature
+from seer.automation.steps import ParallelizedChainStepRequest
 
 
 @celery_app.task()
@@ -33,8 +30,8 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
     request: CreateAnyMissingCodebaseIndexesStepRequest
 
     @staticmethod
-    def _get_request_class():
-        return CreateAnyMissingCodebaseIndexesStepRequest
+    def _instantiate_request(data: dict[str, Any]) -> CreateAnyMissingCodebaseIndexesStepRequest:
+        return CreateAnyMissingCodebaseIndexesStepRequest.model_validate(data)
 
     @staticmethod
     def get_task():
@@ -61,7 +58,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                 repos_to_create.append(repo)
             else:
                 self.context.event_manager.add_log(
-                    f"Codebase index already exists for repo: {repo.full_name}"
+                    f"Codebase index ready for repo: {repo.full_name}"
                 )
                 if codebase.is_behind():
                     if codebase.diff_contains_stacktrace_files(event_details):
@@ -88,10 +85,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                         # Update later
                         pass
 
-        steps: list[tuple[Type[PipelineStep], PipelineStepTaskRequest]] = []
-        expected_signal_keys = [
-            f"codebase_index_done_{repo.external_id}" for repo in repos_to_create
-        ] + [f"codebase_index_done_{repo.external_id}" for repo in repos_to_update]
+        steps: list[Signature] = []
 
         next_step_signature = None
         if self.request.next_step_name == "RootCauseStep":
@@ -105,43 +99,33 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
         #         queue=CeleryQueues.DEFAULT,
         #     )
 
-        check_step_signature = CheckIndexingDoneStep.get_signature(
-            CheckIndexingDoneStepRequest(
-                run_id=self.context.run_id,
-                expected_signal_keys=expected_signal_keys,
-                success_link=next_step_signature,
-            ),
-            queue=CeleryQueues.DEFAULT,
-        )
-
         for repo in repos_to_create:
             steps.append(
                 CreateIndexStep.get_signature(
-                    CodebaseIndexingStepRequest(
-                        run_id=self.context.run_id,
-                        repo=repo,
-                        done_signal_key=f"codebase_index_done_{repo.external_id}",
-                    ),
+                    CodebaseIndexingStepRequest(run_id=self.context.run_id, repo=repo),
                     queue=CeleryQueues.CUDA,
-                    link=check_step_signature,
                 )
             )
 
         for repo in repos_to_update:
             steps.append(
                 CreateIndexStep.get_signature(
-                    CodebaseIndexingStepRequest(
-                        run_id=self.context.run_id,
-                        repo=repo,
-                        done_signal_key=f"codebase_index_done_{repo.external_id}",
-                    ),
+                    CodebaseIndexingStepRequest(run_id=self.context.run_id, repo=repo),
                     queue=CeleryQueues.CUDA,
-                    link=check_step_signature,
                 )
             )
 
         if steps:
-            self.next_concurrent(steps)
+            self.next(
+                AutofixParallelizedChainStep.get_signature(
+                    ParallelizedChainStepRequest(
+                        run_id=self.context.run_id,
+                        steps=steps,
+                        on_success=next_step_signature,
+                    ),
+                    queue=CeleryQueues.DEFAULT,
+                ),
+            )
         else:
             self.next(next_step_signature)
 

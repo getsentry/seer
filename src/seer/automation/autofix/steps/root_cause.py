@@ -6,7 +6,7 @@ from sentry_sdk.ai_analytics import ai_track
 from celery_app.app import app as celery_app
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
-from seer.automation.autofix.steps.step import AutofixPipelineStep
+from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 
@@ -31,8 +31,8 @@ class RootCauseStep(AutofixPipelineStep):
         return root_cause_task
 
     @staticmethod
-    def _get_request_class():
-        return RootCauseStepRequest
+    def _instantiate_request(request: dict[str, Any]) -> RootCauseStepRequest:
+        return RootCauseStepRequest.model_validate(request)
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
     @ai_track(description="Root Cause")

@@ -11,6 +11,7 @@ from sentence_transformers import SentenceTransformer
 # cuda devices available. This "4" should match the number of celery sub-processes configured in celeryworker.sh.
 EXPECTED_CUDA_DEVICES = 4
 logger = logging.getLogger("autofix")
+automation_logger = logging.getLogger("automation")
 
 
 def _use_cuda():
@@ -62,3 +63,7 @@ def _get_embedding_model_on(device_name: str):
 
 def get_embedding_model():
     return _get_embedding_model_on(_get_torch_device_name())
+
+
+def make_done_signal(id: str | int) -> str:
+    return f"done:{id}"

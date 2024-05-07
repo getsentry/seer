@@ -74,6 +74,9 @@ def run_autofix_root_cause(
         cur.mark_triggered()
     cur = state.get()
 
+    event_manager = AutofixEventManager(state)
+    event_manager.send_root_cause_analysis_start()
+
     # Process has no further work.
     if cur.status in AutofixStatus.terminal():
         logger.warning(f"Ignoring job, state {cur.status}")
