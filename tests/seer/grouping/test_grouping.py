@@ -8,7 +8,7 @@ from seer.inference_models import grouping_lookup
 class TestGrouping(unittest.TestCase):
     def test_get_nearest_neighbors_has_neighbor(self):
         """
-        Tests get_nearest_neighbors when the request has a hash and this hash matches
+        Tests get_nearest_neighbors when the request has a hash and and the request's data matches
         an existing record (ie. the neighbor exists within the threshold)
         """
         with Session() as session:
@@ -26,7 +26,7 @@ class TestGrouping(unittest.TestCase):
         grouping_request = GroupingRequest(
             group_id=2,
             project_id=1,
-            stacktrace=b"stacktrace",
+            stacktrace="stacktrace",
             message="message",
             hash="13501807435378261861369456856144",
             k=1,
@@ -48,7 +48,7 @@ class TestGrouping(unittest.TestCase):
 
     def test_get_nearest_neighbors_has_neighbor_no_group_id(self):
         """
-        Tests get_nearest_neighbors when the request has a group hash and this hash matches
+        Tests get_nearest_neighbors when the request has only a hash and the request's data matches
         an existing record (ie. the neighbor exists within the threshold)
         """
         with Session() as session:
@@ -128,9 +128,9 @@ class TestGrouping(unittest.TestCase):
             # Re-insert the grouping record
             grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
             session.commit()
-            new_record = (
+            matching_record = (
                 session.query(DbGroupingRecord)
                 .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
                 .all()
             )
-            assert len(new_record) == 1
+            assert len(matching_record) == 1

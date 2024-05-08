@@ -442,7 +442,7 @@
                     },
                     "parent_hash": {
                         "type": "string",
-                        "title": "Group Hash"
+                        "title": "Parent Hash"
                     },
                     "stacktrace_similarity": {
                         "type": "number",

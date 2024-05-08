@@ -166,7 +166,7 @@ class GroupingLookup:
                         DbGroupingRecord.group_id != issue.group_id,
                         DbGroupingRecord.group_id == None,
                     ),
-                    # TODO We will return the group itself as a similar group if it exists in the old table with no group_hash
+                    # TODO We can return a group as similar group to itself if it exists in the old table with no hash
                     DbGroupingRecord.hash != issue.hash,
                 )
                 .order_by("distance")
