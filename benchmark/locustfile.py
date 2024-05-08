@@ -42,6 +42,7 @@ class SeerBenchmarkUser(HttpUser):
             json={
                 "group_id": 2,
                 "project_id": 1,
+                "hash": "abc",
                 "stacktrace": real_looking_stacktrace,
                 "message": "message",
                 "k": 1,

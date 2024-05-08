@@ -51,7 +51,7 @@ write_files:
                                    -e HF_HOME='/app/data/.cache' \
                                    -e WEB_CONCURRENCY=1 \
                                    -p 80:80 \
-                                   us-central1-docker.pkg.dev/ml-ai-420606/seer-benchmar/benchmark@sha256:785f775f9192ae094e6585734a8ccb05124ae2583ac3de15e187896b4e7d6cc8
+                                   us.gcr.io/sentryio/seer@sha256:d34eb9aaffa46e7e2d5f9105eed877ca88c9c5d67496e7ff9d377ca84bd30c06
       StandardOutput=journal+console
       StandardError=journal+console
 
