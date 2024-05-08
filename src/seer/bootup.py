@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from typing import Collection
 
 import sentry_sdk
@@ -12,8 +11,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from celery_app.config import CeleryQueues
 from seer.db import AsyncSession, Session, db, migrate
-
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +38,7 @@ def bootup(
 ) -> Flask:
     from seer.grouping.grouping import logger as grouping_logger
 
-    grouping_logger.setLevel(logging.INFO)
+    grouping_logger.setLevel(logging.DEBUG)
 
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
