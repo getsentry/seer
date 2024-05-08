@@ -1,16 +1,18 @@
 import abc
 import logging
 import uuid
-from typing import Any, Type
+from typing import Any
 
 from celery import Task, signature
 from pydantic import BaseModel, Field
 
-from celery_app.config import CeleryQueues
 from seer.automation.state import State
 from seer.automation.utils import automation_logger
 
 Signature = Any
+
+DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS = 15  # 15 seconds
+DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 30  # 30 seconds
 
 
 class PipelineContext(abc.ABC):
@@ -26,48 +28,17 @@ class PipelineContext(abc.ABC):
         pass
 
 
-class PipelineSideEffect(abc.ABC):
-    context: PipelineContext
-
-    @abc.abstractmethod
-    def invoke(self):
-        pass
-
-
-class Pipeline(abc.ABC):
-    context: PipelineContext
-    side_effects: list[PipelineSideEffect] = []
-
-    def __init__(self, context: PipelineContext):
-        self.context = context
-
-    def _invoke_side_effects(self):
-        for side_effect in self.side_effects:
-            side_effect.invoke()
-
-    def invoke(self) -> Any:
-        try:
-            self._invoke_side_effects()
-            return self._invoke()
-        except Exception as e:
-            self._handle_exception(e)
-            raise e
-
-    @abc.abstractmethod
-    def _handle_exception(self, exception: Exception):
-        pass
-
-    @abc.abstractmethod
-    def _invoke(self) -> Any:
-        pass
-
-
 class PipelineStepTaskRequest(BaseModel):
     run_id: int
     step_id: int = Field(default_factory=lambda: uuid.uuid4().int)
 
 
 class PipelineStep(abc.ABC):
+    """
+    A step in the automation pipeline, complete with the context, request, logging + error handling utils.
+    Main method that is run is _invoke, which should be implemented by the subclass.
+    """
+
     name = "PipelineStep"
 
     def __init__(self, request: dict[str, Any]):
@@ -76,12 +47,17 @@ class PipelineStep(abc.ABC):
 
     def invoke(self) -> Any:
         try:
+            if not self._pre_invoke():
+                return
             result = self._invoke()
             self._post_invoke(result)
             return result
         except Exception as e:
             self._handle_exception(e)
             raise e
+
+    def _pre_invoke(self) -> bool:
+        return True
 
     def _post_invoke(self, result: Any) -> Any:
         pass
@@ -127,6 +103,10 @@ class PipelineStep(abc.ABC):
 
 
 class PipelineChain(abc.ABC):
+    """
+    Combine this with PipelineStep to make a step into a chain, which can call other steps.
+    """
+
     def next(
         self,
         sig: Any,

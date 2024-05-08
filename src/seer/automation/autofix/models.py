@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from seer.automation.agent.models import Usage
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
 
 
@@ -337,9 +338,16 @@ class AutofixContinuation(AutofixGroupState):
         self.updated_at = datetime.datetime.now()
 
     @property
+    def is_running(self):
+        return self.status == AutofixStatus.PROCESSING or self.status == AutofixStatus.PENDING
+
+    @property
     def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
-        if self.run_timeout_secs and self.updated_at:
+        if self.is_running and self.run_timeout_secs and self.last_triggered_at:
             if now is None:
                 now = datetime.datetime.now()
-            return self.updated_at + datetime.timedelta(seconds=self.run_timeout_secs) < now
+            return (
+                self.last_triggered_at + datetime.timedelta(seconds=AUTOFIX_HARD_TIME_OUT_SECS)
+                > now
+            )
         return False

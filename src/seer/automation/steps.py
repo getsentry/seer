@@ -14,6 +14,10 @@ class ConditionalStepRequest(PipelineStepTaskRequest):
 
 
 class ConditionalStep(PipelineStep):
+    """
+    Utility conditional step with a condition that determines whether to run the on_success or on_failure steps.
+    """
+
     request: ConditionalStepRequest
 
     @abc.abstractmethod
@@ -21,6 +25,9 @@ class ConditionalStep(PipelineStep):
         pass
 
     def _invoke(self):
+        result = self.condition()
+        self.logger.debug(f"Conditional step {self.request.step_id} condition result: {result}")
+
         if self.condition():
             if self.request.on_success:
                 signature(self.request.on_success).apply_async()
@@ -32,22 +39,24 @@ class ConditionalStep(PipelineStep):
         pass
 
 
-class ParallelizedConditionalStepRequest(ConditionalStepRequest):
+class ParallelizedChainConditionalStepRequest(ConditionalStepRequest):
     expected_signals: list[str]
 
 
-class ParallelizedConditionalStep(ConditionalStep):
-    name = "ParallelizedConditionalStep"
-    request: ParallelizedConditionalStepRequest
+class ParallelizedChainConditionalStep(ConditionalStep):
+    """
+    The conditional for the ParallelizedChainStep. It checks if all expected signals are present in the context.
+    """
+
+    name = "ParallelizedChainConditionalStep"
+    request: ParallelizedChainConditionalStepRequest
 
     @staticmethod
-    def _instantiate_request(request: dict[str, Any]) -> ParallelizedConditionalStepRequest:
-        return ParallelizedConditionalStepRequest(**request)
+    def _instantiate_request(request: dict[str, Any]) -> ParallelizedChainConditionalStepRequest:
+        return ParallelizedChainConditionalStepRequest(**request)
 
     def condition(self):
         result = all(signal in self.context.signals for signal in self.request.expected_signals)
-
-        self.logger.debug(f"Conditional step {self.request.step_id} condition result: {result}")
 
         return result
 
@@ -58,12 +67,16 @@ class ParallelizedChainStepRequest(PipelineStepTaskRequest):
 
 
 class ParallelizedChainStep(PipelineChain, PipelineStep):
+    """
+    Runs multiple steps in parallel and waits for all of them to complete successfully before continuing.
+    """
+
     name = "ParallelizedChainStep"
     request: ParallelizedChainStepRequest
 
     @staticmethod
     @abc.abstractmethod
-    def _get_conditional_step_class() -> Type[ParallelizedConditionalStep]:
+    def _get_conditional_step_class() -> Type[ParallelizedChainConditionalStep]:
         pass
 
     def _invoke(self):
@@ -78,7 +91,7 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
         for sig in signatures:
             sig.apply_async(
                 link=self._get_conditional_step_class().get_signature(
-                    ParallelizedConditionalStepRequest(
+                    ParallelizedChainConditionalStepRequest(
                         run_id=self.context.run_id,
                         expected_signals=expected_signals,
                         on_success=self.request.on_success,

@@ -17,6 +17,10 @@ from seer.automation.autofix.components.planner.models import (
     ReplaceCodePromptXml,
 )
 from seer.automation.autofix.components.retriever import RetrieverComponent, RetrieverRequest
+from seer.automation.autofix.config import (
+    AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
+    AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
+)
 from seer.automation.autofix.models import AutofixStatus, CodebaseChange
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
@@ -27,7 +31,10 @@ class AutofixExecutionStepRequest(PipelineStepTaskRequest):
     pass
 
 
-@celery_app.task()
+@celery_app.task(
+    time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
+    soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
+)
 def autofix_execution_task(*args, request: dict[str, Any]):
     AutofixExecutionStep(request).invoke()
 

@@ -6,6 +6,10 @@ from sentry_sdk.ai_analytics import ai_track
 from celery_app.app import app as celery_app
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
+from seer.automation.autofix.config import (
+    AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
+    AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
+)
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -15,7 +19,10 @@ class RootCauseStepRequest(PipelineStepTaskRequest):
     pass
 
 
-@celery_app.task()
+@celery_app.task(
+    time_limit=AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
+    soft_time_limit=AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
+)
 def root_cause_task(*args, request: Any):
     return RootCauseStep(request).invoke()
 

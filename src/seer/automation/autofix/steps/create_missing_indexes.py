@@ -10,11 +10,20 @@ from seer.automation.autofix.steps.create_index_step import (
 )
 from seer.automation.autofix.steps.steps import AutofixParallelizedChainStep, AutofixPipelineStep
 from seer.automation.models import EventDetails, RepoDefinition
-from seer.automation.pipeline import PipelineChain, PipelineStepTaskRequest, Signature
+from seer.automation.pipeline import (
+    DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS,
+    DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS,
+    PipelineChain,
+    PipelineStepTaskRequest,
+    Signature,
+)
 from seer.automation.steps import ParallelizedChainStepRequest
 
 
-@celery_app.task()
+@celery_app.task(
+    time_limit=DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS,
+    soft_time_limit=DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS,
+)
 def create_missing_indexes_task(*args, request: Any):
     CreateMissingIndexesStep(request).invoke()
 

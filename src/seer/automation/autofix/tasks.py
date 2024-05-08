@@ -1,16 +1,10 @@
 import logging
-from typing import Any, cast
+from typing import cast
 
 import sentry_sdk
 
-from celery_app.app import app as celery_app
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.config import (
-    AUTOFIX_CREATE_PR_TIMEOUT_SECS,
-    AUTOFIX_EXECUTION_TIMEOUT_SECS,
-    AUTOFIX_ROOT_CAUSE_TIMEOUT_SECS,
-)
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -71,7 +65,6 @@ def run_autofix_root_cause(
     )
 
     with state.update() as cur:
-        cur.run_timeout_secs = AUTOFIX_ROOT_CAUSE_TIMEOUT_SECS
         cur.mark_triggered()
     cur = state.get()
 
@@ -101,7 +94,6 @@ def run_autofix_execution(request: AutofixUpdateRequest):
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
 
     with state.update() as cur:
-        cur.run_timeout_secs = AUTOFIX_EXECUTION_TIMEOUT_SECS
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
@@ -156,7 +148,6 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
 
     with state.update() as cur:
-        cur.run_timeout_secs = AUTOFIX_CREATE_PR_TIMEOUT_SECS
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)

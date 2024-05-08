@@ -4,8 +4,11 @@ import sentry_sdk
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.config import (
+    AUTOFIX_CREATE_INDEX_HARD_TIME_LIMIT_SECS,
+    AUTOFIX_CREATE_INDEX_SOFT_TIME_LIMIT_SECS,
+)
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 
@@ -14,7 +17,10 @@ class CodebaseIndexingStepRequest(PipelineStepTaskRequest):
     repo: RepoDefinition
 
 
-@celery_app.task()
+@celery_app.task(
+    time_limit=AUTOFIX_CREATE_INDEX_HARD_TIME_LIMIT_SECS,
+    soft_time_limit=AUTOFIX_CREATE_INDEX_SOFT_TIME_LIMIT_SECS,
+)
 def create_index_task(*args, request: Any):
     CreateIndexStep(request).invoke()
 
