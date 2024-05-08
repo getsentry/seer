@@ -386,8 +386,19 @@
             "GroupingRequest": {
                 "properties": {
                     "group_id": {
-                        "type": "integer",
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
                         "title": "Group Id"
+                    },
+                    "hash": {
+                        "type": "string",
+                        "title": "Hash"
                     },
                     "project_id": {
                         "type": "integer",
@@ -413,7 +424,7 @@
                     }
                 },
                 "type": "object",
-                "required": ["group_id", "project_id", "stacktrace", "message"],
+                "required": ["hash", "project_id", "stacktrace", "message"],
                 "title": "GroupingRequest"
             },
             "GroupingResponse": {
@@ -428,6 +439,10 @@
                             }
                         ],
                         "title": "Parent Group Id"
+                    },
+                    "parent_hash": {
+                        "type": "string",
+                        "title": "Parent Hash"
                     },
                     "stacktrace_similarity": {
                         "type": "number",
@@ -444,7 +459,7 @@
                 },
                 "type": "object",
                 "required": [
-                    "parent_group_id",
+                    "parent_hash",
                     "stacktrace_similarity",
                     "message_similarity",
                     "should_group"
