@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from typing import Collection
 
 import sentry_sdk
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from celery_app.config import CeleryQueues
 from seer.db import AsyncSession, Session, db, migrate
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
