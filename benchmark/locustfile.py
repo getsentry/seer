@@ -40,6 +40,7 @@ class SeerBenchmarkUser(HttpUser):
             "/v0/issues/similarity-embedding-benchmark",
             json={
                 "project_id": 1,
+                "hash": "abc",
                 "stacktrace": real_looking_stacktrace,
                 "message": "message",
                 "k": 1,
