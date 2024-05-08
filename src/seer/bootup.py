@@ -15,6 +15,8 @@ from structlog import get_logger
 from celery_app.config import CeleryQueues
 from seer.db import AsyncSession, Session, db, migrate
 
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 structlog.configure(
     processors=[
