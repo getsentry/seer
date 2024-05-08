@@ -21,7 +21,6 @@ class TestNamespaceManager(unittest.TestCase):
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
-        FilesystemStorageAdapter.clear_all_workspaces()
         return super().tearDown()
 
     def test_create_repo(self):
@@ -354,3 +353,118 @@ class TestNamespaceManager(unittest.TestCase):
 
         thread1.join()
         thread2.join()
+
+    def test_not_ready_on_creation(self):
+        namespace = CodebaseNamespaceManager.create_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+        )
+
+        self.assertFalse(namespace.is_ready())
+
+    def test_ready_after_adding(self):
+        namespace = CodebaseNamespaceManager.create_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+        )
+
+        namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                )
+            ]
+        )
+
+        self.assertTrue(namespace.is_ready())
+
+    @patch("seer.automation.codebase.namespace.chromadb.PersistentClient")
+    def test_not_ready_on_error(self, mock_client):
+        mock_client.return_value.get_collection.side_effect = Exception("Error")
+        namespace = CodebaseNamespaceManager.create_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+        )
+
+        namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                )
+            ]
+        )
+
+        self.assertFalse(namespace.is_ready())
+
+    def test_delete(self):
+        namespace = CodebaseNamespaceManager.create_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+        )
+
+        namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                )
+            ]
+        )
+
+        namespace.save()
+        tmpdir = namespace.storage_adapter.tmpdir
+        namespace_id = namespace.namespace.id
+        del namespace
+
+        self.assertFalse(os.path.exists(tmpdir))
+
+        namespace = CodebaseNamespaceManager.load_workspace(namespace_id)
+        self.assertIsNotNone(namespace)
+        if namespace:
+            namespace.delete()
+
+            with Session() as session:
+                db_namespace = session.query(DbCodebaseNamespace).get(namespace_id)
+                self.assertIsNone(db_namespace)
+
+            self.assertIsInstance(namespace.storage_adapter, FilesystemStorageAdapter)
+            if isinstance(namespace.storage_adapter, FilesystemStorageAdapter):
+                self.assertFalse(
+                    os.path.exists(
+                        namespace.storage_adapter.get_storage_location(
+                            namespace.repo_info.id, namespace.namespace.slug
+                        )
+                    )
+                )

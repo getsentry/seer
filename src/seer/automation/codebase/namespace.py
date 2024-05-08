@@ -48,9 +48,7 @@ class CodebaseNamespaceManager:
         self.repo_info = repo_info
         self.namespace = namespace
         self.storage_adapter = storage_adapter
-        self.client = chromadb.PersistentClient(
-            path=storage_adapter.get_workspace_location(namespace.repo_id, namespace.id)
-        )
+        self.client = chromadb.PersistentClient(path=storage_adapter.tmpdir)
 
         self._log_accessed_at()
 
@@ -158,20 +156,22 @@ class CodebaseNamespaceManager:
     @classmethod
     def load_workspace(cls, namespace_id: int, skip_copy: bool = False):
         with Session() as session:
-            db_repo_info = session.get(DbRepositoryInfo, namespace_id)
-
-            if db_repo_info is None:
-                raise ValueError(f"Repository with id {namespace_id} not found")
-
             db_namespace = session.get(DbCodebaseNamespace, namespace_id)
 
             if db_namespace is None:
                 raise ValueError(f"Repository namespace with id {namespace_id} not found")
 
+            db_repo_info = session.get(DbRepositoryInfo, db_namespace.repo_id)
+
+            if db_repo_info is None:
+                raise ValueError(f"Repository with id {db_namespace.repo_id} not found")
+
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         did_copy = False
         if not skip_copy:
@@ -233,6 +233,9 @@ class CodebaseNamespaceManager:
                     .one_or_none()
                 )
             else:
+                if not db_repo_info.default_namespace:
+                    return None
+
                 db_namespace = session.get(DbCodebaseNamespace, db_repo_info.default_namespace)
 
             if db_namespace is None:
@@ -244,7 +247,9 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         cls._wait_for_mutex_clear(namespace.id)
         cls._set_mutex(namespace.id)
@@ -267,6 +272,9 @@ class CodebaseNamespaceManager:
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
     ):
+        autofix_logger.debug(
+            f"Creating new repo for {organization}/{project}/{repo.external_id} (repo: {repo.full_name})"
+        )
         with Session() as session:
             db_repo_info = DbRepositoryInfo(
                 organization=organization,
@@ -296,7 +304,9 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         return cls(repo_info, namespace, storage_adapter)
 
@@ -373,6 +383,9 @@ class CodebaseNamespaceManager:
             if existing_namespace:
                 db_namespace = existing_namespace
             else:
+                autofix_logger.debug(
+                    f"Creating namespace with existing repo for {db_repo_info.organization}/{db_repo_info.project}/{db_repo_info.external_id} (repo: {db_repo_info.external_slug})"
+                )
                 db_namespace = DbCodebaseNamespace(
                     repo_id=repo_id,
                     sha=sha,
@@ -390,7 +403,9 @@ class CodebaseNamespaceManager:
 
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(repo_info.id, namespace.id, namespace.slug)
+        storage_adapter = get_storage_adapter_class()(
+            repo_id=repo_info.id, namespace_slug=namespace.slug
+        )
 
         return cls(repo_info, namespace, storage_adapter)
 
@@ -421,6 +436,22 @@ class CodebaseNamespaceManager:
                 )
 
             return True
+
+    def is_ready(self):
+        """
+        Tries to check if the namespace is ready for use. This is a best-effort check and may not be 100% accurate.
+        The idea behind this is to check to make sure the namespace is not corrupt and actually loaded.
+        """
+        try:
+            collection = self.client.get_collection("chunks")
+
+            if collection.count() == 0:
+                return False
+
+            return True
+        except Exception as e:
+            autofix_logger.exception(e)
+            return False
 
     def chunk_hashes_exist(self, hashes: list[str]):
         if not hashes:
@@ -558,7 +589,7 @@ class CodebaseNamespaceManager:
         autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")
 
     def cleanup(self):
-        self.storage_adapter.cleanup()
+        self.storage_adapter.clear_workspace()
 
         autofix_logger.info(f"Cleaned up workspace for namespace {self.namespace.id}")
 

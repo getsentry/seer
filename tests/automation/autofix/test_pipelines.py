@@ -48,13 +48,34 @@ class TestCreateAnyMissingCodebaseIndexesSideEffect(unittest.TestCase):
         # Setup
         mock_context.return_value.has_missing_codebase_indexes.return_value = True
         mock_context.return_value.repos = [MagicMock()]
-        mock_context.return_value.has_codebase_index.return_value = False
+        mock_context.return_value.get_codebase_from_external_id.return_value = None
         side_effect = CreateAnyMissingCodebaseIndexesSideEffect(mock_context())
 
         # Test
         side_effect.invoke()
 
         # Verify
+        mock_context.return_value.event_manager.send_codebase_indexing_start.assert_called_once()
+        mock_context.return_value.create_codebase_index.assert_called_once()
+        mock_context.return_value.event_manager.send_codebase_indexing_complete_if_exists.assert_called_once()
+
+    @patch("seer.automation.autofix.pipelines.AutofixContext")
+    def test_invoke_creation_needed_workspace_not_ready(self, mock_context):
+        # Setup
+        mock_context.return_value.has_missing_codebase_indexes.return_value = True
+        mock_context.return_value.repos = [MagicMock()]
+        mock_codebase = MagicMock()
+        mock_context.return_value.get_codebase_from_external_id.return_value = mock_codebase
+
+        mock_codebase.workspace.is_ready.return_value = False
+
+        side_effect = CreateAnyMissingCodebaseIndexesSideEffect(mock_context())
+
+        # Test
+        side_effect.invoke()
+
+        # Verify
+        mock_codebase.workspace.delete.assert_called_once()
         mock_context.return_value.event_manager.send_codebase_indexing_start.assert_called_once()
         mock_context.return_value.create_codebase_index.assert_called_once()
         mock_context.return_value.event_manager.send_codebase_indexing_complete_if_exists.assert_called_once()

@@ -13,7 +13,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import QueryResultDocumentChunk
+from seer.automation.codebase.models import Document, QueryResultDocumentChunk
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.models import EventDetails, FileChange, RepoDefinition, Stacktrace
@@ -88,17 +88,12 @@ class AutofixContext(PipelineContext):
         self.event_manager = event_manager
         self.state = state
 
-    def has_codebase_index(self, repo: RepoDefinition) -> bool:
-        for codebase in self.codebases.values():
-            if codebase.repo_info.external_id == repo.external_id:
-                return True
-
-        return False
-
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
-            if not self.has_codebase_index(repo):
+            codebase = self.get_codebase_from_external_id(repo.external_id)
+            if codebase is None or not codebase.workspace.is_ready():
                 return True
+
         return False
 
     def has_codebase_indexing_run(self) -> bool:
@@ -119,17 +114,19 @@ class AutofixContext(PipelineContext):
 
         return codebase_index
 
-    def get_codebase(self, repo_id: int) -> CodebaseIndex:
-        codebase = self.codebases[repo_id]
+    def get_codebase(self, repo_id: int) -> CodebaseIndex | None:
+        return self.codebases[repo_id]
 
-        if codebase is None:
-            raise ValueError(f"Codebase with id {repo_id} not found")
+    def get_codebase_from_external_id(self, external_id: str) -> CodebaseIndex | None:
+        for codebase in self.codebases.values():
+            if codebase.repo_info.external_id == external_id:
+                return codebase
 
-        return codebase
+        return None
 
     def get_document_and_codebase(
         self, path: str, repo_name: str | None = None, repo_id: int | None = None
-    ):
+    ) -> tuple[CodebaseIndex | None, Document | None]:
         if repo_name:
             repo_id = next(
                 (
@@ -141,7 +138,10 @@ class AutofixContext(PipelineContext):
             )
         if repo_id:
             codebase = self.get_codebase(repo_id)
-            return codebase, codebase.get_document(path)
+
+            if codebase:
+                return codebase, codebase.get_document(path)
+            return None, None
 
         for codebase in self.codebases.values():
             document = codebase.get_document(path)
@@ -171,6 +171,10 @@ class AutofixContext(PipelineContext):
                 stacktrace_files.add(frame.filename)
 
         codebase = self.get_codebase(repo_id)
+
+        if codebase is None:
+            raise ValueError(f"Codebase with repo_id {repo_id} not found")
+
         changed_files, removed_files = codebase.repo_client.get_commit_file_diffs(
             codebase.namespace.sha, codebase.repo_client.get_default_branch_head_sha()
         )
