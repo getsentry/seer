@@ -11,7 +11,7 @@ gcloud compute instances create seer-benchmark-1 \
     --service-account=996102297610-compute@developer.gserviceaccount.com \
     --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append \
     --tags=http-server \
-    --image=projects/cos-cloud/global/images/cos-stable-109-17800-147-60 \
+    --image=projects/cos-cloud/global/images/cos-stable-113-18244-1-65 \
     --boot-disk-size=200GB \
     --boot-disk-type=pd-balanced \
     --boot-disk-device-name=seer-benchmark \
