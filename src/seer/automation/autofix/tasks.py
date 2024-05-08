@@ -1,9 +1,7 @@
-import dataclasses
 import logging
 from typing import Any, cast
 
 import sentry_sdk
-from pydantic import BaseModel
 
 from celery_app.app import app as celery_app
 from celery_app.config import CeleryQueues
@@ -24,15 +22,18 @@ from seer.automation.autofix.models import (
     CustomRootCauseSelection,
     SuggestedFixRootCauseSelection,
 )
-from seer.automation.autofix.pipelines import AutofixExecution
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.create_missing_indexes import (
     CreateAnyMissingCodebaseIndexesStepRequest,
     CreateMissingIndexesStep,
 )
+from seer.automation.autofix.steps.execution import (
+    AutofixExecutionStep,
+    AutofixExecutionStepRequest,
+)
+from seer.automation.autofix.steps.root_cause import RootCauseStep, RootCauseStepRequest
 from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
-from seer.automation.state import DbState
 from seer.db import DbRunState, Session
 
 logger = logging.getLogger("autofix")
@@ -85,18 +86,18 @@ def run_autofix_root_cause(
     CreateMissingIndexesStep.get_signature(
         CreateAnyMissingCodebaseIndexesStepRequest(
             run_id=cur.run_id,
-            next_step_name="RootCauseStep",
+            next=RootCauseStep.get_signature(
+                RootCauseStepRequest(
+                    run_id=cur.run_id,
+                ),
+                queue=CeleryQueues.DEFAULT,
+            ),
         ),
         queue=CeleryQueues.DEFAULT,
     ).apply_async()
 
 
-@celery_app.task(time_limit=AUTOFIX_EXECUTION_TIMEOUT_SECS)
-def run_autofix_execution(
-    request_data: dict[str, Any],
-    autofix_group_state: dict[str, Any] | None = None,
-):
-    request = AutofixUpdateRequest.model_validate(request_data)
+def run_autofix_execution(request: AutofixUpdateRequest):
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
 
     with state.update() as cur:
@@ -131,31 +132,24 @@ def run_autofix_execution(
             logger.warning(f"Ignoring job, state {cur.status}")
             return
 
-        with sentry_sdk.start_span(
-            op="seer.automation.autofix_execution",
-            description="Run autofix on an issue within celery task",
-        ):
-            context = AutofixContext(
-                event_manager=event_manager,
-                sentry_client=get_sentry_client(),
-                state=state,
-            )
-            autofix_execution = AutofixExecution(context)
-            autofix_execution.invoke()
+        CreateMissingIndexesStep.get_signature(
+            CreateAnyMissingCodebaseIndexesStepRequest(
+                run_id=cur.run_id,
+                next=AutofixExecutionStep.get_signature(
+                    AutofixExecutionStepRequest(
+                        run_id=cur.run_id,
+                    ),
+                    queue=CeleryQueues.CUDA,
+                ),
+            ),
+            queue=CeleryQueues.DEFAULT,
+        ).apply_async()
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
 
 
-@celery_app.task(time_limit=AUTOFIX_EXECUTION_TIMEOUT_SECS)
-def run_autofix_create_missing_codebase_indexes(request_data: dict[str, Any]):
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
-
-
-@celery_app.task(time_limit=AUTOFIX_CREATE_PR_TIMEOUT_SECS)
-def run_autofix_create_pr(request_data: dict[str, Any]):
-    request = AutofixUpdateRequest.model_validate(request_data)
-
+def run_autofix_create_pr(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixCreatePrUpdatePayload):
         raise ValueError("Invalid payload type for create_pr")
 

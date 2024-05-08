@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Any, Type
 
-from celery import Task
+from celery import Task, signature
 from pydantic import BaseModel, Field
 
 from celery_app.config import CeleryQueues
@@ -129,13 +129,6 @@ class PipelineStep(abc.ABC):
 class PipelineChain(abc.ABC):
     def next(
         self,
-        signature: Any,
+        sig: Any,
     ):
-        signature.apply_async()
-
-    def next_concurrent(
-        self,
-        runs: list[Any],
-    ):
-        for run in runs:
-            run.apply_async()
+        signature(sig).apply_async()

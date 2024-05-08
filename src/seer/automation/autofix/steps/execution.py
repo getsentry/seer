@@ -1,11 +1,9 @@
-import dataclasses
+from typing import Any
 
-import sentry_sdk
 from langsmith import traceable
 from sentry_sdk.ai_analytics import ai_track
 
-from celery_app.config import CeleryQueues
-from seer.automation.autofix.autofix_context import AutofixContext
+from celery_app.app import app as celery_app
 from seer.automation.autofix.components.change_describer import (
     ChangeDescriptionComponent,
     ChangeDescriptionRequest,
@@ -19,27 +17,34 @@ from seer.automation.autofix.components.planner.models import (
     ReplaceCodePromptXml,
 )
 from seer.automation.autofix.components.retriever import RetrieverComponent, RetrieverRequest
-from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
 from seer.automation.autofix.models import AutofixStatus, CodebaseChange
-from seer.automation.autofix.utils import autofix_logger
-from seer.automation.codebase.models import UpdateCodebaseTaskRequest
-from seer.automation.codebase.tasks import update_codebase_index
+from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
-from seer.automation.pipeline import Pipeline, PipelineSideEffect
+from seer.automation.pipeline import PipelineStepTaskRequest
 
 
-class AutofixExecution(Pipeline):
+class AutofixExecutionStepRequest(PipelineStepTaskRequest):
+    pass
+
+
+@celery_app.task()
+def autofix_execution_task(*args, request: dict[str, Any]):
+    AutofixExecutionStep(request).invoke()
+
+
+class AutofixExecutionStep(AutofixPipelineStep):
     """
     This class represents the execution pipeline in the autofix system. It is responsible for
     executing the fixes suggested by the planning component based on the root cause analysis.
     """
 
-    context: AutofixContext
+    @staticmethod
+    def _instantiate_request(request: dict[str, Any]) -> AutofixExecutionStepRequest:
+        return AutofixExecutionStepRequest.model_validate(request)
 
-    def __init__(self, context: AutofixContext):
-        super().__init__(context)
-        # self.side_effects = [CheckCodebaseForUpdatesSideEffect(context)]
+    @staticmethod
+    def get_task():
+        return autofix_execution_task
 
     @traceable(name="Execution", tags=["autofix:v2"])
     @ai_track(description="Execution")

@@ -157,9 +157,9 @@ def autofix_update_endpoint(
     data: AutofixUpdateRequest,
 ) -> AutofixEndpointResponse:
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
-        run_autofix_execution.apply_async((data.model_dump(mode="json"),), queue=CeleryQueues.CUDA)
+        run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        run_autofix_create_pr.apply(args=[data.model_dump(mode="json")], queue=CeleryQueues.DEFAULT)
+        run_autofix_create_pr(data)
     return AutofixEndpointResponse(started=True)
 
 

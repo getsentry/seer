@@ -1,19 +1,16 @@
-import dataclasses
-from typing import Any, Literal, Type
+from typing import Any
 
 import sentry_sdk
 
 from celery_app.app import app as celery_app
 from celery_app.config import CeleryQueues
-from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.steps.create_index_step import (
     CodebaseIndexingStepRequest,
     CreateIndexStep,
 )
-from seer.automation.autofix.steps.root_cause import RootCauseStep
 from seer.automation.autofix.steps.steps import AutofixParallelizedChainStep, AutofixPipelineStep
 from seer.automation.models import EventDetails, RepoDefinition
-from seer.automation.pipeline import PipelineChain, PipelineStep, PipelineStepTaskRequest, Signature
+from seer.automation.pipeline import PipelineChain, PipelineStepTaskRequest, Signature
 from seer.automation.steps import ParallelizedChainStepRequest
 
 
@@ -23,7 +20,7 @@ def create_missing_indexes_task(*args, request: Any):
 
 
 class CreateAnyMissingCodebaseIndexesStepRequest(PipelineStepTaskRequest):
-    next_step_name: Literal["RootCauseStep", "ExecutionStep"]
+    next: Signature
 
 
 class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
@@ -87,18 +84,6 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
 
         steps: list[Signature] = []
 
-        next_step_signature = None
-        if self.request.next_step_name == "RootCauseStep":
-            next_step_signature = RootCauseStep.get_signature(
-                PipelineStepTaskRequest(run_id=self.context.run_id),
-                queue=CeleryQueues.DEFAULT,
-            )
-        # elif self.request.next_step_name == "ExecutionStep":
-        #     next_step_signature = ExecutionStep.task.signature(
-        #         PipelineStepTaskRequest(run_id=self.context.run_id),
-        #         queue=CeleryQueues.DEFAULT,
-        #     )
-
         for repo in repos_to_create:
             steps.append(
                 CreateIndexStep.get_signature(
@@ -121,13 +106,13 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                     ParallelizedChainStepRequest(
                         run_id=self.context.run_id,
                         steps=steps,
-                        on_success=next_step_signature,
+                        on_success=self.request.next,
                     ),
                     queue=CeleryQueues.DEFAULT,
                 ),
             )
         else:
-            self.next(next_step_signature)
+            self.next(self.request.next)
 
     def _handle_exception(self, exception: Exception):
         pass
