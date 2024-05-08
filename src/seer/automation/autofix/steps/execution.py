@@ -45,6 +45,8 @@ class AutofixExecutionStep(AutofixPipelineStep):
     executing the fixes suggested by the planning component based on the root cause analysis.
     """
 
+    name = "AutofixExecutionStep"
+
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixExecutionStepRequest:
         return AutofixExecutionStepRequest.model_validate(request)
@@ -56,6 +58,7 @@ class AutofixExecutionStep(AutofixPipelineStep):
     @traceable(name="Execution", tags=["autofix:v2"])
     @ai_track(description="Execution")
     def _invoke(self):
+        self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_planning_start()
 
         if self.context.has_missing_codebase_indexes():

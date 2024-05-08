@@ -26,6 +26,8 @@ def create_index_task(*args, request: Any):
 
 
 class CreateIndexStep(AutofixPipelineStep):
+    name = "CreateIndexStep"
+
     request: CodebaseIndexingStepRequest
     context: AutofixContext
 

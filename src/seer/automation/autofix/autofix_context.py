@@ -32,7 +32,8 @@ class AutofixCodebaseStateManager(CodebaseStateManager):
             codebase_state = state.codebases[self.repo_id]
             codebase_state.file_changes.append(file_change)
 
-            autofix_logger.info(f"Stored file change for repo {self.repo_id}, new state: {state}")
+            autofix_logger.info(f"Stored file change for repo {self.repo_id}")
+            autofix_logger.debug(f"new state: {state}")
 
     def get_file_changes(self) -> list[FileChange]:
         return self.state.get().codebases[self.repo_id].file_changes

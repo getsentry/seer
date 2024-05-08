@@ -9,6 +9,9 @@ from seer.automation.autofix.steps.create_index_step import (
     CreateIndexStep,
 )
 from seer.automation.autofix.steps.steps import AutofixParallelizedChainStep, AutofixPipelineStep
+from seer.automation.autofix.steps.update_index_step import UpdateIndexStep, UpdateIndexStepRequest
+from seer.automation.codebase.models import UpdateCodebaseTaskRequest
+from seer.automation.codebase.tasks import update_codebase_index
 from seer.automation.models import EventDetails, RepoDefinition
 from seer.automation.pipeline import (
     DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS,
@@ -33,6 +36,7 @@ class CreateAnyMissingCodebaseIndexesStepRequest(PipelineStepTaskRequest):
 
 
 class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
+    name = "CreateMissingIndexesStep"
     request: CreateAnyMissingCodebaseIndexesStepRequest
 
     @staticmethod
@@ -47,7 +51,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
         event_details = EventDetails.from_event(self.context.state.get().request.issue.events[0])
 
         repos_to_create: list[RepoDefinition] = []
-        repos_to_update: list[RepoDefinition] = []
+        repos_to_update: list[int] = []
 
         for repo in self.context.repos:
             codebase = self.context.get_codebase_from_external_id(repo.external_id)
@@ -68,28 +72,19 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                 )
                 if codebase.is_behind():
                     if codebase.diff_contains_stacktrace_files(event_details):
-                        # Update right now and wait
-                        # autofix_logger.debug(
-                        #     f"Waiting for codebase index update for repo {codebase.repo_info.external_slug}"
-                        # )
-                        # self.context.event_manager.send_codebase_indexing_start()
-                        # self.context.event_manager.add_log(
-                        #     f"Creating codebase index for repo: {codebase.repo_info.external_slug}"
-                        # )
-                        # with sentry_sdk.start_span(
-                        #     op="seer.automation.autofix.codebase_index.update",
-                        #     description="Update codebase index",
-                        # ) as span:
-                        #     span.set_tag("repo", codebase.repo_info.external_slug)
-                        #     codebase.update()
-                        # autofix_logger.debug(f"Codebase index updated")
-                        # self.context.event_manager.add_log(
-                        #     f"Created codebase index for repo: {codebase.repo_info.external_slug}"
-                        # )
-                        repos_to_update.append(repo)
+                        # Update now
+                        repos_to_update.append(codebase.repo_info.id)
                     else:
                         # Update later
-                        pass
+                        update_codebase_index.apply_async(
+                            (
+                                UpdateCodebaseTaskRequest(
+                                    repo_id=codebase.repo_info.id,
+                                ),
+                            ),
+                            countdown=60 * 15,  # 15 minutes
+                            queue=CeleryQueues.CUDA,
+                        )
 
         steps: list[Signature] = []
 
@@ -101,13 +96,17 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                 )
             )
 
-        for repo in repos_to_update:
+        for repo_id in repos_to_update:
             steps.append(
-                CreateIndexStep.get_signature(
-                    CodebaseIndexingStepRequest(run_id=self.context.run_id, repo=repo),
+                UpdateIndexStep.get_signature(
+                    UpdateIndexStepRequest(run_id=self.context.run_id, repo_id=repo_id),
                     queue=CeleryQueues.CUDA,
                 )
             )
+
+        self.logger.info(
+            f"Creating {len(repos_to_create)} and updating {len(repos_to_update)} codebase indexes"
+        )
 
         if steps:
             self.next(

@@ -33,6 +33,8 @@ class RootCauseStep(AutofixPipelineStep):
     analyzing the root cause of issues detected in the codebase and suggesting potential fixes.
     """
 
+    name = "RootCauseStep"
+
     @staticmethod
     def get_task():
         return root_cause_task
@@ -44,6 +46,7 @@ class RootCauseStep(AutofixPipelineStep):
     @traceable(name="Root Cause", tags=["autofix:v2"])
     @ai_track(description="Root Cause")
     def _invoke(self):
+        self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_root_cause_analysis_start()
 
         if self.context.has_missing_codebase_indexes():

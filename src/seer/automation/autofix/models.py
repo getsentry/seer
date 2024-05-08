@@ -348,6 +348,6 @@ class AutofixContinuation(AutofixGroupState):
                 now = datetime.datetime.now()
             return (
                 self.last_triggered_at + datetime.timedelta(seconds=AUTOFIX_HARD_TIME_OUT_SECS)
-                > now
+                < now
             )
         return False
