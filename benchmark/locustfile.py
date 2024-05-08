@@ -44,7 +44,6 @@ class SeerBenchmarkUser(HttpUser):
                 "project_id": 1,
                 "stacktrace": real_looking_stacktrace,
                 "message": "message",
-                "stacktrace_hash": "QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                 "k": 1,
                 "threshold": 0.01,
             },
