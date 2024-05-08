@@ -51,7 +51,11 @@ write_files:
                                    -e HF_HOME='/app/data/.cache' \
                                    -e WEB_CONCURRENCY=1 \
                                    -p 80:80 \
+<<<<<<< HEAD
                                    us.gcr.io/sentryio/seer@sha256:7cec044490fc5829a4cd7c6a3c35b84cccce1f34c25ae566f5cb24f6d7421de3
+=======
+                                   us.gcr.io/sentryio/seer@sha256:d34eb9aaffa46e7e2d5f9105eed877ca88c9c5d67496e7ff9d377ca84bd30c06
+>>>>>>> e97acc9 (update locst file)
       StandardOutput=journal+console
       StandardError=journal+console
 
