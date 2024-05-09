@@ -52,6 +52,3 @@ class CreateIndexStep(AutofixPipelineStep):
             span.set_tag("repo", repo.full_name)
             self.context.create_codebase_index(repo)
         self.context.event_manager.add_log(f"Created codebase index for repo: {repo.full_name}")
-
-    def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()

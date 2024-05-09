@@ -61,6 +61,3 @@ class UpdateIndexStep(AutofixPipelineStep):
         self.context.event_manager.add_log(
             f"Updated codebase index for repo: {codebase.repo_info.external_slug}"
         )
-
-    def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()

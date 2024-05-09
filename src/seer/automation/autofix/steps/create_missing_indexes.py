@@ -121,6 +121,3 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
             )
         else:
             self.next(self.request.next)
-
-    def _handle_exception(self, exception: Exception):
-        pass

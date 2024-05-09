@@ -1,4 +1,4 @@
-from typing import Any, Type
+from typing import Any
 
 from langsmith import traceable
 from sentry_sdk.ai_analytics import ai_track
@@ -50,7 +50,7 @@ class RootCauseStep(AutofixPipelineStep):
         self.context.event_manager.send_root_cause_analysis_start()
 
         if self.context.has_missing_codebase_indexes():
-            raise ValueError("Codebase indexes must be created before root cause analysis")
+            raise RuntimeError("Codebase indexes must be created before root cause analysis")
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])
@@ -64,6 +64,3 @@ class RootCauseStep(AutofixPipelineStep):
         )
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
-
-    def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()

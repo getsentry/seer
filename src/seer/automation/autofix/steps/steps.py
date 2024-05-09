@@ -30,8 +30,10 @@ class AutofixPipelineStep(PipelineStep):
 
     def _post_invoke(self, result: Any):
         with self.context.state.update() as cur:
-            print("cur.signals", cur.signals)
             cur.signals.append(make_done_signal(self.request.step_id))
+
+    def _handle_exception(self, exception: Exception):
+        self.context.event_manager.on_error()
 
 
 @celery_app.task(

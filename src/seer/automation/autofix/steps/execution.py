@@ -120,9 +120,6 @@ class AutofixExecutionStep(AutofixPipelineStep):
 
         self.context.event_manager.send_execution_complete(codebase_changes)
 
-    def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()
-
     @traceable(name="Executor with Retriever", run_type="llm")
     @ai_track(description="Executor with Retriever")
     def _run_executor_with_retriever(

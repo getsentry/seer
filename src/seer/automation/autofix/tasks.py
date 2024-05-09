@@ -25,7 +25,7 @@ from seer.automation.autofix.steps.execution import (
     AutofixExecutionStep,
     AutofixExecutionStepRequest,
 )
-from seer.automation.autofix.steps.root_cause import RootCauseStep, RootCauseStepRequest
+from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
 from seer.db import DbRunState, Session
