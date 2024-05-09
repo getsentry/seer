@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from seer.automation.codebase.models import CodebaseNamespace, EmbeddedDocumentChunk
+from seer.automation.codebase.models import (
+    CodebaseNamespace,
+    CodebaseNamespaceStatus,
+    EmbeddedDocumentChunk,
+)
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.storage_adapters import FilesystemStorageAdapter
 from seer.automation.models import RepoDefinition
@@ -461,6 +465,8 @@ class TestNamespaceManager(unittest.TestCase):
                 )
             ]
         )
+
+        namespace.namespace.status = CodebaseNamespaceStatus.CREATED
 
         self.assertTrue(namespace.is_ready())
 
