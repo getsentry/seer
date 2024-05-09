@@ -229,9 +229,6 @@ class DbGroupingRecord(Base):
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-    stacktrace_hash: Mapped[Optional[str]] = deferred(
-        mapped_column(String(32).evaluates_none(), nullable=True)
-    )
     hash: Mapped[str] = mapped_column(
         String(32), nullable=False, default="00000000000000000000000000000000"
     )
