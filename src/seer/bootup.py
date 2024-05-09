@@ -38,7 +38,7 @@ def bootup(
 ) -> Flask:
     from seer.grouping.grouping import logger as grouping_logger
 
-    grouping_logger.setLevel(logging.INFO)
+    grouping_logger.setLevel(logging.DEBUG)
 
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
