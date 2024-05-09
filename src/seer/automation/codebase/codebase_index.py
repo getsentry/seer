@@ -231,56 +231,60 @@ class CodebaseIndex:
         if not workspace:
             raise InitializationError("Failed to load workspace for namespace_id")
 
-        try:
-            repo_client = RepoClient.from_repo_info(workspace.repo_info)
+        repo_client = RepoClient.from_repo_info(workspace.repo_info)
 
-            tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(workspace.namespace.sha)
-            logger.debug(f"Loaded repository to {tmp_repo_dir}")
-
+        # If the workspace is ready then we shouldn't index again...
+        if not workspace.is_ready():
             try:
-                documents = read_directory(tmp_repo_dir)
+                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(workspace.namespace.sha)
+                logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
-                logger.debug(f"Read {len(documents)} documents:")
-                documents_by_language = group_documents_by_language(documents)
-                for language, docs in documents_by_language.items():
-                    logger.debug(f"  {language}: {len(docs)}")
+                try:
+                    documents = read_directory(tmp_repo_dir)[:10]
 
-                doc_parser = DocumentParser(embedding_model)
-                with sentry_sdk.start_span(op="seer.automation.codebase.create.process_documents"):
-                    chunks = doc_parser.process_documents(documents)
-                with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
-                    embedded_chunks = cls.embed_chunks(chunks, embedding_model)
-                logger.debug(f"Processed {len(chunks)} chunks")
+                    logger.debug(f"Read {len(documents)} documents:")
+                    documents_by_language = group_documents_by_language(documents)
+                    for language, docs in documents_by_language.items():
+                        logger.debug(f"  {language}: {len(docs)}")
 
-                workspace.insert_chunks(embedded_chunks)
-                workspace.namespace.status = CodebaseNamespaceStatus.CREATED
-                workspace.save()
+                    doc_parser = DocumentParser(embedding_model)
+                    with sentry_sdk.start_span(
+                        op="seer.automation.codebase.create.process_documents"
+                    ):
+                        chunks = doc_parser.process_documents(documents)
+                    with sentry_sdk.start_span(op="seer.automation.codebase.create.embed_chunks"):
+                        embedded_chunks = cls.embed_chunks(chunks, embedding_model)
+                    logger.debug(f"Processed {len(chunks)} chunks")
 
-                logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
+                    workspace.insert_chunks(embedded_chunks)
+                    workspace.namespace.status = CodebaseNamespaceStatus.CREATED
+                    workspace.save()
 
-                return cls(
-                    workspace.repo_info.organization,
-                    workspace.repo_info.project,
-                    repo_client,
-                    workspace=workspace,
-                    state_manager=(
-                        state_manager_class(repo_id=workspace.repo_info.id, state=state)
-                        if state and state_manager_class
-                        else DummyCodebaseStateManager()
-                    ),
-                    embedding_model=embedding_model,
-                )
-            finally:
-                cleanup_dir(tmp_dir)
-        except Exception as e:
-            logger.error(f"Failed to create codebase index: {e}")
+                    logger.debug(f"Create Step: Inserted {len(chunks)} chunks into the database")
+                finally:
+                    cleanup_dir(tmp_dir)
+            except Exception as e:
+                logger.error(f"Failed to create codebase index: {e}")
 
-            try:
-                workspace.delete()
-            except Exception as ex:
-                sentry_sdk.capture_exception(ex)
+                try:
+                    workspace.delete()
+                except Exception as ex:
+                    sentry_sdk.capture_exception(ex)
 
-            raise e
+                raise e
+
+        return cls(
+            workspace.repo_info.organization,
+            workspace.repo_info.project,
+            repo_client,
+            workspace=workspace,
+            state_manager=(
+                state_manager_class(repo_id=workspace.repo_info.id, state=state)
+                if state and state_manager_class
+                else DummyCodebaseStateManager()
+            ),
+            embedding_model=embedding_model,
+        )
 
     def save(self):
         self.workspace.save()
