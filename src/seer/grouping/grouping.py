@@ -94,42 +94,6 @@ class GroupingLookup:
         )
         logger.info(f"GroupingLookup model initialized using device: {model_device}")
         sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
-        self.initialize_db(data_path)
-
-    def initialize_db(self, data_path: str):
-        """
-        Initializes the database with records from a pickle file if a specific record does not exist.
-
-        This method checks for the existence of a record with a specific group_id in the database.
-        If the record exists, the database is assumed to be initialized, and the method returns early.
-        If the record does not exist, the method proceeds to load data from a pickle file located at
-        `data_path` and populates the database with these records.
-
-        :param data_path: The file path to the pickle file containing the records to load into the database.
-        """
-        with Session() as session:
-            key_group_id = 4506283937  # TODO: less hacky solution to populating the DB if needed
-            record_exists = (
-                session.query(DbGroupingRecord)
-                .filter(DbGroupingRecord.group_id == key_group_id)
-                .first()
-                is not None
-            )
-
-            if record_exists:
-                return
-
-            with open(data_path, mode="rb") as records_file:
-                records_df = pd.read_pickle(records_file)
-                for _, row in records_df.iterrows():
-                    new_record = DbGroupingRecord(
-                        group_id=row["group_id"],
-                        project_id=row["project_id"],
-                        message=row["message"],
-                        stacktrace_embedding=row["stacktrace_embedding"].astype(np.float32),
-                    )
-                    session.add(new_record)
-                session.commit()
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
