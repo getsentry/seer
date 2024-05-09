@@ -17,8 +17,9 @@ depends_on = None
 
 
 def upgrade():
-    if os.getenv("SENTRY_REGION", None) == "s4s":
-        op.execute("TRUNCATE TABLE grouping_records")
+    if os.getenv("SENTRY_REGION", None) != "s4s":
+        return
+    op.execute("TRUNCATE TABLE grouping_records")
 
 
 def downgrade():
