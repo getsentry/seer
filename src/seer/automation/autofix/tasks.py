@@ -17,11 +17,11 @@ from seer.automation.autofix.models import (
     SuggestedFixRootCauseSelection,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.autofix.steps.create_missing_indexes import (
+from seer.automation.autofix.steps.create_missing_indexes_chain import (
     CreateAnyMissingCodebaseIndexesStepRequest,
     CreateMissingIndexesStep,
 )
-from seer.automation.autofix.steps.execution import (
+from seer.automation.autofix.steps.execution_step import (
     AutofixExecutionStep,
     AutofixExecutionStepRequest,
 )

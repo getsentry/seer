@@ -39,3 +39,22 @@ class TestRootCauseStep(unittest.TestCase):
         step.context.event_manager.send_root_cause_analysis_start.assert_called()
         step.context.process_event_paths.assert_called()
         step.context.event_manager.send_root_cause_analysis_result.assert_called()
+
+    @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
+    def test_codebase_not_ready(self, mock_root_cause_component):
+        mock_context = MagicMock()
+        RootCauseStep._instantiate_context = MagicMock(return_value=mock_context)
+
+        error_event = next(generate(SentryEventData))
+
+        mock_context.event_manager = MagicMock()
+        mock_context.has_missing_codebase_indexes.return_value = True
+
+        step = RootCauseStep({"run_id": 1, "step_id": 1})
+
+        with self.assertRaises(RuntimeError):
+            step.invoke()
+
+        step.context.event_manager.send_codebase_indexing_complete_if_exists.assert_called()
+        step.context.event_manager.send_root_cause_analysis_start.assert_called()
+        mock_root_cause_component.assert_not_called()
