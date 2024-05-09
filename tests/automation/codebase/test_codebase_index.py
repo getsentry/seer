@@ -16,7 +16,14 @@ from seer.automation.codebase.models import (
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.state import DummyCodebaseStateManager
 from seer.automation.codebase.storage_adapters import FilesystemStorageAdapter
-from seer.automation.models import FileChange, RepoDefinition
+from seer.automation.models import (
+    EventDetails,
+    ExceptionDetails,
+    FileChange,
+    RepoDefinition,
+    Stacktrace,
+    StacktraceFrame,
+)
 from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
 
 
@@ -810,3 +817,132 @@ class TestCodebaseIndexGetFilePatches(unittest.TestCase):
         self.assertEqual(patches[0].type, "M")
         self.assertEqual(len(patches[0].hunks), 1)
         self.assertEqual(patches[0].hunks[0].section_header, "def foobar(a: int):")
+
+
+class TestCodebaseIndexDiffContainsStacktraceFiles(unittest.TestCase):
+    def setUp(self):
+        self.organization = 1
+        self.project = 1
+        self.repo_definition = MagicMock()
+        self.repo_client = MagicMock()
+        self.repo_client.load_repo_to_tmp_dir.return_value = ("tmp_dir", "tmp_dir/repo")
+
+        self.namespace = CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
+            1,
+            1,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="1"),
+            "sha",
+            "main",
+        )
+        self.state_manager = DummyCodebaseStateManager()
+
+        self.codebase_index = CodebaseIndex(
+            self.organization,
+            self.project,
+            self.repo_client,
+            self.namespace,
+            state_manager=self.state_manager,
+            embedding_model=MagicMock(),
+        )
+
+    def test_diff_contains_stacktrace_files_with_intersection(self):
+        # Mock the get_commit_file_diffs method to return changed and removed files
+        self.repo_client.get_commit_file_diffs.return_value = (
+            ["file1.py", "file2.py"],
+            ["file3.py"],
+        )
+        # Create a stacktrace with one of the files that has changed
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="file2.py",
+                    col_no=0,
+                    line_no=10,
+                    function="test",
+                    context=[],
+                    abs_path="file2.py",
+                )
+            ]
+        )
+        event_details = EventDetails(
+            title="yes",
+            exceptions=[ExceptionDetails(type="yes", value="yes", stacktrace=stacktrace)],
+        )
+        # Check if the diff contains stacktrace files
+        self.assertTrue(self.codebase_index.diff_contains_stacktrace_files(event_details))
+
+    def test_diff_contains_stacktrace_files_without_intersection(self):
+        # Mock the get_commit_file_diffs method to return changed and removed files
+        self.repo_client.get_commit_file_diffs.return_value = (
+            ["file1.py", "file2.py"],
+            ["file3.py"],
+        )
+        # Create a stacktrace with files that have not changed
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="file4.py",
+                    col_no=0,
+                    line_no=10,
+                    function="test",
+                    context=[],
+                    abs_path="file4.py",
+                )
+            ]
+        )
+        event_details = EventDetails(
+            title="yes",
+            exceptions=[ExceptionDetails(type="yes", value="yes", stacktrace=stacktrace)],
+        )
+        # Check if the diff contains stacktrace files
+        self.assertFalse(self.codebase_index.diff_contains_stacktrace_files(event_details))
+
+    def test_diff_contains_stacktrace_files_with_removed_file(self):
+        # Mock the get_commit_file_diffs method to return changed and removed files
+        self.repo_client.get_commit_file_diffs.return_value = (
+            ["file1.py"],
+            ["file2.py"],
+        )
+        # Create a stacktrace with a file that has been removed
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="file2.py",
+                    col_no=0,
+                    line_no=10,
+                    function="test",
+                    context=[],
+                    abs_path="file2.py",
+                )
+            ]
+        )
+        event_details = EventDetails(
+            title="yes",
+            exceptions=[ExceptionDetails(type="yes", value="yes", stacktrace=stacktrace)],
+        )
+        # Check if the diff contains stacktrace files
+        self.assertTrue(self.codebase_index.diff_contains_stacktrace_files(event_details))
+
+    def test_diff_contains_stacktrace_files_raises_file_not_found(self):
+        # Mock the get_commit_file_diffs method to raise FileNotFoundError
+        self.repo_client.get_commit_file_diffs.side_effect = FileNotFoundError
+        # Create a stacktrace with any file
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="file1.py",
+                    col_no=0,
+                    line_no=10,
+                    function="test",
+                    context=[],
+                    abs_path="file1.py",
+                )
+            ]
+        )
+        event_details = EventDetails(
+            title="yes",
+            exceptions=[ExceptionDetails(type="yes", value="yes", stacktrace=stacktrace)],
+        )
+        # Check if the diff contains stacktrace files raises FileNotFoundError
+        with self.assertRaises(FileNotFoundError):
+            self.codebase_index.diff_contains_stacktrace_files(event_details)

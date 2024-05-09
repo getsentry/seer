@@ -687,18 +687,17 @@ class CodebaseIndex:
         return file_patches, combined_diff
 
     def diff_contains_stacktrace_files(self, event_details: EventDetails) -> bool:
-        # stacktraces = [exception.stacktrace for exception in event_details.exceptions]
+        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
 
-        # stacktrace_files: set[str] = set()
-        # for stacktrace in stacktraces:
-        #     for frame in stacktrace.frames:
-        #         stacktrace_files.add(frame.filename)
+        stacktrace_files: set[str] = set()
+        for stacktrace in stacktraces:
+            for frame in stacktrace.frames:
+                stacktrace_files.add(frame.filename)
 
-        # changed_files, removed_files = self.repo_client.get_commit_file_diffs(
-        #     self.namespace.sha, self.repo_client.get_default_branch_head_sha()
-        # )
+        changed_files, removed_files = self.repo_client.get_commit_file_diffs(
+            self.namespace.sha, self.repo_client.get_default_branch_head_sha()
+        )
 
-        # change_files = set(changed_files + removed_files)
+        change_files = set(changed_files + removed_files)
 
-        # return bool(change_files.intersection(stacktrace_files))
-        return True
+        return bool(change_files.intersection(stacktrace_files))
