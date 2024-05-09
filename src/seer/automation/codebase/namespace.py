@@ -341,7 +341,6 @@ class CodebaseNamespaceManager:
                     tracking_branch=tracking_branch,
                     should_set_as_default=should_set_as_default,
                 )
-
             return cls.create_or_get_namespace_for_repo(
                 repo_id=db_repo_info.id,
                 sha=head_sha,
@@ -381,6 +380,9 @@ class CodebaseNamespaceManager:
                 raise ValueError(f"Repository with id {repo_id} not found")
 
             if existing_namespace:
+                autofix_logger.debug(
+                    f"Using existing namespace for {db_repo_info.external_id} namespace id: {existing_namespace.id}"
+                )
                 db_namespace = existing_namespace
             else:
                 autofix_logger.debug(
@@ -400,6 +402,8 @@ class CodebaseNamespaceManager:
 
             if should_set_as_default:
                 repo_info.default_namespace = db_namespace.id
+                session.merge(repo_info.to_db_model())
+                session.commit()
 
             namespace = CodebaseNamespace.from_db(db_namespace)
 
@@ -446,6 +450,9 @@ class CodebaseNamespaceManager:
             collection = self.client.get_collection("chunks")
 
             if collection.count() == 0:
+                return False
+
+            if self.namespace.status != CodebaseNamespaceStatus.CREATED:
                 return False
 
             return True
@@ -584,6 +591,12 @@ class CodebaseNamespaceManager:
                 namespace_id=self.namespace.id
             ).delete()
             session.query(DbCodebaseNamespace).filter_by(id=self.namespace.id).delete()
+
+            # Clear default namespace if it was set
+            if self.repo_info.default_namespace == self.namespace.id:
+                self.repo_info.default_namespace = None
+                session.merge(self.repo_info.to_db_model())
+
             session.commit()
 
         autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")

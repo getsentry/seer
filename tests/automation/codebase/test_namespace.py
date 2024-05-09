@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from seer.automation.codebase.models import CodebaseNamespace, EmbeddedDocumentChunk
+from seer.automation.codebase.models import (
+    CodebaseNamespace,
+    CodebaseNamespaceStatus,
+    EmbeddedDocumentChunk,
+)
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.codebase.storage_adapters import FilesystemStorageAdapter
 from seer.automation.models import RepoDefinition
@@ -80,7 +84,6 @@ class TestNamespaceManager(unittest.TestCase):
         CodebaseNamespaceManager.create_repo = MagicMock()
         CodebaseNamespaceManager.create_or_get_namespace_for_repo = MagicMock()
 
-        CodebaseNamespaceManager.create_repo.assert_not_called()
         CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
             1,
             1337,
@@ -88,8 +91,82 @@ class TestNamespaceManager(unittest.TestCase):
             "sha",
             tracking_branch="main",
         )
+        CodebaseNamespaceManager.create_repo.assert_not_called()
 
         CodebaseNamespaceManager.create_or_get_namespace_for_repo.assert_called_once()
+
+    @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_repo")
+    def test_get_or_create_namespace_for_repo_existing_updates_default_namespace(
+        self, mock_create_repo
+    ):
+        with Session() as session:
+            db_repo_info = DbRepositoryInfo(
+                id=1,
+                organization=1,
+                project=1337,
+                external_slug="getsentry/seer",
+                external_id="123",
+                provider="github",
+                default_namespace=1,
+            )
+            db_namespace = DbCodebaseNamespace(id=2, repo_id=1, sha="sha", tracking_branch="main")
+            session.add(db_repo_info)
+            session.flush()
+            session.add(db_namespace)
+            session.commit()
+
+        CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+            should_set_as_default=True,
+        )
+
+        CodebaseNamespaceManager.create_repo.assert_not_called()
+
+        with Session() as session:
+            db_repo_info = session.query(DbRepositoryInfo).first()
+
+            self.assertIsNotNone(db_repo_info)
+            if db_repo_info:
+                self.assertEqual(db_repo_info.default_namespace, 2)
+
+    @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_repo")
+    def test_get_or_create_namespace_for_repo_existing_repo_but_new_namespace_updates_default_namespace(
+        self, mock_create_repo
+    ):
+        with Session() as session:
+            db_repo_info = DbRepositoryInfo(
+                id=1,
+                organization=1,
+                project=1337,
+                external_slug="getsentry/seer",
+                external_id="123",
+                provider="github",
+                default_namespace=393938,
+            )
+            session.add(db_repo_info)
+            session.commit()
+
+        CodebaseNamespaceManager.create_namespace_with_new_or_existing_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+            should_set_as_default=True,
+        )
+
+        CodebaseNamespaceManager.create_repo.assert_not_called()
+
+        with Session() as session:
+            db_repo_info = session.query(DbRepositoryInfo).first()
+
+            self.assertIsNotNone(db_repo_info)
+            if db_repo_info:
+                self.assertNotEqual(db_repo_info.default_namespace, 393938)
 
     @patch("seer.automation.codebase.namespace.CodebaseNamespaceManager.create_repo")
     @patch(
@@ -388,6 +465,8 @@ class TestNamespaceManager(unittest.TestCase):
                 )
             ]
         )
+
+        namespace.namespace.status = CodebaseNamespaceStatus.CREATED
 
         self.assertTrue(namespace.is_ready())
 
