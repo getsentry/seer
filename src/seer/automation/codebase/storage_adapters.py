@@ -85,6 +85,7 @@ class FilesystemStorageAdapter(StorageAdapter):
                 shutil.rmtree(storage_path, ignore_errors=False)
             except Exception as e:
                 autofix_logger.exception(e)
+                return False
 
         shutil.copytree(self.tmpdir, storage_path, dirs_exist_ok=True)
 
