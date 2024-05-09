@@ -88,14 +88,14 @@ class PipelineStep(abc.ABC):
     def instantiate_signature(serialized_signature: SerializedSignature | Signature) -> Signature:
         return signature(serialized_signature)
 
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def _instantiate_request(cls, request: dict[str, Any]) -> PipelineStepTaskRequest:
+    def _instantiate_request(request: dict[str, Any]) -> PipelineStepTaskRequest:
         pass
 
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def _instantiate_context(cls, request: PipelineStepTaskRequest) -> PipelineContext:
+    def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
         pass
 
     @abc.abstractmethod

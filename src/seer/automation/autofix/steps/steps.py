@@ -20,8 +20,8 @@ from seer.automation.utils import make_done_signal
 class AutofixPipelineStep(PipelineStep):
     context: AutofixContext
 
-    @classmethod
-    def _instantiate_context(cls, request: PipelineStepTaskRequest) -> PipelineContext:
+    @staticmethod
+    def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
         return AutofixContext.from_run_id(request.run_id)
 
     def _pre_invoke(self) -> bool:
@@ -30,6 +30,7 @@ class AutofixPipelineStep(PipelineStep):
 
     def _post_invoke(self, result: Any):
         with self.context.state.update() as cur:
+            print("cur.signals", cur.signals)
             cur.signals.append(make_done_signal(self.request.step_id))
 
 
