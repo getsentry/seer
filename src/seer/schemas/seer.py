@@ -86,7 +86,8 @@ BreakpointTransaction = typing_extensions.TypedDict(
 GroupingRequest = typing_extensions.TypedDict(
     "GroupingRequest",
     {
-        "group_id": int,
+        "hash": str,
+        "group_id": typing.Union[int, None],
         "project_id": int,
         "stacktrace": str,
         "message": str,
@@ -102,6 +103,7 @@ GroupingResponse = typing_extensions.TypedDict(
     "GroupingResponse",
     {
         "parent_group_id": typing.Union[int, None],
+        "parent_hash": str,
         "stacktrace_similarity": float,
         "message_similarity": float,
         "should_group": bool,

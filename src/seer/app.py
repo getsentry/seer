@@ -4,6 +4,7 @@ from typing import List
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
+from celery_app.config import CeleryQueues
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixRequest,
@@ -134,10 +135,13 @@ def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> Similarity
 def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
     namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
 
-    index_namespace.delay(
-        IndexNamespaceTaskRequest(
-            namespace_id=namespace_id,
-        ).model_dump(mode="json")
+    index_namespace.apply_async(
+        (
+            IndexNamespaceTaskRequest(
+                namespace_id=namespace_id,
+            ).model_dump(mode="json"),
+        ),
+        queue=CeleryQueues.CUDA,
     )
 
     return AutofixEndpointResponse(started=True)
@@ -163,7 +167,7 @@ def get_codebase_index_status_endpoint(
 
 @json_api("/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    run_autofix_root_cause.delay(data.model_dump(mode="json"))
+    run_autofix_root_cause.apply_async((data.model_dump(mode="json"),), queue=CeleryQueues.DEFAULT)
     return AutofixEndpointResponse(started=True)
 
 
@@ -172,9 +176,9 @@ def autofix_update_endpoint(
     data: AutofixUpdateRequest,
 ) -> AutofixEndpointResponse:
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
-        run_autofix_execution.delay(data.model_dump(mode="json"))
+        run_autofix_execution.apply_async((data.model_dump(mode="json"),), queue=CeleryQueues.CUDA)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        run_autofix_create_pr.apply(args=[data.model_dump(mode="json")])
+        run_autofix_create_pr.apply(args=[data.model_dump(mode="json")], queue=CeleryQueues.DEFAULT)
     return AutofixEndpointResponse(started=True)
 
 
