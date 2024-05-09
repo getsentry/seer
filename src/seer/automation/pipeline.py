@@ -10,6 +10,7 @@ from seer.automation.state import State
 from seer.automation.utils import automation_logger
 
 Signature = Any
+SerializedSignature = str
 
 DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS = 15  # 15 seconds
 DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 30  # 30 seconds
@@ -83,6 +84,10 @@ class PipelineStep(abc.ABC):
             kwargs={"request": request.model_dump(mode="json")}, **kwargs
         )
 
+    @staticmethod
+    def instantiate_signature(serialized_signature: SerializedSignature | Signature) -> Signature:
+        return signature(serialized_signature)
+
     @classmethod
     @abc.abstractmethod
     def _instantiate_request(cls, request: dict[str, Any]) -> PipelineStepTaskRequest:
@@ -107,8 +112,5 @@ class PipelineChain(abc.ABC):
     Combine this with PipelineStep to make a step into a chain, which can call other steps.
     """
 
-    def next(
-        self,
-        sig: Any,
-    ):
-        signature(sig).apply_async()
+    def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
+        signature(sig).apply_async(**apply_async_kwargs)

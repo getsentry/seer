@@ -1,19 +1,22 @@
 import abc
 from typing import Any, Optional, Type
 
-from celery import signature
-
 from celery_app.config import CeleryQueues
-from seer.automation.pipeline import PipelineChain, PipelineStep, PipelineStepTaskRequest, Signature
+from seer.automation.pipeline import (
+    PipelineChain,
+    PipelineStep,
+    PipelineStepTaskRequest,
+    SerializedSignature,
+)
 from seer.automation.utils import make_done_signal
 
 
 class ConditionalStepRequest(PipelineStepTaskRequest):
-    on_success: Optional[Signature] = None
-    on_failure: Optional[Signature] = None
+    on_success: Optional[SerializedSignature] = None
+    on_failure: Optional[SerializedSignature] = None
 
 
-class ConditionalStep(PipelineStep):
+class ConditionalStep(PipelineChain, PipelineStep):
     """
     Utility conditional step with a condition that determines whether to run the on_success or on_failure steps.
     """
@@ -26,14 +29,15 @@ class ConditionalStep(PipelineStep):
 
     def _invoke(self):
         result = self.condition()
+
         self.logger.debug(f"Conditional step {self.request.step_id} condition result: {result}")
 
-        if self.condition():
+        if result:
             if self.request.on_success:
-                signature(self.request.on_success).apply_async()
+                self.next(self.request.on_success)
         else:
             if self.request.on_failure:
-                signature(self.request.on_failure).apply_async()
+                self.next(self.request.on_failure)
 
     def _handle_exception(self, exception: Exception):
         pass
@@ -62,8 +66,8 @@ class ParallelizedChainConditionalStep(ConditionalStep):
 
 
 class ParallelizedChainStepRequest(PipelineStepTaskRequest):
-    steps: list[Signature]
-    on_success: Optional[Signature]
+    steps: list[SerializedSignature]
+    on_success: Optional[SerializedSignature]
 
 
 class ParallelizedChainStep(PipelineChain, PipelineStep):
@@ -80,7 +84,7 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
         pass
 
     def _invoke(self):
-        signatures = [signature(step) for step in self.request.steps]
+        signatures = [self.instantiate_signature(step) for step in self.request.steps]
 
         expected_signals = [
             make_done_signal(sig.kwargs["request"]["step_id"]) for sig in signatures
@@ -89,7 +93,8 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
         self.logger.debug(f"Running {len(signatures)} parallelized steps.")
 
         for sig in signatures:
-            sig.apply_async(
+            self.next(
+                sig,
                 link=self._get_conditional_step_class().get_signature(
                     ParallelizedChainConditionalStepRequest(
                         run_id=self.context.run_id,
@@ -97,5 +102,5 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
                         on_success=self.request.on_success,
                     ),
                     queue=CeleryQueues.DEFAULT,
-                )
+                ),
             )
