@@ -87,6 +87,7 @@ RootCauseSelection = Union[CustomRootCauseSelection, SuggestedFixRootCauseSelect
 class CommittedPullRequestDetails(BaseModel):
     pr_number: int
     pr_url: str
+    pr_id: Optional[int] = None
 
 
 class CodebaseChange(BaseModel):
@@ -180,9 +181,14 @@ class AutofixStateRequest(BaseModel):
     group_id: int
 
 
+class AutofixPrIdRequest(BaseModel):
+    provider: str
+    pr_id: int
+
+
 class AutofixStateResponse(BaseModel):
-    group_id: int
-    state: dict | None
+    group_id: Optional[int]
+    state: Optional[dict]
 
 
 class AutofixCompleteArgs(BaseModel):

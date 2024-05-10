@@ -28,9 +28,27 @@ from seer.automation.autofix.steps.execution_step import (
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
-from seer.db import DbRunState, Session
+from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 
 logger = logging.getLogger("autofix")
+
+
+def get_autofix_state_from_pr_id(provider: str, pr_id: int) -> ContinuationState | None:
+    with Session() as session:
+        run_state = (
+            session.query(DbRunState)
+            .join(DbPrIdToAutofixRunIdMapping, DbPrIdToAutofixRunIdMapping.run_id == DbRunState.id)
+            .filter(DbPrIdToAutofixRunIdMapping.provider == provider)
+            .filter(DbPrIdToAutofixRunIdMapping.pr_id == pr_id)
+            .order_by(DbRunState.id.desc())
+            .first()
+        )
+        if run_state is None:
+            return None
+
+        continuation = ContinuationState.from_id(run_state.id, AutofixContinuation)
+
+        return continuation
 
 
 def get_autofix_state(group_id: int) -> ContinuationState | None:
