@@ -10,6 +10,9 @@ from seer.bootup import bootup, bootup_celery
 autofix_logger = logging.getLogger("autofix")
 autofix_logger.setLevel(logging.DEBUG)  # log level debug only for the autofix logger
 
+logging.getLogger("automation").setLevel(logging.DEBUG)
+
+
 app = bootup_celery()
 app.autodiscover_tasks(["celery_app.tasks"])
 

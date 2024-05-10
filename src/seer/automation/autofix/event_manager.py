@@ -189,28 +189,29 @@ class AutofixEventManager:
 
     def add_log(self, message: str):
         with self.state.update() as cur:
-            step = cur.steps[-1]
-            if step.status == AutofixStatus.PROCESSING:
-                # If the current step is the planning step, and an execution step is running, we log it there instead.
-                if step.id == self.plan_step.id and step.progress:
-                    execution_step = step.progress[-1]
-                    if (
-                        isinstance(execution_step, DefaultStep)
-                        and execution_step.status == AutofixStatus.PROCESSING
-                    ):
-                        execution_step.progress.append(
-                            ProgressItem(
-                                message=message,
-                                type=ProgressType.INFO,
+            if cur.steps:
+                step = cur.steps[-1]
+                if step.status == AutofixStatus.PROCESSING:
+                    # If the current step is the planning step, and an execution step is running, we log it there instead.
+                    if step.id == self.plan_step.id and step.progress:
+                        execution_step = step.progress[-1]
+                        if (
+                            isinstance(execution_step, DefaultStep)
+                            and execution_step.status == AutofixStatus.PROCESSING
+                        ):
+                            execution_step.progress.append(
+                                ProgressItem(
+                                    message=message,
+                                    type=ProgressType.INFO,
+                                )
                             )
+                            return
+                    step.progress.append(
+                        ProgressItem(
+                            message=message,
+                            type=ProgressType.INFO,
                         )
-                        return
-                step.progress.append(
-                    ProgressItem(
-                        message=message,
-                        type=ProgressType.INFO,
                     )
-                )
 
     def on_error(self, error_msg: str = "Something went wrong"):
         with self.state.update() as cur:
