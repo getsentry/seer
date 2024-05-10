@@ -177,7 +177,7 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
     )
 
 
-@json_api("/v1/automation/autofix/get-state-from-pr")
+@json_api("/v1/automation/autofix/state/pr")
 def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixStateResponse:
     state = get_autofix_state_from_pr_id(data.provider, data.pr_id)
 

@@ -227,12 +227,10 @@ class DbPrIdToAutofixRunIdMapping(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     pr_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    run_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    run_id: Mapped[int] = mapped_column(ForeignKey(DbRunState.id), nullable=False)
     __table_args__ = (
         UniqueConstraint("provider", "pr_id", "run_id"),
-        Index("ix_autofix_pr_id_to_run_id_provider", "provider"),
-        Index("ix_autofix_pr_id_to_run_id_pr_id", "pr_id"),
-        Index("ix_autofix_pr_id_to_run_id_run_id", "run_id"),
+        Index("ix_autofix_pr_id_to_run_id_provider_pr_id", "provider", "pr_id"),
     )
 
 

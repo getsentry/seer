@@ -38,8 +38,10 @@ def get_autofix_state_from_pr_id(provider: str, pr_id: int) -> ContinuationState
         run_state = (
             session.query(DbRunState)
             .join(DbPrIdToAutofixRunIdMapping, DbPrIdToAutofixRunIdMapping.run_id == DbRunState.id)
-            .filter(DbPrIdToAutofixRunIdMapping.provider == provider)
-            .filter(DbPrIdToAutofixRunIdMapping.pr_id == pr_id)
+            .filter(
+                DbPrIdToAutofixRunIdMapping.provider == provider,
+                DbPrIdToAutofixRunIdMapping.pr_id == pr_id,
+            )
             .order_by(DbRunState.id.desc())
             .first()
         )
