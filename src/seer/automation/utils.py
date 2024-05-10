@@ -67,3 +67,9 @@ def get_embedding_model():
 
 def make_done_signal(id: str | int) -> str:
     return f"done:{id}"
+
+
+def process_repo_provider(provider: str) -> str:
+    if provider.startswith("integrations:"):
+        return provider.split(":")[1]
+    return provider
