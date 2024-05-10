@@ -96,6 +96,17 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
         self.assertTrue(os.path.exists(storage_location))
         self.assertTrue(os.path.exists(os.path.join(storage_location, "test.txt")))
 
+    @patch("seer.automation.codebase.storage_adapters.shutil.rmtree", side_effect=Exception)
+    @patch("seer.automation.codebase.storage_adapters.os.path.exists", return_value=True)
+    def test_save_to_storage_failure(self, mock_exists, mock_rmtree):
+        adapter = FilesystemStorageAdapter(1, "test")
+
+        os.makedirs(adapter.tmpdir, exist_ok=True)
+        with open(os.path.join(adapter.tmpdir, "test.txt"), "w") as f:
+            f.write("test")
+
+        self.assertFalse(adapter.save_to_storage())
+
     def test_save_to_storage_overwrites_existing_files(self):
         adapter = FilesystemStorageAdapter(1, "test")
         storage_location = adapter.get_storage_location(1, "test")
@@ -165,6 +176,23 @@ class TestGcsStorageAdapter(unittest.TestCase):
         mock_bucket.blob.assert_called_with(f"{storage_prefix}/test_file.txt")
         self.assertIsNotNone(mock_blob.custom_time)
         mock_blob.upload_from_filename.assert_called_with(test_file_path)
+
+    @patch("seer.automation.codebase.storage_adapters.storage.Client")
+    def test_save_to_storage_failure(self, mock_gcs_client):
+        mock_bucket = mock_gcs_client.return_value.bucket.return_value
+        mock_blob = MagicMock()
+        mock_bucket.blob.return_value = mock_blob
+        mock_blob.upload_from_filename.side_effect = Exception
+
+        adapter = GcsStorageAdapter(1, "test")
+
+        # Simulate files in the workspace
+        os.makedirs(adapter.tmpdir, exist_ok=True)
+        test_file_path = os.path.join(adapter.tmpdir, "test_file.txt")
+        with open(test_file_path, "w") as f:
+            f.write("This is a test file.")
+
+        self.assertFalse(adapter.save_to_storage())
 
     @patch("seer.automation.codebase.storage_adapters.storage.Client")
     def test_save_to_storage_overwrites_existing_files(self, mock_gcs_client):
