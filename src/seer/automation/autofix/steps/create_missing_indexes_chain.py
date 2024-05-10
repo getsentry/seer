@@ -80,7 +80,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                             (
                                 UpdateCodebaseTaskRequest(
                                     repo_id=codebase.repo_info.id,
-                                ),
+                                ).model_dump(mode="json"),
                             ),
                             countdown=60 * 15,  # 15 minutes
                             queue=CeleryQueues.CUDA,
