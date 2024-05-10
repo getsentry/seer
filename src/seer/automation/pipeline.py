@@ -12,8 +12,8 @@ from seer.automation.utils import automation_logger
 Signature = Any
 SerializedSignature = str
 
-DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS = 15  # 15 seconds
-DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 30  # 30 seconds
+DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS = 50  # 50 seconds
+DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 60  # 60 seconds
 
 
 class PipelineContext(abc.ABC):
