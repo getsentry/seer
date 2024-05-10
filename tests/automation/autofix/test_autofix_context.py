@@ -13,9 +13,10 @@ from seer.automation.autofix.models import (
     CodebaseState,
     StepType,
 )
+from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.models import QueryResultDocumentChunk, RepositoryInfo
 from seer.automation.models import FileChange, IssueDetails, SentryEventData
-from seer.automation.state import LocalMemoryState
+from seer.automation.state import DbState, LocalMemoryState
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 
 
@@ -61,14 +62,14 @@ class TestAutofixContext(unittest.TestCase):
 class TestAutofixContextPrCommit(unittest.TestCase):
     def setUp(self):
         error_event = next(generate(SentryEventData))
-        self.state = LocalMemoryState(
+        self.state = ContinuationState.new(
             AutofixContinuation(
                 request=AutofixRequest(
                     organization_id=1,
                     project_id=1,
                     repos=[],
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
-                )
+                ),
             )
         )
         self.autofix_context = AutofixContext(
