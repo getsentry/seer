@@ -21,6 +21,7 @@ from seer.automation.models import EventDetails, FileChange, RepoDefinition, Sta
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model
+from seer.db import DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
 
 
@@ -285,8 +286,17 @@ class AutofixContext(PipelineContext):
                         pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
 
                         change_state.pull_request = CommittedPullRequestDetails(
-                            pr_number=pr.number, pr_url=pr.html_url
+                            pr_number=pr.number, pr_url=pr.html_url, pr_id=pr.id
                         )
+
+                        with Session() as session:
+                            pr_id_mapping = DbPrIdToAutofixRunIdMapping(
+                                provider=repo_info.provider,
+                                pr_id=pr.id,
+                                run_id=state.run_id,
+                            )
+                            session.add(pr_id_mapping)
+                            session.commit()
 
     def _get_org_slug(self, organization_id: int) -> str | None:
         slug: str | None = None
