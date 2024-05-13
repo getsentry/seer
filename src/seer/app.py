@@ -1,4 +1,5 @@
 import time
+from typing import List
 
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -34,7 +35,14 @@ from seer.automation.codebase.tasks import (
     index_namespace,
 )
 from seer.bootup import bootup
-from seer.grouping.grouping import GroupingRequest, SimilarityBenchmarkResponse, SimilarityResponse
+from seer.db import ProcessRequest, Session
+from seer.grouping.grouping import (
+    BulkCreateGroupingRecordsResponse,
+    CreateGroupingRecordsRequest,
+    GroupingRequest,
+    SimilarityBenchmarkResponse,
+    SimilarityResponse,
+)
 from seer.inference_models import embeddings_model, grouping_lookup
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
@@ -99,6 +107,17 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
+
+
+@json_api("/v0/issues/similar-issues/grouping-record")
+def similarity_grouping_record_endpoint(
+    data: CreateGroupingRecordsRequest,
+) -> BulkCreateGroupingRecordsResponse:
+    with sentry_sdk.start_span(
+        op="seer.grouping-record", description="grouping record bulk insert"
+    ) as span:
+        success = grouping_lookup().bulk_create_and_insert_grouping_records(data)
+    return success
 
 
 @json_api("/v0/issues/similarity-embedding-benchmark")
