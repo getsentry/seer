@@ -3,7 +3,29 @@ steps:
   args: ['cp', '-r', 'gs://sentry-ml/seer/models/*', './models']
 
 - name: 'gcr.io/cloud-builders/docker'
-  args: [ 'build', '-t', 'us.gcr.io/sentryio/seer:$COMMIT_SHA', '.' ]
+  args: [
+    'build',
+    '-t', 'us.gcr.io/sentryio/seer:$COMMIT_SHA',
+    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
+    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
+    '--build-arg',
+    'BUILDKIT_INLINE_CACHE=1',
+    '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
+    '.',
+  ]
+  env: [DOCKER_BUILDKIT=1]
+
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      # Only push "latest" tag when building on "main"
+      [ "$BRANCH_NAME" != "main" ] && exit 0
+      docker push us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest
 
 # This is needed for Freight to find matching builds
-images: ['us.gcr.io/sentryio/seer:$COMMIT_SHA']
+images: [
+  'us.gcr.io/sentryio/seer:$COMMIT_SHA',
+  'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
+]
