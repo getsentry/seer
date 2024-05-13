@@ -460,6 +460,41 @@ class CodebaseNamespaceManager:
             autofix_logger.exception(e)
             return False
 
+    def verify_file_integrity(self, paths: set[str]) -> bool:
+        """
+        Verifies that all the paths in the given set exist in the namespace.
+        Heavy operation, should be used sparingly.
+        """
+
+        collection = self.client.get_collection("chunks")
+
+        BATCH_SIZE = 32768
+        all_retrieved_paths = set()
+        total_paths = len(paths)
+        num_batches = (
+            total_paths + BATCH_SIZE - 1
+        ) // BATCH_SIZE  # Calculate the number of batches needed
+
+        for i in range(num_batches):
+            results = collection.get(
+                limit=BATCH_SIZE,
+                offset=i * BATCH_SIZE,
+            )
+
+            if not results["ids"] or not results["metadatas"]:
+                return False
+
+            batch_paths = {metadata["path"] for metadata in results["metadatas"]}
+            all_retrieved_paths.update(batch_paths)
+
+        matches = all_retrieved_paths == paths
+
+        if not matches:
+            missing_paths = paths - all_retrieved_paths
+            autofix_logger.debug(f"Paths mismatch: {missing_paths}")
+
+        return matches
+
     def chunk_hashes_exist(self, hashes: list[str]):
         if not hashes:
             return []
@@ -556,14 +591,7 @@ class CodebaseNamespaceManager:
 
         return self._get_chunk_query_results(results)
 
-    def save(self):
-        self._wait_for_mutex_clear(self.namespace.id)
-        self._set_mutex(self.namespace.id)
-
-        if not self.storage_adapter.save_to_storage():
-            autofix_logger.error(f"Failed to save workspace for namespace {self.namespace.id}")
-            return
-
+    def save_records(self):
         with Session() as session:
             db_repo_info = self.repo_info.to_db_model()
             db_namespace = self.namespace.to_db_model()
@@ -574,6 +602,16 @@ class CodebaseNamespaceManager:
             session.merge(db_repo_info)
             session.merge(db_namespace)
             session.commit()
+
+    def save(self):
+        self._wait_for_mutex_clear(self.namespace.id)
+        self._set_mutex(self.namespace.id)
+
+        if not self.storage_adapter.save_to_storage():
+            autofix_logger.error(f"Failed to save workspace for namespace {self.namespace.id}")
+            return
+
+        self.save_records()
 
         self._clear_mutex(self.namespace.id)
 
