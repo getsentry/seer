@@ -334,3 +334,16 @@ class RepoClient:
             head=branch.ref,
             draft=True,
         )
+
+    def get_file_set(self, sha: str) -> set[str]:
+        tree = self.repo.get_git_tree(sha=sha, recursive=True)
+
+        # Recursive tree requests are truncated at 100,000 entries or 7MB.
+        # This should be sufficient for most repositories, but if it's not, we should consider paginating the tree.
+        # We log to see how often this happens and if it's a problem.
+        if tree.raw_data["truncated"]:
+            sentry_sdk.capture_message(
+                f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
+            )
+
+        return set([file.path for file in tree.tree if file.type == "blob"])
