@@ -28,12 +28,50 @@ class AutofixPipelineStep(PipelineStep):
         # Don't run the step instance if it's already been run
         return make_done_signal(self.request.step_id) not in self.context.state.get().signals
 
+    def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
+        cur = self.context.state.get()
+
+        group_id = cur.request.issue.id
+        group_short_id = cur.request.issue.short_id
+        invoking_user = cur.request.invoking_user
+        codebases = [
+            self._get_codebase_metadata(codebase.repo_id) for codebase in cur.codebases.values()
+        ]
+
+        return {
+            "langsmith_extra": {
+                "tags": [f"run_id:{cur.run_id}", f"org_id:{cur.request.organization_id}"],
+                "metadata": {
+                    "run_id": cur.run_id,
+                    "organization_id": cur.request.organization_id,
+                    "project_id": cur.request.project_id,
+                    "group": {"id": group_id, "short_id": group_short_id},
+                    "invoking_user": invoking_user,
+                    "codebases": codebases,
+                },
+            }
+        }
+
     def _post_invoke(self, result: Any):
         with self.context.state.update() as cur:
             cur.signals.append(make_done_signal(self.request.step_id))
 
     def _handle_exception(self, exception: Exception):
         self.context.event_manager.on_error()
+
+    def _get_codebase_metadata(self, repo_id: int) -> dict[str, Any]:
+        codebase = self.context.get_codebase(repo_id)
+        if codebase:
+            return {
+                "repo_id": codebase.repo_info.id,
+                "namespace_id": codebase.namespace.id,
+                "external_id": codebase.repo_info.external_id,
+                "external_slug": codebase.repo_info.external_slug,
+                "namespace_status": codebase.namespace.status,
+                "namespace_tracking_branch": codebase.namespace.tracking_branch,
+                "sha": codebase.namespace.sha,
+            }
+        return {}
 
 
 @celery_app.task(

@@ -27,7 +27,7 @@ class ConditionalStep(PipelineChain, PipelineStep):
     def condition(self) -> bool:
         pass
 
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         result = self.condition()
 
         self.logger.debug(f"Conditional step {self.request.step_id} condition result: {result}")
@@ -83,7 +83,7 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
     def _get_conditional_step_class() -> Type[ParallelizedChainConditionalStep]:
         pass
 
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         signatures = [self.instantiate_signature(step) for step in self.request.steps]
 
         expected_signals = [

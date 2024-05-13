@@ -39,7 +39,7 @@ class CreateIndexStep(AutofixPipelineStep):
     def get_task():
         return create_index_task
 
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         repo = self.request.repo
 
         self.context.event_manager.send_codebase_indexing_start()  # This should only create the step once and get every next time it's called...
