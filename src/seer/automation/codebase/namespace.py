@@ -469,7 +469,7 @@ class CodebaseNamespaceManager:
         collection = self.client.get_collection("chunks")
 
         BATCH_SIZE = 32768
-        all_retrieved_paths = set()
+        all_retrieved_paths: set[str] = set()
         total_paths = len(paths)
         num_batches = (
             total_paths + BATCH_SIZE - 1
@@ -484,7 +484,7 @@ class CodebaseNamespaceManager:
             if not results["ids"] or not results["metadatas"]:
                 return False
 
-            batch_paths = {metadata["path"] for metadata in results["metadatas"]}
+            batch_paths = {str(metadata["path"]) for metadata in results["metadatas"]}
             all_retrieved_paths.update(batch_paths)
 
         matches = all_retrieved_paths == paths
