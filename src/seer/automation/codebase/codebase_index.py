@@ -241,7 +241,7 @@ class CodebaseIndex:
                 logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
                 try:
-                    documents = read_directory(tmp_repo_dir)[:10]
+                    documents = read_directory(tmp_repo_dir)
 
                     logger.debug(f"Read {len(documents)} documents:")
                     documents_by_language = group_documents_by_language(documents)
