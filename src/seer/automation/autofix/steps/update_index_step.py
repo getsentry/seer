@@ -38,7 +38,7 @@ class UpdateIndexStep(AutofixPipelineStep):
     def get_task():
         return update_index_task
 
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         codebase = self.context.get_codebase(self.request.repo_id)
 
         if not codebase:

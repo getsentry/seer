@@ -50,12 +50,15 @@ class PipelineStep(abc.ABC):
         try:
             if not self._pre_invoke():
                 return
-            result = self._invoke()
+            result = self._invoke(**self._get_extra_invoke_kwargs())
             self._post_invoke(result)
             return result
         except Exception as e:
             self._handle_exception(e)
             raise e
+
+    def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
+        return {}
 
     def _pre_invoke(self) -> bool:
         return True
@@ -103,7 +106,7 @@ class PipelineStep(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _invoke(self) -> Any:
+    def _invoke(self, **kwargs) -> Any:
         pass
 
 

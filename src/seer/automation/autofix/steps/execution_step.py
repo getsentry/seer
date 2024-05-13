@@ -57,7 +57,7 @@ class AutofixExecutionStep(AutofixPipelineStep):
 
     @traceable(name="Execution", tags=["autofix:v2"])
     @ai_track(description="Execution")
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_planning_start()
 

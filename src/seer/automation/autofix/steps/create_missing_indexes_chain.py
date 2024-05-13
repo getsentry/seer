@@ -47,7 +47,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return create_missing_indexes_task
 
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         event_details = EventDetails.from_event(self.context.state.get().request.issue.events[0])
 
         repos_to_create: list[RepoDefinition] = []

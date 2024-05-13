@@ -16,7 +16,7 @@ class ConcreteAutofixPipelineStep(AutofixPipelineStep):
     def _instantiate_context(request):
         return MagicMock()
 
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         return True
 
     def _handle_exception(self, exception):

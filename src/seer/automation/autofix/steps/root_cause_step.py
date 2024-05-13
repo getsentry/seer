@@ -45,7 +45,7 @@ class RootCauseStep(AutofixPipelineStep):
 
     @traceable(name="Root Cause", tags=["autofix:v2"])
     @ai_track(description="Root Cause")
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_root_cause_analysis_start()
 
