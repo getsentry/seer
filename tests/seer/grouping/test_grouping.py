@@ -168,10 +168,11 @@ class TestGrouping(unittest.TestCase):
     def test_bulk_insert_new_grouping_records(self):
         """Test bulk inserting grouping records"""
         records = []
+        hashes = [str(i) * 32 for i in range(10)]
         for i in range(10):
             embedding = grouping_lookup().encode_text("stacktrace " + str(i))
             new_record = GroupingRecord(
-                hash=str(i) * 32,
+                hash=hashes[i],
                 project_id=1,
                 message="message " + str(i),
                 stacktrace_embedding=embedding,
@@ -181,21 +182,18 @@ class TestGrouping(unittest.TestCase):
 
         grouping_lookup().bulk_insert_new_grouping_records(records)
 
-        for i in range(10):
-            with Session() as session:
-                assert (
-                    session.query(DbGroupingRecord)
-                    .filter(DbGroupingRecord.hash == str(i) * 32)
-                    .first()
-                    is not None
-                )
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(10):
+                records[i] is not None
 
     def test_bulk_create_and_insert_grouping_records_valid(self):
         """Test bulk creating and inserting grouping records"""
+        hashes = [str(i) * 32 for i in range(10)]
         record_requests = CreateGroupingRecordsRequest(
             data=[
                 CreateGroupingRecordData(
-                    hash=str(i) * 32,
+                    hash=hashes[i],
                     project_id=1,
                     message="message " + str(i),
                 )
@@ -206,39 +204,31 @@ class TestGrouping(unittest.TestCase):
 
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
         assert response == BulkCreateGroupingRecordsResponse(success=True)
-        for i in range(10):
-            with Session() as session:
-                assert (
-                    session.query(DbGroupingRecord)
-                    .filter(DbGroupingRecord.hash == str(i) * 32)
-                    .first()
-                    is not None
-                )
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(10):
+                records[i] is not None
 
     def test_bulk_create_and_insert_grouping_records_invalid(self):
         """
         Test bulk creating and inserting grouping records fails when the input lists are of
         different lengths
         """
+        hashes = [str(i) * 32 for i in range(10, 20)]
         record_requests = CreateGroupingRecordsRequest(
             data=[
                 CreateGroupingRecordData(
-                    hash=str(i) * 32,
+                    hash=hashes[i],
                     project_id=1,
                     message="message " + str(i),
                 )
-                for i in range(10, 20)
+                for i in range(10)
             ],
             stacktrace_list=["stacktrace " + str(i) for i in range(1)],
         )
 
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
         assert response == BulkCreateGroupingRecordsResponse(success=False)
-        for i in range(10, 20):
-            with Session() as session:
-                assert (
-                    session.query(DbGroupingRecord)
-                    .filter(DbGroupingRecord.hash == str(i) * 32)
-                    .first()
-                    is None
-                )
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            assert records.first() is None

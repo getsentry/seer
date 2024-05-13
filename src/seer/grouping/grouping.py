@@ -158,7 +158,7 @@ class GroupingLookup:
     def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1000) -> np.ndarray:
         """
         Encodes multiple stacktraces in batches using the sentence transformer model.
-        :param stacktraces: The list of stacktracse to encode.
+        :param stacktraces: The list of stacktraces to encode.
         :param batch_size: The batch size used for the computation.
         :return: The embeddings of the stacktraces.
         """

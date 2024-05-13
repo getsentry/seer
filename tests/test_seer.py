@@ -305,10 +305,11 @@ class TestSeer(unittest.TestCase):
 
     def test_similarity_grouping_record_endpoint_valid(self):
         """Test the similarity grouping record endpoint"""
+        hashes = [str(i) * 32 for i in range(5)]
         record_requests = {
             "data": [
                 {
-                    "hash": str(i) * 32,
+                    "hash": hashes[i],
                     "project_id": 1,
                     "message": "message " + str(i),
                 }
@@ -324,28 +325,25 @@ class TestSeer(unittest.TestCase):
         )
         output = json.loads(response.get_data(as_text=True))
         assert output == {"success": True}
-        for i in range(5):
-            with Session() as session:
-                assert (
-                    session.query(DbGroupingRecord)
-                    .filter(DbGroupingRecord.hash == str(i) * 32)
-                    .first()
-                    is not None
-                )
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(5):
+                assert records[i] is not None
 
     def test_similarity_grouping_record_endpoint_invalid(self):
         """
         Test the similarity grouping record endpoint is unsuccessful when input lists are of
         different lengths
         """
+        hashes = [str(i) * 32 for i in range(5, 7)]
         record_requests = {
             "data": [
                 {
-                    "hash": str(i) * 32,
+                    "hash": hashes[i],
                     "project_id": 1,
                     "message": "message " + str(i),
                 }
-                for i in range(2, 4)
+                for i in range(2)
             ],
             "stacktrace_list": ["stacktrace " + str(i) for i in range(3)],
         }
@@ -357,14 +355,11 @@ class TestSeer(unittest.TestCase):
         )
         output = json.loads(response.get_data(as_text=True))
         assert output == {"success": False}
-        for i in range(2, 4):
-            with Session() as session:
-                assert (
-                    session.query(DbGroupingRecord)
-                    .filter(DbGroupingRecord.hash == str(i) * 32)
-                    .first()
-                    is None
-                )
+        with Session() as session:
+            assert (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).first()
+                is None
+            )
 
 
 @parametrize(count=1)
