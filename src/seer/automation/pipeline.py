@@ -10,7 +10,7 @@ from seer.automation.state import State
 from seer.automation.utils import automation_logger
 
 Signature = Any
-SerializedSignature = str
+SerializedSignature = Any
 
 DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS = 50  # 50 seconds
 DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 60  # 60 seconds
