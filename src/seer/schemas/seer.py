@@ -2,6 +2,15 @@ import typing
 
 import typing_extensions
 
+AutofixCreatePrUpdatePayload = typing_extensions.TypedDict(
+    "AutofixCreatePrUpdatePayload",
+    {
+        "type": typing.Literal["create_pr"],
+        "repo_id": typing.Union[int, None],
+    },
+    total=False,
+)
+
 AutofixEndpointResponse = typing_extensions.TypedDict(
     "AutofixEndpointResponse",
     {
@@ -16,9 +25,56 @@ AutofixRequest = typing_extensions.TypedDict(
         "organization_id": int,
         "project_id": int,
         "repos": typing.List["RepoDefinition"],
-        "base_commit_sha": typing.Union[str, None],
         "issue": "IssueDetails",
+        "invoking_user": typing.Union["AutofixUserDetails", None],
+        "base_commit_sha": typing.Union[str, None],
         "additional_context": typing.Union[str, None],
+    },
+    total=False,
+)
+
+AutofixRootCauseUpdatePayload = typing_extensions.TypedDict(
+    "AutofixRootCauseUpdatePayload",
+    {
+        "type": typing.Literal["select_root_cause"],
+        "cause_id": typing.Union[int, None],
+        "fix_id": typing.Union[int, None],
+        "custom_root_cause": typing.Union[str, None],
+    },
+    total=False,
+)
+
+AutofixStateRequest = typing_extensions.TypedDict(
+    "AutofixStateRequest",
+    {
+        "group_id": int,
+    },
+    total=False,
+)
+
+AutofixStateResponse = typing_extensions.TypedDict(
+    "AutofixStateResponse",
+    {
+        "group_id": int,
+        "state": typing.Union[typing.Mapping[str, typing.Any], None],
+    },
+    total=False,
+)
+
+AutofixUpdateRequest = typing_extensions.TypedDict(
+    "AutofixUpdateRequest",
+    {
+        "run_id": int,
+        "payload": typing.Any,
+    },
+    total=False,
+)
+
+AutofixUserDetails = typing_extensions.TypedDict(
+    "AutofixUserDetails",
+    {
+        "id": int,
+        "display_name": str,
     },
     total=False,
 )
@@ -83,17 +139,72 @@ BreakpointTransaction = typing_extensions.TypedDict(
     total=False,
 )
 
+BulkCreateGroupingRecordsResponse = typing_extensions.TypedDict(
+    "BulkCreateGroupingRecordsResponse",
+    {
+        "success": bool,
+    },
+    total=False,
+)
+
+CodebaseStatusCheckRequest = typing_extensions.TypedDict(
+    "CodebaseStatusCheckRequest",
+    {
+        "organization_id": int,
+        "project_id": int,
+        "repo": "RepoDefinition",
+    },
+    total=False,
+)
+
+CodebaseStatusCheckResponse = typing_extensions.TypedDict(
+    "CodebaseStatusCheckResponse",
+    {
+        "status": str,
+    },
+    total=False,
+)
+
+CreateCodebaseRequest = typing_extensions.TypedDict(
+    "CreateCodebaseRequest",
+    {
+        "organization_id": int,
+        "project_id": int,
+        "repo": "RepoDefinition",
+    },
+    total=False,
+)
+
+CreateGroupingRecordData = typing_extensions.TypedDict(
+    "CreateGroupingRecordData",
+    {
+        "hash": str,
+        "project_id": int,
+        "message": str,
+    },
+    total=False,
+)
+
+CreateGroupingRecordsRequest = typing_extensions.TypedDict(
+    "CreateGroupingRecordsRequest",
+    {
+        "data": typing.List["CreateGroupingRecordData"],
+        "stacktrace_list": typing.List[str],
+    },
+    total=False,
+)
+
 GroupingRequest = typing_extensions.TypedDict(
     "GroupingRequest",
     {
-        "hash": str,
-        "group_id": typing.Union[int, None],
         "project_id": int,
         "stacktrace": str,
         "message": str,
+        "hash": str,
+        "group_id": typing.Union[int, None],
         # default: 1
         "k": int,
-        # default: 0.99
+        # default: 0.01
         "threshold": float,
     },
     total=False,
@@ -104,8 +215,8 @@ GroupingResponse = typing_extensions.TypedDict(
     {
         "parent_group_id": typing.Union[int, None],
         "parent_hash": str,
-        "stacktrace_similarity": float,
-        "message_similarity": float,
+        "stacktrace_distance": float,
+        "message_distance": float,
         "should_group": bool,
     },
     total=False,
@@ -116,7 +227,24 @@ IssueDetails = typing_extensions.TypedDict(
     {
         "id": int,
         "title": str,
-        "events": typing.List["EventDetails"],
+        "short_id": typing.Union[str, None],
+        "events": typing.List["SentryEventData"],
+    },
+    total=False,
+)
+
+RepoAccessCheckRequest = typing_extensions.TypedDict(
+    "RepoAccessCheckRequest",
+    {
+        "repo": "RepoDefinition",
+    },
+    total=False,
+)
+
+RepoAccessCheckResponse = typing_extensions.TypedDict(
+    "RepoAccessCheckResponse",
+    {
+        "has_access": bool,
     },
     total=False,
 )
@@ -124,16 +252,18 @@ IssueDetails = typing_extensions.TypedDict(
 RepoDefinition = typing_extensions.TypedDict(
     "RepoDefinition",
     {
-        "provider": typing.Literal["github"],
+        "provider": str,
         "owner": str,
         "name": str,
+        "external_id": str,
     },
     total=False,
 )
 
-EventDetails = typing_extensions.TypedDict(
-    "EventDetails",
+SentryEventData = typing_extensions.TypedDict(
+    "SentryEventData",
     {
+        "title": str,
         "entries": typing.List[typing.Mapping[str, typing.Any]],
     },
     total=False,
@@ -146,8 +276,7 @@ SeverityRequest = typing_extensions.TypedDict(
         "message": str,
         # default: 0
         "has_stacktrace": int,
-        # default: False
-        "handled": bool,
+        "handled": typing.Union[bool, None],
         "trigger_timeout": typing.Union[bool, None],
         "trigger_error": typing.Union[bool, None],
     },
@@ -159,6 +288,14 @@ SeverityResponse = typing_extensions.TypedDict(
     {
         # default: 0.0
         "severity": float,
+    },
+    total=False,
+)
+
+SimilarityBenchmarkResponse = typing_extensions.TypedDict(
+    "SimilarityBenchmarkResponse",
+    {
+        "embedding": typing.List[float],
     },
     total=False,
 )
