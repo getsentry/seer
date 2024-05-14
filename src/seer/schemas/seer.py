@@ -178,3 +178,16 @@ SnubaMetadata = typing_extensions.TypedDict(
     },
     total=False,
 )
+
+CreateGroupingRecordData = typing_extensions.TypedDict(
+    "CreateGroupingRecordData", {"hash": str, "project_id": int, "message": str}
+)
+
+CreateGroupingRecordsRequest = typing_extensions.TypedDict(
+    "CreateGroupingRecordsRequest",
+    {"data": typing.List["CreateGroupingRecordData"], "stacktrace_list": typing.List[str]},
+)
+
+BulkCreateGroupingRecordsResponse = typing_extensions.TypedDict(
+    "BulkCreateGroupingRecordsResponse", {"success": bool}
+)
