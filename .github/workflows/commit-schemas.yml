@@ -1,8 +1,10 @@
 name: Commit schema updates
 
 on:
-  push:
-    branches: [ main ]
+  # TODO: Re-enable this when json schemas are ready to come back
+  # push:
+  #   branches: [ main ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
