@@ -185,7 +185,7 @@ class TestGrouping(unittest.TestCase):
         with Session() as session:
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             for i in range(10):
-                records[i] is not None
+                assert records[i] is not None
 
     def test_bulk_create_and_insert_grouping_records_valid(self):
         """Test bulk creating and inserting grouping records"""
@@ -207,7 +207,39 @@ class TestGrouping(unittest.TestCase):
         with Session() as session:
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             for i in range(10):
-                records[i] is not None
+                assert records[i] is not None
+
+    def test_delete_grouping_records_for_project(self):
+        """Test deleting grouping records for a project"""
+        hashes = [str(i) * 32 for i in range(10)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
+                for i in range(10)
+            ],
+            stacktrace_list=["stacktrace " + str(i) for i in range(10)],
+        )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response == BulkCreateGroupingRecordsResponse(success=True)
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(10):
+                assert records[i] is not None
+
+        # Call the delete endpoint
+        response = grouping_lookup().delete_grouping_records_for_project(1)
+
+        # Verify records are deleted
+        with Session() as session:
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
+            assert len(records) == 0
 
     def test_bulk_create_and_insert_grouping_records_invalid(self):
         """

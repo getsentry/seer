@@ -250,3 +250,12 @@ class GroupingLookup:
         with Session() as session:
             session.bulk_save_objects(records)
             session.commit()
+
+    def delete_grouping_records_for_project(self, project_id: int) -> bool:
+        """
+        Deletes grouping records for a project.
+        """
+        with Session() as session:
+            session.query(DbGroupingRecord).filter_by(project_id=project_id).delete()
+            session.commit()
+        return True

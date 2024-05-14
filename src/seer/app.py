@@ -1,6 +1,7 @@
 import time
 
 import sentry_sdk
+from flask import jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from celery_app.config import CeleryQueues
@@ -84,7 +85,7 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     with sentry_sdk.start_span(
         op="seer.breakpoint_detection",
         description="Get the breakpoint and t-value for every transaction",
-    ) as span:
+    ):
         trend_percentage_list = find_trends(
             txns_data,
             sort_function,
@@ -113,9 +114,18 @@ def similarity_grouping_record_endpoint(
 ) -> BulkCreateGroupingRecordsResponse:
     with sentry_sdk.start_span(
         op="seer.grouping-record", description="grouping record bulk insert"
-    ) as span:
+    ):
         success = grouping_lookup().bulk_create_and_insert_grouping_records(data)
     return success
+
+
+@app.route("/v0/issues/similar-issues/grouping-record/delete/<int:project_id>", methods=["GET"])
+def delete_grouping_record_endpoint(project_id: int):
+    with sentry_sdk.start_span(
+        op="seer.grouping-record", description="grouping record delete for project"
+    ):
+        success = grouping_lookup().delete_grouping_records_for_project(project_id)
+    return jsonify(success=success)
 
 
 @json_api("/v0/issues/similarity-embedding-benchmark")
