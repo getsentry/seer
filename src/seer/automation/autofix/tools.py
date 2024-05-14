@@ -3,7 +3,7 @@ import logging
 import textwrap
 
 from langsmith import traceable
-from sentry_sdk.ai_analytics import ai_track
+from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage

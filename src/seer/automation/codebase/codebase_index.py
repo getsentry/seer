@@ -8,7 +8,7 @@ import torch
 import tree_sitter_languages
 from langsmith import traceable
 from sentence_transformers import SentenceTransformer
-from sentry_sdk.ai_analytics import ai_track
+from sentry_sdk.ai.monitoring import ai_track
 from tqdm.auto import tqdm
 from tree_sitter import Tree
 from unidiff import PatchSet
@@ -219,7 +219,7 @@ class CodebaseIndex:
 
     @classmethod
     @traceable(name="Indexing namespace")
-    @ai_track(description="Indexing namespace")
+    @ai_track(description="Autofix - Indexing namespace")
     def index(
         cls,
         namespace_id: int,
@@ -291,7 +291,7 @@ class CodebaseIndex:
         self.workspace.save()
 
     @traceable(name="Updating codebase index")
-    @ai_track(description="Updating codebase index")
+    @ai_track(description="Autofix - Updating codebase index")
     def update(self, sha: str | None = None):
         """
         Updates the codebase index to the latest state of the default branch if needed

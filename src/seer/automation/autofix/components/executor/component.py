@@ -1,5 +1,5 @@
 from langsmith import traceable
-from sentry_sdk.ai_analytics import ai_track
+from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.models import Message

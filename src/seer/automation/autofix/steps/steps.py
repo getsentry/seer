@@ -49,7 +49,19 @@ class AutofixPipelineStep(PipelineStep):
                     "invoking_user": invoking_user,
                     "codebases": codebases,
                 },
-            }
+            },
+            "sentry_tags": {
+                "run_id": cur.run_id,
+                "org_id": cur.request.organization_id,
+            },
+            "sentry_data": {
+                "run_id": cur.run_id,
+                "organization_id": cur.request.organization_id,
+                "project_id": cur.request.project_id,
+                "group": {"id": group_id, "short_id": group_short_id},
+                "invoking_user": invoking_user,
+                "codebases": codebases,
+            },
         }
 
     def _post_invoke(self, result: Any):
