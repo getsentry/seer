@@ -1,7 +1,7 @@
 from typing import Any
 
 from langsmith import traceable
-from sentry_sdk.ai_analytics import ai_track
+from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.components.change_describer import (
@@ -56,7 +56,7 @@ class AutofixExecutionStep(AutofixPipelineStep):
         return autofix_execution_task
 
     @traceable(name="Execution", tags=["autofix:v2"])
-    @ai_track(description="Execution")
+    @ai_track(description="Autofix - Execution")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_planning_start()

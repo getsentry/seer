@@ -1,5 +1,5 @@
 from langsmith import traceable
-from sentry_sdk.ai_analytics import ai_track
+from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.reranker.component import RerankerComponent
