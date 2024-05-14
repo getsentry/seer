@@ -1,634 +1,1192 @@
 {
-    "openapi": "3.1.0",
-    "info": {
-        "title": "Sentry Inference APIs",
-        "version": "0.0.1"
-    },
-    "servers": [
-        {
-            "url": "http://seer"
-        }
-    ],
-    "paths": {
-        "/v0/issues/severity-score": {
-            "post": {
-                "tags": [],
-                "operationId": "severity_endpoint",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/SeverityRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Success",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/SeverityResponse"
-                                }
-                            }
-                        }
-                    }
-                },
-                "deprecated": false
-            }
-        },
-        "/trends/breakpoint-detector": {
-            "post": {
-                "tags": [],
-                "operationId": "breakpoint_trends_endpoint",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/BreakpointRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Success",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BreakpointResponse"
-                                }
-                            }
-                        }
-                    }
-                },
-                "deprecated": false
-            }
-        },
-        "/v0/issues/similar-issues": {
-            "post": {
-                "tags": [],
-                "operationId": "similarity_endpoint",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/GroupingRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Success",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/SimilarityResponse"
-                                }
-                            }
-                        }
-                    }
-                },
-                "deprecated": false
-            }
-        },
-        "/v0/issues/similar-issues/grouping-record": {
-            "post": {
-                "tags": [],
-                "operationId": "similarity_grouping_record_endpoint",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateGroupingRecordsRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Success",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BulkCreateGroupingRecordsResponse"
-                                }
-                            }
-                        }
-                    }
-                },
-                "deprecated": false
-            }
-        },
-        "/v0/automation/autofix": {
-            "post": {
-                "tags": [],
-                "operationId": "autofix_endpoint",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/AutofixRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Success",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AutofixEndpointResponse"
-                                }
-                            }
-                        }
-                    }
-                },
-                "deprecated": false
-            }
-        }
-    },
-    "components": {
-        "schemas": {
-            "AutofixEndpointResponse": {
-                "properties": {
-                    "started": {
-                        "type": "boolean",
-                        "title": "Started"
-                    }
-                },
-                "type": "object",
-                "required": ["started"],
-                "title": "AutofixEndpointResponse"
-            },
-            "AutofixRequest": {
-                "properties": {
-                    "organization_id": {
-                        "type": "integer",
-                        "title": "Organization Id"
-                    },
-                    "project_id": {
-                        "type": "integer",
-                        "title": "Project Id"
-                    },
-                    "repos": {
-                        "items": {
-                            "$ref": "#/components/schemas/RepoDefinition"
-                        },
-                        "type": "array",
-                        "title": "Repos"
-                    },
-                    "base_commit_sha": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Base Commit Sha"
-                    },
-                    "issue": {
-                        "$ref": "#/components/schemas/IssueDetails"
-                    },
-                    "additional_context": {
-                        "anyOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Additional Context"
-                    }
-                },
-                "type": "object",
-                "required": ["organization_id", "project_id", "repos", "issue"],
-                "title": "AutofixRequest"
-            },
-            "BreakpointEntry": {
-                "properties": {
-                    "project": {
-                        "type": "string",
-                        "title": "Project"
-                    },
-                    "transaction": {
-                        "type": "string",
-                        "title": "Transaction"
-                    },
-                    "aggregate_range_1": {
-                        "type": "number",
-                        "title": "Aggregate Range 1"
-                    },
-                    "aggregate_range_2": {
-                        "type": "number",
-                        "title": "Aggregate Range 2"
-                    },
-                    "unweighted_t_value": {
-                        "type": "number",
-                        "title": "Unweighted T Value"
-                    },
-                    "unweighted_p_value": {
-                        "type": "number",
-                        "title": "Unweighted P Value"
-                    },
-                    "trend_percentage": {
-                        "type": "number",
-                        "title": "Trend Percentage"
-                    },
-                    "absolute_percentage_change": {
-                        "type": "number",
-                        "title": "Absolute Percentage Change"
-                    },
-                    "trend_difference": {
-                        "type": "number",
-                        "title": "Trend Difference"
-                    },
-                    "breakpoint": {
-                        "type": "integer",
-                        "title": "Breakpoint"
-                    },
-                    "request_start": {
-                        "type": "integer",
-                        "title": "Request Start"
-                    },
-                    "request_end": {
-                        "type": "integer",
-                        "title": "Request End"
-                    },
-                    "data_start": {
-                        "type": "integer",
-                        "title": "Data Start"
-                    },
-                    "data_end": {
-                        "type": "integer",
-                        "title": "Data End"
-                    },
-                    "change": {
-                        "anyOf": [
-                            {
-                                "const": "improvement"
-                            },
-                            {
-                                "const": "regression"
-                            }
-                        ],
-                        "title": "Change"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "project",
-                    "transaction",
-                    "aggregate_range_1",
-                    "aggregate_range_2",
-                    "unweighted_t_value",
-                    "unweighted_p_value",
-                    "trend_percentage",
-                    "absolute_percentage_change",
-                    "trend_difference",
-                    "breakpoint",
-                    "request_start",
-                    "request_end",
-                    "data_start",
-                    "data_end",
-                    "change"
-                ],
-                "title": "BreakpointEntry"
-            },
-            "BreakpointRequest": {
-                "properties": {
-                    "data": {
-                        "additionalProperties": {
-                            "$ref": "#/components/schemas/BreakpointTransaction"
-                        },
-                        "type": "object",
-                        "title": "Data"
-                    },
-                    "sort": {
-                        "type": "string",
-                        "title": "Sort",
-                        "default": ""
-                    },
-                    "allow_midpoint": {
-                        "type": "string",
-                        "title": "Allow Midpoint",
-                        "default": "1"
-                    },
-                    "validate_tail_hours": {
-                        "type": "integer",
-                        "title": "Validate Tail Hours",
-                        "default": 0
-                    },
-                    "trend_percentage()": {
-                        "type": "number",
-                        "title": "Trend Percentage()",
-                        "default": 0.1
-                    },
-                    "min_change()": {
-                        "type": "number",
-                        "title": "Min Change()",
-                        "default": 0.0
-                    }
-                },
-                "type": "object",
-                "required": ["data"],
-                "title": "BreakpointRequest"
-            },
-            "BreakpointResponse": {
-                "properties": {
-                    "data": {
-                        "items": {
-                            "$ref": "#/components/schemas/BreakpointEntry"
-                        },
-                        "type": "array",
-                        "title": "Data"
-                    }
-                },
-                "type": "object",
-                "required": ["data"],
-                "title": "BreakpointResponse"
-            },
-            "BreakpointTransaction": {
-                "properties": {
-                    "data": {
-                        "items": {
-                            "prefixItems": [
-                                {
-                                    "type": "integer"
-                                },
-                                {
-                                    "prefixItems": [
-                                        {
-                                            "$ref": "#/components/schemas/SnubaMetadata"
-                                        }
-                                    ],
-                                    "type": "array",
-                                    "maxItems": 1,
-                                    "minItems": 1
-                                }
-                            ],
-                            "type": "array",
-                            "maxItems": 2,
-                            "minItems": 2
-                        },
-                        "type": "array",
-                        "title": "Data"
-                    },
-                    "request_start": {
-                        "type": "integer",
-                        "title": "Request Start"
-                    },
-                    "request_end": {
-                        "type": "integer",
-                        "title": "Request End"
-                    },
-                    "data_start": {
-                        "type": "integer",
-                        "title": "Data Start"
-                    },
-                    "data_end": {
-                        "type": "integer",
-                        "title": "Data End"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "data",
-                    "request_start",
-                    "request_end",
-                    "data_start",
-                    "data_end"
-                ],
-                "title": "BreakpointTransaction"
-            },
-            "GroupingRequest": {
-                "properties": {
-                    "group_id": {
-                        "anyOf": [
-                            {
-                                "type": "integer"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Group Id"
-                    },
-                    "hash": {
-                        "type": "string",
-                        "title": "Hash"
-                    },
-                    "project_id": {
-                        "type": "integer",
-                        "title": "Project Id"
-                    },
-                    "stacktrace": {
-                        "type": "string",
-                        "title": "Stacktrace"
-                    },
-                    "message": {
-                        "type": "string",
-                        "title": "Message"
-                    },
-                    "k": {
-                        "type": "integer",
-                        "title": "K",
-                        "default": 1
-                    },
-                    "threshold": {
-                        "type": "number",
-                        "title": "Threshold",
-                        "default": 0.99
-                    }
-                },
-                "type": "object",
-                "required": ["hash", "project_id", "stacktrace", "message"],
-                "title": "GroupingRequest"
-            },
-            "GroupingResponse": {
-                "properties": {
-                    "parent_group_id": {
-                        "anyOf": [
-                            {
-                                "type": "integer"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Parent Group Id"
-                    },
-                    "parent_hash": {
-                        "type": "string",
-                        "title": "Parent Hash"
-                    },
-                    "stacktrace_similarity": {
-                        "type": "number",
-                        "title": "Stacktrace Similarity"
-                    },
-                    "message_similarity": {
-                        "type": "number",
-                        "title": "Message Similarity"
-                    },
-                    "should_group": {
-                        "type": "boolean",
-                        "title": "Should Group"
-                    }
-                },
-                "type": "object",
-                "required": [
-                    "parent_hash",
-                    "stacktrace_similarity",
-                    "message_similarity",
-                    "should_group"
-                ],
-                "title": "GroupingResponse"
-            },
-            "IssueDetails": {
-                "properties": {
-                    "id": {
-                        "type": "integer",
-                        "title": "Id"
-                    },
-                    "title": {
-                        "type": "string",
-                        "title": "Title"
-                    },
-                    "events": {
-                        "items": {
-                            "$ref": "#/components/schemas/EventDetails"
-                        },
-                        "type": "array",
-                        "title": "Events"
-                    }
-                },
-                "type": "object",
-                "required": ["id", "title", "events"],
-                "title": "IssueDetails"
-            },
-            "RepoDefinition": {
-                "properties": {
-                    "provider": {
-                        "const": "github",
-                        "title": "Provider"
-                    },
-                    "owner": {
-                        "type": "string",
-                        "title": "Owner"
-                    },
-                    "name": {
-                        "type": "string",
-                        "title": "Name"
-                    }
-                },
-                "type": "object",
-                "required": ["provider", "owner", "name"],
-                "title": "RepoDefinition"
-            },
-            "EventDetails": {
-                "properties": {
-                    "entries": {
-                        "items": {
-                            "type": "object"
-                        },
-                        "type": "array",
-                        "title": "Entries"
-                    }
-                },
-                "type": "object",
-                "required": ["entries"],
-                "title": "EventDetails"
-            },
-            "SeverityRequest": {
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "title": "Message",
-                        "default": ""
-                    },
-                    "has_stacktrace": {
-                        "type": "integer",
-                        "title": "Has Stacktrace",
-                        "default": 0
-                    },
-                    "handled": {
-                        "type": "boolean",
-                        "title": "Handled",
-                        "default": false
-                    },
-                    "trigger_timeout": {
-                        "anyOf": [
-                            {
-                                "type": "boolean"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Trigger Timeout"
-                    },
-                    "trigger_error": {
-                        "anyOf": [
-                            {
-                                "type": "boolean"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Trigger Error"
-                    }
-                },
-                "type": "object",
-                "title": "SeverityRequest"
-            },
-            "SeverityResponse": {
-                "properties": {
-                    "severity": {
-                        "type": "number",
-                        "title": "Severity",
-                        "default": 0.0
-                    }
-                },
-                "type": "object",
-                "title": "SeverityResponse"
-            },
-            "SimilarityResponse": {
-                "properties": {
-                    "responses": {
-                        "items": {
-                            "$ref": "#/components/schemas/GroupingResponse"
-                        },
-                        "type": "array",
-                        "title": "Responses"
-                    }
-                },
-                "type": "object",
-                "required": ["responses"],
-                "title": "SimilarityResponse"
-            },
-            "SnubaMetadata": {
-                "properties": {
-                    "count": {
-                        "type": "number",
-                        "title": "Count"
-                    }
-                },
-                "type": "object",
-                "required": ["count"],
-                "title": "SnubaMetadata"
-            }
-        }
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sentry Inference APIs",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "http://seer"
     }
+  ],
+  "paths": {
+    "/v0/issues/severity-score": {
+      "post": {
+        "tags": [],
+        "operationId": "severity_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeverityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeverityResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/trends/breakpoint-detector": {
+      "post": {
+        "tags": [],
+        "operationId": "breakpoint_trends_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakpointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakpointResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v0/issues/similar-issues": {
+      "post": {
+        "tags": [],
+        "operationId": "similarity_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarityResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v0/issues/similar-issues/grouping-record": {
+      "post": {
+        "tags": [],
+        "operationId": "similarity_grouping_record_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupingRecordsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCreateGroupingRecordsResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v0/issues/similarity-embedding-benchmark": {
+      "post": {
+        "tags": [],
+        "operationId": "similarity_embedding_benchmark_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarityBenchmarkResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v1/automation/codebase/index/create": {
+      "post": {
+        "tags": [],
+        "operationId": "create_codebase_index_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCodebaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutofixEndpointResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v1/automation/codebase/repo/check-access": {
+      "post": {
+        "tags": [],
+        "operationId": "repo_access_check_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoAccessCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoAccessCheckResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v1/automation/codebase/index/status": {
+      "post": {
+        "tags": [],
+        "operationId": "get_codebase_index_status_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodebaseStatusCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodebaseStatusCheckResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v1/automation/autofix/start": {
+      "post": {
+        "tags": [],
+        "operationId": "autofix_start_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutofixRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutofixEndpointResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v1/automation/autofix/update": {
+      "post": {
+        "tags": [],
+        "operationId": "autofix_update_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutofixUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutofixEndpointResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/v1/automation/autofix/state": {
+      "post": {
+        "tags": [],
+        "operationId": "get_autofix_state_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutofixStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutofixStateResponse"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AutofixCreatePrUpdatePayload": {
+        "properties": {
+          "type": {
+            "const": "create_pr",
+            "title": "Type"
+          },
+          "repo_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "AutofixCreatePrUpdatePayload"
+      },
+      "AutofixEndpointResponse": {
+        "properties": {
+          "started": {
+            "type": "boolean",
+            "title": "Started"
+          }
+        },
+        "type": "object",
+        "required": [
+          "started"
+        ],
+        "title": "AutofixEndpointResponse"
+      },
+      "AutofixRequest": {
+        "properties": {
+          "organization_id": {
+            "type": "integer",
+            "title": "Organization Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/RepoDefinition"
+            },
+            "type": "array",
+            "title": "Repos"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/IssueDetails"
+          },
+          "invoking_user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AutofixUserDetails"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base_commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Commit Sha"
+          },
+          "additional_context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organization_id",
+          "project_id",
+          "repos",
+          "issue"
+        ],
+        "title": "AutofixRequest"
+      },
+      "AutofixRootCauseUpdatePayload": {
+        "properties": {
+          "type": {
+            "const": "select_root_cause",
+            "title": "Type"
+          },
+          "cause_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause Id"
+          },
+          "fix_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Id"
+          },
+          "custom_root_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Root Cause"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "AutofixRootCauseUpdatePayload"
+      },
+      "AutofixStateRequest": {
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_id"
+        ],
+        "title": "AutofixStateRequest"
+      },
+      "AutofixStateResponse": {
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_id",
+          "state"
+        ],
+        "title": "AutofixStateResponse"
+      },
+      "AutofixUpdateRequest": {
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          },
+          "payload": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AutofixRootCauseUpdatePayload"
+              },
+              {
+                "$ref": "#/components/schemas/AutofixCreatePrUpdatePayload"
+              }
+            ],
+            "title": "Payload",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "create_pr": "#/components/schemas/AutofixCreatePrUpdatePayload",
+                "select_root_cause": "#/components/schemas/AutofixRootCauseUpdatePayload"
+              }
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "payload"
+        ],
+        "title": "AutofixUpdateRequest"
+      },
+      "AutofixUserDetails": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "AutofixUserDetails"
+      },
+      "BreakpointEntry": {
+        "properties": {
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "transaction": {
+            "type": "string",
+            "title": "Transaction"
+          },
+          "aggregate_range_1": {
+            "type": "number",
+            "title": "Aggregate Range 1"
+          },
+          "aggregate_range_2": {
+            "type": "number",
+            "title": "Aggregate Range 2"
+          },
+          "unweighted_t_value": {
+            "type": "number",
+            "title": "Unweighted T Value"
+          },
+          "unweighted_p_value": {
+            "type": "number",
+            "title": "Unweighted P Value"
+          },
+          "trend_percentage": {
+            "type": "number",
+            "title": "Trend Percentage"
+          },
+          "absolute_percentage_change": {
+            "type": "number",
+            "title": "Absolute Percentage Change"
+          },
+          "trend_difference": {
+            "type": "number",
+            "title": "Trend Difference"
+          },
+          "breakpoint": {
+            "type": "integer",
+            "title": "Breakpoint"
+          },
+          "request_start": {
+            "type": "integer",
+            "title": "Request Start"
+          },
+          "request_end": {
+            "type": "integer",
+            "title": "Request End"
+          },
+          "data_start": {
+            "type": "integer",
+            "title": "Data Start"
+          },
+          "data_end": {
+            "type": "integer",
+            "title": "Data End"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "const": "improvement"
+              },
+              {
+                "const": "regression"
+              }
+            ],
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project",
+          "transaction",
+          "aggregate_range_1",
+          "aggregate_range_2",
+          "unweighted_t_value",
+          "unweighted_p_value",
+          "trend_percentage",
+          "absolute_percentage_change",
+          "trend_difference",
+          "breakpoint",
+          "request_start",
+          "request_end",
+          "data_start",
+          "data_end",
+          "change"
+        ],
+        "title": "BreakpointEntry"
+      },
+      "BreakpointRequest": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BreakpointTransaction"
+            },
+            "type": "object",
+            "title": "Data"
+          },
+          "sort": {
+            "type": "string",
+            "title": "Sort",
+            "default": ""
+          },
+          "allow_midpoint": {
+            "type": "string",
+            "title": "Allow Midpoint",
+            "default": "1"
+          },
+          "validate_tail_hours": {
+            "type": "integer",
+            "title": "Validate Tail Hours",
+            "default": 0
+          },
+          "trend_percentage()": {
+            "type": "number",
+            "title": "Trend Percentage()",
+            "default": 0.1
+          },
+          "min_change()": {
+            "type": "number",
+            "title": "Min Change()",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BreakpointRequest"
+      },
+      "BreakpointResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/BreakpointEntry"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BreakpointResponse"
+      },
+      "BreakpointTransaction": {
+        "properties": {
+          "data": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "prefixItems": [
+                    {
+                      "$ref": "#/components/schemas/SnubaMetadata"
+                    }
+                  ],
+                  "type": "array",
+                  "maxItems": 1,
+                  "minItems": 1
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "request_start": {
+            "type": "integer",
+            "title": "Request Start"
+          },
+          "request_end": {
+            "type": "integer",
+            "title": "Request End"
+          },
+          "data_start": {
+            "type": "integer",
+            "title": "Data Start"
+          },
+          "data_end": {
+            "type": "integer",
+            "title": "Data End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "request_start",
+          "request_end",
+          "data_start",
+          "data_end"
+        ],
+        "title": "BreakpointTransaction"
+      },
+      "BulkCreateGroupingRecordsResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "BulkCreateGroupingRecordsResponse"
+      },
+      "CodebaseStatusCheckRequest": {
+        "properties": {
+          "organization_id": {
+            "type": "integer",
+            "title": "Organization Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoDefinition"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organization_id",
+          "project_id",
+          "repo"
+        ],
+        "title": "CodebaseStatusCheckRequest"
+      },
+      "CodebaseStatusCheckResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "CodebaseStatusCheckResponse"
+      },
+      "CreateCodebaseRequest": {
+        "properties": {
+          "organization_id": {
+            "type": "integer",
+            "title": "Organization Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoDefinition"
+          }
+        },
+        "type": "object",
+        "required": [
+          "organization_id",
+          "project_id",
+          "repo"
+        ],
+        "title": "CreateCodebaseRequest"
+      },
+      "CreateGroupingRecordData": {
+        "properties": {
+          "hash": {
+            "type": "string",
+            "title": "Hash"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hash",
+          "project_id",
+          "message"
+        ],
+        "title": "CreateGroupingRecordData"
+      },
+      "CreateGroupingRecordsRequest": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CreateGroupingRecordData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "stacktrace_list": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stacktrace List"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "stacktrace_list"
+        ],
+        "title": "CreateGroupingRecordsRequest"
+      },
+      "GroupingRequest": {
+        "properties": {
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "stacktrace": {
+            "type": "string",
+            "title": "Stacktrace"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "hash": {
+            "type": "string",
+            "title": "Hash"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "k": {
+            "type": "integer",
+            "title": "K",
+            "default": 1
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold",
+            "default": 0.01
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "stacktrace",
+          "message",
+          "hash"
+        ],
+        "title": "GroupingRequest"
+      },
+      "GroupingResponse": {
+        "properties": {
+          "parent_group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Group Id"
+          },
+          "parent_hash": {
+            "type": "string",
+            "title": "Parent Hash"
+          },
+          "stacktrace_distance": {
+            "type": "number",
+            "title": "Stacktrace Distance"
+          },
+          "message_distance": {
+            "type": "number",
+            "title": "Message Distance"
+          },
+          "should_group": {
+            "type": "boolean",
+            "title": "Should Group"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parent_group_id",
+          "parent_hash",
+          "stacktrace_distance",
+          "message_distance",
+          "should_group"
+        ],
+        "title": "GroupingResponse"
+      },
+      "IssueDetails": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "short_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Id"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SentryEventData"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "events"
+        ],
+        "title": "IssueDetails"
+      },
+      "RepoAccessCheckRequest": {
+        "properties": {
+          "repo": {
+            "$ref": "#/components/schemas/RepoDefinition"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo"
+        ],
+        "title": "RepoAccessCheckRequest"
+      },
+      "RepoAccessCheckResponse": {
+        "properties": {
+          "has_access": {
+            "type": "boolean",
+            "title": "Has Access"
+          }
+        },
+        "type": "object",
+        "required": [
+          "has_access"
+        ],
+        "title": "RepoAccessCheckResponse"
+      },
+      "RepoDefinition": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "owner",
+          "name",
+          "external_id"
+        ],
+        "title": "RepoDefinition"
+      },
+      "SentryEventData": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "entries": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "entries"
+        ],
+        "title": "SentryEventData"
+      },
+      "SeverityRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "has_stacktrace": {
+            "type": "integer",
+            "title": "Has Stacktrace",
+            "default": 0
+          },
+          "handled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled"
+          },
+          "trigger_timeout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Timeout"
+          },
+          "trigger_error": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Error"
+          }
+        },
+        "type": "object",
+        "title": "SeverityRequest"
+      },
+      "SeverityResponse": {
+        "properties": {
+          "severity": {
+            "type": "number",
+            "title": "Severity",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "title": "SeverityResponse"
+      },
+      "SimilarityBenchmarkResponse": {
+        "properties": {
+          "embedding": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Embedding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "embedding"
+        ],
+        "title": "SimilarityBenchmarkResponse"
+      },
+      "SimilarityResponse": {
+        "properties": {
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/GroupingResponse"
+            },
+            "type": "array",
+            "title": "Responses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "responses"
+        ],
+        "title": "SimilarityResponse"
+      },
+      "SnubaMetadata": {
+        "properties": {
+          "count": {
+            "type": "number",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "title": "SnubaMetadata"
+      }
+    }
+  }
 }
