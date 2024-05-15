@@ -7,6 +7,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
+    AutofixPrIdRequest,
     AutofixRequest,
     AutofixStateRequest,
     AutofixStateResponse,
@@ -16,6 +17,7 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
     get_autofix_state,
+    get_autofix_state_from_pr_id,
     run_autofix_create_pr,
     run_autofix_execution,
     run_autofix_root_cause,
@@ -200,6 +202,18 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
     return AutofixStateResponse(
         group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None
     )
+
+
+@json_api("/v1/automation/autofix/state/pr")
+def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixStateResponse:
+    state = get_autofix_state_from_pr_id(data.provider, data.pr_id)
+
+    if state:
+        cur = state.get()
+        return AutofixStateResponse(
+            group_id=cur.request.issue.id, state=cur.model_dump(mode="json")
+        )
+    return AutofixStateResponse(group_id=None, state=None)
 
 
 @app.route("/health/live", methods=["GET"])

@@ -19,6 +19,8 @@ from pydantic.alias_generators import to_camel, to_snake
 from pydantic_xml import BaseXmlModel
 from typing_extensions import TypedDict
 
+from seer.automation.utils import process_repo_provider
+
 
 class StacktraceFrame(BaseModel):
     model_config = ConfigDict(
@@ -193,9 +195,7 @@ class RepoDefinition(BaseModel):
     @field_validator("provider", mode="after")
     @classmethod
     def validate_provider(cls, provider: str):
-        cleaned_provider = provider
-        if provider.startswith("integrations:"):
-            cleaned_provider = provider.split(":")[1]
+        cleaned_provider = process_repo_provider(provider)
 
         if cleaned_provider != "github":
             raise ValueError(f"Provider {cleaned_provider} is not supported.")
