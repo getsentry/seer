@@ -79,6 +79,14 @@ class FilesystemStorageAdapter(StorageAdapter):
 
     def save_to_storage(self):
         storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+
+        if os.path.exists(storage_path):
+            try:
+                shutil.rmtree(storage_path, ignore_errors=False)
+            except Exception as e:
+                autofix_logger.exception(e)
+                return False
+
         shutil.copytree(self.tmpdir, storage_path, dirs_exist_ok=True)
 
         return True
