@@ -7,7 +7,7 @@ echo "running flask db upgrade" \
   --container-name="seer" \
   --label-selector="service=seer" \
   "seer-run-migrations" \
-  "us.gcr.io/sentryio/seer:${GO_REVISION_SEER_REPO}" \
+  "us-central1-docker.pkg.dev/sentryio/seer/image:${GO_REVISION_SEER_REPO}" \
   -- \
   flask \
   db \
