@@ -48,6 +48,7 @@ repos:
         pass_filenames: false
         language: system
 
+  # Strips output from jupyter notebooks
   - repo: https://github.com/kynan/nbstripout
     rev: 0.5.0
     hooks:
