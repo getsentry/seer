@@ -176,7 +176,13 @@ class GroupingLookup:
             embedding = self.encode_text(issue.stacktrace).astype("float32")
 
             results = self.query_nearest_k_neighbors(
-                session, embedding, issue.project_id, issue.group_id, issue.hash, 0.15, issue.k
+                session,
+                embedding,
+                issue.project_id,
+                issue.group_id,
+                issue.hash,
+                NN_SIMILARITY_DISTANCE,
+                issue.k,
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
