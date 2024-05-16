@@ -148,6 +148,7 @@ class TestGrouping(unittest.TestCase):
         record_requests = CreateGroupingRecordsRequest(
             data=[
                 CreateGroupingRecordData(
+                    group_id=i,
                     hash=str(i) * 32,
                     project_id=1,
                     message="message " + str(i),
@@ -158,12 +159,13 @@ class TestGrouping(unittest.TestCase):
         )
         records = grouping_lookup().create_grouping_record_objects(record_requests)
 
-        assert len(records) == 2
+        assert len(records[0]) == 2
         for i in range(len(record_requests.data)):
-            assert records[i].hash == record_requests.data[i].hash
-            assert records[i].project_id == record_requests.data[i].project_id
-            assert records[i].message == record_requests.data[i].message
-            assert records[i].stacktrace_embedding is not None
+            assert records[0][i].hash == record_requests.data[i].hash
+            assert records[0][i].project_id == record_requests.data[i].project_id
+            assert records[0][i].message == record_requests.data[i].message
+            assert records[0][i].stacktrace_embedding is not None
+        assert records[1] == {}
 
     def test_bulk_insert_new_grouping_records(self):
         """Test bulk inserting grouping records"""
@@ -193,6 +195,7 @@ class TestGrouping(unittest.TestCase):
         record_requests = CreateGroupingRecordsRequest(
             data=[
                 CreateGroupingRecordData(
+                    group_id=i,
                     hash=hashes[i],
                     project_id=1,
                     message="message " + str(i),
@@ -203,7 +206,7 @@ class TestGrouping(unittest.TestCase):
         )
 
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
-        assert response == BulkCreateGroupingRecordsResponse(success=True)
+        assert response == BulkCreateGroupingRecordsResponse(success=True, groups_with_neighbor={})
         with Session() as session:
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             for i in range(10):
@@ -215,6 +218,7 @@ class TestGrouping(unittest.TestCase):
         record_requests = CreateGroupingRecordsRequest(
             data=[
                 CreateGroupingRecordData(
+                    group_id=i,
                     hash=hashes[i],
                     project_id=1,
                     message="message " + str(i),
@@ -225,7 +229,7 @@ class TestGrouping(unittest.TestCase):
         )
 
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
-        assert response == BulkCreateGroupingRecordsResponse(success=True)
+        assert response == BulkCreateGroupingRecordsResponse(success=True, groups_with_neighbor={})
         with Session() as session:
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             for i in range(10):
@@ -246,10 +250,11 @@ class TestGrouping(unittest.TestCase):
         Test bulk creating and inserting grouping records fails when the input lists are of
         different lengths
         """
-        hashes = [str(i) * 32 for i in range(10, 20)]
+        hashes = [str(i) * 32 for i in range(10)]
         record_requests = CreateGroupingRecordsRequest(
             data=[
                 CreateGroupingRecordData(
+                    group_id=i,
                     hash=hashes[i],
                     project_id=1,
                     message="message " + str(i),
@@ -260,7 +265,65 @@ class TestGrouping(unittest.TestCase):
         )
 
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
-        assert response == BulkCreateGroupingRecordsResponse(success=False)
+        assert response == BulkCreateGroupingRecordsResponse(success=False, groups_with_neighbor={})
         with Session() as session:
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             assert records.first() is None
+
+    def test_bulk_create_and_insert_grouping_records_has_neighbor(self):
+        """
+        Test bulk creating and inserting grouping records does not create a record for a hash that
+        has a nearest neighbor.
+        """
+        # Create a record with the stacktrace "stacktrace"
+        with Session() as session:
+            embedding = grouping_lookup().encode_text("stacktrace")
+            grouping_request = GroupingRequest(
+                group_id=11,
+                project_id=1,
+                stacktrace="stacktrace",
+                message="message",
+                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            )
+            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            session.commit()
+
+        # Create record data to attempt to be inserted, create 5 with the stacktrace "stacktrace"
+        hashes = [str(i) * 32 for i in range(10)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message",
+                )
+                for i in range(10)
+            ],
+            stacktrace_list=["stacktrace" for _ in range(5)]
+            + ["something different" for _ in range(6, 11)],
+        )
+
+        expected_groups_with_neighbor = {}
+        for i in range(5):
+            expected_groups_with_neighbor[str(i)] = GroupingResponse(
+                parent_group_id=None,
+                parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+                stacktrace_distance=0.00,
+                message_distance=0.00,
+                should_group=True,
+            )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response == BulkCreateGroupingRecordsResponse(
+            success=True, groups_with_neighbor=expected_groups_with_neighbor
+        )
+        with Session() as session:
+            records_without_neighbor = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes[5:])).all()
+            )
+            assert len(records_without_neighbor) == 5
+            records_with_neighbor = session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.hash.in_(hashes[:5])
+            )
+            assert records_with_neighbor.all() == []
