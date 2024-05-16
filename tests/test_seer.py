@@ -309,6 +309,7 @@ class TestSeer(unittest.TestCase):
         record_requests = {
             "data": [
                 {
+                    "group_id": i,
                     "hash": hashes[i],
                     "project_id": 1,
                     "message": "message " + str(i),
@@ -324,7 +325,7 @@ class TestSeer(unittest.TestCase):
             content_type="application/json",
         )
         output = json.loads(response.get_data(as_text=True))
-        assert output == {"success": True}
+        assert output == {"success": True, "groups_with_neighbor": {}}
         with Session() as session:
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             for i in range(5):
@@ -339,6 +340,7 @@ class TestSeer(unittest.TestCase):
         record_requests = {
             "data": [
                 {
+                    "group_id": i,
                     "hash": hashes[i],
                     "project_id": 1,
                     "message": "message " + str(i),
@@ -354,7 +356,7 @@ class TestSeer(unittest.TestCase):
             content_type="application/json",
         )
         output = json.loads(response.get_data(as_text=True))
-        assert output == {"success": False}
+        assert output == {"success": False, "groups_with_neighbor": {}}
         with Session() as session:
             assert (
                 session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).first()
