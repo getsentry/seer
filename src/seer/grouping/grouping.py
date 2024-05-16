@@ -1,6 +1,6 @@
 import difflib
 import logging
-from typing import List, Optional
+from typing import List, Mapping, Optional
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,9 @@ from sqlalchemy import or_
 from seer.db import DbGroupingRecord, Session
 
 logger = logging.getLogger("grouping")
+
+NN_GROUPING_DISTANCE = 0.01
+NN_SIMILARITY_DISTANCE = 0.15
 
 
 class GroupingRequest(BaseModel):
@@ -33,6 +36,7 @@ class GroupingRequest(BaseModel):
 
 
 class CreateGroupingRecordData(BaseModel):
+    group_id: int
     hash: str
     project_id: int
     message: str
@@ -80,6 +84,7 @@ class SimilarityResponse(BaseModel):
 
 class BulkCreateGroupingRecordsResponse(BaseModel):
     success: bool
+    groups_with_neighbor: dict[str, GroupingResponse]
 
 
 class SimilarityBenchmarkResponse(BaseModel):
@@ -128,6 +133,36 @@ class GroupingLookup:
         """
         return self.model.encode(sentences=stacktraces, batch_size=batch_size)
 
+    def query_nearest_k_neighbors(
+        self,
+        session,
+        embedding,
+        project_id: int,
+        group_id: int | None,
+        hash: str,
+        distance: float,
+        k: int,
+    ) -> List[tuple[DbGroupingRecord, float]]:
+        return (
+            session.query(
+                DbGroupingRecord,
+                DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label("distance"),
+            )
+            .filter(
+                DbGroupingRecord.project_id == project_id,
+                DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= distance,
+                or_(
+                    DbGroupingRecord.group_id != group_id,
+                    DbGroupingRecord.group_id == None,
+                ),
+                # TODO We can return a group as similar group to itself if it exists in the old table with no hash
+                DbGroupingRecord.hash != hash,
+            )
+            .order_by("distance")
+            .limit(k)
+            .all()
+        )
+
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
         Retrieves the k nearest neighbors for a stacktrace within the same project and determines if they should be grouped.
@@ -140,26 +175,14 @@ class GroupingLookup:
         with Session() as session:
             embedding = self.encode_text(issue.stacktrace).astype("float32")
 
-            results = (
-                session.query(
-                    DbGroupingRecord,
-                    DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label(
-                        "distance"
-                    ),
-                )
-                .filter(
-                    DbGroupingRecord.project_id == issue.project_id,
-                    DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= 0.15,
-                    or_(
-                        DbGroupingRecord.group_id != issue.group_id,
-                        DbGroupingRecord.group_id == None,
-                    ),
-                    # TODO We can return a group as similar group to itself if it exists in the old table with no hash
-                    DbGroupingRecord.hash != issue.hash,
-                )
-                .order_by("distance")
-                .limit(issue.k)
-                .all()
+            results = self.query_nearest_k_neighbors(
+                session,
+                embedding,
+                issue.project_id,
+                issue.group_id,
+                issue.hash,
+                NN_SIMILARITY_DISTANCE,
+                issue.k,
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
@@ -193,31 +216,53 @@ class GroupingLookup:
         Calls functions to create grouping records and bulk insert them.
         """
         if len(data.data) != len(data.stacktrace_list):
-            return BulkCreateGroupingRecordsResponse(success=False)
+            return BulkCreateGroupingRecordsResponse(success=False, groups_with_neighbor={})
 
-        records = self.create_grouping_record_objects(data)
+        records, groups_with_neighbor = self.create_grouping_record_objects(data)
         self.bulk_insert_new_grouping_records(records)
-        return BulkCreateGroupingRecordsResponse(success=True)
+        return BulkCreateGroupingRecordsResponse(
+            success=True, groups_with_neighbor=groups_with_neighbor
+        )
 
     def create_grouping_record_objects(
         self, data: CreateGroupingRecordsRequest
-    ) -> List[DbGroupingRecord]:
+    ) -> tuple[List[DbGroupingRecord], dict[str, GroupingResponse]]:
         """
         Creates stacktrace emebddings and record objects for the given data.
         Returns a list of created records.
         """
-        records = []
+        records, groups_with_neighbor = [], {}
         embeddings = self.encode_multiple_texts(data.stacktrace_list)
-        for i, entry in enumerate(data.data):
-            new_record = GroupingRecord(
-                hash=entry.hash,
-                group_id=None,
-                project_id=entry.project_id,
-                message=entry.message,
-                stacktrace_embedding=embeddings[i].astype("float32"),
-            ).to_db_model()
-            records.append(new_record)
-        return records
+        with Session() as session:
+            for i, entry in enumerate(data.data):
+                embedding = embeddings[i].astype("float32")
+                nearest_neighbor = self.query_nearest_k_neighbors(
+                    session, embedding, entry.project_id, entry.group_id, entry.hash, 0.01, 1
+                )
+                if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
+                    new_record = GroupingRecord(
+                        hash=entry.hash,
+                        group_id=None,
+                        project_id=entry.project_id,
+                        message=entry.message,
+                        stacktrace_embedding=embedding,
+                    ).to_db_model()
+                    records.append(new_record)
+                else:
+                    neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
+                    message_similarity_score = difflib.SequenceMatcher(
+                        None, entry.message, neighbor.message
+                    ).ratio()
+                    response = GroupingResponse(
+                        parent_group_id=None,
+                        parent_hash=neighbor.hash,
+                        stacktrace_distance=distance,
+                        message_distance=1.0 - message_similarity_score,
+                        should_group=True,
+                    )
+                    groups_with_neighbor[str(entry.group_id)] = response
+
+            return (records, groups_with_neighbor)
 
     def insert_new_grouping_record(
         self, session, issue: GroupingRequest, embedding: np.ndarray
