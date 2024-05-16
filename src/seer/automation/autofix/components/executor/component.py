@@ -1,4 +1,3 @@
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import GptAgent
@@ -16,7 +15,6 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
-    @traceable(name="Executor", run_type="llm", tags=["executor:v1.2"])
     @ai_track(description="Executor")
     def invoke(self, request: ExecutorRequest) -> None:
         code_action_tools = CodeActionTools(self.context)

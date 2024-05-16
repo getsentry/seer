@@ -1,6 +1,5 @@
 from typing import Any
 
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
@@ -55,7 +54,6 @@ class AutofixExecutionStep(AutofixPipelineStep):
     def get_task():
         return autofix_execution_task
 
-    @traceable(name="Execution", tags=["autofix:v2"])
     @ai_track(description="Autofix - Execution")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
@@ -120,7 +118,6 @@ class AutofixExecutionStep(AutofixPipelineStep):
 
         self.context.event_manager.send_execution_complete(codebase_changes)
 
-    @traceable(name="Executor with Retriever", run_type="llm")
     @ai_track(description="Executor with Retriever")
     def _run_executor_with_retriever(
         self,

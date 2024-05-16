@@ -1,5 +1,4 @@
 import sentry_sdk
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -18,7 +17,6 @@ from seer.automation.component import BaseComponent
 class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
     context: AutofixContext
 
-    @traceable(name="Reranker", run_type="llm", tags=["reranker:v1.1"])
     @ai_track(description="Reranker")
     def invoke(self, request: RerankerRequest) -> RerankerOutput:
         gpt_client = GptClient()

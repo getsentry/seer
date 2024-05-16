@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
 import openai_multi_tool_use_parallel_patch  # import applies the patch
-from langsmith import wrappers
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
@@ -34,7 +33,7 @@ class LlmClient(ABC):
 class GptClient(LlmClient):
     def __init__(self, model: str = "gpt-4o-2024-05-13"):
         self.model = model
-        self.openai_client = wrappers.wrap_openai(OpenAI())
+        self.openai_client = OpenAI()
 
     def completion(self, messages: list[Message], **chat_completion_kwargs):
         completion: ChatCompletion = self.openai_client.chat.completions.create(

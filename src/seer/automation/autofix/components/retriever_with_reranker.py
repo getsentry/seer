@@ -1,4 +1,3 @@
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -15,7 +14,6 @@ from seer.automation.component import BaseComponent
 class RetrieverWithRerankerComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     context: AutofixContext
 
-    @traceable(name="Retriever With Reranker", run_type="chain", tags=["retriever-reranker:v1"])
     @ai_track(description="Retriever With Reranker")
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         retriever = RetrieverComponent(self.context)
