@@ -5,7 +5,6 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: [
     'build',
-    '-t', 'us.gcr.io/sentryio/seer:$COMMIT_SHA',
     '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
     '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
     '--build-arg',
@@ -26,6 +25,5 @@ steps:
 
 # This is needed for Freight to find matching builds
 images: [
-  'us.gcr.io/sentryio/seer:$COMMIT_SHA',
   'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
 ]
