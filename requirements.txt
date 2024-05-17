@@ -12,7 +12,7 @@ fonttools==4.42.1
 fsspec==2023.6.0
 gunicorn==20.1.0
 holidays==0.31
-idna==3.4
+idna==3.7
 importlib-resources==6.0.1
 itsdangerous==2.1.2
 Jinja2==3.1.2
