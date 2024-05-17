@@ -5,7 +5,7 @@ from github import UnknownObjectException
 from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import InitializationError, RepoDefinition
+from seer.automation.models import RepoDefinition
 
 
 class TestRepoClient(unittest.TestCase):

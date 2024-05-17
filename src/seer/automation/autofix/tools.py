@@ -1,11 +1,8 @@
-import json
 import logging
 import textwrap
 
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GptClient
-from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.retriever import RetrieverRequest
@@ -19,7 +16,6 @@ from seer.automation.autofix.components.snippet_replacement import (
 from seer.automation.autofix.utils import find_original_snippet
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.models import FileChange
-from seer.automation.state import State
 
 logger = logging.getLogger("autofix")
 

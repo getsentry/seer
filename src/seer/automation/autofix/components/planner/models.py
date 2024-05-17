@@ -3,7 +3,6 @@ from typing import Annotated, Optional, Union
 from pydantic import BaseModel, StringConstraints
 from pydantic_xml import attr, element
 
-from seer.automation.autofix.components.assessment.models import ProblemDiscoveryOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel

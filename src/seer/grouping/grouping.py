@@ -1,9 +1,8 @@
 import difflib
 import logging
-from typing import List, Mapping, Optional
+from typing import List, Optional
 
 import numpy as np
-import pandas as pd
 import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator

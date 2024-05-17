@@ -1,7 +1,6 @@
 import functools
 import logging
 import os
-from typing import Any
 
 import billiard  # type: ignore[import-untyped]
 import torch
