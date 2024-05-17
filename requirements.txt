@@ -51,7 +51,7 @@ statsmodels==0.14.0
 sympy==1.12
 threadpoolctl==3.2.0
 torch==2.0.1
-tqdm==4.66.1
+tqdm==4.66.3
 typing_extensions==4.7.1
 tzdata==2023.3
 tree_sitter==0.21.3
