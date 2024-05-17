@@ -95,7 +95,6 @@ class AutofixContext(PipelineContext):
     def from_run_id(cls, run_id: int):
         state = ContinuationState.from_id(run_id, model=AutofixContinuation)
         with state.update() as cur:
-            cur.run_timeout_secs = 10000  # TODO
             cur.mark_triggered()
 
         event_manager = AutofixEventManager(state)
