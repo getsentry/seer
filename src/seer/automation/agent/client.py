@@ -3,7 +3,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
-import openai_multi_tool_use_parallel_patch  # import applies the patch
+import openai_multi_tool_use_parallel_patch  # noqa - import applies the patch
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
