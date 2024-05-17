@@ -1,4 +1,3 @@
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import GptAgent
@@ -18,7 +17,6 @@ from seer.automation.component import BaseComponent
 class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCauseAnalysisOutput]):
     context: AutofixContext
 
-    @traceable(name="Root Cause Analysis", run_type="llm", tags=["root-cause:v1"])
     @ai_track(description="Root Cause Analysis")
     def invoke(self, request: RootCauseAnalysisRequest) -> RootCauseAnalysisOutput | None:
         tools = BaseTools(self.context)

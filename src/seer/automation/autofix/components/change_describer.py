@@ -1,6 +1,5 @@
 import textwrap
 
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -44,7 +43,6 @@ class ChangeDescriptionPrompts:
 class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeDescriptionOutput]):
     context: AutofixContext
 
-    @traceable(name="Change Describer", run_type="llm", tags=["change_describer:v1"])
     @ai_track(description="Change Describer")
     def invoke(self, request: ChangeDescriptionRequest) -> ChangeDescriptionOutput | None:
         prompt = ChangeDescriptionPrompts.format_default_msg(

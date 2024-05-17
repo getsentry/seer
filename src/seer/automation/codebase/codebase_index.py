@@ -6,7 +6,6 @@ import numpy as np
 import sentry_sdk
 import torch
 import tree_sitter_languages
-from langsmith import traceable
 from sentence_transformers import SentenceTransformer
 from sentry_sdk.ai.monitoring import ai_track
 from tqdm.auto import tqdm
@@ -218,7 +217,6 @@ class CodebaseIndex:
         return workspace.namespace.id
 
     @classmethod
-    @traceable(name="Indexing namespace")
     @ai_track(description="Autofix - Indexing namespace")
     def index(
         cls,
@@ -290,7 +288,6 @@ class CodebaseIndex:
     def save(self):
         self.workspace.save()
 
-    @traceable(name="Updating codebase index")
     @ai_track(description="Autofix - Updating codebase index")
     def update(self, sha: str | None = None):
         """

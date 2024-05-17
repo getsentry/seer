@@ -1,4 +1,3 @@
-from langsmith import traceable
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -16,7 +15,6 @@ from seer.automation.component import BaseComponent
 class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDiscoveryOutput]):
     context: AutofixContext
 
-    @traceable(name="Problem Discovery", run_type="llm", tags=["problem_discovery:v1.2"])
     @ai_track(description="Problem Discovery")
     def invoke(self, request: ProblemDiscoveryRequest) -> ProblemDiscoveryOutput | None:
         with self.context.state.update() as cur:

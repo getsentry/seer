@@ -39,17 +39,6 @@ class AutofixPipelineStep(PipelineStep):
         ]
 
         return {
-            "langsmith_extra": {
-                "tags": [f"run_id:{cur.run_id}", f"org_id:{cur.request.organization_id}"],
-                "metadata": {
-                    "run_id": cur.run_id,
-                    "organization_id": cur.request.organization_id,
-                    "project_id": cur.request.project_id,
-                    "group": {"id": group_id, "short_id": group_short_id},
-                    "invoking_user": invoking_user,
-                    "codebases": codebases,
-                },
-            },
             "sentry_tags": {
                 "run_id": cur.run_id,
                 "org_id": cur.request.organization_id,
