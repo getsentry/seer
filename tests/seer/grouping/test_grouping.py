@@ -5,6 +5,8 @@ from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordData,
     CreateGroupingRecordsRequest,
+    DeleteGroupingRecordsByHashRequest,
+    DeleteGroupingRecordsByHashResponse,
     GroupingRecord,
     GroupingRequest,
     GroupingResponse,
@@ -235,7 +237,7 @@ class TestGrouping(unittest.TestCase):
             for i in range(10):
                 assert records[i] is not None
 
-        # Call the delete endpoint
+        # Call the delete by project endpoint
         response = grouping_lookup().delete_grouping_records_for_project(1)
 
         # Verify records are deleted
@@ -244,6 +246,45 @@ class TestGrouping(unittest.TestCase):
                 session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
             )
             assert len(records) == 0
+
+    def test_delete_grouping_records_by_hash(self):
+        """Test deleting grouping records by hash list"""
+        # Create 10 records
+        hashes = [str(i) * 32 for i in range(10)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
+                for i in range(10)
+            ],
+            stacktrace_list=["stacktrace " + str(i) for i in range(10)],
+        )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response == BulkCreateGroupingRecordsResponse(success=True, groups_with_neighbor={})
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(10):
+                assert records[i] is not None
+
+        # Call the delete endpoint to delete first 5 records
+        delete_hashes = hashes[:5]
+        request_data = DeleteGroupingRecordsByHashRequest(project_id=1, hash_list=delete_hashes)
+        response = grouping_lookup().delete_grouping_records_by_hash(request_data)
+        assert response == DeleteGroupingRecordsByHashResponse(success=True)
+
+        # Verify only delete hashes are deleted
+        with Session() as session:
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
+            assert len(records) == 5
+            for hash in delete_hashes:
+                assert hash not in records
 
     def test_bulk_create_and_insert_grouping_records_invalid(self):
         """

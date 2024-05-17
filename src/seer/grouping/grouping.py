@@ -47,6 +47,11 @@ class CreateGroupingRecordsRequest(BaseModel):
     stacktrace_list: List[str]
 
 
+class DeleteGroupingRecordsByHashRequest(BaseModel):
+    project_id: int
+    hash_list: List[str]
+
+
 class GroupingRecord(BaseModel):
     group_id: Optional[int]
     project_id: int
@@ -85,6 +90,10 @@ class SimilarityResponse(BaseModel):
 class BulkCreateGroupingRecordsResponse(BaseModel):
     success: bool
     groups_with_neighbor: dict[str, GroupingResponse]
+
+
+class DeleteGroupingRecordsByHashResponse(BaseModel):
+    success: bool
 
 
 class SimilarityBenchmarkResponse(BaseModel):
@@ -304,3 +313,17 @@ class GroupingLookup:
             session.query(DbGroupingRecord).filter_by(project_id=project_id).delete()
             session.commit()
         return True
+
+    def delete_grouping_records_by_hash(
+        self, data: DeleteGroupingRecordsByHashRequest
+    ) -> DeleteGroupingRecordsByHashResponse:
+        """
+        Deletes grouping records that match a list of hashes.
+        """
+        with Session() as session:
+            session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.project_id == data.project_id,
+                DbGroupingRecord.hash.in_(data.hash_list),
+            ).delete()
+            session.commit()
+        return DeleteGroupingRecordsByHashResponse(success=True)
