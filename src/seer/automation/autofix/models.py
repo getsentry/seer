@@ -166,7 +166,6 @@ class AutofixGroupState(BaseModel):
     status: AutofixStatus = AutofixStatus.PENDING
     codebases: dict[int, CodebaseState] = Field(default_factory=dict)
     usage: Usage = Field(default_factory=Usage)
-    run_timeout_secs: Optional[Annotated[int, Examples((60 * 5,))]] = None
     last_triggered_at: Optional[
         Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
     ] = None
@@ -349,7 +348,7 @@ class AutofixContinuation(AutofixGroupState):
 
     @property
     def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
-        if self.is_running and self.run_timeout_secs and self.last_triggered_at:
+        if self.is_running and self.last_triggered_at:
             if now is None:
                 now = datetime.datetime.now()
             return (
