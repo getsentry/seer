@@ -232,7 +232,7 @@ class AutofixContext(PipelineContext):
                         )
 
                         if branch_ref is None:
-                            autofix_logger.warning(f"Failed to create branch from changes")
+                            autofix_logger.warning("Failed to create branch from changes")
                             return None
 
                         pr_title = f"""🤖 {change_state.title}"""

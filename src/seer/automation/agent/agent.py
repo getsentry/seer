@@ -47,7 +47,7 @@ class LlmAgent(ABC):
         )
 
         logger.debug(f"----[{self.name}] Running Agent----")
-        logger.debug(f"Previous messages: ")
+        logger.debug("Previous messages: ")
         for message in self.memory:
             logger.debug(f"{message.role}: {message.content}")
 
