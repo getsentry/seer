@@ -45,8 +45,6 @@ class TestRootCauseStep(unittest.TestCase):
         mock_context = MagicMock()
         RootCauseStep._instantiate_context = MagicMock(return_value=mock_context)
 
-        error_event = next(generate(SentryEventData))
-
         mock_context.event_manager = MagicMock()
         mock_context.has_missing_codebase_indexes.return_value = True
 

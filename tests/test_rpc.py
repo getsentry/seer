@@ -108,7 +108,7 @@ def test_rpc_call_200_empty(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
         def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
+            headers = QueueHandler.request_queue.get(timeout=5)[1]
             QueueHandler.response_queue.put(b"")
             assert (
                 headers["Authorization"]
@@ -129,7 +129,7 @@ def test_rpc_call_404(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
         def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
+            QueueHandler.request_queue.get(timeout=5)
             QueueHandler.response_queue.put(404)
 
         future = pool.submit(handle_request)
@@ -174,7 +174,7 @@ async def test_rpc_acall_200_empty(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
         def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
+            headers = QueueHandler.request_queue.get(timeout=5)[1]
             QueueHandler.response_queue.put(b"")
             assert (
                 headers["Authorization"]
@@ -196,7 +196,7 @@ async def test_rpc_acall_404(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
         def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
+            QueueHandler.request_queue.get(timeout=5)
             QueueHandler.response_queue.put(404)
 
         future = pool.submit(handle_request)

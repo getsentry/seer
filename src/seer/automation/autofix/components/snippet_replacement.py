@@ -74,7 +74,7 @@ class SnippetReplacementComponent(
             commit_message=request.commit_message,
         )
 
-        data, message, usage = GptClient().completion_with_parser(
+        data, _, usage = GptClient().completion_with_parser(
             [Message(role="user", content=prompt)], parser=self._parser
         )
 

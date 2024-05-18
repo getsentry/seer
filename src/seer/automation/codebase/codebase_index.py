@@ -428,7 +428,7 @@ class CodebaseIndex:
     def _get_file_content_with_cache(self, path: str, sha: str):
         try:
             return self.repo_client.get_file_content(path, sha)
-        except Exception as e:
+        except Exception:
             return None
 
     def _copy_document_with_local_changes(

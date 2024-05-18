@@ -210,7 +210,7 @@ class CodeActionTools(BaseTools):
             )
 
             if result:
-                original_snippet, snippet_start_line, snippet_end_line = result
+                original_snippet = result[0]
 
         logger.debug("Exact snippet:")
         logger.debug(f'"{snippet}"')

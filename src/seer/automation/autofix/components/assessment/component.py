@@ -22,7 +22,7 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDi
 
             exceptions = request.event_details.exceptions
 
-            data, message, usage = gpt_client.json_completion(
+            data, _, usage = gpt_client.json_completion(
                 [
                     Message(
                         role="system",
