@@ -34,6 +34,8 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
         execution_agent.run(
             ExecutionPrompts.format_default_msg(
                 retriever_dump=request.retriever_dump,
+                documents=request.documents,
+                repo_name=request.repo_name,
                 error_message=request.event_details.title,
                 exceptions=request.event_details.exceptions,
                 task=request.task,

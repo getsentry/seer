@@ -22,6 +22,7 @@ from seer.automation.autofix.config import (
 )
 from seer.automation.autofix.models import AutofixStatus, CodebaseChange
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
+from seer.automation.codebase.models import Document
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 
@@ -118,7 +119,7 @@ class AutofixExecutionStep(AutofixPipelineStep):
 
         self.context.event_manager.send_execution_complete(codebase_changes)
 
-    @ai_track(description="Executor with Retriever")
+    @ai_track(description="Executor")
     def _run_executor_with_retriever(
         self,
         retriever: RetrieverComponent,
@@ -126,14 +127,26 @@ class AutofixExecutionStep(AutofixPipelineStep):
         task: ReplaceCodePromptXml | CreateFilePromptXml,
         event_details: EventDetails,
     ):
-        retriever_output = retriever.invoke(RetrieverRequest(text=task.to_prompt_str()))
+        document: Document | None = None
+        retriever_dump: str | None = None
+
+        if isinstance(task, ReplaceCodePromptXml):
+            # For replace code tasks, we just need to retrieve the document.
+            _, document = self.context.get_document_and_codebase(
+                task.file_path, repo_name=task.repo_name
+            )
+        elif isinstance(task, CreateFilePromptXml):
+            # For create file tasks, we need to find relevant context for the new file.
+            retriever_output = retriever.invoke(RetrieverRequest(text=task.to_prompt_str()))
+            if retriever_output:
+                retriever_dump = retriever_output.to_xml().to_prompt_str()
 
         executor.invoke(
             ExecutorRequest(
                 event_details=event_details,
-                retriever_dump=(
-                    retriever_output.to_xml().to_prompt_str() if retriever_output else None
-                ),
+                retriever_dump=retriever_dump,
+                documents=[document] if document else [],
                 task=task.to_prompt_str(),
+                repo_name=task.repo_name,
             )
         )
