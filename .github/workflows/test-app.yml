@@ -47,6 +47,9 @@ jobs:
       #       echo "Error: Schema changes detected, run make schemas and commit those!"
       #       exit 1
       #     fi
+      - name: Typecheck with mypy
+        run: |
+          make mypy
       - name: Test with pytest
         run: |
           make test
