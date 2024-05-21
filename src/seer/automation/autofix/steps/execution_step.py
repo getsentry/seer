@@ -119,7 +119,7 @@ class AutofixExecutionStep(AutofixPipelineStep):
 
         self.context.event_manager.send_execution_complete(codebase_changes)
 
-    @ai_track(description="Executor")
+    @ai_track(description="Augmented Executor")
     def _run_executor_with_retriever(
         self,
         retriever: RetrieverComponent,
