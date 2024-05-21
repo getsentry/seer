@@ -95,6 +95,9 @@ class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
 
 
 class PlanningOutputPromptXml(PromptXmlModel, tag="planning_output"):
+    thoughts: Optional[str] = element(default=None)
+    content: Optional[str] = None
+    # Order matters here, don't move plan_steps before thoughts
     plan_steps: PlanStepsPromptXml
 
     def to_model(self):
