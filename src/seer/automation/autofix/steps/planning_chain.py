@@ -3,6 +3,7 @@ from typing import Any
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
+from celery_app.config import CeleryQueues
 from seer.automation.autofix.components.planner.component import PlanningComponent
 from seer.automation.autofix.components.planner.models import PlanningRequest
 from seer.automation.autofix.config import (
@@ -27,10 +28,10 @@ class AutofixPlanningStepRequest(PipelineStepTaskRequest):
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 def autofix_planning_task(*args, request: dict[str, Any]):
-    AutofixPlanningChainStep(request).invoke()
+    AutofixPlanningStep(request).invoke()
 
 
-class AutofixPlanningChainStep(PipelineChain, AutofixPipelineStep):
+class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
     """
     This class represents the execution pipeline in the autofix system. It is responsible for
     executing the fixes suggested by the planning component based on the root cause analysis.
@@ -84,5 +85,6 @@ class AutofixPlanningChainStep(PipelineChain, AutofixPipelineStep):
                     task_index=0,
                     planning_output=planning_output,
                 )
-            )
+            ),
+            queue=CeleryQueues.CUDA,
         )
