@@ -1,4 +1,5 @@
 from sentry_sdk.ai.monitoring import ai_track
+from lxml import etree
 
 from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.models import Message
