@@ -158,3 +158,95 @@ class TestRepoClient(unittest.TestCase):
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
         self.assertFalse(result)
+
+
+class TestRepoClientIndexFileSet(unittest.TestCase):
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_all_files_included(self, mock_Github):
+        mock_tree = MagicMock(
+            tree=[
+                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
+                MagicMock(path="file2.py", mode="100644", type="blob", size=1 * 1024 * 1024),
+            ],
+            raw_data={"truncated": False},
+        )
+
+        mock_github_instance = mock_Github.return_value
+        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
+        client = RepoClient(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        result = client.get_index_file_set("main")
+        assert result == {"file1.py", "file2.py"}
+
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_filters_out_folders(self, mock_Github):
+        mock_tree = MagicMock(
+            tree=[
+                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
+                MagicMock(path="folder", mode="100644", type="tree", size=1 * 1024 * 1024),
+            ],
+            raw_data={"truncated": False},
+        )
+
+        mock_github_instance = mock_Github.return_value
+        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
+        client = RepoClient(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        result = client.get_index_file_set("main")
+        assert result == {"file1.py"}
+
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_filters_out_symlinks(self, mock_Github):
+        mock_tree = MagicMock(
+            tree=[
+                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
+                MagicMock(path="symlink", mode="120000", type="blob", size=1 * 1024 * 1024),
+            ],
+            raw_data={"truncated": False},
+        )
+
+        mock_github_instance = mock_Github.return_value
+        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
+        client = RepoClient(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        result = client.get_index_file_set("main")
+        assert result == {"file1.py"}
+
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_filters_out_unknown_file_types(self, mock_Github):
+        mock_tree = MagicMock(
+            tree=[
+                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
+                MagicMock(path="file2.hjk", mode="100644", type="blob", size=1 * 1024 * 1024),
+            ],
+            raw_data={"truncated": False},
+        )
+
+        mock_github_instance = mock_Github.return_value
+        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
+        client = RepoClient(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        result = client.get_index_file_set("main")
+        assert result == {"file1.py"}
+
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_filters_out_large_files(self, mock_Github):
+        mock_tree = MagicMock(
+            tree=[
+                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
+                MagicMock(path="file2.py", mode="100644", type="blob", size=4 * 1024 * 1024),
+            ],
+            raw_data={"truncated": False},
+        )
+
+        mock_github_instance = mock_Github.return_value
+        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
+        client = RepoClient(
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+        )
+        result = client.get_index_file_set("main")
+        assert result == {"file1.py"}

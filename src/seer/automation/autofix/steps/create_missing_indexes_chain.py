@@ -66,7 +66,8 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                     self.logger.debug(log)
                     sentry_sdk.capture_message(log)
 
-                if not ready or not integrity:
+                # TODO: Delete codebase if integrity check fails too
+                if not ready:
                     log = (
                         f"Codebase workspace was not ready for repo: {repo.full_name}, recreating."
                     )

@@ -72,14 +72,14 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
                     self.assertEqual(workspace.namespace.id, namespace.id)
 
     @patch("seer.automation.codebase.codebase_index.CodebaseIndex.embed_chunks")
-    @patch("seer.automation.codebase.codebase_index.read_directory")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     def test_simple_create_and_index(
         self,
         mock_cleanup_dir,
         mock_repo_client,
-        mock_read_directory,
+        read_specific_files,
         mock_embed_chunks,
     ):
         mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
@@ -91,7 +91,7 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
         )
         mock_repo_client.from_repo_info.return_value.repo.full_name = "getsentry/seer"
 
-        mock_read_directory.return_value = [
+        read_specific_files.return_value = [
             Document(
                 path="file1.py",
                 language="python",
@@ -154,11 +154,11 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
                     self.assertEqual(workspace.namespace.id, namespace.id)
 
     @patch("seer.automation.codebase.codebase_index.CodebaseIndex.embed_chunks")
-    @patch("seer.automation.codebase.codebase_index.read_directory")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     def test_failing_create_and_index(
-        self, mock_cleanup_dir, mock_repo_client, mock_read_directory, mock_embed_chunks
+        self, mock_cleanup_dir, mock_repo_client, read_specific_files, mock_embed_chunks
     ):
         mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
             return_value="sha"
@@ -169,7 +169,7 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
         )
         mock_repo_client.from_repo_definition.return_value.repo.full_name = "getsentry/seer"
 
-        mock_read_directory.return_value = [
+        read_specific_files.return_value = [
             Document(
                 path="file1.py",
                 language="python",
@@ -994,9 +994,9 @@ class TestCodebaseIndexFileIntegrityCheck(unittest.TestCase):
             ]
         )
 
-        self.mock_repo_client.get_file_set.return_value = set(["path1.py", "path2.js"])
+        self.mock_repo_client.get_index_file_set.return_value = set(["path1.py", "path2.js"])
 
-        self.assertTrue(self.codebase.verify_file_integrity())
+        assert self.codebase.verify_file_integrity() is True
 
     def test_integrity_check_fail_missing_file(self):
         self.namespace.insert_chunks(
@@ -1014,9 +1014,9 @@ class TestCodebaseIndexFileIntegrityCheck(unittest.TestCase):
             ]
         )
 
-        self.mock_repo_client.get_file_set.return_value = set(["path1.py", "path2.js"])
+        self.mock_repo_client.get_index_file_set.return_value = set(["path1.py", "path2.js"])
 
-        self.assertFalse(self.codebase.verify_file_integrity())
+        assert self.codebase.verify_file_integrity() is False
 
     def test_integrity_check_fail_extra_file(self):
         self.namespace.insert_chunks(
@@ -1044,9 +1044,9 @@ class TestCodebaseIndexFileIntegrityCheck(unittest.TestCase):
             ]
         )
 
-        self.mock_repo_client.get_file_set.return_value = set(["path1.py"])
+        self.mock_repo_client.get_index_file_set.return_value = set(["path1.py"])
 
-        self.assertFalse(self.codebase.verify_file_integrity())
+        assert self.codebase.verify_file_integrity() is False
 
     def test_integrity_check_ignores_unsupported_exts(self):
         self.namespace.insert_chunks(
@@ -1074,8 +1074,8 @@ class TestCodebaseIndexFileIntegrityCheck(unittest.TestCase):
             ]
         )
 
-        self.mock_repo_client.get_file_set.return_value = set(
+        self.mock_repo_client.get_index_file_set.return_value = set(
             ["path1.py", "path2.js", "unsupported.ext", "bad.no", ".gitignore"]
         )
 
-        self.assertTrue(self.codebase.verify_file_integrity())
+        assert self.codebase.verify_file_integrity() is False

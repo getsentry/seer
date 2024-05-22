@@ -37,7 +37,6 @@ from seer.automation.codebase.utils import (
     get_language_from_path,
     group_documents_by_language,
     potential_frame_match,
-    read_directory,
     read_specific_files,
 )
 from seer.automation.models import (
@@ -239,7 +238,10 @@ class CodebaseIndex:
                 logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
                 try:
-                    documents = read_directory(tmp_repo_dir)
+                    files = repo_client.get_index_file_set(
+                        workspace.namespace.sha, skip_empty_files=True
+                    )
+                    documents = read_specific_files(tmp_repo_dir, files)
 
                     logger.debug(f"Read {len(documents)} documents:")
                     documents_by_language = group_documents_by_language(documents)
@@ -365,10 +367,9 @@ class CodebaseIndex:
             self.workspace.delete_paths(removed_files)
 
             self.workspace.namespace.sha = target_sha
+            self.workspace.save()
 
-            if self.verify_file_integrity():
-                self.workspace.save()
-            else:
+            if not self.verify_file_integrity():
                 # Let's see how often this happens, if at all.
                 sentry_sdk.capture_message(
                     f"File integrity check after update failed for {self.repo_info.external_slug}, namespace {self.namespace.id}"
@@ -428,12 +429,7 @@ class CodebaseIndex:
         Checks if the files in the workspace match the files in the repository
         Note: Only checks up to 100k files for now.
         """
-        file_paths = self.repo_client.get_file_set(self.namespace.sha)
-
-        for path in list(file_paths):
-            # Remove files that are not supported
-            if not get_language_from_path(path):
-                file_paths.remove(path)
+        file_paths = self.repo_client.get_index_file_set(self.namespace.sha, skip_empty_files=True)
 
         return self.workspace.verify_file_integrity(file_paths)
 
