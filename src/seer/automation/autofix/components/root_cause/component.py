@@ -41,8 +41,13 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
             return None
 
+        from xml.sax.saxutils import escape
+
+        # Sanitize and escape the response variable
+        sanitized_response = escape(response)
+
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(response, ['thoughts', 'snippet', 'title', 'description'])}</root>"
+            f"&lt;root&gt;{sanitized_response}&lt;/root&gt;"
         )
 
         # Assign the ids to be the numerical indices of the causes and suggested fixes
