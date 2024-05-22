@@ -22,7 +22,8 @@ class PlanningPrompts:
             Guidelines:
             - Each code change must be a separate step and be explicit and clear.
             - No placeholders are allowed, the steps must be clear and detailed.
-            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps."""
+            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps.
+            - Use the <thoughts> tag to think step by step before you return your result with a <plan_steps> tag."""
         ).format(steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str())
 
     @staticmethod
@@ -42,7 +43,7 @@ class PlanningPrompts:
             You have to break the below task into steps:
             {task_str}
 
-            Think step-by-step then output a concise and simple list of steps to perform in the output format provided in the system message. This must be inside a <plan_steps> tag."""
+            Think step-by-step inside the <thoughts> tag then output a concise and simple list of steps to perform in the output format provided in the system message."""
         ).format(
             err_msg=err_msg,
             exceptions_str=format_exceptions(exceptions),

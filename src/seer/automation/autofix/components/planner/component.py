@@ -50,7 +50,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
             return None
 
         cleaned_response = escape_multi_xml(
-            response, ["snippet", "reference_snippet", "new_snippet"]
+            response, ["thoughts", "snippet", "reference_snippet", "new_snippet"]
         )
 
         return PlanningOutputPromptXml.from_xml(
