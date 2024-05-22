@@ -124,13 +124,16 @@ class GroupingLookup:
         """
         return self.model.encode(stacktrace)
 
-    def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 10) -> np.ndarray:
+    def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1) -> np.ndarray:
         """
         Encodes multiple stacktraces in batches using the sentence transformer model.
         :param stacktraces: The list of stacktraces to encode.
         :param batch_size: The batch size used for the computation.
         :return: The embeddings of the stacktraces.
         """
+        sum_of_stacktrace_length = sum(len(stacktrace) for stacktrace in stacktraces)
+        logger.info(f"total stacktrace length for encoding: {sum_of_stacktrace_length}")
+
         return self.model.encode(sentences=stacktraces, batch_size=batch_size)
 
     def query_nearest_k_neighbors(
