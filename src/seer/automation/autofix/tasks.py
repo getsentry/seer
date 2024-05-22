@@ -21,9 +21,9 @@ from seer.automation.autofix.steps.create_missing_indexes_chain import (
     CreateAnyMissingCodebaseIndexesStepRequest,
     CreateMissingIndexesStep,
 )
-from seer.automation.autofix.steps.execution_step import (
-    AutofixExecutionStep,
-    AutofixExecutionStepRequest,
+from seer.automation.autofix.steps.planning_chain import (
+    AutofixPlanningStep,
+    AutofixPlanningStepRequest,
 )
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.autofix.utils import get_sentry_client
@@ -148,11 +148,11 @@ def run_autofix_execution(request: AutofixUpdateRequest):
         CreateMissingIndexesStep.get_signature(
             CreateAnyMissingCodebaseIndexesStepRequest(
                 run_id=cur.run_id,
-                next=AutofixExecutionStep.get_signature(
-                    AutofixExecutionStepRequest(
+                next=AutofixPlanningStep.get_signature(
+                    AutofixPlanningStepRequest(
                         run_id=cur.run_id,
                     ),
-                    queue=CeleryQueues.CUDA,
+                    queue=CeleryQueues.DEFAULT,
                 ),
             ),
             queue=CeleryQueues.DEFAULT,
