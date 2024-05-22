@@ -613,7 +613,7 @@ class CodebaseIndex:
 
                 if changed_document:
                     diff = difflib.unified_diff(
-                        "",
+                        [],  # Empty list to represent no original content
                         changed_document.text.splitlines(),
                         fromfile="/dev/null",
                         tofile=path,
@@ -624,10 +624,14 @@ class CodebaseIndex:
                     diffs.append(diff_str)
                     changed_documents_map[path] = changed_document
 
-        combined_diff = "\n".join(diffs).strip("\n")
-        patch = PatchSet(combined_diff)
         file_patches = []
-        for patched_file in patch:
+        for file_diff in diffs:
+            patches = PatchSet(file_diff)
+            if not patches:
+                sentry_sdk.capture_message(f"No patches for diff: {file_diff}")
+                continue
+            patched_file = patches[0]
+
             tree: Tree | None = None
             document = changed_documents_map.get(patched_file.path)
             if document and supports_parent_declarations(document.language):
@@ -706,6 +710,8 @@ class CodebaseIndex:
                     hunks=hunks,
                 )
             )
+
+        combined_diff = "\n".join(diffs)
 
         return file_patches, combined_diff
 
