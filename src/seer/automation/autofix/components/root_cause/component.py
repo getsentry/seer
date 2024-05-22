@@ -26,35 +26,42 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             memory=[Message(role="system", content=RootCauseAnalysisPrompts.format_system_msg())],
         )
 
-        response = agent.run(
-            RootCauseAnalysisPrompts.format_default_msg(
-                err_msg=request.event_details.title,
-                exceptions=request.event_details.exceptions,
-                instruction=request.instruction,
-            )
-        )
+response = agent.run(
+    RootCauseAnalysisPrompts.format_default_msg(
+        err_msg=request.event_details.title,
+        exceptions=request.event_details.exceptions,
+        instruction=request.instruction,
+    )
+)
 
-        with self.context.state.update() as cur:
-            cur.usage += agent.usage
+with self.context.state.update() as cur:
+    cur.usage += agent.usage
 
-        if not response:
-            autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
-            return None
+if not response:
+    autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
+    return None
 
-        xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(response, ['thoughts', 'snippet', 'title', 'description'])}</root>"
-        )
+sanitized_response = escape_multi_xml(response, ['thoughts', 'snippet', 'title', 'description'])
+xml_content = f"&lt;root&gt;{sanitized_response}&lt;/root&gt;"
 
-        # Assign the ids to be the numerical indices of the causes and suggested fixes
-        causes = []
-        for i, cause in enumerate(xml_response.potential_root_causes.causes):
-            cause_model = cause.to_model()
-            cause_model.id = i
+# Validate the XML content
+try:
+    etree.fromstring(xml_content)
+except etree.XMLSyntaxError as e:
+    raise ValueError(f"Malformed XML content: {e}")
 
-            if cause_model.suggested_fixes:
-                for j, suggested_fix in enumerate(cause_model.suggested_fixes):
-                    suggested_fix.id = j
+xml_response = RootCauseAnalysisOutputPromptXml.from_xml(xml_content)
 
-            causes.append(cause_model)
+# Assign the ids to be the numerical indices of the causes and suggested fixes
+causes = []
+for i, cause in enumerate(xml_response.potential_root_causes.causes):
+    cause_model = cause.to_model()
+    cause_model.id = i
 
-        return RootCauseAnalysisOutput(causes=causes)
+    if cause_model.suggested_fixes:
+        for j, suggested_fix in enumerate(cause_model.suggested_fixes):
+            suggested_fix.id = j
+
+    causes.append(cause_model)
+
+return RootCauseAnalysisOutput(causes=causes)
