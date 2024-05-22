@@ -56,12 +56,13 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
         for repo in self.context.repos:
             codebase = self.context.get_codebase_from_external_id(repo.external_id)
 
-            # If a codebase is not ready or missing files delete it and recreate it.
+            # If a codebase is not ready delete it and recreate it.
             if codebase:
                 ready = codebase.workspace.is_ready()
                 integrity = ready and codebase.verify_file_integrity()
 
                 if ready and not integrity:
+                    # Log integrity failures for now
                     log = f"Codebase workspace integrity check failed for repo: {repo.full_name}."
                     self.logger.debug(log)
                     sentry_sdk.capture_message(log)
