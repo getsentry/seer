@@ -22,6 +22,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
     run_autofix_execution,
+    run_autofix_instruction,
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
@@ -203,6 +204,8 @@ def autofix_update_endpoint(
         run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_create_pr(data)
+    elif data.payload.type == AutofixUpdateType.INSTRUCTION:
+        run_autofix_instruction(data)
     return AutofixEndpointResponse(started=True)
 
 

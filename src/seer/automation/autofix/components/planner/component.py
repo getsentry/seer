@@ -36,13 +36,28 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
             else request.root_cause_and_fix
         )
 
-        response = agent.run(
-            PlanningPrompts.format_default_msg(
-                event=request.event_details,
-                task_str=task_str,
-                instruction=request.instruction,
+        response = None
+        if new_instruction := request.new_instruction:
+            diffs_by_repo_name = []
+            for codebase in self.context.codebases.values():
+                _, diff_str = codebase.get_file_patches()
+                diffs_by_repo_name.append((codebase.repo_info.external_slug, diff_str))
+
+            response = agent.run(
+                PlanningPrompts.format_instruction_msg(
+                    event=request.event_details,
+                    diffs_by_repo_name=diffs_by_repo_name,
+                    instruction=new_instruction,
+                )
             )
-        )
+        else:
+            response = agent.run(
+                PlanningPrompts.format_default_msg(
+                    event=request.event_details,
+                    task_str=task_str,
+                    instruction=request.original_instruction,
+                )
+            )
 
         with self.context.state.update() as cur:
             cur.usage += agent.usage

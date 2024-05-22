@@ -103,11 +103,13 @@ class CodebaseChange(BaseModel):
 class StepType(str, enum.Enum):
     ROOT_CAUSE_ANALYSIS = "root_cause_analysis"
     CHANGES = "changes"
+    USER_RESPONSE = "user_response"
     DEFAULT = "default"
 
 
 class BaseStep(BaseModel):
-    id: str
+    id: str = Field(default_factory=lambda: hashlib.sha1().hexdigest())
+    key: str
     title: str
     type: StepType = StepType.DEFAULT
 
@@ -119,7 +121,10 @@ class BaseStep(BaseModel):
 
     def find_child(self, *, id: str) -> "Step | None":
         for step in self.progress:
-            if isinstance(step, (DefaultStep, RootCauseStep, ChangesStep)) and step.id == id:
+            if (
+                isinstance(step, (DefaultStep, RootCauseStep, ChangesStep, UserResponseStep))
+                and step.id == id
+            ):
                 return step
         return None
 
@@ -151,7 +156,13 @@ class ChangesStep(BaseStep):
     changes: list[CodebaseChange]
 
 
-Step = Union[DefaultStep, RootCauseStep, ChangesStep]
+class UserResponseStep(BaseStep):
+    type: Literal[StepType.USER_RESPONSE] = StepType.USER_RESPONSE
+
+    text: str
+
+
+Step = Union[DefaultStep, RootCauseStep, ChangesStep, UserResponseStep]
 
 
 class CodebaseState(BaseModel):
@@ -231,6 +242,7 @@ class AutofixRequest(BaseModel):
 class AutofixUpdateType(str, enum.Enum):
     SELECT_ROOT_CAUSE = "select_root_cause"
     CREATE_PR = "create_pr"
+    INSTRUCTION = "instruction"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -245,11 +257,21 @@ class AutofixCreatePrUpdatePayload(BaseModel):
     repo_id: int | None = None
 
 
+class AutofixTextInstruction(BaseModel):
+    type: Literal["text"]
+    text: str
+
+
+class AutofixInstructionPayload(BaseModel):
+    type: Literal[AutofixUpdateType.INSTRUCTION]
+    content: AutofixTextInstruction
+
+
 class AutofixUpdateRequest(BaseModel):
     run_id: int
-    payload: Union[AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload] = Field(
-        discriminator="type"
-    )
+    payload: Union[
+        AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload, AutofixInstructionPayload
+    ] = Field(discriminator="type")
 
 
 class AutofixContinuation(AutofixGroupState):
@@ -261,14 +283,30 @@ class AutofixContinuation(AutofixGroupState):
                 return step
         return None
 
-    def find_or_add(self, base_step: Step) -> Step:
-        existing = self.find_step(id=base_step.id)
+    def add_step(self, step: Step):
+        step.index = len(self.steps)
+        self.steps.append(step)
+
+        return step
+
+    def find_last_with_key(self, *, key: str) -> Step | None:
+        for step in reversed(self.steps):
+            if step.key == key:
+                return step
+        return None
+
+    def find_or_add(self, base_step: Step, method: Literal["id", "key"] = "id") -> Step:
+        existing = None
+        if method == "id":
+            existing = self.find_step(id=base_step.id)
+        elif method == "key":
+            existing = self.find_last_with_key(key=base_step.key)
+
         if existing:
             return existing
 
         base_step = base_step.model_copy()
-        base_step.index = len(self.steps)
-        self.steps.append(base_step)
+        self.add_step(base_step)
         return base_step
 
     def make_step_latest(self, step: Step):
