@@ -141,7 +141,7 @@ class AutofixContext(PipelineContext):
         return codebase_index
 
     def get_codebase(self, repo_id: int) -> CodebaseIndex | None:
-        return self.codebases[repo_id] if repo_id in self.codebases else None
+        return self.codebases[repo_id]
 
     def get_codebase_from_external_id(self, external_id: str) -> CodebaseIndex | None:
         for codebase in self.codebases.values():
