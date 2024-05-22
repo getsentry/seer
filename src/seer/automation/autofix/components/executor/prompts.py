@@ -1,6 +1,7 @@
 import textwrap
 
 from seer.automation.autofix.prompts import format_exceptions
+from seer.automation.codebase.models import Document
 from seer.automation.models import ExceptionDetails
 
 
@@ -27,9 +28,11 @@ class ExecutionPrompts:
     @staticmethod
     def format_default_msg(
         retriever_dump: str | None,
+        documents: list[Document],
         error_message: str | None,
         exceptions: list[ExceptionDetails],
         task: str,
+        repo_name: str,
     ):
         context_dump_str = (
             textwrap.dedent(
@@ -39,6 +42,25 @@ class ExecutionPrompts:
                 </relevant_context>"""
             ).format(retriever_dump=retriever_dump)
             if retriever_dump
+            else ""
+        )
+
+        document_contents_str = (
+            "\n\n"
+            + textwrap.dedent(
+                """\
+                <relevant_documents>
+                {document_contents}
+                </relevant_documents>"""
+            ).format(
+                document_contents="\n".join(
+                    [
+                        document.get_prompt_xml(repo_name=repo_name).to_prompt_str()
+                        for document in documents
+                    ]
+                )
+            )
+            if documents
             else ""
         )
 
@@ -58,7 +80,7 @@ class ExecutionPrompts:
         return (
             textwrap.dedent(
                 """\
-            {context_dump_str}
+            {context_dump_str}{document_contents_str}
 
             {issue_str}
 
@@ -74,6 +96,11 @@ class ExecutionPrompts:
 
             You must use the tools/functions provided to do so."""
             )
-            .format(context_dump_str=context_dump_str, issue_str=issue_str, task_text=task)
+            .format(
+                context_dump_str=context_dump_str,
+                document_contents_str=document_contents_str,
+                issue_str=issue_str,
+                task_text=task,
+            )
             .strip()
         )
