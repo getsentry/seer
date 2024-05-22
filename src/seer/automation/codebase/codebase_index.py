@@ -366,10 +366,18 @@ class CodebaseIndex:
 
             self.workspace.namespace.sha = target_sha
 
+            if self.verify_file_integrity():
+                self.workspace.save()
+            else:
+                # Let's see how often this happens, if at all.
+                sentry_sdk.capture_message(
+                    f"File integrity check after update failed for {self.repo_info.external_slug}, namespace {self.namespace.id}"
+                )
+
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
             self.workspace.namespace.status = CodebaseNamespaceStatus.CREATED
-            self.workspace.save()
+            self.workspace.save_records()
 
             cleanup_dir(tmp_dir)
 
@@ -414,6 +422,20 @@ class CodebaseIndex:
             return self.repo_client.compare(self.namespace.sha, head_sha).ahead_by > 0
 
         return False
+
+    def verify_file_integrity(self) -> bool:
+        """
+        Checks if the files in the workspace match the files in the repository
+        Note: Only checks up to 100k files for now.
+        """
+        file_paths = self.repo_client.get_file_set(self.namespace.sha)
+
+        for path in list(file_paths):
+            # Remove files that are not supported
+            if not get_language_from_path(path):
+                file_paths.remove(path)
+
+        return self.workspace.verify_file_integrity(file_paths)
 
     def query(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
         assert self.repo_info is not None, "Repository info is not set"
