@@ -1,7 +1,5 @@
 import json
-import textwrap
 
-from pydantic import BaseModel
 from pydantic_xml import element
 
 from seer.automation.codebase.models import BaseDocumentChunk

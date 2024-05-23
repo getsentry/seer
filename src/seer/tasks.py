@@ -13,7 +13,6 @@ import sqlalchemy
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from seer.db import AsyncSession, ProcessRequest
 from seer.task_factory import AsyncTaskFactory, _async_task_factories

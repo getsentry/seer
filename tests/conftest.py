@@ -1,9 +1,7 @@
-import asyncio
 import os
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from seer.bootup import CELERY_CONFIG, bootup
 from seer.db import Session, db
