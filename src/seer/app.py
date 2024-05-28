@@ -1,8 +1,10 @@
+import logging
 import time
 
 import sentry_sdk
 from flask import jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.models import (
@@ -53,7 +55,12 @@ from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointRes
 
 app = bootup(
     __name__,
-    [FlaskIntegration()],
+    [
+        FlaskIntegration(),
+        LoggingIntegration(
+            level=logging.DEBUG,  # Capture debug and above as breadcrumbs
+        ),
+    ],
     init_migrations=True,
     async_load_models=True,
 )

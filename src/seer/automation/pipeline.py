@@ -1,7 +1,7 @@
 import abc
 import logging
 import uuid
-from typing import Any
+from typing import Any, Generic, Type, TypedDict, TypeVar
 
 from celery import Task, signature
 from pydantic import BaseModel, Field
@@ -34,13 +34,22 @@ class PipelineStepTaskRequest(BaseModel):
     step_id: int = Field(default_factory=lambda: uuid.uuid4().int)
 
 
-class PipelineStep(abc.ABC):
+def make_step_request_fields(context: PipelineContext):
+    return {"run_id": context.run_id}
+
+
+# Define a type variable that is bound to PipelineStepTaskRequest
+_RequestType = TypeVar("_RequestType", bound=PipelineStepTaskRequest)
+
+
+class PipelineStep(abc.ABC, Generic[_RequestType]):
     """
     A step in the automation pipeline, complete with the context, request, logging + error handling utils.
     Main method that is run is _invoke, which should be implemented by the subclass.
     """
 
     name = "PipelineStep"
+    request_model: Type[_RequestType]
 
     def __init__(self, request: dict[str, Any]):
         self.request = self._instantiate_request(request)
@@ -108,6 +117,10 @@ class PipelineStep(abc.ABC):
     @abc.abstractmethod
     def _invoke(self, **kwargs) -> Any:
         pass
+
+    @property
+    def step_request_fields(self):
+        return make_step_request_fields(self.context)
 
 
 class PipelineChain(abc.ABC):

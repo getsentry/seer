@@ -100,6 +100,12 @@ This will apply all migrations to the database and create new image.
 make migration
 ```
 
+### Running Mypy type checker
+
+```bash
+make mypy
+```
+
 ### Running Tests
 
 ```bash

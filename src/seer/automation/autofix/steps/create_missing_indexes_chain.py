@@ -91,7 +91,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
         for repo in repos_to_create:
             steps.append(
                 CreateIndexStep.get_signature(
-                    CodebaseIndexingStepRequest(run_id=self.context.run_id, repo=repo),
+                    CodebaseIndexingStepRequest(**self.step_request_fields, repo=repo),
                     queue=CeleryQueues.CUDA,
                 )
             )
@@ -99,7 +99,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
         for repo_id in repos_to_update:
             steps.append(
                 UpdateIndexStep.get_signature(
-                    UpdateIndexStepRequest(run_id=self.context.run_id, repo_id=repo_id),
+                    UpdateIndexStepRequest(**self.step_request_fields, repo_id=repo_id),
                     queue=CeleryQueues.CUDA,
                 )
             )
@@ -112,7 +112,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
             self.next(
                 AutofixParallelizedChainStep.get_signature(
                     ParallelizedChainStepRequest(
-                        run_id=self.context.run_id,
+                        **self.step_request_fields,
                         steps=steps,
                         on_success=self.request.next,
                     ),

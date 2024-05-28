@@ -29,10 +29,19 @@ class UpdateCodebaseTaskRequest(BaseModel):
     repo_id: int
 
 
+class DocumentPromptXml(PromptXmlModel, tag="document", skip_empty=True):
+    path: str = attr()
+    repository: str | None = attr(default=None)
+    content: str
+
+
 class Document(BaseModel):
     path: str
     text: str
     language: str
+
+    def get_prompt_xml(self, repo_name: str | None) -> DocumentPromptXml:
+        return DocumentPromptXml(path=self.path, repository=repo_name, content=self.text)
 
 
 class DraftDocument(BaseModel):
