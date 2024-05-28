@@ -1,5 +1,6 @@
 from typing import Any
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
@@ -46,6 +47,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     def get_task():
         return autofix_change_describer_task
 
+    @observe(name="Change Describer")
     @ai_track(description="Autofix - Change Describer")
     def _invoke(self, **kwargs):
         # Get the diff and PR details for each codebase.

@@ -1,3 +1,4 @@
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -15,6 +16,7 @@ from seer.automation.component import BaseComponent
 class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDiscoveryOutput]):
     context: AutofixContext
 
+    @observe(name="Problem Discovery")
     @ai_track(description="Problem Discovery")
     def invoke(self, request: ProblemDiscoveryRequest) -> ProblemDiscoveryOutput | None:
         with self.context.state.update() as cur:

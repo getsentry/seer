@@ -1,4 +1,5 @@
 import sentry_sdk
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -17,6 +18,7 @@ from seer.automation.component import BaseComponent
 class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
     context: AutofixContext
 
+    @observe(name="Reranker")
     @ai_track(description="Reranker")
     def invoke(self, request: RerankerRequest) -> RerankerOutput:
         gpt_client = GptClient()

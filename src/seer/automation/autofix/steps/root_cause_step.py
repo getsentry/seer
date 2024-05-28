@@ -1,5 +1,6 @@
 from typing import Any
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
@@ -42,6 +43,7 @@ class RootCauseStep(AutofixPipelineStep):
     def _instantiate_request(request: dict[str, Any]) -> RootCauseStepRequest:
         return RootCauseStepRequest.model_validate(request)
 
+    @observe(name="Root Cause")
     @ai_track(description="Autofix - Root Cause")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()

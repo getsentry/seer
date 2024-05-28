@@ -1,3 +1,4 @@
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import GptAgent
@@ -19,6 +20,7 @@ from seer.automation.component import BaseComponent
 class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
     context: AutofixContext
 
+    @observe(name="Planning")
     @ai_track(description="Planning")
     def invoke(self, request: PlanningRequest) -> PlanningOutput | None:
         tools = BaseTools(self.context)
