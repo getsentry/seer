@@ -286,6 +286,45 @@ class TestGrouping(unittest.TestCase):
             for hash in delete_hashes:
                 assert hash not in records
 
+    def test_delete_grouping_records_by_hash_invalid_hashes(self):
+        """Test deleting grouping records by hash list, where some of the hashes do not exist."""
+        hashes = [str(i) * 32 for i in range(10)]
+        # Create 5 records
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
+                for i in range(5)
+            ],
+            stacktrace_list=["stacktrace " + str(i) for i in range(5)],
+        )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response == BulkCreateGroupingRecordsResponse(success=True, groups_with_neighbor={})
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(5):
+                assert records[i] is not None
+
+        # Call the delete endpoint to delete 10 hashes, but only 5 of these hashes have records to delete
+        delete_hashes = hashes
+        request_data = DeleteGroupingRecordsByHashRequest(project_id=1, hash_list=delete_hashes)
+        response = grouping_lookup().delete_grouping_records_by_hash(request_data)
+        assert response == DeleteGroupingRecordsByHashResponse(success=True)
+
+        # Verify that the 5 hashes that have records were deleted
+        with Session() as session:
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
+            assert len(records) == 0
+            for hash in delete_hashes:
+                assert hash not in records
+
     def test_bulk_create_and_insert_grouping_records_invalid(self):
         """
         Test bulk creating and inserting grouping records fails when the input lists are of

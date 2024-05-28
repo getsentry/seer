@@ -139,7 +139,7 @@ def delete_project_grouping_record_endpoint(project_id: int):
     return jsonify(success=success)
 
 
-@json_api("/v0/issues/similar-issues/delete-grouping-record-by-hash")
+@json_api("/v0/issues/similar-issues/grouping-record/delete-by-hash")
 def delete_grouping_records_by_hash_endpoint(
     data: DeleteGroupingRecordsByHashRequest,
 ) -> DeleteGroupingRecordsByHashResponse:
