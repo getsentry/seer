@@ -43,8 +43,8 @@ class RootCauseStep(AutofixPipelineStep):
     def _instantiate_request(request: dict[str, Any]) -> RootCauseStepRequest:
         return RootCauseStepRequest.model_validate(request)
 
-    @observe(name="Root Cause")
-    @ai_track(description="Autofix - Root Cause")
+    @observe(name="Autofix - Root Cause Step")
+    @ai_track(description="Autofix - Root Cause Step")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_root_cause_analysis_start()

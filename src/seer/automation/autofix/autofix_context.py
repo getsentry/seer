@@ -238,7 +238,7 @@ class AutofixContext(PipelineContext):
                         pr_title = f"""🤖 {change_state.title}"""
 
                         ref_note = ""
-                        org_slug = self._get_org_slug(state.request.organization_id)
+                        org_slug = self.get_org_slug(state.request.organization_id)
                         if org_slug:
                             issue_url = f"https://sentry.io/organizations/{org_slug}/issues/{state.request.issue.id}/"
                             issue_link = (
@@ -297,7 +297,7 @@ class AutofixContext(PipelineContext):
                             session.add(pr_id_mapping)
                             session.commit()
 
-    def _get_org_slug(self, organization_id: int) -> str | None:
+    def get_org_slug(self, organization_id: int) -> str | None:
         slug: str | None = None
         try:
             response = self.sentry_client.call("get_organization_slug", org_id=organization_id)

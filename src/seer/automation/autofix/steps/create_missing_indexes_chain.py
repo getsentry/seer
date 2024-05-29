@@ -1,6 +1,8 @@
 from typing import Any
 
 import sentry_sdk
+from langfuse.decorators import observe
+from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
 from celery_app.config import CeleryQueues
@@ -47,6 +49,8 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return create_missing_indexes_task
 
+    @observe(name="Autofix - Create Missing Indices Step")
+    @ai_track(description="Autofix - Create Missing Indices Step")
     def _invoke(self, **kwargs):
         event_details = EventDetails.from_event(self.context.state.get().request.issue.events[0])
 

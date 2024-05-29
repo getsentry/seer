@@ -58,8 +58,8 @@ class AutofixExecutionStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return autofix_execution_task
 
-    @observe(name="Execution")
-    @ai_track(description="Autofix - Execution")
+    @observe(name="Autofix - Execution Step")
+    @ai_track(description="Autofix - Execution Step")
     def _invoke(self, **kwargs):
         retriever = RetrieverComponent(self.context)
         executor = ExecutorComponent(self.context)

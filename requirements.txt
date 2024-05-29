@@ -99,4 +99,4 @@ johen==0.1.3
 pydantic-xml==2.9.0
 chromadb==0.4.14
 google-cloud-storage==2.16.0
-langfuse==2.33.0
+langfuse @ git+https://github.com/jennmueng/langfuse-python.git@8e42a433e203ad39360339448b6c67b200661f66

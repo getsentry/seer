@@ -47,8 +47,8 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     def get_task():
         return autofix_change_describer_task
 
-    @observe(name="Change Describer")
-    @ai_track(description="Autofix - Change Describer")
+    @observe(name="Autofix – Change Describer Step")
+    @ai_track(description="Autofix - Change Describer Step")
     def _invoke(self, **kwargs):
         # Get the diff and PR details for each codebase.
         change_describer = ChangeDescriptionComponent(self.context)

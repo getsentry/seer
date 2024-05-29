@@ -1,5 +1,7 @@
 from typing import Any
 
+from langfuse.decorators import langfuse_context
+
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
@@ -29,29 +31,50 @@ class AutofixPipelineStep(PipelineStep):
         return make_done_signal(self.request.step_id) not in self.context.state.get().signals
 
     def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
-        cur = self.context.state.get()
+        try:
+            cur = self.context.state.get()
 
-        group_id = cur.request.issue.id
-        group_short_id = cur.request.issue.short_id
-        invoking_user = cur.request.invoking_user
-        codebases = [
-            self._get_codebase_metadata(codebase.repo_id) for codebase in cur.codebases.values()
-        ]
+            group_id = cur.request.issue.id
+            group_short_id = cur.request.issue.short_id
+            invoking_user = cur.request.invoking_user
+            codebases = [
+                self._get_codebase_metadata(codebase.repo_id) for codebase in cur.codebases.values()
+            ]
 
-        return {
-            "sentry_tags": {
+            org_slug = self.context.get_org_slug(cur.request.organization_id)
+
+            tags = {
                 "run_id": cur.run_id,
                 "org_id": cur.request.organization_id,
-            },
-            "sentry_data": {
-                "run_id": cur.run_id,
-                "organization_id": cur.request.organization_id,
                 "project_id": cur.request.project_id,
+                "group_id": group_id,
+            }
+            repo_tags = [f"repo:{codebase.get('external_slug')}" for codebase in codebases]
+            repo_tags_dict = {tag: 1 for tag in repo_tags}
+            metadata = {
+                "run_id": cur.run_id,
+                "org_slug": org_slug,
                 "group": {"id": group_id, "short_id": group_short_id},
                 "invoking_user": invoking_user,
                 "codebases": codebases,
-            },
-        }
+            }
+
+            return {
+                "langfuse_tags": [
+                    f"{key}:{value}" for key, value in tags.items() if value is not None
+                ]
+                + repo_tags,
+                "langfuse_metadata": metadata,
+                "langfuse_session_id": str(cur.run_id),
+                "langfuse_user_id": f"org:{org_slug}" if org_slug else None,
+                "sentry_tags": {
+                    **tags,
+                    **repo_tags_dict,
+                },
+                "sentry_data": metadata,
+            }
+        except Exception as e:
+            return {}
 
     def _post_invoke(self, result: Any):
         with self.context.state.update() as cur:

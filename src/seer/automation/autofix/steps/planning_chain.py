@@ -48,8 +48,8 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return autofix_planning_task
 
-    @observe(name="Planning")
-    @ai_track(description="Autofix - Planning")
+    @observe(name="Autofix - Planning Step")
+    @ai_track(description="Autofix - Planning Step")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_planning_start()
