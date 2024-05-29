@@ -55,7 +55,7 @@ def get_github_token_auth():
     return Auth.Token(github_token)
 
 
-def get_write_app_credentials():
+def get_write_app_credentials() -> tuple[int | str, str]:
     app_id = os.environ.get("GITHUB_APP_ID")
     private_key = os.environ.get("GITHUB_PRIVATE_KEY")
 
@@ -67,7 +67,7 @@ def get_write_app_credentials():
     return app_id, private_key
 
 
-def get_read_app_credentials():
+def get_read_app_credentials() -> tuple[int | str, str]:
     app_id = os.environ.get("GITHUB_SENTRY_APP_ID")
     private_key = os.environ.get("GITHUB_SENTRY_PRIVATE_KEY")
 
