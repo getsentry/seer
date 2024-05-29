@@ -132,7 +132,7 @@ class CodebaseIndex:
         )
 
         if workspace:
-            repo_client = RepoClient(repo)
+            repo_client = RepoClient.from_repo_definition(repo, "read")
             return cls(
                 organization,
                 project,
@@ -172,7 +172,7 @@ class CodebaseIndex:
                 return cls(
                     organization=repo_info.organization,
                     project=repo_info.project,
-                    repo_client=RepoClient.from_repo_info(repo_info),
+                    repo_client=RepoClient.from_repo_info(repo_info, "read"),
                     workspace=workspace,
                     state_manager=state_manager,
                     embedding_model=embedding_model,
@@ -188,7 +188,7 @@ class CodebaseIndex:
         tracking_branch: str | None = None,
         sha: str | None = None,
     ) -> int:
-        repo_client = RepoClient(repo)
+        repo_client = RepoClient.from_repo_definition(repo, "read")
 
         head_sha = sha
         branch = None
@@ -230,7 +230,7 @@ class CodebaseIndex:
         if not workspace:
             raise InitializationError("Failed to load workspace for namespace_id")
 
-        repo_client = RepoClient.from_repo_info(workspace.repo_info)
+        repo_client = RepoClient.from_repo_info(workspace.repo_info, "read")
 
         # If the workspace is ready then we shouldn't index again...
         if not workspace.is_ready():

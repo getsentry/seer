@@ -12,7 +12,6 @@ from seer.automation.codebase.models import (
     UpdateCodebaseTaskRequest,
 )
 from seer.automation.codebase.namespace import CodebaseNamespaceManager
-from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import InitializationError, RepoDefinition
 from seer.automation.utils import get_embedding_model
 
@@ -60,12 +59,6 @@ def update_codebase_index(data: dict[str, Any]) -> None:
         codebase.update()
 
     logger.info("Codebase index updated for repo: %s", request.repo_id)
-
-
-def check_repo_access(
-    repo: RepoDefinition,
-) -> bool:
-    return RepoClient.check_repo_access(repo)
 
 
 def get_codebase_index_status(
