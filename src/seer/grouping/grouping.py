@@ -112,7 +112,7 @@ class GroupingLookup:
             trust_remote_code=True,
             device=model_device,
         )
-        self.model.encode("IndexError: list index out of range")  # Ensure warm start
+        self.encode_text("IndexError: list index out of range")  # Ensure warm start
         logger.info(f"GroupingLookup model initialized using device: {model_device}")
         sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
 
