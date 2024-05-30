@@ -39,7 +39,9 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
 
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     def test_simple_create(self, mock_repo_client):
-        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
+        mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
+            return_value="sha"
+        )
         namespace_id = CodebaseIndex.create(
             organization=1,
             project=1,
@@ -80,7 +82,9 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
         mock_read_directory,
         mock_embed_chunks,
     ):
-        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
+        mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
+            return_value="sha"
+        )
         mock_repo_client.from_repo_info.return_value.load_repo_to_tmp_dir.return_value = (
             "tmp_dir",
             "tmp_dir/repo",
@@ -156,12 +160,14 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
     def test_failing_create_and_index(
         self, mock_cleanup_dir, mock_repo_client, mock_read_directory, mock_embed_chunks
     ):
-        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
-        mock_repo_client.from_repo_info.return_value.load_repo_to_tmp_dir.return_value = (
+        mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
+            return_value="sha"
+        )
+        mock_repo_client.from_repo_definition.return_value.load_repo_to_tmp_dir.return_value = (
             "tmp_dir",
             "tmp_dir/repo",
         )
-        mock_repo_client.from_repo_info.return_value.repo.full_name = "getsentry/seer"
+        mock_repo_client.from_repo_definition.return_value.repo.full_name = "getsentry/seer"
 
         mock_read_directory.return_value = [
             Document(
