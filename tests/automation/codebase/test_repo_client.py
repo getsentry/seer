@@ -162,7 +162,8 @@ class TestRepoClient(unittest.TestCase):
 
 class TestRepoClientIndexFileSet(unittest.TestCase):
     @patch("seer.automation.codebase.repo_client.Github")
-    def test_all_files_included(self, mock_Github):
+    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    def test_all_files_included(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
                 MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
@@ -180,7 +181,8 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         assert result == {"file1.py", "file2.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    def test_filters_out_folders(self, mock_Github):
+    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    def test_filters_out_folders(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
                 MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
@@ -198,7 +200,8 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    def test_filters_out_symlinks(self, mock_Github):
+    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    def test_filters_out_symlinks(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
                 MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
@@ -216,7 +219,8 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    def test_filters_out_unknown_file_types(self, mock_Github):
+    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    def test_filters_out_unknown_file_types(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
                 MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
@@ -234,7 +238,8 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    def test_filters_out_large_files(self, mock_Github):
+    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    def test_filters_out_large_files(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
                 MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
