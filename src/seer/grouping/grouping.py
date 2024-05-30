@@ -15,7 +15,6 @@ from seer.db import DbGroupingRecord, Session
 logger = logging.getLogger("grouping")
 
 NN_GROUPING_DISTANCE = 0.01
-NN_SIMILARITY_DISTANCE = 0.15
 
 
 class GroupingRequest(BaseModel):
@@ -25,7 +24,7 @@ class GroupingRequest(BaseModel):
     hash: str
     group_id: Optional[int] = None
     k: int = 1
-    threshold: float = 0.01
+    threshold: float = NN_GROUPING_DISTANCE
 
     @field_validator("stacktrace", "message")
     @classmethod
@@ -185,7 +184,7 @@ class GroupingLookup:
                 issue.project_id,
                 issue.group_id,
                 issue.hash,
-                NN_SIMILARITY_DISTANCE,
+                NN_GROUPING_DISTANCE,
                 issue.k,
             )
 
@@ -241,7 +240,13 @@ class GroupingLookup:
             for i, entry in enumerate(data.data):
                 embedding = embeddings[i].astype("float32")
                 nearest_neighbor = self.query_nearest_k_neighbors(
-                    session, embedding, entry.project_id, entry.group_id, entry.hash, 0.01, 1
+                    session,
+                    embedding,
+                    entry.project_id,
+                    entry.group_id,
+                    entry.hash,
+                    NN_GROUPING_DISTANCE,
+                    1,
                 )
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
                     new_record = GroupingRecord(
