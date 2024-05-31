@@ -5,7 +5,7 @@ from github import UnknownObjectException
 from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import InitializationError, RepoDefinition
+from seer.automation.models import RepoDefinition
 
 
 class TestRepoClient(unittest.TestCase):
@@ -162,8 +162,11 @@ class TestRepoClient(unittest.TestCase):
 
 class TestRepoClientIndexFileSet(unittest.TestCase):
     @patch("seer.automation.codebase.repo_client.Github")
-    @patch("seer.automation.codebase.repo_client.get_github_auth")
-    def test_all_files_included(self, mock_get_github_auth, mock_Github):
+    @patch(
+        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
+        return_value=[MagicMock(), MagicMock()],
+    )
+    def test_all_files_included(self, get_github_app_auth_and_installation, mock_Github):
         mock_tree = MagicMock(
             tree=[
                 MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
@@ -175,13 +178,18 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         mock_github_instance = mock_Github.return_value
         mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
         client = RepoClient(
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+            1,
+            "very private heh",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py", "file2.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    @patch(
+        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
+        return_value=[MagicMock(), MagicMock()],
+    )
     def test_filters_out_folders(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
@@ -194,13 +202,18 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         mock_github_instance = mock_Github.return_value
         mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
         client = RepoClient(
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+            1,
+            "very private heh",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    @patch(
+        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
+        return_value=[MagicMock(), MagicMock()],
+    )
     def test_filters_out_symlinks(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
@@ -213,13 +226,18 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         mock_github_instance = mock_Github.return_value
         mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
         client = RepoClient(
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+            1,
+            "very private heh",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    @patch(
+        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
+        return_value=[MagicMock(), MagicMock()],
+    )
     def test_filters_out_unknown_file_types(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
@@ -232,13 +250,18 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         mock_github_instance = mock_Github.return_value
         mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
         client = RepoClient(
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+            1,
+            "very private heh",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.Github")
-    @patch("seer.automation.codebase.repo_client.get_github_auth")
+    @patch(
+        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
+        return_value=[MagicMock(), MagicMock()],
+    )
     def test_filters_out_large_files(self, mock_get_github_auth, mock_Github):
         mock_tree = MagicMock(
             tree=[
@@ -251,7 +274,9 @@ class TestRepoClientIndexFileSet(unittest.TestCase):
         mock_github_instance = mock_Github.return_value
         mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
         client = RepoClient(
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
+            1,
+            "very private heh",
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py"}
