@@ -1,5 +1,6 @@
 from typing import Any
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
@@ -57,7 +58,8 @@ class AutofixExecutionStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return autofix_execution_task
 
-    @ai_track(description="Autofix - Execution")
+    @observe(name="Autofix - Execution Step")
+    @ai_track(description="Autofix - Execution Step")
     def _invoke(self, **kwargs):
         retriever = RetrieverComponent(self.context)
         executor = ExecutorComponent(self.context)

@@ -1,5 +1,6 @@
 import textwrap
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -69,6 +70,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
+    @observe(name="Retriever")
     @ai_track(description="Retriever")
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         # Identify good search queries for the plan item

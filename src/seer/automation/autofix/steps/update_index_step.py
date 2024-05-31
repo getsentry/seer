@@ -1,6 +1,8 @@
 from typing import Any
 
 import sentry_sdk
+from langfuse.decorators import observe
+from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -38,6 +40,8 @@ class UpdateIndexStep(AutofixPipelineStep):
     def get_task():
         return update_index_task
 
+    @observe(name="Autofix – Change Describer Step")
+    @ai_track(description="Autofix - Change Describer Step")
     def _invoke(self, **kwargs):
         codebase = self.context.get_codebase(self.request.repo_id)
 

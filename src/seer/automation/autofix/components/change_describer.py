@@ -1,5 +1,6 @@
 import textwrap
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -43,6 +44,7 @@ class ChangeDescriptionPrompts:
 class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeDescriptionOutput]):
     context: AutofixContext
 
+    @observe(name="Change Describer")
     @ai_track(description="Change Describer")
     def invoke(self, request: ChangeDescriptionRequest) -> ChangeDescriptionOutput | None:
         prompt = ChangeDescriptionPrompts.format_default_msg(

@@ -40,6 +40,8 @@
             "johen.*",
             "johen",
             "google-cloud-storage",
+            "langfuse.*",
+            "langfuse",
         ]
         ignore_missing_imports = true
 
