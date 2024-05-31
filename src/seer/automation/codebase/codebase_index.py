@@ -37,7 +37,6 @@ from seer.automation.codebase.utils import (
     get_language_from_path,
     group_documents_by_language,
     potential_frame_match,
-    read_directory,
     read_specific_files,
 )
 from seer.automation.models import (
@@ -239,7 +238,10 @@ class CodebaseIndex:
                 logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
                 try:
-                    documents = read_directory(tmp_repo_dir)
+                    files = repo_client.get_index_file_set(
+                        workspace.namespace.sha, skip_empty_files=True
+                    )
+                    documents = read_specific_files(tmp_repo_dir, files)
 
                     logger.debug(f"Read {len(documents)} documents:")
                     documents_by_language = group_documents_by_language(documents)
@@ -365,11 +367,18 @@ class CodebaseIndex:
             self.workspace.delete_paths(removed_files)
 
             self.workspace.namespace.sha = target_sha
+            self.workspace.save()
+
+            if not self.verify_file_integrity():
+                # Let's see how often this happens, if at all.
+                sentry_sdk.capture_message(
+                    f"File integrity check after update failed for {self.repo_info.external_slug}, namespace {self.namespace.id}"
+                )
 
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
             self.workspace.namespace.status = CodebaseNamespaceStatus.CREATED
-            self.workspace.save()
+            self.workspace.save_records()
 
             cleanup_dir(tmp_dir)
 
@@ -414,6 +423,16 @@ class CodebaseIndex:
             return self.repo_client.compare(self.namespace.sha, head_sha).ahead_by > 0
 
         return False
+
+    def verify_file_integrity(self) -> bool:
+        """
+        Checks if the files in the workspace match the files in the repository
+        Note: Only checks up to 100k files for now.
+        """
+        file_paths = self.repo_client.get_index_file_set(self.namespace.sha, skip_empty_files=True)
+
+        with sentry_sdk.start_span(op="seer.automation.codebase.verify_file_integrity"):
+            return self.workspace.verify_file_integrity(file_paths)
 
     def query(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
         assert self.repo_info is not None, "Repository info is not set"
