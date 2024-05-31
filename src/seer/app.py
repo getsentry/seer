@@ -32,8 +32,8 @@ from seer.automation.codebase.models import (
     RepoAccessCheckRequest,
     RepoAccessCheckResponse,
 )
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.tasks import (
-    check_repo_access,
     create_codebase_index,
     get_codebase_index_status,
     index_namespace,
@@ -166,7 +166,7 @@ def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpoi
 
 @json_api("/v1/automation/codebase/repo/check-access")
 def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
-    return RepoAccessCheckResponse(has_access=check_repo_access(data.repo))
+    return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
 
 
 @json_api("/v1/automation/codebase/index/status")

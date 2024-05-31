@@ -225,7 +225,7 @@ class AutofixContext(PipelineContext):
                                 f"Repo info not found for repo id {codebase_state.repo_id}"
                             )
 
-                        repo_client = RepoClient.from_repo_info(repo_info)
+                        repo_client = RepoClient.from_repo_info(repo_info, "write")
                         branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,
                             file_changes=codebase_state.file_changes,
