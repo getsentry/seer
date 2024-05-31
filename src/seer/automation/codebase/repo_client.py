@@ -72,6 +72,9 @@ def get_read_app_credentials() -> tuple[int | str, str]:
     private_key = os.environ.get("GITHUB_SENTRY_PRIVATE_KEY")
 
     if not app_id or not private_key:
+        logger.error(
+            "GITHUB_SENTRY_APP_ID and GITHUB_SENTRY_PRIVATE_KEY not set, falling back to 'write' app."
+        )
         return get_write_app_credentials()
 
     return app_id, private_key
