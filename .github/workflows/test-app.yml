@@ -19,6 +19,7 @@ jobs:
 
     env:
       TEST: 1
+      NO_SENTRY_INTEGRATION: 1
 
     steps:
       - uses: actions/checkout@v3

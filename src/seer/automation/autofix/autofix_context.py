@@ -12,7 +12,7 @@ from seer.automation.autofix.models import (
     CommittedPullRequestDetails,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.autofix.utils import autofix_logger, get_sentry_client
+from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import Document, QueryResultDocumentChunk
 from seer.automation.codebase.repo_client import RepoClient
@@ -20,7 +20,7 @@ from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.models import EventDetails, FileChange, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
-from seer.automation.utils import get_embedding_model
+from seer.automation.utils import get_embedding_model, get_sentry_client
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
 
