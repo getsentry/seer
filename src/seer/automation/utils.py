@@ -7,11 +7,19 @@ import billiard  # type: ignore[import-untyped]
 import torch
 from sentence_transformers import SentenceTransformer
 
+from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
+
 # ALERT: Using magic number four. This is temporary code that ensures that AutopFix uses all 4
 # cuda devices available. This "4" should match the number of celery sub-processes configured in celeryworker.sh.
 EXPECTED_CUDA_DEVICES = 4
 logger = logging.getLogger("autofix")
 automation_logger = logging.getLogger("automation")
+
+
+class ConsentError(Exception):
+    """Exception raised when consent is not granted for an operation."""
+
+    pass
 
 
 def _use_cuda():
@@ -73,3 +81,29 @@ def process_repo_provider(provider: str) -> str:
     if provider.startswith("integrations:"):
         return provider.split(":")[1]
     return provider
+
+
+def check_genai_consent(org_id: int) -> bool:
+    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+        # If we are running in a local environment, we just pass this check
+        return True
+
+    response = get_sentry_client().call("get_organization_autofix_consent", org_id=org_id)
+
+    if response and response.get("consent", False) is True:
+        return True
+    return False
+
+
+def raise_if_no_genai_consent(org_id: int) -> None:
+    if not check_genai_consent(org_id):
+        raise ConsentError(f"Organization {org_id} has not consented to use GenAI")
+
+
+def get_sentry_client() -> RpcClient:
+    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+        rpc_client: DummyRpcClient = DummyRpcClient()
+        rpc_client.dry_run = True
+        return rpc_client
+    else:
+        return SentryRpcClient()

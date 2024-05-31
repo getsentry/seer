@@ -38,6 +38,7 @@ from seer.automation.codebase.tasks import (
     get_codebase_index_status,
     index_namespace,
 )
+from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
@@ -150,6 +151,8 @@ def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> Similarity
 
 @json_api("/v1/automation/codebase/index/create")
 def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
+    raise_if_no_genai_consent(data.organization_id)
+
     namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
 
     index_namespace.apply_async(
@@ -184,6 +187,7 @@ def get_codebase_index_status_endpoint(
 
 @json_api("/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    raise_if_no_genai_consent(data.organization_id)
     run_autofix_root_cause(data)
     return AutofixEndpointResponse(started=True)
 
