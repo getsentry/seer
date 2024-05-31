@@ -61,7 +61,7 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                 ready = codebase.workspace.is_ready()
                 integrity = ready and codebase.verify_file_integrity()
 
-                if ready and not integrity:
+                if not integrity:
                     # Log integrity failures for now
                     log = f"Codebase workspace integrity check failed for repo: {repo.full_name}."
                     self.logger.debug(log)

@@ -431,7 +431,8 @@ class CodebaseIndex:
         """
         file_paths = self.repo_client.get_index_file_set(self.namespace.sha, skip_empty_files=True)
 
-        return self.workspace.verify_file_integrity(file_paths)
+        with sentry_sdk.start_span(op="seer.automation.codebase.verify_file_integrity"):
+            return self.workspace.verify_file_integrity(file_paths)
 
     def query(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
         assert self.repo_info is not None, "Repository info is not set"

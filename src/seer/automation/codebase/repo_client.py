@@ -391,7 +391,7 @@ class RepoClient:
     ) -> set[str]:
         tree = self.repo.get_git_tree(sha=sha, recursive=True)
 
-        # Recursive tree requests are truncated at 100,000 entries or 7MB.
+        # Recursive tree requests are truncated at 100,000 entries or 7MB as noted @ https://docs.github.com/en/rest/git/trees?apiVersion=2022-11-28#get-a-tree
         # This should be sufficient for most repositories, but if it's not, we should consider paginating the tree.
         # We log to see how often this happens and if it's a problem.
         if tree.raw_data["truncated"]:
