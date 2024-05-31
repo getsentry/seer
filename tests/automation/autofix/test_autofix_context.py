@@ -75,7 +75,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         self.autofix_context = AutofixContext(
             self.state, MagicMock(), MagicMock(), skip_loading_codebase=True
         )
-        self.autofix_context._get_org_slug = MagicMock(return_value="slug")
+        self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch(
         "seer.automation.autofix.autofix_context.CodebaseIndex.get_repo_info_from_db",
