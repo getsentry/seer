@@ -154,11 +154,6 @@ class GroupingLookup:
             .filter(
                 DbGroupingRecord.project_id == project_id,
                 DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= distance,
-                or_(
-                    DbGroupingRecord.group_id != group_id,
-                    DbGroupingRecord.group_id == None,
-                ),
-                # TODO We can return a group as similar group to itself if it exists in the old table with no hash
                 DbGroupingRecord.hash != hash,
             )
             .order_by("distance")
