@@ -31,7 +31,7 @@ optimum==1.16.2
 packaging
 pandas==2.0.3
 patsy==0.5.3
-Pillow==10.0.0
+Pillow==10.3.0
 PyGithub==2.1.1
 PyMeeus==0.5.12
 pyparsing==3.0.9
