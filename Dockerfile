@@ -2,6 +2,7 @@ FROM nvidia/cuda:12.3.2-base-ubuntu22.04
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
 ARG TEST
+ARG DEV
 ENV PYTHONUNBUFFERED True
 
 ARG PORT
@@ -25,18 +26,18 @@ RUN ln -s /usr/bin/python /usr/local/bin/python && \
 # Install libpq-dev for psycopg & git for 'sentry-sdk @ git://' in requirements.txt
 RUN apt-get update && \
     apt-get install -y supervisor \
-      libpq-dev \
-      git && \
+    libpq-dev \
+    git && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
 
 # Copy setup files, requirements, and scripts
-COPY setup.py requirements.txt celeryworker.sh asyncworker.sh ./
+COPY setup.py requirements.txt celeryworker.sh asyncworker.sh gunicorn.sh ./
 
 # Make celeryworker.sh and asyncworker.sh executable
-RUN chmod +x ./celeryworker.sh ./asyncworker.sh
+RUN chmod +x ./celeryworker.sh ./asyncworker.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
