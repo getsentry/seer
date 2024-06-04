@@ -117,6 +117,32 @@ class TestGrouping(unittest.TestCase):
         assert new_record
         assert response == SimilarityResponse(responses=[])
 
+    def test_get_nearest_neighbors_no_neighbor_read_only(self):
+        """
+        Test read only get_nearest_neighbors when no matching record exists. Assert that the record
+        for the group hash was not added.
+        """
+        grouping_request = GroupingRequest(
+            hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            project_id=1,
+            stacktrace="stacktrace",
+            message="message",
+            k=1,
+            threshold=0.01,
+            read_only=True,
+        )
+
+        response = grouping_lookup().get_nearest_neighbors(grouping_request)
+        with Session() as session:
+            new_record = (
+                session.query(DbGroupingRecord)
+                .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
+                .first()
+            )
+
+        assert new_record is None
+        assert response == SimilarityResponse(responses=[])
+
     def test_insert_new_grouping_record_group_record_exists(self):
         """
         Tests that insert_new_grouping_record only creates one record per group hash.

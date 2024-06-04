@@ -25,6 +25,7 @@ class GroupingRequest(BaseModel):
     group_id: Optional[int] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
+    read_only: bool = False
 
     @field_validator("stacktrace", "message")
     @classmethod
@@ -184,7 +185,7 @@ class GroupingLookup:
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
-            if not any(distance <= issue.threshold for _, distance in results):
+            if not (issue.read_only or any(distance <= issue.threshold for _, distance in results)):
                 self.insert_new_grouping_record(session, issue, embedding)
             session.commit()
 
