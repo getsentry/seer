@@ -143,6 +143,33 @@ class TestGrouping(unittest.TestCase):
             )
             assert len(matching_record) == 1
 
+    def test_insert_new_grouping_record_group_record_cross_project(self):
+        with Session() as session:
+            embedding = grouping_lookup().encode_text("stacktrace")
+            grouping_request1 = GroupingRequest(
+                project_id=1,
+                stacktrace="stacktrace",
+                message="message",
+                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            )
+            grouping_request2 = GroupingRequest(
+                project_id=2,
+                stacktrace="stacktrace",
+                message="message",
+                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
+            )
+            # Insert the grouping record
+            grouping_lookup().insert_new_grouping_record(session, grouping_request1, embedding)
+            session.commit()
+            grouping_lookup().insert_new_grouping_record(session, grouping_request2, embedding)
+            session.commit()
+            matching_record = (
+                session.query(DbGroupingRecord)
+                .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
+                .all()
+            )
+            assert len(matching_record) == 2
+
     def test_create_grouping_record_objects(self):
         """Tests create grouping record objects"""
         record_requests = CreateGroupingRecordsRequest(

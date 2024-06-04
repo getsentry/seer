@@ -279,7 +279,11 @@ class GroupingLookup:
         :param issue: The issue to insert as a new GroupingRecord.
         :param embedding: The embedding of the stacktrace.
         """
-        existing_record = session.query(DbGroupingRecord).filter_by(hash=issue.hash).first()
+        existing_record = (
+            session.query(DbGroupingRecord)
+            .filter_by(hash=issue.hash, project_id=issue.project_id)
+            .first()
+        )
 
         if existing_record is None:
             new_record = GroupingRecord(
