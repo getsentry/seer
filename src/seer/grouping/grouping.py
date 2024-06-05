@@ -186,6 +186,9 @@ class GroupingLookup:
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
             if not (issue.read_only or any(distance <= issue.threshold for _, distance in results)):
+                logger.info(
+                    f"calling insert_new_grouping_record | input_hash: {issue.hash}, issue_message: {issue.message}, stacktrace: {issue.stacktrace}"
+                )
                 self.insert_new_grouping_record(session, issue, embedding)
             session.commit()
 
@@ -195,6 +198,11 @@ class GroupingLookup:
                 None, issue.message, record.message
             ).ratio()
             should_group = distance <= issue.threshold
+
+            if should_group:
+                logger.info(
+                    f"should_group | input_hash: {issue.hash}, issue_message: {issue.message}, stacktrace: {issue.stacktrace}, distance: {distance}, threshold: {issue.threshold}, parent_hash: {record.hash}"
+                )
 
             similarity_response.responses.append(
                 GroupingResponse(
@@ -245,6 +253,10 @@ class GroupingLookup:
                     1,
                 )
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
+                    logger.info(
+                        f"inserting a new grouping record in bulk - input_hash: {entry.hash}, issue_message: {entry.message}, stacktrace: {data.stacktrace_list[i]}"
+                    )
+
                     new_record = GroupingRecord(
                         hash=entry.hash,
                         group_id=None,
@@ -273,7 +285,7 @@ class GroupingLookup:
         self, session, issue: GroupingRequest, embedding: np.ndarray
     ) -> None:
         """
-        Inserts a new GroupingRecord into the database if the group_id does not already exist.
+        Inserts a new GroupingRecord into the database if the group_hash does not already exist.
         If new grouping record was created, return the id.
 
         :param session: The database session.
@@ -295,6 +307,10 @@ class GroupingLookup:
                 hash=issue.hash,
             ).to_db_model()
             session.add(new_record)
+        else:
+            logger.info(
+                f"GroupingRecord with hash already exists in the database. existing_hash={existing_record.hash}, input_hash={issue.hash}"
+            )
 
     def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):
         """
