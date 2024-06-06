@@ -257,10 +257,5 @@ class DbGroupingRecord(Base):
             "ix_grouping_records_project_id",
             "project_id",
         ),
-        Index(
-            "ix_grouping_records_project_id",
-            "project_id",
-        ),
-        Index("ix_grouping_records_project_id_hash", "project_id", "hash", unique=True),
-        UniqueConstraint("project_id", "hash"),
+        UniqueConstraint("project_id", "hash", name="u_project_id_hash"),
     )
