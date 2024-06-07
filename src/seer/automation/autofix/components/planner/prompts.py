@@ -41,7 +41,9 @@ class PlanningPrompts:
             </issue>
 
             You have to break the below task into steps:
+            <task>
             {task_str}
+            </task>
 
             Think step-by-step inside the <thoughts> tag then output a concise and simple list of steps to perform in the output format provided in the system message."""
         ).format(
@@ -49,4 +51,47 @@ class PlanningPrompts:
             exceptions_str=format_exceptions(exceptions),
             task_str=task_str,
             instruction=format_instruction(instruction),
+        )
+
+    @staticmethod
+    def format_instruction_msg(
+        err_msg: str,
+        exceptions: list[ExceptionDetails],
+        diffs_by_repo_name: list[tuple[str, str]],
+        instruction: str | None,
+    ):
+        changes_str = ""
+        for repo, diff in diffs_by_repo_name:
+            changes_str += textwrap.dedent(
+                """\
+
+                <changes repo_name="{repo}">
+                {diff}
+                </changes>"""
+            ).format(repo=repo, diff=diff)
+
+        return textwrap.dedent(
+            """\
+            This is in response to the below issue:
+            <issue>
+            <error_message>
+            {err_msg}
+            </error_message>
+            {exceptions_str}
+            </issue>
+
+            The following changes have been made to the codebase to fix the issue:
+            {changes_str}
+
+            You are given the following instruction in relationship to the above changes and you have to break it into steps:
+            <instruction>
+            {instruction}
+            </instruction>
+
+            Think step-by-step inside the <thoughts> tag then output a concise and simple list of steps to perform in the output format provided in the system message."""
+        ).format(
+            err_msg=err_msg,
+            exceptions_str=format_exceptions(exceptions),
+            changes_str=changes_str,
+            instruction=instruction,
         )

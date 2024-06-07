@@ -21,7 +21,6 @@ class ExecutionPrompts:
                 - The code must be valid, executable code.
                 - Code padding, spacing, and indentation matters, make sure that the indentation is corrected for.
                 - `multi_tool_use.parallel` is invalid, do not use it.
-                - You cannot call tools via XML, use the tool calling API instead.
             </guidelines>"""
         )
 

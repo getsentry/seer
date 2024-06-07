@@ -9,6 +9,7 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
+    AutofixInstructionPayload,
     AutofixRequest,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
@@ -122,10 +123,10 @@ def run_autofix_execution(request: AutofixUpdateRequest):
     with state.update() as cur:
         cur.mark_triggered()
 
-    event_manager = AutofixEventManager(state)
-    event_manager.send_planning_start()
-
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
+
+    event_manager = AutofixEventManager(state)
+    event_manager.send_planning_start(is_retry=payload.is_retry or False)
 
     try:
         root_cause: CustomRootCauseSelection | SuggestedFixRootCauseSelection | None = None
@@ -165,6 +166,38 @@ def run_autofix_execution(request: AutofixUpdateRequest):
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
+
+
+def run_autofix_instruction(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixInstructionPayload):
+        raise ValueError("Invalid payload type for instruction")
+
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+
+    with state.update() as cur:
+        cur.mark_triggered()
+
+    event_manager = AutofixEventManager(state)
+
+    context = AutofixContext(
+        state=state,
+        sentry_client=get_sentry_client(),
+        event_manager=event_manager,
+        skip_loading_codebase=True,
+    )
+
+    context.event_manager.send_user_response_step(
+        request.invoking_user.id, request.payload.content.text
+    )
+    event_manager.send_planning_start(is_update=True)
+
+    AutofixPlanningStep.get_signature(
+        AutofixPlanningStepRequest(
+            run_id=cur.run_id,
+            instruction=request.payload.content,
+        ),
+        queue=CeleryQueues.DEFAULT,
+    ).apply_async()
 
 
 def run_autofix_create_pr(request: AutofixUpdateRequest):

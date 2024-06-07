@@ -12,7 +12,8 @@ from seer.automation.models import EventDetails, PromptXmlModel
 class PlanningRequest(BaseComponentRequest):
     event_details: EventDetails
     root_cause_and_fix: RootCauseAnalysisItem | str
-    instruction: Optional[str] = None
+    original_instruction: Optional[str] = None
+    new_instruction: Optional[str] = None
 
 
 class RootCausePlanTaskPromptXml(PromptXmlModel, tag="task", skip_empty=True):

@@ -11,6 +11,7 @@ from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixPrIdRequest,
     AutofixRequest,
+    AutofixStateOptions,
     AutofixStateRequest,
     AutofixStateResponse,
     AutofixUpdateRequest,
@@ -22,6 +23,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
     run_autofix_execution,
+    run_autofix_instruction,
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
@@ -200,6 +202,8 @@ def autofix_update_endpoint(
         run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_create_pr(data)
+    elif data.payload.type == AutofixUpdateType.INSTRUCTION:
+        run_autofix_instruction(data)
     return AutofixEndpointResponse(started=True)
 
 
@@ -209,6 +213,11 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
 
     if state:
         check_and_mark_if_timed_out(state)
+
+        with state.update() as cur:
+            if not cur.options:
+                cur.options = AutofixStateOptions()
+            cur.options.iterative_feedback = True  # Enable iterative feedback even on older runs
 
     return AutofixStateResponse(
         group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None

@@ -11,6 +11,7 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.autofix.models import AutofixTextInstruction
 from seer.automation.autofix.steps.execution_step import (
     AutofixExecutionStep,
     AutofixExecutionStepRequest,
@@ -21,7 +22,7 @@ from seer.automation.pipeline import PipelineChain, PipelineStepTaskRequest
 
 
 class AutofixPlanningStepRequest(PipelineStepTaskRequest):
-    pass
+    instruction: AutofixTextInstruction | None = None
 
 
 @celery_app.task(
@@ -40,6 +41,8 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
 
     name = "AutofixPlanningChainStep"
 
+    request: AutofixPlanningStepRequest
+
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixPlanningStepRequest:
         return AutofixPlanningStepRequest.model_validate(request)
@@ -52,7 +55,8 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
     @ai_track(description="Autofix - Planning Step")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
-        self.context.event_manager.send_planning_start()
+
+        self.context.event_manager.send_planning_start(is_update=bool(self.request.instruction))
 
         if self.context.has_missing_codebase_indexes():
             raise ValueError("Codebase indexes must be created before planning")
@@ -70,7 +74,8 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
             PlanningRequest(
                 event_details=event_details,
                 root_cause_and_fix=root_cause_and_fix,
-                instruction=state.request.instruction,
+                original_instruction=state.request.instruction,
+                new_instruction=self.request.instruction.text if self.request.instruction else None,
             )
         )
 
