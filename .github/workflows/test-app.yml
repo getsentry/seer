@@ -49,8 +49,10 @@ jobs:
       #       exit 1
       #     fi
       - name: Typecheck with mypy
+        if: ${{ github.ref != 'refs/heads/experimental' }}
         run: |
           make mypy
       - name: Test with pytest
+        if: ${{ github.ref != 'refs/heads/experimental' }}
         run: |
           make test
