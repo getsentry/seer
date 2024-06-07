@@ -123,10 +123,10 @@ def run_autofix_execution(request: AutofixUpdateRequest):
     with state.update() as cur:
         cur.mark_triggered()
 
-    event_manager = AutofixEventManager(state)
-    event_manager.send_planning_start()
-
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
+
+    event_manager = AutofixEventManager(state)
+    event_manager.send_planning_start(is_retry=payload.is_retry or False)
 
     try:
         root_cause: CustomRootCauseSelection | SuggestedFixRootCauseSelection | None = None

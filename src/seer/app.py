@@ -11,6 +11,7 @@ from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixPrIdRequest,
     AutofixRequest,
+    AutofixStateOptions,
     AutofixStateRequest,
     AutofixStateResponse,
     AutofixUpdateRequest,
@@ -215,6 +216,11 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
 
     if state:
         check_and_mark_if_timed_out(state)
+
+        with state.update() as cur:
+            if not cur.options:
+                cur.options = AutofixStateOptions()
+            cur.options.iterative_feedback = True  # Enable iterative feedback even on older runs
 
     return AutofixStateResponse(
         group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None

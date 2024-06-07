@@ -175,6 +175,10 @@ class CodebaseState(BaseModel):
     file_changes: list[FileChange] = []
 
 
+class AutofixStateOptions(BaseModel):
+    iterative_feedback: bool | None = False
+
+
 class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
@@ -190,6 +194,7 @@ class AutofixGroupState(BaseModel):
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
     actor_ids: list[int] = Field(default_factory=list)
+    options: AutofixStateOptions | None = Field(default=AutofixStateOptions())
 
 
 class AutofixStateRequest(BaseModel):
@@ -255,6 +260,7 @@ class AutofixRootCauseUpdatePayload(BaseModel):
     cause_id: int | None = None
     fix_id: int | None = None
     custom_root_cause: str | None = None
+    is_retry: bool | None = False
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):

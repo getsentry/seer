@@ -120,9 +120,15 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_planning_start(self, is_update: bool = False):
+    def send_planning_start(self, is_update: bool = False, is_retry: bool = False):
         with self.state.update() as cur:
+            if is_retry:
+                last_step = cur.steps[-1]
+                if last_step.key == self.plan_step.key:
+                    del cur.steps[-1]
+
             plan_step = cur.last_or_add(self.plan_step)
+
             plan_step.status = AutofixStatus.PROCESSING
 
             if is_update:
