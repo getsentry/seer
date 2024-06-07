@@ -1,6 +1,7 @@
 import datetime
 import enum
 import hashlib
+import os
 from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
@@ -108,8 +109,10 @@ class StepType(str, enum.Enum):
 
 
 class BaseStep(BaseModel):
-    id: str = Field(default_factory=lambda: hashlib.sha1().hexdigest())
-    key: str
+    id: str = Field(
+        default_factory=lambda: hashlib.sha1(os.urandom(16)).hexdigest()
+    )  # Unique identifier for this step
+    key: str  # Identifier for a type of step
     title: str
     type: StepType = StepType.DEFAULT
 
@@ -160,6 +163,7 @@ class UserResponseStep(BaseStep):
     type: Literal[StepType.USER_RESPONSE] = StepType.USER_RESPONSE
 
     text: str
+    user_id: int
 
 
 Step = Union[DefaultStep, RootCauseStep, ChangesStep, UserResponseStep]
@@ -185,6 +189,7 @@ class AutofixGroupState(BaseModel):
     ] = None
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
+    actor_ids: list[int] = Field(default_factory=list)
 
 
 class AutofixStateRequest(BaseModel):
@@ -269,6 +274,7 @@ class AutofixInstructionPayload(BaseModel):
 
 class AutofixUpdateRequest(BaseModel):
     run_id: int
+    invoking_user: AutofixUserDetails
     payload: Union[
         AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload, AutofixInstructionPayload
     ] = Field(discriminator="type")
@@ -277,37 +283,33 @@ class AutofixUpdateRequest(BaseModel):
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
 
-    def find_step(self, *, id: str) -> Step | None:
-        for step in self.steps:
-            if step.id == id:
-                return step
-        return None
-
-    def add_step(self, step: Step):
-        step.index = len(self.steps)
-        self.steps.append(step)
-
-        return step
-
-    def find_last_with_key(self, *, key: str) -> Step | None:
+    def find_step(self, *, key: str | None = None, id: str | None = None) -> Step | None:
         for step in reversed(self.steps):
-            if step.key == key:
+            if step.key == key or step.id == id:
                 return step
         return None
 
-    def find_or_add(self, base_step: Step, method: Literal["id", "key"] = "id") -> Step:
-        existing = None
-        if method == "id":
-            existing = self.find_step(id=base_step.id)
-        elif method == "key":
-            existing = self.find_last_with_key(key=base_step.key)
+    def add_step(self, base_step: Step):
+        base_step = base_step.model_copy()
+        base_step.index = len(self.steps)
+        self.steps.append(base_step)
+
+        return base_step
+
+    def find_or_add(self, base_step: Step) -> Step:
+        existing = self.find_step(key=base_step.key)
 
         if existing:
             return existing
 
-        base_step = base_step.model_copy()
-        self.add_step(base_step)
-        return base_step
+        return self.add_step(base_step)
+
+    def last_or_add(self, base_step: Step) -> Step:
+        last_step = self.steps[-1]
+        if last_step and (last_step.id == base_step.id or last_step.key == base_step.key):
+            return last_step
+
+        return self.add_step(base_step)
 
     def make_step_latest(self, step: Step):
         if step in self.steps:
@@ -344,7 +346,7 @@ class AutofixContinuation(AutofixGroupState):
             self.steps[-1].completedMessage = message
 
     def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
-        root_cause_step = self.find_step(id="root_cause_analysis")
+        root_cause_step = self.find_step(key="root_cause_analysis")
         if root_cause_step and isinstance(root_cause_step, RootCauseStep):
             if root_cause_step.selection:
                 if isinstance(root_cause_step.selection, SuggestedFixRootCauseSelection):

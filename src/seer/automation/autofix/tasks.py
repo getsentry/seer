@@ -178,6 +178,7 @@ def run_autofix_instruction(request: AutofixUpdateRequest):
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
+
     context = AutofixContext(
         state=state,
         sentry_client=get_sentry_client(),
@@ -185,7 +186,10 @@ def run_autofix_instruction(request: AutofixUpdateRequest):
         skip_loading_codebase=True,
     )
 
-    context.event_manager.send_user_response_step(request.payload.content.text)
+    context.event_manager.send_user_response_step(
+        request.invoking_user.id, request.payload.content.text
+    )
+    event_manager.send_planning_start(is_update=True)
 
     AutofixPlanningStep.get_signature(
         AutofixPlanningStepRequest(

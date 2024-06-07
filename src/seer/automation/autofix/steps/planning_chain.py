@@ -56,10 +56,7 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
 
-        if self.request.instruction:
-            self.context.event_manager.send_update_planning_start()
-        else:
-            self.context.event_manager.send_planning_start()
+        self.context.event_manager.send_planning_start(is_update=bool(self.request.instruction))
 
         if self.context.has_missing_codebase_indexes():
             raise ValueError("Codebase indexes must be created before planning")

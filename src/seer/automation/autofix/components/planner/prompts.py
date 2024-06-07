@@ -34,7 +34,9 @@ class PlanningPrompts:
             {event_str}
 
             You have to break the below task into steps:
+            <task>
             {task_str}
+            </task>
 
             Think step-by-step inside the <thoughts> tag then output a concise and simple list of steps to perform in the output format provided in the system message."""
         ).format(
@@ -67,8 +69,10 @@ class PlanningPrompts:
             The following changes have been made to the codebase to fix the issue:
             {changes_str}
 
-            You are given the following instruction and you have to break it into steps:
+            You are given the following instruction in relationship to the above changes and you have to break it into steps:
+            <instruction>
             {instruction}
+            </instruction>
 
             Think step-by-step inside the <thoughts> tag then output a concise and simple list of steps to perform in the output format provided in the system message."""
         ).format(
