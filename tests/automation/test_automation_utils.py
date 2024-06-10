@@ -8,27 +8,27 @@ from seer.automation.utils import ConsentError, check_genai_consent, raise_if_no
 
 
 class TestCheckGenAiConsent(unittest.TestCase):
-    @patch.dict(os.environ, {"NO_SENTRY_INTEGRATION": ""})
     @patch("seer.automation.utils.SentryRpcClient")
     def test_check_passing(self, mock_RpcClient):
+        os.environ["NO_SENTRY_INTEGRATION"] = ""
         mock_RpcClient.return_value.call.return_value = {"consent": True}
         assert check_genai_consent(1) == True
 
-    @patch.dict(os.environ, {"NO_SENTRY_INTEGRATION": ""})
     @patch("seer.automation.utils.SentryRpcClient")
     def test_check_failing(self, mock_RpcClient):
+        os.environ["NO_SENTRY_INTEGRATION"] = ""
         mock_RpcClient.return_value.call.return_value = {"consent": False}
         assert check_genai_consent(1) == False
 
-    @patch.dict(os.environ, {"NO_SENTRY_INTEGRATION": ""})
     @patch("seer.automation.utils.SentryRpcClient")
     def test_check_failing_none(self, mock_RpcClient):
+        os.environ["NO_SENTRY_INTEGRATION"] = ""
         mock_RpcClient.return_value.call.return_value = None
         assert check_genai_consent(1) == False
 
-    @patch.dict(os.environ, {"NO_SENTRY_INTEGRATION": "1"})
     @patch("seer.automation.utils.SentryRpcClient")
     def test_check_passing_without_integration(self, mock_RpcClient):
+        os.environ["NO_SENTRY_INTEGRATION"] = "1"
         mock_RpcClient.return_value.call.return_value = None
 
         assert check_genai_consent(1) == True
