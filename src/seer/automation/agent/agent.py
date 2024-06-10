@@ -19,7 +19,7 @@ class LlmAgent(ABC):
 
     client: LlmClient
     iterations: int = 0
-    max_iterations: int = 48
+    max_iterations: int = 16
 
     def __init__(
         self,
