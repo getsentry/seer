@@ -132,8 +132,6 @@ class GroupingLookup:
         :param batch_size: The batch size used for the computation.
         :return: The embeddings of the stacktraces.
         """
-        sum_of_stacktrace_length = sum(len(stacktrace) for stacktrace in stacktraces)
-        logger.info(f"total stacktrace length for encoding: {sum_of_stacktrace_length}")
 
         return self.model.encode(sentences=stacktraces, batch_size=batch_size)
 
@@ -187,7 +185,12 @@ class GroupingLookup:
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
             if not (issue.read_only or any(distance <= issue.threshold for _, distance in results)):
                 logger.info(
-                    f"calling insert_new_grouping_record | input_hash: {issue.hash}, issue_message: {issue.message}, stacktrace: {issue.stacktrace}"
+                    "calling insert_new_grouping_record",
+                    extra={
+                        "input_hash": issue.hash,
+                        "issue_message": issue.message,
+                        "stacktrace": issue.stacktrace,
+                    },
                 )
                 self.insert_new_grouping_record(session, issue, embedding)
             session.commit()
@@ -254,7 +257,12 @@ class GroupingLookup:
                 )
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
                     logger.info(
-                        f"inserting a new grouping record in bulk - input_hash: {entry.hash}, issue_message: {entry.message}, stacktrace: {data.stacktrace_list[i]}"
+                        "inserting a new grouping record in bulk",
+                        extra={
+                            "input_hash": entry.hash,
+                            "issue_message": entry.message,
+                            "stacktrace": data.stacktrace_list[i],
+                        },
                     )
 
                     new_record = GroupingRecord(
@@ -309,7 +317,8 @@ class GroupingLookup:
             session.add(new_record)
         else:
             logger.info(
-                f"GroupingRecord with hash already exists in the database. existing_hash={existing_record.hash}, input_hash={issue.hash}"
+                "GroupingRecord with hash already exists in the database.",
+                extra={"existing_hash": existing_record.hash, "input_hash": issue.hash},
             )
 
     def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):
