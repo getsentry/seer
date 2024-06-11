@@ -229,8 +229,6 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
 
 @app.route("/health/live", methods=["GET"])
 def health_check():
-    grouping_logger = logging.getLogger("grouping")
-
     from seer.inference_models import models_loading_status
 
     if models_loading_status() == "failed":
