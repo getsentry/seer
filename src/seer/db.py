@@ -257,4 +257,5 @@ class DbGroupingRecord(Base):
             "ix_grouping_records_project_id",
             "project_id",
         ),
+        UniqueConstraint("project_id", "hash", name="u_project_id_hash"),
     )
