@@ -22,46 +22,6 @@ class TestGrouping(unittest.TestCase):
         with Session() as session:
             embedding = grouping_lookup().encode_text("stacktrace")
             grouping_request = GroupingRequest(
-                group_id=1,
-                project_id=1,
-                stacktrace="stacktrace",
-                message="message",
-                hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
-            )
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
-            session.commit()
-
-        grouping_request = GroupingRequest(
-            group_id=2,
-            project_id=1,
-            stacktrace="stacktrace",
-            message="message",
-            hash="13501807435378261861369456856144",
-            k=1,
-            threshold=0.01,
-        )
-
-        response = grouping_lookup().get_nearest_neighbors(grouping_request)
-        assert response == SimilarityResponse(
-            responses=[
-                GroupingResponse(
-                    parent_group_id=1,
-                    parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
-                    stacktrace_distance=0.0,
-                    message_distance=0.0,
-                    should_group=True,
-                )
-            ],
-        )
-
-    def test_get_nearest_neighbors_has_neighbor_no_group_id(self):
-        """
-        Tests get_nearest_neighbors when the request has only a hash and the request's data matches
-        an existing record (ie. the neighbor exists within the threshold)
-        """
-        with Session() as session:
-            embedding = grouping_lookup().encode_text("stacktrace")
-            grouping_request = GroupingRequest(
                 project_id=1,
                 stacktrace="stacktrace",
                 message="message",
@@ -83,7 +43,6 @@ class TestGrouping(unittest.TestCase):
         assert response == SimilarityResponse(
             responses=[
                 GroupingResponse(
-                    parent_group_id=None,
                     parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                     stacktrace_distance=0.0,
                     message_distance=0.0,
@@ -150,7 +109,6 @@ class TestGrouping(unittest.TestCase):
         with Session() as session:
             embedding = grouping_lookup().encode_text("stacktrace")
             grouping_request = GroupingRequest(
-                group_id=1,
                 project_id=1,
                 stacktrace="stacktrace",
                 message="message",
@@ -231,7 +189,6 @@ class TestGrouping(unittest.TestCase):
                 project_id=1,
                 message="message " + str(i),
                 stacktrace_embedding=embedding,
-                group_id=None,
             ).to_db_model()
             records.append(new_record)
 
@@ -332,7 +289,6 @@ class TestGrouping(unittest.TestCase):
         with Session() as session:
             embedding = grouping_lookup().encode_text("stacktrace")
             grouping_request = GroupingRequest(
-                group_id=11,
                 project_id=1,
                 stacktrace="stacktrace",
                 message="message",
@@ -360,7 +316,6 @@ class TestGrouping(unittest.TestCase):
         expected_groups_with_neighbor = {}
         for i in range(5):
             expected_groups_with_neighbor[str(i)] = GroupingResponse(
-                parent_group_id=None,
                 parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                 stacktrace_distance=0.00,
                 message_distance=0.00,
