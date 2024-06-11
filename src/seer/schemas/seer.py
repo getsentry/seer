@@ -201,7 +201,6 @@ GroupingRequest = typing_extensions.TypedDict(
         "stacktrace": str,
         "message": str,
         "hash": str,
-        "group_id": typing.Union[int, None],
         # default: 1
         "k": int,
         # default: 0.01
@@ -213,7 +212,6 @@ GroupingRequest = typing_extensions.TypedDict(
 GroupingResponse = typing_extensions.TypedDict(
     "GroupingResponse",
     {
-        "parent_group_id": typing.Union[int, None],
         "parent_hash": str,
         "stacktrace_distance": float,
         "message_distance": float,
