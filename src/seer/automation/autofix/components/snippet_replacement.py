@@ -46,10 +46,12 @@ class SnippetReplacementPrompts:
             {commit_message}
             </description>
 
-            Make sure you fix any errors in the code and ensure it is working as expected to the intent of the change.
-            Do not make extraneous changes to the code or whitespace that are not related to the intent of the change.
-
-            You MUST return the code result inside a <code></code> tag."""
+            <requirements>
+            - Make sure you fix any errors in the code and ensure it is working as expected to the intent of the change.
+            - Do not make extraneous changes to the code or whitespace that are not related to the intent of the change.
+            - Make sure you maintain code indentation and formatting as per the original code chunk in your output.
+            - You MUST return the code result inside a <code></code> tag.
+            </requirements>"""
         ).format(
             reference_snippet=reference_snippet,
             replacement_snippet=replacement_snippet,
