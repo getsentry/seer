@@ -22,7 +22,6 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     hash: str
-    group_id: Optional[int] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
@@ -48,7 +47,6 @@ class CreateGroupingRecordsRequest(BaseModel):
 
 
 class GroupingRecord(BaseModel):
-    group_id: Optional[int]
     project_id: int
     message: str
     stacktrace_embedding: np.ndarray
@@ -56,7 +54,6 @@ class GroupingRecord(BaseModel):
 
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
-            group_id=self.group_id,
             project_id=self.project_id,
             message=self.message,
             stacktrace_embedding=self.stacktrace_embedding,
@@ -71,7 +68,6 @@ class GroupingRecord(BaseModel):
 
 
 class GroupingResponse(BaseModel):
-    parent_group_id: Optional[int]
     parent_hash: str
     stacktrace_distance: float
     message_distance: float
@@ -142,7 +138,6 @@ class GroupingLookup:
         session,
         embedding,
         project_id: int,
-        group_id: int | None,
         hash: str,
         distance: float,
         k: int,
@@ -178,7 +173,6 @@ class GroupingLookup:
                 session,
                 embedding,
                 issue.project_id,
-                issue.group_id,
                 issue.hash,
                 NN_GROUPING_DISTANCE,
                 issue.k,
@@ -206,7 +200,6 @@ class GroupingLookup:
 
             similarity_response.responses.append(
                 GroupingResponse(
-                    parent_group_id=record.group_id if hasattr(record, "group_id") else None,
                     parent_hash=record.hash,
                     stacktrace_distance=distance,
                     message_distance=1.0 - message_similarity_score,
@@ -247,7 +240,6 @@ class GroupingLookup:
                     session,
                     embedding,
                     entry.project_id,
-                    entry.group_id,
                     entry.hash,
                     NN_GROUPING_DISTANCE,
                     1,
@@ -259,7 +251,6 @@ class GroupingLookup:
 
                     new_record = GroupingRecord(
                         hash=entry.hash,
-                        group_id=None,
                         project_id=entry.project_id,
                         message=entry.message,
                         stacktrace_embedding=embedding,
@@ -271,7 +262,6 @@ class GroupingLookup:
                         None, entry.message, neighbor.message
                     ).ratio()
                     response = GroupingResponse(
-                        parent_group_id=None,
                         parent_hash=neighbor.hash,
                         stacktrace_distance=distance,
                         message_distance=1.0 - message_similarity_score,
@@ -300,7 +290,6 @@ class GroupingLookup:
 
         if existing_record is None:
             new_record = GroupingRecord(
-                group_id=issue.group_id if hasattr(issue, "group_id") else None,
                 project_id=issue.project_id,
                 message=issue.message,
                 stacktrace_embedding=embedding,
