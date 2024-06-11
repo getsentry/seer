@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -11,10 +12,8 @@ from seer.automation.models import RepoDefinition
 class TestRepoClient(unittest.TestCase):
     @patch("seer.automation.codebase.repo_client.Github")
     @patch("seer.automation.codebase.repo_client.get_github_app_auth_and_installation")
-    @patch("seer.automation.codebase.repo_client.os.environ.get", return_value="1337")
-    def test_repo_client_accepts_github_provider(
-        self, mock_environ_get, mock_get_github_auth, mock_github
-    ):
+    def test_repo_client_accepts_github_provider(self, mock_get_github_auth, mock_github):
+        os.environ["GITHUB_APP_ID"] = "1337"
         # Mocking Github class and get_github_auth function to simulate GitHub API responses and authentication
         mock_github_instance = mock_github.return_value
         mock_github_instance.get_repo.return_value.default_branch = "main"
