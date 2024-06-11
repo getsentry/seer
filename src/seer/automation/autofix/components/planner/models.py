@@ -56,9 +56,9 @@ class ReplaceCodePromptXml(PromptXmlModel, tag="code_change"):
             file_path="path/to/file.py",
             repo_name="owner/repo",
             description="Describe what you are doing here in detail like you are explaining it to a software engineer.",
-            reference_snippet="# This is the reference snippet, use this to find the code to replace",
-            new_snippet="# This is the new snippet",
-            new_imports="# Optional, import statements that need to be added to the TOP of the file",
+            reference_snippet="This is the reference snippet, use this to find the code to replace",
+            new_snippet="This is the new snippet, this can be an empty opening/closing tag if you are deleting code",
+            new_imports="Optional, import statements that need to be added to the TOP of the file",
             commit_message="Fix the foo() function by returning 'bar'",
         )
 
