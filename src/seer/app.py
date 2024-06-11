@@ -43,6 +43,8 @@ from seer.bootup import bootup
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
+    DeleteGroupingRecordsRequest,
+    DeleteGroupingRecordsResponse,
     GroupingRequest,
     SimilarityBenchmarkResponse,
     SimilarityResponse,
@@ -129,13 +131,24 @@ def similarity_grouping_record_endpoint(
     return success
 
 
+# TODO: Deprecate
 @app.route("/v0/issues/similar-issues/grouping-record/delete/<int:project_id>", methods=["GET"])
 def delete_grouping_record_endpoint(project_id: int):
+    response = delete_grouping_record_api_endpoint(
+        DeleteGroupingRecordsRequest(project_id=project_id)
+    )
+    return jsonify(success=response.success)
+
+
+@json_api("/v0/issues/similar-issues/delete-grouping-record")
+def delete_grouping_record_api_endpoint(
+    request: DeleteGroupingRecordsRequest,
+) -> DeleteGroupingRecordsResponse:
     with sentry_sdk.start_span(
         op="seer.grouping-record", description="grouping record delete for project"
     ):
-        success = grouping_lookup().delete_grouping_records_for_project(project_id)
-    return jsonify(success=success)
+        success = grouping_lookup().delete_grouping_records_for_project(request.project_id)
+    return DeleteGroupingRecordsResponse(success=success)
 
 
 @json_api("/v0/issues/similarity-embedding-benchmark")

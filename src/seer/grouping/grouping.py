@@ -87,6 +87,14 @@ class BulkCreateGroupingRecordsResponse(BaseModel):
     groups_with_neighbor: dict[str, GroupingResponse]
 
 
+class DeleteGroupingRecordsResponse(BaseModel):
+    success: bool
+
+
+class DeleteGroupingRecordsRequest(BaseModel):
+    project_id: int
+
+
 class SimilarityBenchmarkResponse(BaseModel):
     embedding: List[float]
 
