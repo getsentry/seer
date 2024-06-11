@@ -31,10 +31,10 @@ class BaseTools:
 
     @observe(name="Codebase Search")
     @ai_track(description="Codebase Search")
-    def codebase_retriever(self, query: str):
+    def codebase_retriever(self, query: str, intent: str):
         component = RetrieverWithRerankerComponent(self.context)
 
-        output = component.invoke(RetrieverRequest(text=query, repo_top_k=16))
+        output = component.invoke(RetrieverRequest(text=query, intent=intent, top_k=16))
 
         if not output:
             return "No results found."
@@ -68,6 +68,11 @@ class BaseTools:
                         "name": "query",
                         "type": "string",
                         "description": "The query to search for.",
+                    },
+                    {
+                        "name": "intent",
+                        "type": "string",
+                        "description": "The intent of the search, provide a short description of what you're looking for.",
                     },
                 ],
                 fn=self.codebase_retriever,

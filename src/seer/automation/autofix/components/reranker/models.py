@@ -11,6 +11,7 @@ from seer.automation.models import PromptXmlModel
 
 class RerankerRequest(BaseComponentRequest):
     query: str
+    intent: str | None = None
     chunks: list[BaseDocumentChunk]
 
 
