@@ -22,21 +22,32 @@ class RerankerPrompts:
         )
 
     @staticmethod
-    def format_default_msg(task_instruction: str, code_dump: str):
+    def format_default_msg(query: str, code_dump: str, intent: str | None = None):
         return textwrap.dedent(
             """\
             <code_snippets>
             {code_dump}
             </code_snippets>
 
-            Given the task:
-            <task>
-            {task_instruction}
-            </task>
+            Given the query:
+            <query>
+            {query}
+            </query>{intent_msg}
             you must return all relevant code snippet ids in order of relevance.
 
             Think out loud step-by-step in a <thoughts> block then output all relevant code snippet IDs in the JSON inside a <code_snippet_ids> block."""
         ).format(
             code_dump=code_dump,
-            task_instruction=task_instruction,
+            query=query,
+            intent_msg=(
+                textwrap.dedent(
+                    """\
+                    The query was made with the intent:
+                    <intent>
+                    {intent}
+                    </intent>"""
+                ).format(intent=intent)
+                if intent
+                else ""
+            ),
         )

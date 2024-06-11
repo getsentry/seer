@@ -30,7 +30,9 @@ class RetrieverWithRerankerComponent(BaseComponent[RetrieverRequest, RetrieverOu
         reranker = RerankerComponent(self.context)
 
         reranker_output = reranker.invoke(
-            RerankerRequest(query=request.text, chunks=retriever_output.chunks)
+            RerankerRequest(
+                query=request.text, chunks=retriever_output.chunks, intent=request.intent
+            )
         )
 
         file_names = set()
