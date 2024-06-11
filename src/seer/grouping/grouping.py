@@ -1,6 +1,6 @@
 import difflib
 import logging
-from typing import List, Mapping, Optional
+from typing import List, Mapping, NotRequired, Optional
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,7 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     hash: str
+    error_type: Optional[str] = "unknown"
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
@@ -51,6 +52,7 @@ class GroupingRecord(BaseModel):
     message: str
     stacktrace_embedding: np.ndarray
     hash: str
+    error_type: Optional[str] = "unknown"
 
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
@@ -58,6 +60,7 @@ class GroupingRecord(BaseModel):
             message=self.message,
             stacktrace_embedding=self.stacktrace_embedding,
             hash=self.hash,
+            error_type=self.error_type,
         )
 
     class Config:
