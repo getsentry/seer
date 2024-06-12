@@ -713,7 +713,9 @@ class CodebaseIndex:
         return file_patches, combined_diff
 
     def diff_contains_stacktrace_files(self, event_details: EventDetails) -> bool:
-        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
+        stacktraces = [exception.stacktrace for exception in event_details.exceptions] + [
+            thread.stacktrace for thread in event_details.threads if thread.stacktrace
+        ]
 
         stacktrace_files: set[str] = set()
         for stacktrace in stacktraces:

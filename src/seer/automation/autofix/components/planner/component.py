@@ -38,8 +38,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
 
         response = agent.run(
             PlanningPrompts.format_default_msg(
-                err_msg=request.event_details.title,
-                exceptions=request.event_details.exceptions,
+                event=request.event_details,
                 task_str=task_str,
                 instruction=request.instruction,
             )

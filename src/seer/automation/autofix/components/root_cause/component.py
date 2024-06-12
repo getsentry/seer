@@ -30,8 +30,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
         response = agent.run(
             RootCauseAnalysisPrompts.format_default_msg(
-                err_msg=request.event_details.title,
-                exceptions=request.event_details.exceptions,
+                event=request.event_details,
                 instruction=request.instruction,
             )
         )

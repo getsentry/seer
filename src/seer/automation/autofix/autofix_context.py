@@ -201,6 +201,9 @@ class AutofixContext(PipelineContext):
         """
         for exception in event.exceptions:
             self._process_stacktrace_paths(exception.stacktrace)
+        for thread in event.threads:
+            if thread.stacktrace:
+                self._process_stacktrace_paths(thread.stacktrace)
 
     def commit_changes(self, repo_id: int | None = None):
         with self.state.update() as state:
