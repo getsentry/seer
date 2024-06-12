@@ -180,13 +180,11 @@ class GroupingLookup:
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
             if not (issue.read_only or any(distance <= issue.threshold for _, distance in results)):
                 logger.info(
-                    "calling insert_new_grouping_record",
+                    "insert_new_grouping_record",
                     extra={
                         "input_hash": issue.hash,
                         "project_id": issue.project_id,
-                        "issue_message": issue.message,
                         "stacktrace_length": len(issue.stacktrace),
-                        "stacktrace": issue.stacktrace,
                     },
                 )
                 self.insert_new_grouping_record(session, issue, embedding)
@@ -201,7 +199,12 @@ class GroupingLookup:
 
             if should_group:
                 logger.info(
-                    f"should_group | input_hash: {issue.hash}, issue_message: {issue.message}, stacktrace: {issue.stacktrace}, distance: {distance}, threshold: {issue.threshold}, parent_hash: {record.hash}"
+                    "should_group",
+                    extra={
+                        "input_hash": issue.hash,
+                        "stacktrace_length": len(issue.stacktrace),
+                        "parent_hash": record.hash,
+                    },
                 )
 
             similarity_response.responses.append(
@@ -257,8 +260,6 @@ class GroupingLookup:
                             "input_hash": entry.hash,
                             "stacktrace_length": len(data.stacktrace_list[i]),
                             "project_id": entry.project_id,
-                            "issue_message": entry.message,
-                            "stacktrace": data.stacktrace_list[i],
                         },
                     )
 
@@ -311,7 +312,7 @@ class GroupingLookup:
             session.add(new_record)
         else:
             logger.info(
-                "GroupingRecord with hash already exists in the database.",
+                "group_already_exists_in_seer_db",
                 extra={
                     "existing_hash": existing_record.hash,
                     "project_id": issue.project_id,
