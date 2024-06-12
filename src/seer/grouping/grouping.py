@@ -183,7 +183,9 @@ class GroupingLookup:
                     "calling insert_new_grouping_record",
                     extra={
                         "input_hash": issue.hash,
+                        "project_id": issue.project_id,
                         "issue_message": issue.message,
+                        "stacktrace_length": len(issue.stacktrace),
                         "stacktrace": issue.stacktrace,
                     },
                 )
@@ -253,6 +255,8 @@ class GroupingLookup:
                         "inserting a new grouping record in bulk",
                         extra={
                             "input_hash": entry.hash,
+                            "stacktrace_length": len(data.stacktrace_list[i]),
+                            "project_id": entry.project_id,
                             "issue_message": entry.message,
                             "stacktrace": data.stacktrace_list[i],
                         },
@@ -308,7 +312,12 @@ class GroupingLookup:
         else:
             logger.info(
                 "GroupingRecord with hash already exists in the database.",
-                extra={"existing_hash": existing_record.hash, "input_hash": issue.hash},
+                extra={
+                    "existing_hash": existing_record.hash,
+                    "project_id": issue.project_id,
+                    "stacktrace_length": len(issue.stacktrace),
+                    "input_hash": issue.hash,
+                },
             )
 
     def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):
