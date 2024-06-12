@@ -173,7 +173,7 @@ class GroupingLookup:
                 embedding,
                 issue.project_id,
                 issue.hash,
-                NN_SIMILARITY_DISTANCE if issue.read_only else NN_GROUPING_DISTANCE,
+                NN_SIMILARITY_DISTANCE if issue.read_only else issue.threshold,
                 issue.k,
             )
 
