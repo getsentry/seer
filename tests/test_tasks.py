@@ -315,7 +315,9 @@ async def test_async_celery_job_failure(
 
     async with asyncio.timeout(10):
         with pytest.raises(ValueError, match=error_msg):
-            async for v in factory.async_celery_job(lambda: my_task.delay(test_value)):
+            async for _ in factory.async_celery_job(lambda: my_task.delay(test_value)):
+                # This loop is purely to force the callback to run, by iterating over the generator
+                # returned by `factory.async_celery_job`
                 pass
     assert buff[-1] == test_value
 

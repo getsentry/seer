@@ -52,7 +52,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
             hint=request.hint,
         )
 
-        data, message, usage = GptClient().json_completion(
+        data, _, usage = GptClient().json_completion(
             [Message(role="user", content=prompt)],
         )
 
