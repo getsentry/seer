@@ -15,6 +15,7 @@ from seer.db import DbGroupingRecord, Session
 logger = logging.getLogger("grouping")
 
 NN_GROUPING_DISTANCE = 0.01
+NN_SIMILARITY_DISTANCE = 0.05
 
 
 class GroupingRequest(BaseModel):
@@ -172,7 +173,7 @@ class GroupingLookup:
                 embedding,
                 issue.project_id,
                 issue.hash,
-                NN_GROUPING_DISTANCE,
+                NN_SIMILARITY_DISTANCE if issue.read_only else NN_GROUPING_DISTANCE,
                 issue.k,
             )
 
