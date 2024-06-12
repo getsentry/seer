@@ -119,15 +119,18 @@ def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:
     match = False
 
     src_split = src_file.split("/")[::-1]
-    frame_split = frame.filename.split("/")[::-1]
 
-    if len(src_split) > 1 and len(frame_split) > 1 and len(src_split) >= len(frame_split):
-        for i in range(len(frame_split)):
-            if src_split[i] == frame_split[i]:
-                match = True
-            else:
-                match = False
-                break
+    filename = frame.filename or frame.package
+    if filename:
+        frame_split = filename.split("/")[::-1]
+
+        if len(src_split) > 1 and len(frame_split) > 1 and len(src_split) >= len(frame_split):
+            for i in range(len(frame_split)):
+                if src_split[i] == frame_split[i]:
+                    match = True
+                else:
+                    match = False
+                    break
 
     return match
 

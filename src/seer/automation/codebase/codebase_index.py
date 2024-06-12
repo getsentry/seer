@@ -720,7 +720,8 @@ class CodebaseIndex:
         stacktrace_files: set[str] = set()
         for stacktrace in stacktraces:
             for frame in stacktrace.frames:
-                stacktrace_files.add(frame.filename)
+                if frame.filename:
+                    stacktrace_files.add(frame.filename)
 
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
             self.namespace.sha, self.repo_client.get_default_branch_head_sha()
