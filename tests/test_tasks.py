@@ -269,7 +269,7 @@ class ScheduleAsyncTest:
             await asyncio.sleep(0.1)
             if self.side_effect_calls:
                 return self.side_effect_calls
-        raise ValueError(f"side effect of invoke was not invoked for 2 seconds")
+        raise ValueError("side effect of invoke was not invoked for 2 seconds")
 
 
 @pytest.mark.asyncio

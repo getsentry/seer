@@ -44,7 +44,7 @@ class ProblemDiscoveryComponent(BaseComponent[ProblemDiscoveryRequest, ProblemDi
             cur.usage += usage
 
             if data is None:
-                autofix_logger.warning(f"Problem discovery agent did not return a valid response")
+                autofix_logger.warning("Problem discovery agent did not return a valid response")
                 return None
 
             return ProblemDiscoveryOutput.model_validate(data)

@@ -101,9 +101,9 @@ class AsyncApp:
                 )
             if result is not None and result[0]:
                 for item in result[0]:
-                    logger.info(f"Picked up process request, running")
+                    logger.info("Picked up process request, running")
                     await self.run_or_end(self.queue.put(item))
-                    logger.info(f"Process request completed successfully")
+                    logger.info("Process request completed successfully")
                     if self.end_event.is_set():
                         break
             else:
