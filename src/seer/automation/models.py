@@ -209,14 +209,18 @@ class EventDetails(BaseModel):
 
     def format_event(self):
         return textwrap.dedent(
-            f"""\
+            """\
             <issue>
             <error_message>
-            {self.title}
+            {title}
             </error_message>
-            {self.format_exceptions()}
-            {self.format_threads()}
+            {exceptions}
+            {threads}
             </issue>"""
+        ).format(
+            title=self.title,
+            exceptions=self.format_exceptions(),
+            threads=self.format_threads(),
         )
 
     def format_exceptions(self):
