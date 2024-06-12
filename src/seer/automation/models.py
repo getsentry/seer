@@ -187,6 +187,8 @@ class EventDetails(BaseModel):
 
     @classmethod
     def from_event(cls, error_event: SentryEventData):
+        MAX_THREADS = 8  # TODO: Smarter logic for max threads
+
         exceptions: list[ExceptionDetails] = []
         threads: list[ThreadDetails] = []
         for entry in error_event.get("entries", []):
@@ -196,7 +198,11 @@ class EventDetails(BaseModel):
             if entry.get("type") == "threads":
                 for thread in entry.get("data", {}).get("values", []):
                     thread_details = ThreadDetails.model_validate(thread)
-                    if thread_details.stacktrace and thread_details.stacktrace.frames:
+                    if (
+                        thread_details.stacktrace
+                        and thread_details.stacktrace.frames
+                        and len(threads) < MAX_THREADS
+                    ):
                         threads.append(thread_details)
 
         return cls(title=error_event.get("title"), exceptions=exceptions, threads=threads)
