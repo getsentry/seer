@@ -8,7 +8,6 @@ from seer.automation.autofix.components.change_describer import (
     ChangeDescriptionComponent,
     ChangeDescriptionRequest,
 )
-from seer.automation.autofix.components.planner.models import PlanningOutput
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,

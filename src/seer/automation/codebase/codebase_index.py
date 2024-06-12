@@ -447,7 +447,7 @@ class CodebaseIndex:
     def _get_file_content_with_cache(self, path: str, sha: str):
         try:
             return self.repo_client.get_file_content(path, sha)
-        except Exception as e:
+        except Exception:
             return None
 
     def _copy_document_with_local_changes(
@@ -541,7 +541,7 @@ class CodebaseIndex:
                             break
 
     def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[QueryResultDocumentChunk]:
-        ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
+        # This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)

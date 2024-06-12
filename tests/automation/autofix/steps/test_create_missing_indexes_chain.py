@@ -5,7 +5,6 @@ from johen import generate
 
 from seer.automation.autofix.models import AutofixRequest
 from seer.automation.autofix.steps.create_missing_indexes_chain import CreateMissingIndexesStep
-from seer.automation.autofix.steps.update_index_step import UpdateIndexStep
 from seer.automation.models import RepoDefinition
 from seer.automation.steps import ParallelizedChainStepRequest
 

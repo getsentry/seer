@@ -16,7 +16,7 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.models import QueryResultDocumentChunk, RepositoryInfo
 from seer.automation.models import FileChange, IssueDetails, SentryEventData
-from seer.automation.state import DbState, LocalMemoryState
+from seer.automation.state import LocalMemoryState
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 
 

@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from seer.automation.models import PromptXmlModel
 from seer.automation.pipeline import PipelineContext
-from seer.automation.state import State
 
 
 class BaseComponentRequest(BaseModel):

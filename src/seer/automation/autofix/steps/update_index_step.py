@@ -61,7 +61,7 @@ class UpdateIndexStep(AutofixPipelineStep):
         ) as span:
             span.set_tag("repo", codebase.repo_info.external_slug)
             codebase.update()
-        self.logger.info(f"Codebase index updated")
+        self.logger.info("Codebase index updated")
         self.context.event_manager.add_log(
             f"Updated codebase index for repo: {codebase.repo_info.external_slug}"
         )

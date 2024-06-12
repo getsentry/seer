@@ -143,7 +143,7 @@ def test_mark_complete_does_not_erase_concurrent_work(updated: UpdatedWork):
 
 
 @parametrize
-def test_next_schedule(
+def test_next_schedule_1(
     scheduled: tuple[ScheduledWork, ScheduledWork, ScheduledWork, ScheduledWork]
 ):
     for s in scheduled:
@@ -177,7 +177,7 @@ def test_next_schedule(
 
 
 @parametrize
-def test_next_schedule(scheduled: ScheduledWork):
+def test_next_schedule_2(scheduled: ScheduledWork):
     scheduled.save()
     proc = scheduled.process_request
 
@@ -269,7 +269,7 @@ class ScheduleAsyncTest:
             await asyncio.sleep(0.1)
             if self.side_effect_calls:
                 return self.side_effect_calls
-        raise ValueError(f"side effect of invoke was not invoked for 2 seconds")
+        raise ValueError("side effect of invoke was not invoked for 2 seconds")
 
 
 @pytest.mark.asyncio

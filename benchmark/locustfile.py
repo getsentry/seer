@@ -1,5 +1,4 @@
 import random
-import string
 
 from locust import HttpUser, task
 

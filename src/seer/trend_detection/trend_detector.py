@@ -117,7 +117,6 @@ def find_trends(
 
         # get all the non-zero data
         ts_data = txn.data
-        ts_entry: SnubaTSEntry
 
         for timestamp, (metadata,) in txn.data:
             metric = metadata["count"]

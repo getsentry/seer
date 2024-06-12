@@ -5,7 +5,7 @@ from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPromptXml,
 )
 from seer.automation.autofix.prompts import format_instruction
-from seer.automation.models import EventDetails, ExceptionDetails
+from seer.automation.models import EventDetails
 
 
 class RootCauseAnalysisPrompts:

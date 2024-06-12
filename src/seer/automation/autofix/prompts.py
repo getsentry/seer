@@ -1,7 +1,5 @@
 import textwrap
 
-from seer.automation.models import ExceptionDetails, ThreadDetails
-
 
 def format_instruction(instruction: str | None):
     return textwrap.dedent(  # The leading newline is intentional

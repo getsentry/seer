@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from tree_sitter import Node, Tree
+from tree_sitter import Node
 
 
 class AstDeclaration(BaseModel):
