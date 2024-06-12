@@ -31,8 +31,8 @@ class StacktraceFrame(BaseModel):
     )
 
     function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
-    filename: Annotated[str, Examples(specialized.file_names)]
-    abs_path: Annotated[str, Examples(specialized.file_paths)]
+    filename: Optional[Annotated[str, Examples(specialized.file_names)]]
+    abs_path: Optional[Annotated[str, Examples(specialized.file_paths)]]
     line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]
@@ -40,6 +40,7 @@ class StacktraceFrame(BaseModel):
     repo_id: Optional[int] = None
     in_app: bool = False
     vars: Optional[dict[str, Any]] = None
+    package: Optional[str] = None
 
 
 class SentryFrame(TypedDict):
@@ -102,7 +103,14 @@ class Stacktrace(BaseModel):
                 if frame.line_no is not None
                 else "[Line: Unknown]"
             )
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+
+            if frame.filename:
+                stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            elif frame.package:
+                stack_str += f" {frame.function} in package {frame.package} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            else:
+                stack_str += f" {frame.function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
