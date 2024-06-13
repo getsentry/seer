@@ -202,6 +202,7 @@ class GroupingLookup:
                         "input_hash": issue.hash,
                         "stacktrace_length": len(issue.stacktrace),
                         "parent_hash": record.hash,
+                        "project_id": issue.project_id,
                     },
                 )
 
