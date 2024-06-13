@@ -1,7 +1,5 @@
 from typing import Any
 
-from langfuse.decorators import langfuse_context
-
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
@@ -73,7 +71,7 @@ class AutofixPipelineStep(PipelineStep):
                 },
                 "sentry_data": metadata,
             }
-        except Exception as e:
+        except Exception:
             return {}
 
     def _post_invoke(self, result: Any):

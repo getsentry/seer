@@ -1,6 +1,6 @@
 from typing import Any, Literal, Optional
 
-from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageToolCall
+from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel
 
 

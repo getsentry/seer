@@ -13,7 +13,6 @@ import sqlalchemy
 from dateutil.relativedelta import relativedelta
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from seer.db import AsyncSession, ProcessRequest
 from seer.task_factory import AsyncTaskFactory, _async_task_factories
@@ -101,9 +100,9 @@ class AsyncApp:
                 )
             if result is not None and result[0]:
                 for item in result[0]:
-                    logger.info(f"Picked up process request, running")
+                    logger.info("Picked up process request, running")
                     await self.run_or_end(self.queue.put(item))
-                    logger.info(f"Process request completed successfully")
+                    logger.info("Process request completed successfully")
                     if self.end_event.is_set():
                         break
             else:

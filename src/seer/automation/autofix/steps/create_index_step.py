@@ -1,4 +1,4 @@
-from typing import Any, Type
+from typing import Any
 
 import sentry_sdk
 from langfuse.decorators import observe

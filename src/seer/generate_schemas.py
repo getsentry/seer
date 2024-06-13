@@ -1,8 +1,6 @@
 import json
 import os.path
-from typing import Dict, Generator, Iterable, Iterator, List, Optional, Set, Union
-
-root = os.path.abspath(os.path.join(__file__, ".."))
+from typing import Generator, Iterator, List, Optional, Set, Union
 
 from openapi_core import Spec
 from openapi_pydantic import OpenAPI, Reference, Schema
@@ -10,6 +8,8 @@ from openapi_pydantic.util import PydanticSchema, construct_open_api_with_schema
 
 import seer.app  # noqa
 from seer.json_api import view_functions
+
+root = os.path.abspath(os.path.join(__file__, ".."))
 
 
 class TypedDictsGenerator:

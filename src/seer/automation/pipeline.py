@@ -1,7 +1,7 @@
 import abc
 import logging
 import uuid
-from typing import Any, Generic, Type, TypedDict, TypeVar
+from typing import Any, Generic, Type, TypeVar
 
 from celery import Task, signature
 from pydantic import BaseModel, Field

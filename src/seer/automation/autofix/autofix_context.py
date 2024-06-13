@@ -208,7 +208,7 @@ class AutofixContext(PipelineContext):
     def commit_changes(self, repo_id: int | None = None):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
-                if repo_id == None or codebase_state.repo_id == repo_id:
+                if repo_id is None or codebase_state.repo_id == repo_id:
                     changes_step = state.find_step(id="changes")
                     if not changes_step:
                         raise ValueError("Changes step not found")
@@ -235,7 +235,7 @@ class AutofixContext(PipelineContext):
                         )
 
                         if branch_ref is None:
-                            autofix_logger.warning(f"Failed to create branch from changes")
+                            autofix_logger.warning("Failed to create branch from changes")
                             return None
 
                         pr_title = f"""🤖 {change_state.title}"""
@@ -300,7 +300,7 @@ class AutofixContext(PipelineContext):
         try:
             response = self.sentry_client.call("get_organization_slug", org_id=organization_id)
             slug = None if response is None else response.get("slug", None)
-            if slug == None:
+            if slug is None:
                 autofix_logger.warn(
                     f"Slug lookup call for organization {organization_id} succeeded but returned value None."
                 )
