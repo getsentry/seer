@@ -21,7 +21,7 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     hash: str
-    error_type: Optional[str] = "unknown"
+    error_type: Optional[str] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
@@ -51,7 +51,7 @@ class GroupingRecord(BaseModel):
     message: str
     stacktrace_embedding: np.ndarray
     hash: str
-    error_type: Optional[str] = "unknown"
+    error_type: Optional[str] = None
 
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
