@@ -29,11 +29,11 @@ repos:
         types: [python]
       # Configuration for flake8 exists in setup.cfg,
       # but we let pre-commit take care of the file filtering.
-      # - id: flake8
-      #   name: flake8
-      #   entry: flake8
-      #   language: system
-      #   types: [python]
+      - id: flake8
+        name: flake8
+        entry: flake8
+        language: system
+        types: [python]
       - id: lint-requirements
         name: lint-requirements
         entry: python -m tools.lint_requirements
