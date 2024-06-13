@@ -20,12 +20,6 @@ def upgrade():
     with op.batch_alter_table("grouping_records", schema=None) as batch_op:
         batch_op.add_column(sa.Column("error_type", sa.String(), nullable=True))
 
-    # Execute the update statement after the column has been added
-    op.execute("UPDATE grouping_records SET error_type = 'unknown'")
-
-    # Alter the column to be non-nullable
-    with op.batch_alter_table("grouping_records", schema=None) as batch_op:
-        batch_op.alter_column("error_type", nullable=False)
     # ### end Alembic commands ###
 
 
