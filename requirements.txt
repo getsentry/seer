@@ -48,6 +48,7 @@ sentry-sdk @ git+https://github.com/getsentry/sentry-python.git@584843ae958f436b
 simdkalman==1.0.2
 six==1.16.0
 statsmodels==0.14.0
+structlog>=22
 sympy==1.12
 threadpoolctl==3.2.0
 torch==2.0.1

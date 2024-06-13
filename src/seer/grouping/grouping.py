@@ -1,20 +1,19 @@
 import difflib
 import logging
-from typing import List, Mapping, NotRequired, Optional
+from typing import List
 
 import numpy as np
-import pandas as pd
 import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
-from sqlalchemy import or_
 
 from seer.db import DbGroupingRecord, Session
 
 logger = logging.getLogger("grouping")
 
 NN_GROUPING_DISTANCE = 0.01
+NN_SIMILARITY_DISTANCE = 0.05
 
 
 class GroupingRequest(BaseModel):
@@ -131,8 +130,6 @@ class GroupingLookup:
         :param batch_size: The batch size used for the computation.
         :return: The embeddings of the stacktraces.
         """
-        sum_of_stacktrace_length = sum(len(stacktrace) for stacktrace in stacktraces)
-        logger.info(f"total stacktrace length for encoding: {sum_of_stacktrace_length}")
 
         return self.model.encode(sentences=stacktraces, batch_size=batch_size)
 
@@ -177,14 +174,19 @@ class GroupingLookup:
                 embedding,
                 issue.project_id,
                 issue.hash,
-                NN_GROUPING_DISTANCE,
+                NN_SIMILARITY_DISTANCE if issue.read_only else issue.threshold,
                 issue.k,
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
             if not (issue.read_only or any(distance <= issue.threshold for _, distance in results)):
                 logger.info(
-                    f"calling insert_new_grouping_record | input_hash: {issue.hash}, issue_message: {issue.message}, stacktrace: {issue.stacktrace}"
+                    "insert_new_grouping_record",
+                    extra={
+                        "input_hash": issue.hash,
+                        "project_id": issue.project_id,
+                        "stacktrace_length": len(issue.stacktrace),
+                    },
                 )
                 self.insert_new_grouping_record(session, issue, embedding)
             session.commit()
@@ -198,7 +200,12 @@ class GroupingLookup:
 
             if should_group:
                 logger.info(
-                    f"should_group | input_hash: {issue.hash}, issue_message: {issue.message}, stacktrace: {issue.stacktrace}, distance: {distance}, threshold: {issue.threshold}, parent_hash: {record.hash}"
+                    "should_group",
+                    extra={
+                        "input_hash": issue.hash,
+                        "stacktrace_length": len(issue.stacktrace),
+                        "parent_hash": record.hash,
+                    },
                 )
 
             similarity_response.responses.append(
@@ -249,7 +256,12 @@ class GroupingLookup:
                 )
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
                     logger.info(
-                        f"inserting a new grouping record in bulk - input_hash: {entry.hash}, issue_message: {entry.message}, stacktrace: {data.stacktrace_list[i]}"
+                        "inserting a new grouping record in bulk",
+                        extra={
+                            "input_hash": entry.hash,
+                            "stacktrace_length": len(data.stacktrace_list[i]),
+                            "project_id": entry.project_id,
+                        },
                     )
 
                     new_record = GroupingRecord(
@@ -301,7 +313,13 @@ class GroupingLookup:
             session.add(new_record)
         else:
             logger.info(
-                f"GroupingRecord with hash already exists in the database. existing_hash={existing_record.hash}, input_hash={issue.hash}"
+                "group_already_exists_in_seer_db",
+                extra={
+                    "existing_hash": existing_record.hash,
+                    "project_id": issue.project_id,
+                    "stacktrace_length": len(issue.stacktrace),
+                    "input_hash": issue.hash,
+                },
             )
 
     def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):

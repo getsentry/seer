@@ -447,7 +447,7 @@ class CodebaseIndex:
     def _get_file_content_with_cache(self, path: str, sha: str):
         try:
             return self.repo_client.get_file_content(path, sha)
-        except Exception as e:
+        except Exception:
             return None
 
     def _copy_document_with_local_changes(
@@ -541,7 +541,7 @@ class CodebaseIndex:
                             break
 
     def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[QueryResultDocumentChunk]:
-        ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
+        # This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)
@@ -713,12 +713,15 @@ class CodebaseIndex:
         return file_patches, combined_diff
 
     def diff_contains_stacktrace_files(self, event_details: EventDetails) -> bool:
-        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
+        stacktraces = [exception.stacktrace for exception in event_details.exceptions] + [
+            thread.stacktrace for thread in event_details.threads if thread.stacktrace
+        ]
 
         stacktrace_files: set[str] = set()
         for stacktrace in stacktraces:
             for frame in stacktrace.frames:
-                stacktrace_files.add(frame.filename)
+                if frame.filename:
+                    stacktrace_files.add(frame.filename)
 
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
             self.namespace.sha, self.repo_client.get_default_branch_head_sha()

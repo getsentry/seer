@@ -237,7 +237,6 @@ class DbPrIdToAutofixRunIdMapping(Base):
 class DbGroupingRecord(Base):
     __tablename__ = "grouping_records"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[Optional[int]] = deferred(mapped_column(BigInteger, nullable=True))
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
     error_type: Mapped[str] = mapped_column(String, nullable=False)

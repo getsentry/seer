@@ -1,8 +1,8 @@
 import textwrap
 
 from seer.automation.autofix.components.planner.models import PlanStepsPromptXml
-from seer.automation.autofix.prompts import format_exceptions, format_instruction
-from seer.automation.models import ExceptionDetails
+from seer.automation.autofix.prompts import format_instruction
+from seer.automation.models import EventDetails
 
 
 class PlanningPrompts:
@@ -27,26 +27,18 @@ class PlanningPrompts:
         ).format(steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str())
 
     @staticmethod
-    def format_default_msg(
-        err_msg: str, exceptions: list[ExceptionDetails], task_str: str, instruction: str | None
-    ):
+    def format_default_msg(event: EventDetails, task_str: str, instruction: str | None):
         return textwrap.dedent(
             """\
             Given the issue:
-            <issue>
-            <error_message>
-            {err_msg}
-            </error_message>
-            {exceptions_str}
-            </issue>
+            {event_str}
 
             You have to break the below task into steps:
             {task_str}
 
             Think step-by-step inside the <thoughts> tag then output a concise and simple list of steps to perform in the output format provided in the system message."""
         ).format(
-            err_msg=err_msg,
-            exceptions_str=format_exceptions(exceptions),
+            event_str=event.format_event(),
             task_str=task_str,
             instruction=format_instruction(instruction),
         )

@@ -4,8 +4,8 @@ from typing import Optional
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPromptXml,
 )
-from seer.automation.autofix.prompts import format_exceptions, format_instruction
-from seer.automation.models import ExceptionDetails
+from seer.automation.autofix.prompts import format_instruction
+from seer.automation.models import EventDetails
 
 
 class RootCauseAnalysisPrompts:
@@ -41,25 +41,18 @@ class RootCauseAnalysisPrompts:
 
     @staticmethod
     def format_default_msg(
-        err_msg: str,
-        exceptions: list[ExceptionDetails],
+        event: EventDetails,
         instruction: Optional[str] = None,
     ):
         return textwrap.dedent(
             """\
             Given the issue:
-            <issue>
-            <error_message>
-            {err_msg}
-            </error_message>
-            {exceptions_str}
-            </issue>
+            {error_str}
 
             {instruction_str}
 
             Think step-by-step in a <thoughts> block before returning the potential root causes of the issue inside a <potential_root_causes> block."""
         ).format(
-            err_msg=err_msg,
-            exceptions_str=format_exceptions(exceptions),
+            error_str=event.format_event(),
             instruction_str=format_instruction(instruction),
         )

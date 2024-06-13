@@ -38,8 +38,7 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
                 retriever_dump=request.retriever_dump,
                 documents=request.documents,
                 repo_name=request.repo_name,
-                error_message=request.event_details.title,
-                exceptions=request.event_details.exceptions,
+                event=request.event_details,
                 task=request.task,
             )
         )
