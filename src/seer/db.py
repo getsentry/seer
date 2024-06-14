@@ -1,7 +1,6 @@
 import contextlib
 import datetime
 import json
-from typing import Optional
 
 import sqlalchemy
 from flask_migrate import Migrate
@@ -23,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, Mapped, deferred, mapped_column, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
 class Base(DeclarativeBase):
@@ -239,6 +238,7 @@ class DbGroupingRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
+    error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     hash: Mapped[str] = mapped_column(
         String(32), nullable=False, default="00000000000000000000000000000000"

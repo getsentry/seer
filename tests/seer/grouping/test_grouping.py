@@ -189,6 +189,7 @@ class TestGrouping(unittest.TestCase):
                 project_id=1,
                 message="message " + str(i),
                 stacktrace_embedding=embedding,
+                error_type=None,
             ).to_db_model()
             records.append(new_record)
 

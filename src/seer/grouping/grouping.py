@@ -1,6 +1,6 @@
 import difflib
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import sentry_sdk
@@ -21,6 +21,7 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     hash: str
+    error_type: Optional[str] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
@@ -50,6 +51,7 @@ class GroupingRecord(BaseModel):
     message: str
     stacktrace_embedding: np.ndarray
     hash: str
+    error_type: Optional[str] = None
 
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
@@ -57,6 +59,7 @@ class GroupingRecord(BaseModel):
             message=self.message,
             stacktrace_embedding=self.stacktrace_embedding,
             hash=self.hash,
+            error_type=self.error_type,
         )
 
     class Config:
