@@ -35,6 +35,22 @@ class GroupingRequest(BaseModel):
         return v
 
 
+class GroupingResponse(BaseModel):
+    parent_group_id: Optional[int]
+    parent_hash: str
+    stacktrace_distance: float
+    message_distance: float
+    should_group: bool
+
+
+class SimilarityResponse(BaseModel):
+    responses: List[GroupingResponse]
+
+
+class SimilarityBenchmarkResponse(BaseModel):
+    embedding: List[float]
+
+
 class CreateGroupingRecordData(BaseModel):
     group_id: int
     hash: str
@@ -47,9 +63,18 @@ class CreateGroupingRecordsRequest(BaseModel):
     stacktrace_list: List[str]
 
 
+class BulkCreateGroupingRecordsResponse(BaseModel):
+    success: bool
+    groups_with_neighbor: dict[str, GroupingResponse]
+
+
 class DeleteGroupingRecordsByHashRequest(BaseModel):
     project_id: int
     hash_list: List[str]
+
+
+class DeleteGroupingRecordsByHashResponse(BaseModel):
+    success: bool
 
 
 class GroupingRecord(BaseModel):
@@ -73,31 +98,6 @@ class GroupingRecord(BaseModel):
         json_encoders = {
             np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
         }
-
-
-class GroupingResponse(BaseModel):
-    parent_group_id: Optional[int]
-    parent_hash: str
-    stacktrace_distance: float
-    message_distance: float
-    should_group: bool
-
-
-class SimilarityResponse(BaseModel):
-    responses: List[GroupingResponse]
-
-
-class BulkCreateGroupingRecordsResponse(BaseModel):
-    success: bool
-    groups_with_neighbor: dict[str, GroupingResponse]
-
-
-class DeleteGroupingRecordsByHashResponse(BaseModel):
-    success: bool
-
-
-class SimilarityBenchmarkResponse(BaseModel):
-    embedding: List[float]
 
 
 class GroupingLookup:
