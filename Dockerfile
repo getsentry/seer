@@ -1,4 +1,9 @@
+FROM golang:1.20.0 as go-build
+RUN mkdir go && cd go && export GOPATH=/go && \
+    go install github.com/cloudflare/cfssl/cmd/...@latest
+
 FROM nvidia/cuda:12.3.2-base-ubuntu22.04
+COPY --from=go-build /go/bin/* /bin/
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
 ARG TEST
@@ -26,6 +31,8 @@ RUN ln -s /usr/bin/python /usr/local/bin/python && \
 # Install libpq-dev for psycopg & git for 'sentry-sdk @ git://' in requirements.txt
 RUN apt-get update && \
     apt-get install -y supervisor \
+    curl \
+    protobuf-compiler \
     libpq-dev \
     git && \
     rm -rf /var/lib/apt/lists/*
@@ -41,11 +48,20 @@ RUN chmod +x ./celeryworker.sh ./asyncworker.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
+
+COPY protobuf-adaptors/ protobuf-adaptors/
+RUN pip wheel --default-timeout=120 ./protobuf-adaptors
+
+COPY protos/ protos/
+RUN pip install --default-timeout=120 --find-links=./ ./protos
+
 RUN pip install -r requirements.txt
 
 # Copy source code
 COPY src/ src/
 COPY pyproject.toml .
+
+COPY certs/ certs/
 
 # Copy the supervisord.conf file into the container
 COPY supervisord.conf /etc/supervisord.conf

@@ -1,0 +1,14 @@
+{
+  "CN": "consumer",
+  "hosts": ["consumer"],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "ST": "California",
+      "C": "US"
+    }
+  ]
+}

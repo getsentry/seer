@@ -1,10 +1,13 @@
 import logging
 import time
 
+import grpc
 import sentry_sdk
 from flask import jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_services.seer.severity_pb2 import ScoreRequest, ScoreResponse
+from sentry_services.seer.severity_pb2_grpc import SeverityServicer, add_SeverityServicer_to_server
 
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.models import (
@@ -79,6 +82,25 @@ def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
         response = embeddings_model().severity_score(data)
         span.set_tag("severity", str(response.severity))
     return response
+
+
+class SeverityService(SeverityServicer):
+    def GetIssueScore(
+        self, proto_request: ScoreRequest, context: grpc.ServicerContext
+    ) -> ScoreResponse:
+        identities = context.peer_identities()
+        if not identities or b"consumer" not in identities:
+            context.abort(grpc.StatusCode.PERMISSION_DENIED, "only consumer can access")
+
+        request = SeverityRequest()
+        request.adapt_from(proto_request)
+        response = severity_endpoint(request)
+        proto_response = ScoreResponse()
+        response.apply_to(proto_response)
+        return proto_response
+
+
+add_SeverityServicer_to_server(servicer=SeverityService(), server=app.grpc_server)
 
 
 @json_api("/trends/breakpoint-detector")

@@ -25,19 +25,31 @@ services:
             POSTGRES_DB: seer
         volumes:
             - pgdata_test:/var/lib/postgresql/data
+    envoy:
+        image: envoyproxy/envoy:v1.30.0
+        restart: always
+        ports:
+            - "50051:50051"
+        volumes:
+            - ./envoy.yaml:/etc/envoy/envoy.yaml
+            - mtlstestcerts:/app/certs
     app:
         build:
             context: .
         working_dir: /app
         volumes:
             - ./src:/app/src
+            - ./protobuf-adaptors:/app/protobuf-adaptors
+            - ./protos:/app/protos
             - ./tests:/app/tests
             - ./models:/app/models
             - ./data/chroma:/app/data/chroma
             - ~/.config/gcloud:/root/.config/gcloud
+            - mtlstestcerts:/app/certs
         depends_on:
             - rabbitmq
             - db
+            - envoy
         env_file:
             - .env
         environment:
@@ -58,3 +70,4 @@ services:
 volumes:
     pgdata:
     pgdata_test:
+    mtlstestcerts:

@@ -1,0 +1,14 @@
+{
+  "CN": "envoy",
+  "hosts": ["envoy"],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "ST": "California",
+      "C": "US"
+    }
+  ]
+}

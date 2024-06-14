@@ -1,0 +1,3 @@
+types-protobuf==4.25.0.20240417
+protobuf==4.25.3
+mypy-protobuf==3.6.0

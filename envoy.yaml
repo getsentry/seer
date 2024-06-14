@@ -1,0 +1,70 @@
+static_resources:
+  listeners:
+  - name: grpc
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 50051
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          forward_client_cert_details: APPEND_FORWARD
+          set_current_client_cert_details:
+            subject: true
+            dns: true
+          access_log:
+          - name: envoy.access_loggers.stdout
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+          stat_prefix: ingress_http
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: local_service
+              domains: ["*"]
+              routes:
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: app
+          http_filters:
+          - name: envoy.filters.http.grpc_http1_reverse_bridge
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_http1_reverse_bridge.v3.FilterConfig
+              content_type: application/grpc
+              withhold_grpc_frames: true
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          require_client_certificate: true
+          common_tls_context:
+            alpn_protocols: ["h2"]
+            validation_context:
+#              match_subject_alt_names: # Only accept client certificates with this hostname in the SAN
+#                - exact: "app-internal-api"
+              trusted_ca:
+                filename: /app/certs/ca/ca.pem
+            tls_certificates:
+              - certificate_chain:
+                  filename: /app/certs/server/server.pem
+                private_key:
+                  filename: /app/certs/server/server-key.pem
+  clusters:
+  - name: app
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: app
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: app
+                port_value: 9091

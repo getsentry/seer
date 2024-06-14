@@ -40,14 +40,6 @@ jobs:
       - name: Build image
         run: |
           make update
-      # TODO: Re-enable this when json schemas are ready to come back
-      # - name: Check schema
-      #   run: |
-      #     make schemas
-      #     if ! git diff --quiet --ignore-submodules --cached; then
-      #       echo "Error: Schema changes detected, run make schemas and commit those!"
-      #       exit 1
-      #     fi
       - name: Typecheck with mypy
         run: |
           make mypy
