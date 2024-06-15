@@ -61,9 +61,8 @@ logger = logging.getLogger("anomaly_detection")
 
 
 class AnomalyDetection:
-    def __init__(self, model_path: str):
-        self.model_path = model_path
-        logger.info(f"Anomaly detection model initialized with path: {model_path}")
+    def __init__(self):
+        pass
 
     def detect_anomalies(self, request: AlertAnomaliesRequest) -> AlertAnomaliesResponse:
         logger.info(f"Detecting anomalies for alert ID: {request.alert.id}")
@@ -75,6 +74,5 @@ class AnomalyDetection:
         return AlertAnomaliesResponse(anomalies=anomalies)
 
     def store_data(self, request: StoreDataRequest) -> bool:
-        logger.info(f"Storing data for alert ID: {request.alert_id}")
-        # Placeholder for actual data storage logic
-        return True
+        logger.info(f"Storing data for request: {request}")
+        return None
