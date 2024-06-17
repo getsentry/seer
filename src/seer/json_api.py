@@ -38,7 +38,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
-                    raise Unauthorized(f"Rpcsignature did not match for given url and data")
+                    raise Unauthorized("Rpcsignature did not match for given url and data")
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
