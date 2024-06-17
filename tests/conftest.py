@@ -50,6 +50,14 @@ def celery_config():
     return CELERY_CONFIG
 
 
+@pytest.fixture(autouse=True)
+def reset_environ():
+    old_env = os.environ
+    os.environ = dict(**old_env)
+    yield
+    os.environ = old_env
+
+
 johen.global_config["matchers"].extend(
     [
         pydantic.generate_pydantic_instances,
