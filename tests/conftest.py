@@ -57,6 +57,7 @@ def reset_environ():
     yield
     os.environ = old_env
 
+
 johen.global_config["matchers"].extend(
     [
         pydantic.generate_pydantic_instances,
