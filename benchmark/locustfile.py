@@ -1,5 +1,4 @@
 import random
-import string
 
 from locust import HttpUser, task
 
@@ -40,7 +39,6 @@ class SeerBenchmarkUser(HttpUser):
         self.client.post(
             "/v0/issues/similarity-embedding-benchmark",
             json={
-                "group_id": 2,
                 "project_id": 1,
                 "stacktrace": real_looking_stacktrace,
                 "message": "message",

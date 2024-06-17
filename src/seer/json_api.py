@@ -27,7 +27,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
             assert issubclass(response_annotation, BaseModel)
         except (KeyError, IndexError, AssertionError):
             raise ValueError(
-                f"json_api implementations must have one non keyword, argument, annotated with a BaseModel and a BaseModel return value"
+                "json_api implementations must have one non keyword, argument, annotated with a BaseModel and a BaseModel return value"
             )
 
         def wrapper() -> Any:

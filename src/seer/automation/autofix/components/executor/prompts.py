@@ -1,8 +1,7 @@
 import textwrap
 
-from seer.automation.autofix.prompts import format_exceptions
 from seer.automation.codebase.models import Document
-from seer.automation.models import ExceptionDetails
+from seer.automation.models import EventDetails
 
 
 class ExecutionPrompts:
@@ -29,8 +28,7 @@ class ExecutionPrompts:
     def format_default_msg(
         retriever_dump: str | None,
         documents: list[Document],
-        error_message: str | None,
-        exceptions: list[ExceptionDetails],
+        event: EventDetails,
         task: str,
         repo_name: str,
     ):
@@ -64,25 +62,12 @@ class ExecutionPrompts:
             else ""
         )
 
-        issue_str = textwrap.dedent(
-            """\
-                <issue>
-                <error_message>
-                {error_message}
-                </error_message>
-                {exceptions_str}
-                </issue>"""
-        ).format(
-            error_message=error_message,
-            exceptions_str=format_exceptions(exceptions),
-        )
-
         return (
             textwrap.dedent(
                 """\
             {context_dump_str}{document_contents_str}
 
-            {issue_str}
+            {event_str}
 
             <task>
             {task_text}
@@ -99,7 +84,7 @@ class ExecutionPrompts:
             .format(
                 context_dump_str=context_dump_str,
                 document_contents_str=document_contents_str,
-                issue_str=issue_str,
+                event_str=event.format_event(),
                 task_text=task,
             )
             .strip()

@@ -1,12 +1,9 @@
 import difflib
 import logging
-import os
 import random
 import re
 from typing import List
 from xml.etree import ElementTree as ET
-
-from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
 
 autofix_logger = logging.getLogger("autofix")
 

@@ -1,8 +1,8 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from seer.automation.agent.agent import GptAgent
-from seer.automation.agent.models import Message, ToolCall
+from seer.automation.agent.models import ToolCall
 from seer.automation.agent.tools import FunctionTool
 
 

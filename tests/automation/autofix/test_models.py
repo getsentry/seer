@@ -183,7 +183,7 @@ class TestAutofixRequest(unittest.TestCase):
 @parametrize
 def test_event_no_exception_events(event: SentryEventData, entry: InvalidEventEntry):
     event["entries"] = [entry]
-    assert len(EventDetails.from_event(event).exceptions) is 0
+    assert len(EventDetails.from_event(event).exceptions) == 0
 
 
 @parametrize

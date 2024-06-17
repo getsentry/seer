@@ -19,7 +19,7 @@ class LlmAgent(ABC):
 
     client: LlmClient
     iterations: int = 0
-    max_iterations: int = 48
+    max_iterations: int = 16
 
     def __init__(
         self,
@@ -47,7 +47,7 @@ class LlmAgent(ABC):
         )
 
         logger.debug(f"----[{self.name}] Running Agent----")
-        logger.debug(f"Previous messages: ")
+        logger.debug("Previous messages: ")
         for message in self.memory:
             logger.debug(f"{message.role}: {message.content}")
 

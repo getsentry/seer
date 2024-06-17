@@ -2,7 +2,7 @@ import abc
 import contextlib
 import dataclasses
 import functools
-from typing import Any, Callable, Generic, Iterator, Type, TypeVar, cast
+from typing import Any, Generic, Iterator, Type, TypeVar, cast
 
 from celery import Task
 from pydantic import BaseModel

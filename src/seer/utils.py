@@ -1,7 +1,6 @@
 import contextlib
 import functools
 import json
-import sys
 import weakref
 from enum import Enum
 from queue import Empty, Full, Queue
