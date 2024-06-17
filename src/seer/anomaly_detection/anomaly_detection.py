@@ -15,7 +15,7 @@ class ADConfig(BaseModel):
         ...,
         description="Aggregation window used in the time period, in minutes",
     )
-    display_window: int = Field(None, description="Window for the view, in minutes")
+    display_window: int = Field(..., description="Window for the view, in minutes")
     detection_threshold: Literal["low", "medium", "high"] = Field(
         ...,
         description="Low means more anomalies will be detected while high means less anomalies will be detected.",
