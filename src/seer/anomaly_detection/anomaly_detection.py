@@ -75,4 +75,4 @@ class AnomalyDetection:
 
     def store_data(self, request: StoreDataRequest) -> bool:
         logger.info(f"Storing data for request: {request}")
-        return None
+        return True

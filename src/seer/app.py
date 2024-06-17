@@ -242,8 +242,8 @@ def detect_anomalies_endpoint(data: AlertAnomaliesRequest) -> AlertAnomaliesResp
 
 @json_api("/v1/anomaly-detection/store")
 def store_data_endpoint(data: StoreDataRequest) -> dict:
-    anomaly_detection().store_data(data)
-    return "", 200
+    success = anomaly_detection().store_data(data)
+    return jsonify(success=success)
 
 
 @app.route("/health/live", methods=["GET"])
