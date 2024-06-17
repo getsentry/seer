@@ -241,7 +241,7 @@ def detect_anomalies_endpoint(data: AlertAnomaliesRequest) -> AlertAnomaliesResp
 
 
 @app.route("/v1/anomaly-detection/store")
-def store_data_endpoint(data: StoreDataRequest) -> dict:
+def store_data_endpoint(data: StoreDataRequest):
     success = anomaly_detection().store_data(data)
     return jsonify(success=success)
 
