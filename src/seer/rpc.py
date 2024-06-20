@@ -1,4 +1,3 @@
-import contextlib
 import dataclasses
 import hashlib
 import hmac
@@ -8,10 +7,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Any, Callable
 
-import aiohttp
 import requests
-from aiohttp import ContentTypeError
-from aiohttp.http_exceptions import HttpProcessingError
 from requests import HTTPError
 
 from seer.utils import json_dumps
@@ -22,10 +18,6 @@ logger = logging.getLogger(__name__)
 class RpcClient(ABC):
     @abstractmethod
     def call(self, method: str, **kwargs) -> dict[str, Any] | None:
-        pass
-
-    @abstractmethod
-    async def acall(self, method: str, **kwargs) -> dict[str, Any] | None:
         pass
 
 
@@ -73,16 +65,6 @@ class DummyRpcClient(RpcClient):
             print(f"Calling {method} with {json_dump}")
         return 404, "Not Found"
 
-    async def acall(self, method: str, **kwargs) -> dict[str, Any] | None:
-        kwargs.pop("session", None)
-        result = self.handlers.get(method, self._default_call)(method, kwargs)
-        if result is None:
-            return None
-        if isinstance(result, dict):
-            return result
-        status, msg = result
-        raise HttpProcessingError(code=status, message=msg)
-
 
 class SentryRpcClient(RpcClient):
     @cached_property
@@ -114,24 +96,6 @@ class SentryRpcClient(RpcClient):
             logger.warning("No application/json content type")
             return None
         return response.json()
-
-    async def acall(
-        self, method: str, session: aiohttp.ClientSession | None = None, **kwargs
-    ) -> dict[str, Any] | None:
-        body_bytes, endpoint, headers = self._prepare_request(method, kwargs)
-        async with contextlib.AsyncExitStack() as stack:
-            if session is None:
-                session = aiohttp.ClientSession()
-            await stack.enter_async_context(session)
-            response = await stack.enter_async_context(
-                session.post(endpoint, headers=headers, data=body_bytes)
-            )
-            response.raise_for_status()
-            try:
-                result = await response.json()
-            except ContentTypeError:
-                result = None
-        return result
 
     def _prepare_request(self, method, kwargs):
         url_path = f"/api/0/internal/seer-rpc/{method}/"
