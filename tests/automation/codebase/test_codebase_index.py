@@ -39,7 +39,9 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
 
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     def test_simple_create(self, mock_repo_client):
-        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
+        mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
+            return_value="sha"
+        )
         namespace_id = CodebaseIndex.create(
             organization=1,
             project=1,
@@ -70,24 +72,26 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
                     self.assertEqual(workspace.namespace.id, namespace.id)
 
     @patch("seer.automation.codebase.codebase_index.CodebaseIndex.embed_chunks")
-    @patch("seer.automation.codebase.codebase_index.read_directory")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     def test_simple_create_and_index(
         self,
         mock_cleanup_dir,
         mock_repo_client,
-        mock_read_directory,
+        read_specific_files,
         mock_embed_chunks,
     ):
-        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
+        mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
+            return_value="sha"
+        )
         mock_repo_client.from_repo_info.return_value.load_repo_to_tmp_dir.return_value = (
             "tmp_dir",
             "tmp_dir/repo",
         )
         mock_repo_client.from_repo_info.return_value.repo.full_name = "getsentry/seer"
 
-        mock_read_directory.return_value = [
+        read_specific_files.return_value = [
             Document(
                 path="file1.py",
                 language="python",
@@ -150,20 +154,22 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
                     self.assertEqual(workspace.namespace.id, namespace.id)
 
     @patch("seer.automation.codebase.codebase_index.CodebaseIndex.embed_chunks")
-    @patch("seer.automation.codebase.codebase_index.read_directory")
+    @patch("seer.automation.codebase.codebase_index.read_specific_files")
     @patch("seer.automation.codebase.codebase_index.RepoClient")
     @patch("seer.automation.codebase.codebase_index.cleanup_dir")
     def test_failing_create_and_index(
-        self, mock_cleanup_dir, mock_repo_client, mock_read_directory, mock_embed_chunks
+        self, mock_cleanup_dir, mock_repo_client, read_specific_files, mock_embed_chunks
     ):
-        mock_repo_client.return_value.get_branch_head_sha = MagicMock(return_value="sha")
-        mock_repo_client.from_repo_info.return_value.load_repo_to_tmp_dir.return_value = (
+        mock_repo_client.from_repo_definition.return_value.get_branch_head_sha = MagicMock(
+            return_value="sha"
+        )
+        mock_repo_client.from_repo_definition.return_value.load_repo_to_tmp_dir.return_value = (
             "tmp_dir",
             "tmp_dir/repo",
         )
-        mock_repo_client.from_repo_info.return_value.repo.full_name = "getsentry/seer"
+        mock_repo_client.from_repo_definition.return_value.repo.full_name = "getsentry/seer"
 
-        mock_read_directory.return_value = [
+        read_specific_files.return_value = [
             Document(
                 path="file1.py",
                 language="python",
@@ -946,3 +952,130 @@ class TestCodebaseIndexDiffContainsStacktraceFiles(unittest.TestCase):
         # Check if the diff contains stacktrace files raises FileNotFoundError
         with self.assertRaises(FileNotFoundError):
             self.codebase_index.diff_contains_stacktrace_files(event_details)
+
+
+class TestCodebaseIndexFileIntegrityCheck(unittest.TestCase):
+    def setUp(self):
+        self.mock_repo_client = MagicMock()
+        self.namespace = CodebaseNamespaceManager.create_repo(
+            1,
+            1337,
+            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
+            "sha",
+            tracking_branch="main",
+        )
+        self.codebase = CodebaseIndex(
+            1, 1, self.mock_repo_client, self.namespace, MagicMock(), MagicMock()
+        )
+
+    def test_integrity_check_success(self):
+        self.namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1.py",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                ),
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk2hash",
+                    path="path2.js",
+                    index=0,
+                    token_count=0,
+                    language="javascript",
+                    embedding=np.ones((768)),
+                ),
+            ]
+        )
+
+        self.mock_repo_client.get_index_file_set.return_value = set(["path1.py", "path2.js"])
+
+        assert self.codebase.verify_file_integrity() is True
+
+    def test_integrity_check_fail_missing_file(self):
+        self.namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1.py",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                )
+            ]
+        )
+
+        self.mock_repo_client.get_index_file_set.return_value = set(["path1.py", "path2.js"])
+
+        assert self.codebase.verify_file_integrity() is False
+
+    def test_integrity_check_fail_extra_file(self):
+        self.namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1.py",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                ),
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk2hash",
+                    path="path2.js",
+                    index=0,
+                    token_count=0,
+                    language="javascript",
+                    embedding=np.ones((768)),
+                ),
+            ]
+        )
+
+        self.mock_repo_client.get_index_file_set.return_value = set(["path1.py"])
+
+        assert self.codebase.verify_file_integrity() is False
+
+    def test_integrity_check_ignores_unsupported_exts(self):
+        self.namespace.insert_chunks(
+            [
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk1hash",
+                    path="path1.py",
+                    index=0,
+                    token_count=0,
+                    language="python",
+                    embedding=np.ones((768)),
+                ),
+                EmbeddedDocumentChunk(
+                    context="chunk1context",
+                    content="chunk1",
+                    hash="chunk2hash",
+                    path="path2.js",
+                    index=0,
+                    token_count=0,
+                    language="javascript",
+                    embedding=np.ones((768)),
+                ),
+            ]
+        )
+
+        self.mock_repo_client.get_index_file_set.return_value = set(
+            ["path1.py", "path2.js", "unsupported.ext", "bad.no", ".gitignore"]
+        )
+
+        assert self.codebase.verify_file_integrity() is False

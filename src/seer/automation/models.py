@@ -31,8 +31,8 @@ class StacktraceFrame(BaseModel):
     )
 
     function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
-    filename: Annotated[str, Examples(specialized.file_names)]
-    abs_path: Annotated[str, Examples(specialized.file_paths)]
+    filename: Optional[Annotated[str, Examples(specialized.file_names)]]
+    abs_path: Optional[Annotated[str, Examples(specialized.file_paths)]]
     line_no: Optional[int]
     col_no: Optional[int]
     context: list[tuple[int, str]]
@@ -40,6 +40,7 @@ class StacktraceFrame(BaseModel):
     repo_id: Optional[int] = None
     in_app: bool = False
     vars: Optional[dict[str, Any]] = None
+    package: Optional[str] = None
 
 
 class SentryFrame(TypedDict):
@@ -102,7 +103,14 @@ class Stacktrace(BaseModel):
                 if frame.line_no is not None
                 else "[Line: Unknown]"
             )
-            stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+
+            if frame.filename:
+                stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            elif frame.package:
+                stack_str += f" {frame.function} in package {frame.package} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+            else:
+                stack_str += f" {frame.function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
                 stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
@@ -160,19 +168,113 @@ class ExceptionDetails(BaseModel):
         )
 
 
+class ThreadDetails(BaseModel):
+    id: int
+    name: Optional[str] = None
+    crashed: Optional[bool] = False
+    current: Optional[bool] = False
+    state: Optional[str] = None
+    main: Optional[bool] = False
+
+    stacktrace: Optional[Stacktrace] = None
+
+    @field_validator("stacktrace", mode="before")
+    @classmethod
+    def validate_stacktrace(cls, sentry_stacktrace: SentryStacktrace | Stacktrace | None):
+        return (
+            Stacktrace.model_validate(sentry_stacktrace)
+            if isinstance(sentry_stacktrace, dict)
+            else sentry_stacktrace
+        )
+
+
 class EventDetails(BaseModel):
     title: str
     exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=False)
+    threads: list[ThreadDetails] = Field(default_factory=list, exclude=False)
 
     @classmethod
     def from_event(cls, error_event: SentryEventData):
+        MAX_THREADS = 8  # TODO: Smarter logic for max threads
+
         exceptions: list[ExceptionDetails] = []
+        threads: list[ThreadDetails] = []
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
                     exceptions.append(ExceptionDetails.model_validate(exception))
+            if entry.get("type") == "threads":
+                for thread in entry.get("data", {}).get("values", []):
+                    thread_details = ThreadDetails.model_validate(thread)
+                    if (
+                        thread_details.stacktrace
+                        and thread_details.stacktrace.frames
+                        and len(threads) < MAX_THREADS
+                    ):
+                        threads.append(thread_details)
 
-        return cls(title=error_event.get("title"), exceptions=exceptions)
+        return cls(title=error_event.get("title"), exceptions=exceptions, threads=threads)
+
+    def format_event(self):
+        return textwrap.dedent(
+            """\
+            <issue>
+            <error_message>
+            {title}
+            </error_message>
+            {exceptions}
+            {threads}
+            </issue>"""
+        ).format(
+            title=self.title,
+            exceptions=self.format_exceptions(),
+            threads=self.format_threads(),
+        )
+
+    def format_exceptions(self):
+        return "\n".join(
+            textwrap.dedent(
+                """\
+                    <exception_{i}>
+                    <exception_type>
+                    {exception_type}
+                    </exception_type>
+                    <exception_message>
+                    {exception_message}
+                    </exception_message>
+                    <stacktrace>
+                    {stacktrace}
+                    </stacktrace>
+                    </exception_{i}>"""
+            ).format(
+                i=i,
+                exception_type=exception.type,
+                exception_message=exception.value,
+                stacktrace=exception.stacktrace.to_str() if exception.stacktrace else "",
+            )
+            for i, exception in enumerate(self.exceptions)
+        )
+
+    def format_threads(self):
+        return "\n".join(
+            textwrap.dedent(
+                """\
+                    <thread_{thread_id} name="{thread_name}" is_current="{thread_current}" state="{thread_state}" is_main="{thread_main}" crashed="{thread_crashed}">
+                    <stacktrace>
+                    {stacktrace}
+                    </stacktrace>
+                    </thread_{thread_id}>"""
+            ).format(
+                thread_id=thread.id,
+                thread_name=thread.name,
+                thread_state=thread.state,
+                thread_current=thread.current,
+                thread_crashed=thread.crashed,
+                thread_main=thread.main,
+                stacktrace=thread.stacktrace.to_str() if thread.stacktrace else "",
+            )
+            for thread in self.threads
+        )
 
 
 class IssueDetails(BaseModel):

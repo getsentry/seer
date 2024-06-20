@@ -26,9 +26,12 @@ from seer.automation.autofix.steps.planning_chain import (
     AutofixPlanningStepRequest,
 )
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
-from seer.automation.autofix.utils import get_sentry_client
 from seer.automation.models import InitializationError
-from seer.automation.utils import process_repo_provider
+from seer.automation.utils import (
+    get_sentry_client,
+    process_repo_provider,
+    raise_if_no_genai_consent,
+)
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 
 logger = logging.getLogger("autofix")
@@ -114,6 +117,8 @@ def run_autofix_root_cause(
 def run_autofix_execution(request: AutofixUpdateRequest):
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
 
+    raise_if_no_genai_consent(state.get().request.organization_id)
+
     with state.update() as cur:
         cur.mark_triggered()
 
@@ -167,6 +172,8 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
         raise ValueError("Invalid payload type for create_pr")
 
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+
+    raise_if_no_genai_consent(state.get().request.organization_id)
 
     with state.update() as cur:
         cur.mark_triggered()

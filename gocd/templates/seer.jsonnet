@@ -5,7 +5,6 @@ local pipedream_config = {
   name: 'seer',
   auto_deploy: false,
   exclude_regions: [
-    'de',
     'customer-1',
     'customer-2',
     'customer-3',

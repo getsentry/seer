@@ -74,44 +74,7 @@ def get_language_from_path(path: str) -> str | None:
     return get_extension_to_language_map().get(extension, None)
 
 
-def read_directory(
-    path: str,
-    parent_tmp_dir: str | None = None,
-    max_file_size=2 * 1024 * 1024,  # 2 MB
-) -> list[Document]:
-    """
-    Recursively reads all files in a directory that match the given list of file extensions and returns a Directory tree.
-
-    :param directory: The directory to search in.
-    :param extensions: A list of file extensions to include (e.g., ['.py', '.txt']).
-    :return: A Directory object representing the directory tree with Document objects for files that match the given file extensions.
-    """
-    path_to_remove = parent_tmp_dir if parent_tmp_dir else path
-
-    dir_children = []
-    for entry in os.scandir(path):
-        if entry.is_dir(follow_symlinks=False):
-            dir_children.extend(read_directory(entry.path, path_to_remove))
-        elif entry.is_file() and entry.stat().st_size < max_file_size:
-            language = get_language_from_path(entry.path)
-
-            # TODO: Support languages that are out of this list in the near future by simply using dumb chunking.
-            if not language:
-                continue
-
-            with open(entry.path, "r", encoding="utf-8") as f:
-                text = f.read()
-
-            truncated_path = entry.path.replace(path_to_remove, "")
-
-            if truncated_path.startswith("/"):
-                truncated_path = truncated_path[1:]
-
-            dir_children.append(Document(path=truncated_path, text=text, language=language))
-    return dir_children
-
-
-def read_specific_files(repo_path: str, files: list[str]) -> list[Document]:
+def read_specific_files(repo_path: str, files: list[str] | set[str]) -> list[Document]:
     """
     Reads the contents of specific files and returns a list of Document objects.
 
@@ -131,6 +94,9 @@ def read_specific_files(repo_path: str, files: list[str]) -> list[Document]:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 text = f.read()
+        except UnicodeDecodeError:
+            logger.warning(f"Unicode decode error: {file_path}")
+            continue
         except FileNotFoundError:
             logger.warning(f"File not found: {file_path}")
             documents.append(Document(path=file, text="", language=language))
@@ -153,15 +119,18 @@ def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:
     match = False
 
     src_split = src_file.split("/")[::-1]
-    frame_split = frame.filename.split("/")[::-1]
 
-    if len(src_split) > 1 and len(frame_split) > 1 and len(src_split) >= len(frame_split):
-        for i in range(len(frame_split)):
-            if src_split[i] == frame_split[i]:
-                match = True
-            else:
-                match = False
-                break
+    filename = frame.filename or frame.package
+    if filename:
+        frame_split = filename.split("/")[::-1]
+
+        if len(src_split) > 1 and len(frame_split) > 1 and len(src_split) >= len(frame_split):
+            for i in range(len(frame_split)):
+                if src_split[i] == frame_split[i]:
+                    match = True
+                else:
+                    match = False
+                    break
 
     return match
 

@@ -1,9 +1,9 @@
-import asyncio
 import os
 
+import johen
 import pytest
+from johen.generators import pydantic, sqlalchemy
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from seer.bootup import CELERY_CONFIG, bootup
 from seer.db import Session, db
@@ -50,8 +50,13 @@ def celery_config():
     return CELERY_CONFIG
 
 
-import johen
-from johen.generators import pydantic, sqlalchemy
+@pytest.fixture(autouse=True)
+def reset_environ():
+    old_env = os.environ
+    os.environ = dict(**old_env)
+    yield
+    os.environ = old_env
+
 
 johen.global_config["matchers"].extend(
     [

@@ -12,9 +12,7 @@ from typing import Iterator, Type
 
 import pytest
 from aiohttp import ClientResponseError
-from johen import gen
 from johen.pytest import parametrize
-from pydantic import BaseModel
 from requests.models import HTTPError
 
 from seer.automation.autofix.models import AutofixCompleteArgs, AutofixStepUpdateArgs

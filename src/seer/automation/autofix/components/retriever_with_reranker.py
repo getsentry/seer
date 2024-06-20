@@ -1,3 +1,4 @@
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -14,6 +15,7 @@ from seer.automation.component import BaseComponent
 class RetrieverWithRerankerComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     context: AutofixContext
 
+    @observe(name="Retriever With Reranker")
     @ai_track(description="Retriever With Reranker")
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         retriever = RetrieverComponent(self.context)
@@ -28,7 +30,9 @@ class RetrieverWithRerankerComponent(BaseComponent[RetrieverRequest, RetrieverOu
         reranker = RerankerComponent(self.context)
 
         reranker_output = reranker.invoke(
-            RerankerRequest(query=request.text, chunks=retriever_output.chunks)
+            RerankerRequest(
+                query=request.text, chunks=retriever_output.chunks, intent=request.intent
+            )
         )
 
         file_names = set()

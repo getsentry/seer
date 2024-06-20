@@ -365,7 +365,6 @@ class CUSUMDetector:
         Compare daily magnitude to avoid daily seasonality false positives.
         """
         time = self.data_zerofill.time
-        interest_window = self.interest_window
         magnitude_ratio = self.magnitude_ratio
 
         assert magnitude_ratio is not None
@@ -474,9 +473,7 @@ class CUSUMDetector:
         interest_window = kwargs.get("interest_window", defaultArgs.interest_window)
         magnitude_quantile = kwargs.get("magnitude_quantile", defaultArgs.magnitude_quantile)
         magnitude_ratio = kwargs.get("magnitude_ratio", defaultArgs.magnitude_ratio)
-        magnitude_comparable_day = kwargs.get(
-            "magnitude_comparable_day", defaultArgs.magnitude_comparable_day
-        )
+
         return_all_changepoints = kwargs.get(
             "return_all_changepoints", defaultArgs.return_all_changepoints
         )

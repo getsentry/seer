@@ -1,5 +1,6 @@
 from typing import Any
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
@@ -47,7 +48,8 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return autofix_planning_task
 
-    @ai_track(description="Autofix - Planning")
+    @observe(name="Autofix - Planning Step")
+    @ai_track(description="Autofix - Planning Step")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_planning_start()

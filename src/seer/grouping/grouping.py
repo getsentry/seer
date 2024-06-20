@@ -1,21 +1,19 @@
 import difflib
 import logging
-from typing import List, Mapping, Optional
+from typing import List, Optional
 
 import numpy as np
-import pandas as pd
 import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
-from sqlalchemy import or_
 
 from seer.db import DbGroupingRecord, Session
 
 logger = logging.getLogger("grouping")
 
 NN_GROUPING_DISTANCE = 0.01
-NN_SIMILARITY_DISTANCE = 0.15
+NN_SIMILARITY_DISTANCE = 0.05
 
 
 class GroupingRequest(BaseModel):
@@ -23,9 +21,10 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     hash: str
-    group_id: Optional[int] = None
+    error_type: Optional[str] = None
     k: int = 1
-    threshold: float = 0.01
+    threshold: float = NN_GROUPING_DISTANCE
+    read_only: bool = False
 
     @field_validator("stacktrace", "message")
     @classmethod
@@ -78,19 +77,19 @@ class DeleteGroupingRecordsByHashResponse(BaseModel):
 
 
 class GroupingRecord(BaseModel):
-    group_id: Optional[int]
     project_id: int
     message: str
     stacktrace_embedding: np.ndarray
     hash: str
+    error_type: Optional[str] = None
 
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
-            group_id=self.group_id,
             project_id=self.project_id,
             message=self.message,
             stacktrace_embedding=self.stacktrace_embedding,
             hash=self.hash,
+            error_type=self.error_type,
         )
 
     class Config:
@@ -121,6 +120,7 @@ class GroupingLookup:
             trust_remote_code=True,
             device=model_device,
         )
+        self.encode_text("IndexError: list index out of range")  # Ensure warm start
         logger.info(f"GroupingLookup model initialized using device: {model_device}")
         sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
 
@@ -140,8 +140,6 @@ class GroupingLookup:
         :param batch_size: The batch size used for the computation.
         :return: The embeddings of the stacktraces.
         """
-        sum_of_stacktrace_length = sum(len(stacktrace) for stacktrace in stacktraces)
-        logger.info(f"total stacktrace length for encoding: {sum_of_stacktrace_length}")
 
         return self.model.encode(sentences=stacktraces, batch_size=batch_size)
 
@@ -150,7 +148,6 @@ class GroupingLookup:
         session,
         embedding,
         project_id: int,
-        group_id: int | None,
         hash: str,
         distance: float,
         k: int,
@@ -163,11 +160,6 @@ class GroupingLookup:
             .filter(
                 DbGroupingRecord.project_id == project_id,
                 DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= distance,
-                or_(
-                    DbGroupingRecord.group_id != group_id,
-                    DbGroupingRecord.group_id == None,
-                ),
-                # TODO We can return a group as similar group to itself if it exists in the old table with no hash
                 DbGroupingRecord.hash != hash,
             )
             .order_by("distance")
@@ -191,14 +183,21 @@ class GroupingLookup:
                 session,
                 embedding,
                 issue.project_id,
-                issue.group_id,
                 issue.hash,
-                NN_SIMILARITY_DISTANCE,
+                NN_SIMILARITY_DISTANCE if issue.read_only else issue.threshold,
                 issue.k,
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
-            if not any(distance <= issue.threshold for _, distance in results):
+            if not (issue.read_only or any(distance <= issue.threshold for _, distance in results)):
+                logger.info(
+                    "insert_new_grouping_record",
+                    extra={
+                        "input_hash": issue.hash,
+                        "project_id": issue.project_id,
+                        "stacktrace_length": len(issue.stacktrace),
+                    },
+                )
                 self.insert_new_grouping_record(session, issue, embedding)
             session.commit()
 
@@ -209,9 +208,19 @@ class GroupingLookup:
             ).ratio()
             should_group = distance <= issue.threshold
 
+            if should_group:
+                logger.info(
+                    "should_group",
+                    extra={
+                        "input_hash": issue.hash,
+                        "stacktrace_length": len(issue.stacktrace),
+                        "parent_hash": record.hash,
+                        "project_id": issue.project_id,
+                    },
+                )
+
             similarity_response.responses.append(
                 GroupingResponse(
-                    parent_group_id=record.group_id if hasattr(record, "group_id") else None,
                     parent_hash=record.hash,
                     stacktrace_distance=distance,
                     message_distance=1.0 - message_similarity_score,
@@ -249,12 +258,25 @@ class GroupingLookup:
             for i, entry in enumerate(data.data):
                 embedding = embeddings[i].astype("float32")
                 nearest_neighbor = self.query_nearest_k_neighbors(
-                    session, embedding, entry.project_id, entry.group_id, entry.hash, 0.01, 1
+                    session,
+                    embedding,
+                    entry.project_id,
+                    entry.hash,
+                    NN_GROUPING_DISTANCE,
+                    1,
                 )
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
+                    logger.info(
+                        "inserting a new grouping record in bulk",
+                        extra={
+                            "input_hash": entry.hash,
+                            "stacktrace_length": len(data.stacktrace_list[i]),
+                            "project_id": entry.project_id,
+                        },
+                    )
+
                     new_record = GroupingRecord(
                         hash=entry.hash,
-                        group_id=None,
                         project_id=entry.project_id,
                         message=entry.message,
                         stacktrace_embedding=embedding,
@@ -266,7 +288,6 @@ class GroupingLookup:
                         None, entry.message, neighbor.message
                     ).ratio()
                     response = GroupingResponse(
-                        parent_group_id=None,
                         parent_hash=neighbor.hash,
                         stacktrace_distance=distance,
                         message_distance=1.0 - message_similarity_score,
@@ -280,24 +301,37 @@ class GroupingLookup:
         self, session, issue: GroupingRequest, embedding: np.ndarray
     ) -> None:
         """
-        Inserts a new GroupingRecord into the database if the group_id does not already exist.
+        Inserts a new GroupingRecord into the database if the group_hash does not already exist.
         If new grouping record was created, return the id.
 
         :param session: The database session.
         :param issue: The issue to insert as a new GroupingRecord.
         :param embedding: The embedding of the stacktrace.
         """
-        existing_record = session.query(DbGroupingRecord).filter_by(hash=issue.hash).first()
+        existing_record = (
+            session.query(DbGroupingRecord)
+            .filter_by(hash=issue.hash, project_id=issue.project_id)
+            .first()
+        )
 
         if existing_record is None:
             new_record = GroupingRecord(
-                group_id=issue.group_id if hasattr(issue, "group_id") else None,
                 project_id=issue.project_id,
                 message=issue.message,
                 stacktrace_embedding=embedding,
                 hash=issue.hash,
             ).to_db_model()
             session.add(new_record)
+        else:
+            logger.info(
+                "group_already_exists_in_seer_db",
+                extra={
+                    "existing_hash": existing_record.hash,
+                    "project_id": issue.project_id,
+                    "stacktrace_length": len(issue.stacktrace),
+                    "input_hash": issue.hash,
+                },
+            )
 
     def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):
         """

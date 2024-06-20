@@ -1,3 +1,4 @@
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import GptAgent
@@ -15,6 +16,7 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
+    @observe(name="Executor")
     @ai_track(description="Executor")
     def invoke(self, request: ExecutorRequest) -> None:
         code_action_tools = CodeActionTools(self.context)
@@ -36,8 +38,7 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
                 retriever_dump=request.retriever_dump,
                 documents=request.documents,
                 repo_name=request.repo_name,
-                error_message=request.event_details.title,
-                exceptions=request.event_details.exceptions,
+                event=request.event_details,
                 task=request.task,
             )
         )

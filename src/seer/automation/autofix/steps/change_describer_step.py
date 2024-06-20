@@ -1,5 +1,6 @@
 from typing import Any
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
@@ -7,7 +8,6 @@ from seer.automation.autofix.components.change_describer import (
     ChangeDescriptionComponent,
     ChangeDescriptionRequest,
 )
-from seer.automation.autofix.components.planner.models import PlanningOutput
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
@@ -46,7 +46,8 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     def get_task():
         return autofix_change_describer_task
 
-    @ai_track(description="Autofix - Change Describer")
+    @observe(name="Autofix – Change Describer Step")
+    @ai_track(description="Autofix - Change Describer Step")
     def _invoke(self, **kwargs):
         # Get the diff and PR details for each codebase.
         change_describer = ChangeDescriptionComponent(self.context)

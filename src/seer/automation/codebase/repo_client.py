@@ -3,6 +3,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+from typing import Literal
 
 import requests
 import sentry_sdk
@@ -13,21 +14,16 @@ from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.models import RepositoryInfo
+from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.models import FileChange, InitializationError, RepoDefinition
 from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger("autofix")
 
 
-def get_app_installation(repo_owner: str, repo_name: str):
-    app_id = os.environ.get("GITHUB_APP_ID")
-    private_key = os.environ.get("GITHUB_PRIVATE_KEY")
-
-    if app_id is None or private_key is None:
-        raise InitializationError(
-            "GITHUB_APP_ID and GITHUB_PRIVATE_KEY environment variables must be set for app authentication."
-        )
-
+def get_github_app_auth_and_installation(
+    app_id: int | str, private_key: str, repo_owner: str, repo_name: str
+):
     app_auth = Auth.AppAuth(app_id, private_key=private_key)
     gi = GithubIntegration(auth=app_auth)
     installation = gi.get_repo_installation(repo_owner, repo_name)
@@ -36,16 +32,53 @@ def get_app_installation(repo_owner: str, repo_name: str):
     return github_auth, installation
 
 
-def get_github_auth(repo_owner: str, repo_name: str):
+def get_repo_app_permissions(
+    app_id: int | str, private_key: str, repo_owner: str, repo_name: str
+) -> dict[str, str] | None:
+    try:
+        _, installation = get_github_app_auth_and_installation(
+            app_id, private_key, repo_owner, repo_name
+        )
+
+        return installation.raw_data.get("permissions", {})
+    except UnknownObjectException:
+        return None
+
+
+def get_github_token_auth():
     github_token = os.environ.get("GITHUB_TOKEN")
 
-    github_auth: Auth.Token | Auth.AppInstallationAuth
-    if github_token is not None:
-        github_auth = Auth.Token(github_token)
-    else:
-        github_auth, _ = get_app_installation(repo_owner, repo_name)
+    if github_token is None:
+        raise InitializationError(
+            "GITHUB_TOKEN environment variable must be set for token authentication."
+        )
 
-    return github_auth
+    return Auth.Token(github_token)
+
+
+def get_write_app_credentials() -> tuple[int | str, str]:
+    app_id = os.environ.get("GITHUB_APP_ID")
+    private_key = os.environ.get("GITHUB_PRIVATE_KEY")
+
+    if not app_id or not private_key:
+        raise InitializationError(
+            "GITHUB_APP_ID and GITHUB_PRIVATE_KEY environment variables must be set for app authentication."
+        )
+
+    return app_id, private_key
+
+
+def get_read_app_credentials() -> tuple[int | str, str]:
+    app_id = os.environ.get("GITHUB_SENTRY_APP_ID")
+    private_key = os.environ.get("GITHUB_SENTRY_PRIVATE_KEY")
+
+    if not app_id or not private_key:
+        logger.error(
+            "GITHUB_SENTRY_APP_ID and GITHUB_SENTRY_PRIVATE_KEY not set, falling back to 'write' app."
+        )
+        return get_write_app_credentials()
+
+    return app_id, private_key
 
 
 class RepoClient:
@@ -56,7 +89,7 @@ class RepoClient:
 
     provider: str
 
-    def __init__(self, repo_definition: RepoDefinition):
+    def __init__(self, app_id: int | str, private_key: str, repo_definition: RepoDefinition):
         if repo_definition.provider != "github":
             # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
             # easier if it does
@@ -64,7 +97,11 @@ class RepoClient:
                 f"Unsupported repo provider: {repo_definition.provider}, only github is supported."
             )
 
-        self.github = Github(auth=get_github_auth(repo_definition.owner, repo_definition.name))
+        self.github = Github(
+            auth=get_github_app_auth_and_installation(
+                app_id, private_key, repo_definition.owner, repo_definition.name
+            )[0]
+        )
         self.repo = self.github.get_repo(
             int(repo_definition.external_id)
             if repo_definition.external_id.isdigit()
@@ -76,25 +113,39 @@ class RepoClient:
         self.repo_name = repo_definition.name
 
     @staticmethod
-    def check_repo_access(repo: RepoDefinition):
-        try:
-            _, installation = get_app_installation(repo.owner, repo.name)
+    def check_repo_write_access(repo: RepoDefinition):
+        permissions = get_repo_app_permissions(*get_write_app_credentials(), repo.owner, repo.name)
 
-            permissions = installation.raw_data.get("permissions", {})
+        if (
+            permissions
+            and permissions.get("contents") == "write"
+            and permissions.get("pull_requests") == "write"
+        ):
+            return True
 
-            if (
-                permissions.get("contents") == "write"
-                and permissions.get("pull_requests") == "write"
-            ):
-                return True
+        return False
 
-            return False
-        except UnknownObjectException:
-            return False
+    @staticmethod
+    def check_repo_read_access(repo: RepoDefinition):
+        permissions = get_repo_app_permissions(*get_read_app_credentials(), repo.owner, repo.name)
+
+        if permissions and (
+            permissions.get("contents") == "read" or permissions.get("contents") == "write"
+        ):
+            return True
+
+        return False
 
     @classmethod
-    def from_repo_info(cls, repo_info: RepositoryInfo):
-        return cls(repo_info.to_repo_definition())
+    def from_repo_definition(cls, repo_def: RepoDefinition, type: Literal["read", "write"]):
+        if type == "write":
+            return cls(*get_write_app_credentials(), repo_def)
+
+        return cls(*get_read_app_credentials(), repo_def)
+
+    @classmethod
+    def from_repo_info(cls, repo_info: RepositoryInfo, type: Literal["read", "write"]):
+        return cls.from_repo_definition(repo_info.to_repo_definition(), type)
 
     @property
     def repo_full_name(self):
@@ -334,3 +385,30 @@ class RepoClient:
             head=branch.ref,
             draft=True,
         )
+
+    def get_index_file_set(
+        self, sha: str, max_file_size_bytes=2 * 1024 * 1024, skip_empty_files=False
+    ) -> set[str]:
+        tree = self.repo.get_git_tree(sha=sha, recursive=True)
+
+        # Recursive tree requests are truncated at 100,000 entries or 7MB as noted @ https://docs.github.com/en/rest/git/trees?apiVersion=2022-11-28#get-a-tree
+        # This should be sufficient for most repositories, but if it's not, we should consider paginating the tree.
+        # We log to see how often this happens and if it's a problem.
+        if tree.raw_data["truncated"]:
+            sentry_sdk.capture_message(
+                f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
+            )
+
+        file_set = set()
+        for file in tree.tree:
+            if (
+                file.type == "blob"
+                and file.size < max_file_size_bytes
+                and file.mode
+                in ["100644", "100755"]  # 100644 is a regular file, 100755 is an executable file
+                and get_language_from_path(file.path) is not None
+                and (not skip_empty_files or file.size > 0)
+            ):
+                file_set.add(file.path)
+
+        return file_set

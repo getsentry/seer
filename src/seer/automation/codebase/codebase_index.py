@@ -37,7 +37,6 @@ from seer.automation.codebase.utils import (
     get_language_from_path,
     group_documents_by_language,
     potential_frame_match,
-    read_directory,
     read_specific_files,
 )
 from seer.automation.models import (
@@ -132,7 +131,7 @@ class CodebaseIndex:
         )
 
         if workspace:
-            repo_client = RepoClient(repo)
+            repo_client = RepoClient.from_repo_definition(repo, "read")
             return cls(
                 organization,
                 project,
@@ -172,7 +171,7 @@ class CodebaseIndex:
                 return cls(
                     organization=repo_info.organization,
                     project=repo_info.project,
-                    repo_client=RepoClient.from_repo_info(repo_info),
+                    repo_client=RepoClient.from_repo_info(repo_info, "read"),
                     workspace=workspace,
                     state_manager=state_manager,
                     embedding_model=embedding_model,
@@ -188,7 +187,7 @@ class CodebaseIndex:
         tracking_branch: str | None = None,
         sha: str | None = None,
     ) -> int:
-        repo_client = RepoClient(repo)
+        repo_client = RepoClient.from_repo_definition(repo, "read")
 
         head_sha = sha
         branch = None
@@ -230,7 +229,7 @@ class CodebaseIndex:
         if not workspace:
             raise InitializationError("Failed to load workspace for namespace_id")
 
-        repo_client = RepoClient.from_repo_info(workspace.repo_info)
+        repo_client = RepoClient.from_repo_info(workspace.repo_info, "read")
 
         # If the workspace is ready then we shouldn't index again...
         if not workspace.is_ready():
@@ -239,7 +238,10 @@ class CodebaseIndex:
                 logger.debug(f"Loaded repository to {tmp_repo_dir}")
 
                 try:
-                    documents = read_directory(tmp_repo_dir)
+                    files = repo_client.get_index_file_set(
+                        workspace.namespace.sha, skip_empty_files=True
+                    )
+                    documents = read_specific_files(tmp_repo_dir, files)
 
                     logger.debug(f"Read {len(documents)} documents:")
                     documents_by_language = group_documents_by_language(documents)
@@ -365,11 +367,18 @@ class CodebaseIndex:
             self.workspace.delete_paths(removed_files)
 
             self.workspace.namespace.sha = target_sha
+            self.workspace.save()
+
+            if not self.verify_file_integrity():
+                # Let's see how often this happens, if at all.
+                sentry_sdk.capture_message(
+                    f"File integrity check after update failed for {self.repo_info.external_slug}, namespace {self.namespace.id}"
+                )
 
             logger.debug(f"Update step: Inserted {len(chunks)} chunks into the database")
         finally:
             self.workspace.namespace.status = CodebaseNamespaceStatus.CREATED
-            self.workspace.save()
+            self.workspace.save_records()
 
             cleanup_dir(tmp_dir)
 
@@ -415,6 +424,16 @@ class CodebaseIndex:
 
         return False
 
+    def verify_file_integrity(self) -> bool:
+        """
+        Checks if the files in the workspace match the files in the repository
+        Note: Only checks up to 100k files for now.
+        """
+        file_paths = self.repo_client.get_index_file_set(self.namespace.sha, skip_empty_files=True)
+
+        with sentry_sdk.start_span(op="seer.automation.codebase.verify_file_integrity"):
+            return self.workspace.verify_file_integrity(file_paths)
+
     def query(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
         assert self.repo_info is not None, "Repository info is not set"
 
@@ -428,7 +447,7 @@ class CodebaseIndex:
     def _get_file_content_with_cache(self, path: str, sha: str):
         try:
             return self.repo_client.get_file_content(path, sha)
-        except Exception as e:
+        except Exception:
             return None
 
     def _copy_document_with_local_changes(
@@ -522,7 +541,7 @@ class CodebaseIndex:
                             break
 
     def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[QueryResultDocumentChunk]:
-        ### This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
+        # This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
 
         doc_parser = DocumentParser(self.embedding_model)
@@ -694,12 +713,15 @@ class CodebaseIndex:
         return file_patches, combined_diff
 
     def diff_contains_stacktrace_files(self, event_details: EventDetails) -> bool:
-        stacktraces = [exception.stacktrace for exception in event_details.exceptions]
+        stacktraces = [exception.stacktrace for exception in event_details.exceptions] + [
+            thread.stacktrace for thread in event_details.threads if thread.stacktrace
+        ]
 
         stacktrace_files: set[str] = set()
         for stacktrace in stacktraces:
             for frame in stacktrace.frames:
-                stacktrace_files.add(frame.filename)
+                if frame.filename:
+                    stacktrace_files.add(frame.filename)
 
         changed_files, removed_files = self.repo_client.get_commit_file_diffs(
             self.namespace.sha, self.repo_client.get_default_branch_head_sha()

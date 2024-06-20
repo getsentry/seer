@@ -1,11 +1,9 @@
-import json
 import logging
 import textwrap
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GptClient
-from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.retriever import RetrieverRequest
@@ -19,7 +17,6 @@ from seer.automation.autofix.components.snippet_replacement import (
 from seer.automation.autofix.utils import find_original_snippet
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.models import FileChange
-from seer.automation.state import State
 
 logger = logging.getLogger("autofix")
 
@@ -32,17 +29,19 @@ class BaseTools:
         self.context = context
         self.retrieval_top_k = retrieval_top_k
 
+    @observe(name="Codebase Search")
     @ai_track(description="Codebase Search")
-    def codebase_retriever(self, query: str):
+    def codebase_retriever(self, query: str, intent: str):
         component = RetrieverWithRerankerComponent(self.context)
 
-        output = component.invoke(RetrieverRequest(text=query, repo_top_k=16))
+        output = component.invoke(RetrieverRequest(text=query, intent=intent, top_k=16))
 
         if not output:
             return "No results found."
 
         return output.to_xml().to_prompt_str()
 
+    @observe(name="Expand Document")
     @ai_track(description="Expand Document")
     def expand_document(self, input: str, repo_name: str | None = None):
         self.context.event_manager.add_log(
@@ -69,6 +68,11 @@ class BaseTools:
                         "name": "query",
                         "type": "string",
                         "description": "The query to search for.",
+                    },
+                    {
+                        "name": "intent",
+                        "type": "string",
+                        "description": "The intent of the search, provide a short description of what you're looking for.",
                     },
                 ],
                 fn=self.codebase_retriever,
@@ -100,6 +104,7 @@ class CodeActionTools(BaseTools):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
+    @observe(name="Store File Change")
     @ai_track(description="Store File Change")
     def store_file_change(self, codebase: CodebaseIndex, file_change: FileChange):
         """
@@ -114,6 +119,7 @@ class CodeActionTools(BaseTools):
             f"Made a code change in {file_change.path} in {codebase.repo_info.external_slug}."
         )
 
+    @observe(name="Replace Snippet")
     @ai_track(description="Replace Snippet")
     def replace_snippet_with(
         self,
@@ -187,6 +193,7 @@ class CodeActionTools(BaseTools):
 
         return f"success: Resulting code after replacement:\n```\n{output.snippet}\n```\n"
 
+    @observe(name="Delete Snippet")
     @ai_track(description="Delete Snippet")
     def delete_snippet(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
@@ -275,6 +282,7 @@ class CodeActionTools(BaseTools):
 
     #     return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
+    @observe(name="Create File")
     @ai_track(description="Create File")
     def create_file(self, file_path: str, repo_name: str, snippet: str, commit_message: str):
         """
@@ -303,6 +311,7 @@ class CodeActionTools(BaseTools):
 
         return "success"
 
+    @observe(name="Delete File")
     @ai_track(description="Delete File")
     def delete_file(self, file_path: str, repo_name: str, commit_message: str):
         """

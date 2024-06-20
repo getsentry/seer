@@ -126,3 +126,15 @@ If you run into any data issue or connection issue and want to start from scratc
 docker compose down --volumes
 make update && make dev
 ```
+
+### Using Langfuse
+
+We publish our Langfuse traces to our Langfuse instance. Set the following environment variables:
+
+```bash
+LANGFUSE_SECRET_KEY=...
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_HOST=...
+```
+
+to use it. Otherwise leaving them unset will disable the instrumentation.

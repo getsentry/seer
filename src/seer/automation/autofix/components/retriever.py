@@ -1,5 +1,6 @@
 import textwrap
 
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
@@ -13,6 +14,7 @@ from seer.automation.models import PromptXmlModel
 
 class RetrieverRequest(BaseComponentRequest):
     text: str
+    intent: str | None = None
     top_k: int = 8
     include_short_hash_as_id: bool = False
 
@@ -33,34 +35,42 @@ class RetrieverPrompts:
     def format_plan_item_query_system_msg():
         return textwrap.dedent(
             """\
-            Given the below instruction, please output a JSON with the "queries" field being an array of strings of queries that you would use to find the code that would accomplish the instruction.
+            Given the below query, please output a JSON with the "queries" field being an array of strings of multiple relevant queries that you would use to find the code that would satisfy the original query.
 
             ## Guidelines ##
-            - The queries should be specific to the codebase and should be able to be used to find the code that would accomplish the instruction.
+            - The queries should be specific to the codebase and should be able to be used to find the code that would satisfy the original query.
             - The queries can be both keywords and semantic queries.
+            - These queries will be used for an embedding cosine similarity search to find the relevant code.
+            - The queries will match with code snippets that also include the file path.
 
             Examples are provided below:
 
-            Instruction:
-            "Rename the function `get_abc()` to `get_xyz()` in `static/app.py`."
-            Queries:
-            {"queries": ["get_abc", "static/app.py", "get_abc in static/app.py"]}
+            Original Query:
+            "def get_abc("
+            Intent:
+            "Renaming the function `get_abc()` to `get_xyz()` in `static/app.py`."
+            Improved Queries:
+            {"queries": ["def get_abc", "get_abc", "static/app.py", "get_abc in static/app.py", "abc"]}
 
-            Instruction:
+            Original Query:
+            "/api/v1/health"
+            Intent:
             "Find where the endpoint for `/api/v1/health` is defined in the codebase."
-            Queries:
-            {"queries": ["/api/v1/health", "health endpoint", "health api", "status check"]}"""
+            Improved Queries:
+            {"queries": ["/api/v1/health", "api/v1/health", "health", "health check", "liveliness", "ready"]}"""
         )
 
     @staticmethod
-    def format_plan_item_query_default_msg(text: str):
+    def format_plan_item_query_default_msg(text: str, intent: str | None = None):
         return textwrap.dedent(
             """\
-            Instruction:
-            "{text}"
-            Queries:
+            Original Query:
+            "{text}"{intent_msg}
+            Improved Queries:
             """
-        ).format(text=text)
+        ).format(
+            text=text, intent_msg='\nIntent:\n"{intent}"'.format(intent=intent) if intent else ""
+        )
 
 
 class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
@@ -69,6 +79,7 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     def __init__(self, context: AutofixContext):
         super().__init__(context)
 
+    @observe(name="Retriever")
     @ai_track(description="Retriever")
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         # Identify good search queries for the plan item
@@ -79,7 +90,9 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
                 ),
                 Message(
                     role="user",
-                    content=RetrieverPrompts.format_plan_item_query_default_msg(text=request.text),
+                    content=RetrieverPrompts.format_plan_item_query_default_msg(
+                        text=request.text, intent=request.intent
+                    ),
                 ),
             ]
         )

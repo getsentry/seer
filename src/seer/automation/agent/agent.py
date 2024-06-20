@@ -19,7 +19,7 @@ class LlmAgent(ABC):
 
     client: LlmClient
     iterations: int = 0
-    max_iterations: int = 48
+    max_iterations: int = 16
 
     def __init__(
         self,
@@ -47,7 +47,7 @@ class LlmAgent(ABC):
         )
 
         logger.debug(f"----[{self.name}] Running Agent----")
-        logger.debug(f"Previous messages: ")
+        logger.debug("Previous messages: ")
         for message in self.memory:
             logger.debug(f"{message.role}: {message.content}")
 
@@ -118,11 +118,8 @@ class GptAgent(LlmAgent):
     def run_iteration(self):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
-        messages = [{k: v for k, v in msg.dict().items() if v is not None} for msg in self.memory]
-        # logger.debug(f"Messages: {messages}")
-
         message, usage = self.client.completion(
-            messages=messages,  # type: ignore
+            messages=self.memory,
             tools=([tool.to_dict() for tool in self.tools] if len(self.tools) > 0 else NotGiven()),
             **self.chat_completion_kwargs,
         )

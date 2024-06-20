@@ -1,6 +1,8 @@
-from typing import Any, Type
+from typing import Any
 
 import sentry_sdk
+from langfuse.decorators import observe
+from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -39,6 +41,8 @@ class CreateIndexStep(AutofixPipelineStep):
     def get_task():
         return create_index_task
 
+    @observe(name="Autofix - Create Index Step")
+    @ai_track(description="Autofix - Create Index Step")
     def _invoke(self, **kwargs):
         repo = self.request.repo
 

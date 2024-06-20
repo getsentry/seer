@@ -32,12 +32,13 @@ from seer.automation.codebase.models import (
     RepoAccessCheckRequest,
     RepoAccessCheckResponse,
 )
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.tasks import (
-    check_repo_access,
     create_codebase_index,
     get_codebase_index_status,
     index_namespace,
 )
+from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
@@ -114,7 +115,7 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 
 @json_api("/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
-    with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
+    with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
 
@@ -161,6 +162,8 @@ def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> Similarity
 
 @json_api("/v1/automation/codebase/index/create")
 def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
+    raise_if_no_genai_consent(data.organization_id)
+
     namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
 
     index_namespace.apply_async(
@@ -177,7 +180,7 @@ def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpoi
 
 @json_api("/v1/automation/codebase/repo/check-access")
 def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
-    return RepoAccessCheckResponse(has_access=check_repo_access(data.repo))
+    return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
 
 
 @json_api("/v1/automation/codebase/index/status")
@@ -195,6 +198,7 @@ def get_codebase_index_status_endpoint(
 
 @json_api("/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    raise_if_no_genai_consent(data.organization_id)
     run_autofix_root_cause(data)
     return AutofixEndpointResponse(started=True)
 

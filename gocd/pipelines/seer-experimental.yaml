@@ -1,0 +1,73 @@
+format_version: 10
+pipelines:
+  deploy-seer-experimental:
+    environment_variables:
+      GCP_PROJECT: mattrobenolt-kube
+      GKE_CLUSTER: primary
+      GKE_REGION: us-west1
+      GKE_CLUSTER_ZONE: c
+      GKE_BASTION_ZONE: c
+    group: seer
+    lock_behavior: unlockWhenFinished
+    materials:
+      seer_repo:
+        branch: experimental
+        destination: seer
+        git: git@github.com:getsentry/seer.git
+        shallow_clone: true
+    stages:
+      - checks:
+          approval:
+            type: manual
+          fetch_materials: true
+          jobs:
+            check:
+              environment_variables:
+                GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
+              elastic_profile_id: seer
+              tasks:
+                - script: |
+                    ##!/bin/bash
+
+                    /devinfra/scripts/checks/githubactions/checkruns.py \
+                      getsentry/seer \
+                      "${GO_REVISION_SEER_REPO}" \
+                      build
+                - script: |
+                    ##!/bin/bash
+
+                    /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
+                      "${GO_REVISION_SEER_REPO}" \
+                      sentryio \
+                      "us-central1-docker.pkg.dev/sentryio/seer/image"
+              timeout: 1200
+      - deploy-experimental:
+          environment_variables:
+            SENTRY_REGION: s4s
+          jobs:
+            deploy:
+              elastic_profile_id: seer
+              tasks:
+                - script: |
+                    ##!/bin/bash
+
+                    eval "$(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")"
+
+                    /devinfra/scripts/k8s/k8stunnel \
+                      && /devinfra/scripts/k8s/k8s-deploy.py \
+                      --label-selector="service=seer" \
+                      --image="us-central1-docker.pkg.dev/sentryio/seer/image:${GO_REVISION_SEER_REPO}" \
+                      --container-name="seer"
+
+                    /devinfra/scripts/k8s/k8stunnel \
+                      && /devinfra/scripts/k8s/k8s-deploy.py \
+                      --label-selector="service=seer-autofix" \
+                      --image="us-central1-docker.pkg.dev/sentryio/seer/image:${GO_REVISION_SEER_REPO}" \
+                      --container-name="seer-autofix"
+              timeout: 1200
+      - pipeline-complete:
+          jobs:
+            pipeline-complete:
+              tasks:
+                - exec:
+                    command: true

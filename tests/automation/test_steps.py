@@ -1,6 +1,5 @@
 import unittest
-from typing import Type
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.seer.automation.steps import (
     ConditionalStep,

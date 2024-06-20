@@ -1,6 +1,8 @@
 from typing import Any
 
 import sentry_sdk
+from langfuse.decorators import observe
+from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import app as celery_app
 from celery_app.config import CeleryQueues
@@ -47,6 +49,8 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
     def get_task():
         return create_missing_indexes_task
 
+    @observe(name="Autofix - Create Missing Indices Step")
+    @ai_track(description="Autofix - Create Missing Indices Step")
     def _invoke(self, **kwargs):
         event_details = EventDetails.from_event(self.context.state.get().request.issue.events[0])
 
@@ -56,13 +60,27 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
         for repo in self.context.repos:
             codebase = self.context.get_codebase_from_external_id(repo.external_id)
 
-            # If a codebase is not ready, delete it and recreate it.
-            if codebase and not codebase.workspace.is_ready():
-                sentry_sdk.capture_message(
-                    f"Codebase workspace was not ready for repo: {repo.full_name}, recreating"
-                )
-                codebase.workspace.delete()
-                codebase = None
+            # If a codebase is not ready delete it and recreate it.
+            if codebase:
+                ready = codebase.workspace.is_ready()
+                integrity = ready and codebase.verify_file_integrity()
+
+                if not integrity:
+                    # Log integrity failures for now
+                    log = f"Codebase workspace integrity check failed for repo: {repo.full_name}."
+                    self.logger.debug(log)
+                    sentry_sdk.capture_message(log)
+
+                # TODO: Delete codebase if integrity check fails too
+                if not ready:
+                    log = (
+                        f"Codebase workspace was not ready for repo: {repo.full_name}, recreating."
+                    )
+                    self.logger.debug(log)
+                    sentry_sdk.capture_message(log)
+
+                    codebase.workspace.delete()
+                    codebase = None
 
             if not codebase:
                 repos_to_create.append(repo)
