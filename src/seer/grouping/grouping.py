@@ -35,7 +35,6 @@ class GroupingRequest(BaseModel):
 
 
 class GroupingResponse(BaseModel):
-    parent_group_id: Optional[int]
     parent_hash: str
     stacktrace_distance: float
     message_distance: float
