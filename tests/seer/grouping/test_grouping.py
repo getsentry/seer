@@ -255,9 +255,9 @@ class TestGrouping(unittest.TestCase):
         assert len(response.groups_with_neighbor) == 0
 
         with Session() as session:
-            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
-            for i in range(10):
-                assert records[i] is not None
+            assert session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.hash.in_(hashes)
+            ).count() == len(hashes)
 
     def test_delete_grouping_records_for_project(self):
         """Test deleting grouping records for a project"""

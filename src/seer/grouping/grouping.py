@@ -7,6 +7,7 @@ import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
+from sqlalchemy.exc import IntegrityError
 
 from seer.db import DbGroupingRecord, Session
 
@@ -332,10 +333,9 @@ class GroupingLookup:
             with Session() as session:
                 session.bulk_save_objects(records)
                 session.commit()
-        except Exception as e:
+        except IntegrityError:
             with Session() as session:
-                logger.info(f"Error in bulk insert: {str(e)}")
-                logger.info("Attempting to insert records individually...")
+                logger.info("Error in bulk insert. Attempting to insert records individually...")
 
                 existing_records = (
                     session.query(DbGroupingRecord.hash, DbGroupingRecord.project_id)
