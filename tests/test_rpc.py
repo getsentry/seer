@@ -11,7 +11,6 @@ from queue import Queue
 from typing import Iterator, Type
 
 import pytest
-from aiohttp import ClientResponseError
 from johen.pytest import parametrize
 from requests.models import HTTPError
 
@@ -137,72 +136,5 @@ def test_rpc_call_404(test_server: TestRpcHttpServer):
             client.call("method")
 
         assert exc_info.value.response.status_code == 404
-
-        future.result()
-
-
-@pytest.mark.asyncio
-@parametrize
-async def test_rpc_acall_200_json(
-    test_server: TestRpcHttpServer,
-    args: AutofixCompleteArgs | AutofixStepUpdateArgs,
-    expected_result: dict[str, int],
-):
-    with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
-
-        def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
-            QueueHandler.response_queue.put(json.dumps(expected_result).encode("utf-8"))
-            assert type(args).model_validate(json.loads(body)["args"]) == args
-            assert headers["Content-Type"] == "application/json"
-            assert path == "/api/0/internal/seer-rpc/method/"
-
-        future = pool.submit(handle_request)
-
-        client = SentryRpcClient()
-        r = await client.acall("method", **args.model_dump(mode="json"))
-        assert r == expected_result
-
-        future.result()
-
-
-@pytest.mark.asyncio
-@parametrize
-async def test_rpc_acall_200_empty(test_server: TestRpcHttpServer):
-    with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
-
-        def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
-            QueueHandler.response_queue.put(b"")
-            assert (
-                headers["Authorization"]
-                == "Rpcsignature rpc0:a16521c8142bdf13770fac1b25b97a126eaa4761db9fcdd9dc24d4e098766972"
-            )
-
-        future = pool.submit(handle_request)
-
-        client = SentryRpcClient()
-        r = await client.acall("method", issue_id=1)
-        assert r is None
-
-        future.result()
-
-
-@pytest.mark.asyncio
-@parametrize(count=1)
-async def test_rpc_acall_404(test_server: TestRpcHttpServer):
-    with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
-
-        def handle_request():
-            body, headers, path = QueueHandler.request_queue.get(timeout=5)
-            QueueHandler.response_queue.put(404)
-
-        future = pool.submit(handle_request)
-
-        client = SentryRpcClient()
-        with pytest.raises(ClientResponseError) as exc_info:
-            await client.acall("method")
-
-        assert exc_info.value.code == 404
 
         future.result()
