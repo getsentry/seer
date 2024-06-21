@@ -42,7 +42,6 @@ services:
             - .env
         environment:
             - DEV=1
-            - LAZY_INFERENCE_MODELS=1
             - SEVERITY_ENABLED=1
             - GROUPING_ENABLED=1
             - CELERY_WORKER_ENABLE=true

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 
 from seer.db import DbGroupingRecord, Session
+from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
 logger = logging.getLogger("grouping")
 
@@ -89,12 +90,25 @@ class SimilarityBenchmarkResponse(BaseModel):
     embedding: List[float]
 
 
+def _load_model(model_path: str) -> SentenceTransformer:
+    if can_use_model_stubs():
+        return DummySentenceTransformer(embedding_size=768)
+
+    model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    logger.info(f"Loading transformer model to device {model_device}")
+    SentenceTransformer(
+        model_path,
+        trust_remote_code=True,
+        device=model_device,
+    )
+    sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
+
+
 class GroupingLookup:
-    """Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
+    model: SentenceTransformer
 
-    Attributes:
-        model (SentenceTransformer): The sentence transformer model for encoding text.
-
+    """
+    Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
     """
 
     def __init__(self, model_path: str, data_path: str):
@@ -103,16 +117,8 @@ class GroupingLookup:
 
         :param model_path: Path to the sentence transformer model.
         """
-        model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        logger.info(f"Loading transformer model to device {model_device}")
-        self.model = SentenceTransformer(
-            model_path,
-            trust_remote_code=True,
-            device=model_device,
-        )
+        self.model = _load_model(model_path)
         self.encode_text("IndexError: list index out of range")  # Ensure warm start
-        logger.info(f"GroupingLookup model initialized using device: {model_device}")
-        sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """

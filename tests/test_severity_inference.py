@@ -1,6 +1,7 @@
 import unittest
 
 from seer.severity.severity_inference import SeverityInference, SeverityRequest
+from seer.stubs import can_use_model_stubs
 
 
 class TestSeverityInference(unittest.TestCase):
@@ -14,7 +15,8 @@ class TestSeverityInference(unittest.TestCase):
         ).severity
 
         self.assertIsInstance(score, float)
-        self.assertGreater(score, 0.5)
+        if not can_use_model_stubs():
+            self.assertGreater(score, 0.5)
 
     def test_low_severity_error(self):
         score = self.severity_inference.severity_score(
@@ -22,7 +24,8 @@ class TestSeverityInference(unittest.TestCase):
         ).severity
 
         self.assertIsInstance(score, float)
-        self.assertLess(score, 0.5)
+        if not can_use_model_stubs():
+            self.assertLess(score, 0.5)
 
     def test_empty_input(self):
         score = self.severity_inference.severity_score(SeverityRequest(message="")).severity

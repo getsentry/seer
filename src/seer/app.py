@@ -1,8 +1,10 @@
 import logging
+import os
 import time
+from typing import Any
 
 import sentry_sdk
-from flask import jsonify
+from flask import Flask, got_request_exception, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -52,8 +54,9 @@ from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
-app = bootup(
-    __name__,
+app = Flask(__name__)
+bootup(
+    app,
     [
         FlaskIntegration(),
         LoggingIntegration(
@@ -63,6 +66,12 @@ app = bootup(
     init_migrations=True,
     async_load_models=True,
 )
+
+
+@got_request_exception.connect
+def _capture_exception(sender: Any, exception: Exception, **kwargs: Any):
+    if os.environ.get("DEV", ""):
+        app.logger.exception("", exc_info=exception)
 
 
 @json_api("/v0/issues/severity-score")
