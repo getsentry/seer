@@ -12,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TEST: 1
-      NO_SENTRY_INTEGRATION: 1
-      NO_REAL_MODELS: 1
+      EXTRA_COMPOSE_TEST_OPTIONS: "-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1"
 
     steps:
       - uses: actions/checkout@v3
