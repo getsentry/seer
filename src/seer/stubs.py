@@ -18,11 +18,11 @@ class DummySentenceTransformer(SentenceTransformer):
         self,
         sentences: Union[str, List[str]],
         batch_size: int = 32,
-        show_progress_bar: bool = None,
+        show_progress_bar: bool | None = None,
         output_value: str = "sentence_embedding",
         convert_to_numpy: bool = True,
         convert_to_tensor: bool = False,
-        device: str = None,
+        device: str | None = None,
         normalize_embeddings: bool = False,
     ) -> Union[List[Tensor], ndarray, Tensor]:
         embeddings_array: list[list[float]] = []
