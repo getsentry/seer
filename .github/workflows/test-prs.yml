@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TEST: 1
+      EXTRA_COMPOSE_TEST_OPTIONS: "-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build image
+        run: |
+          make update
+      - name: Typecheck with mypy
+        run: |
+          make mypy
+      - name: Test with pytest
+        run: |
+          make test

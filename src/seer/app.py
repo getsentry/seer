@@ -2,7 +2,7 @@ import logging
 import time
 
 import sentry_sdk
-from flask import jsonify
+from flask import Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -52,8 +52,9 @@ from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
-app = bootup(
-    __name__,
+app = Flask(__name__)
+bootup(
+    app,
     [
         FlaskIntegration(),
         LoggingIntegration(

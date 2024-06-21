@@ -8,7 +8,7 @@ from johen.pytest import parametrize
 from sqlalchemy import text
 
 from seer.app import app
-from seer.db import AsyncSession, DbGroupingRecord, ProcessRequest, Session
+from seer.db import DbGroupingRecord, ProcessRequest, Session
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 
 
@@ -382,29 +382,6 @@ def test_prepared_statements_disabled(
             session.add(request)
             session.flush()
         assert session.execute(text("select count(*) from pg_prepared_statements")).scalar() == 0
-
-
-@pytest.mark.asyncio
-@parametrize(count=1)
-async def test_async_prepared_statements_disabled(
-    requests: tuple[
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-    ]
-):
-    async with AsyncSession() as session:
-        # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
-        for i, request in enumerate(requests):
-            request.name += str(i)
-            session.add(request)
-            await session.flush()
-        assert (
-            await session.execute(text("select count(*) from pg_prepared_statements"))
-        ).scalar() == 0
 
 
 def test_async_loading():

@@ -9,11 +9,10 @@ from celery import Celery
 from flask import Flask
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
-from sqlalchemy.ext.asyncio import create_async_engine
 from structlog import get_logger
 
 from celery_app.config import CeleryQueues
-from seer.db import AsyncSession, Session, db, migrate
+from seer.db import Session, db, migrate
 
 logger = logging.getLogger(__name__)
 structlog.configure(
@@ -39,11 +38,10 @@ class DisablePreparedStatementConnection(Connection):
 
 
 def bootup(
-    name: str,
+    app: Flask,
     plugins: Collection[Integration] = (),
     init_migrations=False,
     init_db=True,
-    with_async=False,
     async_load_models=False,
 ) -> Flask:
     grouping_logger = logging.getLogger("grouping")
@@ -59,7 +57,6 @@ def bootup(
         traces_sample_rate=1.0,
         send_default_pii=True,
     )
-    app = Flask(name)
 
     uri = os.environ["DATABASE_URL"]
     app.config["SQLALCHEMY_DATABASE_URI"] = uri
@@ -73,12 +70,6 @@ def bootup(
             migrate.init_app(app, db)
         with app.app_context():
             Session.configure(bind=db.engine)
-            if with_async:
-                AsyncSession.configure(
-                    bind=create_async_engine(
-                        db.engine.url, connect_args={"prepare_threshold": None}
-                    )
-                )
 
     if async_load_models:
         start_loading(async_load_models)

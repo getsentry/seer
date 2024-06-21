@@ -5,7 +5,7 @@ import pytest
 from johen.generators import pydantic, sqlalchemy
 from sqlalchemy import text
 
-from seer.bootup import CELERY_CONFIG, bootup
+from seer.bootup import CELERY_CONFIG
 from seer.db import Session, db
 from seer.inference_models import reset_loading_state
 
@@ -17,14 +17,9 @@ def configure_environment():
 
 @pytest.fixture(autouse=True)
 def setup_app():
-    # Forces the initialization of the database
+    from seer.app import app
+
     reset_loading_state()
-    app = bootup(
-        __name__,
-        init_db=True,
-        init_migrations=False,
-        with_async=True,
-    )
 
     with app.app_context():
         db.metadata.drop_all(bind=db.engine)

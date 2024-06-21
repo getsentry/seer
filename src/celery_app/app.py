@@ -3,6 +3,7 @@ import os
 
 import billiard  # type: ignore[import-untyped]
 from celery import signals
+from flask import Flask
 from sentry_sdk.integrations.celery import CeleryIntegration
 
 from seer.bootup import bootup, bootup_celery
@@ -16,7 +17,8 @@ logging.getLogger("automation").setLevel(logging.DEBUG)
 app = bootup_celery()
 app.autodiscover_tasks(["celery_app.tasks"])
 
-flask_app = bootup(__name__, [CeleryIntegration(propagate_traces=True)])
+flask_app = Flask(__name__)
+flask_app = bootup(flask_app, [CeleryIntegration(propagate_traces=True)])
 
 
 @signals.celeryd_after_setup.connect
