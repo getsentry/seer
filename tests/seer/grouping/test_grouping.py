@@ -223,6 +223,42 @@ class TestGrouping(unittest.TestCase):
             for i in range(10):
                 assert records[i] is not None
 
+    def test_bulk_create_and_insert_grouping_records_with_existing_record(self):
+        """Test bulk creating and inserting grouping records with one record already existing"""
+        hashes = [str(i) * 32 for i in range(10)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
+                for i in range(10)
+            ],
+            stacktrace_list=["stacktrace " + str(i) for i in range(10)],
+        )
+
+        # Insert one record before bulk insert
+        single_record = GroupingRecord(
+            hash=hashes[0],
+            project_id=1,
+            message="message " + str(0),
+            stacktrace_embedding=grouping_lookup().encode_text("stacktrace " + str(0)),
+        ).to_db_model()
+        with Session() as session:
+            session.add(single_record)
+            session.commit()
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response.success is True
+        assert len(response.groups_with_neighbor) == 0
+
+        with Session() as session:
+            assert session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.hash.in_(hashes)
+            ).count() == len(hashes)
+
     def test_delete_grouping_records_for_project(self):
         """Test deleting grouping records for a project"""
         hashes = [str(i) * 32 for i in range(10)]
