@@ -1,10 +1,8 @@
 import logging
-import os
 import time
-from typing import Any
 
 import sentry_sdk
-from flask import Flask, got_request_exception, jsonify
+from flask import Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -66,12 +64,6 @@ bootup(
     init_migrations=True,
     async_load_models=True,
 )
-
-
-@got_request_exception.connect
-def _capture_exception(sender: Any, exception: Exception, **kwargs: Any):
-    if os.environ.get("DEV", ""):
-        app.logger.exception("", exc_info=exception)
 
 
 @json_api("/v0/issues/severity-score")
