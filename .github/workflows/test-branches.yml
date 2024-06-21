@@ -39,6 +39,9 @@ jobs:
       - name: Build image
         run: |
           make update
+      - name: Typecheck with mypy
+        run: |
+          make mypy
       - name: Test with pytest
         run: |
           make test
