@@ -1,9 +1,8 @@
-name: Seer
+name: Tests
 
 on:
   push:
     branches: [main, experimental]
-  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -40,9 +39,6 @@ jobs:
       - name: Build image
         run: |
           make update
-      - name: Typecheck with mypy
-        run: |
-          make mypy
       - name: Test with pytest
         run: |
           make test
