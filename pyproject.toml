@@ -14,9 +14,9 @@
 
 [tool.mypy]
     python_version = "3.11"
-    mypy_path = []
+    mypy_path = ["src/generated"]
     plugins = ["pydantic.mypy"]
-    files = ["src/"]
+    files = ['src/']
 
     # minimal strictness settings
     check_untyped_defs = true

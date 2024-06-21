@@ -3,6 +3,7 @@ import os
 import sys
 from typing import Collection
 
+import grpc
 import sentry_sdk
 import structlog
 from celery import Celery
@@ -14,6 +15,7 @@ from structlog import get_logger
 
 from celery_app.config import CeleryQueues
 from seer.db import AsyncSession, Session, db, migrate
+from seer.grpc_helpers import FlaskHandlerGrpcServer
 
 logger = logging.getLogger(__name__)
 structlog.configure(
@@ -38,6 +40,10 @@ class DisablePreparedStatementConnection(Connection):
     pass
 
 
+class SeerFlask(Flask):
+    grpc_server: FlaskHandlerGrpcServer
+
+
 def bootup(
     name: str,
     plugins: Collection[Integration] = (),
@@ -45,7 +51,7 @@ def bootup(
     init_db=True,
     with_async=False,
     async_load_models=False,
-) -> Flask:
+) -> SeerFlask:
     grouping_logger = logging.getLogger("grouping")
     grouping_logger.setLevel(logging.INFO)
     grouping_logger.addHandler(StructLogHandler(sys.stdout))
@@ -59,7 +65,9 @@ def bootup(
         traces_sample_rate=1.0,
         send_default_pii=True,
     )
-    app = Flask(name)
+    app = SeerFlask(name)
+    app.grpc_server = FlaskHandlerGrpcServer(app)
+    app.before_request(app.grpc_server)
 
     uri = os.environ["DATABASE_URL"]
     app.config["SQLALCHEMY_DATABASE_URI"] = uri

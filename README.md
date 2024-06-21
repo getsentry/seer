@@ -1,5 +1,16 @@
 # seer
 
+## gRPC experiment
+
+This repo is currently in the process of experimenting with and migrating its endpoints to gRPC
+services!  This may include some new kinds of workflows and some dev ux bumps until issues are
+sorted out.
+
+However, we appreciate cooperation.
+
+When building new endpoints, please use the new gRPC workflow and add new services & methods, then add
+json compatible endpoint on top of that.  Ideally all services would be supported via gRPC.
+
 ## Using Seer
 
 ### Autofix

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package sentry_rpc.seer;
+
+message ScoreRequest {
+    string message = 1;
+    // Really a boolean, but historically a non-zero integer.
+    int32 has_stacktrace = 2;
+    oneof has_handled {
+        bool handled = 3;
+    };
+
+    // Some silly debug flags, likely will be deprecated, but here for demo completeness
+    bool trigger_timeout = 4;
+    bool trigger_error = 5;
+}
+
+message ScoreResponse {
+    double severity = 1;
+}
+
+service Severity {
+    rpc GetIssueScore(ScoreRequest) returns (ScoreResponse);
+}
