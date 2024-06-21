@@ -328,9 +328,38 @@ class GroupingLookup:
         Bulk inserts new GroupingRecord into the database.
         :param records: List of records to be inserted
         """
-        with Session() as session:
-            session.bulk_save_objects(records)
-            session.commit()
+        try:
+            with Session() as session:
+                session.bulk_save_objects(records)
+                session.commit()
+        except Exception as e:
+            with Session() as session:
+                logger.info(f"Error in bulk insert: {str(e)}")
+                logger.info("Attempting to insert records individually...")
+
+                existing_records = (
+                    session.query(DbGroupingRecord.hash, DbGroupingRecord.project_id)
+                    .filter(
+                        DbGroupingRecord.hash.in_([record.hash for record in records]),
+                        DbGroupingRecord.project_id.in_([record.project_id for record in records]),
+                    )
+                    .all()
+                )
+
+                existing_records_set = {
+                    (record.hash, record.project_id) for record in existing_records
+                }
+
+                records_to_insert = [
+                    record
+                    for record in records
+                    if (record.hash, record.project_id) not in existing_records_set
+                ]
+                if not records_to_insert:
+                    logger.info("No new records to insert.")
+                    return
+                session.bulk_save_objects(records_to_insert)
+                session.commit()
 
     def delete_grouping_records_for_project(self, project_id: int) -> bool:
         """
