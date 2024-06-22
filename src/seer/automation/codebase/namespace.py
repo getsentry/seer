@@ -4,6 +4,7 @@ from typing import Mapping, Optional, Self
 
 import chromadb
 import numpy as np
+import sentry_sdk
 from chromadb.api import API as ChromaClient
 
 from seer.automation.autofix.utils import autofix_logger
@@ -85,22 +86,26 @@ class CodebaseNamespaceManager:
 
     @staticmethod
     def _wait_for_mutex_clear(namespace_id: int):
-        while namespace_mutex := CodebaseNamespaceManager.get_mutex(namespace_id):
-            if (
-                namespace_mutex is not None
-                and datetime.datetime.now() - namespace_mutex
-                > datetime.timedelta(
-                    minutes=CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES
-                )
-            ):
-                autofix_logger.warning(
-                    f"Mutex for namespace {namespace_id} has been held for more than {CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES} minutes"
-                )
-                CodebaseNamespaceManager._clear_mutex(namespace_id)
-                break
+        with sentry_sdk.start_span(
+            op="seer.automation.codebase._wait_for_mutex_clear",
+            description="Awaiting the mutex associated with a namespace",
+        ):
+            while namespace_mutex := CodebaseNamespaceManager.get_mutex(namespace_id):
+                if (
+                    namespace_mutex is not None
+                    and datetime.datetime.now() - namespace_mutex
+                    > datetime.timedelta(
+                        minutes=CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES
+                    )
+                ):
+                    autofix_logger.warning(
+                        f"Mutex for namespace {namespace_id} has been held for more than {CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES} minutes"
+                    )
+                    CodebaseNamespaceManager._clear_mutex(namespace_id)
+                    break
 
-            autofix_logger.debug(f"Mutex for namespace {namespace_id} is held, waiting...")
-            time.sleep(1)
+                autofix_logger.debug(f"Mutex for namespace {namespace_id} is held, waiting...")
+                time.sleep(1)
 
     @staticmethod
     def get_namespace(
