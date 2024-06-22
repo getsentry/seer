@@ -22,10 +22,14 @@ class CreateCodebaseRequest(BaseModel):
 
 
 class IndexNamespaceTaskRequest(BaseModel):
+    organization_id: int | None = None
+    project_id: int | None = None
     namespace_id: int
 
 
 class UpdateCodebaseTaskRequest(BaseModel):
+    organization_id: int | None = None
+    project_id: int | None = None
     repo_id: int
 
 

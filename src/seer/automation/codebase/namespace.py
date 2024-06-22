@@ -448,17 +448,18 @@ class CodebaseNamespaceManager:
         """
         try:
             collection = self.client.get_collection("chunks")
-
-            if collection.count() == 0:
-                return False
-
-            if self.namespace.status != CodebaseNamespaceStatus.CREATED:
-                return False
-
-            return True
-        except Exception as e:
-            autofix_logger.exception(e)
+        except ValueError:
+            # Happens when the collection chunks does not exist.
+            # https://sentry.sentry.io/issues/5303418225/?project=6178942
             return False
+
+        if collection.count() == 0:
+            return False
+
+        if self.namespace.status != CodebaseNamespaceStatus.CREATED:
+            return False
+
+        return True
 
     def verify_file_integrity(self, paths: set[str]) -> bool:
         """
