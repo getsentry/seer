@@ -472,7 +472,7 @@ class TestNamespaceManager(unittest.TestCase):
 
     @patch("seer.automation.codebase.namespace.chromadb.PersistentClient")
     def test_not_ready_on_error(self, mock_client):
-        mock_client.return_value.get_collection.side_effect = Exception("Error")
+        mock_client.return_value.get_collection.side_effect = ValueError("Error")
         namespace = CodebaseNamespaceManager.create_repo(
             1,
             1337,
