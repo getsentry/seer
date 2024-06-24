@@ -160,6 +160,8 @@ def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpoi
         (
             IndexNamespaceTaskRequest(
                 namespace_id=namespace_id,
+                organization_id=data.organization_id,
+                project_id=data.project_id,
             ).model_dump(mode="json"),
         ),
         queue=CeleryQueues.CUDA,

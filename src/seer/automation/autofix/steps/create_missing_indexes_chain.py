@@ -98,6 +98,8 @@ class CreateMissingIndexesStep(PipelineChain, AutofixPipelineStep):
                             (
                                 UpdateCodebaseTaskRequest(
                                     repo_id=codebase.repo_info.id,
+                                    organization_id=self.context.organization_id,
+                                    project_id=self.context.project_id,
                                 ).model_dump(mode="json"),
                             ),
                             countdown=60 * 15,  # 15 minutes
