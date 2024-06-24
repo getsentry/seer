@@ -250,7 +250,8 @@ class GroupingLookup:
         Creates stacktrace emebddings and record objects for the given data.
         Returns a list of created records.
         """
-        records, records_embedding_indices, groups_with_neighbor = [], [], {}
+        records: List[DbGroupingRecord] = []
+        groups_with_neighbor = {}
         embeddings = self.encode_multiple_texts(data.stacktrace_list)
         with Session() as session:
             for i, entry in enumerate(data.data):
@@ -264,16 +265,12 @@ class GroupingLookup:
                     1,
                 )
 
-                # Compare stacktrace embedding against previous records in batch
+                # Compare stacktrace embedding against previously created records in batch
                 if not nearest_neighbor:
-                    for record_index, record_embedding_index in enumerate(
-                        records_embedding_indices
-                    ):
-                        distance = spatial.distance.cosine(
-                            embeddings[i], embeddings[record_embedding_index]
-                        )
+                    for record in records:
+                        distance = spatial.distance.cosine(embedding, record.stacktrace_embedding)
                         if distance <= NN_GROUPING_DISTANCE:
-                            nearest_neighbor.append((records[record_index], distance))
+                            nearest_neighbor.append((record, distance))
                             break
 
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
@@ -293,7 +290,6 @@ class GroupingLookup:
                         stacktrace_embedding=embedding,
                     ).to_db_model()
                     records.append(new_record)
-                    records_embedding_indices.append(i)
                 else:
                     neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
                     message_similarity_score = difflib.SequenceMatcher(
