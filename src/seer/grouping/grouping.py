@@ -6,6 +6,7 @@ import numpy as np
 import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
+from scipy import spatial
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.exc import IntegrityError
 
@@ -249,7 +250,7 @@ class GroupingLookup:
         Creates stacktrace emebddings and record objects for the given data.
         Returns a list of created records.
         """
-        records, groups_with_neighbor = [], {}
+        records, records_embedding_indices, groups_with_neighbor = [], [], {}
         embeddings = self.encode_multiple_texts(data.stacktrace_list)
         with Session() as session:
             for i, entry in enumerate(data.data):
@@ -262,6 +263,19 @@ class GroupingLookup:
                     NN_GROUPING_DISTANCE,
                     1,
                 )
+
+                # Compare stacktrace embedding against previous records in batch
+                if not nearest_neighbor:
+                    for record_index, record_embedding_index in enumerate(
+                        records_embedding_indices
+                    ):
+                        distance = spatial.distance.cosine(
+                            embeddings[i], embeddings[record_embedding_index]
+                        )
+                        if distance <= NN_GROUPING_DISTANCE:
+                            nearest_neighbor.append((records[record_index], distance))
+                            break
+
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
                     logger.info(
                         "inserting a new grouping record in bulk",
@@ -279,6 +293,7 @@ class GroupingLookup:
                         stacktrace_embedding=embedding,
                     ).to_db_model()
                     records.append(new_record)
+                    records_embedding_indices.append(i)
                 else:
                     neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
                     message_similarity_score = difflib.SequenceMatcher(
