@@ -3,7 +3,6 @@ import logging
 from typing import List, Optional
 
 import numpy as np
-import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from scipy import spatial
@@ -98,12 +97,11 @@ def _load_model(model_path: str) -> SentenceTransformer:
 
     model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     logger.info(f"Loading transformer model to device {model_device}")
-    SentenceTransformer(
+    return SentenceTransformer(
         model_path,
         trust_remote_code=True,
         device=model_device,
     )
-    sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
 
 
 class GroupingLookup:
