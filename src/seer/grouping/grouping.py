@@ -6,6 +6,7 @@ import numpy as np
 import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
+from scipy import spatial
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.exc import IntegrityError
 
@@ -249,7 +250,8 @@ class GroupingLookup:
         Creates stacktrace emebddings and record objects for the given data.
         Returns a list of created records.
         """
-        records, groups_with_neighbor = [], {}
+        records: List[DbGroupingRecord] = []
+        groups_with_neighbor = {}
         embeddings = self.encode_multiple_texts(data.stacktrace_list)
         with Session() as session:
             for i, entry in enumerate(data.data):
@@ -262,6 +264,15 @@ class GroupingLookup:
                     NN_GROUPING_DISTANCE,
                     1,
                 )
+
+                # Compare stacktrace embedding against previously created records in batch
+                if not nearest_neighbor:
+                    for record in records:
+                        distance = spatial.distance.cosine(embedding, record.stacktrace_embedding)
+                        if distance <= NN_GROUPING_DISTANCE:
+                            nearest_neighbor.append((record, distance))
+                            break
+
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
                     logger.info(
                         "inserting a new grouping record in bulk",
