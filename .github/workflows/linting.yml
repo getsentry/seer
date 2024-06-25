@@ -31,16 +31,12 @@ jobs:
 
 # For the time being, we don't actually split the dev requirements out to enable this optimization.
 # Enable this in a future where we complete that split.
-#      - uses: getsentry/action-setup-venv@a133e6fd5fa6abd3f590a1c106abda344f5df69f # v2.1.0
-#        with:
-#          python-version: 3.11.8
-#          cache-dependency-path: |
-#            requirements-dev.txt
-#            requirements-dev-frozen.txt
-#          install-cmd: python3 -m tools.hack_pip && pip install -r requirements-dev.txt -c requirements-dev-frozen.txt
-      - name: Install pre-commit
-        run: |
-          pip install pre-commit black isort flake8
+      - uses: getsentry/action-setup-venv@a133e6fd5fa6abd3f590a1c106abda344f5df69f # v2.1.0
+        with:
+          python-version: 3.11.8
+          cache-dependency-path: |
+            requirements.txt
+          install-cmd: python3 -m tools.hack_pip && pip install -r requirements.txt
       - name: Setup pre-commit
         run: |
           pre-commit install
