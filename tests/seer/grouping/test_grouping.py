@@ -168,15 +168,21 @@ class TestGrouping(unittest.TestCase):
             ],
             stacktrace_list=["stacktrace " + str(i) for i in range(2)],
         )
-        records = grouping_lookup().create_grouping_record_objects(record_requests)
+        (
+            records,
+            groups_with_neighbor,
+            groups_with_records,
+        ) = grouping_lookup().create_grouping_record_objects(record_requests)
 
-        assert len(records[0]) == 2
+        assert len(records) == 2
+        assert len(groups_with_records) == len(records)
+        assert groups_with_neighbor == {}
         for i in range(len(record_requests.data)):
-            assert records[0][i].hash == record_requests.data[i].hash
-            assert records[0][i].project_id == record_requests.data[i].project_id
-            assert records[0][i].message == record_requests.data[i].message
-            assert records[0][i].stacktrace_embedding is not None
-        assert records[1] == {}
+            assert records[i].hash == record_requests.data[i].hash
+            assert records[i].project_id == record_requests.data[i].project_id
+            assert records[i].message == record_requests.data[i].message
+            assert records[i].stacktrace_embedding is not None
+            assert groups_with_records[record_requests.data[i].group_id] == records[i]
 
     def test_bulk_insert_new_grouping_records(self):
         """Test bulk inserting grouping records"""
@@ -361,11 +367,11 @@ class TestGrouping(unittest.TestCase):
             + ["stacktrace " + str(i) for i in range(5)],
         )
 
-        # We expect the last 5 entries to have a neighbor
+        # We expect the first 5 entries to have a neighbor
         expected_groups_with_neighbor = {}
-        for i in range(5, 10):
+        for i in range(5):
             expected_groups_with_neighbor[str(i)] = GroupingResponse(
-                parent_hash=str(i - 5) * 32,
+                parent_hash=str(i + 5) * 32,
                 stacktrace_distance=0.00,
                 message_distance=0.00,
                 should_group=True,
@@ -381,7 +387,7 @@ class TestGrouping(unittest.TestCase):
             )
             assert len(records) == 5
             records_with_neighbor = session.query(DbGroupingRecord).filter(
-                DbGroupingRecord.hash.in_(hashes[5:])
+                DbGroupingRecord.hash.in_(hashes[:5])
             )
             assert records_with_neighbor.all() == []
 
