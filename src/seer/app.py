@@ -1,6 +1,7 @@
 import logging
 import time
 
+import sentry_sdk
 from flask import Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -75,6 +76,7 @@ def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
         time.sleep(0.5)
 
     response = embeddings_model().severity_score(data)
+    sentry_sdk.set_tag("severity", str(response.severity))
     return response
 
 
