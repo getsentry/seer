@@ -3,12 +3,14 @@ import logging
 from typing import List, Optional
 
 import numpy as np
-import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
+from scipy import spatial
 from sentence_transformers import SentenceTransformer
+from sqlalchemy.exc import IntegrityError
 
 from seer.db import DbGroupingRecord, Session
+from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
 logger = logging.getLogger("grouping")
 
@@ -97,13 +99,24 @@ class GroupingRecord(BaseModel):
             np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
         }
 
+def _load_model(model_path: str) -> SentenceTransformer:
+    if can_use_model_stubs():
+        return DummySentenceTransformer(embedding_size=768)
 
+    model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    logger.info(f"Loading transformer model to device {model_device}")
+    return SentenceTransformer(
+        model_path,
+        trust_remote_code=True,
+        device=model_device,
+    )
+
+  
 class GroupingLookup:
-    """Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
+    model: SentenceTransformer
 
-    Attributes:
-        model (SentenceTransformer): The sentence transformer model for encoding text.
-
+    """
+    Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
     """
 
     def __init__(self, model_path: str, data_path: str):
@@ -112,16 +125,8 @@ class GroupingLookup:
 
         :param model_path: Path to the sentence transformer model.
         """
-        model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        logger.info(f"Loading transformer model to device {model_device}")
-        self.model = SentenceTransformer(
-            model_path,
-            trust_remote_code=True,
-            device=model_device,
-        )
+        self.model = _load_model(model_path)
         self.encode_text("IndexError: list index out of range")  # Ensure warm start
-        logger.info(f"GroupingLookup model initialized using device: {model_device}")
-        sentry_sdk.capture_message(f"GroupingLookup model initialized using device: {model_device}")
 
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
@@ -251,7 +256,8 @@ class GroupingLookup:
         Creates stacktrace emebddings and record objects for the given data.
         Returns a list of created records.
         """
-        records, groups_with_neighbor = [], {}
+        records: List[DbGroupingRecord] = []
+        groups_with_neighbor = {}
         embeddings = self.encode_multiple_texts(data.stacktrace_list)
         with Session() as session:
             for i, entry in enumerate(data.data):
@@ -264,6 +270,15 @@ class GroupingLookup:
                     NN_GROUPING_DISTANCE,
                     1,
                 )
+
+                # Compare stacktrace embedding against previously created records in batch
+                if not nearest_neighbor:
+                    for record in records:
+                        distance = spatial.distance.cosine(embedding, record.stacktrace_embedding)
+                        if distance <= NN_GROUPING_DISTANCE:
+                            nearest_neighbor.append((record, distance))
+                            break
+
                 if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
                     logger.info(
                         "inserting a new grouping record in bulk",
@@ -337,9 +352,37 @@ class GroupingLookup:
         Bulk inserts new GroupingRecord into the database.
         :param records: List of records to be inserted
         """
-        with Session() as session:
-            session.bulk_save_objects(records)
-            session.commit()
+        try:
+            with Session() as session:
+                session.bulk_save_objects(records)
+                session.commit()
+        except IntegrityError:
+            with Session() as session:
+                logger.info("Error in bulk insert. Attempting to insert records individually...")
+
+                existing_records = (
+                    session.query(DbGroupingRecord.hash, DbGroupingRecord.project_id)
+                    .filter(
+                        DbGroupingRecord.hash.in_([record.hash for record in records]),
+                        DbGroupingRecord.project_id.in_([record.project_id for record in records]),
+                    )
+                    .all()
+                )
+
+                existing_records_set = {
+                    (record.hash, record.project_id) for record in existing_records
+                }
+
+                records_to_insert = [
+                    record
+                    for record in records
+                    if (record.hash, record.project_id) not in existing_records_set
+                ]
+                if not records_to_insert:
+                    logger.info("No new records to insert.")
+                    return
+                session.bulk_save_objects(records_to_insert)
+                session.commit()
 
     def delete_grouping_records_for_project(self, project_id: int) -> bool:
         """

@@ -225,8 +225,8 @@ class TestGrouping(unittest.TestCase):
             for i in range(10):
                 assert records[i] is not None
 
-    def test_delete_grouping_records_for_project(self):
-        """Test deleting grouping records for a project"""
+    def test_bulk_create_and_insert_grouping_records_with_existing_record(self):
+        """Test bulk creating and inserting grouping records with one record already existing"""
         hashes = [str(i) * 32 for i in range(10)]
         record_requests = CreateGroupingRecordsRequest(
             data=[
@@ -241,22 +241,25 @@ class TestGrouping(unittest.TestCase):
             stacktrace_list=["stacktrace " + str(i) for i in range(10)],
         )
 
+        # Insert one record before bulk insert
+        single_record = GroupingRecord(
+            hash=hashes[0],
+            project_id=1,
+            message="message " + str(0),
+            stacktrace_embedding=grouping_lookup().encode_text("stacktrace " + str(0)),
+        ).to_db_model()
+        with Session() as session:
+            session.add(single_record)
+            session.commit()
+
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
-        assert response == BulkCreateGroupingRecordsResponse(success=True, groups_with_neighbor={})
-        with Session() as session:
-            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
-            for i in range(10):
-                assert records[i] is not None
+        assert response.success is True
+        assert len(response.groups_with_neighbor) == 0
 
-        # Call the delete by project endpoint
-        response = grouping_lookup().delete_grouping_records_for_project(1)
-
-        # Verify records are deleted
         with Session() as session:
-            records = (
-                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
-            )
-            assert len(records) == 0
+            assert session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.hash.in_(hashes)
+            ).count() == len(hashes)
 
     def test_delete_grouping_records_by_hash(self):
         """Test deleting grouping records by hash list"""
@@ -317,10 +320,10 @@ class TestGrouping(unittest.TestCase):
             records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
             assert records.first() is None
 
-    def test_bulk_create_and_insert_grouping_records_has_neighbor(self):
+    def test_bulk_create_and_insert_grouping_records_has_neighbor_in_existing_records(self):
         """
         Test bulk creating and inserting grouping records does not create a record for a hash that
-        has a nearest neighbor.
+        has a nearest neighbor that exists in existing records.
         """
         # Create a record with the stacktrace "stacktrace"
         with Session() as session:
@@ -347,7 +350,7 @@ class TestGrouping(unittest.TestCase):
                 for i in range(10)
             ],
             stacktrace_list=["stacktrace" for _ in range(5)]
-            + ["something different" for _ in range(6, 11)],
+            + ["something different " + str(i) for i in range(6, 11)],
         )
 
         expected_groups_with_neighbor = {}
@@ -372,3 +375,81 @@ class TestGrouping(unittest.TestCase):
                 DbGroupingRecord.hash.in_(hashes[:5])
             )
             assert records_with_neighbor.all() == []
+
+    def test_bulk_create_and_insert_grouping_records_has_neighbor_in_batch(self):
+        """
+        Test bulk creating and inserting grouping records does not create a record for a hash that
+        has a nearest neighbor that exists in the current batch.
+        """
+        hashes = [str(i) * 32 for i in range(10)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message",
+                )
+                for i in range(10)
+            ],
+            # Create 5 duplicate stacktraces
+            stacktrace_list=["stacktrace " + str(i) for i in range(5)]
+            + ["stacktrace " + str(i) for i in range(5)],
+        )
+
+        # We expect the last 5 entries to have a neighbor
+        expected_groups_with_neighbor = {}
+        for i in range(5, 10):
+            expected_groups_with_neighbor[str(i)] = GroupingResponse(
+                parent_hash=str(i - 5) * 32,
+                stacktrace_distance=0.00,
+                message_distance=0.00,
+                should_group=True,
+            )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response == BulkCreateGroupingRecordsResponse(
+            success=True, groups_with_neighbor=expected_groups_with_neighbor
+        )
+        with Session() as session:
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
+            assert len(records) == 5
+            records_with_neighbor = session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.hash.in_(hashes[5:])
+            )
+            assert records_with_neighbor.all() == []
+
+    def test_delete_grouping_records_for_project(self):
+        """Test deleting grouping records for a project"""
+        hashes = [str(i) * 32 for i in range(10)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
+                for i in range(10)
+            ],
+            stacktrace_list=["stacktrace " + str(i) for i in range(10)],
+        )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        assert response == BulkCreateGroupingRecordsResponse(success=True, groups_with_neighbor={})
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(10):
+                assert records[i] is not None
+
+        # Call the delete endpoint
+        response = grouping_lookup().delete_grouping_records_for_project(1)
+
+        # Verify records are deleted
+        with Session() as session:
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
+            assert len(records) == 0

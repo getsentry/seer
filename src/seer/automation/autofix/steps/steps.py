@@ -1,5 +1,7 @@
 from typing import Any
 
+import sentry_sdk
+
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
@@ -76,7 +78,9 @@ class AutofixPipelineStep(PipelineStep):
 
     def _post_invoke(self, result: Any):
         with self.context.state.update() as cur:
-            cur.signals.append(make_done_signal(self.request.step_id))
+            signal = make_done_signal(self.request.step_id)
+            sentry_sdk.capture_message(f"Done for signal {repr(signal)}")
+            cur.signals.append(signal)
 
     def _handle_exception(self, exception: Exception):
         self.context.event_manager.on_error()
