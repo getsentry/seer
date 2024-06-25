@@ -36,6 +36,21 @@ class GroupingRequest(BaseModel):
         return v
 
 
+class GroupingResponse(BaseModel):
+    parent_hash: str
+    stacktrace_distance: float
+    message_distance: float
+    should_group: bool
+
+
+class SimilarityResponse(BaseModel):
+    responses: List[GroupingResponse]
+
+
+class SimilarityBenchmarkResponse(BaseModel):
+    embedding: List[float]
+
+
 class CreateGroupingRecordData(BaseModel):
     group_id: int
     hash: str
@@ -46,6 +61,20 @@ class CreateGroupingRecordData(BaseModel):
 class CreateGroupingRecordsRequest(BaseModel):
     data: List[CreateGroupingRecordData]
     stacktrace_list: List[str]
+
+
+class BulkCreateGroupingRecordsResponse(BaseModel):
+    success: bool
+    groups_with_neighbor: dict[str, GroupingResponse]
+
+
+class DeleteGroupingRecordsByHashRequest(BaseModel):
+    project_id: int
+    hash_list: List[str]
+
+
+class DeleteGroupingRecordsByHashResponse(BaseModel):
+    success: bool
 
 
 class GroupingRecord(BaseModel):
@@ -70,27 +99,6 @@ class GroupingRecord(BaseModel):
             np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
         }
 
-
-class GroupingResponse(BaseModel):
-    parent_hash: str
-    stacktrace_distance: float
-    message_distance: float
-    should_group: bool
-
-
-class SimilarityResponse(BaseModel):
-    responses: List[GroupingResponse]
-
-
-class BulkCreateGroupingRecordsResponse(BaseModel):
-    success: bool
-    groups_with_neighbor: dict[str, GroupingResponse]
-
-
-class SimilarityBenchmarkResponse(BaseModel):
-    embedding: List[float]
-
-
 def _load_model(model_path: str) -> SentenceTransformer:
     if can_use_model_stubs():
         return DummySentenceTransformer(embedding_size=768)
@@ -103,7 +111,7 @@ def _load_model(model_path: str) -> SentenceTransformer:
         device=model_device,
     )
 
-
+  
 class GroupingLookup:
     model: SentenceTransformer
 
@@ -384,3 +392,17 @@ class GroupingLookup:
             session.query(DbGroupingRecord).filter_by(project_id=project_id).delete()
             session.commit()
         return True
+
+    def delete_grouping_records_by_hash(
+        self, data: DeleteGroupingRecordsByHashRequest
+    ) -> DeleteGroupingRecordsByHashResponse:
+        """
+        Deletes grouping records that match a list of hashes.
+        """
+        with Session() as session:
+            session.query(DbGroupingRecord).filter(
+                DbGroupingRecord.project_id == data.project_id,
+                DbGroupingRecord.hash.in_(data.hash_list),
+            ).delete()
+            session.commit()
+        return DeleteGroupingRecordsByHashResponse(success=True)
