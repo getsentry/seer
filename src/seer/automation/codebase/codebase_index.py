@@ -8,7 +8,6 @@ import torch
 import tree_sitter_languages
 from sentence_transformers import SentenceTransformer
 from sentry_sdk.ai.monitoring import ai_track
-from tqdm.auto import tqdm
 from tree_sitter import Tree
 from unidiff import PatchSet
 
@@ -386,20 +385,21 @@ class CodebaseIndex:
     def embed_chunks(
         cls, chunks: list[BaseDocumentChunk], embedding_model: SentenceTransformer
     ) -> list[EmbeddedDocumentChunk]:
-        logger.debug(f"Embedding {len(chunks)} chunks...")
+        repo_name = (chunks[0].repo_name if chunks else None) or "unknown"
+        logger.debug(f"Embedding {len(chunks)} chunks for repo {repo_name}")
+
         embeddings_list: list[np.ndarray] = []
 
-        with tqdm(total=len(chunks), desc="Embedding chunk") as pbar:
-            for i in range(0, len(chunks), superchunk_size := 256):
-                batch_embeddings: np.ndarray = embedding_model.encode(
-                    [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
-                    batch_size=4,  # Batch size of 24 works best on a2-ultragpu-1g instance.
-                    show_progress_bar=False,
-                )
-                embeddings_list.extend(batch_embeddings)
-                pbar.update(superchunk_size)
+        for i in range(0, len(chunks), superchunk_size := 256):
+            batch_embeddings: np.ndarray = embedding_model.encode(
+                [chunk.get_dump_for_embedding() for chunk in chunks[i : i + superchunk_size]],
+                batch_size=4,  # Batch size of 24 works best on a2-ultragpu-1g instance.
+                show_progress_bar=False,
+            )
+            embeddings_list.extend(batch_embeddings)
+
         embeddings = np.array(embeddings_list)
-        logger.debug(f"Embedded {len(chunks)} chunks")
+        logger.debug(f"Embedded {len(chunks)} chunks for repo {repo_name}")
 
         embedded_chunks = []
         for i, chunk in enumerate(chunks):

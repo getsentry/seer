@@ -48,6 +48,10 @@ def bootup(
     grouping_logger.setLevel(logging.INFO)
     grouping_logger.addHandler(StructLogHandler(sys.stdout))
 
+    autofix_logger = logging.getLogger("autofix")
+    autofix_logger.setLevel(logging.DEBUG)
+    autofix_logger.addHandler(StructLogHandler(sys.stdout))
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
         integrations=[*plugins],

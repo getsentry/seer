@@ -277,7 +277,7 @@ class CodebaseNamespaceManager:
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
     ):
-        autofix_logger.debug(
+        autofix_logger.info(
             f"Creating new repo for {organization}/{project}/{repo.external_id} (repo: {repo.full_name})"
         )
         with Session() as session:
@@ -385,12 +385,12 @@ class CodebaseNamespaceManager:
                 raise ValueError(f"Repository with id {repo_id} not found")
 
             if existing_namespace:
-                autofix_logger.debug(
+                autofix_logger.info(
                     f"Using existing namespace for {db_repo_info.external_id} namespace id: {existing_namespace.id}"
                 )
                 db_namespace = existing_namespace
             else:
-                autofix_logger.debug(
+                autofix_logger.info(
                     f"Creating namespace with existing repo for {db_repo_info.organization}/{db_repo_info.project}/{db_repo_info.external_id} (repo: {db_repo_info.external_slug})"
                 )
                 db_namespace = DbCodebaseNamespace(

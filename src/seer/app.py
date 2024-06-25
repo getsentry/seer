@@ -42,6 +42,8 @@ from seer.bootup import bootup
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
+    DeleteGroupingRecordsByHashRequest,
+    DeleteGroupingRecordsByHashResponse,
     GroupingRequest,
     SimilarityBenchmarkResponse,
     SimilarityResponse,
@@ -104,7 +106,9 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 
 @json_api("/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
-    similar_issues = grouping_lookup().get_nearest_neighbors(data)
+    with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
+        sentry_sdk.set_tag("read_only", data.read_only)
+        similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
 
 
@@ -120,6 +124,14 @@ def similarity_grouping_record_endpoint(
 def delete_grouping_record_endpoint(project_id: int):
     success = grouping_lookup().delete_grouping_records_for_project(project_id)
     return jsonify(success=success)
+
+
+@json_api("/v0/issues/similar-issues/grouping-record/delete-by-hash")
+def delete_grouping_records_by_hash_endpoint(
+    data: DeleteGroupingRecordsByHashRequest,
+) -> DeleteGroupingRecordsByHashResponse:
+    success = grouping_lookup().delete_grouping_records_by_hash(data)
+    return success
 
 
 @json_api("/v0/issues/similarity-embedding-benchmark")
