@@ -3,6 +3,7 @@ import logging
 from typing import List, Optional
 
 import numpy as np
+import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from scipy import spatial
@@ -99,6 +100,7 @@ class GroupingRecord(BaseModel):
             np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
         }
 
+
 def _load_model(model_path: str) -> SentenceTransformer:
     if can_use_model_stubs():
         return DummySentenceTransformer(embedding_size=768)
@@ -111,7 +113,7 @@ def _load_model(model_path: str) -> SentenceTransformer:
         device=model_device,
     )
 
-  
+
 class GroupingLookup:
     model: SentenceTransformer
 
@@ -137,6 +139,7 @@ class GroupingLookup:
         """
         return self.model.encode(stacktrace)
 
+    @sentry_sdk.tracing.trace
     def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1) -> np.ndarray:
         """
         Encodes multiple stacktraces in batches using the sentence transformer model.
@@ -147,6 +150,7 @@ class GroupingLookup:
 
         return self.model.encode(sentences=stacktraces, batch_size=batch_size)
 
+    @sentry_sdk.tracing.trace
     def query_nearest_k_neighbors(
         self,
         session,
@@ -249,6 +253,7 @@ class GroupingLookup:
             success=True, groups_with_neighbor=groups_with_neighbor
         )
 
+    @sentry_sdk.tracing.trace
     def create_grouping_record_objects(
         self, data: CreateGroupingRecordsRequest
     ) -> tuple[List[DbGroupingRecord], dict[str, GroupingResponse]]:
@@ -347,6 +352,7 @@ class GroupingLookup:
                 },
             )
 
+    @sentry_sdk.tracing.trace
     def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):
         """
         Bulk inserts new GroupingRecord into the database.
