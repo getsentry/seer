@@ -1,5 +1,7 @@
 from typing import Any
 
+import sentry_sdk
+
 from celery_app.app import app as celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
@@ -23,6 +25,12 @@ class AutofixPipelineStep(PipelineStep):
     @staticmethod
     def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
         return AutofixContext.from_run_id(request.run_id)
+
+    def _invoke(self, **kwargs: Any) -> Any:
+        sentry_sdk.set_tag("organization_id", self.context.organization_id)
+        sentry_sdk.set_tag("project", self.context.project_id)
+        sentry_sdk.set_tag("run_id", self.context.state.get().run_id)
+        super()._invoke(**kwargs)
 
     def _pre_invoke(self) -> bool:
         # Don't run the step instance if it's already been run
