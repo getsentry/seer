@@ -34,7 +34,7 @@ jobs:
           python-version: 3.11.8
           cache-dependency-path: |
             requirements.txt
-          install-cmd: pip install -r requirements.txt
+          install-cmd: pip install -r requirements-precommit.txt
       - name: Setup pre-commit
         run: |
           pre-commit install

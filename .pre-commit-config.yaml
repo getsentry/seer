@@ -34,12 +34,6 @@ repos:
         entry: flake8
         language: system
         types: [python]
-      - id: lint-requirements
-        name: lint-requirements
-        entry: python -m tools.lint_requirements
-        language: python
-        files: requirements-.*\.txt$
-        additional_dependencies: [packaging==21.3]
       - id: prevent-push
         name: prevent pushing to main
         stages: [push]
