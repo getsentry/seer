@@ -1,6 +1,8 @@
 import abc
 from typing import Any, Optional, Type
 
+import sentry_sdk
+
 from celery_app.config import CeleryQueues
 from seer.automation.pipeline import (
     PipelineChain,
@@ -61,6 +63,8 @@ class ParallelizedChainConditionalStep(ConditionalStep):
 
     def condition(self):
         result = all(signal in self.context.signals for signal in self.request.expected_signals)
+        if not result:
+            sentry_sdk.capture_message(f"Condition not met in {self}.")
 
         return result
 
