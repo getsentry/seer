@@ -59,7 +59,6 @@ tree_sitter==0.21.3
 tree_sitter_languages==1.10.2
 urllib3==1.26.16
 Werkzeug==2.3.7
-pre-commit==3.5.0
 pytest==7.4.3
 pydantic==2.6.2
 mypy==1.8.0
