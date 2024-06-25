@@ -170,13 +170,11 @@ class TestGrouping(unittest.TestCase):
         )
         (
             records,
-            groups_with_neighbor,
             groups_with_records,
         ) = grouping_lookup().create_grouping_record_objects(record_requests)
 
         assert len(records) == 2
         assert len(groups_with_records) == len(records)
-        assert groups_with_neighbor == {}
         for i in range(len(record_requests.data)):
             assert records[i].hash == record_requests.data[i].hash
             assert records[i].project_id == record_requests.data[i].project_id

@@ -234,14 +234,10 @@ class GroupingLookup:
         if len(data.data) != len(data.stacktrace_list):
             return BulkCreateGroupingRecordsResponse(success=False, groups_with_neighbor={})
 
-        records, groups_with_neighbor, groups_with_records = self.create_grouping_record_objects(
-            data
-        )
+        records, groups_with_records = self.create_grouping_record_objects(data)
         self.bulk_insert_new_grouping_records(records)
-        groups_with_neighbor.update(
-            self.remove_grouping_records_with_neighbors(
-                groups_with_records, records[0].project_id if records else None
-            )
+        groups_with_neighbor = self.remove_grouping_records_with_neighbors(
+            groups_with_records, records[0].project_id if records else None
         )
         return BulkCreateGroupingRecordsResponse(
             success=True, groups_with_neighbor=groups_with_neighbor
@@ -249,64 +245,41 @@ class GroupingLookup:
 
     def create_grouping_record_objects(
         self, data: CreateGroupingRecordsRequest
-    ) -> tuple[list[DbGroupingRecord], dict[str, GroupingResponse], dict[int, DbGroupingRecord]]:
+    ) -> tuple[list[DbGroupingRecord], dict[int, DbGroupingRecord]]:
         """
         Creates stacktrace emebddings and record objects for the given data.
         Returns a list of created records.
         """
         records: List[DbGroupingRecord] = []
-        groups_with_records, groups_with_neighbor = {}, {}
+        groups_with_records: dict[int, DbGroupingRecord] = {}
         embeddings = self.encode_multiple_texts(data.stacktrace_list)
-        with Session() as session:
-            for i, entry in enumerate(data.data):
-                embedding = embeddings[i].astype("float32")
-                nearest_neighbor = self.query_nearest_k_neighbors(
-                    session,
-                    embedding,
-                    entry.project_id,
-                    entry.hash,
-                    NN_GROUPING_DISTANCE,
-                    1,
-                )
+        for i, entry in enumerate(data.data):
+            embedding = embeddings[i].astype("float32")
+            logger.info(
+                "inserting a new grouping record in bulk",
+                extra={
+                    "input_hash": entry.hash,
+                    "stacktrace_length": len(data.stacktrace_list[i]),
+                    "project_id": entry.project_id,
+                },
+            )
 
-                if not any(distance <= NN_GROUPING_DISTANCE for _, distance in nearest_neighbor):
-                    logger.info(
-                        "inserting a new grouping record in bulk",
-                        extra={
-                            "input_hash": entry.hash,
-                            "stacktrace_length": len(data.stacktrace_list[i]),
-                            "project_id": entry.project_id,
-                        },
-                    )
+            new_record = GroupingRecord(
+                hash=entry.hash,
+                project_id=entry.project_id,
+                message=entry.message,
+                stacktrace_embedding=embedding,
+            ).to_db_model()
+            records.append(new_record)
+            groups_with_records[entry.group_id] = new_record
 
-                    new_record = GroupingRecord(
-                        hash=entry.hash,
-                        project_id=entry.project_id,
-                        message=entry.message,
-                        stacktrace_embedding=embedding,
-                    ).to_db_model()
-                    records.append(new_record)
-                    groups_with_records[entry.group_id] = new_record
-                else:
-                    neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
-                    message_similarity_score = difflib.SequenceMatcher(
-                        None, entry.message, neighbor.message
-                    ).ratio()
-                    response = GroupingResponse(
-                        parent_hash=neighbor.hash,
-                        stacktrace_distance=distance,
-                        message_distance=1.0 - message_similarity_score,
-                        should_group=True,
-                    )
-                    groups_with_neighbor[str(entry.group_id)] = response
-
-            return (records, groups_with_neighbor, groups_with_records)
+        return (records, groups_with_records)
 
     def remove_grouping_records_with_neighbors(
         self, groups_with_records: dict[int, DbGroupingRecord], project_id: int | None
     ) -> dict[str, GroupingResponse]:
         """
-        Delete grouping records that have a neighbor within the batch.
+        Delete grouping records that have a neighbor.
         Return the groups with neighbors.
         """
         if not project_id:
@@ -315,6 +288,7 @@ class GroupingLookup:
         groups_with_neighbor, hashes_to_delete, parent_hashes = {}, [], set()
         with Session() as session:
             for group_id, record in groups_with_records.items():
+                # Make sure we keep one record per batch if neighbors within a batch exist
                 if record.hash in parent_hashes:
                     continue
 
@@ -347,6 +321,13 @@ class GroupingLookup:
                 DbGroupingRecord.hash.in_(hashes_to_delete),
             ).delete()
             session.commit()
+            logger.info(
+                "deleting grouping records with neighbors within the batch",
+                extra={
+                    "project_id": project_id,
+                    "hashes": hashes_to_delete,
+                },
+            )
 
         return groups_with_neighbor
 
