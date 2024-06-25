@@ -3,6 +3,7 @@ import logging
 import uuid
 from typing import Any, Generic, Type, TypeVar
 
+import sentry_sdk
 from celery import Task, signature
 from pydantic import BaseModel, Field
 
@@ -129,4 +130,5 @@ class PipelineChain(abc.ABC):
     """
 
     def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
+        sentry_sdk.capture_message(f"Next invoked from {self}", "info")
         signature(sig).apply_async(**apply_async_kwargs)
