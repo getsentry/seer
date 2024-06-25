@@ -117,6 +117,7 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 @json_api("/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
+        sentry_sdk.set_tag("read_only", data.read_only)
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
 
