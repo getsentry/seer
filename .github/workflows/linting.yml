@@ -29,14 +29,13 @@ jobs:
             all:
               - added|modified: '**/*'
 
-# For the time being, we don't actually split the dev requirements out to enable this optimization.
-# Enable this in a future where we complete that split.
+      # TODO: split out requirements-dev.txt
       - uses: getsentry/action-setup-venv@a133e6fd5fa6abd3f590a1c106abda344f5df69f # v2.1.0
         with:
           python-version: 3.11.8
           cache-dependency-path: |
             requirements.txt
-          install-cmd: python3 -m tools.hack_pip && pip install -r requirements.txt
+          install-cmd: pip install -r requirements.txt
       - name: Setup pre-commit
         run: |
           pre-commit install
