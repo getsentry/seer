@@ -40,7 +40,7 @@ jobs:
 #          install-cmd: python3 -m tools.hack_pip && pip install -r requirements-dev.txt -c requirements-dev-frozen.txt
       - name: Install pre-commit
         run: |
-          pip install pre-commit
+          pip install pre-commit black isort flake8
       - name: Setup pre-commit
         run: |
           pre-commit install
