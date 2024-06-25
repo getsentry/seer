@@ -385,7 +385,9 @@ class CodebaseIndex:
     def embed_chunks(
         cls, chunks: list[BaseDocumentChunk], embedding_model: SentenceTransformer
     ) -> list[EmbeddedDocumentChunk]:
-        logger.debug(f"Embedding {len(chunks)} chunks...")
+        repo_name = (chunks[0].repo_name if chunks else None) or "unknown"
+        logger.debug(f"Embedding {len(chunks)} chunks for repo {repo_name}")
+
         embeddings_list: list[np.ndarray] = []
 
         for i in range(0, len(chunks), superchunk_size := 256):
@@ -397,7 +399,7 @@ class CodebaseIndex:
             embeddings_list.extend(batch_embeddings)
 
         embeddings = np.array(embeddings_list)
-        logger.debug(f"Embedded {len(chunks)} chunks")
+        logger.debug(f"Embedded {len(chunks)} chunks for repo {repo_name}")
 
         embedded_chunks = []
         for i, chunk in enumerate(chunks):
