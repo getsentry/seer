@@ -1,8 +1,6 @@
 import logging
 from typing import Any
 
-import sentry_sdk
-
 from celery_app.app import app as celery_app
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import (
@@ -32,11 +30,6 @@ def create_codebase_index(
 def index_namespace(data: dict[str, Any]) -> None:
     request = IndexNamespaceTaskRequest.model_validate(data)
 
-    if request.organization_id is not None:
-        sentry_sdk.set_tag("organization_id", request.organization_id)
-    if request.project_id is not None:
-        sentry_sdk.set_tag("project_id", request.project_id)
-
     CodebaseIndex.index(
         namespace_id=request.namespace_id,
         embedding_model=get_embedding_model(),
@@ -47,11 +40,6 @@ def index_namespace(data: dict[str, Any]) -> None:
 def update_codebase_index(data: dict[str, Any]) -> None:
     request = UpdateCodebaseTaskRequest.model_validate(data)
     logger.info("Updating codebase index for repo: %s", request.repo_id)
-
-    if request.organization_id is not None:
-        sentry_sdk.set_tag("organization_id", request.organization_id)
-    if request.project_id is not None:
-        sentry_sdk.set_tag("project_id", request.project_id)
 
     codebase = CodebaseIndex.from_repo_id(request.repo_id, embedding_model=get_embedding_model())
 
