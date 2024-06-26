@@ -44,15 +44,18 @@ CODEBASE_STORAGE_DIR=<path to your local directory>
 
 ### Setup
 
-Use `direnv` or a similar tool that sources `.envrc`. It will check your python version and setup virtualenv for you:
+Use [`direnv`](https://github.com/direnv/direnv#getting-started) or a similar tool that sources `.envrc`. It will:
+
+- Check your Python version, and install the required version if necessary
+- Check for required system packages, and install any missing ones
+- Check for a virtualenv, and set one up for you if it doesn't find one
+- Check for pre-commit hooks, and install them if not found
 
 ```bash
 direnv allow
 ```
 
-Recommended to use `pyenv` or similar python environment manager so as to be able to use differing python versions between sentry projects.
-
-> You will need pyenv installed and configured for python 3.11 before running `direnv allow`.
+It is recommended to use `pyenv` or a similar python environment manager so as to be able to use differing python versions between sentry projects.
 
 ### Environment variables
 
