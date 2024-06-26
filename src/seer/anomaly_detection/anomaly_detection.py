@@ -1,5 +1,5 @@
 import logging
-from typing import List, Literal, Optional, Tuple
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,8 +34,8 @@ class ADConfig(BaseModel):
 
 class Alert(BaseModel):
     id: int
-    cur_window: Optional[List[Tuple[float, float]]] = Field(
-        None, description="Tuple with two values - timestamp and the measured value."
+    cur_window: Optional[TimeSeriesPoint] = Field(
+        None, description="Timestamp and the measured value for current time window."
     )
 
 
