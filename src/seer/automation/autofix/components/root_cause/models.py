@@ -94,7 +94,7 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
 
 
 class MultipleRootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="potential_root_causes"):
-    causes: list[RootCauseAnalysisItemPromptXml]
+    causes: list[RootCauseAnalysisItemPromptXml] = []
 
     @classmethod
     def get_example(cls):
