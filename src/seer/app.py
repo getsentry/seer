@@ -75,12 +75,8 @@ def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
     elif data.trigger_timeout:
         time.sleep(0.5)
 
-    with sentry_sdk.start_span(
-        op="seer.severity",
-        description="Generate issue severity score",
-    ) as span:
-        response = embeddings_model().severity_score(data)
-        span.set_tag("severity", str(response.severity))
+    response = embeddings_model().severity_score(data)
+    sentry_sdk.set_tag("severity", str(response.severity))
     return response
 
 
@@ -95,18 +91,14 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     min_pct_change = data.trend_percentage
     min_change = data.min_change
 
-    with sentry_sdk.start_span(
-        op="seer.breakpoint_detection",
-        description="Get the breakpoint and t-value for every transaction",
-    ):
-        trend_percentage_list = find_trends(
-            txns_data,
-            sort_function,
-            allow_midpoint,
-            min_pct_change,
-            min_change,
-            validate_tail_hours,
-        )
+    trend_percentage_list = find_trends(
+        txns_data,
+        sort_function,
+        allow_midpoint,
+        min_pct_change,
+        min_change,
+        validate_tail_hours,
+    )
 
     trends = BreakpointResponse(data=[x[1] for x in trend_percentage_list])
     app.logger.debug("Trend results: %s", trends)
@@ -126,19 +118,13 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
 def similarity_grouping_record_endpoint(
     data: CreateGroupingRecordsRequest,
 ) -> BulkCreateGroupingRecordsResponse:
-    with sentry_sdk.start_span(
-        op="seer.grouping-record", description="grouping record bulk insert"
-    ):
-        success = grouping_lookup().bulk_create_and_insert_grouping_records(data)
+    success = grouping_lookup().bulk_create_and_insert_grouping_records(data)
     return success
 
 
 @app.route("/v0/issues/similar-issues/grouping-record/delete/<int:project_id>", methods=["GET"])
-def delete_project_grouping_record_endpoint(project_id: int):
-    with sentry_sdk.start_span(
-        op="seer.grouping-record", description="grouping record delete for project"
-    ):
-        success = grouping_lookup().delete_grouping_records_for_project(project_id)
+def delete_grouping_record_endpoint(project_id: int):
+    success = grouping_lookup().delete_grouping_records_for_project(project_id)
     return jsonify(success=success)
 
 
@@ -146,8 +132,7 @@ def delete_project_grouping_record_endpoint(project_id: int):
 def delete_grouping_records_by_hash_endpoint(
     data: DeleteGroupingRecordsByHashRequest,
 ) -> DeleteGroupingRecordsByHashResponse:
-    with sentry_sdk.start_span(op="seer.grouping-record", description="grouping record delete"):
-        success = grouping_lookup().delete_grouping_records_by_hash(data)
+    success = grouping_lookup().delete_grouping_records_by_hash(data)
     return success
 
 
@@ -172,8 +157,6 @@ def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpoi
         (
             IndexNamespaceTaskRequest(
                 namespace_id=namespace_id,
-                organization_id=data.organization_id,
-                project_id=data.project_id,
             ).model_dump(mode="json"),
         ),
         queue=CeleryQueues.CUDA,

@@ -214,10 +214,6 @@ class AutofixRequest(BaseModel):
     ] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
 
-    @property
-    def process_request_name(self) -> str:
-        return f"autofix:{self.organization_id}:{self.issue.id}"
-
     @field_validator("repos", mode="after")
     @classmethod
     def validate_repo_duplicates(cls, repos):

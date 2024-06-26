@@ -26,6 +26,12 @@ class AutofixPipelineStep(PipelineStep):
     def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
         return AutofixContext.from_run_id(request.run_id)
 
+    def _invoke(self, **kwargs: Any) -> Any:
+        sentry_sdk.set_tag("organization_id", self.context.organization_id)
+        sentry_sdk.set_tag("project", self.context.project_id)
+        sentry_sdk.set_tag("run_id", self.context.state.get().run_id)
+        super()._invoke(**kwargs)
+
     def _pre_invoke(self) -> bool:
         # Don't run the step instance if it's already been run
         return make_done_signal(self.request.step_id) not in self.context.state.get().signals

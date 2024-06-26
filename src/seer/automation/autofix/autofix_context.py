@@ -33,9 +33,6 @@ class AutofixCodebaseStateManager(CodebaseStateManager):
             codebase_state = state.codebases[self.repo_id]
             codebase_state.file_changes.append(file_change)
 
-            autofix_logger.info(f"Stored file change for repo {self.repo_id}")
-            autofix_logger.debug(f"new state: {state}")
-
     def get_file_changes(self) -> list[FileChange]:
         return self.state.get().codebases[self.repo_id].file_changes
 
@@ -104,15 +101,6 @@ class AutofixContext(PipelineContext):
     @property
     def run_id(self) -> int:
         return self.state.get().run_id
-
-    @property
-    def signals(self) -> list[str]:
-        return self.state.get().signals
-
-    @signals.setter
-    def signals(self, value: list[str]):
-        with self.state.update() as state:
-            state.signals = value
 
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
