@@ -111,7 +111,7 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
         sentry_sdk.set_tag("read_only", data.read_only)
         sentry_sdk.set_tag("stacktrace_len", len(data.stacktrace))
-        sentry_sdk.set_tag("request_hash", len(data.hash))
+        sentry_sdk.set_tag("request_hash", data.hash)
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
 
