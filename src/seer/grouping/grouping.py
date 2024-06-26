@@ -130,6 +130,7 @@ class GroupingLookup:
         self.model = _load_model(model_path)
         self.encode_text("IndexError: list index out of range")  # Ensure warm start
 
+    @sentry_sdk.tracing.trace
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
         Encodes the stacktrace using the sentence transformer model.
@@ -175,6 +176,7 @@ class GroupingLookup:
             .all()
         )
 
+    @sentry_sdk.tracing.trace
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
         """
         Retrieves the k nearest neighbors for a stacktrace within the same project and determines if they should be grouped.
@@ -238,6 +240,7 @@ class GroupingLookup:
 
         return similarity_response
 
+    @sentry_sdk.tracing.trace
     def bulk_create_and_insert_grouping_records(
         self, data: CreateGroupingRecordsRequest
     ) -> BulkCreateGroupingRecordsResponse:
@@ -316,6 +319,7 @@ class GroupingLookup:
 
             return (records, groups_with_neighbor)
 
+    @sentry_sdk.tracing.trace
     def insert_new_grouping_record(
         self, session, issue: GroupingRequest, embedding: np.ndarray
     ) -> None:
@@ -390,6 +394,7 @@ class GroupingLookup:
                 session.bulk_save_objects(records_to_insert)
                 session.commit()
 
+    @sentry_sdk.tracing.trace
     def delete_grouping_records_for_project(self, project_id: int) -> bool:
         """
         Deletes grouping records for a project.
@@ -399,6 +404,7 @@ class GroupingLookup:
             session.commit()
         return True
 
+    @sentry_sdk.tracing.trace
     def delete_grouping_records_by_hash(
         self, data: DeleteGroupingRecordsByHashRequest
     ) -> DeleteGroupingRecordsByHashResponse:
