@@ -74,8 +74,8 @@ def test_json_api_signature():
     assert changed.to_value(401)
 
     with status_code_watcher as changed:
-        headers[
-            "Authorization"
-        ] = "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
+        headers["Authorization"] = (
+            "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
+        )
 
     assert changed.to_value(200)
