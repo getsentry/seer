@@ -70,11 +70,11 @@ def register_json_api_views(app: Flask) -> None:
 
 def get_json_api_shared_secrets() -> list[str]:
     result = os.environ.get("JSON_API_SHARED_SECRETS", "").split()
-    # TODO: Add this back in after we confirm with safer behavior.
-    # if not result:
-    #     raise ValueError(
-    #         "JSON_API_SHARED_SECRETS environment variable required to support signature based auth."
-    #     )
+    if not result:
+        sentry_sdk.capture_message(
+            "JSON_API_SHARED_SECRETS environment variable required to support signature based auth.",
+            "fatal",
+        )
     return result
 
 
@@ -92,8 +92,7 @@ def compare_signature(url: str, body: bytes, signature: str) -> bool:
 
     if not signature.startswith("rpc0:"):
         sentry_sdk.capture_message("Signature did not start with rpc0:")
-        return True
-        # return False
+        return False
 
     _, signature_data = signature.split(":", 2)
     signature_input = b"%s:%s" % (
@@ -107,8 +106,7 @@ def compare_signature(url: str, body: bytes, signature: str) -> bool:
         if is_valid:
             return True
         else:
-            sentry_sdk.capture_message("Signature did not match hmac")
+            sentry_sdk.capture_message("Signature did not match hmac", "fatal")
 
-    sentry_sdk.capture_message("No signature matches found")
-    return True
-    # return False
+    sentry_sdk.capture_message("No signature matches found", "fatal")
+    return False
