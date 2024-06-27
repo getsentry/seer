@@ -45,6 +45,16 @@ def celery_config():
     return CELERY_CONFIG
 
 
+@pytest.fixture(scope="session")
+def celery_worker_parameters():
+    return {"without_heartbeat": False}
+
+
+@pytest.fixture(scope="session")
+def celery_worker_pool():
+    return "prefork"
+
+
 @pytest.fixture(autouse=True)
 def reset_environ():
     old_env = os.environ

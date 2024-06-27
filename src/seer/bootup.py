@@ -89,6 +89,8 @@ def bootup(
 
 CELERY_CONFIG = dict(
     broker_url=os.environ.get("CELERY_BROKER_URL"),
+    worker_send_task_events=True,
+    worker_pool_restarts=True,
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
