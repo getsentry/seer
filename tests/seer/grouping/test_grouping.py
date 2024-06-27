@@ -192,7 +192,7 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=str(i) * 32,
                     project_id=1,
-                    message="message " + str(i),
+                    message=f"message {i}",
                 )
                 for i in range(2)
             ],
