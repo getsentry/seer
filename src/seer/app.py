@@ -9,6 +9,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
+    AutofixPrEventRequest,
     AutofixPrIdRequest,
     AutofixRequest,
     AutofixStateRequest,
@@ -22,6 +23,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
     run_autofix_execution,
+    run_autofix_log_pr_event,
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
@@ -51,6 +53,7 @@ from seer.grouping.grouping import (
 )
 from seer.inference_models import embeddings_model, grouping_lookup
 from seer.json_api import json_api, register_json_api_views
+from seer.models import SimpleEndpointResponse
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
@@ -228,6 +231,12 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
             group_id=cur.request.issue.id, state=cur.model_dump(mode="json")
         )
     return AutofixStateResponse(group_id=None, state=None)
+
+
+@json_api("/v1/automation/autofix/pr/event")
+def autofix_pr_event_endpoint(data: AutofixPrEventRequest) -> SimpleEndpointResponse:
+    run_autofix_log_pr_event(data)
+    return SimpleEndpointResponse(success=True)
 
 
 @app.route("/health/live", methods=["GET"])
