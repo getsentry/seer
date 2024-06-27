@@ -184,6 +184,29 @@ class TestGrouping(unittest.TestCase):
             assert records[i].stacktrace_embedding is not None
             assert groups_with_records[record_requests.data[i].group_id] == records[i]
 
+    def test_create_grouping_record_objects_include_embedding_batch_size(self):
+        """Tests create grouping record objects including the encode_stacktrace_batch_size field"""
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=str(i) * 32,
+                    project_id=1,
+                    message=f"message {i}",
+                )
+                for i in range(2)
+            ],
+            stacktrace_list=[f"stacktrace {i}" for i in range(2)],
+            encode_stacktrace_batch_size=2,
+        )
+        (
+            records,
+            groups_with_records,
+        ) = grouping_lookup().create_grouping_record_objects(record_requests)
+
+        assert len(records) == 2
+        assert len(groups_with_records) == len(records)
+
     def test_bulk_insert_new_grouping_records(self):
         """Test bulk inserting grouping records"""
         records = []
