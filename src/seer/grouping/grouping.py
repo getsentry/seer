@@ -61,6 +61,7 @@ class CreateGroupingRecordData(BaseModel):
 class CreateGroupingRecordsRequest(BaseModel):
     data: List[CreateGroupingRecordData]
     stacktrace_list: List[str]
+    encode_stacktrace_batch_size: int = 1
 
 
 class BulkCreateGroupingRecordsResponse(BaseModel):
@@ -268,7 +269,9 @@ class GroupingLookup:
         """
         records: List[DbGroupingRecord] = []
         groups_with_records: dict[int, DbGroupingRecord] = {}
-        embeddings = self.encode_multiple_texts(data.stacktrace_list)
+        embeddings = self.encode_multiple_texts(
+            data.stacktrace_list, data.encode_stacktrace_batch_size
+        )
         for i, entry in enumerate(data.data):
             embedding = embeddings[i].astype("float32")
             logger.info(
