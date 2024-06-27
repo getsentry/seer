@@ -196,7 +196,7 @@ class TestGrouping(unittest.TestCase):
                 )
                 for i in range(2)
             ],
-            stacktrace_list=["stacktrace " + str(i) for i in range(2)],
+            stacktrace_list=[f"stacktrace {i}"  for i in range(2)],
             encode_stacktrace_batch_size=2,
         )
         (
