@@ -264,7 +264,6 @@ class AutofixContext(PipelineContext):
     def commit_changes(self, repo_external_id: str | None = None):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
-                print("codebase_state", repo_external_id)
                 if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
                     changes_step = state.find_step(id="changes")
                     if not changes_step:
@@ -278,7 +277,6 @@ class AutofixContext(PipelineContext):
                         ),
                         None,
                     )
-                    print("codebase_state.file_changes", codebase_state.file_changes)
                     if codebase_state.file_changes and change_state:
                         repo_definition = self.get_repo_definition_from_external_id(
                             codebase_state.repo_external_id
