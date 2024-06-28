@@ -252,8 +252,14 @@ class AutofixUpdateRequest(BaseModel):
     )
 
 
+class RepoRequest(BaseModel):
+    external_id: str
+    provider: str
+    owner: str
+    name: str
+
 class AutofixContinuation(AutofixGroupState):
-    request: AutofixRequest
+    request: list[RepoRequest]
 
     def find_step(self, *, id: str) -> Step | None:
         for step in self.steps:
