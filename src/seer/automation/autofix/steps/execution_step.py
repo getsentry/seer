@@ -23,7 +23,7 @@ from seer.automation.autofix.steps.change_describer_step import (
     AutofixChangeDescriberStep,
 )
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
-from seer.automation.codebase.models import Document
+from seer.automation.codebase.models import BaseDocument
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineChain, PipelineStepTaskRequest
 
@@ -67,14 +67,17 @@ class AutofixExecutionStep(PipelineChain, AutofixPipelineStep):
 
         self.context.event_manager.send_execution_step_start(self.request.task_index)
 
-        document: Document | None = None
+        document: BaseDocument | None = None
         retriever_dump: str | None = None
 
         if isinstance(task, ReplaceCodePromptXml):
             # For replace code tasks, we just need to retrieve the document.
-            _, document = self.context.get_document_and_codebase(
-                task.file_path, repo_name=task.repo_name
-            )
+            contents = self.context.get_file_contents(task.file_path, repo_name=task.repo_name)
+            if contents:
+                document = BaseDocument(
+                    path=task.file_path,
+                    text=contents,
+                )
         elif isinstance(task, CreateFilePromptXml):
             # For create file tasks, we need to find relevant context for the new file.
             retriever_output = retriever.invoke(RetrieverRequest(text=task.to_prompt_str()))

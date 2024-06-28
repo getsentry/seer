@@ -1,28 +1,20 @@
-import difflib
 import logging
 from typing import Type
 
 import numpy as np
 import sentry_sdk
 import torch
-import tree_sitter_languages
 from sentence_transformers import SentenceTransformer
 from sentry_sdk.ai.monitoring import ai_track
-from tree_sitter import Tree
-from unidiff import PatchSet
 
-from seer.automation.codebase.ast import (
-    extract_declaration,
-    find_first_parent_declaration,
-    supports_parent_declarations,
-)
+from seer.automation.codebase.file_patches import copy_document_and_apply_changes
 from seer.automation.codebase.models import (
+    BaseDocument,
     BaseDocumentChunk,
     ChunkQueryResult,
     CodebaseNamespace,
     CodebaseNamespaceStatus,
     Document,
-    DraftDocument,
     EmbeddedDocumentChunk,
     QueryResultDocumentChunk,
     RepositoryInfo,
@@ -35,19 +27,9 @@ from seer.automation.codebase.utils import (
     cleanup_dir,
     get_language_from_path,
     group_documents_by_language,
-    potential_frame_match,
     read_specific_files,
 )
-from seer.automation.models import (
-    EventDetails,
-    FileChange,
-    FilePatch,
-    Hunk,
-    InitializationError,
-    Line,
-    RepoDefinition,
-    Stacktrace,
-)
+from seer.automation.models import EventDetails, FileChange, InitializationError, RepoDefinition
 from seer.automation.state import State
 from seer.db import DbRepositoryInfo, Session
 from seer.utils import class_method_lru_cache
@@ -136,7 +118,7 @@ class CodebaseIndex:
                 project,
                 repo_client,
                 workspace=workspace,
-                state_manager=state_manager_class(workspace.repo_info.id, state),
+                state_manager=state_manager_class(workspace.repo_info.external_id, state),
                 embedding_model=embedding_model,
             )
 
@@ -163,7 +145,7 @@ class CodebaseIndex:
 
             if workspace:
                 state_manager = (
-                    state_manager_class(workspace.repo_info.id, state)
+                    state_manager_class(workspace.repo_info.external_id, state)
                     if state_manager_class and state
                     else DummyCodebaseStateManager()
                 )
@@ -279,7 +261,7 @@ class CodebaseIndex:
             repo_client,
             workspace=workspace,
             state_manager=(
-                state_manager_class(repo_id=workspace.repo_info.id, state=state)
+                state_manager_class(repo_external_id=workspace.repo_info.external_id, state=state)
                 if state and state_manager_class
                 else DummyCodebaseStateManager()
             ),
@@ -450,23 +432,6 @@ class CodebaseIndex:
         except Exception:
             return None
 
-    def _copy_document_with_local_changes(
-        self, document: DraftDocument | Document
-    ) -> Document | None:
-        content: str | None = document.text
-        # Make sure the changes are applied in order!
-        changes = list(
-            filter(lambda x: x.path == document.path, self.state_manager.get_file_changes())
-        )
-        if changes:
-            for change in changes:
-                content = change.apply(content)
-
-        if content is None or content == "":
-            return None
-
-        return Document(path=document.path, text=content, language=document.language)
-
     def get_document(self, path: str, ignore_local_changes=False) -> Document | None:
         assert self.repo_info is not None, "Repository info is not set"
 
@@ -480,19 +445,24 @@ class CodebaseIndex:
         if document_content is None:
             if ignore_local_changes:
                 return None
-            return self._copy_document_with_local_changes(
-                DraftDocument(path=path, language=language)
+            base_doc = copy_document_and_apply_changes(
+                BaseDocument(path=path, text=""), self.state_manager.get_file_changes()
             )
+            if base_doc:
+                return Document(path=path, text=base_doc.text, language=language)
+            return None
 
         document = Document(path=path, text=document_content, language=language)
 
         if ignore_local_changes:
             return document
-        return self._copy_document_with_local_changes(document)
+
+        base_doc = copy_document_and_apply_changes(document, self.state_manager.get_file_changes())
+        if base_doc:
+            return Document(path=path, text=base_doc.text, language=language)
+        return None
 
     def store_file_change(self, file_change: FileChange):
-        self.state_manager.store_file_change(file_change)
-
         document = None
         if file_change.change_type != "create":
             document = self.get_document(file_change.path)
@@ -525,21 +495,6 @@ class CodebaseIndex:
     def cleanup(self):
         self.workspace.cleanup()
 
-    def process_stacktrace(self, stacktrace: Stacktrace):
-        valid_file_paths = self.repo_client.get_valid_file_paths(self.namespace.sha)
-        for frame in stacktrace.frames:
-            if frame.in_app and frame.repo_id is None:
-                if frame.filename in valid_file_paths:
-                    frame.repo_id = self.repo_info.id
-                    frame.repo_name = self.repo_info.external_slug
-                else:
-                    for valid_path in valid_file_paths:
-                        if potential_frame_match(valid_path, frame):
-                            frame.repo_id = self.repo_info.id
-                            frame.repo_name = self.repo_info.external_slug
-                            frame.filename = valid_path
-                            break
-
     def _get_chunks(self, chunk_results: list[ChunkQueryResult]) -> list[QueryResultDocumentChunk]:
         # This seems awfully wasteful to chunk and hash a document for each returned chunk but I guess we are offloading the work to when it's needed?
         assert self.repo_info is not None, "Repository info is not set"
@@ -570,147 +525,6 @@ class CodebaseIndex:
             )
 
         return matched_chunks
-
-    def get_file_patches(self) -> tuple[list[FilePatch], str]:
-        document_paths = list(
-            set([file_change.path for file_change in self.state_manager.get_file_changes()])
-        )
-
-        if not document_paths:
-            return [], ""
-
-        original_documents = [
-            self.get_document(path, ignore_local_changes=True) for path in document_paths
-        ]
-        changed_documents_map: dict[str, Document] = {}
-
-        diffs: list[str] = []
-        for i, document in enumerate(original_documents):
-            if document and document.text:
-                changed_document = self._copy_document_with_local_changes(document)
-
-                diff = difflib.unified_diff(
-                    document.text.splitlines(),
-                    changed_document.text.splitlines() if changed_document else "",
-                    fromfile=document.path,
-                    tofile=changed_document.path if changed_document else "/dev/null",
-                    lineterm="",
-                )
-
-                diff_str = "\n".join(diff).strip("\n")
-                diffs.append(diff_str)
-
-                if changed_document:
-                    changed_documents_map[changed_document.path] = changed_document
-            else:
-                path = document_paths[i]
-                changed_document = self._copy_document_with_local_changes(
-                    Document(path=path, language=get_language_from_path(path) or "unknown", text="")
-                )
-
-                if changed_document:
-                    diff = difflib.unified_diff(
-                        [],  # Empty list to represent no original content
-                        changed_document.text.splitlines(),
-                        fromfile="/dev/null",
-                        tofile=path,
-                        lineterm="",
-                    )
-
-                    diff_str = "\n".join(diff).strip("\n")
-                    diffs.append(diff_str)
-                    changed_documents_map[path] = changed_document
-
-        file_patches = []
-        for file_diff in diffs:
-            patches = PatchSet(file_diff)
-            if not patches:
-                sentry_sdk.capture_message(f"No patches for diff: {file_diff}")
-                continue
-            patched_file = patches[0]
-
-            tree: Tree | None = None
-            document = changed_documents_map.get(patched_file.path)
-            if document and supports_parent_declarations(document.language):
-                ast_parser = tree_sitter_languages.get_parser(document.language)
-                tree = ast_parser.parse(document.text.encode("utf-8"))
-
-            hunks: list[Hunk] = []
-            for hunk in patched_file:
-                lines: list[Line] = []
-                for line in hunk:
-                    lines.append(
-                        Line(
-                            source_line_no=line.source_line_no,
-                            target_line_no=line.target_line_no,
-                            diff_line_no=line.diff_line_no,
-                            value=line.value,
-                            line_type=line.line_type,
-                        )
-                    )
-
-                section_header = hunk.section_header
-                if tree and document:
-                    line_numbers = [
-                        line.target_line_no
-                        for line in lines
-                        if line.line_type != " " and line.target_line_no is not None
-                    ]
-                    first_line_no = line_numbers[0] if line_numbers else None
-                    last_line_no = line_numbers[-1] if line_numbers else None
-                    if first_line_no is not None and last_line_no is not None:
-                        node = tree.root_node.descendant_for_point_range(
-                            (first_line_no, 0), (last_line_no, 0)
-                        )
-                        if node:
-                            parent_declaration_node = find_first_parent_declaration(
-                                node, document.language
-                            )
-                            declaration = (
-                                extract_declaration(
-                                    parent_declaration_node, tree.root_node, document.language
-                                )
-                                if parent_declaration_node
-                                else None
-                            )
-                            section_header_str = (
-                                declaration.to_str(tree.root_node, include_indent=False)
-                                if declaration
-                                else ""
-                            )
-                            if section_header_str:
-                                section_header_lines = section_header_str.splitlines()
-                                if section_header_lines:
-                                    section_header = section_header_lines[0].strip()
-
-                hunks.append(
-                    Hunk(
-                        source_start=hunk.source_start,
-                        source_length=hunk.source_length,
-                        target_start=hunk.target_start,
-                        target_length=hunk.target_length,
-                        section_header=section_header,
-                        lines=lines,
-                    )
-                )
-            patch_type = (
-                patched_file.is_added_file and "A" or patched_file.is_removed_file and "D" or "M"
-            )
-            file_patches.append(
-                FilePatch(
-                    type=patch_type,
-                    path=patched_file.path,
-                    added=patched_file.added,
-                    removed=patched_file.removed,
-                    source_file=patched_file.source_file,
-                    target_file=patched_file.target_file,
-                    hunks=hunks,
-                )
-            )
-
-        combined_diff = "\n".join(diffs)
-
-        return file_patches, combined_diff
 
     def diff_contains_stacktrace_files(self, event_details: EventDetails) -> bool:
         stacktraces = [exception.stacktrace for exception in event_details.exceptions] + [

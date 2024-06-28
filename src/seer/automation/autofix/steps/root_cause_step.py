@@ -49,7 +49,7 @@ class RootCauseStep(AutofixPipelineStep):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_root_cause_analysis_start()
 
-        if self.context.has_missing_codebase_indexes():
+        if not self.context.skip_loading_codebase and self.context.has_missing_codebase_indexes():
             raise RuntimeError("Codebase indexes must be created before root cause analysis")
 
         state = self.context.state.get()

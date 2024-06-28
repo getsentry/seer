@@ -44,8 +44,10 @@ class AutofixPipelineStep(PipelineStep):
             group_short_id = cur.request.issue.short_id
             invoking_user = cur.request.invoking_user
             codebases = [
-                self._get_codebase_metadata(codebase.repo_id) for codebase in cur.codebases.values()
+                self._get_codebase_metadata(codebase.repo_id) if codebase.repo_id else None
+                for codebase in cur.codebases.values()
             ]
+            codebases = list(filter(None, codebases))
 
             org_slug = self.context.get_org_slug(cur.request.organization_id)
 
@@ -54,8 +56,9 @@ class AutofixPipelineStep(PipelineStep):
                 "org_id": cur.request.organization_id,
                 "project_id": cur.request.project_id,
                 "group_id": group_id,
+                "codebase_indexing": not cur.request.options.disable_codebase_indexing,
             }
-            repo_tags = [f"repo:{codebase.get('external_slug')}" for codebase in codebases]
+            repo_tags = [f"repo:{repo.full_name}" for repo in cur.request.repos]
             repo_tags_dict = {tag: 1 for tag in repo_tags}
             metadata = {
                 "run_id": cur.run_id,

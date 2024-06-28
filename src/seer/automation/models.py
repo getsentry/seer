@@ -93,9 +93,14 @@ class Stacktrace(BaseModel):
 
         return stacktrace_frames
 
-    def to_str(self, max_frames: int = 16):
+    def to_str(self, max_frames: int = 16, in_app_only: bool = False):
         stack_str = ""
-        for frame in reversed(self.frames[-max_frames:]):
+
+        frames = self.frames
+        if in_app_only:
+            frames = [frame for frame in frames if frame.in_app]
+
+        for frame in reversed(frames[-max_frames:]):
             col_no_str = f", column {frame.col_no}" if frame.col_no is not None else ""
             repo_str = f" in repo {frame.repo_name}" if frame.repo_name else ""
             line_no_str = (
@@ -250,7 +255,9 @@ class EventDetails(BaseModel):
                 i=i,
                 exception_type=exception.type,
                 exception_message=exception.value,
-                stacktrace=exception.stacktrace.to_str() if exception.stacktrace else "",
+                stacktrace=(
+                    exception.stacktrace.to_str(in_app_only=True) if exception.stacktrace else ""
+                ),
             )
             for i, exception in enumerate(self.exceptions)
         )

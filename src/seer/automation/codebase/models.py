@@ -35,13 +35,16 @@ class DocumentPromptXml(PromptXmlModel, tag="document", skip_empty=True):
     content: str
 
 
-class Document(BaseModel):
+class BaseDocument(BaseModel):
     path: str
     text: str
-    language: str
 
     def get_prompt_xml(self, repo_name: str | None) -> DocumentPromptXml:
         return DocumentPromptXml(path=self.path, repository=repo_name, content=self.text)
+
+
+class Document(BaseDocument):
+    language: str
 
 
 class DraftDocument(BaseModel):

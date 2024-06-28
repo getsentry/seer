@@ -52,26 +52,39 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         # Get the diff and PR details for each codebase.
         change_describer = ChangeDescriptionComponent(self.context)
         codebase_changes: list[CodebaseChange] = []
-        for codebase in self.context.codebases.values():
-            diff, diff_str = codebase.get_file_patches()
-
-            if diff:
-                change_description = change_describer.invoke(
-                    ChangeDescriptionRequest(
-                        hint="Describe the code changes in the following branch for a pull request.",
-                        change_dump=diff_str,
+        cur_state = self.context.state.get()
+        for codebase_state in cur_state.codebases.values():
+            if codebase_state.file_changes:
+                repo_definition = self.context.get_repo_definition_from_external_id(
+                    codebase_state.repo_external_id
+                )
+                if not repo_definition:
+                    raise ValueError(
+                        f"Could not find repo definition for external id {codebase_state.repo_external_id}"
                     )
+
+                diff, diff_str = self.context.make_file_patches(
+                    codebase_state.file_changes, repo_definition.full_name
                 )
 
-                change = CodebaseChange(
-                    repo_id=codebase.repo_info.id,
-                    repo_name=codebase.repo_info.external_slug,
-                    title=change_description.title if change_description else "Code Changes",
-                    description=change_description.description if change_description else "",
-                    diff=diff,
-                    diff_str=diff_str,
-                )
+                if diff:
+                    change_description = change_describer.invoke(
+                        ChangeDescriptionRequest(
+                            hint="Describe the code changes in the following branch for a pull request.",
+                            change_dump=diff_str,
+                        )
+                    )
 
-                codebase_changes.append(change)
+                    change = CodebaseChange(
+                        repo_id=1,
+                        repo_external_id=codebase_state.repo_external_id,
+                        repo_name=repo_definition.full_name,
+                        title=change_description.title if change_description else "Code Changes",
+                        description=change_description.description if change_description else "",
+                        diff=diff,
+                        diff_str=diff_str,
+                    )
+
+                    codebase_changes.append(change)
 
         self.context.event_manager.send_execution_complete(codebase_changes)

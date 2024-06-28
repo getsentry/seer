@@ -88,6 +88,9 @@ class RepoClient:
     repo: Repository
 
     provider: str
+    repo_owner: str
+    repo_name: str
+    repo_external_id: str
 
     def __init__(self, app_id: int | str, private_key: str, repo_definition: RepoDefinition):
         if repo_definition.provider != "github":
@@ -111,6 +114,7 @@ class RepoClient:
         self.provider = repo_definition.provider
         self.repo_owner = repo_definition.owner
         self.repo_name = repo_definition.name
+        self.repo_external_id = repo_definition.external_id
 
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
@@ -265,8 +269,10 @@ class RepoClient:
 
         return changed_files, removed_files
 
-    def get_file_content(self, path: str, sha: str) -> str | None:
+    def get_file_content(self, path: str, sha: str | None = None) -> str | None:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
+        if sha is None:
+            sha = self.get_default_branch_head_sha()
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
@@ -279,7 +285,10 @@ class RepoClient:
 
             return None
 
-    def get_valid_file_paths(self, sha: str) -> set[str]:
+    def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
+        if sha is None:
+            sha = self.get_default_branch_head_sha()
+
         tree = self.repo.get_git_tree(sha, recursive=True)
 
         if tree.raw_data["truncated"]:
