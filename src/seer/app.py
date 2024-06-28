@@ -208,12 +208,17 @@ def autofix_update_endpoint(
 
 @json_api("/v1/automation/autofix/state")
 def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
+    # Ensure external_id is included in request.repos
+    for repo in data.repos:
+        if 'external_id' not in repo:
+            repo['external_id'] = generate_external_id(repo)  # Assuming a function to generate external_id
+
     state = get_autofix_state(data.group_id)
 
     if state:
         check_and_mark_if_timed_out(state)
 
-    return AutofixStateResponse(
+    return AutofixEndpointResponse(
         group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None
     )
 
