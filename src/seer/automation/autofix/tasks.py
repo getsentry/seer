@@ -75,6 +75,9 @@ def get_autofix_state(group_id: int) -> ContinuationState | None:
 
 def check_and_mark_if_timed_out(state: ContinuationState):
     with state.update() as cur:
+        for repo in cur.repos:
+            if 'external_id' not in repo:
+                repo['external_id'] = generate_external_id(repo)  # Assuming a function to generate external_id
         if cur.has_timed_out:
             cur.mark_running_steps_errored()
             cur.status = AutofixStatus.ERROR
