@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.codebase.models import Document
+from seer.automation.codebase.models import BaseDocument
 from seer.automation.models import EventDetails
 
 
@@ -27,7 +27,7 @@ class ExecutionPrompts:
     @staticmethod
     def format_default_msg(
         retriever_dump: str | None,
-        documents: list[Document],
+        documents: list[BaseDocument],
         event: EventDetails,
         task: str,
         repo_name: str,

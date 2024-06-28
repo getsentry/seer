@@ -58,14 +58,16 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                 if not codebase_state.repo_external_id:
                     raise ValueError("Codebase state does not have a repo external id")
 
-                codebase = self.context.codebases.get(codebase_state.repo_external_id)
+                repo_definition = self.context.repos_by_key.get(codebase_state.repo_external_id)
 
-                if not codebase:
+                if not repo_definition:
                     raise ValueError(
-                        f"Could not find codebase for external id {codebase_state.repo_external_id}"
+                        f"Could not find repo definition for external id {codebase_state.repo_external_id}"
                     )
 
-                diff, diff_str = codebase.get_file_patches()
+                diff, diff_str = self.context.make_file_patches(
+                    codebase_state.file_changes, repo_definition.full_name
+                )
 
                 if diff:
                     change_description = change_describer.invoke(
@@ -76,8 +78,9 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     )
 
                     change = CodebaseChange(
+                        repo_id=1,
                         repo_external_id=codebase_state.repo_external_id,
-                        repo_name=codebase.repo_info.external_slug,
+                        repo_name=repo_definition.full_name,
                         title=change_description.title if change_description else "Code Changes",
                         description=change_description.description if change_description else "",
                         diff=diff,

@@ -11,10 +11,6 @@ class CodebaseStateManager(abc.ABC):
     state: State
 
     @abc.abstractmethod
-    def store_file_change(self, file_change: FileChange):
-        pass
-
-    @abc.abstractmethod
     def get_file_changes(self) -> list[FileChange]:
         pass
 
