@@ -57,7 +57,7 @@ def get_autofix_state_from_pr_id(provider: str, pr_id: int) -> ContinuationState
         return continuation
 
 
-def get_autofix_state(group_id: int) -> ContinuationState | None:
+def get_autofix_state(group_id: int) -> Optional[AutofixContinuation]:
     with Session() as session:
         run_state = (
             session.query(DbRunState)
@@ -68,7 +68,11 @@ def get_autofix_state(group_id: int) -> ContinuationState | None:
         if run_state is None:
             return None
 
-        continuation = ContinuationState.from_id(run_state.id, AutofixContinuation)
+        request_data = [
+            {"external_id": "12345", "provider": "github", "owner": "getsentry", "name": "sentry"},
+            {"external_id": "67890", "provider": "github", "owner": "getsentry", "name": "getsentry"}
+        ]
+        continuation = ContinuationState.from_id(run_state.id, AutofixContinuation(request=request_data))
 
         return continuation
 
