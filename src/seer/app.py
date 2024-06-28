@@ -53,6 +53,7 @@ from seer.inference_models import embeddings_model, grouping_lookup
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
+from seer.utils import generate_external_id  # Assuming this utility function exists
 
 app = Flask(__name__)
 bootup(
