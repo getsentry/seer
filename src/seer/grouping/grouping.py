@@ -274,14 +274,6 @@ class GroupingLookup:
         )
         for i, entry in enumerate(data.data):
             embedding = embeddings[i].astype("float32")
-            logger.info(
-                "inserting a new grouping record in bulk",
-                extra={
-                    "input_hash": entry.hash,
-                    "stacktrace_length": len(data.stacktrace_list[i]),
-                    "project_id": entry.project_id,
-                },
-            )
 
             new_record = GroupingRecord(
                 hash=entry.hash,
