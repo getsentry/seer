@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 from johen import gen
 from johen.examples import Examples
 from johen.generators import specialized
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
 
 from seer.automation.agent.models import Usage
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
