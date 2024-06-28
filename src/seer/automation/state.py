@@ -78,7 +78,11 @@ class DbState(State[_State]):
             if db_state is None:
                 raise ValueError(f"No state found for id {self.id}")
 
-            return cast(_State, self.model.model_validate(db_state.value))
+            state = cast(_State, self.model.model_validate(db_state.value))
+            for repo in state.repos:
+                if 'external_id' not in repo:
+                    repo['external_id'] = generate_external_id(repo)  # Assuming a function to generate external_id
+            return state
 
     def set(self, value: _State):
         with Session() as session:
