@@ -255,6 +255,12 @@ class AutofixUpdateRequest(BaseModel):
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
 
+    @validator('request.repos', each_item=True)
+    def check_external_id(cls, v):
+        if 'external_id' not in v:
+            raise ValueError('external_id is required in each repo')
+        return v
+
     def find_step(self, *, id: str) -> Step | None:
         for step in self.steps:
             if step.id == id:
