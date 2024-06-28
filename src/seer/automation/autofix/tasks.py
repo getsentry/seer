@@ -204,7 +204,6 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
 
     event_manager.send_pr_creation_start()
 
-    print("???")
     context.commit_changes(repo_external_id=request.payload.repo_external_id)
 
     event_manager.send_pr_creation_complete()
