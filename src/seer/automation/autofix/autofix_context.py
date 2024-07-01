@@ -1,5 +1,5 @@
 import textwrap
-from typing import cast
+from typing import Mapping, cast
 
 import sentry_sdk
 from sentence_transformers import SentenceTransformer
@@ -24,6 +24,11 @@ from seer.automation.utils import get_embedding_model, get_sentry_client
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
 
+RepoExternalId = str
+RepoInternalId = int
+RepoKey = RepoExternalId | RepoInternalId
+RepoIdentifiers = tuple[RepoExternalId, RepoInternalId]
+
 
 class AutofixCodebaseStateManager(CodebaseStateManager):
     state: State[AutofixContinuation]
@@ -40,6 +45,8 @@ class AutofixCodebaseStateManager(CodebaseStateManager):
 class AutofixContext(PipelineContext):
     state: State[AutofixContinuation]
     codebases: dict[str, CodebaseIndex]
+    repos: list[RepoDefinition]
+
     event_manager: AutofixEventManager
     sentry_client: RpcClient
 
@@ -102,6 +109,23 @@ class AutofixContext(PipelineContext):
     @property
     def run_id(self) -> int:
         return self.state.get().run_id
+
+    @property
+    def repos_by_key(self) -> Mapping[RepoKey, RepoDefinition]:
+        repos_by_key: Mapping[RepoKey, RepoDefinition] = {
+            repo.external_id: repo for repo in self.repos
+        }
+        for codebase_state in self.codebases.values():
+            external_id = codebase_state.repo_info.external_id
+
+            repo = next(
+                (repo for repo in self.repos if repo.external_id == external_id),
+                None,
+            )
+            if repo:
+                repos_by_key[codebase_state.repo_info.id] = repo
+
+        return repos_by_key
 
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
@@ -215,34 +239,17 @@ class AutofixContext(PipelineContext):
                         None,
                     )
                     if codebase_state.file_changes and change_state:
-                        repo_client: RepoClient
-                        if codebase_state.repo_external_id:
-                            repo_definition = self.get_repo_definition_from_external_id(
-                                codebase_state.repo_external_id
-                            )
-                            if not repo_definition:
-                                raise ValueError(
-                                    f"Repo definition not found for external_id {codebase_state.repo_external_id}"
-                                )
-                            repo_client = RepoClient.from_repo_definition(repo_definition, "write")
-                        elif codebase_state.repo_id:
-                            codebase = next(
-                                (
-                                    codebase
-                                    for codebase in self.codebases.values()
-                                    if codebase.repo_info.id == codebase_state.repo_id
-                                ),
-                                None,
-                            )
+                        key = codebase_state.repo_external_id or codebase_state.repo_id
 
-                            if not codebase:
-                                raise ValueError(
-                                    f"Codebase not found for repo_id {codebase_state.repo_id}"
-                                )
+                        if key is None:
+                            raise ValueError("Repo key not found")
 
-                            repo_client = codebase.repo_client
-                        else:
-                            raise ValueError("No repo definition or codebase found")
+                        repo_definition = self.repos_by_key.get(key)
+
+                        if repo_definition is None:
+                            raise ValueError(f"Repo definition not found for key {key}")
+
+                        repo_client = RepoClient.from_repo_definition(repo_definition, "write")
 
                         branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,

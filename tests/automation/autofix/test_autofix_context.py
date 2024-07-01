@@ -122,14 +122,14 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                 )
             ]
 
-        self.autofix_context.get_repo_definition_from_external_id = MagicMock(
-            return_value=RepoDefinition(
+        self.autofix_context.repos = [
+            RepoDefinition(
                 provider="github",
                 owner="getsentry",
                 name="name",
                 external_id="1",
             )
-        )
+        ]
 
         self.autofix_context.commit_changes()
 
