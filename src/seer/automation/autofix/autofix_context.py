@@ -265,10 +265,15 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
-    def commit_changes(self, repo_external_id: str | None = None):
+    def commit_changes(self, repo_external_id: str | None = None, repo_id: int | None = None):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
-                if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
+                if (
+                    (repo_external_id is None and repo_id is None)
+                    or codebase_state.repo_external_id == repo_external_id
+                    # TODO: Remove this when repo_id is removed from the model
+                    or codebase_state.repo_id == repo_id
+                ):
                     changes_step = state.find_step(id="changes")
                     if not changes_step:
                         raise ValueError("Changes step not found")
