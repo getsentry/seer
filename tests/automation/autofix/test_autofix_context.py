@@ -83,12 +83,13 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         mock_repo_client.create_branch_from_changes.return_value = "test_branch"
         mock_pr = MagicMock(number=1, html_url="http://test.com", id=123)
         mock_repo_client.create_pr_from_branch.return_value = mock_pr
+        mock_repo_client.provider = "github"
 
         mock_RepoClient.from_repo_definition.return_value = mock_repo_client
 
         with self.state.update() as cur:
             cur.codebases = {
-                1: CodebaseState(
+                "1": CodebaseState(
                     repo_external_id="1",
                     namespace_id=1,
                     file_changes=[
