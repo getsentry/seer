@@ -17,19 +17,15 @@ class TestReplaceSnippetWith(unittest.TestCase):
         original_snippet = "print('Hello, world!')"
         replacement_snippet = "print('Goodbye, world!')"
         file_path = "test_file.py"
-        mock_document = MagicMock()
-        mock_document.text = textwrap.dedent(
+        mock_context = MagicMock()
+        contents = textwrap.dedent(
             """\
             def foo():
                 print('Hello, world!')
                 return True
             """
         )
-        mock_context = MagicMock()
-        mock_codebase = MagicMock()
-        mock_codebase.repo_info.external_slug = "repo"
-        mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
-        mock_context.codebases = {"repo": mock_codebase}
+        mock_context.get_file_contents.return_value = contents
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(
@@ -43,6 +39,8 @@ class TestReplaceSnippetWith(unittest.TestCase):
         mock_invoke.return_value = SnippetReplacementOutput(snippet=code)
 
         code_action_tools = CodeActionTools(context=mock_context)
+        code_action_tools.store_file_change = MagicMock()
+
         result = code_action_tools.replace_snippet_with(
             file_path, "repo", original_snippet, replacement_snippet, "message"
         )
@@ -50,14 +48,15 @@ class TestReplaceSnippetWith(unittest.TestCase):
         # Assert
         self.assertTrue(result)
         self.assertEqual(result, f"success: Resulting code after replacement:\n```\n{code}\n```\n")
-        mock_codebase.store_file_change.assert_called_once_with(
+        code_action_tools.store_file_change.assert_called_once_with(
+            "repo",
             FileChange(
                 change_type="edit",
                 path=file_path,
-                reference_snippet=mock_document.text,
+                reference_snippet=contents,
                 new_snippet=code,
                 description="message",
-            )
+            ),
         )
 
     @patch(
@@ -68,8 +67,7 @@ class TestReplaceSnippetWith(unittest.TestCase):
         original_snippet = "print('Hello, world!')"
         replacement_snippet = "print('Goodbye, world!')"
         file_path = "test_file.py"
-        mock_document = MagicMock()
-        mock_document.text = textwrap.dedent(
+        contents = textwrap.dedent(
             """\
 
             def foo():
@@ -79,11 +77,8 @@ class TestReplaceSnippetWith(unittest.TestCase):
 
             """
         )
-        mock_codebase = MagicMock()
-        mock_codebase.repo_info.external_slug = "repo"
         mock_context = MagicMock()
-        mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
-        mock_context.codebases = {"repo": mock_codebase}
+        mock_context.get_file_contents.return_value = contents
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(
@@ -96,6 +91,8 @@ class TestReplaceSnippetWith(unittest.TestCase):
         mock_invoke.return_value = SnippetReplacementOutput(snippet=code)
 
         code_action_tools = CodeActionTools(context=mock_context)
+        code_action_tools.store_file_change = MagicMock()
+
         result = code_action_tools.replace_snippet_with(
             file_path, "repo", original_snippet, replacement_snippet, "message"
         )
@@ -103,14 +100,15 @@ class TestReplaceSnippetWith(unittest.TestCase):
         # Assert
         self.assertTrue(result)
         self.assertEqual(result, f"success: Resulting code after replacement:\n```\n{code}\n```\n")
-        mock_codebase.store_file_change.assert_called_once_with(
+        code_action_tools.store_file_change.assert_called_once_with(
+            "repo",
             FileChange(
                 change_type="edit",
                 path=file_path,
-                reference_snippet=mock_document.text.strip("\n") + "\n",
+                reference_snippet=contents.strip("\n") + "\n",
                 new_snippet=code + "\n",
                 description="message",
-            )
+            ),
         )
 
         expected_final_document_content = textwrap.dedent(
@@ -124,6 +122,6 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """
         )
         assert (
-            mock_codebase.store_file_change.call_args[0][0].apply(mock_document.text)
+            code_action_tools.store_file_change.call_args[0][1].apply(contents)
             == expected_final_document_content
         )
