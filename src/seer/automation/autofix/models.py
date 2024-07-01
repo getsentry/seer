@@ -252,6 +252,15 @@ class AutofixUpdateRequest(BaseModel):
     )
 
 
+class Request(BaseModel):
+    repos: List[Repo]
+
+class Repo(BaseModel):
+    provider: str
+    owner: str
+    name: str
+    external_id: str  # Added the missing field
+
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
 
