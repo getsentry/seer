@@ -14,8 +14,8 @@ from seer.automation.autofix.models import (
     StepType,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.codebase.models import QueryResultDocumentChunk, RepositoryInfo
-from seer.automation.models import FileChange, IssueDetails, SentryEventData
+from seer.automation.codebase.models import QueryResultDocumentChunk
+from seer.automation.models import FileChange, IssueDetails, RepoDefinition, SentryEventData
 from seer.automation.state import LocalMemoryState
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 
@@ -49,8 +49,8 @@ class TestAutofixContext(unittest.TestCase):
             chunks.append(next(generate(QueryResultDocumentChunk)))
 
         self.autofix_context.codebases = {
-            1: MagicMock(query=MagicMock(return_value=chunks[:3])),
-            2: MagicMock(query=MagicMock(return_value=chunks[3:])),
+            "1": MagicMock(query=MagicMock(return_value=chunks[:3])),
+            "2": MagicMock(query=MagicMock(return_value=chunks[3:])),
         }
 
         sorted_chunks = sorted(chunks, key=lambda x: x.distance)
@@ -77,30 +77,19 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         )
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
-    @patch(
-        "seer.automation.autofix.autofix_context.CodebaseIndex.get_repo_info_from_db",
-        return_value=RepositoryInfo(
-            id=1,
-            organization=1,
-            project=1,
-            provider="github",
-            external_slug="getsentry/slug",
-            external_id="1",
-        ),
-    )
     @patch("seer.automation.autofix.autofix_context.RepoClient")
-    def test_commit_changes(self, mock_RepoClient, mock_get_repo_info_from_db):
+    def test_commit_changes(self, mock_RepoClient):
         mock_repo_client = MagicMock()
         mock_repo_client.create_branch_from_changes.return_value = "test_branch"
         mock_pr = MagicMock(number=1, html_url="http://test.com", id=123)
         mock_repo_client.create_pr_from_branch.return_value = mock_pr
 
-        mock_RepoClient.from_repo_info.return_value = mock_repo_client
+        mock_RepoClient.from_repo_definition.return_value = mock_repo_client
 
         with self.state.update() as cur:
             cur.codebases = {
                 1: CodebaseState(
-                    repo_id=1,
+                    repo_external_id="1",
                     namespace_id=1,
                     file_changes=[
                         FileChange(
@@ -122,7 +111,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     index=0,
                     changes=[
                         CodebaseChange(
-                            repo_id=1,
+                            repo_external_id="1",
                             repo_name="test",
                             title="This is the title",
                             description="This is the description",
@@ -130,6 +119,15 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     ],
                 )
             ]
+
+        self.autofix_context.get_repo_definition_from_external_id = MagicMock(
+            return_value=RepoDefinition(
+                provider="github",
+                owner="getsentry",
+                name="name",
+                external_id="1",
+            )
+        )
 
         self.autofix_context.commit_changes()
 

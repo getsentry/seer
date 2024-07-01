@@ -100,18 +100,26 @@ def run_autofix_root_cause(
         logger.warning(f"Ignoring job, state {cur.status}")
         return
 
-    CreateMissingIndexesStep.get_signature(
-        CreateAnyMissingCodebaseIndexesStepRequest(
-            run_id=cur.run_id,
-            next=RootCauseStep.get_signature(
-                RootCauseStepRequest(
-                    run_id=cur.run_id,
-                ),
-                queue=CeleryQueues.DEFAULT,
+    if request.options.disable_codebase_indexing:
+        RootCauseStep.get_signature(
+            RootCauseStepRequest(
+                run_id=cur.run_id,
             ),
-        ),
-        queue=CeleryQueues.DEFAULT,
-    ).apply_async()
+            queue=CeleryQueues.DEFAULT,
+        ).apply_async()
+    else:
+        CreateMissingIndexesStep.get_signature(
+            CreateAnyMissingCodebaseIndexesStepRequest(
+                run_id=cur.run_id,
+                next=RootCauseStep.get_signature(
+                    RootCauseStepRequest(
+                        run_id=cur.run_id,
+                    ),
+                    queue=CeleryQueues.DEFAULT,
+                ),
+            ),
+            queue=CeleryQueues.DEFAULT,
+        ).apply_async()
 
 
 def run_autofix_execution(request: AutofixUpdateRequest):
@@ -150,18 +158,26 @@ def run_autofix_execution(request: AutofixUpdateRequest):
             logger.warning(f"Ignoring job, state {cur.status}")
             return
 
-        CreateMissingIndexesStep.get_signature(
-            CreateAnyMissingCodebaseIndexesStepRequest(
-                run_id=cur.run_id,
-                next=AutofixPlanningStep.get_signature(
-                    AutofixPlanningStepRequest(
-                        run_id=cur.run_id,
-                    ),
-                    queue=CeleryQueues.DEFAULT,
+        if cur.request.options.disable_codebase_indexing:
+            AutofixPlanningStep.get_signature(
+                AutofixPlanningStepRequest(
+                    run_id=cur.run_id,
                 ),
-            ),
-            queue=CeleryQueues.DEFAULT,
-        ).apply_async()
+                queue=CeleryQueues.DEFAULT,
+            ).apply_async()
+        else:
+            CreateMissingIndexesStep.get_signature(
+                CreateAnyMissingCodebaseIndexesStepRequest(
+                    run_id=cur.run_id,
+                    next=AutofixPlanningStep.get_signature(
+                        AutofixPlanningStepRequest(
+                            run_id=cur.run_id,
+                        ),
+                        queue=CeleryQueues.DEFAULT,
+                    ),
+                ),
+                queue=CeleryQueues.DEFAULT,
+            ).apply_async()
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
@@ -188,6 +204,6 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
 
     event_manager.send_pr_creation_start()
 
-    context.commit_changes(repo_id=request.payload.repo_id)
+    context.commit_changes(repo_external_id=request.payload.repo_external_id)
 
     event_manager.send_pr_creation_complete()

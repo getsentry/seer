@@ -17,6 +17,7 @@ from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import Document, QueryResultDocumentChunk
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.state import CodebaseStateManager
+from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
@@ -30,16 +31,16 @@ class AutofixCodebaseStateManager(CodebaseStateManager):
 
     def store_file_change(self, file_change: FileChange):
         with self.state.update() as state:
-            codebase_state = state.codebases[self.repo_id]
+            codebase_state = state.codebases[self.repo_external_id]
             codebase_state.file_changes.append(file_change)
 
     def get_file_changes(self) -> list[FileChange]:
-        return self.state.get().codebases[self.repo_id].file_changes
+        return self.state.get().codebases[self.repo_external_id].file_changes
 
 
 class AutofixContext(PipelineContext):
     state: State[AutofixContinuation]
-    codebases: dict[int, CodebaseIndex]
+    codebases: dict[str, CodebaseIndex]
     event_manager: AutofixEventManager
     sentry_client: RpcClient
 
@@ -76,13 +77,14 @@ class AutofixContext(PipelineContext):
                 )
 
                 if codebase_index:
-                    self.codebases[codebase_index.repo_info.id] = codebase_index
+                    self.codebases[codebase_index.repo_info.external_id] = codebase_index
                     with state.update() as cur:
-                        if codebase_index.repo_info.id not in cur.codebases:
-                            cur.codebases[codebase_index.repo_info.id] = CodebaseState(
+                        if codebase_index.repo_info.external_id not in cur.codebases:
+                            cur.codebases[codebase_index.repo_info.external_id] = CodebaseState(
                                 repo_id=codebase_index.repo_info.id,
                                 namespace_id=codebase_index.namespace.id,
                                 file_changes=[],
+                                repo_external_id=codebase_index.repo_info.external_id,
                             )
 
         self.event_manager = event_manager
@@ -104,7 +106,7 @@ class AutofixContext(PipelineContext):
 
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
-            codebase = self.get_codebase_from_external_id(repo.external_id)
+            codebase = self.get_codebase(repo.external_id)
             if codebase is None or not codebase.workspace.is_ready():
                 return True
 
@@ -128,30 +130,65 @@ class AutofixContext(PipelineContext):
 
         return codebase_index
 
-    def get_codebase(self, repo_id: int) -> CodebaseIndex | None:
-        return self.codebases.get(repo_id, None)
+    def get_codebase(self, external_id: str) -> CodebaseIndex | None:
+        return self.codebases.get(external_id, None)
 
-    def get_codebase_from_external_id(self, external_id: str) -> CodebaseIndex | None:
-        for codebase in self.codebases.values():
-            if codebase.repo_info.external_id == external_id:
-                return codebase
+    def get_codebase_from_repo_id(self, repo_id: int) -> CodebaseIndex | None:
+        return next((c for c in self.codebases.values() if c.repo_info.id == repo_id), None)
+
+    def get_codebase_from_repo_name(self, repo_name: str) -> CodebaseIndex | None:
+        return next(
+            (c for c in self.codebases.values() if c.repo_info.external_slug == repo_name), None
+        )
+
+    def get_repo_definition_from_external_id(self, external_id: str) -> RepoDefinition | None:
+        for repo in self.repos:
+            if repo.external_id == external_id:
+                return repo
 
         return None
 
+    def get_repo_client(self, repo_name: str | None = None, repo_external_id: str | None = None):
+        """
+        Gets a repo client for the current single repo or for a given repo name.
+        If there are more than 1 repos, a repo name must be provided.
+        """
+        repo_client: RepoClient | None = None
+        if len(self.repos) == 1:
+            repo_client = RepoClient.from_repo_definition(self.repos[0], "read")
+        elif repo_name:
+            repo = next((r for r in self.repos if r.full_name == repo_name), None)
+
+            if not repo:
+                raise ValueError(f"Repo {repo_name} not found.")
+
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+        elif repo_external_id:
+            repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
+
+            if not repo:
+                raise ValueError(f"Repo {repo_external_id} not found.")
+
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+        else:
+            raise ValueError("Please provide a repo name because you have multiple repos.")
+
+        return repo_client
+
     def get_document_and_codebase(
-        self, path: str, repo_name: str | None = None, repo_id: int | None = None
+        self, path: str, repo_name: str | None = None, repo_external_id: str | None = None
     ) -> tuple[CodebaseIndex | None, Document | None]:
         if repo_name:
-            repo_id = next(
+            repo_external_id = next(
                 (
-                    repo_id
+                    repo_external_id
                     for repo_id, codebase in self.codebases.items()
                     if codebase.repo_info.external_slug == repo_name
                 ),
                 None,
             )
-        if repo_id:
-            codebase = self.get_codebase(repo_id)
+        if repo_external_id:
+            codebase = self.get_codebase(repo_external_id)
 
             if codebase:
                 return codebase, codebase.get_document(path)
@@ -180,8 +217,20 @@ class AutofixContext(PipelineContext):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
-        for codebase in self.codebases.values():
-            codebase.process_stacktrace(stacktrace)
+        for repo in self.repos:
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+
+            valid_file_paths = repo_client.get_valid_file_paths()
+            for frame in stacktrace.frames:
+                if frame.in_app and frame.repo_id is None:
+                    if frame.filename in valid_file_paths:
+                        frame.repo_name = repo.full_name
+                    else:
+                        for valid_path in valid_file_paths:
+                            if potential_frame_match(valid_path, frame):
+                                frame.repo_name = repo.full_name
+                                frame.filename = valid_path
+                                break
 
     def process_event_paths(self, event: EventDetails):
         """
@@ -193,10 +242,10 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
-    def commit_changes(self, repo_id: int | None = None):
+    def commit_changes(self, repo_external_id: str | None = None):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
-                if repo_id is None or codebase_state.repo_id == repo_id:
+                if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
                     changes_step = state.find_step(id="changes")
                     if not changes_step:
                         raise ValueError("Changes step not found")
@@ -205,18 +254,20 @@ class AutofixContext(PipelineContext):
                         (
                             change
                             for change in changes_step.changes
-                            if change.repo_id == codebase_state.repo_id
+                            if change.repo_external_id == codebase_state.repo_external_id
                         ),
                         None,
                     )
                     if codebase_state.file_changes and change_state:
-                        repo_info = CodebaseIndex.get_repo_info_from_db(codebase_state.repo_id)
-                        if repo_info is None:
+                        repo_definition = self.get_repo_definition_from_external_id(
+                            codebase_state.repo_external_id
+                        )
+                        if not repo_definition:
                             raise ValueError(
-                                f"Repo info not found for repo id {codebase_state.repo_id}"
+                                f"Repo definition not found for external_id {codebase_state.repo_external_id}"
                             )
 
-                        repo_client = RepoClient.from_repo_info(repo_info, "write")
+                        repo_client = RepoClient.from_repo_definition(repo_definition, "write")
                         branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,
                             file_changes=codebase_state.file_changes,
@@ -276,7 +327,7 @@ class AutofixContext(PipelineContext):
 
                         with Session() as session:
                             pr_id_mapping = DbPrIdToAutofixRunIdMapping(
-                                provider=repo_info.provider,
+                                provider=repo_definition.provider,
                                 pr_id=pr.id,
                                 run_id=state.run_id,
                             )

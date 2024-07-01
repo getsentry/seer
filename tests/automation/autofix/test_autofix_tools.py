@@ -12,8 +12,6 @@ class TestReplaceSnippetWith(unittest.TestCase):
         "seer.automation.autofix.components.snippet_replacement.SnippetReplacementComponent.invoke"
     )
     def test_replace_snippet_with_success(self, mock_invoke):
-        mock_context = MagicMock()
-        code_action_tools = CodeActionTools(context=mock_context)
 
         # Setup
         original_snippet = "print('Hello, world!')"
@@ -27,8 +25,10 @@ class TestReplaceSnippetWith(unittest.TestCase):
                 return True
             """
         )
+        mock_context = MagicMock()
         mock_codebase = MagicMock()
         mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
+        mock_context.get_codebase_from_repo_name.return_value = mock_codebase
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(
@@ -41,6 +41,7 @@ class TestReplaceSnippetWith(unittest.TestCase):
         completion_with_parser.return_value = ({"code": code}, MagicMock(), MagicMock())
         mock_invoke.return_value = SnippetReplacementOutput(snippet=code)
 
+        code_action_tools = CodeActionTools(context=mock_context)
         result = code_action_tools.replace_snippet_with(
             file_path, "repo", original_snippet, replacement_snippet, "message"
         )
@@ -62,9 +63,6 @@ class TestReplaceSnippetWith(unittest.TestCase):
         "seer.automation.autofix.components.snippet_replacement.SnippetReplacementComponent.invoke"
     )
     def test_replace_snippet_with_chunk_newlines(self, mock_invoke):
-        mock_context = MagicMock()
-        code_action_tools = CodeActionTools(context=mock_context)
-
         # Setup
         original_snippet = "print('Hello, world!')"
         replacement_snippet = "print('Goodbye, world!')"
@@ -81,7 +79,9 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """
         )
         mock_codebase = MagicMock()
+        mock_context = MagicMock()
         mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
+        mock_context.get_codebase_from_repo_name.return_value = mock_codebase
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(
@@ -93,6 +93,7 @@ class TestReplaceSnippetWith(unittest.TestCase):
         completion_with_parser.return_value = ({"code": code}, MagicMock(), MagicMock())
         mock_invoke.return_value = SnippetReplacementOutput(snippet=code)
 
+        code_action_tools = CodeActionTools(context=mock_context)
         result = code_action_tools.replace_snippet_with(
             file_path, "repo", original_snippet, replacement_snippet, "message"
         )

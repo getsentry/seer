@@ -15,7 +15,6 @@ from seer.automation.autofix.components.snippet_replacement import (
     SnippetReplacementRequest,
 )
 from seer.automation.autofix.utils import find_original_snippet
-from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.models import FileChange
 
 logger = logging.getLogger("autofix")
@@ -108,17 +107,27 @@ class CodeActionTools(BaseTools):
 
     @observe(name="Store File Change")
     @ai_track(description="Store File Change")
-    def store_file_change(self, codebase: CodebaseIndex, file_change: FileChange):
+    def store_file_change(self, repo_name: str, file_change: FileChange):
         """
         Stores a file change to a codebase index.
         This function exists mainly to be traceable in Langsmith.
         """
         with self.context.state.update() as cur:
+            repo_client = self.context.get_repo_client(repo_name)
+            cur.codebases[repo_client.repo_external_id].file_changes.append(file_change)
+
+        codebase = self.context.get_codebase_from_repo_name(repo_name)
+        if codebase:
             codebase.store_file_change(file_change)
-            cur.codebases[codebase.repo_info.id].file_changes.append(file_change)
+        else:
+            # Exception for sentry to log but we don't inform the LLM
+            logger.exception(
+                ValueError(f"Codebase for repo name {repo_name} not found."),
+                exc_info=True,
+            )
 
         self.context.event_manager.add_log(
-            f"Made a code change in {file_change.path} in {codebase.repo_info.external_slug}."
+            f"Made a code change in {file_change.path} in {repo_name}."
         )
 
     @observe(name="Replace Snippet")
@@ -183,7 +192,7 @@ class CodeActionTools(BaseTools):
             new_snippet += "\n"
 
         self.store_file_change(
-            codebase,
+            repo_name,
             FileChange(
                 change_type="edit",
                 path=file_path,
@@ -234,55 +243,11 @@ class CodeActionTools(BaseTools):
             new_snippet="",
         )
         self.store_file_change(
-            codebase,
+            repo_name,
             file_change,
         )
 
         return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
-
-    # def insert_snippet(
-    #     self, file_path: str, reference_snippet: str, snippet: str, commit_message: str
-    # ):
-    #     """
-    #     Inserts a snippet after the reference snippet.
-    #     """
-
-    #     logger.debug(
-    #         f"[CodeActionTools.insert_snippet] Inserting snippet {snippet} after {reference_snippet} in {file_path}"
-    #     )
-
-    #     file_contents = self._get_latest_file_contents(file_path)
-
-    #     if not file_contents:
-    #         raise Exception("File not found.")
-
-    #     original_snippet = find_original_snippet(
-    #         reference_snippet, file_contents, threshold=self._snippet_matching_threshold
-    #     )
-
-    #     logger.debug("Exact reference snippet:")
-    #     logger.debug(f'"{reference_snippet}"')
-
-    #     if not original_snippet:
-    #         raise Exception("Reference snippet not found. Try again with an exact match.")
-
-    #     new_contents = file_contents.replace(original_snippet, original_snippet + "\n" + snippet)
-
-    #     self.context._update_document(file_path, new_contents)
-
-    #     original_contents = file_contents
-    #     if file_path in self.file_changes:
-    #         original_contents = self.file_changes[file_path].original_contents
-
-    #     self.file_changes[file_path] = FileChange(
-    #         change_type="edit",
-    #         path=file_path,
-    #         contents=new_contents,
-    #         description=commit_message,
-    #         original_contents=original_contents,
-    #     )
-
-    #     return f"success; New file contents for `{file_path}`: \n\n```\n{new_contents}\n```"
 
     @observe(name="Create File")
     @ai_track(description="Create File")
@@ -302,7 +267,7 @@ class CodeActionTools(BaseTools):
             raise FileExistsError(f"File `{file_path}` already exists.")
 
         self.store_file_change(
-            codebase,
+            repo_name,
             FileChange(
                 change_type="create",
                 path=file_path,
@@ -327,7 +292,7 @@ class CodeActionTools(BaseTools):
             raise FileNotFoundError(f"File `{file_path}` not found.")
 
         self.store_file_change(
-            codebase,
+            repo_name,
             FileChange(change_type="delete", path=file_path, description=commit_message),
         )
 
@@ -410,35 +375,6 @@ class CodeActionTools(BaseTools):
                 ],
                 fn=self.delete_snippet,
             ),
-            #             FunctionTool(
-            #                 name="insert_snippet",
-            #                 description="""Inserts a snippet on a new line directly after reference snippet in a file.
-            # - The reference snippet must be an exact match.
-            # - Indentation and spacing must be included in the snippet to insert.""",
-            #                 parameters=[
-            #                     {
-            #                         "name": "file_path",
-            #                         "type": "string",
-            #                         "description": "The file path to modify.",
-            #                     },
-            #                     {
-            #                         "name": "reference_snippet",
-            #                         "type": "string",
-            #                         "description": "The reference snippet to insert after.",
-            #                     },
-            #                     {
-            #                         "name": "snippet",
-            #                         "type": "string",
-            #                         "description": "The snippet to insert. This snippet will be on a new line after the reference snippet.",
-            #                     },
-            #                     {
-            #                         "name": "commit_message",
-            #                         "type": "string",
-            #                         "description": "The commit message to use.",
-            #                     },
-            #                 ],
-            #                 fn=self.insert_snippet,
-            #             ),
             FunctionTool(
                 name="create_file",
                 description="""Creates a file with the provided snippet.""",
