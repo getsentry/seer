@@ -252,6 +252,15 @@ class AutofixUpdateRequest(BaseModel):
     )
 
 
+class Request(BaseModel):
+    repos: List[Repo]
+
+class Repo(BaseModel):
+    external_id: str
+    provider: str
+    organization: str
+    name: str
+
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
 
