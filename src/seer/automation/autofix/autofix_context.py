@@ -202,10 +202,15 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
-    def commit_changes(self, repo_external_id: str | None = None):
+    def commit_changes(self, repo_external_id: str | None = None, repo_id: int | None = None):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
-                if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
+                if (
+                    (repo_external_id is None and repo_id is None)
+                    or codebase_state.repo_external_id == repo_external_id
+                    # TODO: Remove this when repo_id is removed from the model
+                    or codebase_state.repo_id == repo_id
+                ):
                     changes_step = state.find_step(id="changes")
                     if not changes_step:
                         raise ValueError("Changes step not found")
@@ -215,19 +220,34 @@ class AutofixContext(PipelineContext):
                             change
                             for change in changes_step.changes
                             if change.repo_external_id == codebase_state.repo_external_id
+                            # TODO: Remove this when repo_id is removed from the model
+                            or change.repo_id == codebase_state.repo_id
                         ),
                         None,
                     )
                     if codebase_state.file_changes and change_state:
-                        repo_definition = self.get_repo_definition_from_external_id(
-                            codebase_state.repo_external_id
-                        )
-                        if not repo_definition:
-                            raise ValueError(
-                                f"Repo definition not found for external_id {codebase_state.repo_external_id}"
+                        repo_client: RepoClient | None = None
+                        if codebase_state.repo_external_id:
+                            repo_definition = self.get_repo_definition_from_external_id(
+                                codebase_state.repo_external_id
                             )
+                            if not repo_definition:
+                                raise ValueError(
+                                    f"Repo definition not found for external_id {codebase_state.repo_external_id}"
+                                )
+                            repo_client = RepoClient.from_repo_definition(repo_definition, "write")
+                        elif codebase_state.repo_id:
+                            codebase = self.get_codebase_from_repo_id(codebase_state.repo_id)
 
-                        repo_client = RepoClient.from_repo_definition(repo_definition, "write")
+                            if not codebase:
+                                raise ValueError(
+                                    f"Codebase not found for repo_id {codebase_state.repo_id}"
+                                )
+
+                            repo_client = codebase.repo_client
+                        else:
+                            raise ValueError("No repo definition or codebase found")
+
                         branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,
                             file_changes=codebase_state.file_changes,
@@ -287,7 +307,7 @@ class AutofixContext(PipelineContext):
 
                         with Session() as session:
                             pr_id_mapping = DbPrIdToAutofixRunIdMapping(
-                                provider=repo_definition.provider,
+                                provider=repo_client.provider,
                                 pr_id=pr.id,
                                 run_id=state.run_id,
                             )

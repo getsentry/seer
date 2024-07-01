@@ -91,7 +91,8 @@ class CommittedPullRequestDetails(BaseModel):
 
 
 class CodebaseChange(BaseModel):
-    repo_external_id: str
+    repo_id: int | None = None
+    repo_external_id: str | None = None
     repo_name: str
     title: str
     description: str
@@ -157,7 +158,7 @@ Step = Union[DefaultStep, RootCauseStep, ChangesStep]
 class CodebaseState(BaseModel):
     repo_id: int | None = None
     namespace_id: int | None = None
-    repo_external_id: str
+    repo_external_id: str | None = None
     file_changes: list[FileChange] = []
 
 
@@ -250,6 +251,7 @@ class AutofixRootCauseUpdatePayload(BaseModel):
 class AutofixCreatePrUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_PR]
     repo_external_id: str | None = None
+    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 
 
 class AutofixUpdateRequest(BaseModel):
