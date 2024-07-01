@@ -112,6 +112,7 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
         sentry_sdk.set_tag("read_only", data.read_only)
         sentry_sdk.set_tag("stacktrace_len", len(data.stacktrace))
         sentry_sdk.set_tag("request_hash", data.hash)
+        print(data)
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
 
