@@ -59,26 +59,35 @@ class SentryApiClientImpl(SentryApiClient):
         return int(resp["id"])
 
     def _make_request(self, method: str, url: str, body: dict | None = None) -> Any:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode("utf-8") if body else None,
-            method=method,
-            headers={
-                "Authorization": f"Bearer {self.auth}",
-                **({"Content-Type": "application/json"} if body is not None else {}),
-            },
-        )
-        try:
-            resp: HTTPResponse = urllib.request.urlopen(req)
-        except urllib.error.HTTPError as e:
-            print(f"Sentry Api Error for {method} {url}:\n{e.read().decode()}")
-            raise
+        retries = 3
+        timeout = 10
 
-        assert (
-            200 <= resp.status < 300
-        ), f"Sentry Api HTTP Error code: {resp.status} for {method} {url}:\n{resp.read()}"
-        result = json.loads(resp.read())
-        return result
+        for i in range(retries):
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode("utf-8") if body else None,
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {self.auth}",
+                    **({"Content-Type": "application/json"} if body is not None else {}),
+                },
+            )
+            try:
+                resp: HTTPResponse = urllib.request.urlopen(req, timeout=timeout)
+            except urllib.error.HTTPError as e:
+                print(f"Sentry Api Error for {method} {url}:\n{e.read().decode()}")
+                continue
+            except (ConnectionError, TimeoutError) as e:
+                print(f"Failed sentry api connection: {e}")
+                continue
+
+            assert (
+                200 <= resp.status < 300
+            ), f"Sentry Api HTTP Error code: {resp.status} for {method} {url}:\n{resp.read()}"
+            result = json.loads(resp.read())
+            return result
+
+        raise Exception(f"Sentry Api failed after {retries} retries, see log above")
 
     def get_latest_sha(self, config: ReleaseConfig, project_id: int) -> str | None:
         query = urlencode({"project": project_id, "environment": config.environment})
