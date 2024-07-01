@@ -105,7 +105,7 @@ class AutofixContext(PipelineContext):
 
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
-            codebase = self.get_codebase(repo.external_id)
+            codebase = self.codebases.get(repo.external_id)
             if codebase is None or not codebase.workspace.is_ready():
                 return True
 
@@ -129,17 +129,6 @@ class AutofixContext(PipelineContext):
 
         return codebase_index
 
-    def get_codebase(self, external_id: str) -> CodebaseIndex | None:
-        return self.codebases.get(external_id, None)
-
-    def get_codebase_from_repo_id(self, repo_id: int) -> CodebaseIndex | None:
-        return next((c for c in self.codebases.values() if c.repo_info.id == repo_id), None)
-
-    def get_codebase_from_repo_name(self, repo_name: str) -> CodebaseIndex | None:
-        return next(
-            (c for c in self.codebases.values() if c.repo_info.external_slug == repo_name), None
-        )
-
     def get_repo_definition_from_external_id(self, external_id: str) -> RepoDefinition | None:
         for repo in self.repos:
             if repo.external_id == external_id:
@@ -160,7 +149,7 @@ class AutofixContext(PipelineContext):
                 None,
             )
         if repo_external_id:
-            codebase = self.get_codebase(repo_external_id)
+            codebase = self.codebases.get(repo_external_id)
 
             if codebase:
                 return codebase, codebase.get_document(path)
@@ -237,7 +226,14 @@ class AutofixContext(PipelineContext):
                                 )
                             repo_client = RepoClient.from_repo_definition(repo_definition, "write")
                         elif codebase_state.repo_id:
-                            codebase = self.get_codebase_from_repo_id(codebase_state.repo_id)
+                            codebase = next(
+                                (
+                                    codebase
+                                    for codebase in self.codebases.values()
+                                    if codebase.repo_info.id == codebase_state.repo_id
+                                ),
+                                None,
+                            )
 
                             if not codebase:
                                 raise ValueError(

@@ -99,7 +99,7 @@ class AutofixPipelineStep(PipelineStep):
         self.context.event_manager.on_error()
 
     def _get_codebase_metadata(self, repo_external_id: str) -> dict[str, Any]:
-        codebase = self.context.get_codebase(repo_external_id)
+        codebase = self.context.codebases.get(repo_external_id)
         if codebase:
             return {
                 "repo_id": codebase.repo_info.id,

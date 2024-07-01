@@ -27,8 +27,9 @@ class TestReplaceSnippetWith(unittest.TestCase):
         )
         mock_context = MagicMock()
         mock_codebase = MagicMock()
+        mock_codebase.repo_info.external_slug = "repo"
         mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
-        mock_context.get_codebase_from_repo_name.return_value = mock_codebase
+        mock_context.codebases = {"repo": mock_codebase}
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(
@@ -79,9 +80,10 @@ class TestReplaceSnippetWith(unittest.TestCase):
             """
         )
         mock_codebase = MagicMock()
+        mock_codebase.repo_info.external_slug = "repo"
         mock_context = MagicMock()
         mock_context.get_document_and_codebase.return_value = (mock_codebase, mock_document)
-        mock_context.get_codebase_from_repo_name.return_value = mock_codebase
+        mock_context.codebases = {"repo": mock_codebase}
 
         completion_with_parser = MagicMock()
         code = textwrap.dedent(

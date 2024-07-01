@@ -41,7 +41,8 @@ class TestAutofixContext(unittest.TestCase):
             MagicMock(),
             MagicMock(),
         )
-        self.autofix_context.get_codebase = MagicMock(return_value=self.mock_codebase_index)
+        self.autofix_context.codebases = MagicMock()
+        self.autofix_context.codebases.get.return_value = self.mock_codebase_index
 
     def test_multi_codebase_query(self):
         chunks: list[QueryResultDocumentChunk] = []

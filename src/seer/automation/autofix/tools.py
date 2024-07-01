@@ -112,7 +112,10 @@ class CodeActionTools(BaseTools):
         Stores a file change to a codebase index.
         This function exists mainly to be traceable in Langsmith.
         """
-        codebase = self.context.get_codebase_from_repo_name(repo_name)
+        codebase = next(
+            (c for c in self.context.codebases.values() if c.repo_info.external_slug == repo_name),
+            None,
+        )
 
         if codebase:
             with self.context.state.update() as cur:
