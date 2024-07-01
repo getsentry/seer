@@ -1,7 +1,7 @@
 import datetime
 import enum
 import hashlib
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union, List
 
 from johen import gen
 from johen.examples import Examples
