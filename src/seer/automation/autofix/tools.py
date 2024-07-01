@@ -112,19 +112,15 @@ class CodeActionTools(BaseTools):
         Stores a file change to a codebase index.
         This function exists mainly to be traceable in Langsmith.
         """
-        with self.context.state.update() as cur:
-            repo_client = self.context.get_repo_client(repo_name)
-            cur.codebases[repo_client.repo_external_id].file_changes.append(file_change)
-
         codebase = self.context.get_codebase_from_repo_name(repo_name)
+
         if codebase:
+            with self.context.state.update() as cur:
+                cur.codebases[codebase.repo_info.external_id].file_changes.append(file_change)
+
             codebase.store_file_change(file_change)
         else:
-            # Exception for sentry to log but we don't inform the LLM
-            logger.exception(
-                ValueError(f"Codebase for repo name {repo_name} not found."),
-                exc_info=True,
-            )
+            raise ValueError(f"Codebase for repo name {repo_name} not found.")
 
         self.context.event_manager.add_log(
             f"Made a code change in {file_change.path} in {repo_name}."

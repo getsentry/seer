@@ -17,7 +17,6 @@ from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import Document, QueryResultDocumentChunk
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.state import CodebaseStateManager
-from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
@@ -148,33 +147,6 @@ class AutofixContext(PipelineContext):
 
         return None
 
-    def get_repo_client(self, repo_name: str | None = None, repo_external_id: str | None = None):
-        """
-        Gets a repo client for the current single repo or for a given repo name.
-        If there are more than 1 repos, a repo name must be provided.
-        """
-        repo_client: RepoClient | None = None
-        if len(self.repos) == 1:
-            repo_client = RepoClient.from_repo_definition(self.repos[0], "read")
-        elif repo_name:
-            repo = next((r for r in self.repos if r.full_name == repo_name), None)
-
-            if not repo:
-                raise ValueError(f"Repo {repo_name} not found.")
-
-            repo_client = RepoClient.from_repo_definition(repo, "read")
-        elif repo_external_id:
-            repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
-
-            if not repo:
-                raise ValueError(f"Repo {repo_external_id} not found.")
-
-            repo_client = RepoClient.from_repo_definition(repo, "read")
-        else:
-            raise ValueError("Please provide a repo name because you have multiple repos.")
-
-        return repo_client
-
     def get_document_and_codebase(
         self, path: str, repo_name: str | None = None, repo_external_id: str | None = None
     ) -> tuple[CodebaseIndex | None, Document | None]:
@@ -217,20 +189,8 @@ class AutofixContext(PipelineContext):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
-        for repo in self.repos:
-            repo_client = RepoClient.from_repo_definition(repo, "read")
-
-            valid_file_paths = repo_client.get_valid_file_paths()
-            for frame in stacktrace.frames:
-                if frame.in_app and frame.repo_id is None:
-                    if frame.filename in valid_file_paths:
-                        frame.repo_name = repo.full_name
-                    else:
-                        for valid_path in valid_file_paths:
-                            if potential_frame_match(valid_path, frame):
-                                frame.repo_name = repo.full_name
-                                frame.filename = valid_path
-                                break
+        for codebase in self.codebases.values():
+            codebase.process_stacktrace(stacktrace)
 
     def process_event_paths(self, event: EventDetails):
         """
