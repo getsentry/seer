@@ -23,7 +23,7 @@ class GroupingRequest(BaseModel):
     stacktrace: str
     message: str
     hash: str
-    error_type: Optional[str] = None
+    exception_type: Optional[str] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
@@ -56,6 +56,7 @@ class CreateGroupingRecordData(BaseModel):
     hash: str
     project_id: int
     message: str
+    exception_type: Optional[str] = None
 
 
 class CreateGroupingRecordsRequest(BaseModel):
@@ -280,6 +281,7 @@ class GroupingLookup:
                 project_id=entry.project_id,
                 message=entry.message,
                 stacktrace_embedding=embedding,
+                error_type=entry.exception_type,
             ).to_db_model()
             records.append(new_record)
             groups_with_records[entry.group_id] = new_record
@@ -366,6 +368,7 @@ class GroupingLookup:
                 message=issue.message,
                 stacktrace_embedding=embedding,
                 hash=issue.hash,
+                error_type=issue.exception_type,
             ).to_db_model()
             session.add(new_record)
         else:
