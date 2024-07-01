@@ -102,6 +102,15 @@ class AutofixContext(PipelineContext):
     def run_id(self) -> int:
         return self.state.get().run_id
 
+    @property
+    def signals(self) -> list[str]:
+        return self.state.get().signals
+
+    @signals.setter
+    def signals(self, value: list[str]):
+        with self.state.update() as state:
+            state.signals = value
+
     def has_missing_codebase_indexes(self) -> bool:
         for repo in self.repos:
             codebase = self.get_codebase_from_external_id(repo.external_id)
