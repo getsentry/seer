@@ -84,11 +84,11 @@ def make_file_patches(
         patched_file = patches[0]
 
         tree: Tree | None = None
-        document = changed_documents_map.get(patched_file.path)
+        doc = changed_documents_map.get(patched_file.path)
         language = get_language_from_path(patched_file.path)
-        if document and language and supports_parent_declarations(language):
+        if doc and language and supports_parent_declarations(language):
             ast_parser = tree_sitter_languages.get_parser(language)
-            tree = ast_parser.parse(document.text.encode("utf-8"))
+            tree = ast_parser.parse(doc.text.encode("utf-8"))
 
         hunks: list[Hunk] = []
         for hunk in patched_file:
@@ -105,7 +105,7 @@ def make_file_patches(
                 )
 
             section_header = hunk.section_header
-            if tree and document:
+            if tree and doc:
                 line_numbers = [
                     line.target_line_no
                     for line in lines
