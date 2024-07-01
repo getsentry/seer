@@ -226,7 +226,7 @@ class AutofixContext(PipelineContext):
                         None,
                     )
                     if codebase_state.file_changes and change_state:
-                        repo_client: RepoClient | None = None
+                        repo_client: RepoClient
                         if codebase_state.repo_external_id:
                             repo_definition = self.get_repo_definition_from_external_id(
                                 codebase_state.repo_external_id

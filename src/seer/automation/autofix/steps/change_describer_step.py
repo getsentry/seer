@@ -55,6 +55,9 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         cur_state = self.context.state.get()
         for codebase_state in cur_state.codebases.values():
             if codebase_state.file_changes:
+                if not codebase_state.repo_external_id:
+                    raise ValueError("Codebase state does not have a repo external id")
+
                 codebase = self.context.get_codebase(codebase_state.repo_external_id)
 
                 if not codebase:
