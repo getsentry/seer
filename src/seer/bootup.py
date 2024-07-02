@@ -52,6 +52,8 @@ def bootup(
     autofix_logger.setLevel(logging.DEBUG)
     autofix_logger.addHandler(StructLogHandler(sys.stdout))
 
+    commit_sha = os.environ.get("SEER_VERSION_SHA", "")
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
         integrations=[*plugins],
@@ -60,6 +62,8 @@ def bootup(
         enable_tracing=True,
         traces_sample_rate=1.0,
         send_default_pii=True,
+        release=f"seer@{commit_sha}",
+        environment="production",
     )
 
     uri = os.environ["DATABASE_URL"]

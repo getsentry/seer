@@ -51,6 +51,13 @@ function(region) {
           SENTRY_REGION: region,
         },
         jobs: {
+          'create-sentry-release': {
+            timeout: 120,
+            elastic_profile_id: 'seer',
+            tasks: [
+              gocdtasks.script(importstr '../bash/create-sentry-release.sh'),
+            ],
+          },
           deploy: {
             timeout: 1200,
             elastic_profile_id: 'seer',
