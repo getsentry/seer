@@ -120,7 +120,7 @@ class AutofixContext(PipelineContext):
             state.signals = value
 
     def repos_by_key(self) -> Mapping[RepoKey, RepoDefinition]:
-        repos_by_key: Mapping[RepoKey, RepoDefinition] = {
+        repos_by_key: dict[RepoKey, RepoDefinition] = {
             repo.external_id: repo for repo in self.repos
         }
         for codebase_state in self.codebases.values():
@@ -252,7 +252,7 @@ class AutofixContext(PipelineContext):
                         if key is None:
                             raise ValueError("Repo key not found")
 
-                        repo_definition = self.repos_by_key.get(key)
+                        repo_definition = self.repos_by_key().get(key)
 
                         if repo_definition is None:
                             raise ValueError(f"Repo definition not found for key {key}")
