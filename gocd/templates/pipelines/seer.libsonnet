@@ -50,7 +50,7 @@ function(region) {
         fetch_materials: true,
         environment_variables: {
           SENTRY_REGION: region,
-          SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}'
+          SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
         },
         jobs: {
           'create-sentry-release': {
