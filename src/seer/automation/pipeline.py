@@ -19,7 +19,6 @@ DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 60  # 60 seconds
 
 class PipelineContext(abc.ABC):
     state: State
-    signals: list[str]
 
     def __init__(self, state: State):
         self.state = state
@@ -27,6 +26,16 @@ class PipelineContext(abc.ABC):
     @property
     @abc.abstractmethod
     def run_id(self) -> int:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def signals(self) -> list[str]:
+        pass
+
+    @signals.setter
+    @abc.abstractmethod
+    def signals(self, signals: list[str]):
         pass
 
 

@@ -9,6 +9,8 @@ steps:
     '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
     '--build-arg',
     'BUILDKIT_INLINE_CACHE=1',
+    '--build-arg',
+    'SEER_VERSION_SHA=$COMMIT_SHA',
     '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
     '.',
   ]
