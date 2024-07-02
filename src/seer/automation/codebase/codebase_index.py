@@ -136,7 +136,7 @@ class CodebaseIndex:
                 project,
                 repo_client,
                 workspace=workspace,
-                state_manager=state_manager_class(workspace.repo_info.id, state),
+                state_manager=state_manager_class(workspace.repo_info.external_id, state),
                 embedding_model=embedding_model,
             )
 
@@ -163,7 +163,7 @@ class CodebaseIndex:
 
             if workspace:
                 state_manager = (
-                    state_manager_class(workspace.repo_info.id, state)
+                    state_manager_class(workspace.repo_info.external_id, state)
                     if state_manager_class and state
                     else DummyCodebaseStateManager()
                 )
@@ -279,7 +279,7 @@ class CodebaseIndex:
             repo_client,
             workspace=workspace,
             state_manager=(
-                state_manager_class(repo_id=workspace.repo_info.id, state=state)
+                state_manager_class(repo_external_id=workspace.repo_info.external_id, state=state)
                 if state and state_manager_class
                 else DummyCodebaseStateManager()
             ),
@@ -491,8 +491,6 @@ class CodebaseIndex:
         return self._copy_document_with_local_changes(document)
 
     def store_file_change(self, file_change: FileChange):
-        self.state_manager.store_file_change(file_change)
-
         document = None
         if file_change.change_type != "create":
             document = self.get_document(file_change.path)

@@ -24,7 +24,7 @@ class TestCreateMissingIndicesChain(unittest.TestCase):
         mock_workspace = MagicMock()
         mock_workspace.is_ready = MagicMock(return_value=False)
         mock_codebase.workspace = mock_workspace
-        mock_context.get_codebase_from_external_id = MagicMock(return_value=mock_codebase)
+        mock_context.codebases.get.return_value = mock_codebase
 
         mock_CreateIndexStep.get_signature.return_value = "create_index"
         mock_AutofixParallelizedChainStep.get_signature.return_value = "autofix_parallelized_chain"
@@ -58,7 +58,7 @@ class TestCreateMissingIndicesChain(unittest.TestCase):
         mock_workspace.is_ready = MagicMock(side_effect=[True, True, True, False, True])
         mock_codebase.workspace = mock_workspace
         mock_codebase.is_behind.return_value = False
-        mock_context.get_codebase_from_external_id = MagicMock(return_value=mock_codebase)
+        mock_context.codebases.get.return_value = mock_codebase
 
         mock_CreateIndexStep.get_signature.return_value = "create_index"
         mock_AutofixParallelizedChainStep.get_signature.return_value = "autofix_parallelized_chain"

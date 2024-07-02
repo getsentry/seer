@@ -43,7 +43,14 @@ class UpdateIndexStep(AutofixPipelineStep):
     @observe(name="Autofix – Change Describer Step")
     @ai_track(description="Autofix - Change Describer Step")
     def _invoke(self, **kwargs):
-        codebase = self.context.get_codebase(self.request.repo_id)
+        codebase = next(
+            (
+                codebase
+                for codebase in self.context.codebases.values()
+                if codebase.repo_info.id == self.request.repo_id
+            ),
+            None,
+        )
 
         if not codebase:
             raise ValueError(f"Codebase index for repo_id {self.request.repo_id} not found")

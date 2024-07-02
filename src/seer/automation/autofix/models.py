@@ -91,7 +91,8 @@ class CommittedPullRequestDetails(BaseModel):
 
 
 class CodebaseChange(BaseModel):
-    repo_id: int
+    repo_id: int | None = None
+    repo_external_id: str | None = None
     repo_name: str
     title: str
     description: str
@@ -155,8 +156,9 @@ Step = Union[DefaultStep, RootCauseStep, ChangesStep]
 
 
 class CodebaseState(BaseModel):
-    repo_id: int
-    namespace_id: int
+    repo_id: int | None = None
+    namespace_id: int | None = None
+    repo_external_id: str | None = None
     file_changes: list[FileChange] = []
 
 
@@ -164,7 +166,7 @@ class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
     status: AutofixStatus = AutofixStatus.PENDING
-    codebases: dict[int, CodebaseState] = Field(default_factory=dict)
+    codebases: dict[str, CodebaseState] = Field(default_factory=dict)
     usage: Usage = Field(default_factory=Usage)
     last_triggered_at: Optional[
         Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
@@ -203,6 +205,10 @@ class AutofixStepUpdateArgs(BaseModel):
     steps: list[Step]
 
 
+class AutofixRequestOptions(BaseModel):
+    disable_codebase_indexing: bool = False
+
+
 class AutofixRequest(BaseModel):
     organization_id: Annotated[int, Examples(specialized.unsigned_ints)]
     project_id: Annotated[int, Examples(specialized.unsigned_ints)]
@@ -213,6 +219,8 @@ class AutofixRequest(BaseModel):
         Annotated[str, Examples(hashlib.sha1(s).hexdigest() for s in specialized.byte_strings)]
     ] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
+
+    options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 
     @field_validator("repos", mode="after")
     @classmethod
@@ -242,7 +250,8 @@ class AutofixRootCauseUpdatePayload(BaseModel):
 
 class AutofixCreatePrUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_PR]
-    repo_id: int | None = None
+    repo_external_id: str | None = None
+    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 
 
 class AutofixUpdateRequest(BaseModel):
