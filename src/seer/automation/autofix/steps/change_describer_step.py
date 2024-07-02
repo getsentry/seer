@@ -58,7 +58,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                 if not codebase_state.repo_external_id:
                     raise ValueError("Codebase state does not have a repo external id")
 
-                repo_definition = self.context.repos_by_key.get(codebase_state.repo_external_id)
+                repo_definition = self.context.repos_by_key().get(codebase_state.repo_external_id)
 
                 if not repo_definition:
                     raise ValueError(
