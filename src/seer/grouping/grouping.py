@@ -7,7 +7,6 @@ import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
-from sqlalchemy.exc import IntegrityError
 
 from seer.db import DbGroupingRecord, Session
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
@@ -251,73 +250,45 @@ class GroupingLookup:
         if len(data.data) != len(data.stacktrace_list):
             return BulkCreateGroupingRecordsResponse(success=False, groups_with_neighbor={})
 
-        records, groups_with_records = self.create_grouping_record_objects(data)
-        self.bulk_insert_new_grouping_records(records)
-        groups_with_neighbor = self.remove_grouping_records_with_neighbors(
-            groups_with_records, records[0].project_id if records else None
-        )
+        groups_with_neighbor = self.insert_batch_grouping_records(data)
         return BulkCreateGroupingRecordsResponse(
             success=True, groups_with_neighbor=groups_with_neighbor
         )
 
     @sentry_sdk.tracing.trace
-    def create_grouping_record_objects(
+    def insert_batch_grouping_records(
         self, data: CreateGroupingRecordsRequest
-    ) -> tuple[list[DbGroupingRecord], dict[int, DbGroupingRecord]]:
+    ) -> dict[str, GroupingResponse]:
         """
-        Creates stacktrace emebddings and record objects for the given data.
-        Returns a list of created records.
+        Creates stacktrace embeddings in bulk.
+        Checks if record has nearest neighbor or if it's already inserted, and inserts it if not.
+        Returns group ids with neighbors.
         """
-        records: List[DbGroupingRecord] = []
-        groups_with_records: dict[int, DbGroupingRecord] = {}
+        groups_with_neighbor: dict[str, GroupingResponse] = {}
         embeddings = self.encode_multiple_texts(
             data.stacktrace_list, data.encode_stacktrace_batch_size
         )
-        for i, entry in enumerate(data.data):
-            embedding = embeddings[i].astype("float32")
-
-            new_record = GroupingRecord(
-                hash=entry.hash,
-                project_id=entry.project_id,
-                message=entry.message,
-                stacktrace_embedding=embedding,
-                error_type=entry.exception_type,
-            ).to_db_model()
-            records.append(new_record)
-            groups_with_records[entry.group_id] = new_record
-
-        return (records, groups_with_records)
-
-    def remove_grouping_records_with_neighbors(
-        self, groups_with_records: dict[int, DbGroupingRecord], project_id: int | None
-    ) -> dict[str, GroupingResponse]:
-        """
-        Delete grouping records that have a neighbor.
-        Return the groups with neighbors.
-        """
-        if not project_id:
-            return {}
-
-        groups_with_neighbor, hashes_to_delete, parent_hashes = {}, [], set()
         with Session() as session:
-            for group_id, record in groups_with_records.items():
-                # Make sure we keep one record per batch if neighbors within a batch exist
-                if record.hash in parent_hashes:
-                    continue
-
+            for i, entry in enumerate(data.data):
+                embedding = embeddings[i].astype("float32")
                 nearest_neighbor = self.query_nearest_k_neighbors(
                     session,
-                    record.stacktrace_embedding,
-                    record.project_id,
-                    record.hash,
+                    embedding,
+                    entry.project_id,
+                    entry.hash,
                     NN_GROUPING_DISTANCE,
                     1,
+                )
+                existing_record = (
+                    session.query(DbGroupingRecord)
+                    .filter_by(hash=entry.hash, project_id=entry.project_id)
+                    .first()
                 )
 
                 if nearest_neighbor:
                     neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
                     message_similarity_score = difflib.SequenceMatcher(
-                        None, record.message, neighbor.message
+                        None, entry.message, neighbor.message
                     ).ratio()
                     response = GroupingResponse(
                         parent_hash=neighbor.hash,
@@ -325,22 +296,17 @@ class GroupingLookup:
                         message_distance=1.0 - message_similarity_score,
                         should_group=True,
                     )
-                    groups_with_neighbor[str(group_id)] = response
-                    hashes_to_delete.append(record.hash)
-                    parent_hashes.add(neighbor.hash)
-
-            session.query(DbGroupingRecord).filter(
-                DbGroupingRecord.project_id == project_id,
-                DbGroupingRecord.hash.in_(hashes_to_delete),
-            ).delete()
-            session.commit()
-            logger.info(
-                "deleting grouping records with neighbors within the batch",
-                extra={
-                    "project_id": project_id,
-                    "hashes": hashes_to_delete,
-                },
-            )
+                    groups_with_neighbor[str(entry.group_id)] = response
+                elif existing_record is None:
+                    new_record = GroupingRecord(
+                        hash=entry.hash,
+                        project_id=entry.project_id,
+                        message=entry.message,
+                        stacktrace_embedding=embedding,
+                        error_type=entry.exception_type,
+                    ).to_db_model()
+                    session.add(new_record)
+                    session.commit()
 
         return groups_with_neighbor
 
@@ -381,44 +347,6 @@ class GroupingLookup:
                     "input_hash": issue.hash,
                 },
             )
-
-    @sentry_sdk.tracing.trace
-    def bulk_insert_new_grouping_records(self, records: List[DbGroupingRecord]):
-        """
-        Bulk inserts new GroupingRecord into the database.
-        :param records: List of records to be inserted
-        """
-        try:
-            with Session() as session:
-                session.bulk_save_objects(records)
-                session.commit()
-        except IntegrityError:
-            with Session() as session:
-                logger.info("Error in bulk insert. Attempting to insert records individually...")
-
-                existing_records = (
-                    session.query(DbGroupingRecord.hash, DbGroupingRecord.project_id)
-                    .filter(
-                        DbGroupingRecord.hash.in_([record.hash for record in records]),
-                        DbGroupingRecord.project_id.in_([record.project_id for record in records]),
-                    )
-                    .all()
-                )
-
-                existing_records_set = {
-                    (record.hash, record.project_id) for record in existing_records
-                }
-
-                records_to_insert = [
-                    record
-                    for record in records
-                    if (record.hash, record.project_id) not in existing_records_set
-                ]
-                if not records_to_insert:
-                    logger.info("No new records to insert.")
-                    return
-                session.bulk_save_objects(records_to_insert)
-                session.commit()
 
     @sentry_sdk.tracing.trace
     def delete_grouping_records_for_project(self, project_id: int) -> bool:

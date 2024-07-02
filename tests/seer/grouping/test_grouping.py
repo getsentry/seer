@@ -156,79 +156,6 @@ class TestGrouping(unittest.TestCase):
             )
             assert len(matching_record) == 2
 
-    def test_create_grouping_record_objects(self):
-        """Tests create grouping record objects"""
-        record_requests = CreateGroupingRecordsRequest(
-            data=[
-                CreateGroupingRecordData(
-                    group_id=i,
-                    hash=str(i) * 32,
-                    project_id=1,
-                    message="message " + str(i),
-                )
-                for i in range(2)
-            ],
-            stacktrace_list=["stacktrace " + str(i) for i in range(2)],
-        )
-        (
-            records,
-            groups_with_records,
-        ) = grouping_lookup().create_grouping_record_objects(record_requests)
-
-        assert len(records) == 2
-        assert len(groups_with_records) == len(records)
-        for i in range(len(record_requests.data)):
-            assert records[i].hash == record_requests.data[i].hash
-            assert records[i].project_id == record_requests.data[i].project_id
-            assert records[i].message == record_requests.data[i].message
-            assert records[i].stacktrace_embedding is not None
-            assert groups_with_records[record_requests.data[i].group_id] == records[i]
-
-    def test_create_grouping_record_objects_include_embedding_batch_size(self):
-        """Tests create grouping record objects including the encode_stacktrace_batch_size field"""
-        record_requests = CreateGroupingRecordsRequest(
-            data=[
-                CreateGroupingRecordData(
-                    group_id=i,
-                    hash=str(i) * 32,
-                    project_id=1,
-                    message=f"message {i}",
-                )
-                for i in range(2)
-            ],
-            stacktrace_list=[f"stacktrace {i}" for i in range(2)],
-            encode_stacktrace_batch_size=2,
-        )
-        (
-            records,
-            groups_with_records,
-        ) = grouping_lookup().create_grouping_record_objects(record_requests)
-
-        assert len(records) == 2
-        assert len(groups_with_records) == len(records)
-
-    def test_bulk_insert_new_grouping_records(self):
-        """Test bulk inserting grouping records"""
-        records = []
-        hashes = [str(i) * 32 for i in range(10)]
-        for i in range(10):
-            embedding = grouping_lookup().encode_text("stacktrace " + str(i))
-            new_record = GroupingRecord(
-                hash=hashes[i],
-                project_id=1,
-                message="message " + str(i),
-                stacktrace_embedding=embedding,
-                error_type=None,
-            ).to_db_model()
-            records.append(new_record)
-
-        grouping_lookup().bulk_insert_new_grouping_records(records)
-
-        with Session() as session:
-            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
-            for i in range(10):
-                assert records[i] is not None
-
     def test_bulk_create_and_insert_grouping_records_valid(self):
         """Test bulk creating and inserting grouping records"""
         hashes = [str(i) * 32 for i in range(10)]
@@ -424,11 +351,11 @@ class TestGrouping(unittest.TestCase):
             + ["stacktrace " + str(i) for i in range(5)],
         )
 
-        # We expect the first 5 entries to have a neighbor
+        # We expect the last 5 entries to have a neighbor
         expected_groups_with_neighbor = {}
         for i in range(5):
-            expected_groups_with_neighbor[str(i)] = GroupingResponse(
-                parent_hash=str(i + 5) * 32,
+            expected_groups_with_neighbor[str(i + 5)] = GroupingResponse(
+                parent_hash=str(i) * 32,
                 stacktrace_distance=0.00,
                 message_distance=0.00,
                 should_group=True,
@@ -443,10 +370,10 @@ class TestGrouping(unittest.TestCase):
                 session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
             )
             assert len(records) == 5
-            records_with_neighbor = session.query(DbGroupingRecord).filter(
-                DbGroupingRecord.hash.in_(hashes[:5])
+            no_records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes[5:])).all()
             )
-            assert records_with_neighbor.all() == []
+            assert len(no_records) == 0
 
     def test_delete_grouping_records_for_project(self):
         """Test deleting grouping records for a project"""
