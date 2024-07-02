@@ -43,6 +43,7 @@
             "langfuse.*",
             "langfuse",
             "sklearn.dummy",
+            "urllib3",
             "urllib",
             "urllib.*",
         ]
