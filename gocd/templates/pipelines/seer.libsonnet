@@ -50,12 +50,14 @@ function(region) {
         fetch_materials: true,
         environment_variables: {
           SENTRY_REGION: region,
-          SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
         },
         jobs: {
           'create-sentry-release': {
             timeout: 120,
             elastic_profile_id: 'seer',
+            environment_variables: {
+              SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
+            },
             tasks: [
               gocdtasks.script(importstr '../bash/create-sentry-release.sh'),
             ],
