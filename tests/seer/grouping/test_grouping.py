@@ -156,28 +156,6 @@ class TestGrouping(unittest.TestCase):
             )
             assert len(matching_record) == 2
 
-    def test_bulk_insert_new_grouping_records(self):
-        """Test bulk inserting grouping records"""
-        records = []
-        hashes = [str(i) * 32 for i in range(10)]
-        for i in range(10):
-            embedding = grouping_lookup().encode_text("stacktrace " + str(i))
-            new_record = GroupingRecord(
-                hash=hashes[i],
-                project_id=1,
-                message="message " + str(i),
-                stacktrace_embedding=embedding,
-                error_type=None,
-            ).to_db_model()
-            records.append(new_record)
-
-        grouping_lookup().bulk_insert_new_grouping_records(records)
-
-        with Session() as session:
-            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
-            for i in range(10):
-                assert records[i] is not None
-
     def test_bulk_create_and_insert_grouping_records_valid(self):
         """Test bulk creating and inserting grouping records"""
         hashes = [str(i) * 32 for i in range(10)]
