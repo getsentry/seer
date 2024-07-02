@@ -43,6 +43,8 @@
             "langfuse.*",
             "langfuse",
             "sklearn.dummy",
+            "urllib",
+            "urllib.*",
         ]
         ignore_missing_imports = true
 

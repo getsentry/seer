@@ -40,7 +40,7 @@ class SentryApiClient:
     def get_project_id(self, config: ReleaseConfig) -> int:
         return 1
 
-    def get_latest_sha(self, config: ReleaseConfig, project_id: int) -> None:
+    def get_latest_sha(self, config: ReleaseConfig, project_id: int) -> str | None:
         return None
 
     def create_and_deploy_release(self, config: ReleaseConfig, context: "ReleaseContext"):
@@ -149,6 +149,7 @@ def main(config: ReleaseConfig, client: SentryApiClient | None = None) -> int:
     assert client
     context = prepare_release_context(config, client)
     client.create_and_deploy_release(config, context)
+    return 0
 
 
 if __name__ == "__main__":

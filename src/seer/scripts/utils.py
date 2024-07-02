@@ -16,13 +16,13 @@ class DataclassArgumentParser(typing.Generic[_T]):
         parser = argparse.ArgumentParser()
 
         for field in dataclasses.fields(self.constructor):
-            defaults = (
+            defaults: dict[str, typing.Any] = (
                 dict(default=_unset)
                 if field.default is not dataclasses.MISSING
                 or field.default_factory is not dataclasses.MISSING
                 else {}
             )
-            actions = (
+            actions: dict[str, typing.Any] = (
                 dict(action="store_true") if issubclass(field.type, bool) else dict(type=field.type)
             )
             parser.add_argument(
@@ -30,8 +30,8 @@ class DataclassArgumentParser(typing.Generic[_T]):
                 required=not defaults,
                 **defaults,
                 **actions,
-                **field.metadata,
+                **({str(k): v for k, v in field.metadata.items()}),
             )
 
         namespace = parser.parse_args(args)
-        return self.constructor(**{k: v for k, v in vars(namespace).items() if v is not _unset})
+        return self.constructor(**{k: v for k, v in vars(namespace).items() if v is not _unset})  # type: ignore
