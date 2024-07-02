@@ -118,7 +118,7 @@ class AutofixContext(PipelineContext):
     def signals(self, value: list[str]):
         with self.state.update() as state:
             state.signals = value
-    
+
     def repos_by_key(self) -> Mapping[RepoKey, RepoDefinition]:
         repos_by_key: Mapping[RepoKey, RepoDefinition] = {
             repo.external_id: repo for repo in self.repos
