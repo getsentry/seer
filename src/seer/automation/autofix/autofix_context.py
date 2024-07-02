@@ -14,10 +14,12 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.codebase_index import CodebaseIndex
-from seer.automation.codebase.models import Document, QueryResultDocumentChunk
+from seer.automation.codebase.file_patches import make_file_patches
+from seer.automation.codebase.models import BaseDocument, QueryResultDocumentChunk
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.state import CodebaseStateManager
-from seer.automation.models import EventDetails, FileChange, RepoDefinition, Stacktrace
+from seer.automation.codebase.utils import potential_frame_match
+from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.utils import get_embedding_model, get_sentry_client
@@ -69,7 +71,17 @@ class AutofixContext(PipelineContext):
         self.sentry_client = sentry_client
         self.embedding_model = embedding_model or get_embedding_model()
 
-        if not skip_loading_codebase:
+        no_codebase_indexes = skip_loading_codebase or request.options.disable_codebase_indexing
+
+        if no_codebase_indexes:
+            with state.update() as cur:
+                for repo in request.repos:
+                    if repo.external_id not in cur.codebases:
+                        cur.codebases[repo.external_id] = CodebaseState(
+                            file_changes=[],
+                            repo_external_id=repo.external_id,
+                        )
+        else:
             for repo in request.repos:
                 codebase_index = CodebaseIndex.from_repo_definition(
                     request.organization_id,
@@ -95,6 +107,11 @@ class AutofixContext(PipelineContext):
 
         self.event_manager = event_manager
         self.state = state
+        self.skip_loading_codebase = no_codebase_indexes
+
+        autofix_logger.info(
+            f"AutofixContext initialized with run_id {self.run_id}, {'without codebase indexing' if self.skip_loading_codebase else 'with codebase indexing'}"
+        )
 
     @classmethod
     def from_run_id(cls, run_id: int):
@@ -161,38 +178,51 @@ class AutofixContext(PipelineContext):
 
         return codebase_index
 
-    def get_repo_definition_from_external_id(self, external_id: str) -> RepoDefinition | None:
-        for repo in self.repos:
-            if repo.external_id == external_id:
-                return repo
+    def get_repo_client(self, repo_name: str | None = None, repo_external_id: str | None = None):
+        """
+        Gets a repo client for the current single repo or for a given repo name.
+        If there are more than 1 repos, a repo name must be provided.
+        """
+        repo_client: RepoClient | None = None
+        if len(self.repos) == 1:
+            repo_client = RepoClient.from_repo_definition(self.repos[0], "read")
+        elif repo_name:
+            repo = next((r for r in self.repos if r.full_name == repo_name), None)
 
-        return None
+            if not repo:
+                raise ValueError(f"Repo {repo_name} not found.")
 
-    def get_document_and_codebase(
-        self, path: str, repo_name: str | None = None, repo_external_id: str | None = None
-    ) -> tuple[CodebaseIndex | None, Document | None]:
-        if repo_name:
-            repo_external_id = next(
-                (
-                    repo_external_id
-                    for repo_id, codebase in self.codebases.items()
-                    if codebase.repo_info.external_slug == repo_name
-                ),
-                None,
-            )
-        if repo_external_id:
-            codebase = self.codebases.get(repo_external_id)
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+        elif repo_external_id:
+            repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
 
-            if codebase:
-                return codebase, codebase.get_document(path)
-            return None, None
+            if not repo:
+                raise ValueError(f"Repo {repo_external_id} not found.")
 
-        for codebase in self.codebases.values():
-            document = codebase.get_document(path)
-            if document:
-                return codebase, document
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+        else:
+            raise ValueError("Please provide a repo name because you have multiple repos.")
 
-        return None, None
+        return repo_client
+
+    def get_file_contents(
+        self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
+    ) -> str | None:
+        # @jennmueng: This functionality is duplicated with get_documents in CodebaseIndex,
+        # that one is needed for uses within that class,
+        # we will remove that one if we go with the no-embedding approach
+        repo_client = self.get_repo_client(repo_name)
+
+        file_contents = repo_client.get_file_content(path)
+
+        if not ignore_local_changes:
+            cur_state = self.state.get()
+            repo_file_changes = cur_state.codebases[repo_client.repo_external_id].file_changes
+            current_file_changes = list(filter(lambda x: x.path == path, repo_file_changes))
+            for file_change in current_file_changes:
+                file_contents = file_change.apply(file_contents)
+
+        return file_contents
 
     def query_all_codebases(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
         """
@@ -210,8 +240,20 @@ class AutofixContext(PipelineContext):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
-        for codebase in self.codebases.values():
-            codebase.process_stacktrace(stacktrace)
+        for repo in self.repos:
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+
+            valid_file_paths = repo_client.get_valid_file_paths()
+            for frame in stacktrace.frames:
+                if frame.in_app and frame.repo_id is None:
+                    if frame.filename in valid_file_paths:
+                        frame.repo_name = repo.full_name
+                    else:
+                        for valid_path in valid_file_paths:
+                            if potential_frame_match(valid_path, frame):
+                                frame.repo_name = repo.full_name
+                                frame.filename = valid_path
+                                break
 
     def process_event_paths(self, event: EventDetails):
         """
@@ -340,6 +382,25 @@ class AutofixContext(PipelineContext):
             sentry_sdk.capture_exception(e)
             slug = None
         return slug
+
+    def make_file_patches(
+        self, file_changes: list[FileChange], repo_name: str
+    ) -> tuple[list[FilePatch], str]:
+        document_paths = list(set([file_change.path for file_change in file_changes]))
+
+        if not document_paths:
+            return [], ""
+
+        original_documents = [
+            BaseDocument(
+                path=path,
+                text=self.get_file_contents(path, repo_name=repo_name, ignore_local_changes=True)
+                or "",
+            )
+            for path in document_paths
+        ]
+
+        return make_file_patches(file_changes, document_paths, original_documents)
 
     def cleanup(self):
         for codebase in self.codebases.values():

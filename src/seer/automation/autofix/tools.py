@@ -43,40 +43,56 @@ class BaseTools:
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
     def expand_document(self, input: str, repo_name: str | None = None):
+        file_contents = self.context.get_file_contents(input, repo_name=repo_name)
+
+        if repo_name is None:
+            client = self.context.get_repo_client(repo_name)
+            repo_name = client.repo_name
+
         self.context.event_manager.add_log(
             f"Taking a look at the document at {input} in {repo_name}."
         )
 
-        _, document = self.context.get_document_and_codebase(input, repo_name=repo_name)
-
-        if document:
-            return document.text
+        if file_contents:
+            return file_contents
 
         return "<document with the provided path not found>"
 
+    @observe(name="List Directory")
+    @ai_track(description="List Directory")
+    def list_directory(self, path: str, repo_name: str | None = None):
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+
+        all_paths = repo_client.get_index_file_set(repo_client.get_default_branch_head_sha())
+
+        paths = [p for p in all_paths if p.startswith(path)]
+
+        if not paths:
+            return f"<no paths found in directory {path}>"
+
+        joined = "\n".join(paths)
+        paths_str = f"<paths>\n{joined}\n</paths>"
+
+        return paths_str
+
     def get_tools(self):
-        return [
+        tools = [
             FunctionTool(
-                name="codebase_search",
-                description=textwrap.dedent(
-                    """\
-                    Search for code snippets in the codebase.
-                    - Providing long and detailed queries with entire code snippets will yield better results.
-                    - This tool cannot search for code snippets outside the immediate codebase such as in external libraries."""
-                ),
+                name="list_directory",
+                fn=self.list_directory,
+                description="Given the path for a directory in this codebase, returns the paths of the directory.",
                 parameters=[
                     {
-                        "name": "query",
+                        "name": "path",
                         "type": "string",
-                        "description": "The query to search for.",
+                        "description": 'The path to view. For example, "src/app/components"',
                     },
                     {
-                        "name": "intent",
+                        "name": "repo_name",
                         "type": "string",
-                        "description": "The intent of the search, provide a short description of what you're looking for.",
+                        "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
-                fn=self.codebase_retriever,
             ),
             FunctionTool(
                 name="expand_document",
@@ -97,6 +113,34 @@ class BaseTools:
             ),
         ]
 
+        if not self.context.skip_loading_codebase:
+            tools.append(
+                FunctionTool(
+                    name="codebase_search",
+                    description=textwrap.dedent(
+                        """\
+                        Search for code snippets in the codebase.
+                        - Providing long and detailed queries with entire code snippets will yield better results.
+                        - This tool cannot search for code snippets outside the immediate codebase such as in external libraries."""
+                    ),
+                    parameters=[
+                        {
+                            "name": "query",
+                            "type": "string",
+                            "description": "The query to search for.",
+                        },
+                        {
+                            "name": "intent",
+                            "type": "string",
+                            "description": "The intent of the search, provide a short description of what you're looking for.",
+                        },
+                    ],
+                    fn=self.codebase_retriever,
+                )
+            )
+
+        return tools
+
 
 class CodeActionTools(BaseTools):
     snippet_matching_threshold = 0.8
@@ -112,18 +156,20 @@ class CodeActionTools(BaseTools):
         Stores a file change to a codebase index.
         This function exists mainly to be traceable in Langsmith.
         """
-        codebase = next(
-            (c for c in self.context.codebases.values() if c.repo_info.external_slug == repo_name),
-            None,
-        )
+        repo_client = self.context.get_repo_client(repo_name)
+        with self.context.state.update() as cur:
+            cur.codebases[repo_client.repo_external_id].file_changes.append(file_change)
 
-        if codebase:
-            with self.context.state.update() as cur:
-                cur.codebases[codebase.repo_info.external_id].file_changes.append(file_change)
-
-            codebase.store_file_change(file_change)
-        else:
-            raise ValueError(f"Codebase for repo name {repo_name} not found.")
+        if not self.context.skip_loading_codebase:
+            codebase = self.context.codebases.get(repo_client.repo_external_id)
+            if codebase:
+                codebase.store_file_change(file_change)
+            else:
+                # Exception for sentry to log but we don't inform the LLM
+                logger.exception(
+                    ValueError(f"Codebase for repo name {repo_name} not found."),
+                    exc_info=True,
+                )
 
         self.context.event_manager.add_log(
             f"Made a code change in {file_change.path} in {repo_name}."
@@ -146,13 +192,13 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.replace_snippet_with] Replacing snippet\n```\n{reference_snippet}\n```\n with \n```\n{replacement_snippet}\n```\nin {file_path} in repo {repo_name}"
         )
 
-        codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
+        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
-        if not document or not codebase:
+        if not file_contents:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         result = find_original_snippet(
-            reference_snippet, document.text, threshold=self.snippet_matching_threshold
+            reference_snippet, file_contents, threshold=self.snippet_matching_threshold
         )
 
         if not result:
@@ -160,7 +206,7 @@ class CodeActionTools(BaseTools):
 
         original_snippet, snippet_start_line, snippet_end_line = result
 
-        lines = document.text.splitlines()
+        lines = file_contents.splitlines()
         chunk_lines = lines[
             max(0, snippet_start_line - self.chunk_padding) : min(
                 len(lines), snippet_end_line + self.chunk_padding
@@ -213,17 +259,17 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.delete_snippet] Deleting snippet {snippet} in {file_path} in repo {repo_name}"
         )
 
-        codebase, document = self.context.get_document_and_codebase(file_path)
+        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
-        if not (document and codebase):
+        if not file_contents:
             raise FileNotFoundError("File not found or it was deleted in a previous action.")
 
         original_snippet: str | None = None
-        if snippet in document.text:
+        if snippet in file_contents:
             original_snippet = snippet
         else:
             result = find_original_snippet(
-                snippet, document.text, threshold=self.snippet_matching_threshold
+                snippet, file_contents, threshold=self.snippet_matching_threshold
             )
 
             if result:
@@ -246,7 +292,7 @@ class CodeActionTools(BaseTools):
             file_change,
         )
 
-        return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(document.text)}\n```"
+        return f"success; New file contents for `{file_path}`: \n\n```\n{file_change.apply(file_contents)}\n```"
 
     @observe(name="Create File")
     @ai_track(description="Create File")
@@ -258,11 +304,9 @@ class CodeActionTools(BaseTools):
             f"[CodeActionTools.create_file] Creating file {file_path} with snippet {snippet} in {repo_name}"
         )
 
-        codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
+        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
-        if not codebase:
-            raise FileNotFoundError(f"Repository `{repo_name}` not found.")
-        if document:
+        if file_contents:
             raise FileExistsError(f"File `{file_path}` already exists.")
 
         self.store_file_change(
@@ -285,9 +329,9 @@ class CodeActionTools(BaseTools):
         """
         logger.debug(f"[CodeActionTools.delete_file] Deleting file {file_path} in {repo_name}")
 
-        codebase, document = self.context.get_document_and_codebase(file_path, repo_name=repo_name)
+        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
-        if not document or not codebase:
+        if not file_contents:
             raise FileNotFoundError(f"File `{file_path}` not found.")
 
         self.store_file_change(
