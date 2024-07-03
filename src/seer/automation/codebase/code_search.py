@@ -65,7 +65,7 @@ class CodeSearcher:
                     if keyword.lower() in line.lower():
                         start = max(0, i - 8)
                         end = min(len(lines), i + 9)
-                        context = "".join(lines[start:end]).strip()
+                        context = "".join(lines[start:end])
                         matches.append(Match(line_number=i + 1, context=context))
                         break  # Stop after finding the first match
 
