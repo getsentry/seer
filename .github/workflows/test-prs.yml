@@ -15,6 +15,12 @@ jobs:
       EXTRA_COMPOSE_TEST_OPTIONS: "-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1"
 
     steps:
+      - name: Remove unnecessary files
+        run: |
+          df / -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df / -h
       - uses: actions/checkout@v3
       - name: Clean for PR build
         run: |
