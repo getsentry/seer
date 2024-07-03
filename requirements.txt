@@ -1,3 +1,7 @@
+# Packages that are only effectively used by production models can be
+# added to model.requirements.txt (in addition to this file).
+# They will not be built in PR test runs (but they will be built in master)
+
 certifi==2023.7.22
 charset-normalizer==2.0.12
 click==8.1.7
@@ -20,7 +24,6 @@ joblib==1.3.2
 kiwisolver==1.4.5
 LunarCalendar==0.0.9
 MarkupSafe==2.1.3
-matplotlib==3.7.2
 mpmath==1.3.0
 networkx==3.1
 numpy==1.26.1
@@ -79,7 +82,6 @@ types-requests==2.25.0
 openapi-pydantic==0.4.0
 celery==5.3.6
 celery-stubs==0.1.3
-redis==5.0.1
 # deepsparse-nightly==1.7.0.20240103 TODO - fix pydantic conflict
 unidiff==0.7.5
 transformers==4.37.2

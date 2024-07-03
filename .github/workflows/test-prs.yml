@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - run: |
+          while IFS= read -r line do sed -i.bak "/^$line/d" requirements.txt; done < model.requirements.txt
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -25,7 +27,7 @@ jobs:
           context: .
           load: true
           cache-from: type=gha
-          cache-to: type=gha,mode=min
+          cache-to: type=gha,mode=max
 
       - name: Prepare docker compose environment
         run: |
