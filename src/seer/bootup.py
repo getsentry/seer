@@ -62,7 +62,7 @@ def bootup(
         enable_tracing=True,
         traces_sample_rate=1.0,
         send_default_pii=True,
-        release=f"seer@{commit_sha}",
+        release=commit_sha,
         environment="production",
     )
 
