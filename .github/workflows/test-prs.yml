@@ -16,7 +16,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - run: |
+      - name: Clean for PR build
+        run: |
+          rm -rf ./models
+          mkdir models
           while IFS= read -r line
           do
             sed -i.bak "/^$line/d" requirements.txt
