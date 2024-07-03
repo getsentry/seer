@@ -10,7 +10,7 @@ class FunctionTool(BaseModel):
     name: str
     description: str
     fn: Callable
-    parameters: List[Dict[str, str]]
+    parameters: List[Dict[str, str | List[str] | Dict[str, str]]]
     required: List[str] = []
 
     def call(self, **kwargs):
@@ -30,8 +30,13 @@ class FunctionTool(BaseModel):
                     "type": "object",
                     "properties": {
                         param["name"]: {
-                            "type": param["type"],
-                            "description": param.get("description", ""),
+                            key: value
+                            for key, value in {
+                                "type": param["type"],
+                                "description": param.get("description", ""),
+                                "items": param.get("items"),
+                            }.items()
+                            if value is not None
                         }
                         for param in self.parameters
                     },

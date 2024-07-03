@@ -85,7 +85,10 @@ class LlmAgent(ABC):
 
         tool = next(tool for tool in self.tools if tool.name == tool_call.function)
 
-        kwargs = parse_json_with_keys(tool_call.args, [param["name"] for param in tool.parameters])
+        kwargs = parse_json_with_keys(
+            tool_call.args,
+            [param["name"] for param in tool.parameters if isinstance(param["name"], str)],
+        )
         tool_result = tool.call(**kwargs)
 
         logger.debug(f"Tool {tool_call.function} returned \n{tool_result}")
