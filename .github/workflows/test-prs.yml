@@ -16,9 +16,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Build image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build docker image (with cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Prepare docker compose environment
         run: |
           make update
+
       - name: Typecheck with mypy
         run: |
           make mypy
