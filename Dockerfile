@@ -50,7 +50,7 @@ COPY pyproject.toml .
 # Copy the supervisord.conf file into the container
 COPY supervisord.conf /etc/supervisord.conf
 
-RUN pip install --default-timeout=120 -e .
+RUN pip install --default-timeout=120 -e . --no-cache-dir
 
 ENV FLASK_APP=src.seer.app
 # Set in cloudbuild.yaml for production images
