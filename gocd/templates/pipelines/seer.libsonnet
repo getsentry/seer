@@ -56,6 +56,8 @@ function(region) {
             timeout: 120,
             elastic_profile_id: 'seer',
             environment_variables: {
+              SENTRY_ORG: 'sentry',
+              SENTRY_PROJECT: 'seer',
               SENTRY_AUTH_TOKEN: '{{SECRET:[devinfra-sentryio][token]}}',
             },
             tasks: [
