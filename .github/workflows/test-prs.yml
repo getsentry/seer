@@ -17,9 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: |
-          while IFS= read -r line \
-          do \
-            sed -i.bak "/^$line/d" requirements.txt \
+          while IFS= read -r line
+          do
+            sed -i.bak "/^$line/d" requirements.txt
           done < model.requirements.txt
         shell: bash
       - name: Set up Docker Buildx
