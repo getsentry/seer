@@ -49,32 +49,36 @@ def get_github_token_auth():
     github_token = os.environ.get("GITHUB_TOKEN")
 
     if github_token is None:
-        raise InitializationError(
-            "GITHUB_TOKEN environment variable must be set for token authentication."
-        )
+        return None
 
     return Auth.Token(github_token)
 
 
-def get_write_app_credentials() -> tuple[int | str, str]:
+def get_write_app_credentials() -> tuple[int | str | None, str | None]:
     app_id = os.environ.get("GITHUB_APP_ID")
     private_key = os.environ.get("GITHUB_PRIVATE_KEY")
 
     if not app_id or not private_key:
-        raise InitializationError(
-            "GITHUB_APP_ID and GITHUB_PRIVATE_KEY environment variables must be set for app authentication."
+        logger.exception(
+            InitializationError(
+                "GITHUB_APP_ID and GITHUB_PRIVATE_KEY environment variables must be set for app authentication."
+            )
         )
+
+        return None, None
 
     return app_id, private_key
 
 
-def get_read_app_credentials() -> tuple[int | str, str]:
+def get_read_app_credentials() -> tuple[int | str | None, str | None]:
     app_id = os.environ.get("GITHUB_SENTRY_APP_ID")
     private_key = os.environ.get("GITHUB_SENTRY_PRIVATE_KEY")
 
     if not app_id or not private_key:
-        logger.error(
-            "GITHUB_SENTRY_APP_ID and GITHUB_SENTRY_PRIVATE_KEY not set, falling back to 'write' app."
+        logger.exception(
+            InitializationError(
+                "GITHUB_SENTRY_APP_ID and GITHUB_SENTRY_PRIVATE_KEY not set, falling back to 'write' app."
+            )
         )
         return get_write_app_credentials()
 
@@ -92,7 +96,9 @@ class RepoClient:
     repo_name: str
     repo_external_id: str
 
-    def __init__(self, app_id: int | str, private_key: str, repo_definition: RepoDefinition):
+    def __init__(
+        self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
+    ):
         if repo_definition.provider != "github":
             # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
             # easier if it does
@@ -100,11 +106,16 @@ class RepoClient:
                 f"Unsupported repo provider: {repo_definition.provider}, only github is supported."
             )
 
-        self.github = Github(
-            auth=get_github_app_auth_and_installation(
-                app_id, private_key, repo_definition.owner, repo_definition.name
-            )[0]
-        )
+        if app_id and private_key:
+            self.github = Github(
+                auth=get_github_app_auth_and_installation(
+                    app_id, private_key, repo_definition.owner, repo_definition.name
+                )[0]
+            )
+        else:
+            logger.info("RepoClient falling back to token auth.")
+            self.github = Github(auth=get_github_token_auth())
+
         self.repo = self.github.get_repo(
             int(repo_definition.external_id)
             if repo_definition.external_id.isdigit()
@@ -118,7 +129,12 @@ class RepoClient:
 
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
-        permissions = get_repo_app_permissions(*get_write_app_credentials(), repo.owner, repo.name)
+        app_id, pk = get_write_app_credentials()
+
+        if app_id is None or pk is None:
+            return True if get_github_token_auth() else None
+
+        permissions = get_repo_app_permissions(app_id, pk, repo.owner, repo.name)
 
         if (
             permissions
@@ -131,7 +147,12 @@ class RepoClient:
 
     @staticmethod
     def check_repo_read_access(repo: RepoDefinition):
-        permissions = get_repo_app_permissions(*get_read_app_credentials(), repo.owner, repo.name)
+        app_id, pk = get_write_app_credentials()
+
+        if app_id is None or pk is None:
+            return True if get_github_token_auth() else None
+
+        permissions = get_repo_app_permissions(app_id, pk, repo.owner, repo.name)
 
         if permissions and (
             permissions.get("contents") == "read" or permissions.get("contents") == "write"
