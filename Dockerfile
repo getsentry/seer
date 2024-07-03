@@ -41,7 +41,7 @@ RUN chmod +x ./celeryworker.sh ./asyncworker.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --no-cache-dir
 
 # Copy source code
 COPY src/ src/
@@ -50,10 +50,11 @@ COPY pyproject.toml .
 # Copy the supervisord.conf file into the container
 COPY supervisord.conf /etc/supervisord.conf
 
-RUN pip install --default-timeout=120 -e .
+RUN pip install --default-timeout=120 -e . --no-cache-dir
 
 ENV FLASK_APP=src.seer.app
 # Set in cloudbuild.yaml for production images
+ARG SEER_VERSION_SHA
 ENV SEER_VERSION_SHA ${SEER_VERSION_SHA}
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

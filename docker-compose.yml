@@ -35,6 +35,8 @@ services:
             - ./models:/app/models
             - ./data/chroma:/app/data/chroma
             - ~/.config/gcloud:/root/.config/gcloud
+            # Codecov test artifacts
+            - ./.artifacts:/app/.artifacts
         depends_on:
             - rabbitmq
             - db

@@ -45,3 +45,12 @@ jobs:
       - name: Test with pytest
         run: |
           make test
+      - name: Upload to codecov
+        if: ${{ always() }}
+        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4.0.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: '.artifacts/coverage.xml'
+          override_commit: ${{ github.event.pull_request.head.sha }}
+          plugin: noop
+          verbose: true
