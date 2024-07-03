@@ -1,0 +1,22 @@
+coverage:
+  status:
+    project:
+      default: false
+    patch:
+      default: false
+      grouping:
+        paths:
+          - 'src/seer/grouping/'
+      automation:
+        paths:
+          - 'src/seer/automation/'
+      severity:
+        paths:
+          - 'src/seer/severity/'
+      trend_detection:
+        paths:
+          - 'src/seer/trend_detection/'
+      app:
+        paths:
+          - 'src/seer/app.py'
+comment: false

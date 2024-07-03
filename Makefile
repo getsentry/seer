@@ -34,7 +34,7 @@ dev-cuda: .env # Starts the webserver based on the current src on port 9091 with
 .PHONY: test
 test: # Executes all tests in the baked image file.  Requires models/
 	docker compose up -d test-db
-	docker compose run $(EXTRA_COMPOSE_TEST_OPTIONS) app pytest
+	docker compose run $(EXTRA_COMPOSE_TEST_OPTIONS) app pytest --cov . --cov-report="xml:.artifacts/coverage.xml" --json-report --json-report-file=".artifacts/pytest.json" --json-report-omit=log
 
 .PHONY: mypy
 mypy: # Runs mypy type checking
