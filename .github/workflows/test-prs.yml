@@ -19,8 +19,8 @@ jobs:
       - run: |
           while IFS= read -r line \
           do \
-            sed -i.bak "/^$line/d" a.txt \
-          done < b.txt
+            sed -i.bak "/^$line/d" requirements.txt \
+          done < model.requirements.txt
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
