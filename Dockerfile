@@ -41,7 +41,7 @@ RUN chmod +x ./celeryworker.sh ./asyncworker.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt --no-cache-dir
 
 # Copy source code
 COPY src/ src/
