@@ -263,3 +263,19 @@ class RepoAccessCheckResponse(BaseModel):
 
 class CodebaseStatusCheckResponse(BaseModel):
     status: str  # CodebaseIndexStatus, but not using the enum here because it breaks JSON schema generation
+
+
+class MatchXml(PromptXmlModel, tag="result"):
+    path: str = attr()
+    context: str
+
+
+class Match(BaseModel):
+    line_number: int
+    context: str
+
+
+class SearchResult(BaseModel):
+    relative_path: str
+    matches: list[Match]
+    score: float

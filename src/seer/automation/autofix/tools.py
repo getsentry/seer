@@ -15,6 +15,9 @@ from seer.automation.autofix.components.snippet_replacement import (
     SnippetReplacementRequest,
 )
 from seer.automation.autofix.utils import find_original_snippet
+from seer.automation.codebase.code_search import CodeSearcher
+from seer.automation.codebase.models import MatchXml
+from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.models import FileChange
 
 logger = logging.getLogger("autofix")
@@ -75,6 +78,48 @@ class BaseTools:
 
         return paths_str
 
+    @observe(name="Keyword Search")
+    @ai_track(description="Keyword Search")
+    def keyword_search(
+        self,
+        keyword: str,
+        supported_extensions: list[str],
+        repo_name: str | None = None,
+        in_proximity_to: str | None = None,
+    ):
+        """
+        Searches for a keyword in the codebase.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+
+        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(
+            repo_client.get_default_branch_head_sha()
+        )
+
+        searcher = CodeSearcher(
+            directory=tmp_repo_dir,
+            supported_extensions=set(supported_extensions),
+            start_path=in_proximity_to,
+        )
+
+        results = searcher.search(keyword)
+
+        cleanup_dir(tmp_dir)
+
+        if not results:
+            return "No results found."
+
+        result_str = ""
+        for result in results:
+            for match in result.matches:
+                match_xml = MatchXml(
+                    path=result.relative_path,
+                    context=match.context,
+                )
+                result_str += f"{match_xml.to_prompt_str()}\n\n"
+
+        return result_str
+
     def get_tools(self):
         tools = [
             FunctionTool(
@@ -108,6 +153,34 @@ class BaseTools:
                         "name": "repo_name",
                         "type": "string",
                         "description": "Optional name of the repository to search in if you know it.",
+                    },
+                ],
+            ),
+            FunctionTool(
+                name="keyword_search",
+                fn=self.keyword_search,
+                description="Searches for a keyword in the codebase.",
+                parameters=[
+                    {
+                        "name": "keyword",
+                        "type": "string",
+                        "description": "The keyword to search for.",
+                    },
+                    {
+                        "name": "supported_extensions",
+                        "type": "array",
+                        "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
+                        "items": {"type": "string"},
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
+                    {
+                        "name": "in_proximity_to",
+                        "type": "string",
+                        "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
                     },
                 ],
             ),
