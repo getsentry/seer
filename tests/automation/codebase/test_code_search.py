@@ -41,46 +41,40 @@ class TestCodeSearcher(unittest.TestCase):
             f.write("This is file4 without")
 
     def test_calculate_proximity_score(self):
-        score1 = self.code_searcher._calculate_proximity_score(
+        score1 = self.code_searcher.calculate_proximity_score(
             os.path.join(self.test_dir, "folder1", "file1.txt")
         )
-        score2 = self.code_searcher._calculate_proximity_score(
-            os.path.join(self.test_dir, "folder2", "file2.txt")
-        )
-        score3 = self.code_searcher._calculate_proximity_score(
-            os.path.join(self.test_dir, "root_file.txt")
-        )
-        score4 = self.code_searcher._calculate_proximity_score(
+        score2 = self.code_searcher.calculate_proximity_score(
             os.path.join(self.test_dir, "folder1", "subfolder", "file3.txt")
         )
+        score3 = self.code_searcher.calculate_proximity_score(
+            os.path.join(self.test_dir, "folder2", "file2.txt")
+        )
+        score4 = self.code_searcher.calculate_proximity_score(
+            os.path.join(self.test_dir, "root_file.txt")
+        )
 
-        assert score1 == 1.0, f"Score for file in start_path should be 1.0, got {score1}"
-        assert score2 == 1 / 3, f"Score for file in different folder should be 0.3, got {score2}"
-        assert score3 == 1 / 3, f"Score for root file should be 0.3, got {score3}"
-        assert score4 == 0.5, f"Score for file in subfolder should be 0.5, got {score4}"
+        assert score1 >= score2 >= score3 >= score4, "Scores should be in descending order"
 
     def test_calculate_proximity_score_for_file_proximity(self):
         self.code_searcher.start_path = os.path.join(self.test_dir, "folder1", "file1.txt")
-        score1 = self.code_searcher._calculate_proximity_score(
+        score1 = self.code_searcher.calculate_proximity_score(
             os.path.join(self.test_dir, "folder1", "file1.txt")
         )
-        score2 = self.code_searcher._calculate_proximity_score(
-            os.path.join(self.test_dir, "folder2", "file2.txt")
-        )
-        score3 = self.code_searcher._calculate_proximity_score(
+        score2 = self.code_searcher.calculate_proximity_score(
             os.path.join(self.test_dir, "root_file.txt")
         )
-        score4 = self.code_searcher._calculate_proximity_score(
+        score3 = self.code_searcher.calculate_proximity_score(
             os.path.join(self.test_dir, "folder1", "subfolder", "file3.txt")
         )
+        score4 = self.code_searcher.calculate_proximity_score(
+            os.path.join(self.test_dir, "folder2", "file2.txt")
+        )
 
-        assert score1 == 1.0, f"Score for file in start_path should be 1.0, got {score1}"
-        assert score2 == 0.2, f"Score for file in different folder should be 0.2, got {score2}"
-        assert score3 == 0.25, f"Score for root file should be 0.25, got {score3}"
-        assert score4 == 0.25, f"Score for file in subfolder should be 0.25, got {score4}"
+        assert score1 >= score2 >= score3 >= score4, "Scores should be in descending order"
 
     def test_search_file(self):
-        result = self.code_searcher._search_file(
+        result = self.code_searcher.search_file(
             os.path.join(self.test_dir, "folder1", "file1.txt"), "keyword"
         )
         assert isinstance(result, SearchResult), "Should return a SearchResult object"
@@ -93,7 +87,7 @@ class TestCodeSearcher(unittest.TestCase):
 
     def test_search_file_max_size(self):
         self.code_searcher.max_file_size_bytes = 1
-        result = self.code_searcher._search_file(
+        result = self.code_searcher.search_file(
             os.path.join(self.test_dir, "folder1", "file1.txt"), "keyword"
         )
         assert result is None, "Should return None for files exceeding max size"

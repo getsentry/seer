@@ -20,7 +20,7 @@ class CodeSearcher:
         self.start_path = start_path
         self.max_file_size_bytes = max_file_size_bytes
 
-    def _calculate_proximity_score(self, file_path: str) -> float:
+    def calculate_proximity_score(self, file_path: str) -> float:
         if not self.start_path:
             return 1.0  # No proximity score if no start_path is provided
 
@@ -48,7 +48,7 @@ class CodeSearcher:
             total_distance + 1
         )  # +1 to avoid division by zero and to ensure score is never 0
 
-    def _search_file(self, file_path: str, keyword: str) -> Optional[SearchResult]:
+    def search_file(self, file_path: str, keyword: str) -> Optional[SearchResult]:
         relative_path = os.path.relpath(file_path, self.directory)
         matches = []
 
@@ -70,7 +70,7 @@ class CodeSearcher:
                         break  # Stop after finding the first match
 
             if matches:
-                score = self._calculate_proximity_score(file_path)
+                score = self.calculate_proximity_score(file_path)
                 return SearchResult(relative_path=relative_path, matches=matches, score=score)
         except UnicodeDecodeError:
             autofix_logger.error(f"Unable to read {file_path}")
@@ -82,7 +82,7 @@ class CodeSearcher:
             for filename in filenames:
                 if any(filename.endswith(ext) for ext in self.supported_extensions):
                     file_path = os.path.join(root, filename)
-                    result = self._search_file(file_path, keyword)
+                    result = self.search_file(file_path, keyword)
                     if result:
                         results.append(result)
 
