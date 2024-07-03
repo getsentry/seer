@@ -62,4 +62,3 @@ jobs:
           override_commit: ${{ github.event.pull_request.head.sha }}
           plugin: noop
           verbose: true
-        continue-on-error: true
