@@ -1,5 +1,4 @@
 import unittest
-import uuid
 
 from johen import change_watcher
 from johen.pytest import parametrize
@@ -33,7 +32,7 @@ class TestGrouping(unittest.TestCase):
                 message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            grouping_lookup().upsert_grouping_record(embedding, grouping_request, session)
             session.commit()
 
         grouping_request = GroupingRequest(
@@ -121,10 +120,10 @@ class TestGrouping(unittest.TestCase):
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            grouping_lookup().upsert_grouping_record(embedding, grouping_request, session)
             session.commit()
             # Re-insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            grouping_lookup().upsert_grouping_record(embedding, grouping_request, session)
             session.commit()
             matching_record = (
                 session.query(DbGroupingRecord)
@@ -149,9 +148,9 @@ class TestGrouping(unittest.TestCase):
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request1, embedding)
+            grouping_lookup().upsert_grouping_record(embedding, grouping_request1, session)
             session.commit()
-            grouping_lookup().insert_new_grouping_record(session, grouping_request2, embedding)
+            grouping_lookup().upsert_grouping_record(embedding, grouping_request2, session)
             session.commit()
             matching_record = (
                 session.query(DbGroupingRecord)
@@ -292,7 +291,7 @@ class TestGrouping(unittest.TestCase):
                 message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            grouping_lookup().upsert_grouping_record(embedding, grouping_request, session)
             session.commit()
 
         # Create record data to attempt to be inserted, create 5 with the stacktrace "stacktrace"
@@ -414,29 +413,23 @@ class TestGrouping(unittest.TestCase):
 
 
 @parametrize(count=1)
-def test_GroupingLookup_insert_batch_grouping_records_duplicates(
+def test_upsert_grouping_record(
     project_1_id: int,
     hash_1: str,
-    orig_record: CreateGroupingRecordData,
-    grouping_request: CreateGroupingRecordsRequest,
+    orig_record: GroupingRequest,
 ):
     orig_record.project_id = project_1_id
     orig_record.hash = hash_1
-    project_2_id = project_1_id + 1
-    hash_2 = hash_1 + "_2"
-
-    updated_duplicate = orig_record.copy(update=dict(message=orig_record.message + " updated?"))
-
-    grouping_request.data = [
+    embedding = grouping_lookup().encode_text("some text")
+    test_records = [
         orig_record,
-        orig_record.copy(update=dict(project_id=project_2_id)),
-        orig_record.copy(update=dict(hash=hash_2)),
+        orig_record.copy(update=dict(project_id=(project_1_id + 1))),
+        orig_record.copy(update=dict(hash=(hash_1 + "_2"))),
         # Duplicate of original should not actually update the original
-        updated_duplicate,
+        orig_record.copy(update=dict(message=orig_record.message + " updated?")),
     ]
-    grouping_request.stacktrace_list = [uuid.uuid4().hex for r in grouping_request.data]
 
-    def query_created(record: CreateGroupingRecordData) -> DbGroupingRecord | None:
+    def query_created(record: GroupingRequest) -> DbGroupingRecord | None:
         with Session() as session:
             return (
                 session.query(DbGroupingRecord)
@@ -451,20 +444,19 @@ def test_GroupingLookup_insert_batch_grouping_records_duplicates(
             return db_record.message
         return None
 
+    duplicates = 0
     with updated_message_for_orig as changed:
-        grouping_lookup().insert_batch_grouping_records(grouping_request)
+        with Session() as session:
+            for record in test_records:
+                duplicates += int(
+                    grouping_lookup().upsert_grouping_record(embedding, record, session)
+                )
+            session.commit()
 
+    assert duplicates == 1
     assert changed
     assert changed.to_value(orig_record.message)
 
     # ensure that atleast a record was made for each item
-    for item in grouping_request.data:
+    for item in test_records:
         assert query_created(item) is not None
-
-    # Again, ensuring that duplicates are ignored
-    grouping_request.data = [updated_duplicate]
-    grouping_request.stacktrace_list = ["does not matter" for _ in grouping_request.data]
-    with updated_message_for_orig as changed:
-        grouping_lookup().insert_batch_grouping_records(grouping_request)
-
-    assert not changed
