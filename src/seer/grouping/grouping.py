@@ -7,6 +7,7 @@ import sentry_sdk
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
+from sqlalchemy.exc import IntegrityError
 
 from seer.db import DbGroupingRecord, Session
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
@@ -306,7 +307,11 @@ class GroupingLookup:
                         error_type=entry.exception_type,
                     ).to_db_model()
                     session.add(new_record)
-                    session.commit()
+                    try:
+                        session.commit()
+                    except IntegrityError as e:
+                        session.rollback()
+                        sentry_sdk.capture_exception(e)
 
         return groups_with_neighbor
 
