@@ -1,4 +1,8 @@
 import unittest
+import uuid
+
+from johen import change_watcher
+from johen.pytest import parametrize
 
 from seer.db import DbGroupingRecord, Session
 from seer.grouping.grouping import (
@@ -407,3 +411,60 @@ class TestGrouping(unittest.TestCase):
                 session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
             )
             assert len(records) == 0
+
+
+@parametrize(count=1)
+def test_GroupingLookup_insert_batch_grouping_records_duplicates(
+    project_1_id: int,
+    hash_1: str,
+    orig_record: CreateGroupingRecordData,
+    grouping_request: CreateGroupingRecordsRequest,
+):
+    orig_record.project_id = project_1_id
+    orig_record.hash = hash_1
+    project_2_id = project_1_id + 1
+    hash_2 = hash_1 + "_2"
+
+    updated_duplicate = orig_record.copy(update=dict(message=orig_record.message + " updated?"))
+
+    grouping_request.data = [
+        orig_record,
+        orig_record.copy(update=dict(project_id=project_2_id)),
+        orig_record.copy(update=dict(hash=hash_2)),
+        # Duplicate of original should not actually update the original
+        updated_duplicate,
+    ]
+    grouping_request.stacktrace_list = [uuid.uuid4().hex for r in grouping_request.data]
+
+    def query_created(record: CreateGroupingRecordData) -> DbGroupingRecord | None:
+        with Session() as session:
+            return (
+                session.query(DbGroupingRecord)
+                .filter_by(hash=record.hash, project_id=record.project_id)
+                .first()
+            )
+
+    @change_watcher
+    def updated_message_for_orig():
+        db_record = query_created(orig_record)
+        if db_record:
+            return db_record.message
+        return None
+
+    with updated_message_for_orig as changed:
+        grouping_lookup().insert_batch_grouping_records(grouping_request)
+
+    assert changed
+    assert changed.to_value(orig_record.message)
+
+    # ensure that atleast a record was made for each item
+    for item in grouping_request.data:
+        assert query_created(item) is not None
+
+    # Again, ensuring that duplicates are ignored
+    grouping_request.data = [updated_duplicate]
+    grouping_request.stacktrace_list = ["does not matter" for _ in grouping_request.data]
+    with updated_message_for_orig as changed:
+        grouping_lookup().insert_batch_grouping_records(grouping_request)
+
+    assert not changed

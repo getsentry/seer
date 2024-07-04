@@ -4,10 +4,11 @@ from typing import List, Optional
 
 import numpy as np
 import sentry_sdk
+import sqlalchemy.orm
 import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 
 from seer.db import DbGroupingRecord, Session
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
@@ -155,8 +156,8 @@ class GroupingLookup:
     @sentry_sdk.tracing.trace
     def query_nearest_k_neighbors(
         self,
-        session,
-        embedding,
+        session: sqlalchemy.orm.Session,
+        embedding: np.ndarray,
         project_id: int,
         hash: str,
         distance: float,
@@ -280,11 +281,6 @@ class GroupingLookup:
                     NN_GROUPING_DISTANCE,
                     1,
                 )
-                existing_record = (
-                    session.query(DbGroupingRecord)
-                    .filter_by(hash=entry.hash, project_id=entry.project_id)
-                    .first()
-                )
 
                 if nearest_neighbor:
                     neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
@@ -298,20 +294,20 @@ class GroupingLookup:
                         should_group=True,
                     )
                     groups_with_neighbor[str(entry.group_id)] = response
-                elif existing_record is None:
-                    new_record = GroupingRecord(
-                        hash=entry.hash,
+                else:
+                    insert_stmt = insert(DbGroupingRecord).values(
                         project_id=entry.project_id,
                         message=entry.message,
-                        stacktrace_embedding=embedding,
                         error_type=entry.exception_type,
-                    ).to_db_model()
-                    session.add(new_record)
-                    try:
-                        session.flush()
-                    except IntegrityError as e:
-                        session.expunge(new_record)
-                        sentry_sdk.capture_exception(e)
+                        hash=entry.hash,
+                        stacktrace_embedding=embedding,
+                    )
+
+                    session.execute(
+                        insert_stmt.on_conflict_do_nothing(
+                            index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
+                        )
+                    )
 
             session.commit()
 
