@@ -308,10 +308,12 @@ class GroupingLookup:
                     ).to_db_model()
                     session.add(new_record)
                     try:
-                        session.commit()
+                        session.flush()
                     except IntegrityError as e:
-                        session.rollback()
+                        session.expunge(new_record)
                         sentry_sdk.capture_exception(e)
+
+            session.commit()
 
         return groups_with_neighbor
 
