@@ -2,7 +2,7 @@
 # added to model.requirements.txt (in addition to this file).
 # They will not be built in PR test runs (but they will be built in master)
 
-certifi==2023.7.22
+certifi==2024.7.4
 charset-normalizer==2.0.12
 click==8.1.7
 contourpy==1.1.0
