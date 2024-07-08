@@ -163,10 +163,9 @@ class GroupingLookup:
         distance: float,
         k: int,
     ) -> List[tuple[DbGroupingRecord, float]]:
-        return (
-            session.execute(sqlalchemy.text("SET LOCAL hnsw.ef_search = 100"))
-            .execution_options(autocommit=True)
-            .query(
+        custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
+        query = (
+            session.query(
                 DbGroupingRecord,
                 DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label("distance"),
             )
@@ -177,8 +176,9 @@ class GroupingLookup:
             )
             .order_by("distance")
             .limit(k)
-            .all()
+            .execution_options(**custom_options)
         )
+        return query.all()
 
     @sentry_sdk.tracing.trace
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
