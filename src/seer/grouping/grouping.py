@@ -354,7 +354,7 @@ class GroupingLookup:
 
     def upsert_grouping_record(
         self, embedding: np.ndarray, request: GroupingRequest, session: sqlalchemy.orm.Session
-    ) -> GroupingResponse:
+    ) -> bool:
         insert_stmt = insert(DbGroupingRecord).values(
             project_id=request.project_id,
             message=request.message,
