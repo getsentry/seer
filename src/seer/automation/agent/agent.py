@@ -9,7 +9,7 @@ from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 class LlmAgent(ABC):

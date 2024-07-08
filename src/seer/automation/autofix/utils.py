@@ -5,7 +5,7 @@ import re
 from typing import List
 from xml.etree import ElementTree as ET
 
-autofix_logger = logging.getLogger("autofix")
+autofix_logger = logging.getLogger(__name__)
 
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
 

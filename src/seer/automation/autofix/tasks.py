@@ -34,7 +34,7 @@ from seer.automation.utils import (
 )
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 def get_autofix_state_from_pr_id(provider: str, pr_id: int) -> ContinuationState | None:

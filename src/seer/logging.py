@@ -1,0 +1,106 @@
+import logging
+import sys
+from typing import Annotated
+
+import structlog
+from structlog import get_logger
+
+from seer.injector import Injector, Labeled
+
+injector = Injector()
+
+LogLevel = Annotated[int, Labeled("log_level")]
+LoggingPrefixes = Annotated[list[str], Labeled("logging_prefixes")]
+
+injector.constant(LogLevel, logging.INFO)
+
+
+@injector.extension
+def logging_prefixes() -> LoggingPrefixes:
+    return ["sentry."]
+
+
+@injector.extension
+def default_log_handlers() -> list[logging.Handler]:
+    return [StructLogHandler(sys.stdout)]
+
+
+@injector.initializer
+def initialize_logs(
+    log_level: LogLevel,
+    handlers: list[logging.Handler],
+    prefixes: LoggingPrefixes,
+):
+    for log_name in logging.Manager.loggerDict:
+        if any(log_name.startswith(prefix) for prefix in prefixes):
+            logger = logging.getLogger(log_name)
+            logger.setLevel(log_level)
+            for handler in handlers:
+                logger.addHandler(handler)
+
+
+@injector.initializer
+def initialize_structlog():
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ]
+    )
+
+
+class StructLogHandler(logging.StreamHandler):
+    def get_log_kwargs(self, record, logger):
+        kwargs = {k: v for k, v in vars(record).items() if k not in throwaways and v is not None}
+        kwargs.update({"level": record.levelno, "event": record.msg})
+
+        if record.args:
+            # record.args inside of LogRecord.__init__ gets unrolled
+            # if it's the shape `({},)`, a single item dictionary.
+            # so we need to check for this, and re-wrap it because
+            # down the line of structlog, it's expected to be this
+            # original shape.
+            if isinstance(record.args, (tuple, list)):
+                kwargs["positional_args"] = record.args
+            else:
+                kwargs["positional_args"] = (record.args,)
+
+        return kwargs
+
+    def emit(self, record, logger=None):
+        # If anyone wants to use the 'extra' kwarg to provide context within
+        # structlog, we have to strip all of the default attributes from
+        # a record because the RootLogger will take the 'extra' dictionary
+        # and just turn them into attributes.
+        try:
+            if logger is None:
+                logger = get_logger()
+
+            logger.log(**self.get_log_kwargs(record=record, logger=logger))
+        except Exception:
+            if logging.raiseExceptions:
+                raise
+
+
+throwaways = frozenset(
+    (
+        "threadName",
+        "thread",
+        "created",
+        "process",
+        "processName",
+        "args",
+        "module",
+        "filename",
+        "levelno",
+        "exc_text",
+        "msg",
+        "pathname",
+        "lineno",
+        "funcName",
+        "relativeCreated",
+        "levelname",
+        "msecs",
+    )
+)

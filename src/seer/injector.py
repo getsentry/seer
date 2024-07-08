@@ -1,14 +1,15 @@
+import contextlib
 import dataclasses
 import functools
 import inspect
 import threading
-from typing import Annotated, Any, Callable, TypeVar
+from typing import Annotated, Any, Callable, ContextManager, Generator, Protocol, TypeVar
 
 from johen.generators.annotations import AnnotationProcessingContext
 
 _A = TypeVar("_A")
+_C = TypeVar("_C", bound=Callable[[], Any])
 _T = TypeVar("_T", bound=type)
-_C = TypeVar("_C", bound=Callable)
 
 
 @dataclasses.dataclass
@@ -39,37 +40,44 @@ class FactoryAnnotation:
         if annotation.origin is Annotated:
             label = next((arg.label for arg in annotation.args[1:] if isinstance(arg, Labeled)), "")
             inner = FactoryAnnotation.from_annotation(annotation.args[0])
-            assert not inner.label, f"Cannot resolve {source}: Annotated has embedded Labeled"
+            assert not inner.label, f"Cannot get_factory {source}: Annotated has embedded Labeled"
             return dataclasses.replace(inner, label=label)
         elif annotation.concretely_implements(list):
             assert (
                 len(annotation.args) == 1
-            ), f"Cannot resolve {source}: list requires at least one argument"
+            ), f"Cannot get_factory {source}: list requires at least one argument"
             inner = FactoryAnnotation.from_annotation(annotation.args[0])
-            assert not inner.label, f"Cannot resolve {source}: list has embedded Labeled"
+            assert not inner.label, f"Cannot get_factory {source}: list has embedded Labeled"
             assert (
                 not inner.is_collection
-            ), f"Cannot resolve {source}: collections must be of concrete types, not other lists"
+            ), f"Cannot get_factory {source}: collections must be of concrete types, not other lists"
             return dataclasses.replace(inner, is_collection=True)
 
         assert (
             annotation.origin is None
-        ), f"Cannot resolve {source}, only concrete types or lists of concrete types are supported"
+        ), f"Cannot get_factory {source}, only concrete types or lists of concrete types are supported"
         return FactoryAnnotation(concrete_type=annotation.source, is_collection=False, label="")
 
     @classmethod
-    def from_factory(cls, c: _C) -> "FactoryAnnotation":
+    def from_factory(cls, c: Callable) -> "FactoryAnnotation":
         argspec = inspect.getfullargspec(c)
         num_arg_defaults = len(argspec.defaults) if argspec.defaults is not None else 0
-        num_kwd_defaults = len(argspec.kwonlydefaults) if argspec.defaults is not None else 0
+        num_kwd_defaults = len(argspec.kwonlydefaults) if argspec.kwonlydefaults is not None else 0
+
+        # Constructors have implicit self reference and return annotations -- themselves
+        if inspect.isclass(c):
+            num_arg_defaults += 1
+            rv = c
+        else:
+            rv = argspec.annotations.get("return", None)
+            assert rv is not None, "Cannot decorate function without return annotation"
+
         assert num_arg_defaults >= len(
             argspec.args
         ), "Cannot decorate function with required positional args"
         assert num_kwd_defaults >= len(
             argspec.kwonlyargs
         ), "Cannot decorate function with required kwd args"
-        rv = argspec.annotations.get("return", None)
-        assert rv is not None, "Cannot decorate function without return annotation"
         return FactoryAnnotation.from_annotation(rv)
 
 
@@ -77,32 +85,62 @@ class FactoryNotFound(Exception):
     pass
 
 
+class Destructor(Protocol):
+    def __call__(self) -> None:
+        pass
+
+
 @dataclasses.dataclass
 class Injector:
-    _registry: dict[FactoryAnnotation, Callable] = dataclasses.field(default_factory=dict)
+    registry: dict[FactoryAnnotation, Callable] = dataclasses.field(default_factory=dict)
+
+    def initializer(self, c: "_CD") -> "_CD":
+        c = inject(c)
+
+        def initialize() -> Destructors:
+            rv = c()
+            if rv is None:
+                return []
+            if isinstance(rv, contextlib.AbstractContextManager):
+                rv.__enter__()
+                return [rv.__exit__]
+            if inspect.isgenerator(rv):
+                try:
+                    next(rv)
+                except StopIteration:
+                    return []
+                return [lambda: list(rv)]
+            return []
+
+        self.extension(initialize)
+
+        return c
 
     def extension(self, c: _C) -> _C:
-        key = FactoryAnnotation.from_factory(c)
+        assert inspect.isfunction(c), f"{c} is not compatible with extension, functions required"
         c = inject(c)
+
+        key = FactoryAnnotation.from_factory(c)
         assert key.is_collection, f"{c} is compatible with provider method, not extension method"
-        existing = self._registry.get(key, lambda: [])
+        existing = self.registry.get(key, lambda: [])
 
         def extended():
             return [*existing(), *c()]
 
-        self._registry[key] = extended
+        self.registry[key] = extended
         return c
 
     def provider(self, c: _C) -> _C:
+        c = inject(c)
+
         key = FactoryAnnotation.from_factory(c)
         assert (
             not key.is_collection
         ), f"{c} is compatible with extension method, not provider method"
         assert (
-            key not in self._registry
+            key not in self.registry
         ), f"{key.concrete_type} is already registered for this injector"
-        c = inject(c)
-        self._registry[key] = c
+        self.registry[key] = c
         return c
 
     def constant(self, annotation: type[_A], val: _A) -> _A:
@@ -110,30 +148,58 @@ class Injector:
         assert (
             not key.is_collection
         ), f"{annotation} is compatible with extension method, not constant method"
-        self._registry[key] = lambda: val
+        self.registry[key] = lambda: val
         return val
 
-    def __enter__(self):
-        if _context.stack is None:
-            _context.stack = []
-        if _context.cache is None:
-            _context.cache = []
-        _context.stack.append(self)
-        _context.cache.append({})
+    def enable(self):
+        context = _Context()
+        with self.install_into_context(context):
+            if _cur.context:
+                context.parent = _cur.context
+            _cur.context = self
+        return context
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
-        _context.stack.pop()
-        _context.cache.pop()
+    @contextlib.contextmanager
+    def install_into_context(self, context: "_Context"):
+        context.injectors[self] = None
 
-    def resolve(self, source: type[_A]) -> _A:
         try:
-            f = self._registry[FactoryAnnotation.from_annotation(source)]
-        except KeyError:
-            raise FactoryNotFound(
-                f"Cannot resolve {source}, no factory available for this type of object."
+            dependencies: Callable[[], list[Injector]] = self.get_factory(
+                FactoryAnnotation.from_annotation(Dependencies)
             )
+        except FactoryNotFound:
 
-        return f()
+            def dependencies():
+                return []
+
+        with contextlib.ExitStack() as stack:
+            for dep in dependencies():
+                if dep in context.injectors:
+                    continue
+                stack.enter_context(dep.install_into_context(context))
+
+            yield
+
+        try:
+            destructors = self.get_factory(FactoryAnnotation.from_annotation(Destructors))
+        except FactoryNotFound:
+
+            def destructors():
+                return []
+
+        context.destructors.extend(destructors())
+
+    def get_factory(self, annotation: FactoryAnnotation) -> Callable:
+        try:
+            return self.registry[annotation]
+        except KeyError:
+            raise FactoryNotFound(f"no factory available for {annotation!r}")
+
+
+Destructors = Annotated[list[Destructor], Labeled("destructors")]
+Dependencies = Annotated[list[Injector], Labeled("dependencies")]
+
+_CD = TypeVar("_CD", bound=Callable[[], ContextManager | Generator | None])
 
 
 class _Injected:
@@ -144,59 +210,118 @@ injected: Any = _Injected()
 
 
 def inject(c: _A) -> _A:
+    original_type = c
+    if inspect.isclass(c):
+        c = c.__init__
+
     argspec = inspect.getfullargspec(c)
 
     @functools.wraps(c)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        new_kwds = {**kwargs}
+
         if argspec.defaults:
-            new_args = list(args)
             offset = len(argspec.args) - len(argspec.defaults)
             for i, d in enumerate(argspec.defaults):
-                if d is injected:
+                arg_idx = offset + i
+                arg_name = argspec.args[arg_idx]
+
+                if d is injected and len(args) <= arg_idx and arg_name not in new_kwds:
                     try:
-                        new_args[offset + i] = resolve(
-                            argspec.annotations[argspec.args[offset + i]]
-                        )
+                        resolved = resolve(argspec.annotations[arg_name])
                     except KeyError:
                         raise AssertionError(
-                            f"Cannot inject argument {argspec.args[offset + i]} as it lacks annotations"
+                            f"Cannot inject argument {arg_name} as it lacks annotations"
                         )
-            args = tuple(new_args)
+
+                    new_kwds[arg_name] = resolved
+
         if argspec.kwonlydefaults:
-            new_kwds = {**kwargs}
             for k, v in argspec.kwonlydefaults.items():
-                if v is injected:
+                if v is injected and k not in new_kwds:
                     try:
                         new_kwds[k] = resolve(argspec.annotations[k])
                     except KeyError:
                         raise AssertionError(f"Cannot inject argument {k} as it lacks annotations")
-            kwds = new_kwds
 
-        return c(*args, **kwds)
+        return c(*args, **new_kwds)
+
+    if inspect.isclass(original_type):
+        return type(original_type.__name__, (original_type,), dict(__init__=wrapper))
 
     return wrapper
 
 
-def resolve(source: type[_A]) -> _A:
-    if _context.stack is None:
+def resolve(source: type[_A], key: FactoryAnnotation | None = None) -> _A:
+    if _cur.context is None:
         raise FactoryNotFound(
-            "No Injector has been initiated, use `with injector:` to enable an injection context."
+            f"Cannot resolve '{source}', no factory registered for any active injector."
         )
 
-    for injector in reversed(_context.stack):
+    if key is None:
+        key = FactoryAnnotation.from_annotation(source)
+    assert key is not None
+
+    if _cur.seen is None:
+        _cur.seen = []
+
+    try:
+        if key in _cur.seen:
+            raise FactoryNotFound(
+                f"Circular dependency: {' -> '.join(str(k) for k in _cur.seen)} -> {key}"
+            )
+        _cur.seen.append(key)
+
+        if key in _cur.context.cache:
+            _cur.seen.clear()
+            return _cur.context.cache[key]
+
+        for injector in _cur.context.injectors.keys():
+            try:
+                factory = injector.get_factory(key)
+                break
+            except FactoryNotFound:
+                continue
+        else:
+            orig = _cur.context
+            _cur.context = _cur.context.parent
+            try:
+                return resolve(source, key)
+            finally:
+                _cur.context = orig
+
+        rv = _cur.context.cache[key] = factory()
+        return rv
+    finally:
+        _cur.seen.clear()
+
+
+@dataclasses.dataclass
+class _Context:
+    injectors: dict[Injector, None] = dataclasses.field(default_factory=dict)
+    cache: dict[FactoryAnnotation, Any] = dataclasses.field(default_factory=dict)
+    destructors: list[Callable[[], None]] = dataclasses.field(default_factory=list)
+    parent: "_Context | None" = dataclasses.field(default_factory=lambda: None)
+
+    def __enter__(self):
+        return self
+
+    def disable(self):
+        self.__exit__(None, None, None)
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
+        assert _cur.context is self, "injector was prematurely disabled!"
+
         try:
-            return injector.resolve(source)
-        except FactoryNotFound:
-            continue
-
-    raise FactoryNotFound(
-        f"Cannot resolve {source}, no factory registered for any active injector."
-    )
+            for destructor in self.destructors:
+                destructor()
+        finally:
+            _cur.context = self.parent
 
 
-class _Context(threading.local):
-    stack: list[Injector] | None = None
-    cache: list[dict[FactoryAnnotation, Any]] | None = None
+class _Cur(threading.local):
+    context: _Context | None = None
+    seen: list[FactoryAnnotation] | None = None
 
 
-_context = _Context()
+_cur = _Cur()

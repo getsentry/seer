@@ -6,14 +6,15 @@ import billiard  # type: ignore[import-untyped]
 import torch
 from sentence_transformers import SentenceTransformer
 
+from seer.env import Environment
+from seer.injector import inject, injected
 from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
 # ALERT: Using magic number four. This is temporary code that ensures that AutopFix uses all 4
 # cuda devices available. This "4" should match the number of celery sub-processes configured in celeryworker.sh.
 EXPECTED_CUDA_DEVICES = 4
-logger = logging.getLogger("autofix")
-automation_logger = logging.getLogger("automation")
+logger = logging.getLogger(__name__)
 
 
 class ConsentError(Exception):
@@ -85,8 +86,9 @@ def process_repo_provider(provider: str) -> str:
     return provider
 
 
-def check_genai_consent(org_id: int) -> bool:
-    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+@inject
+def check_genai_consent(org_id: int, env: Environment = injected) -> bool:
+    if env.NO_SENTRY_INTEGRATION:
         # If we are running in a local environment, we just pass this check
         return True
 
@@ -102,8 +104,9 @@ def raise_if_no_genai_consent(org_id: int) -> None:
         raise ConsentError(f"Organization {org_id} has not consented to use GenAI")
 
 
-def get_sentry_client() -> RpcClient:
-    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+@inject
+def get_sentry_client(env: Environment) -> RpcClient:
+    if env.NO_SENTRY_INTEGRATION == "1":
         rpc_client: DummyRpcClient = DummyRpcClient()
         rpc_client.dry_run = True
         return rpc_client

@@ -67,7 +67,6 @@ class Configurations(dict[str, str]):
 
 def test_injections():
     injector = Injector()
-    override = Injector()
     magic_object: Any = object
 
     @injector.provider
@@ -82,14 +81,14 @@ def test_injections():
         config_b: Annotated[str, Labeled("b")] = injected
 
     @injector.provider
-    def a_configuration(inputs: list[Configurations]) -> Annotated[str, Labeled("a")]:
+    def a_configuration(inputs: list[Configurations] = injected) -> Annotated[str, Labeled("a")]:
         for c in inputs:
             if "a" in c:
                 return c["a"]
         raise ValueError("No configuration found for a")
 
     @injector.provider
-    def b_configuration(inputs: list[Configurations]) -> Annotated[str, Labeled("b")]:
+    def b_configuration(inputs: list[Configurations] = injected) -> Annotated[str, Labeled("b")]:
         for c in inputs:
             if "b" in c:
                 return c["b"]
@@ -107,13 +106,18 @@ def test_injections():
     def main(ready: bool, service_b: ServiceB = injected) -> ServiceB:
         return service_b
 
-    override.constant(ServiceB, magic_object)
-
     with injector:
         existing = resolve(ServiceB)
+        assert existing.service_a.config_a == "a-val"
+        assert existing.config_b == "b-val"
+
         assert main(True) is existing
         assert main(True) is main(True)
         assert existing is resolve(ServiceB)
+        assert type(existing) is ServiceB
+
+        override = Injector()
+        override.constant(ServiceB, magic_object)
 
         with override:
             assert magic_object is resolve(ServiceB)

@@ -13,7 +13,7 @@ from seer.automation.codebase.namespace import CodebaseNamespaceManager
 from seer.automation.models import InitializationError, RepoDefinition
 from seer.automation.utils import get_embedding_model
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 def create_codebase_index(

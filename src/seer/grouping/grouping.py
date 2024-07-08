@@ -11,7 +11,7 @@ from sentence_transformers import SentenceTransformer
 from seer.db import DbGroupingRecord, Session
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
-logger = logging.getLogger("grouping")
+logger = logging.getLogger(__name__)
 
 NN_GROUPING_DISTANCE = 0.01
 NN_SIMILARITY_DISTANCE = 0.05

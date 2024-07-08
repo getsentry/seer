@@ -16,9 +16,11 @@ from seer.automation.autofix.utils import generate_random_string, sanitize_branc
 from seer.automation.codebase.models import RepositoryInfo
 from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.models import FileChange, InitializationError, RepoDefinition
+from seer.env import Environment
+from seer.injector import inject, injected
 from seer.utils import class_method_lru_cache
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 def get_github_app_auth_and_installation(
@@ -45,18 +47,20 @@ def get_repo_app_permissions(
         return None
 
 
-def get_github_token_auth():
-    github_token = os.environ.get("GITHUB_TOKEN")
+@inject
+def get_github_token_auth(env: Environment = injected):
+    github_token = env.GITHUB_TOKEN
 
-    if github_token is None:
+    if not github_token:
         return None
 
     return Auth.Token(github_token)
 
 
-def get_write_app_credentials() -> tuple[int | str | None, str | None]:
-    app_id = os.environ.get("GITHUB_APP_ID")
-    private_key = os.environ.get("GITHUB_PRIVATE_KEY")
+@inject
+def get_write_app_credentials(env: Environment = injected) -> tuple[int | str | None, str | None]:
+    app_id = env.GITHUB_APP_ID
+    private_key = env.GITHUB_PRIVATE_KEY
 
     if not app_id or not private_key:
         logger.exception(
@@ -70,9 +74,10 @@ def get_write_app_credentials() -> tuple[int | str | None, str | None]:
     return app_id, private_key
 
 
-def get_read_app_credentials() -> tuple[int | str | None, str | None]:
-    app_id = os.environ.get("GITHUB_SENTRY_APP_ID")
-    private_key = os.environ.get("GITHUB_SENTRY_PRIVATE_KEY")
+@inject
+def get_read_app_credentials(env: Environment) -> tuple[int | str | None, str | None]:
+    app_id = env.GITHUB_APP_ID
+    private_key = env.GITHUB_PRIVATE_KEY
 
     if not app_id or not private_key:
         logger.exception(

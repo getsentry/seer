@@ -20,7 +20,7 @@ from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.models import FileChange
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 class BaseTools:

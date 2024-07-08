@@ -2,20 +2,20 @@ import functools
 import hashlib
 import hmac
 import inspect
-import os
-from typing import Any, Callable, List, Tuple, Type, TypeVar, get_type_hints
+from typing import Any, Callable, Type, TypeVar, get_type_hints
 
 import sentry_sdk
-from flask import Flask, request
+from flask import Blueprint, request
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, Unauthorized
 
+from seer.env import Environment
+from seer.injector import inject, injected
+
 _F = TypeVar("_F", bound=Callable[..., Any])
 
-view_functions: List[Tuple[str, Callable[[], Any], Type[BaseModel], Type[BaseModel]]] = []
 
-
-def json_api(url_rule: str) -> Callable[[_F], _F]:
+def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     def decorator(implementation: _F) -> _F:
         spec = inspect.getfullargspec(implementation)
         annotations = get_type_hints(implementation)
@@ -38,6 +38,7 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
+                    sentry_sdk.capture_message("Rpcsignature did not match", level="critical")
                     raise Unauthorized("Rpcsignature did not match for given url and data")
 
             # Cached from ^^, this won't result in double read.
@@ -56,59 +57,38 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
             return result.model_dump()
 
         functools.update_wrapper(wrapper, implementation)
-        view_functions.append((url_rule, wrapper, request_annotation, response_annotation))
+        blueprint.add_url_rule(url_rule, view_func=wrapper, methods=["POST"])
 
         return implementation
 
     return decorator
 
 
-def register_json_api_views(app: Flask) -> None:
-    for url_rule, wrapper, _, _ in view_functions:
-        app.add_url_rule(url_rule, view_func=wrapper, methods=["POST"])
-
-
-def get_json_api_shared_secrets() -> list[str]:
-    result = os.environ.get("JSON_API_SHARED_SECRETS", "").split()
-    # TODO: Add this back in after we confirm with safer behavior.
-    # if not result:
-    #     raise ValueError(
-    #         "JSON_API_SHARED_SECRETS environment variable required to support signature based auth."
-    #     )
-    return result
-
-
-def compare_signature(url: str, body: bytes, signature: str) -> bool:
+@inject
+def compare_signature(
+    url: str, body: bytes, signature: str, environment: Environment = injected
+) -> bool:
     """
     Compare request data + signature signed by one of the shared secrets.
     Once a key has been able to validate the signature other keys will
     not be attempted. We should only have multiple keys during key rotations.
     """
-    # During the transition, support running seer without the shared secrets.
-    if not signature:
-        return True
-
-    secrets = get_json_api_shared_secrets()
-
     if not signature.startswith("rpc0:"):
         sentry_sdk.capture_message("Signature did not start with rpc0:")
-        return True
-        # return False
+        return False
 
-    _, signature_data = signature.split(":", 2)
+    _, signature_data = signature.split(":", 1)
     signature_input = b"%s:%s" % (
         url.encode(),
         body,
     )
 
-    for key in secrets:
+    for key in environment.JSON_API_SHARED_SECRETS:
         computed = hmac.new(key.encode(), signature_input, hashlib.sha256).hexdigest()
         is_valid = hmac.compare_digest(computed.encode(), signature_data.encode())
         if is_valid:
             return True
         else:
-            sentry_sdk.capture_message("Signature did not match hmac")
+            sentry_sdk.capture_message("Signature did not match hmac, trying other secrets")
 
-    sentry_sdk.capture_message("No signature matches found")
-    return True
-    # return False
+    return False

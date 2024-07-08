@@ -3,6 +3,7 @@ import datetime
 import json
 
 import sqlalchemy
+from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
@@ -22,6 +23,36 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+from seer.env import Environment
+from seer.injector import Dependencies, Injector
+
+injector = Injector()
+
+
+@injector.provider
+def default_db_flask_db() -> Flask:
+    return Flask(__name__)
+
+
+@injector.initializer
+def initialize_db(app: Flask, env: Environment):
+    app.config["SQLALCHEMY_DATABASE_URI"] = env.DATABASE_URL
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
+    db.init_app(app)
+    migrate.init_app(app, db)
+    with app.app_context():
+        Session.configure(bind=db.engine)
+
+
+@injector.extension
+def dependencies() -> Dependencies:
+    from seer import env
+
+    return [
+        env.injector,
+    ]
 
 
 class Base(DeclarativeBase):

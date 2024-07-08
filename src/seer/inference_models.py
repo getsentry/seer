@@ -2,14 +2,43 @@ import contextlib
 import functools
 import os
 import threading
-from typing import Any, Callable, Literal, TypeVar
+from typing import Annotated, Any, Callable, Literal, Protocol, TypeVar
 
 import sentry_sdk
 
+from seer.env import Environment
 from seer.grouping.grouping import GroupingLookup
+from seer.injector import Dependencies, Injector, Labeled
 from seer.severity.severity_inference import SeverityInference
 
 root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
+
+injector = Injector()
+
+AsyncLoad = Annotated[bool, Labeled("async_model_load")]
+
+injector.constant(AsyncLoad, False)
+
+
+@injector.extension
+def dependencies() -> Dependencies:
+    from seer import env
+
+    return [env.injector]
+
+
+@injector.initializer
+def initialize_models(async_load: AsyncLoad, env: Environment):
+    import torch
+
+    torch.set_num_threads(env.TORCH_NUM_THREADS)
+
+    if async_load:
+        start_loading(async_load)
+        try:
+            yield
+        finally:
+            reset_loading_state()
 
 
 def model_path(subpath: str) -> str:
@@ -17,7 +46,13 @@ def model_path(subpath: str) -> str:
 
 
 _A = TypeVar("_A")
-_deferred: list[Callable[[], Any]] = []
+
+
+class DeferredLoading(Protocol):
+    def __call__(self) -> Any: ...
+
+
+_deferred: list[DeferredLoading] = []
 
 
 def deferred_loading(env_var_required: str) -> Callable[[Callable[[], _A]], Callable[[], _A]]:
@@ -30,6 +65,11 @@ def deferred_loading(env_var_required: str) -> Callable[[Callable[[], _A]], Call
         return wrapped
 
     return decorator
+
+
+@injector.extension
+def default_deferred_loading() -> list[DeferredLoading]:
+    return _deferred
 
 
 @deferred_loading("SEVERITY_ENABLED")
@@ -48,7 +88,6 @@ def grouping_lookup() -> GroupingLookup:
 
 
 LoadingResult = Literal["pending", "loading", "done", "failed"]
-
 _loading_lock: threading.RLock = threading.RLock()
 _loading_thread: threading.Thread | None = None
 _loading_result: LoadingResult = "pending"

@@ -31,7 +31,7 @@ from scipy.stats import chi2
 
 from seer.trend_detection.consts import TimeSeriesChangePoint
 
-_log: logging.Logger = logging.getLogger("cusum_detection")
+_log: logging.Logger = logging.getLogger(__name__)
 
 
 @functools.lru_cache(maxsize=10)
