@@ -164,7 +164,9 @@ class GroupingLookup:
         k: int,
     ) -> List[tuple[DbGroupingRecord, float]]:
         return (
-            session.query(
+            session.execute(sqlalchemy.text("SET LOCAL hnsw.ef_search = 100"))
+            .execution_options(autocommit=True)
+            .query(
                 DbGroupingRecord,
                 DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label("distance"),
             )
