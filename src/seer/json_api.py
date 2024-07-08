@@ -39,8 +39,11 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
                     raise Unauthorized("Rpcsignature did not match for given url and data")
+            elif not os.environ.get("DEV"):
+                sentry_sdk.capture_message("No Rpcsignature auth in request!", level="critical")
+                raise Unauthorized("No Rpcsignature found in Authorization header")
 
-            # Cached from ^^, this won't result in double read.
+            # Cached from request.get_data(), not a double read
             data = request.get_json()
 
             if not isinstance(data, dict):
@@ -70,11 +73,6 @@ def register_json_api_views(app: Flask) -> None:
 
 def get_json_api_shared_secrets() -> list[str]:
     result = os.environ.get("JSON_API_SHARED_SECRETS", "").split()
-    # TODO: Add this back in after we confirm with safer behavior.
-    # if not result:
-    #     raise ValueError(
-    #         "JSON_API_SHARED_SECRETS environment variable required to support signature based auth."
-    #     )
     return result
 
 
@@ -84,16 +82,11 @@ def compare_signature(url: str, body: bytes, signature: str) -> bool:
     Once a key has been able to validate the signature other keys will
     not be attempted. We should only have multiple keys during key rotations.
     """
-    # During the transition, support running seer without the shared secrets.
-    if not signature:
-        return True
-
     secrets = get_json_api_shared_secrets()
 
     if not signature.startswith("rpc0:"):
-        sentry_sdk.capture_message("Signature did not start with rpc0:")
-        return True
-        # return False
+        sentry_sdk.capture_message("Signature did not start with rpc0:", level="critical")
+        return False
 
     _, signature_data = signature.split(":", 2)
     signature_input = b"%s:%s" % (
@@ -109,6 +102,5 @@ def compare_signature(url: str, body: bytes, signature: str) -> bool:
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
 
-    sentry_sdk.capture_message("No signature matches found")
-    return True
-    # return False
+    sentry_sdk.capture_message("No signature matches found", level="critical")
+    return False
