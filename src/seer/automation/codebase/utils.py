@@ -122,9 +122,11 @@ def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:
 
     filename = frame.filename or frame.package
     if filename:
+        # Remove leading './' or '.' from filename
+        filename = filename.lstrip("./")
         frame_split = filename.split("/")[::-1]
 
-        if len(src_split) > 1 and len(frame_split) > 1 and len(src_split) >= len(frame_split):
+        if len(src_split) > 0 and len(frame_split) > 0 and len(src_split) >= len(frame_split):
             for i in range(len(frame_split)):
                 if src_split[i] == frame_split[i]:
                     match = True
