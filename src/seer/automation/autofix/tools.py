@@ -66,7 +66,7 @@ class BaseTools:
     def list_directory(self, path: str, repo_name: str | None = None):
         repo_client = self.context.get_repo_client(repo_name=repo_name)
 
-        all_paths = repo_client.get_index_file_set(repo_client.get_default_branch_head_sha())
+        all_paths = repo_client.get_index_file_set()
 
         paths = [p for p in all_paths if p.startswith(path)]
 
@@ -92,9 +92,7 @@ class BaseTools:
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name)
 
-        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(
-            repo_client.get_default_branch_head_sha()
-        )
+        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
 
         searcher = CodeSearcher(
             directory=tmp_repo_dir,
