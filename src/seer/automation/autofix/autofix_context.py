@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
+    AutofixRequest,
     ChangesStep,
     CodebaseState,
     CommittedPullRequestDetails,
@@ -129,6 +130,10 @@ class AutofixContext(PipelineContext):
         return self.state.get().run_id
 
     @property
+    def request(self) -> AutofixRequest:
+        return self.state.get().request
+
+    @property
     def signals(self) -> list[str]:
         return self.state.get().signals
 
@@ -216,7 +221,9 @@ class AutofixContext(PipelineContext):
         # we will remove that one if we go with the no-embedding approach
         repo_client = self.get_repo_client(repo_name)
 
-        file_contents = repo_client.get_file_content(path)
+        file_contents = repo_client.get_file_content(
+            path, sha=self.state.get().request.base_commit_sha
+        )
 
         if not ignore_local_changes:
             cur_state = self.state.get()

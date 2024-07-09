@@ -14,6 +14,7 @@ from seer.automation.autofix.evaluations import (
     score_one,
     score_root_causes,
     sync_run_evaluation_on_item,
+    sync_run_execution,
     sync_run_root_cause,
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
@@ -252,7 +253,7 @@ def run_autofix_evaluation_on_item(
     *,
     item_id: str,
     run_name: str,
-    run_type: Literal["full", "root_cause"],
+    run_type: Literal["execution", "full", "root_cause"],
     item_index: int,
     item_count: int,
 ):
@@ -317,6 +318,38 @@ def run_autofix_evaluation_on_item(
                         model=scoring_model, n_panel=scoring_n_panel, name="mean_score"
                     ),
                     value=root_cause_score.get("mean_score"),
+                )
+            else:
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
+                    value=0,
+                )
+        elif run_type == "execution":
+            diff: str | None = None
+            try:
+                diff = sync_run_execution(dataset_item, langfuse_session_id=trace_id)
+            except Exception as e:
+                logger.error(f"Error running evaluation: {e}")
+
+            if diff:
+                score = score_one(dataset_item, diff, n_panel=5, langfuse_session_id=trace_id)
+
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
+                    value=score,
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="score"
+                    ),
+                    value=score,
                 )
             else:
                 langfuse.score(

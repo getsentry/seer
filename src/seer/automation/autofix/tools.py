@@ -49,10 +49,6 @@ class BaseTools:
     def expand_document(self, input: str, repo_name: str | None = None):
         file_contents = self.context.get_file_contents(input, repo_name=repo_name)
 
-        if repo_name is None:
-            client = self.context.get_repo_client(repo_name)
-            repo_name = client.repo_name
-
         self.context.event_manager.add_log(
             f"Taking a look at the document at {input} in {repo_name}."
         )
