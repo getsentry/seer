@@ -51,12 +51,6 @@ def test_json_api_decorator():
 
 
 def test_json_api_signature_strict_mode():
-    # Note -- we make an exception for DEV environments so that
-    # tests and basic setups aren't required to all perform
-    # signed requests.  To validate the production behavior we
-    # disable this here.
-    # TODO: Dependency injection to conditionally manage this.
-    os.environ["DEV"] = ""
     app = Flask(__name__)
     test_client = app.test_client()
 
@@ -73,6 +67,13 @@ def test_json_api_signature_strict_mode():
     )
 
     with status_code_watcher as changed:
+        # Note -- we make an exception for DEV environments so that
+        # tests and basic setups aren't required to all perform
+        # signed requests.  To validate the production behavior we
+        # disable this here.
+        # TODO: Dependency injection to conditionally manage this.
+        os.environ["DEV"] = ""
+
         os.environ["JSON_API_SHARED_SECRETS"] = "secret-one secret-two"
         headers["Authorization"] = "Rpcsignature rpc0:some-token"
 
