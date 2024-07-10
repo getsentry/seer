@@ -62,10 +62,15 @@ class DetectAnomaliesResponse(BaseModel):
 
 
 class StoreDataRequest(BaseModel):
-    alert_id: int
     organization_id: int
     project_id: int
+    alert: Alert
+    config: ADConfig
     timeseries: List[TimeSeriesPoint]
+
+
+class StoreDataResponse(BaseModel):
+    success: bool
 
 
 logger = logging.getLogger("anomaly_detection")
@@ -101,6 +106,6 @@ class AnomalyDetection:
         # Placeholder for actual anomaly detection logic
         return DetectAnomaliesResponse(anomalies=anomalies)
 
-    def store_data(self, request: StoreDataRequest) -> bool:
+    def store_data(self, request: StoreDataRequest) -> StoreDataResponse:
         logger.info(f"Storing data for request: {request}")
-        return True
+        return StoreDataResponse(success=True)

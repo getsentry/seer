@@ -11,6 +11,7 @@ from seer.anomaly_detection.anomaly_detection import (
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
+    StoreDataResponse,
 )
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
@@ -240,10 +241,9 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     return anomaly_detection().detect_anomalies(data)
 
 
-@app.route("/v1/anomaly-detection/store")
-def store_data_endpoint(data: StoreDataRequest):
-    success = anomaly_detection().store_data(data)
-    return jsonify(success=success)
+@json_api("/v1/anomaly-detection/store")
+def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
+    return anomaly_detection().store_data(data)
 
 
 @app.route("/health/live", methods=["GET"])
