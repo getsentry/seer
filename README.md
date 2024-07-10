@@ -56,11 +56,12 @@ Recommended to use `pyenv` or similar python environment manager so as to be abl
 
 ### Environment variables
 
-Set the environment variables that are in `.env.example` with the actual values, save this as `.env` in the root of the project.
+Create `.env` in the root of the project and set the environment variables that are in `.env.example` to the actual values.
 
-> The example shows `GITHUB_PRIVATE_KEY` and `GITHUB_APP_ID`. You can also use just `GITHUB_TOKEN` instead.
+> The example shows `GITHUB_PRIVATE_KEY` and `GITHUB_APP_ID`. You can also use just `GITHUB_TOKEN` instead, which you can get from GitHub Settings/Developer Setttings/Personal Access Tokens.
+> For local development, set `NO_SENTRY_INTEGRATION=1` and set `NO_REAL_MODELS=1`.
 
-Add `export SENTRY_AUTH_TOKEN=<your sentry auth token>` to your rc file.
+In your rc file, add `export SENTRY_AUTH_TOKEN=<your sentry auth token>`.
 
 ### Install GCloud CLI
 
@@ -76,13 +77,35 @@ gsutil cp -r gs://sentry-ml/seer/models ./models
 
 ### Running
 
-To run for development locally in one ago including building the docker image and rabbitmq container:
+To run for development locally in one go, including building the docker image and rabbitmq container, run:
 
 ```bash
 make dev # runs docker compose up --build
 ```
 
-Port `9091` will be exposed which is what the local sentry application will look for to connect to the service.
+If you see database-related errors, try `make update` (see the Applying Migrations section below).
+
+#### Running Autofix with Sentry
+
+For the full Autofix experience, you'll want to use the UI in `sentry`.
+
+Port `9091` will be exposed which is what the local `sentry` application will look for to connect to the service.
+
+In `~/.sentry/sentry.conf.py`, make sure you have the below to access Autofix and Seer in your local `sentry` instance:
+
+```yaml
+SEER_RPC_SHARED_SECRET=["seers-also-very-long-value-haha"]
+SENTRY_FEATURES['projects:ai-autofix'] = True
+SENTRY_FEATURES['organizations:issue-details-autofix-ui'] = True
+```
+
+You will not be able to get GenAI data consent locally, so you may need to hardcode [this line](https://github.com/getsentry/sentry/blob/c4848fa48c92a9dd40649a4f94072c4154d6d564/static/app/components/events/autofix/useAutofixSetup.tsx#L50-L54) in `sentry` to `Boolean(true)`.
+
+You may also have to comment out [this GitHub check](https://github.com/getsentry/sentry/blob/3f6b07dbd53386c8b8bb44a84fbffcdd5d59f16f/src/sentry/api/endpoints/group_ai_autofix.py#L199-L203) in order to use Autofix from the UI locally, if no GitHub repositories are linked to your project.
+
+Make sure to restart `sentry` and `seer`.
+
+Now in the Sentry interface, you should be able to start Autofix from an event.
 
 ### Database Stuff
 
