@@ -43,6 +43,18 @@ CODEBASE_STORAGE_TYPE=filesystem
 CODEBASE_STORAGE_DIR=<path to your local directory>
 ```
 
+#### Running Autofix Evaluations
+
+You can run Autofix evaluations by hitting `POST /v1/automation/autofix/evaluations/start` with
+
+```json
+{
+  "dataset_name": ..., // The name of the dataset to run on
+  "run_name": ... // Whatever you want to name your run
+}
+```
+
+
 ## Local Development
 
 ### Setup
