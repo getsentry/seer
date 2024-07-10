@@ -189,6 +189,11 @@ class AutofixPrIdRequest(BaseModel):
     pr_id: int
 
 
+class AutofixEvaluationRequest(BaseModel):
+    dataset_name: str
+    run_name: str
+
+
 class AutofixStateResponse(BaseModel):
     group_id: Optional[int]
     run_id: Optional[int]

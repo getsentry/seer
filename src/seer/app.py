@@ -16,6 +16,7 @@ from seer.anomaly_detection.anomaly_detection import (
 )
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
+    AutofixEvaluationRequest,
     AutofixPrIdRequest,
     AutofixRequest,
     AutofixStateRequest,
@@ -28,6 +29,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
+    run_autofix_evaluation,
     run_autofix_execution,
     run_autofix_root_cause,
 )
@@ -224,6 +226,13 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
             state=cur_state.model_dump(mode="json"),
         )
     return AutofixStateResponse(group_id=None, run_id=None, state=None)
+
+
+@json_api(blueprint, "/v1/automation/autofix/evaluations/start")
+def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
+    run_autofix_evaluation(data.dataset_name, data.run_name)
+
+    return AutofixEndpointResponse(started=True, run_id=-1)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")

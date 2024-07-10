@@ -16,6 +16,8 @@ SerializedSignature = Any
 DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS = 50  # 50 seconds
 DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS = 60  # 60 seconds
 
+PIPELINE_SYNC_SIGNAL = "pipeline_run_mode:sync"
+
 
 class PipelineContext(abc.ABC):
     state: State
@@ -138,6 +140,12 @@ class PipelineChain(abc.ABC):
     Combine this with PipelineStep to make a step into a chain, which can call other steps.
     """
 
+    context: PipelineContext
+
     def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
         sentry_sdk.capture_message(f"Next invoked from {self}", "info")
-        signature(sig).apply_async(**apply_async_kwargs)
+
+        if PIPELINE_SYNC_SIGNAL in self.context.signals:
+            signature(sig).apply(**apply_async_kwargs)
+        else:
+            signature(sig).apply_async(**apply_async_kwargs)
