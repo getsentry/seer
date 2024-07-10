@@ -84,13 +84,17 @@ class AnomalyDetection:
         print(request)
         if isinstance(request.context, Alert):
             logger.info(f"Detecting anomalies for alert ID: {request.context.id}")
-            anomalies = [
-                TimeSeriesPoint(
-                    timestamp=request.context.cur_window.timestamp,
-                    value=request.context.cur_window.value,
-                    anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
-                )
-            ]
+            anomalies = (
+                [
+                    TimeSeriesPoint(
+                        timestamp=request.context.cur_window.timestamp,
+                        value=request.context.cur_window.value,
+                        anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
+                    )
+                ]
+                if request.context.cur_window
+                else []
+            )
         else:
             logger.info(
                 f"Detecting anomalies for time series with {len(request.context)} datapoints"
