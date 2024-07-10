@@ -214,7 +214,7 @@ def run_autofix_evaluation(dataset_name: str, run_name: str):
     )
     logger.info(f"Number of items: {len(dataset.items)}")
 
-    for i, item in enumerate(dataset.items[:1]):
+    for i, item in enumerate(dataset.items):
         run_autofix_evaluation_on_item.apply_async(
             (item.id, run_name, i, len(dataset.items)), queue=CeleryQueues.DEFAULT
         )
