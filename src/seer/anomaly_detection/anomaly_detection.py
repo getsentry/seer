@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class Anonmaly(BaseModel):
+class Anomaly(BaseModel):
     anomaly_type: Literal["none", "anomaly_low", "anomaly_high", "no_data"] = Field(
         ...,
         description="Indicates result of the anomaly detection algorithm. 'none' means no anomaly detected, 'anomaly_low' means lower threshold, 'anomaly_high' means higher threshold, 'no_data' means time series did not have enough data to run anomaly detection.",
@@ -16,7 +16,7 @@ class Anonmaly(BaseModel):
 class TimeSeriesPoint(BaseModel):
     timestamp: float
     value: float
-    anomaly: Optional[Anonmaly] = None
+    anomaly: Optional[Anomaly] = None
 
 
 class ADConfig(BaseModel):
@@ -88,7 +88,7 @@ class AnomalyDetection:
                 TimeSeriesPoint(
                     timestamp=request.context.cur_window.timestamp,
                     value=request.context.cur_window.value,
-                    anomaly=Anonmaly(anomaly_type="none", anomaly_score=0.5),
+                    anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
                 )
             ]
         else:
@@ -99,7 +99,7 @@ class AnomalyDetection:
                 TimeSeriesPoint(
                     timestamp=point.timestamp,
                     value=point.value,
-                    anomaly=Anonmaly(anomaly_type="none", anomaly_score=0.5),
+                    anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
                 )
                 for point in request.context or []
             ]
