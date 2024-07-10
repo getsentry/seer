@@ -215,6 +215,9 @@ def run_autofix_evaluation(dataset_name: str, run_name: str):
     logger.info(f"Number of items: {len(dataset.items)}")
 
     for i, item in enumerate(dataset.items):
+        # Note: This will add ALL the dataset item runs into the CPU queue.
+        # As we are not going to be running this in prod yet, it's fine to leave as is.
+        # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
         run_autofix_evaluation_on_item.apply_async(
             (item.id, run_name, i, len(dataset.items)), queue=CeleryQueues.DEFAULT
         )

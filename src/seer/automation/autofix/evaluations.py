@@ -1,3 +1,4 @@
+import textwrap
 from xml.etree import ElementTree as ET
 
 from langfuse.client import DatasetItemClient
@@ -83,16 +84,16 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     if not changes:
         return None
 
-    diffs = []
+    diffs: list[str] = []
     for change in changes:
-        diff = change.diff_str
-        diffs.append(diff)
+        if change.diff_str:
+            diffs.append(change.diff_str)
 
     return make_combined_diff(diffs)
 
 
 @observe(name="Score fix")
-def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff_str: str) -> float:
+def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str) -> float:
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
 
@@ -100,28 +101,35 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff_str: str
 
     event_details = EventDetails.from_event(request.issue.events[0])
 
-    prompt = f"""{event_details.format_event()}
+    prompt = textwrap.dedent(
+        """\
+            {event_details}
 
-Given the above issue, we know the correct fix is:
+            Given the above issue, we know the correct fix is:
 
-<expected_solution>
-<diff>
-{dataset_item.expected_output.get('diff')}
-</diff>
-</expected_solution>
+            <expected_solution>
+            <diff>
+            {expected_diff}
+            </diff>
+            </expected_solution>
 
-The model outputted the following solution:
+            The model outputted the following solution:
 
-<predicted_solution>
-{predicted_diff_str}
-</predicted_solution>
+            <predicted_solution>
+            {predicted_diff}
+            </predicted_solution>
 
-Score how well the predicted solution matches the expected solution with a float score from 0 to 1, where 1 means the solution fully fixes the issue and 0 means the solution does not fix the issue at all.
-- Consider the context of the issue and the diff
-- Consider that there are multiple ways to fix an issue
+            Score how well the predicted solution matches the expected solution with a float score from 0 to 1, where 1 means the solution fully fixes the issue and 0 means the solution does not fix the issue at all.
+            - Consider the context of the issue and the diff
+            - Consider that there are multiple ways to fix an issue
 
-Think step-by-step inside a <thoughts> tag before giving a score.
-Return the score inside a <score> tag."""
+            Think step-by-step inside a <thoughts> tag before giving a score.
+            Return the score inside a <score> tag."""
+    ).format(
+        event_details=event_details.format_event(),
+        expected_diff=dataset_item.expected_output.get("diff"),
+        predicted_diff=predicted_diff,
+    )
     response, usage = GptClient(model="gpt-4-0125-preview").completion(
         messages=[Message(role="user", content=prompt)]
     )

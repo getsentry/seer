@@ -1,7 +1,7 @@
 import abc
 import logging
 import uuid
-from typing import Any, Generic, Type, TypeVar
+from typing import Any, Generic, TypeVar
 
 import sentry_sdk
 from celery import Task, signature
@@ -52,16 +52,18 @@ def make_step_request_fields(context: PipelineContext):
 
 # Define a type variable that is bound to PipelineStepTaskRequest
 _RequestType = TypeVar("_RequestType", bound=PipelineStepTaskRequest)
+_ContextType = TypeVar("_ContextType", bound=PipelineContext)
 
 
-class PipelineStep(abc.ABC, Generic[_RequestType]):
+class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
     """
     A step in the automation pipeline, complete with the context, request, logging + error handling utils.
     Main method that is run is _invoke, which should be implemented by the subclass.
     """
 
     name = "PipelineStep"
-    request_model: Type[_RequestType]
+    request: _RequestType
+    context: _ContextType
 
     def __init__(self, request: dict[str, Any]):
         self.request = self._instantiate_request(request)
@@ -114,12 +116,12 @@ class PipelineStep(abc.ABC, Generic[_RequestType]):
 
     @staticmethod
     @abc.abstractmethod
-    def _instantiate_request(request: dict[str, Any]) -> PipelineStepTaskRequest:
+    def _instantiate_request(request: dict[str, Any]) -> _RequestType:
         pass
 
     @staticmethod
     @abc.abstractmethod
-    def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
+    def _instantiate_context(request: PipelineStepTaskRequest) -> _ContextType:
         pass
 
     @abc.abstractmethod
@@ -135,12 +137,10 @@ class PipelineStep(abc.ABC, Generic[_RequestType]):
         return make_step_request_fields(self.context)
 
 
-class PipelineChain(abc.ABC):
+class PipelineChain(PipelineStep):
     """
-    Combine this with PipelineStep to make a step into a chain, which can call other steps.
+    A PipelineStep which can call other steps.
     """
-
-    context: PipelineContext
 
     def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
         sentry_sdk.capture_message(f"Next invoked from {self}", "info")
