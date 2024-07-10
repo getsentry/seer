@@ -14,6 +14,7 @@ from seer.automation.autofix.models import (
     ProgressType,
     RootCauseSelection,
     RootCauseStep,
+    UserResponseStep,
 )
 from seer.automation.state import State
 
@@ -27,37 +28,46 @@ class AutofixEventManager:
     @property
     def root_cause_analysis_processing_step(self) -> DefaultStep:
         return DefaultStep(
-            id="root_cause_analysis_processing",
+            key="root_cause_analysis_processing",
             title="Analyze Issue",
         )
 
     @property
     def root_cause_analysis_step(self) -> RootCauseStep:
         return RootCauseStep(
-            id="root_cause_analysis",
+            key="root_cause_analysis",
             title="Root Cause Analysis",
         )
 
     @property
     def indexing_step(self) -> DefaultStep:
         return DefaultStep(
-            id="codebase_indexing",
+            key="codebase_indexing",
             title="Codebase Indexing",
         )
 
     @property
     def plan_step(self) -> DefaultStep:
         return DefaultStep(
-            id="plan",
+            key="plan",
             title="Create Fix",
         )
 
     @property
     def changes_step(self) -> ChangesStep:
         return ChangesStep(
-            id="changes",
+            key="changes",
             title="Changes",
             changes=[],
+        )
+
+    @property
+    def user_response_step(self) -> UserResponseStep:
+        return UserResponseStep(
+            title="User",
+            text="",
+            user_id=-1,
+            key="user_response",
         )
 
     def send_root_cause_analysis_pending(self):
@@ -79,7 +89,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
             root_cause_processing_step.status = AutofixStatus.COMPLETED
-            root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
+            root_cause_step = cur.add_step(self.root_cause_analysis_step)
             if root_cause_output and root_cause_output.causes:
                 root_cause_step.status = AutofixStatus.COMPLETED
                 root_cause_step.causes = root_cause_output.causes
@@ -91,14 +101,14 @@ class AutofixEventManager:
 
     def send_codebase_indexing_start(self):
         with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
+            indexing_step = cur.add_step(self.indexing_step.model_copy())
             indexing_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
 
     def send_codebase_indexing_complete_if_exists(self):
         with self.state.update() as cur:
-            indexing_step = cur.find_step(id=self.indexing_step.id)
+            indexing_step = cur.find_step(key=self.indexing_step.key)
 
             if indexing_step:
                 indexing_step.status = AutofixStatus.COMPLETED
@@ -110,17 +120,19 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_planning_pending(self):
+    def send_planning_start(self, is_update: bool = False, is_retry: bool = False):
         with self.state.update() as cur:
-            root_cause_step = cur.find_or_add(self.plan_step)
-            root_cause_step.status = AutofixStatus.PENDING
+            if is_retry:
+                last_step = cur.steps[-1]
+                if last_step.key == self.plan_step.key:
+                    del cur.steps[-1]
 
-            cur.status = AutofixStatus.PROCESSING
+            plan_step = cur.last_or_add(self.plan_step)
 
-    def send_planning_start(self):
-        with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING
+
+            if is_update:
+                plan_step.title = "Update Fix"
 
             cur.status = AutofixStatus.PROCESSING
 
@@ -134,6 +146,7 @@ class AutofixEventManager:
                     step = plan_step.find_or_add_child(
                         DefaultStep(
                             id=str(i),
+                            key="execution_step",
                             title=child_step.commit_message,
                         )
                     )
@@ -169,7 +182,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             cur.mark_all_steps_completed()
 
-            changes_step = cur.find_or_add(self.changes_step)
+            changes_step = cur.add_step(self.changes_step)
             changes_step.status = AutofixStatus.COMPLETED
             changes_step.changes = codebase_changes
 
@@ -187,13 +200,24 @@ class AutofixEventManager:
             changes_step.status = AutofixStatus.COMPLETED
             cur.status = AutofixStatus.COMPLETED
 
+    def send_user_response_step(self, user_id: int, text: str):
+        with self.state.update() as cur:
+            step = cur.add_step(self.user_response_step)
+            step.user_id = user_id
+            step.text = text
+            step.status = AutofixStatus.COMPLETED
+
+            cur.actor_ids = list(set(cur.actor_ids + [user_id]))
+
+            cur.status = AutofixStatus.PROCESSING
+
     def add_log(self, message: str):
         with self.state.update() as cur:
             if cur.steps:
                 step = cur.steps[-1]
                 if step.status == AutofixStatus.PROCESSING:
-                    # If the current step is the planning step, and an execution step is running, we log it there instead.
-                    if step.id == self.plan_step.id and step.progress:
+                    # If an execution step is running, we log it there instead.
+                    if step.progress:
                         execution_step = step.progress[-1]
                         if (
                             isinstance(execution_step, DefaultStep)
