@@ -2,6 +2,7 @@ import logging
 from typing import cast
 
 import sentry_sdk
+from langfuse import Langfuse
 
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -9,6 +10,7 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
+    AutofixPrEventRequest,
     AutofixRequest,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
@@ -209,3 +211,25 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     )
 
     event_manager.send_pr_creation_complete()
+
+
+def run_autofix_log_pr_event(request: AutofixPrEventRequest):
+    """
+    Logs the event of a PR being opened, closed, or merged to langfuse to update the tags of the traces for a given run_id.
+    """
+    langfuse = Langfuse()
+
+    action_tag_map = {"opened": "pr:opened", "closed": "pr:closed", "merged": "pr:merged"}
+
+    if request.action not in action_tag_map:
+        raise ValueError(f"Invalid action: {request.action}")
+
+    new_tag = action_tag_map[request.action]
+
+    traces = langfuse.client.trace.list(tags=[f"run_id:{request.run_id}"])
+
+    def update_tags(tags: list[str] | None) -> list[str]:
+        return list(set(tags or []) | {new_tag})
+
+    for trace in traces.data:
+        langfuse.trace(id=trace.id, tags=update_tags(trace.tags))

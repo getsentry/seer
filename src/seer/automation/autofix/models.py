@@ -187,6 +187,11 @@ class AutofixPrIdRequest(BaseModel):
     pr_id: int
 
 
+class AutofixPrEventRequest(BaseModel):
+    run_id: int
+    action: Literal["opened", "closed", "merged"]
+
+
 class AutofixStateResponse(BaseModel):
     group_id: Optional[int]
     state: Optional[dict]
