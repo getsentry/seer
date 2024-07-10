@@ -58,7 +58,7 @@ class DetectAnomaliesRequest(BaseModel):
 
 
 class DetectAnomaliesResponse(BaseModel):
-    anomalies: List[TimeSeriesPoint]
+    timeseries: List[TimeSeriesPoint]
 
 
 class StoreDataRequest(BaseModel):
@@ -108,7 +108,7 @@ class AnomalyDetection:
                 for point in request.context or []
             ]
         # Placeholder for actual anomaly detection logic
-        return DetectAnomaliesResponse(anomalies=anomalies)
+        return DetectAnomaliesResponse(timeseries=anomalies)
 
     def store_data(self, request: StoreDataRequest) -> StoreDataResponse:
         logger.info(f"Storing data for request: {request}")
