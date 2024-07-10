@@ -56,32 +56,12 @@ Recommended to use `pyenv` or similar python environment manager so as to be abl
 
 ### Environment variables
 
-Set the environment variables that are in `.env.example` with the actual values and save this as `.env` in the root of the project.
+Create `.env` in the root of the project and set the environment variables that are in `.env.example` to the actual values.
 
 > The example shows `GITHUB_PRIVATE_KEY` and `GITHUB_APP_ID`. You can also use just `GITHUB_TOKEN` instead, which you can get from GitHub Settings/Developer Setttings/Personal Access Tokens.
+> For local development, set `NO_SENTRY_INTEGRATION=1` and set `NO_REAL_MODELS=1`.
 
-For local development, set `NO_SENTRY_INTEGRATION=1` and set `NO_REAL_MODELS=1`.
-
-Set `RPC_SHARED_SECRET="seers-also-very-long-value-haha"`.
-
-Your `.env` file should end up looking something like this (replace "TODO" with correct values):
-
-```yaml
-OPENAI_API_KEY=TODO
-GITHUB_PRIVATE_KEY=... # Or just use GITHUB_TOKEN
-GITHUB_APP_ID=... # Or just use GITHUB_TOKEN
-GITHUB_TOKEN=TODO
-GITHUB_SENTRY_APP_ID=...
-GITHUB_SENTRY_PRIVATE_KEY=...
-NO_SENTRY_INTEGRATION=1 # Set this to 1 in develop mode to ignore calling sentry
-LANGFUSE_SECRET_KEY=TODO
-LANGFUSE_PUBLIC_KEY=TODO
-LANGFUSE_HOST=TODO
-NO_REAL_MODELS=1 # Set this to 1 in development to ignore real models and use stubs
-RPC_SHARED_SECRET="seers-also-very-long-value-haha"
-```
-
-Add `export SENTRY_AUTH_TOKEN=<your sentry auth token>` to your rc file.
+In your rc file, add `export SENTRY_AUTH_TOKEN=<your sentry auth token>`.
 
 ### Install GCloud CLI
 
@@ -105,7 +85,7 @@ make dev # runs docker compose up --build
 
 If you see database-related errors, try `make update` (see the Applying Migrations section below).
 
-#### Running with Sentry
+#### Running Autofix with Sentry
 
 For the full Autofix experience, you'll want to use the UI in `sentry`.
 
