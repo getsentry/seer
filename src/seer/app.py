@@ -7,6 +7,12 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from celery_app.config import CeleryQueues
+from seer.anomaly_detection.anomaly_detection import (
+    DetectAnomaliesRequest,
+    DetectAnomaliesResponse,
+    StoreDataRequest,
+    StoreDataResponse,
+)
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixPrIdRequest,
@@ -49,7 +55,7 @@ from seer.grouping.grouping import (
     SimilarityBenchmarkResponse,
     SimilarityResponse,
 )
-from seer.inference_models import embeddings_model, grouping_lookup
+from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
 from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
@@ -228,6 +234,16 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
             group_id=cur.request.issue.id, state=cur.model_dump(mode="json")
         )
     return AutofixStateResponse(group_id=None, state=None)
+
+
+@json_api("/v1/anomaly-detection/detect")
+def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
+    return anomaly_detection().detect_anomalies(data)
+
+
+@json_api("/v1/anomaly-detection/store")
+def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
+    return anomaly_detection().store_data(data)
 
 
 @app.route("/health/live", methods=["GET"])

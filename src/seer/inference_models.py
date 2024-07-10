@@ -6,6 +6,7 @@ from typing import Any, Callable, Literal, TypeVar
 
 import sentry_sdk
 
+from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.grouping.grouping import GroupingLookup
 from seer.severity.severity_inference import SeverityInference
 
@@ -45,6 +46,11 @@ def grouping_lookup() -> GroupingLookup:
         model_path=model_path("issue_grouping_v0/embeddings"),
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
+
+
+@deferred_loading("ANOMALY_DETECTION_ENABLED")
+def anomaly_detection() -> AnomalyDetection:
+    return AnomalyDetection()
 
 
 LoadingResult = Literal["pending", "loading", "done", "failed"]
