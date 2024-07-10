@@ -8,8 +8,8 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from celery_app.config import CeleryQueues
 from seer.anomaly_detection.anomaly_detection import (
-    AlertAnomaliesRequest,
-    AlertAnomaliesResponse,
+    DetectAnomaliesRequest,
+    DetectAnomaliesResponse,
     StoreDataRequest,
 )
 from seer.automation.autofix.models import (
@@ -236,7 +236,7 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
 
 
 @json_api("/v1/anomaly-detection/detect")
-def detect_anomalies_endpoint(data: AlertAnomaliesRequest) -> AlertAnomaliesResponse:
+def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
     return anomaly_detection().detect_anomalies(data)
 
 

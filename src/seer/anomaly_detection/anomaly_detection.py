@@ -4,19 +4,27 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class Anonmaly(BaseModel):
+    anomaly_type: Literal["none", "anomaly_low", "anomaly_high", "no_data"] = Field(
+        ...,
+        description="Indicates result of the anomaly detection algorithm. 'none' means no anomaly detected, 'anomaly_low' means lower threshold, 'anomaly_high' means higher threshold, 'no_data' means time series did not have enough data to run anomaly detection.",
+    )
+
+    anomaly_score: Optional[float] = Field(None, description="Computed anomaly score")
+
+
 class TimeSeriesPoint(BaseModel):
     timestamp: float
     value: float
-    anomaly_score: Optional[float] = None
+    anomaly: Optional[Anonmaly] = None
 
 
 class ADConfig(BaseModel):
-    time_period: int = Field(
+    time_period: Literal[15, 30, 60] = Field(
         ...,
         description="Aggregation window used in the time period, in minutes",
     )
-    display_window: int = Field(..., description="Window for the view, in minutes")
-    detection_threshold: Literal["low", "medium", "high"] = Field(
+    sensitivity: Literal["low", "medium", "high"] = Field(
         ...,
         description="Low means more anomalies will be detected while high means less anomalies will be detected.",
     )
@@ -24,7 +32,7 @@ class ADConfig(BaseModel):
         ...,
         description="Identifies the type of deviation(s) to detect. Up means only anomalous values above normal values are identified while down means values lower than normal values are identified. Passing both will identify both above and below normal values.",
     )
-    expected_cyclicality: Literal["hourly", "daily", "weekly", "auto"] = Field(
+    expected_seasonality: Literal["hourly", "daily", "weekly", "auto"] = Field(
         ...,
         description="Underlying cyclicality in the time series. Auto means the system will detect by itself.",
     )
@@ -39,14 +47,17 @@ class Alert(BaseModel):
     )
 
 
-class AlertAnomaliesRequest(BaseModel):
+class DetectAnomaliesRequest(BaseModel):
     organization_id: int
     project_id: int
     config: ADConfig
-    alert: Alert
+    context: Alert | List[TimeSeriesPoint] = Field(
+        ...,
+        description="Context can be an alert identified by its id or a raw time series. If alert is provided then the system will pull the related timeseries from store else it will use the provided timeseries.",
+    )
 
 
-class AlertAnomaliesResponse(BaseModel):
+class DetectAnomaliesResponse(BaseModel):
     anomalies: List[TimeSeriesPoint]
 
 
@@ -64,14 +75,31 @@ class AnomalyDetection:
     def __init__(self):
         pass
 
-    def detect_anomalies(self, request: AlertAnomaliesRequest) -> AlertAnomaliesResponse:
-        logger.info(f"Detecting anomalies for alert ID: {request.alert.id}")
+    def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
+        print(request)
+        if isinstance(request.context, Alert):
+            logger.info(f"Detecting anomalies for alert ID: {request.context.id}")
+            anomalies = [
+                TimeSeriesPoint(
+                    timestamp=request.context.cur_window.timestamp,
+                    value=request.context.cur_window.value,
+                    anomaly=Anonmaly(anomaly_type="none", anomaly_score=0.5),
+                )
+            ]
+        else:
+            logger.info(
+                f"Detecting anomalies for time series with {len(request.context)} datapoints"
+            )
+            anomalies = [
+                TimeSeriesPoint(
+                    timestamp=point.timestamp,
+                    value=point.value,
+                    anomaly=Anonmaly(anomaly_type="none", anomaly_score=0.5),
+                )
+                for point in request.context or []
+            ]
         # Placeholder for actual anomaly detection logic
-        anomalies = [
-            TimeSeriesPoint(timestamp=point[0], value=point[1], anomaly_score=0.5)
-            for point in request.alert.cur_window or []
-        ]
-        return AlertAnomaliesResponse(anomalies=anomalies)
+        return DetectAnomaliesResponse(anomalies=anomalies)
 
     def store_data(self, request: StoreDataRequest) -> bool:
         logger.info(f"Storing data for request: {request}")
