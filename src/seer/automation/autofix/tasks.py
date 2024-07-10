@@ -231,10 +231,10 @@ def run_autofix_evaluation_on_item(item_id: str, run_name: str, item_index: int,
     )
 
     with dataset_item.observe(run_name=run_name) as trace_id:
-        diff = sync_run_evaluation_on_item(dataset_item)
+        diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
         if diff:
             langfuse.score(
                 trace_id=trace_id,
                 name="gpt4_0125_n3_score",
-                value=score_one(dataset_item, diff),
+                value=score_one(dataset_item, diff, langfuse_session_id=trace_id),
             )
