@@ -89,7 +89,7 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
         if change.diff_str:
             diffs.append(change.diff_str)
 
-    return make_combined_diff(diffs)
+    return "\n".join(diffs)
 
 
 @observe(name="Score fix")
@@ -150,10 +150,3 @@ def score_one(dataset_item: DatasetItemClient, predicted_diff_str: str, n_panel=
         / n_panel,
         2,
     )
-
-
-def make_combined_diff(diffs: list[str]) -> str:
-    combined_diff = ""
-    for diff in diffs:
-        combined_diff += diff
-    return combined_diff
