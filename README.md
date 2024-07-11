@@ -50,10 +50,10 @@ You can run Autofix evaluations by hitting `POST /v1/automation/autofix/evaluati
 ```json
 {
   "dataset_name": ..., // The name of the dataset to run on
-  "run_name": ... // Whatever you want to name your run
+  "run_name": ..., // Whatever you want to name your run
+  "test": false // Set this to `true` if you just want to run on 1 item for testing the pipeline
 }
 ```
-
 
 ## Local Development
 
