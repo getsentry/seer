@@ -230,7 +230,7 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
 
 @json_api(blueprint, "/v1/automation/autofix/evaluations/start")
 def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
-    run_autofix_evaluation(data.dataset_name, data.run_name)
+    run_autofix_evaluation(data.dataset_name, data.run_name, is_test=data.test)
 
     return AutofixEndpointResponse(started=True, run_id=-1)
 

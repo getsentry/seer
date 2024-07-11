@@ -192,6 +192,7 @@ class AutofixPrIdRequest(BaseModel):
 class AutofixEvaluationRequest(BaseModel):
     dataset_name: str
     run_name: str
+    test: bool = False
 
 
 class AutofixStateResponse(BaseModel):

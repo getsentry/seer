@@ -204,23 +204,31 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     event_manager.send_pr_creation_complete()
 
 
-def run_autofix_evaluation(dataset_name: str, run_name: str):
+def run_autofix_evaluation(
+    dataset_name: str, run_name: str, n_runs_per_item: int = 1, is_test: bool = False
+):
     langfuse = Langfuse()
 
     dataset = langfuse.get_dataset(dataset_name)
+    items = dataset.items
+
+    if is_test:
+        items = items[:1]
 
     logger.info(
         f"Starting autofix evaluation for dataset {dataset_name} with run name '{run_name}'."
     )
-    logger.info(f"Number of items: {len(dataset.items)}")
+    logger.info(f"Number of items: {len(items)}")
+    logger.info(f"Total number of runs: {len(items) * n_runs_per_item}")
 
-    for i, item in enumerate(dataset.items):
+    for i, item in enumerate(items):
         # Note: This will add ALL the dataset item runs into the CPU queue.
         # As we are not going to be running this in prod yet, it's fine to leave as is.
         # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
-        run_autofix_evaluation_on_item.apply_async(
-            (item.id, run_name, i, len(dataset.items)), queue=CeleryQueues.DEFAULT
-        )
+        for _ in range(n_runs_per_item):
+            run_autofix_evaluation_on_item.apply_async(
+                (item.id, run_name, i, len(items)), queue=CeleryQueues.DEFAULT
+            )
 
 
 @celery_app.task()
@@ -238,6 +246,6 @@ def run_autofix_evaluation_on_item(item_id: str, run_name: str, item_index: int,
         if diff:
             langfuse.score(
                 trace_id=trace_id,
-                name="gpt4_0125_n3_score",
-                value=score_one(dataset_item, diff, langfuse_session_id=trace_id),
+                name="gpt4o_n5_score",
+                value=score_one(dataset_item, diff, n_panel=5, langfuse_session_id=trace_id),
             )
