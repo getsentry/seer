@@ -137,7 +137,7 @@ class AutofixEventManager:
                             title=child_step.commit_message,
                         )
                     )
-                    step.status = AutofixStatus.PROCESSING
+                    step.status = AutofixStatus.PENDING
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
@@ -195,25 +195,21 @@ class AutofixEventManager:
 
                 # If the current step is the planning step, and an execution step is running, we log it there instead.
                 if step.id == self.plan_step.id and step.progress:
-                    # select the first execution step that is still processing
+                    # select the first execution step that is processing
                     execution_step = None
-                    i = -1
-                    while i >= -len(step.progress):
+                    i = 0
+                    while i < len(step.progress):
                         temp_step = step.progress[i]
                         if (
                             isinstance(temp_step, DefaultStep)
                             and temp_step.status == AutofixStatus.PROCESSING
                         ):
                             execution_step = temp_step
-                            i -= 1
-                        else:
                             break
+                        else:
+                            i += 1
 
-                    if (
-                        execution_step
-                        and isinstance(execution_step, DefaultStep)
-                        and execution_step.status == AutofixStatus.PROCESSING
-                    ):
+                    if execution_step:
                         execution_step.progress.append(
                             ProgressItem(
                                 message=message,
@@ -221,6 +217,7 @@ class AutofixEventManager:
                             )
                         )
                         return
+
                 step.progress.append(
                     ProgressItem(
                         message=message,
