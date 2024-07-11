@@ -196,18 +196,15 @@ class AutofixEventManager:
                 # If the current step is the planning step, and an execution step is running, we log it there instead.
                 if step.id == self.plan_step.id and step.progress:
                     # select the first execution step that is processing
-                    execution_step = None
-                    i = 0
-                    while i < len(step.progress):
-                        temp_step = step.progress[i]
-                        if (
-                            isinstance(temp_step, DefaultStep)
-                            and temp_step.status == AutofixStatus.PROCESSING
-                        ):
-                            execution_step = temp_step
-                            break
-                        else:
-                            i += 1
+                    execution_step = next(
+                        (
+                            step
+                            for step in step.progress
+                            if isinstance(step, DefaultStep)
+                            and step.status == AutofixStatus.PROCESSING
+                        ),
+                        None,
+                    )
 
                     if execution_step:
                         execution_step.progress.append(
