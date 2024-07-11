@@ -1,0 +1,19 @@
+{
+"model": {
+    "modelName": "severit_model",
+    "handler": "src/seer/handlers/severity_handler.py",
+    "modelDir": "models/issue_severity_v0",
+    "device": "cpu",
+    "batchSize": 1,
+    "maxBatchDelay": 100,
+    "initialWorkers": 1,
+    "synchronous": true
+  },
+  "service": {
+    "inference_address": "http://0.0.0.0:8080",
+    "management_address": "http://0.0.0.0:8081"
+  },
+  "parameters": {
+    "model_dir": "models/issue_severity_v0",
+  }
+}

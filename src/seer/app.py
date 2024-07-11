@@ -1,270 +1,30 @@
 import logging
-import time
 
 import sentry_sdk
-from flask import Flask, jsonify
-from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
-from celery_app.config import CeleryQueues
-from seer.anomaly_detection.anomaly_detection import (
-    DetectAnomaliesRequest,
-    DetectAnomaliesResponse,
-    StoreDataRequest,
-    StoreDataResponse,
-)
-from seer.automation.autofix.models import (
-    AutofixEndpointResponse,
-    AutofixPrIdRequest,
-    AutofixRequest,
-    AutofixStateRequest,
-    AutofixStateResponse,
-    AutofixUpdateRequest,
-    AutofixUpdateType,
-)
-from seer.automation.autofix.tasks import (
-    check_and_mark_if_timed_out,
-    get_autofix_state,
-    get_autofix_state_from_pr_id,
-    run_autofix_create_pr,
-    run_autofix_execution,
-    run_autofix_root_cause,
-)
-from seer.automation.codebase.models import (
-    CodebaseStatusCheckRequest,
-    CodebaseStatusCheckResponse,
-    CreateCodebaseRequest,
-    IndexNamespaceTaskRequest,
-    RepoAccessCheckRequest,
-    RepoAccessCheckResponse,
-)
-from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.tasks import (
-    create_codebase_index,
-    get_codebase_index_status,
-    index_namespace,
-)
-from seer.automation.utils import raise_if_no_genai_consent
-from seer.bootup import bootup
-from seer.grouping.grouping import (
-    BulkCreateGroupingRecordsResponse,
-    CreateGroupingRecordsRequest,
-    DeleteGroupingRecordsByHashRequest,
-    DeleteGroupingRecordsByHashResponse,
-    GroupingRequest,
-    SimilarityBenchmarkResponse,
-    SimilarityResponse,
-)
-from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
-from seer.json_api import json_api, register_json_api_views
-from seer.severity.severity_inference import SeverityRequest, SeverityResponse
-from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
+from seer.handlers.severity_handler import SeverityHandler
 
-app = Flask(__name__)
-bootup(
-    app,
-    [
-        FlaskIntegration(),
+logger = logging.getLogger(__name__)
+
+# Initialize Sentry SDK
+sentry_sdk.init(
+    integrations=[
         LoggingIntegration(
             level=logging.DEBUG,  # Capture debug and above as breadcrumbs
         ),
-    ],
-    init_migrations=True,
-    async_load_models=True,
+    ]
 )
 
-
-@json_api("/v0/issues/severity-score")
-def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
-    if data.trigger_error:
-        raise Exception("oh no")
-    elif data.trigger_timeout:
-        time.sleep(0.5)
-
-    response = embeddings_model().severity_score(data)
-    sentry_sdk.set_tag("severity", str(response.severity))
-    return response
+_service = SeverityHandler()
 
 
-@json_api("/trends/breakpoint-detector")
-def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
-    txns_data = data.data
-
-    sort_function = data.sort
-    allow_midpoint = data.allow_midpoint == "1"
-    validate_tail_hours = data.validate_tail_hours
-
-    min_pct_change = data.trend_percentage
-    min_change = data.min_change
-
-    trend_percentage_list = find_trends(
-        txns_data,
-        sort_function,
-        allow_midpoint,
-        min_pct_change,
-        min_change,
-        validate_tail_hours,
-    )
-
-    trends = BreakpointResponse(data=[x[1] for x in trend_percentage_list])
-    app.logger.debug("Trend results: %s", trends)
-
-    return trends
-
-
-@json_api("/v0/issues/similar-issues")
-def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
-    with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
-        sentry_sdk.set_tag("read_only", data.read_only)
-        sentry_sdk.set_tag("stacktrace_len", len(data.stacktrace))
-        sentry_sdk.set_tag("request_hash", data.hash)
-        similar_issues = grouping_lookup().get_nearest_neighbors(data)
-    return similar_issues
-
-
-@json_api("/v0/issues/similar-issues/grouping-record")
-def similarity_grouping_record_endpoint(
-    data: CreateGroupingRecordsRequest,
-) -> BulkCreateGroupingRecordsResponse:
-    sentry_sdk.set_tag(
-        "stacktrace_len_sum", sum([len(stacktrace) for stacktrace in data.stacktrace_list])
-    )
-    success = grouping_lookup().bulk_create_and_insert_grouping_records(data)
-    return success
-
-
-@app.route("/v0/issues/similar-issues/grouping-record/delete/<int:project_id>", methods=["GET"])
-def delete_grouping_record_endpoint(project_id: int):
-    success = grouping_lookup().delete_grouping_records_for_project(project_id)
-    return jsonify(success=success)
-
-
-@json_api("/v0/issues/similar-issues/grouping-record/delete-by-hash")
-def delete_grouping_records_by_hash_endpoint(
-    data: DeleteGroupingRecordsByHashRequest,
-) -> DeleteGroupingRecordsByHashResponse:
-    success = grouping_lookup().delete_grouping_records_by_hash(data)
-    return success
-
-
-@json_api("/v0/issues/similarity-embedding-benchmark")
-def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> SimilarityBenchmarkResponse:
-    start_time = time.time()
-    embedding = grouping_lookup().encode_text(data.stacktrace).astype("float32")
-    embedding_list = embedding.tolist()
-    end_time = time.time()
-    app.logger.debug(f"Embedding generation time: {end_time - start_time} seconds")
-
-    return SimilarityBenchmarkResponse(embedding=embedding_list)
-
-
-@json_api("/v1/automation/codebase/index/create")
-def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
-    raise_if_no_genai_consent(data.organization_id)
-
-    namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
-
-    index_namespace.apply_async(
-        (
-            IndexNamespaceTaskRequest(
-                namespace_id=namespace_id,
-            ).model_dump(mode="json"),
-        ),
-        queue=CeleryQueues.CUDA,
-    )
-
-    return AutofixEndpointResponse(started=True)
-
-
-@json_api("/v1/automation/codebase/repo/check-access")
-def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
-    return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
-
-
-@json_api("/v1/automation/codebase/index/status")
-def get_codebase_index_status_endpoint(
-    data: CodebaseStatusCheckRequest,
-) -> CodebaseStatusCheckResponse:
-    return CodebaseStatusCheckResponse(
-        status=get_codebase_index_status(
-            organization_id=data.organization_id,
-            project_id=data.project_id,
-            repo=data.repo,
-        )
-    )
-
-
-@json_api("/v1/automation/autofix/start")
-def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    raise_if_no_genai_consent(data.organization_id)
-    run_autofix_root_cause(data)
-    return AutofixEndpointResponse(started=True)
-
-
-@json_api("/v1/automation/autofix/update")
-def autofix_update_endpoint(
-    data: AutofixUpdateRequest,
-) -> AutofixEndpointResponse:
-    if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
-        run_autofix_execution(data)
-    elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        run_autofix_create_pr(data)
-    return AutofixEndpointResponse(started=True)
-
-
-@json_api("/v1/automation/autofix/state")
-def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
-    state = get_autofix_state(data.group_id)
-
-    if state:
-        check_and_mark_if_timed_out(state)
-
-    return AutofixStateResponse(
-        group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None
-    )
-
-
-@json_api("/v1/automation/autofix/state/pr")
-def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixStateResponse:
-    state = get_autofix_state_from_pr_id(data.provider, data.pr_id)
-
-    if state:
-        cur = state.get()
-        return AutofixStateResponse(
-            group_id=cur.request.issue.id, state=cur.model_dump(mode="json")
-        )
-    return AutofixStateResponse(group_id=None, state=None)
-
-
-@json_api("/v1/anomaly-detection/detect")
-def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-    return anomaly_detection().detect_anomalies(data)
-
-
-@json_api("/v1/anomaly-detection/store")
-def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
-    return anomaly_detection().store_data(data)
-
-
-@app.route("/health/live", methods=["GET"])
-def health_check():
-    from seer.inference_models import models_loading_status
-
-    if models_loading_status() == "failed":
-        return "Models failed to load", 500
-    return "", 200
-
-
-@app.route("/health/ready", methods=["GET"])
-def ready_check():
-    from seer.inference_models import models_loading_status
-
-    status = models_loading_status()
-    if status == "failed":
-        return "", 500
-    if status == "done":
-        return "", 200
-    return "", 503
-
-
-register_json_api_views(app)
+def handle(data, context):
+    if not _service.initialized:
+        _service.initialize(context)
+    if data is None:
+        return None
+    data = _service.preprocess(data)
+    data = _service.inference(data)
+    data = _service.postprocess(data)
+    return data
