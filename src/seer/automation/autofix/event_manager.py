@@ -200,7 +200,10 @@ class AutofixEventManager:
                     i = -1
                     while i >= -len(step.progress):
                         temp_step = step.progress[i]
-                        if temp_step.status == AutofixStatus.PROCESSING:
+                        if (
+                            isinstance(temp_step, DefaultStep)
+                            and temp_step.status == AutofixStatus.PROCESSING
+                        ):
                             execution_step = temp_step
                             i -= 1
                         else:
