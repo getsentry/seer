@@ -1,3 +1,5 @@
+import abc
+
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
@@ -6,9 +8,10 @@ from pydantic import BaseModel, Field
 from seer.anomaly_detection.detectors.normalizers import MinMaxNormalizer, Normalizer
 
 
-class WindowSizeSelector(BaseModel):
+class WindowSizeSelector(BaseModel, abc.ABC):
+    @abc.abstractmethod
     def optimal_window_size(self, time_series: npt.NDArray) -> int:
-        raise NotImplementedError("Subclasses should implement this!")
+        return NotImplemented
 
 
 class SuSSWindowSizeSelector(WindowSizeSelector):

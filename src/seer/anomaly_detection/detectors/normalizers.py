@@ -1,11 +1,14 @@
+import abc
+
 import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
 
-class Normalizer(BaseModel):
+class Normalizer(BaseModel, abc.ABC):
+    @abc.abstractmethod
     def normalize(self, array: npt.NDArray) -> npt.NDArray:
-        raise NotImplementedError("Subclasses should implement this!")
+        return NotImplemented
 
 
 class MinMaxNormalizer(Normalizer):

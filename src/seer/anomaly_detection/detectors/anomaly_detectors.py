@@ -1,3 +1,4 @@
+import abc
 import logging
 
 import numpy as np
@@ -24,16 +25,17 @@ class MPConfig(BaseModel):
     )
 
 
-class AnomalyDetector(BaseModel):
+class AnomalyDetector(BaseModel, abc.ABC):
+    @abc.abstractmethod
     def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
-        raise NotImplementedError("Subclasses should implement this!")
+        return NotImplemented
 
 
 class MPBatchAnomalyDetector(AnomalyDetector):
-    config: MPConfig
-    scorer: MPScorer
-    ws_selector: WindowSizeSelector
-    normalizer: Normalizer
+    config: MPConfig = Field(...)
+    scorer: MPScorer = Field(...)
+    ws_selector: WindowSizeSelector = Field(...)
+    normalizer: Normalizer = Field(...)
 
     def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
         mp, mp_dist, scores, flags, window_size = self._compute_matrix_profile(timeseries)
@@ -73,7 +75,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
     def _compute_matrix_profile(self, timeseries: list[TimeSeriesPoint]) -> tuple:
         ts_values = self._to_raw_ts(timeseries)
-
         window_size = self.ws_selector.optimal_window_size(ts_values)
         logger.debug(f"window_size: {window_size}")
         if window_size <= 0:

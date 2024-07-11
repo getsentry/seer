@@ -1,13 +1,16 @@
+import abc
+
 import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
 
-class MPScorer(BaseModel):
+class MPScorer(BaseModel, abc.ABC):
+    @abc.abstractmethod
     def score(
         self, ts: npt.NDArray, mp: npt.NDArray, mp_dist: npt.NDArray, window_size: int
     ) -> tuple:
-        raise NotImplementedError("Subclasses should implement this!")
+        return NotImplemented
 
 
 class MPIRQScorer(MPScorer):
