@@ -104,3 +104,4 @@ google-cloud-aiplatform==1.59.0
 anthropic[vertex]==0.31.1
 langfuse @ git+https://github.com/jennmueng/langfuse-python.git@8e42a433e203ad39360339448b6c67b200661f66
 watchdog
+stumpy==1.12.0
