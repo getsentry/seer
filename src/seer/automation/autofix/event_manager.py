@@ -137,8 +137,7 @@ class AutofixEventManager:
                             title=child_step.commit_message,
                         )
                     )
-
-                    step.status = AutofixStatus.PROCESSING
+                    step.status = AutofixStatus.PENDING
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
@@ -191,27 +190,37 @@ class AutofixEventManager:
         with self.state.update() as cur:
             if cur.steps:
                 step = cur.steps[-1]
-                if step.status == AutofixStatus.PROCESSING:
-                    # If the current step is the planning step, and an execution step is running, we log it there instead.
-                    if step.id == self.plan_step.id and step.progress:
-                        execution_step = step.progress[-1]
-                        if (
-                            isinstance(execution_step, DefaultStep)
-                            and execution_step.status == AutofixStatus.PROCESSING
-                        ):
-                            execution_step.progress.append(
-                                ProgressItem(
-                                    message=message,
-                                    type=ProgressType.INFO,
-                                )
-                            )
-                            return
-                    step.progress.append(
-                        ProgressItem(
-                            message=message,
-                            type=ProgressType.INFO,
-                        )
+                if step.status != AutofixStatus.PROCESSING:
+                    return
+
+                # If the current step is the planning step, and an execution step is running, we log it there instead.
+                if step.id == self.plan_step.id and step.progress:
+                    # select the first execution step that is processing
+                    execution_step = next(
+                        (
+                            step
+                            for step in step.progress
+                            if isinstance(step, DefaultStep)
+                            and step.status == AutofixStatus.PROCESSING
+                        ),
+                        None,
                     )
+
+                    if execution_step:
+                        execution_step.progress.append(
+                            ProgressItem(
+                                message=message,
+                                type=ProgressType.INFO,
+                            )
+                        )
+                        return
+
+                step.progress.append(
+                    ProgressItem(
+                        message=message,
+                        type=ProgressType.INFO,
+                    )
+                )
 
     def on_error(self, error_msg: str = "Something went wrong"):
         with self.state.update() as cur:
