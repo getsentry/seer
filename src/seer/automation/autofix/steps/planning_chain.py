@@ -88,5 +88,5 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
                     planning_output=planning_output,
                 )
             ),
-            queue=CeleryQueues.CUDA,
+            queue=CeleryQueues.DEFAULT if self.context.skip_loading_codebase else CeleryQueues.CUDA,
         )
