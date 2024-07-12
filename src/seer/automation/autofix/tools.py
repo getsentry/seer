@@ -63,20 +63,60 @@ class BaseTools:
 
     @observe(name="List Directory")
     @ai_track(description="List Directory")
-    def list_directory(self, path: str, repo_name: str | None = None):
+    def list_directory(self, path: str, repo_name: str | None = None) -> str:
+        """
+        Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.
+        """
         repo_client = self.context.get_repo_client(repo_name=repo_name)
 
         all_paths = repo_client.get_index_file_set(repo_client.get_default_branch_head_sha())
 
-        paths = [p for p in all_paths if p.startswith(path)]
+        # Normalize the path
+        normalized_path = path.strip("/") + "/" if path.strip("/") else ""
 
-        if not paths:
-            return f"<no paths found in directory {path}>"
+        # Filter paths to include only those directly under the specified path + remove duplicates and sort
+        unique_direct_children = sorted(
+            set(
+                p[len(normalized_path) :].split("/")[0]
+                for p in all_paths
+                if p.startswith(normalized_path) and p != normalized_path
+            )
+        )
 
-        joined = "\n".join(paths)
-        paths_str = f"<paths>\n{joined}\n</paths>"
+        # Separate directories and files
+        dirs, files = self._separate_dirs_and_files(
+            normalized_path, unique_direct_children, all_paths
+        )
 
-        return paths_str
+        if not dirs and not files:
+            return f"<no entries found in directory '{path or '/'}'>"
+
+        # Format the output
+        output = []
+        if dirs:
+            output.append("Directories:")
+            output.extend(f"  {d}/" for d in dirs)
+        if files:
+            if dirs:
+                output.append("")  # Add a blank line between dirs and files
+            output.append("Files:")
+            output.extend(f"  {f}" for f in files)
+
+        joined = "\n".join(output)
+        return f"<entries>\n{joined}\n</entries>"
+
+    def _separate_dirs_and_files(
+        self, parent_path: str, direct_children: list[str], all_paths: set
+    ) -> tuple[list[str], list[str]]:
+        dirs = []
+        files = []
+        for child in direct_children:
+            full_path = f"{parent_path}{child}"
+            if any(p.startswith(full_path + "/") for p in all_paths):
+                dirs.append(child)
+            else:
+                files.append(child)
+        return dirs, files
 
     @observe(name="Keyword Search")
     @ai_track(description="Keyword Search")
@@ -125,7 +165,7 @@ class BaseTools:
             FunctionTool(
                 name="list_directory",
                 fn=self.list_directory,
-                description="Given the path for a directory in this codebase, returns the paths of the directory.",
+                description="Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.",
                 parameters=[
                     {
                         "name": "path",
