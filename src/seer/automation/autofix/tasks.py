@@ -7,7 +7,14 @@ from langfuse import Langfuse
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.evaluations import score_one, sync_run_evaluation_on_item
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.evaluations import (
+    RootCauseScoreResult,
+    score_one,
+    score_root_causes,
+    sync_run_evaluation_on_item,
+    sync_run_root_cause,
+)
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -205,7 +212,7 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
 
 
 def run_autofix_evaluation(
-    dataset_name: str, run_name: str, n_runs_per_item: int = 1, is_test: bool = False
+    dataset_name: str, run_name: str, run_type: str, n_runs_per_item: int = 1, is_test: bool = False
 ):
     langfuse = Langfuse()
 
@@ -227,12 +234,22 @@ def run_autofix_evaluation(
         # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
         for _ in range(n_runs_per_item):
             run_autofix_evaluation_on_item.apply_async(
-                (item.id, run_name, i, len(items)), queue=CeleryQueues.DEFAULT
+                (),
+                dict(
+                    item_id=item.id,
+                    run_name=run_name,
+                    run_type=run_type,
+                    item_index=i,
+                    item_count=len(items),
+                ),
+                queue=CeleryQueues.DEFAULT,
             )
 
 
 @celery_app.task()
-def run_autofix_evaluation_on_item(item_id: str, run_name: str, item_index: int, item_count: int):
+def run_autofix_evaluation_on_item(
+    *, item_id: str, run_name: str, run_type: str, item_index: int, item_count: int
+):
     langfuse = Langfuse()
 
     dataset_item = langfuse.get_dataset_item(item_id)
@@ -242,10 +259,67 @@ def run_autofix_evaluation_on_item(item_id: str, run_name: str, item_index: int,
     )
 
     with dataset_item.observe(run_name=run_name) as trace_id:
-        diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
-        if diff:
-            langfuse.score(
-                trace_id=trace_id,
-                name="gpt4o_n5_score",
-                value=score_one(dataset_item, diff, n_panel=5, langfuse_session_id=trace_id),
-            )
+        if run_type == "root_cause":
+            causes: list[RootCauseAnalysisItem] | None = None
+            try:
+                causes = sync_run_root_cause(dataset_item, langfuse_session_id=trace_id)
+            except Exception as e:
+                logger.error(f"Error running root cause analysis: {e}")
+
+            if causes:
+                root_cause_score: RootCauseScoreResult = score_root_causes(
+                    dataset_item, causes, n_panel=5, langfuse_session_id=trace_id
+                )
+
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_error_weighted_score",
+                    value=root_cause_score.get("highest_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_highest_score",
+                    value=root_cause_score.get("highest_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_positioning_score",
+                    value=root_cause_score.get("position_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_mean_score",
+                    value=root_cause_score.get("mean_score"),
+                )
+            else:
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_error_weighted_score",
+                    value=0,
+                )
+        else:
+            diff: str | None = None
+            try:
+                diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
+            except Exception as e:
+                logger.error(f"Error running evaluation: {e}")
+
+            if diff:
+                score = score_one(dataset_item, diff, n_panel=5, langfuse_session_id=trace_id)
+
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_error_weighted_score",
+                    value=score,
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_score",
+                    value=score,
+                )
+            else:
+                langfuse.score(
+                    trace_id=trace_id,
+                    name="gpt4o_n5_error_weighted_score",
+                    value=0,
+                )

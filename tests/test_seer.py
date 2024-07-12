@@ -370,7 +370,12 @@ class TestSeer(unittest.TestCase):
     @mock.patch("seer.app.run_autofix_evaluation")
     def test_autofix_evaluation_start_endpoint(self, mock_run_autofix_evaluation):
         # Prepare test data
-        test_data = {"dataset_name": "test_dataset", "run_name": "test_run", "test": False}
+        test_data = {
+            "dataset_name": "test_dataset",
+            "run_name": "test_run",
+            "run_type": "full",
+            "test": False,
+        }
 
         # Make a POST request to the endpoint
         response = app.test_client().post(
@@ -386,13 +391,18 @@ class TestSeer(unittest.TestCase):
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(
-            "test_dataset", "test_run", is_test=False
+            "test_dataset", "test_run", "full", is_test=False
         )
 
     @mock.patch("seer.app.run_autofix_evaluation")
     def test_autofix_evaluation_start_endpoint_test_mode(self, mock_run_autofix_evaluation):
         # Prepare test data with test mode enabled
-        test_data = {"dataset_name": "test_dataset", "run_name": "test_run", "test": True}
+        test_data = {
+            "dataset_name": "test_dataset",
+            "run_name": "test_run",
+            "run_type": "root_cause",
+            "test": True,
+        }
 
         # Make a POST request to the endpoint
         response = app.test_client().post(
@@ -408,7 +418,7 @@ class TestSeer(unittest.TestCase):
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(
-            "test_dataset", "test_run", is_test=True
+            "test_dataset", "test_run", "root_cause", is_test=True
         )
 
 

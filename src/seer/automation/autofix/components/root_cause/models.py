@@ -84,6 +84,37 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
             suggested_fixes=RootCauseAnalysisSuggestedFixesPromptXml.get_example(),
         )
 
+    @classmethod
+    def from_model(cls, model: RootCauseAnalysisItem):
+        return cls(
+            title=model.title,
+            likelihood=model.likelihood,
+            actionability=model.actionability,
+            description=model.description,
+            suggested_fixes=(
+                RootCauseAnalysisSuggestedFixesPromptXml(
+                    fixes=[
+                        RootCauseSuggestedFixPromptXml(
+                            title=fix.title,
+                            description=fix.description,
+                            snippet=(
+                                SnippetPromptXml(
+                                    file_path=fix.snippet.file_path,
+                                    snippet=fix.snippet.snippet,
+                                )
+                                if fix.snippet
+                                else None
+                            ),
+                            elegance=fix.elegance,
+                        )
+                        for fix in model.suggested_fixes
+                    ]
+                )
+                if model.suggested_fixes
+                else None
+            ),
+        )
+
     def to_model(self):
         return RootCauseAnalysisItem.model_validate(
             {
