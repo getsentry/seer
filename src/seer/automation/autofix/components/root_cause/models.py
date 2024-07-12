@@ -1,5 +1,7 @@
 from typing import Annotated, Optional
 
+from johen import gen
+from johen.examples import Examples
 from pydantic import BaseModel, Field, StringConstraints
 from pydantic_xml import attr, element
 
@@ -52,8 +54,8 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    likelihood: float = Field(..., ge=0, le=1)
-    actionability: float = Field(..., ge=0, le=1)
+    likelihood: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
+    actionability: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
     suggested_fixes: Optional[list[RootCauseSuggestedFix]] = None
 
 
