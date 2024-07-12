@@ -17,26 +17,11 @@ class RootCauseAnalysisPrompts:
 
             You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue. It is very important to be very detailed and clear in your output.
 
-            You must follow the below XML format in your final output:
-            {root_cause_output_example_str}
-
             Guidelines:
-            - The likelihood must be a float between 0 and 1. It represents the likelihood that the root cause is correct.
-            - The actionability must be a float between 0 and 1. It represents if a fix to this cause is actionable within this codebase.
-                - For example, if it's caused by a malformed API request, then it's not actionable in the codebase.
-                - If there is a clear code change that can be made to fix the issue, then it is actionable.
-                - If you do not have a clear code change that can be made to fix the issue, then it should be scored low.
-            - You can include suggested fixes if you have ones that are clear and actionable within the immediate codebase.
-                - In a suggested fix, suggest a fix with expert judgement, consider the implications of the fix, and the potential side effects.
-                - For example, simply raising an exception or assigning a default value may not be the best fix.
-                - The elegance of a fix is a float between 0 and 1. The higher the score the better the fix.
-                    - A fix by a staff engineer will have a high elegance score.
-                    - A fix by a junior engineer or intern will have a low elegance score.
-                - When you provide code snippets for a suggested fix, you must provide explicit code changes and file paths.
-            - Don't always assume the data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.
+            - Don't always assume data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.
             - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search or suggest changes in external libraries.
             - You must only suggest actionable fixes that can be made in the immediate workable codebase. Do not suggest fixes with code snippets in external libraries.
-            - If you are not able to find any potential root causes, you can return an empty <potential_root_causes></potential_root_causes> tag.
+            - If you are not able to find any potential root causes, say so.
             - If multiple searches turn up no viable results, you should conclude the session.
 
             It is important that we find all the potential root causes of the issue, so provide as many possibilities as you can for the root cause, ordered from most likely to least likely."""
@@ -56,8 +41,35 @@ class RootCauseAnalysisPrompts:
 
             {instruction_str}
 
-            Think step-by-step in a <thoughts> block before returning the potential root causes of the issue inside a <potential_root_causes> block."""
+            Think step-by-step each time before using the tools provided to you.
+            Also think step-by-step before giving the final answer.
+
+            When ready with your final answer, detail all the potential root causes of the issue inside wrapped with a <potential_root_causes></potential_root_causes> block.
+            - Each root cause should be inside its own <root_cause> block with its suggested fix in there too.
+            - Include float values from 0.0-1.0 of the likelihood and actionability of each root cause.
+            - If there is a clear and obvious fix to a given root cause, suggest a fix and provide a code snippet if possible. Suggest as many fixes as you can.
+            - You MUST include the EXACT file name in the code snippets you provide. If you cannot, do not provide a code snippet."""
         ).format(
             error_str=event.format_event(),
             instruction_str=format_instruction(instruction),
+        )
+
+    @staticmethod
+    def root_cause_formatter_msg(raw_root_cause_output: str):
+        return textwrap.dedent(
+            """\
+            Given the following root cause analysis:
+
+            {raw_root_cause_output}
+
+            Please format properly according to the following guidelines:
+
+            {root_cause_output_example_str}
+
+            Note: If the provided root cause analysis is not formatted properly, such as suggested fixes missing descriptions, you can derive them from the provided root cause analysis.
+
+            Return only the formatted root cause analysis:"""
+        ).format(
+            raw_root_cause_output=raw_root_cause_output,
+            root_cause_output_example_str=MultipleRootCauseAnalysisOutputPromptXml.get_example().to_prompt_str(),
         )
