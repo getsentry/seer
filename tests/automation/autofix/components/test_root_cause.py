@@ -208,3 +208,12 @@ class TestRootCauseComponent:
                     output.causes[0].suggested_fixes[0].snippet.snippet == "def test():\n    pass"
                 )
             assert output.causes[0].suggested_fixes[0].elegance == 0.7
+
+    def test_no_root_causes_response(self, component, mock_gpt_agent, mock_gpt_client):
+        mock_gpt_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"
+
+        output = component.invoke(MagicMock())
+
+        assert output is None
+        # Ensure that the GptClient (formatter) is not called when <NO_ROOT_CAUSES> is returned
+        mock_gpt_client.return_value.completion.assert_not_called()
