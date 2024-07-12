@@ -16,36 +16,54 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table("grouping_records", schema=None) as batch_op:
-        batch_op.drop_index(
-            "ix_grouping_records_stacktrace_embedding_hnsw",
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
-            postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+    with op.get_context().autocommit_block():
+        op.execute(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw_new"
         )
-        batch_op.create_index(
-            "ix_grouping_records_stacktrace_embedding_hnsw",
-            ["stacktrace_embedding"],
-            unique=False,
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 200},
-            postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+
+        op.execute(
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS
+            ix_grouping_records_stacktrace_embedding_hnsw_new
+            ON grouping_records USING hnsw (stacktrace_embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 200)
+            """
+        )
+
+        op.execute(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw"
+        )
+
+        op.execute(
+            """
+            ALTER INDEX ix_grouping_records_stacktrace_embedding_hnsw_new
+            RENAME TO ix_grouping_records_stacktrace_embedding_hnsw
+            """
         )
 
 
 def downgrade():
-    with op.batch_alter_table("grouping_records", schema=None) as batch_op:
-        batch_op.drop_index(
-            "ix_grouping_records_stacktrace_embedding_hnsw",
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 200},
-            postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+    with op.get_context().autocommit_block():
+        op.execute(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw_old"
         )
-        batch_op.create_index(
-            "ix_grouping_records_stacktrace_embedding_hnsw",
-            ["stacktrace_embedding"],
-            unique=False,
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
-            postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+
+        op.execute(
+            """
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS
+            ix_grouping_records_stacktrace_embedding_hnsw_old
+            ON grouping_records USING hnsw (stacktrace_embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64)
+            """
+        )
+
+        op.execute(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw"
+        )
+
+        op.execute(
+            """
+            ALTER INDEX ix_grouping_records_stacktrace_embedding_hnsw_old
+            RENAME TO ix_grouping_records_stacktrace_embedding_hnsw
+            """
         )
