@@ -22,7 +22,7 @@ from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
-from seer.automation.utils import get_embedding_model, get_sentry_client
+from seer.automation.utils import AgentError, get_embedding_model, get_sentry_client
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
 
@@ -190,18 +190,20 @@ class AutofixContext(PipelineContext):
             repo = next((r for r in self.repos if r.full_name == repo_name), None)
 
             if not repo:
-                raise ValueError(f"Repo {repo_name} not found.")
+                raise AgentError() from ValueError(f"Repo {repo_name} not found.")
 
             repo_client = RepoClient.from_repo_definition(repo, "read")
         elif repo_external_id:
             repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
 
             if not repo:
-                raise ValueError(f"Repo {repo_external_id} not found.")
+                raise AgentError() from ValueError(f"Repo {repo_external_id} not found.")
 
             repo_client = RepoClient.from_repo_definition(repo, "read")
         else:
-            raise ValueError("Please provide a repo name because you have multiple repos.")
+            raise AgentError() from ValueError(
+                "Please provide a repo name because you have multiple repos."
+            )
 
         return repo_client
 
