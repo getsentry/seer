@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 from pydantic_xml import attr, element
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -52,8 +52,8 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    likelihood: float
-    actionability: float
+    likelihood: float = Field(..., ge=0, le=1)
+    actionability: float = Field(..., ge=0, le=1)
     suggested_fixes: Optional[list[RootCauseSuggestedFix]] = None
 
 
