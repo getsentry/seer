@@ -69,9 +69,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         self._update_ts(timeseries, scores, flags)
         return timeseries
 
-    def _update_ts(
-        self, timeseries: list[TimeSeriesPoint], scores: npt.NDArray, flags: list
-    ) -> list[TimeSeriesPoint]:
+    def _update_ts(self, timeseries: list[TimeSeriesPoint], scores: npt.NDArray, flags: list):
         """
         Update the timeseries with score and flag. This method does an inplace update.
         """
