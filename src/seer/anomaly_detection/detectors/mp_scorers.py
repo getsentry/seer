@@ -6,6 +6,10 @@ from pydantic import BaseModel
 
 
 class MPScorer(BaseModel, abc.ABC):
+    """
+    Abstract base class for calculating an anomaly score
+    """
+
     @abc.abstractmethod
     def score(
         self, ts: npt.NDArray, mp: npt.NDArray, mp_dist: npt.NDArray, window_size: int
@@ -17,6 +21,31 @@ class MPIRQScorer(MPScorer):
     def score(
         self, ts: npt.NDArray, mp: npt.NDArray, mp_dist: npt.NDArray, window_size: int
     ) -> tuple:
+        """
+        Concrete implementation of MPScorer that scores anomalies by computing the distance of the relevant MP distance from the
+        mean using inter quartile range. This approach is not swayed by extreme values in MP distances. It also converts the score
+        to a flag with a more meaningful interpretation of score
+
+        Parameters:
+        ts: Numpy array
+            The time series
+
+        mp: Numpy array
+            The matrix profile as returned by the call to stumpy.stump method
+
+        mp_dist: Numpy array
+            The matrix profile distances for the timeseries
+
+        window_size: int
+            The window size used to compute matrix profile
+
+        Returns:
+            tuple with list of scores and list of flags, where each flag is one of
+            * "none" - indicating not an anomaly
+            * "anomaly_low" - indicating anomaly but only with a lower threshold
+            * "anomaly_high" - indicating anomaly with a higher threshold
+        """
+
         def to_flag(score, threshold_lower, threshold_upper):
             if np.isnan(score):
                 return "none"
@@ -25,6 +54,10 @@ class MPIRQScorer(MPScorer):
             if score < threshold_upper:
                 return "anomaly_low"
             return "anomaly_high"
+
+        if len(mp_dist[~np.isfinite(mp_dist)]) > 0:
+            # TODO: Add sentry logging and metric here
+            pass
 
         mp_dist_finite = mp_dist[np.isfinite(mp_dist)]
 
