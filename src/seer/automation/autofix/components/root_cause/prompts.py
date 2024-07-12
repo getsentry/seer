@@ -21,7 +21,7 @@ class RootCauseAnalysisPrompts:
             - Don't always assume data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.
             - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search or suggest changes in external libraries.
             - You must only suggest actionable fixes that can be made in the immediate workable codebase. Do not suggest fixes with code snippets in external libraries.
-            - If you are not able to find any potential root causes, say so.
+            - If you are not able to find any potential root causes, return only <NO_ROOT_CAUSES>.
             - If multiple searches turn up no viable results, you should conclude the session.
 
             It is important that we find all the potential root causes of the issue, so provide as many possibilities as you can for the root cause, ordered from most likely to least likely."""

@@ -27,6 +27,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         agent = GptAgent(
             tools=tools.get_tools(),
             memory=[Message(role="system", content=RootCauseAnalysisPrompts.format_system_msg())],
+            stop_message="<NO_ROOT_CAUSES>",
         )
 
         response = agent.run(
@@ -41,6 +42,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
         if not response:
             autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
+            return None
+
+        if "<NO_ROOT_CAUSES>" in response:
             return None
 
         extracted_response = extract_text_inside_tags(response, "potential_root_causes")
