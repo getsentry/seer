@@ -64,6 +64,9 @@ class BaseTools:
     @observe(name="List Directory")
     @ai_track(description="List Directory")
     def list_directory(self, path: str, repo_name: str | None = None) -> str:
+        """
+        Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.
+        """
         repo_client = self.context.get_repo_client(repo_name=repo_name)
 
         all_paths = repo_client.get_index_file_set(repo_client.get_default_branch_head_sha())
@@ -71,18 +74,19 @@ class BaseTools:
         # Normalize the path
         normalized_path = path.strip("/") + "/" if path.strip("/") else ""
 
-        # Filter paths to include only those directly under the specified path
-        direct_children = [
-            p[len(normalized_path) :].split("/")[0]
-            for p in all_paths
-            if p.startswith(normalized_path) and p != normalized_path
-        ]
-
-        # Remove duplicates and sort
-        unique_children = sorted(set(direct_children))
+        # Filter paths to include only those directly under the specified path + remove duplicates and sort
+        unique_direct_children = sorted(
+            set(
+                p[len(normalized_path) :].split("/")[0]
+                for p in all_paths
+                if p.startswith(normalized_path) and p != normalized_path
+            )
+        )
 
         # Separate directories and files
-        dirs, files = self._separate_dirs_and_files(normalized_path, unique_children, all_paths)
+        dirs, files = self._separate_dirs_and_files(
+            normalized_path, unique_direct_children, all_paths
+        )
 
         if not dirs and not files:
             return f"<no entries found in directory '{path or '/'}'>"
@@ -102,11 +106,11 @@ class BaseTools:
         return f"<entries>\n{joined}\n</entries>"
 
     def _separate_dirs_and_files(
-        self, parent_path: str, children: list[str], all_paths: set
+        self, parent_path: str, direct_children: list[str], all_paths: set
     ) -> tuple[list[str], list[str]]:
         dirs = []
         files = []
-        for child in children:
+        for child in direct_children:
             full_path = f"{parent_path}{child}"
             if any(p.startswith(full_path + "/") for p in all_paths):
                 dirs.append(child)
@@ -161,7 +165,7 @@ class BaseTools:
             FunctionTool(
                 name="list_directory",
                 fn=self.list_directory,
-                description="Given the path for a directory in this codebase, returns the paths of the directory.",
+                description="Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.",
                 parameters=[
                     {
                         "name": "path",
