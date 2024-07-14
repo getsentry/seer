@@ -46,12 +46,12 @@ class MPIRQScorer(MPScorer):
             * "anomaly_high" - indicating anomaly with a higher threshold
         """
 
-        def to_flag(score, threshold_lower, threshold_upper):
-            if np.isnan(score):
+        def to_flag(mp_dist, threshold_lower, threshold_upper):
+            if np.isnan(mp_dist):
                 return "none"
-            if score < threshold_lower:
+            if mp_dist < threshold_lower:
                 return "none"
-            if score < threshold_upper:
+            if mp_dist < threshold_upper:
                 return "anomaly_low"
             return "anomaly_high"
 
@@ -68,9 +68,9 @@ class MPIRQScorer(MPScorer):
         [Q1, Q3] = np.quantile(mp_dist_finite, [0.15, 0.85])
         IQR_L = Q3 - Q1
         threshold_upper = Q3 + (1.5 * IQR_L)
-
         scores = [
-            np.NAN if np.isnan(val) or np.isinf(val) else val - threshold_upper for val in mp_dist
+            np.nan if np.isnan(val) or np.isinf(val) else val - threshold_upper for val in mp_dist
         ]
-        flags = [to_flag(score, threshold_lower, threshold_upper) for score in scores]
+
+        flags = [to_flag(val, threshold_lower, threshold_upper) for val in mp_dist]
         return scores, flags
