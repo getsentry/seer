@@ -28,7 +28,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         agent = GptAgent(
             tools=tools.get_tools(),
             memory=[Message(role="system", content=RootCauseAnalysisPrompts.format_system_msg())],
-            stop_message="<NO_ROOT_CAUSES>",
         )
 
         response = agent.run(
