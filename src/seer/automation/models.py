@@ -207,6 +207,8 @@ class EventDetails(BaseModel):
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
+                    if exception.get("value") is None:
+                        exception["value"] = ""
                     exceptions.append(ExceptionDetails.model_validate(exception))
             if entry.get("type") == "threads":
                 for thread in entry.get("data", {}).get("values", []):
