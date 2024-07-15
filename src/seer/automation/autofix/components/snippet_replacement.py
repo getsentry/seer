@@ -3,8 +3,8 @@ import textwrap
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.utils import extract_text_inside_tags
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
+from seer.automation.utils import extract_text_inside_tags
 
 
 class SnippetReplacementRequest(BaseComponentRequest):

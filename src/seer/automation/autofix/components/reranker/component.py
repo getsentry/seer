@@ -11,8 +11,9 @@ from seer.automation.autofix.components.reranker.models import (
     RerankerRequest,
 )
 from seer.automation.autofix.components.reranker.prompts import RerankerPrompts
-from seer.automation.autofix.utils import autofix_logger, escape_multi_xml
+from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
+from seer.automation.utils import escape_multi_xml
 
 
 class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):

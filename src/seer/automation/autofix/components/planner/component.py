@@ -13,8 +13,8 @@ from seer.automation.autofix.components.planner.models import (
 from seer.automation.autofix.components.planner.prompts import PlanningPrompts
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
-from seer.automation.autofix.utils import escape_multi_xml
 from seer.automation.component import BaseComponent
+from seer.automation.utils import escape_multi_xml
 
 
 class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
