@@ -5,9 +5,21 @@ import pytest
 from johen.generators import pydantic, sqlalchemy
 from sqlalchemy import text
 
-from seer.bootup import CELERY_CONFIG
+from seer.bootup import CELERY_CONFIG, stub_module
 from seer.db import Session, db
+from seer.dependency_injection import Module
 from seer.inference_models import reset_loading_state
+
+
+@pytest.fixture
+def test_module() -> Module:
+    return stub_module
+
+
+@pytest.fixture(autouse=True)
+def enable_test_injector(test_module: Module) -> None:
+    with test_module:
+        yield
 
 
 @pytest.fixture(autouse=True, scope="session")

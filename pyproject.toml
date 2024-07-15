@@ -37,8 +37,6 @@
             "unidiff",
             "tree_sitter_languages",
             "tree_sitter",
-            "johen.*",
-            "johen",
             "google-cloud-storage",
             "langfuse.*",
             "langfuse",
