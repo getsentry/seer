@@ -13,6 +13,7 @@ from structlog import get_logger
 
 from celery_app.config import CeleryQueues
 from seer.db import Session, db, migrate
+from seer.dependency_injection import Module
 
 logger = logging.getLogger(__name__)
 structlog.configure(
@@ -22,6 +23,9 @@ structlog.configure(
         structlog.processors.JSONRenderer(),
     ]
 )
+
+module = Module()
+stub_module = Module()
 
 
 def traces_sampler(sampling_context: dict):
@@ -88,6 +92,7 @@ def bootup(
 
         torch.set_num_threads(int(torch_num_threads))
 
+    module.enable()
     return app
 
 
