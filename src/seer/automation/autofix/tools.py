@@ -19,6 +19,7 @@ from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.models import FileChange
+from seer.automation.utils import AgentError
 
 logger = logging.getLogger("autofix")
 
@@ -308,14 +309,18 @@ class CodeActionTools(BaseTools):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         if not file_contents:
-            raise FileNotFoundError("File not found or it was deleted in a previous action.")
+            raise AgentError() from FileNotFoundError(
+                "File not found or it was deleted in a previous action."
+            )
 
         result = find_original_snippet(
             reference_snippet, file_contents, threshold=self.snippet_matching_threshold
         )
 
         if not result:
-            raise Exception("Reference snippet not found. Try again with an exact match.")
+            raise AgentError() from Exception(
+                "Reference snippet not found. Try again with an exact match."
+            )
 
         original_snippet, snippet_start_line, snippet_end_line = result
 
@@ -328,7 +333,9 @@ class CodeActionTools(BaseTools):
         chunk = "\n".join(chunk_lines).strip("\n")
 
         if not original_snippet:
-            raise Exception("Reference snippet not found. Try again with an exact match.")
+            raise AgentError() from Exception(
+                "Reference snippet not found. Try again with an exact match."
+            )
 
         output = SnippetReplacementComponent(self.context).invoke(
             SnippetReplacementRequest(
@@ -340,7 +347,7 @@ class CodeActionTools(BaseTools):
         )
 
         if not output:
-            raise Exception("Snippet replacement failed.")
+            raise AgentError() from Exception("Snippet replacement failed.")
 
         # Add a trailing newline in the reference snippet, this is because we stripped all newlines from the chunk originally, we should add the trailing one back in.
         reference_snippet = chunk + "\n"
@@ -375,7 +382,9 @@ class CodeActionTools(BaseTools):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         if not file_contents:
-            raise FileNotFoundError("File not found or it was deleted in a previous action.")
+            raise AgentError() from FileNotFoundError(
+                "File not found or it was deleted in a previous action."
+            )
 
         original_snippet: str | None = None
         if snippet in file_contents:
@@ -392,7 +401,9 @@ class CodeActionTools(BaseTools):
         logger.debug(f'"{snippet}"')
 
         if not original_snippet:
-            raise Exception("Reference snippet not found. Try again with an exact match.")
+            raise AgentError() from Exception(
+                "Reference snippet not found. Try again with an exact match."
+            )
         file_change = FileChange(
             change_type="delete",
             path=file_path,
@@ -420,7 +431,7 @@ class CodeActionTools(BaseTools):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         if file_contents:
-            raise FileExistsError(f"File `{file_path}` already exists.")
+            raise AgentError() from FileExistsError(f"File `{file_path}` already exists.")
 
         self.store_file_change(
             repo_name,
@@ -445,7 +456,7 @@ class CodeActionTools(BaseTools):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         if not file_contents:
-            raise FileNotFoundError(f"File `{file_path}` not found.")
+            raise AgentError() from FileNotFoundError(f"File `{file_path}` not found.")
 
         self.store_file_change(
             repo_name,

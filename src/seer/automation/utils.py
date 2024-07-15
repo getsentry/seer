@@ -1,6 +1,8 @@
 import functools
 import logging
 import os
+import re
+from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
 import torch
@@ -18,6 +20,12 @@ automation_logger = logging.getLogger("automation")
 
 class ConsentError(Exception):
     """Exception raised when consent is not granted for an operation."""
+
+    pass
+
+
+class AgentError(Exception):
+    """Exception to be ignored by the Sentry SDK and intended only for an AI agent to read"""
 
     pass
 
@@ -109,3 +117,71 @@ def get_sentry_client() -> RpcClient:
         return rpc_client
     else:
         return SentryRpcClient()
+
+
+def escape_xml_chars(s: str) -> str:
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def escape_xml(s: str, tag: str) -> str:
+    def replace_content(match):
+        return match.group(0).replace(match.group(2), escape_xml_chars(match.group(2)))
+
+    return re.sub(rf"<{tag}(\s+[^>]*)?>((.|\n)*?)</{tag}>", replace_content, s, flags=re.DOTALL)
+
+
+def escape_multi_xml(s: str, tags: list[str]) -> str:
+    for tag in tags:
+        s = escape_xml(s, tag)
+
+    return s
+
+
+def extract_text_inside_tags(content: str, tag: str, strip_newlines: bool = True) -> str:
+    """
+    Extract the text inside the specified XML tag.
+
+    Args:
+        content (str): The XML content.
+        tag (str): The tag to extract the text from.
+
+    Returns:
+        str: The text inside the specified XML tag.
+    """
+    start_tag = f"<{tag}>"
+    end_tag = f"</{tag}>"
+
+    start_index = content.find(start_tag)
+    end_index = content.find(end_tag)
+
+    if start_index == -1 or end_index == -1:
+        return ""
+
+    text = content[start_index + len(start_tag) : end_index]
+
+    return text.strip("\n") if strip_newlines else text
+
+
+def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
+    """
+    Extract the text from an XML element with the given tag.
+
+    Args:
+        element (ET.Element): The XML element to extract the text from.
+        tag (str): The tag of the XML element to extract the text from.
+
+    Returns:
+        str: The text of the XML element with the given tag.
+    """
+    el = element.find(tag)
+
+    if el is not None:
+        return (el.text or "").strip()
+
+    return None

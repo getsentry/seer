@@ -14,6 +14,7 @@ from seer.automation.autofix.components.root_cause.prompts import RootCauseAnaly
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.autofix.utils import autofix_logger, escape_multi_xml, extract_text_inside_tags
 from seer.automation.component import BaseComponent
+from seer.automation.utils import escape_multi_xml
 
 
 class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCauseAnalysisOutput]):

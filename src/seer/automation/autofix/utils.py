@@ -2,8 +2,6 @@ import difflib
 import logging
 import random
 import re
-from typing import List
-from xml.etree import ElementTree as ET
 
 autofix_logger = logging.getLogger("autofix")
 
@@ -152,71 +150,3 @@ def sanitize_branch_name(title: str) -> str:
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
     return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
-
-
-def escape_xml_chars(s: str) -> str:
-    return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&apos;")
-    )
-
-
-def escape_xml(s: str, tag: str) -> str:
-    def replace_content(match):
-        return match.group(0).replace(match.group(2), escape_xml_chars(match.group(2)))
-
-    return re.sub(rf"<{tag}(\s+[^>]*)?>((.|\n)*?)</{tag}>", replace_content, s, flags=re.DOTALL)
-
-
-def escape_multi_xml(s: str, tags: List[str]) -> str:
-    for tag in tags:
-        s = escape_xml(s, tag)
-
-    return s
-
-
-def extract_text_inside_tags(content: str, tag: str, strip_newlines: bool = True) -> str:
-    """
-    Extract the text inside the specified XML tag.
-
-    Args:
-        content (str): The XML content.
-        tag (str): The tag to extract the text from.
-
-    Returns:
-        str: The text inside the specified XML tag.
-    """
-    start_tag = f"<{tag}>"
-    end_tag = f"</{tag}>"
-
-    start_index = content.find(start_tag)
-    end_index = content.find(end_tag)
-
-    if start_index == -1 or end_index == -1:
-        return ""
-
-    text = content[start_index + len(start_tag) : end_index]
-
-    return text.strip("\n") if strip_newlines else text
-
-
-def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
-    """
-    Extract the text from an XML element with the given tag.
-
-    Args:
-        element (ET.Element): The XML element to extract the text from.
-        tag (str): The tag of the XML element to extract the text from.
-
-    Returns:
-        str: The text of the XML element with the given tag.
-    """
-    el = element.find(tag)
-
-    if el is not None:
-        return (el.text or "").strip()
-
-    return None

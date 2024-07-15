@@ -12,6 +12,7 @@ from sentry_sdk.integrations import Integration
 from structlog import get_logger
 
 from celery_app.config import CeleryQueues
+from seer.automation.utils import AgentError
 from seer.db import Session, db, migrate
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,14 @@ def bootup(
 
     commit_sha = os.environ.get("SEER_VERSION_SHA", "")
 
+    def before_send(event, hint):
+        if "exc_info" in hint:
+            exc_type, exc_value, tb = hint["exc_info"]
+            # exclude errors intended for an AI agent, not Sentry
+            if isinstance(exc_value, (AgentError)):
+                return None
+        return event
+
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
         integrations=[*plugins],
@@ -64,6 +73,7 @@ def bootup(
         send_default_pii=True,
         release=commit_sha,
         environment="production",
+        before_send=before_send,
     )
 
     uri = os.environ["DATABASE_URL"]
