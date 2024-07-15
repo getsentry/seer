@@ -50,7 +50,9 @@ COPY pyproject.toml .
 # Copy the supervisord.conf file into the container
 COPY supervisord.conf /etc/supervisord.conf
 
-RUN pip install --default-timeout=120 -e . --no-cache-dir
+# Ignore dependencies, as they are already installed and docker handles the caching
+# this skips annoying rebuilds where requirements would technically be met anyways.
+RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
 
 ENV FLASK_APP=src.seer.app
 # Set in cloudbuild.yaml for production images
