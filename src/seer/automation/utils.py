@@ -22,6 +22,12 @@ class ConsentError(Exception):
     pass
 
 
+class AgentError(Exception):
+    """Exception to be ignored by the Sentry SDK and intended only for an AI agent to read"""
+
+    pass
+
+
 def _use_cuda():
     return os.getenv("USE_CUDA", "false").lower() in ("true", "t", "1")
 
