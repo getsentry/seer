@@ -165,7 +165,7 @@ def inject(c: _A) -> _A:
 
     argspec = inspect.getfullargspec(c)
 
-    @functools.wraps(c)
+    @functools.wraps(c)  # type: ignore
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         new_kwds = {**kwargs}
 
@@ -193,12 +193,12 @@ def inject(c: _A) -> _A:
                     except KeyError:
                         raise AssertionError(f"Cannot inject argument {k} as it lacks annotations")
 
-        return c(*args, **new_kwds)
+        return c(*args, **new_kwds)  # type: ignore
 
     if inspect.isclass(original_type):
-        return type(original_type.__name__, (original_type,), dict(__init__=wrapper))
+        return type(original_type.__name__, (original_type,), dict(__init__=wrapper))  # type: ignore
 
-    return wrapper
+    return wrapper  # type: ignore
 
 
 def resolve(source: type[_A]) -> _A:
