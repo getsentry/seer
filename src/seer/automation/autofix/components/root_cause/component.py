@@ -2,6 +2,7 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import GptAgent
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.models import (
@@ -13,7 +14,7 @@ from seer.automation.autofix.components.root_cause.prompts import RootCauseAnaly
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml
+from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
 
 
 class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCauseAnalysisOutput]):
@@ -27,6 +28,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         agent = GptAgent(
             tools=tools.get_tools(),
             memory=[Message(role="system", content=RootCauseAnalysisPrompts.format_system_msg())],
+            stop_message="<NO_ROOT_CAUSES>",
         )
 
         response = agent.run(
@@ -43,8 +45,29 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
             return None
 
+        if "<NO_ROOT_CAUSES>" in response:
+            return None
+
+        extracted_response = extract_text_inside_tags(response, "potential_root_causes")
+
+        formatter_response, formatter_usage = GptClient().completion(
+            [
+                Message(
+                    role="user",
+                    content=RootCauseAnalysisPrompts.root_cause_formatter_msg(extracted_response),
+                )
+            ]
+        )
+
+        with self.context.state.update() as cur:
+            cur.usage += formatter_usage
+
+        if not formatter_response.content:
+            autofix_logger.warning("Root Cause Analysis formatter did not return a valid response")
+            return None
+
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(response, ['thoughts', 'snippet', 'title', 'description'])}</root>"
+            f"<root>{escape_multi_xml(formatter_response.content, ['thoughts', 'snippet', 'title', 'description'])}</root>"
         )
 
         # Assign the ids to be the numerical indices of the causes and suggested fixes

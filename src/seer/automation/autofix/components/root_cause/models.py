@@ -1,6 +1,8 @@
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, StringConstraints
+from johen import gen
+from johen.examples import Examples
+from pydantic import BaseModel, Field, StringConstraints
 from pydantic_xml import attr, element
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -52,8 +54,8 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    likelihood: float
-    actionability: float
+    likelihood: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
+    actionability: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
     suggested_fixes: Optional[list[RootCauseSuggestedFix]] = None
 
 
