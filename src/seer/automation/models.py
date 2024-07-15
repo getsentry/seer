@@ -19,7 +19,7 @@ from pydantic.alias_generators import to_camel, to_snake
 from pydantic_xml import BaseXmlModel
 from typing_extensions import TypedDict
 
-from seer.automation.utils import process_repo_provider
+from seer.automation.utils import process_repo_provider, unescape_xml_chars
 
 
 class StacktraceFrame(BaseModel):
@@ -338,7 +338,7 @@ class PromptXmlModel(BaseXmlModel):
 
         self._pad_with_newlines(tree)
 
-        return ET.tostring(tree, encoding="unicode")
+        return unescape_xml_chars(ET.tostring(tree, encoding="unicode"))
 
 
 class Line(BaseModel):

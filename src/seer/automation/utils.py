@@ -129,6 +129,16 @@ def escape_xml_chars(s: str) -> str:
     )
 
 
+def unescape_xml_chars(s: str) -> str:
+    return (
+        s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&apos;", "'")
+    )
+
+
 def escape_xml(s: str, tag: str) -> str:
     def replace_content(match):
         return match.group(0).replace(match.group(2), escape_xml_chars(match.group(2)))
