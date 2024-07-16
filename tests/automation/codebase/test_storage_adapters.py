@@ -7,16 +7,21 @@ from seer.automation.codebase.storage_adapters import (
     GcsStorageAdapter,
     get_storage_adapter_class,
 )
+from seer.configuration import AppConfig, CodebaseStorageType
+from seer.dependency_injection import resolve
 
 
 class TestStorageAdapter(unittest.TestCase):
-    def test_fs_workspace_clear(self):
-        os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
-        os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
-        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
+    def test_adaptor_selection(self):
+        existing_config = resolve(AppConfig)
+        existing_config.CODEBASE_STORAGE_TYPE = CodebaseStorageType.FILESYSTEM
+        assert get_storage_adapter_class(existing_config) is FilesystemStorageAdapter
 
-        StorageAdapter = get_storage_adapter_class()
-        adapter = StorageAdapter(1, "test")
+        existing_config.CODEBASE_STORAGE_TYPE = CodebaseStorageType.FILESYSTEM
+        assert get_storage_adapter_class(existing_config) is FilesystemStorageAdapter
+
+    def test_fs_workspace_clear(self):
+        adapter = FilesystemStorageAdapter(1, "test")
 
         # Create a file in the workspace
         workspace_dir = adapter.tmpdir
@@ -31,12 +36,7 @@ class TestStorageAdapter(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(workspace_dir, "test.txt")))
 
     def test_gcs_workspace_clear(self):
-        os.environ["CODEBASE_STORAGE_TYPE"] = "gcs"
-        os.environ["CODEBASE_GCS_BUCKET"] = "seer-chroma"
-        os.environ["CODEBASE_GCS_STORAGE_DIR"] = "chroma-test/data/storage"
-
-        StorageAdapter = get_storage_adapter_class()
-        adapter = StorageAdapter(1, "test")
+        adapter = GcsStorageAdapter(1, "test")
 
         # Create a file in the workspace
         workspace_dir = adapter.tmpdir
@@ -52,11 +52,6 @@ class TestStorageAdapter(unittest.TestCase):
 
 
 class TestFilesystemStorageAdapter(unittest.TestCase):
-    def setUp(self):
-        os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
-        os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
-        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
-
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
         return super().tearDown()
@@ -127,16 +122,11 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
 
 
 class TestGcsStorageAdapter(unittest.TestCase):
-    def setUp(self) -> None:
-        os.environ["CODEBASE_STORAGE_TYPE"] = "gcs"
-        os.environ["CODEBASE_GCS_BUCKET"] = "seer-chroma"
-        os.environ["CODEBASE_GCS_STORAGE_DIR"] = "chroma-test/data/storage"
-
     @patch("seer.automation.codebase.storage_adapters.storage.Client")
     def test_storage_prefix(self, mock_gcs_client):
         adapter = GcsStorageAdapter(1, "test")
         storage_prefix = adapter.get_storage_prefix(1, "test")
-        self.assertEqual(storage_prefix, "chroma-test/data/storage/1/test")
+        self.assertEqual(storage_prefix, os.path.abspath("chroma-test/data/storage/1/test"))
 
     @patch("seer.automation.codebase.storage_adapters.storage.Client")
     def test_copy_to_workspace(self, mock_gcs_client):

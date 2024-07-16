@@ -21,7 +21,6 @@ class TestNamespaceManager(unittest.TestCase):
     def setUp(self):
         os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
         os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
-        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()

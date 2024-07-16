@@ -16,12 +16,6 @@ def test_module() -> Module:
     return stub_module
 
 
-@pytest.fixture(autouse=True)
-def enable_test_injector(test_module: Module) -> None:
-    with test_module:
-        yield
-
-
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
     os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].replace("db", "test-db")
@@ -44,6 +38,12 @@ def setup_app():
     finally:
         with app.app_context():
             db.metadata.drop_all(bind=db.engine)
+
+
+@pytest.fixture(autouse=True)
+def enable_test_injector(test_module: Module, setup_app) -> None:
+    with test_module:
+        yield
 
 
 pytest_plugins = (
