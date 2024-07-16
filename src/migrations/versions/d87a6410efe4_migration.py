@@ -16,54 +16,64 @@ depends_on = None
 
 
 def upgrade():
-    with op.get_context().autocommit_block():
+    # Create a temporary table with the new structure
+    op.execute(
+        """
+        CREATE TABLE grouping_records_tmp (LIKE grouping_records INCLUDING ALL)
+        PARTITION BY HASH (project_id);
+    """
+    )
+
+    # Create partitions
+    for i in range(100):
         op.execute(
-            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw_new"
+            f"""
+            CREATE TABLE grouping_records_tmp_{i}
+            PARTITION OF grouping_records_tmp
+            FOR VALUES WITH (modulus 100, remainder {i});
+        """
         )
 
-        op.execute(
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS
-            ix_grouping_records_stacktrace_embedding_hnsw_new
-            ON grouping_records USING hnsw (stacktrace_embedding vector_cosine_ops)
-            WITH (m = 16, ef_construction = 200)
-            """
-        )
+    # Copy data to the temporary table
+    op.execute("INSERT INTO grouping_records_tmp SELECT * FROM grouping_records;")
 
-        op.execute(
-            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw"
-        )
+    # Rename tables
+    op.execute("ALTER TABLE grouping_records RENAME TO grouping_records_old;")
+    op.execute("ALTER TABLE grouping_records_tmp RENAME TO grouping_records;")
 
-        op.execute(
-            """
-            ALTER INDEX ix_grouping_records_stacktrace_embedding_hnsw_new
-            RENAME TO ix_grouping_records_stacktrace_embedding_hnsw
-            """
-        )
+    # Recreate the index with new parameters
+    op.create_index(
+        "ix_grouping_records_stacktrace_embedding_hnsw",
+        "grouping_records",
+        ["stacktrace_embedding"],
+        unique=False,
+        postgresql_using="hnsw",
+        postgresql_with={"m": 16, "ef_construction": 200},
+        postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+    )
+
+    # Drop the old table
+    op.execute("DROP TABLE grouping_records_old;")
 
 
 def downgrade():
-    with op.get_context().autocommit_block():
-        op.execute(
-            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw_old"
-        )
+    # Create a temporary table without partitioning
+    op.execute("CREATE TABLE grouping_records_tmp (LIKE grouping_records INCLUDING ALL);")
 
-        op.execute(
-            """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS
-            ix_grouping_records_stacktrace_embedding_hnsw_old
-            ON grouping_records USING hnsw (stacktrace_embedding vector_cosine_ops)
-            WITH (m = 16, ef_construction = 64)
-            """
-        )
+    # Copy data to the temporary table
+    op.execute("INSERT INTO grouping_records_tmp SELECT * FROM grouping_records;")
 
-        op.execute(
-            "DROP INDEX CONCURRENTLY IF EXISTS ix_grouping_records_stacktrace_embedding_hnsw"
-        )
+    # Rename tables
+    op.execute("DROP TABLE grouping_records;")
+    op.execute("ALTER TABLE grouping_records_tmp RENAME TO grouping_records;")
 
-        op.execute(
-            """
-            ALTER INDEX ix_grouping_records_stacktrace_embedding_hnsw_old
-            RENAME TO ix_grouping_records_stacktrace_embedding_hnsw
-            """
-        )
+    # Recreate the index with old parameters
+    op.create_index(
+        "ix_grouping_records_stacktrace_embedding_hnsw",
+        "grouping_records",
+        ["stacktrace_embedding"],
+        unique=False,
+        postgresql_using="hnsw",
+        postgresql_with={"m": 16, "ef_construction": 64},
+        postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+    )
