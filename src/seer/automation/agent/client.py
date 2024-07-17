@@ -58,6 +58,17 @@ class GptClient(LlmClient):
 
         return message, usage
 
+    def completion_with_parser(
+        self,
+        messages: list[Message],
+        parser: Callable[[str | None], T],
+        model=DEFAULT_GPT_MODEL,
+        **chat_completion_kwargs,
+    ) -> tuple[T, Message, Usage]:
+        message, usage = self.completion(messages, model, **chat_completion_kwargs)
+
+        return parser(message.content), message, usage
+
     def json_completion(
         self, messages: list[Message], model=DEFAULT_GPT_MODEL, **chat_completion_kwargs
     ) -> tuple[dict[str, Any] | None, Message, Usage]:
@@ -85,7 +96,7 @@ class DummyGptClient(GptClient):
         default_factory=list
     )
 
-    def completion(self, messages: list[Message], **chat_completion_kwargs):
+    def completion(self, messages: list[Message], model="test-gpt", **chat_completion_kwargs):
         for handler in self.handlers:
             result = handler(messages, chat_completion_kwargs)
             if result:
