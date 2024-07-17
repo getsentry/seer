@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from openai.types.chat.chat_completion_message_tool_call import (
@@ -13,8 +13,10 @@ from seer.automation.agent.agent import (
     LlmAgent,
     MaxIterationsReachedException,
 )
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
+from seer.dependency_injection import resolve
 
 
 class TestAgentConfig:
@@ -61,11 +63,11 @@ class TestLlmAgent:
 
         agent.iterations = agent.config.max_iterations
         agent.memory = [Message(role="assistant", content="STOP")]
-        assert agent.should_continue()  # Max iterations reached
+        assert not agent.should_continue()  # Max iterations reached
 
         agent.iterations = 1
         agent.config.stop_message = "STOP"
-        assert agent.should_continue()  # Stop message found
+        assert not agent.should_continue()  # Stop message found
 
     def test_add_user_message(self, agent: LlmAgent):
         agent.add_user_message("Test message")
@@ -126,12 +128,12 @@ class TestGptAgent:
         return AgentConfig()
 
     @pytest.fixture
-    def mock_client(self):
-        return Mock()
+    def agent(self, config):
+        return GptAgent(config)
 
     @pytest.fixture
-    def agent(self, config, mock_client):
-        return GptAgent(config, client=mock_client)
+    def mock_client(self):
+        return resolve(GptClient)
 
     def test_initialization(self, agent, config, mock_client):
         assert agent.config == config
@@ -141,7 +143,7 @@ class TestGptAgent:
     def test_run_iteration(self, agent, mock_client):
         mock_message = Message(role="assistant", content="Test response")
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion.return_value = (mock_message, mock_usage)
+        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
 
         agent.run_iteration()
 
@@ -153,7 +155,7 @@ class TestGptAgent:
     def test_get_completion(self, agent, mock_client):
         mock_message = Message(role="assistant", content="Test response")
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion.return_value = (mock_message, mock_usage)
+        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
 
         message, usage = agent.get_completion()
 
@@ -204,7 +206,7 @@ class TestGptAgent:
     def test_run(self, agent, mock_client):
         mock_message = Message(role="assistant", content="Final response")
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion.return_value = (mock_message, mock_usage)
+        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
 
         result = agent.run("Test prompt")
 
@@ -232,7 +234,7 @@ class TestGptAgent:
             ],
         )
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion.return_value = (mock_message, mock_usage)
+        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
 
         with pytest.raises(MaxIterationsReachedException):
             agent.run("Test prompt")

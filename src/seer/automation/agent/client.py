@@ -7,6 +7,7 @@ from langfuse.openai import openai
 from openai.types.chat import ChatCompletion
 
 from seer.automation.agent.models import Message, Usage
+from seer.bootup import module, stub_module
 
 T = TypeVar("T")
 
@@ -14,7 +15,7 @@ T = TypeVar("T")
 class LlmClient(ABC):
     @abstractmethod
     def completion(
-        self, messages: list[Message], **chat_completion_kwargs
+        self, messages: list[Message], model: str, **chat_completion_kwargs
     ) -> tuple[Message, Usage]:
         pass
 
@@ -22,21 +23,26 @@ class LlmClient(ABC):
         self,
         messages: list[Message],
         parser: Callable[[str | None], T],
+        model: str,
         **chat_completion_kwargs,
     ) -> tuple[T, Message, Usage]:
-        message, usage = self.completion(messages, **chat_completion_kwargs)
+        message, usage = self.completion(messages, model, **chat_completion_kwargs)
 
         return parser(message.content), message, usage
 
 
+DEFAULT_GPT_MODEL = "gpt-4o-2024-05-13"
+
+
 class GptClient(LlmClient):
-    def __init__(self, model: str = "gpt-4o-2024-05-13"):
-        self.model = model
+    def __init__(self):
         self.openai_client = openai.Client()
 
-    def completion(self, messages: list[Message], **chat_completion_kwargs):
+    def completion(
+        self, messages: list[Message], model=DEFAULT_GPT_MODEL, **chat_completion_kwargs
+    ):
         completion: ChatCompletion = self.openai_client.chat.completions.create(
-            model=self.model,
+            model=model,
             messages=[message.to_openai_message() for message in messages],
             temperature=0.0,
             **chat_completion_kwargs,
@@ -53,14 +59,20 @@ class GptClient(LlmClient):
         return message, usage
 
     def json_completion(
-        self, messages: list[Message], **chat_completion_kwargs
+        self, messages: list[Message], model=DEFAULT_GPT_MODEL, **chat_completion_kwargs
     ) -> tuple[dict[str, Any] | None, Message, Usage]:
         return self.completion_with_parser(
             messages,
             parser=lambda x: json.loads(x) if x else None,
+            model=model,
             response_format={"type": "json_object"},
             **chat_completion_kwargs,
         )
+
+
+@module.provider
+def provide_gpt_client() -> GptClient:
+    return GptClient()
 
 
 GptCompletionHandler = Callable[[list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]]
@@ -80,3 +92,8 @@ class DummyGptClient(GptClient):
                 return result
         self.missed_calls.append((messages, chat_completion_kwargs))
         return Message(), Usage()
+
+
+@stub_module.provider
+def provide_stub_gpt_client() -> GptClient:
+    return DummyGptClient()

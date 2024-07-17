@@ -6,10 +6,11 @@ from openai._types import NotGiven
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
 
-from seer.automation.agent.client import GptClient, LlmClient
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
 
@@ -107,17 +108,18 @@ class LlmAgent(ABC):
 
 
 class GptAgent(LlmAgent):
+    @inject
     def __init__(
         self,
         config: AgentConfig,
-        client: Optional[LlmClient] = None,
+        client: GptClient = injected,
         tools: Optional[list[FunctionTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "GptAgent",
         chat_completion_kwargs: Optional[dict] = None,
     ):
         super().__init__(config, tools, memory, name)
-        self.client = client or GptClient(model=config.model)
+        self.client = client
         self.chat_completion_kwargs = chat_completion_kwargs or {}
 
     def run_iteration(self):
@@ -132,6 +134,7 @@ class GptAgent(LlmAgent):
     def get_completion(self):
         return self.client.completion(
             messages=self.memory,
+            model=self.config.model,
             tools=([tool.to_dict() for tool in self.tools] if self.tools else NotGiven()),
             **self.chat_completion_kwargs,
         )
