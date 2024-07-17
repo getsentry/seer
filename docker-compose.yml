@@ -36,7 +36,7 @@ services:
             - ./data/chroma:/app/data/chroma
             - ~/.config/gcloud:/root/.config/gcloud
             # Codecov test artifacts
-            # TODO removed because not working for some reason for Rohan - ./.artifacts:/app/.artifacts
+            - ./.artifacts:/app/.artifacts
         depends_on:
             - rabbitmq
             - db
