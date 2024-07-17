@@ -21,7 +21,7 @@ def upgrade():
     op.execute(
         """
         CREATE TABLE grouping_records_new (
-            id INTEGER NOT NULL,
+            id BIGINT NOT NULL,
             project_id BIGINT NOT NULL,
             hash VARCHAR(32) NOT NULL,
             message VARCHAR NOT NULL,
