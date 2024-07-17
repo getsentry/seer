@@ -16,8 +16,21 @@ depends_on = None
 
 
 def upgrade():
+    op.execute("ALTER TABLE IF EXISTS grouping_records RENAME to grouping_records_old;")
+
+    op.execute("ALTER TABLE grouping_records_new RENAME TO grouping_records;")
+    for i in range(100):
+        op.execute(f"ALTER TABLE grouping_records_new_p{i} RENAME TO grouping_records_p{i};")
+
     op.execute("DROP TABLE IF EXISTS grouping_records_old")
 
 
 def downgrade():
-    pass
+    op.execute("ALTER TABLE IF EXISTS grouping_records RENAME TO grouping_records_new;")
+
+    for i in range(100):
+        op.execute(f"ALTER TABLE grouping_records_p{i} RENAME TO grouping_records_new_p{i};")
+
+    op.execute("ALTER TABLE grouping_records_old RENAME TO grouping_records;")
+
+    op.execute("DROP TABLE IF EXISTS grouping_records_new")
