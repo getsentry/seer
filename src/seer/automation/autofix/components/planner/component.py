@@ -1,6 +1,7 @@
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
+from seer.automation.agent.agent import AgentConfig, GptAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.planner.models import (
     PlanningOutput,
@@ -12,7 +13,7 @@ from seer.automation.autofix.components.planner.prompts import PlanningPrompts
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml, get_autofix_client_and_agent
+from seer.automation.utils import escape_multi_xml
 
 
 class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
@@ -23,8 +24,10 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
     def invoke(self, request: PlanningRequest) -> PlanningOutput | None:
         tools = BaseTools(self.context)
 
-        agent = get_autofix_client_and_agent()[1](
-            tools=tools.get_tools(), memory=[], system_prompt=PlanningPrompts.format_system_msg()
+        agent = GptAgent(
+            tools=tools.get_tools(),
+            memory=[],
+            config=AgentConfig(system_prompt=PlanningPrompts.format_system_msg()),
         )
 
         task_str = (

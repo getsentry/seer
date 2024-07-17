@@ -4,7 +4,13 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from seer.automation.agent.client import DEFAULT_GPT_MODEL, ClaudeClient, GptClient, LlmClient
+from seer.automation.agent.client import (
+    DEFAULT_CLAUDE_MODEL,
+    DEFAULT_GPT_MODEL,
+    ClaudeClient,
+    GptClient,
+    LlmClient,
+)
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
@@ -17,7 +23,7 @@ class AgentConfig(BaseModel):
     max_iterations: int = Field(
         default=16, description="Maximum number of iterations the agent can perform"
     )
-    model: str = Field(default=DEFAULT_GPT_MODEL, description="The model to be used by the agent")
+    model: str = Field(default="UNKNOWN", description="The model to be used by the agent")
     system_prompt: str | None = None
     stop_message: Optional[str] = Field(
         default=None, description="Message that signals the agent to stop"
@@ -140,28 +146,6 @@ class LlmAgent(ABC):
     def update_usage(self, usage: Usage):
         self.usage += usage
 
-
-class GptAgent(LlmAgent):
-    @inject
-    def __init__(
-        self,
-        config: AgentConfig = AgentConfig(),
-        client: GptClient = injected,
-        tools: Optional[list[FunctionTool]] = None,
-        memory: Optional[list[Message]] = None,
-        name: str = "GptAgent",
-    ):
-        super().__init__(config, client, tools, memory, name)
-
-    def run_iteration(self):
-        logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
-
-        message, usage = self.get_completion()
-        self.process_message(message)
-        self.update_usage(usage)
-
-        return self.memory
-
     def process_message(self, message: Message):
         self.memory.append(message)
 
@@ -175,19 +159,37 @@ class MaxIterationsReachedException(Exception):
     pass
 
 
+class GptAgent(LlmAgent):
+    @inject
+    def __init__(
+        self,
+        config: AgentConfig = AgentConfig(),
+        client: GptClient = injected,
+        tools: Optional[list[FunctionTool]] = None,
+        memory: Optional[list[Message]] = None,
+        name: str = "GptAgent",
+    ):
+        super().__init__(config, client, tools, memory, name)
+        if self.config.model == "UNKNOWN":
+            self.config.model = DEFAULT_GPT_MODEL
+
+
 class ClaudeAgent(LlmAgent):
+    @inject
     def __init__(
         self,
         config: AgentConfig = AgentConfig(),
         client: ClaudeClient = injected,
-        tools: list[FunctionTool] | None = None,
-        memory: list[Message] | None = None,
-        name="ClaudeAgent",
+        tools: Optional[list[FunctionTool]] = None,
+        memory: Optional[list[Message]] = None,
+        name: str = "ClaudeAgent",
     ):
         super().__init__(
             config,
             client,
             tools,
             memory,
-            name=name,
+            name,
         )
+        if self.config.model == "UNKNOWN":
+            self.config.model = DEFAULT_CLAUDE_MODEL

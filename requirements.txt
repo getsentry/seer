@@ -100,5 +100,7 @@ johen==0.1.5
 pydantic-xml==2.9.0
 chromadb==0.4.14
 google-cloud-storage==2.16.0
+google-cloud-aiplatform==1.59.0
+anthropic[vertex]==0.31.1
 langfuse @ git+https://github.com/jennmueng/langfuse-python.git@8e42a433e203ad39360339448b6c67b200661f66
 watchdog

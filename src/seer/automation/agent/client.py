@@ -64,6 +64,7 @@ class LlmClient(ABC):
 
 
 DEFAULT_GPT_MODEL = "gpt-4o-2024-05-13"
+DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet@20240620"
 
 
 class GptClient(LlmClient):
@@ -115,27 +116,28 @@ class GptClient(LlmClient):
 
         return message, usage
 
+    @abstractmethod
     def completion_with_parser(
         self,
         messages: list[Message],
         parser: Callable[[str | None], T],
-        model=DEFAULT_GPT_MODEL,
-        **chat_completion_kwargs,
+        model: str = DEFAULT_GPT_MODEL,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        response_format: dict | None = None,
     ) -> tuple[T, Message, Usage]:
-        message, usage = self.completion(messages, model, **chat_completion_kwargs)
-
-        return parser(message.content), message, usage
-
-    def json_completion(
-        self, messages: list[Message], model=DEFAULT_GPT_MODEL, **chat_completion_kwargs
-    ) -> tuple[dict[str, Any] | None, Message, Usage]:
-        return self.completion_with_parser(
-            messages,
-            parser=lambda x: json.loads(x) if x else None,
-            model=model,
-            response_format={"type": "json_object"},
-            **chat_completion_kwargs,
+        return super().completion_with_parser(
+            messages, parser, model, system_prompt, tools, response_format
         )
+
+    @abstractmethod
+    def json_completion(
+        self,
+        messages: list[Message],
+        model: str = DEFAULT_GPT_MODEL,
+        system_prompt: str | None = None,
+    ) -> tuple[dict[str, Any] | None, Message, Usage]:
+        return super().json_completion(messages, model, system_prompt)
 
 
 class ClaudeClient(LlmClient):
@@ -148,7 +150,7 @@ class ClaudeClient(LlmClient):
     def completion(
         self,
         messages: list[Message],
-        model: str = "claude-3-5-sonnet@20240620",
+        model: str = DEFAULT_CLAUDE_MODEL,
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = None,
         response_format: Optional[dict] = None,
@@ -237,13 +239,37 @@ class ClaudeClient(LlmClient):
 
         return message, usage
 
+    def completion_with_parser(
+        self,
+        messages: list[Message],
+        parser: Callable[[str | None], T],
+        model: str = DEFAULT_CLAUDE_MODEL,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        response_format: dict | None = None,
+    ) -> tuple[T, Message, Usage]:
+        return super().completion_with_parser(
+            messages, parser, model, system_prompt, tools, response_format
+        )
+
+    def json_completion(
+        self,
+        messages: list[Message],
+        model: str = DEFAULT_CLAUDE_MODEL,
+        system_prompt: str | None = None,
+    ) -> tuple[dict[str, Any] | None, Message, Usage]:
+        return super().json_completion(messages, model, system_prompt)
+
 
 @module.provider
 def provide_gpt_client() -> GptClient:
     return GptClient()
 
 
-GptCompletionHandler = Callable[[list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]]
+@module.provider
+def provide_claude_client() -> ClaudeClient:
+    return ClaudeClient()
+
 
 LlmCompletionHandler = Callable[[list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]]
 

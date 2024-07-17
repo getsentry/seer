@@ -2,6 +2,7 @@ import sentry_sdk
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.reranker.models import (
@@ -12,7 +13,7 @@ from seer.automation.autofix.components.reranker.models import (
 from seer.automation.autofix.components.reranker.prompts import RerankerPrompts
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml, get_autofix_client_and_agent
+from seer.automation.utils import escape_multi_xml
 
 
 class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
@@ -21,7 +22,7 @@ class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
     @observe(name="Reranker")
     @ai_track(description="Reranker")
     def invoke(self, request: RerankerRequest) -> RerankerOutput:
-        gpt_client = get_autofix_client_and_agent()[0]()
+        gpt_client = GptClient()
 
         code_dump = "\n".join(
             [chunk.get_dump_for_llm(include_short_hash_as_id=True) for chunk in request.chunks]

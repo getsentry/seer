@@ -1,9 +1,10 @@
 import textwrap
 
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
-from seer.automation.utils import extract_text_inside_tags, get_autofix_client_and_agent
+from seer.automation.utils import extract_text_inside_tags
 
 
 class SnippetReplacementRequest(BaseComponentRequest):
@@ -75,7 +76,7 @@ class SnippetReplacementComponent(
             commit_message=request.commit_message,
         )
 
-        data, message, usage = get_autofix_client_and_agent()[0]().completion_with_parser(
+        data, message, usage = GptClient().completion_with_parser(
             [Message(role="user", content=prompt)], parser=self._parser
         )
 
