@@ -6,7 +6,6 @@ Create Date: 2024-07-17 03:16:52.924194
 
 """
 
-import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -17,22 +16,8 @@ depends_on = None
 
 
 def upgrade():
-    op.drop_table("grouping_records_old")
+    op.execute("DROP TABLE IF EXISTS grouping_records_old")
 
 
 def downgrade():
-    op.create_table(
-        "grouping_records_old",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("group_id", sa.Integer(), nullable=False),
-        sa.Column("record_id", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["group_id"],
-            ["groups.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["record_id"],
-            ["records.id"],
-        ),
-    )
+    pass
