@@ -16,64 +16,94 @@ depends_on = None
 
 
 def upgrade():
-    # Create a temporary table with the new structure
+    op.execute("DROP TABLE IF EXISTS grouping_records_new CASCADE;")
+
     op.execute(
         """
-        CREATE TABLE grouping_records_tmp (LIKE grouping_records INCLUDING ALL)
-        PARTITION BY HASH (project_id);
-    """
+        CREATE TABLE grouping_records_new (
+            id INTEGER NOT NULL,
+            project_id BIGINT NOT NULL,
+            hash VARCHAR(32) NOT NULL,
+            message VARCHAR NOT NULL,
+            error_type VARCHAR,
+            stacktrace_embedding VECTOR(768) NOT NULL,
+            PRIMARY KEY (id, project_id)
+        ) PARTITION BY HASH (project_id);
+        """
     )
 
-    # Create partitions
     for i in range(100):
         op.execute(
             f"""
-            CREATE TABLE grouping_records_tmp_{i}
-            PARTITION OF grouping_records_tmp
-            FOR VALUES WITH (modulus 100, remainder {i});
-        """
+            CREATE TABLE grouping_records_new_p{i} PARTITION OF grouping_records_new
+            FOR VALUES WITH (MODULUS 100, REMAINDER {i});
+            """
         )
 
-    # Copy data to the temporary table
-    op.execute("INSERT INTO grouping_records_tmp SELECT * FROM grouping_records;")
-
-    # Rename tables
-    op.execute("ALTER TABLE grouping_records RENAME TO grouping_records_old;")
-    op.execute("ALTER TABLE grouping_records_tmp RENAME TO grouping_records;")
-
-    # Recreate the index with new parameters
-    op.create_index(
-        "ix_grouping_records_stacktrace_embedding_hnsw",
-        "grouping_records",
-        ["stacktrace_embedding"],
-        unique=False,
-        postgresql_using="hnsw",
-        postgresql_with={"m": 16, "ef_construction": 200},
-        postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+    op.execute(
+        """
+        INSERT INTO grouping_records_new (id, project_id, message, error_type, stacktrace_embedding, hash)
+        SELECT id, project_id, message, error_type, stacktrace_embedding, hash
+        FROM grouping_records;
+        """
     )
 
-    # Drop the old table
-    op.execute("DROP TABLE grouping_records_old;")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_grouping_records_new_project_id ON grouping_records_new (project_id);"
+    )
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_grouping_records_new_stacktrace_embedding_hnsw
+        ON grouping_records_new USING hnsw (stacktrace_embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 200);
+    """
+    )
+
+    with op.batch_alter_table("grouping_records_new", schema=None) as batch_op:
+        batch_op.create_unique_constraint("u_project_id_hash_composite", ["project_id", "hash"])
+
+    op.execute("ALTER TABLE IF EXISTS grouping_records RENAME to grouping_records_old;")
+    op.execute("ALTER TABLE grouping_records_new RENAME TO grouping_records;")
 
 
 def downgrade():
-    # Create a temporary table without partitioning
-    op.execute("CREATE TABLE grouping_records_tmp (LIKE grouping_records INCLUDING ALL);")
+    op.execute("ALTER TABLE IF EXISTS grouping_records RENAME TO grouping_records_new;")
 
-    # Copy data to the temporary table
-    op.execute("INSERT INTO grouping_records_tmp SELECT * FROM grouping_records;")
-
-    # Rename tables
-    op.execute("DROP TABLE grouping_records;")
-    op.execute("ALTER TABLE grouping_records_tmp RENAME TO grouping_records;")
-
-    # Recreate the index with old parameters
-    op.create_index(
-        "ix_grouping_records_stacktrace_embedding_hnsw",
-        "grouping_records",
-        ["stacktrace_embedding"],
-        unique=False,
-        postgresql_using="hnsw",
-        postgresql_with={"m": 16, "ef_construction": 64},
-        postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+    op.execute(
+        """
+        CREATE TABLE grouping_records (
+            id INTEGER NOT NULL,
+            project_id BIGINT NOT NULL,
+            hash VARCHAR(32) NOT NULL,
+            message VARCHAR NOT NULL,
+            error_type VARCHAR,
+            stacktrace_embedding VECTOR(768) NOT NULL,
+            PRIMARY KEY (id, project_id)
+        );
+        """
     )
+
+    op.execute(
+        """
+        INSERT INTO grouping_records (id, project_id, message, error_type, stacktrace_embedding, hash)
+        SELECT id, project_id, message, error_type, stacktrace_embedding, hash
+        FROM grouping_records_new;
+        """
+    )
+
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_grouping_records_project_id ON grouping_records (project_id);"
+    )
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_grouping_records_stacktrace_embedding_hnsw
+        ON grouping_records USING hnsw (stacktrace_embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64);
+        """
+    )
+
+    op.execute(
+        "ALTER TABLE grouping_records ADD CONSTRAINT u_project_id_hash_composite UNIQUE (project_id, hash);"
+    )
+
+    op.execute("DROP TABLE IF EXISTS grouping_records_new CASCADE;")
