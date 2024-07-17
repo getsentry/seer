@@ -10,6 +10,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: write
+      statuses: write
+
     steps:
       - uses: actions/checkout@v3
       - name: Get changed files
