@@ -4,21 +4,27 @@ import os
 import shutil
 import tempfile
 
-# Why is this all good on pylance but mypy is complaining?
-from google.cloud import storage  # type: ignore
+from google.cloud import storage
+from google.cloud.storage import Bucket
 
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.utils import cleanup_dir
+from seer.bootup import module
+from seer.configuration import AppConfig, CodebaseStorageType
+from seer.dependency_injection import inject, injected
 
 
 class StorageAdapter(abc.ABC):
     repo_id: int
     namespace_slug: str
+    app_config: AppConfig
 
-    def __init__(self, repo_id: int, namespace_slug: str):
+    @inject
+    def __init__(self, repo_id: int, namespace_slug: str, app_config: AppConfig = injected):
         self.repo_id = repo_id
         self.namespace_slug = namespace_slug
         self.tmpdir = tempfile.mkdtemp()
+        self.app_config = app_config
 
     def __del__(self):
         self.clear_workspace()
@@ -50,23 +56,20 @@ class FilesystemStorageAdapter(StorageAdapter):
     data storage and retrieval from a local directory structure.
     """
 
-    @staticmethod
-    def get_storage_dir():
-        storage_dir = os.getenv("CODEBASE_STORAGE_DIR", "data/chroma/storage")
-        return os.path.abspath(storage_dir)
+    def get_storage_dir(self):
+        return self.app_config.CODEBASE_STORAGE_DIR
+
+    def get_storage_location(self):
+        storage_dir = self.get_storage_dir()
+        return os.path.join(storage_dir, f"{self.repo_id}/{self.namespace_slug}")
 
     @staticmethod
-    def get_storage_location(repo_id: int, namespace_slug: str):
-        storage_dir = FilesystemStorageAdapter.get_storage_dir()
-        return os.path.join(storage_dir, f"{repo_id}/{namespace_slug}")
-
-    @staticmethod
-    def clear_all_storage():
-        storage_dir = FilesystemStorageAdapter.get_storage_dir()
-        shutil.rmtree(storage_dir, ignore_errors=True)
+    @inject
+    def clear_all_storage(app_config: AppConfig = injected):
+        shutil.rmtree(app_config.CODEBASE_STORAGE_DIR, ignore_errors=True)
 
     def copy_to_workspace(self):
-        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        storage_path = self.get_storage_location()
 
         if os.path.exists(storage_path):
             try:
@@ -78,7 +81,7 @@ class FilesystemStorageAdapter(StorageAdapter):
         return True
 
     def save_to_storage(self):
-        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        storage_path = self.get_storage_location()
 
         if os.path.exists(storage_path):
             try:
@@ -92,7 +95,7 @@ class FilesystemStorageAdapter(StorageAdapter):
         return True
 
     def delete_from_storage(self):
-        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        storage_path = self.get_storage_location()
 
         if os.path.exists(storage_path):
             try:
@@ -109,13 +112,11 @@ class GcsStorageAdapter(StorageAdapter):
     A storage adapter designed to store database files in Google Cloud Storage.
     """
 
-    @staticmethod
-    def get_bucket():
-        return storage.Client().bucket(os.getenv("CODEBASE_GCS_STORAGE_BUCKET", "sentry-ml"))
+    def get_bucket(self) -> Bucket:
+        return storage.Client().bucket(self.app_config.CODEBASE_GCS_STORAGE_BUCKET)
 
-    @staticmethod
-    def get_storage_prefix(repo_id: int, namespace_slug: str):
-        storage_dir = os.getenv("CODEBASE_GCS_STORAGE_DIR", "tmp_jenn/dev/chroma/storage")
+    def get_storage_prefix(self, repo_id: int, namespace_slug: str):
+        storage_dir = self.app_config.CODEBASE_GCS_STORAGE_DIR
         return os.path.join(storage_dir, f"{repo_id}/{namespace_slug}")
 
     def copy_to_workspace(self) -> bool:
@@ -195,14 +196,13 @@ class GcsStorageAdapter(StorageAdapter):
         return True
 
 
-def get_storage_adapter_class() -> type[StorageAdapter]:
-    storage_type = os.getenv("CODEBASE_STORAGE_TYPE", "filesystem")
+@module.provider
+def get_storage_adapter_class(config: AppConfig = injected) -> type[StorageAdapter]:
+    autofix_logger.debug(f"Using storage type: {config.CODEBASE_STORAGE_TYPE}")
 
-    autofix_logger.debug(f"Using storage type: {storage_type}")
-
-    if storage_type == "filesystem":
+    if config.CODEBASE_STORAGE_TYPE == CodebaseStorageType.FILESYSTEM:
         return FilesystemStorageAdapter
-    elif storage_type == "gcs":
+    elif config.CODEBASE_STORAGE_TYPE == CodebaseStorageType.GCS:
         return GcsStorageAdapter
     else:
-        raise ValueError(f"Unknown storage type: {storage_type}")
+        raise ValueError(f"Unknown storage type: {config.CODEBASE_STORAGE_TYPE}")

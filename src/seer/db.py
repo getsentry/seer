@@ -247,7 +247,7 @@ class DbGroupingRecord(Base):
             "ix_grouping_records_stacktrace_embedding_hnsw",
             "stacktrace_embedding",
             postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_with={"m": 16, "ef_construction": 200},
             postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
         ),
         Index(

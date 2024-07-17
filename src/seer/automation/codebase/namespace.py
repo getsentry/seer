@@ -17,9 +17,10 @@ from seer.automation.codebase.models import (
     EmbeddedDocumentChunk,
     RepositoryInfo,
 )
-from seer.automation.codebase.storage_adapters import StorageAdapter, get_storage_adapter_class
+from seer.automation.codebase.storage_adapters import StorageAdapter
 from seer.automation.models import RepoDefinition
 from seer.db import DbCodebaseNamespace, DbCodebaseNamespaceMutex, DbRepositoryInfo, Session
+from seer.dependency_injection import inject, injected
 
 
 class CodebaseNamespaceManager:
@@ -159,7 +160,13 @@ class CodebaseNamespaceManager:
             return CodebaseNamespace.from_db(db_namespace)
 
     @classmethod
-    def load_workspace(cls, namespace_id: int, skip_copy: bool = False):
+    @inject
+    def load_workspace(
+        cls,
+        namespace_id: int,
+        skip_copy: bool = False,
+        storage_type: type[StorageAdapter] = injected,
+    ):
         with Session() as session:
             db_namespace = session.get(DbCodebaseNamespace, namespace_id)
 
@@ -174,9 +181,7 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(
-            repo_id=repo_info.id, namespace_slug=namespace.slug
-        )
+        storage_adapter = storage_type(repo_id=repo_info.id, namespace_slug=namespace.slug)
 
         did_copy = False
         if not skip_copy:
@@ -192,6 +197,7 @@ class CodebaseNamespaceManager:
         return None
 
     @classmethod
+    @inject
     def load_workspace_for_repo_definition(
         cls,
         organization: int,
@@ -199,6 +205,7 @@ class CodebaseNamespaceManager:
         repo: RepoDefinition,
         sha: str | None = None,
         tracking_branch: str | None = None,
+        storage_type: type[StorageAdapter] = injected,
     ) -> Self | None:
         with Session() as session:
             db_repo_info = (
@@ -252,9 +259,7 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(
-            repo_id=repo_info.id, namespace_slug=namespace.slug
-        )
+        storage_adapter = storage_type(repo_id=repo_info.id, namespace_slug=namespace.slug)
 
         cls._wait_for_mutex_clear(namespace.id)
         cls._set_mutex(namespace.id)
@@ -268,6 +273,7 @@ class CodebaseNamespaceManager:
         return None
 
     @classmethod
+    @inject
     def create_repo(
         cls,
         organization: int,
@@ -276,6 +282,7 @@ class CodebaseNamespaceManager:
         head_sha: str,
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
+        storage_type: type[StorageAdapter] = injected,
     ):
         autofix_logger.info(
             f"Creating new repo for {organization}/{project}/{repo.external_id} (repo: {repo.full_name})"
@@ -309,9 +316,7 @@ class CodebaseNamespaceManager:
             repo_info = RepositoryInfo.from_db(db_repo_info)
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(
-            repo_id=repo_info.id, namespace_slug=namespace.slug
-        )
+        storage_adapter = storage_type(repo_id=repo_info.id, namespace_slug=namespace.slug)
 
         return cls(repo_info, namespace, storage_adapter)
 
@@ -354,12 +359,14 @@ class CodebaseNamespaceManager:
             )
 
     @classmethod
+    @inject
     def create_or_get_namespace_for_repo(
         cls,
         repo_id: int,
         sha: str,
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
+        storage_type: type[StorageAdapter] = injected,
     ):
         with Session() as session:
             existing_namespace = None
@@ -412,9 +419,7 @@ class CodebaseNamespaceManager:
 
             namespace = CodebaseNamespace.from_db(db_namespace)
 
-        storage_adapter = get_storage_adapter_class()(
-            repo_id=repo_info.id, namespace_slug=namespace.slug
-        )
+        storage_adapter = storage_type(repo_id=repo_info.id, namespace_slug=namespace.slug)
 
         return cls(repo_info, namespace, storage_adapter)
 

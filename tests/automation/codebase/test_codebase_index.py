@@ -30,7 +30,6 @@ class TestCodebaseIndexCreateAndIndex(unittest.TestCase):
     def setUp(self):
         os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
         os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
-        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
 
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
@@ -215,7 +214,6 @@ class TestCodebaseIndexUpdate(unittest.TestCase):
     def setUp(self):
         os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
         os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
-        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
 
         self.embedding_model = MagicMock()
         self.embedding_model.encode.return_value = [np.ones((768))]
