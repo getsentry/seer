@@ -1,7 +1,7 @@
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import GptAgent
+from seer.automation.agent.agent import AgentConfig, GptAgent
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.executor.models import ExecutorOutput, ExecutorRequest
@@ -22,7 +22,10 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
         code_action_tools = CodeActionTools(self.context)
 
         execution_agent = GptAgent(
-            name="executor",
+            config=AgentConfig(
+                stop_message="<DONE>",
+            ),
+            name="Executor",
             tools=code_action_tools.get_tools(),
             memory=[
                 Message(
@@ -30,7 +33,6 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
                     content=ExecutionPrompts.format_system_msg(),
                 ),
             ],
-            stop_message="<DONE>",
         )
 
         execution_agent.run(
