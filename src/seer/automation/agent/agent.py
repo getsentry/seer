@@ -6,7 +6,7 @@ from openai._types import NotGiven
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
 
-from seer.automation.agent.client import GptClient
+from seer.automation.agent.client import DEFAULT_GPT_MODEL, GptClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
@@ -19,7 +19,7 @@ class AgentConfig(BaseModel):
     max_iterations: int = Field(
         default=16, description="Maximum number of iterations the agent can perform"
     )
-    model: str = Field(default="gpt-4-0613", description="The model to be used by the agent")
+    model: str = Field(default=DEFAULT_GPT_MODEL, description="The model to be used by the agent")
     stop_message: Optional[str] = Field(
         default=None, description="Message that signals the agent to stop"
     )
@@ -111,7 +111,7 @@ class GptAgent(LlmAgent):
     @inject
     def __init__(
         self,
-        config: AgentConfig,
+        config: AgentConfig = AgentConfig(),
         client: GptClient = injected,
         tools: Optional[list[FunctionTool]] = None,
         memory: Optional[list[Message]] = None,
