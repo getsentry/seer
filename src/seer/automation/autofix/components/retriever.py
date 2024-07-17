@@ -3,13 +3,13 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.models import DocumentChunkPromptXml, QueryResultDocumentChunk
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import PromptXmlModel
+from seer.automation.utils import get_autofix_client_and_agent
 
 
 class RetrieverRequest(BaseComponentRequest):
@@ -83,18 +83,16 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
     @ai_track(description="Retriever")
     def invoke(self, request: RetrieverRequest) -> RetrieverOutput | None:
         # Identify good search queries for the plan item
-        data, message, usage = GptClient().json_completion(
+        data, message, usage = get_autofix_client_and_agent()[0]().json_completion(
             messages=[
-                Message(
-                    role="system", content=RetrieverPrompts.format_plan_item_query_system_msg()
-                ),
                 Message(
                     role="user",
                     content=RetrieverPrompts.format_plan_item_query_default_msg(
                         text=request.text, intent=request.intent
                     ),
                 ),
-            ]
+            ],
+            system_prompt=RetrieverPrompts.format_plan_item_query_system_msg(),
         )
 
         with self.context.state.update() as cur:

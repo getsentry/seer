@@ -1,7 +1,6 @@
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -14,7 +13,11 @@ from seer.automation.autofix.components.root_cause.prompts import RootCauseAnaly
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from seer.automation.utils import (
+    escape_multi_xml,
+    extract_text_inside_tags,
+    get_autofix_client_and_agent,
+)
 
 
 class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCauseAnalysisOutput]):
@@ -25,9 +28,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     def invoke(self, request: RootCauseAnalysisRequest) -> RootCauseAnalysisOutput | None:
         tools = BaseTools(self.context)
 
-        agent = GptAgent(
+        agent = get_autofix_client_and_agent()[1](
             tools=tools.get_tools(),
-            memory=[Message(role="system", content=RootCauseAnalysisPrompts.format_system_msg())],
+            memory=[],
+            system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
         )
 
         response = agent.run(

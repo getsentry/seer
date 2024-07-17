@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, Dict, List
+from typing import Any, Callable, Dict, List, Literal
 
 from pydantic import BaseModel
 
@@ -30,13 +30,36 @@ class FunctionTool(BaseModel):
             logger.exception(e)
             return f"Error: {get_full_exception_string(e)}"
 
-    def to_dict(self):
-        return {
-            "type": "function",
-            "function": {
+    def to_dict(self, model: Literal["claude", "gpt"] = "gpt") -> dict[str, Any]:
+        if model == "gpt":
+            return {
+                "type": "function",
+                "function": {
+                    "name": self.name,
+                    "description": self.description,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            param["name"]: {
+                                key: value
+                                for key, value in {
+                                    "type": param["type"],
+                                    "description": param.get("description", ""),
+                                    "items": param.get("items"),
+                                }.items()
+                                if value is not None
+                            }
+                            for param in self.parameters
+                        },
+                        "required": self.required,
+                    },
+                },
+            }
+        elif model == "claude":
+            return {
                 "name": self.name,
                 "description": self.description,
-                "parameters": {
+                "input_schema": {
                     "type": "object",
                     "properties": {
                         param["name"]: {
@@ -52,12 +75,4 @@ class FunctionTool(BaseModel):
                     },
                     "required": self.required,
                 },
-            },
-        }
-
-
-class FunctionParameter(BaseModel):
-    name: str
-    type: str
-    description: str
-    enum: List[str]
+            }

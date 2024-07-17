@@ -8,7 +8,7 @@ from johen import generate
 from johen.examples import Examples
 from johen.generators import specialized
 
-from seer.automation.agent.client import DummyGptClient, GptCompletionHandler
+from seer.automation.agent.client import DummyGptClient, LlmCompletionHandler
 from seer.automation.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
 from seer.rpc import DummyRpcClient, RpcClientHandler
 
@@ -88,7 +88,7 @@ class GptClientMock:
     mocked_path: str = "seer.automation.agent.agent.GptClient"
 
     @contextlib.contextmanager
-    def enabled(self, *handlers: GptCompletionHandler) -> Iterator[DummyGptClient]:
+    def enabled(self, *handlers: LlmCompletionHandler) -> Iterator[DummyGptClient]:
         old_handlers = self.client.handlers
         with mock.patch(self.mocked_path) as target:
             target.return_value = self.client

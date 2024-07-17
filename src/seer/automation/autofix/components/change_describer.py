@@ -3,10 +3,10 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
+from seer.automation.utils import get_autofix_client_and_agent
 
 
 class ChangeDescriptionRequest(BaseComponentRequest):
@@ -52,7 +52,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
             hint=request.hint,
         )
 
-        data, message, usage = GptClient().json_completion(
+        data, message, usage = get_autofix_client_and_agent()[0]().json_completion(
             [Message(role="user", content=prompt)],
         )
 

@@ -6,7 +6,7 @@ from openai._types import NotGiven
 from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
 
-from seer.automation.agent.client import DEFAULT_GPT_MODEL, GptClient
+from seer.automation.agent.client import DEFAULT_GPT_MODEL, ClaudeClient, GptClient, LlmClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
@@ -20,6 +20,7 @@ class AgentConfig(BaseModel):
         default=16, description="Maximum number of iterations the agent can perform"
     )
     model: str = Field(default=DEFAULT_GPT_MODEL, description="The model to be used by the agent")
+    system_prompt: str | None = None
     stop_message: Optional[str] = Field(
         default=None, description="Message that signals the agent to stop"
     )
@@ -29,23 +30,50 @@ class AgentConfig(BaseModel):
 
 
 class LlmAgent(ABC):
+
     def __init__(
         self,
         config: AgentConfig,
+        client: LlmClient,
         tools: Optional[list[FunctionTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "Agent",
     ):
         self.config = config
+        self.client = client
         self.tools = tools or []
         self.memory = memory or []
         self.usage = Usage()
         self.name = name
         self.iterations = 0
 
-    @abstractmethod
+    def get_completion(self):
+        return self.client.completion(
+            messages=self.memory,
+            model=self.config.model,
+            system_prompt=self.config.system_prompt if self.config.system_prompt else None,
+            tools=(self.tools if len(self.tools) > 0 else None),
+        )
+
     def run_iteration(self):
-        pass
+        logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
+
+        message, usage = self.get_completion()
+
+        self.memory.append(message)
+
+        logger.debug(f"Message content:\n{message.content}")
+        logger.debug(f"Message tool calls:\n{message.tool_calls}")
+
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                tool_response = self.call_tool(tool_call)
+                self.memory.append(tool_response)
+
+        self.iterations += 1
+        self.usage += usage
+
+        return self.memory
 
     def should_continue(self) -> bool:
         # If this is the first iteration or there are no messages, continue
@@ -106,6 +134,14 @@ class LlmAgent(ABC):
             args, [param["name"] for param in tool.parameters if isinstance(param["name"], str)]
         )
 
+    def process_tool_calls(self, tool_calls: list[ToolCall]):
+        for tool_call in tool_calls:
+            tool_response = self.call_tool(tool_call)
+            self.memory.append(tool_response)
+
+    def update_usage(self, usage: Usage):
+        self.usage += usage
+
 
 class GptAgent(LlmAgent):
     @inject
@@ -116,11 +152,8 @@ class GptAgent(LlmAgent):
         tools: Optional[list[FunctionTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "GptAgent",
-        chat_completion_kwargs: Optional[dict] = None,
     ):
-        super().__init__(config, tools, memory, name)
-        self.client = client
-        self.chat_completion_kwargs = chat_completion_kwargs or {}
+        super().__init__(config, client, tools, memory, name)
 
     def run_iteration(self):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
@@ -131,39 +164,32 @@ class GptAgent(LlmAgent):
 
         return self.memory
 
-    def get_completion(self):
-        return self.client.completion(
-            messages=self.memory,
-            model=self.config.model,
-            tools=([tool.to_dict() for tool in self.tools] if self.tools else NotGiven()),
-            **self.chat_completion_kwargs,
-        )
-
     def process_message(self, message: Message):
         self.memory.append(message)
 
         if message.tool_calls:
-            converted_tool_calls = self.convert_tool_calls(message.tool_calls)
             self.process_tool_calls(converted_tool_calls)
 
         self.iterations += 1
 
-    def convert_tool_calls(self, tool_calls: list[ChatCompletionMessageToolCall]) -> list[ToolCall]:
-        return [
-            ToolCall(
-                id=tool_call.id, function=tool_call.function.name, args=tool_call.function.arguments
-            )
-            for tool_call in tool_calls
-        ]
-
-    def process_tool_calls(self, tool_calls: list[ToolCall]):
-        for tool_call in tool_calls:
-            tool_response = self.call_tool(tool_call)
-            self.memory.append(tool_response)
-
-    def update_usage(self, usage: Usage):
-        self.usage += usage
-
 
 class MaxIterationsReachedException(Exception):
     pass
+
+
+class ClaudeAgent(LlmAgent):
+    def __init__(
+        self,
+        config: AgentConfig = AgentConfig(),
+        client: ClaudeClient = injected,
+        tools: list[FunctionTool] | None = None,
+        memory: list[Message] | None = None,
+        name="ClaudeAgent",
+    ):
+        super().__init__(
+            config,
+            client,
+            tools,
+            memory,
+            name=name,
+        )

@@ -8,6 +8,8 @@ import billiard  # type: ignore[import-untyped]
 import torch
 from sentence_transformers import SentenceTransformer
 
+from seer.automation.agent.agent import ClaudeAgent, GptAgent, LlmAgent
+from seer.automation.agent.client import ClaudeClient, GptClient, LlmClient
 from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
@@ -28,6 +30,17 @@ class AgentError(Exception):
     """Exception to be ignored by the Sentry SDK and intended only for an AI agent to read"""
 
     pass
+
+
+def get_autofix_client_and_agent() -> tuple[type[LlmClient], type[LlmAgent]]:
+    """Return the correct LLM classes for Autofix based on the .env variable"""
+    # TODO: switch to Zach's dependency injection
+    llm = os.environ["AUTOFIX_LLM"]
+    if llm == "GPT":
+        return GptClient, GptAgent
+    elif llm == "CLAUDE":
+        return ClaudeClient, ClaudeAgent
+    raise ValueError("Unsupported LLM selected in environment")
 
 
 def _use_cuda():
