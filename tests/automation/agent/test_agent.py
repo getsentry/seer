@@ -1,18 +1,16 @@
+from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
-from openai.types.chat.chat_completion_message_tool_call import (
-    ChatCompletionMessageToolCall,
-    Function,
-)
 
 from seer.automation.agent.agent import (
     AgentConfig,
+    ClaudeAgent,
     GptAgent,
     LlmAgent,
     MaxIterationsReachedException,
 )
-from seer.automation.agent.client import GptClient
+from seer.automation.agent.client import ClaudeClient, GptClient, LlmClient, T
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.dependency_injection import resolve
@@ -24,12 +22,43 @@ class TestLlmAgent:
         return AgentConfig()
 
     @pytest.fixture
-    def agent(self, config):
+    def client(self):
+        class TestClient(LlmClient):
+            def completion(
+                self,
+                messages: list[Message],
+                model: str,
+                system_prompt: str | None = None,
+                tools: list[FunctionTool] | None = ...,
+                response_format: dict | None = None,
+            ) -> tuple[Message, Usage]:
+                pass
+
+            def completion_with_parser(
+                self,
+                messages: list[Message],
+                parser: Callable[[str | None], T],
+                model: str,
+                system_prompt: str | None = None,
+                tools: list[FunctionTool] | None = None,
+                response_format: dict | None = None,
+            ) -> tuple[T, Message, Usage]:
+                pass
+
+            def json_completion(
+                self, messages: list[Message], model: str, system_prompt: str | None = None
+            ) -> tuple[dict[str, Any] | None, Message, Usage]:
+                pass
+
+        return TestClient()
+
+    @pytest.fixture
+    def agent(self, config, client):
         class TestAgent(LlmAgent):
             def run_iteration(self):
                 pass
 
-        return TestAgent(config)
+        return TestAgent(config=config, client=client)
 
     def test_should_continue(self, agent: LlmAgent):
         assert agent.should_continue()  # Initial state
@@ -96,17 +125,23 @@ class TestLlmAgent:
 
 
 class TestGptAgent:
+    @pytest.fixture(params=[(GptAgent, GptClient), (ClaudeAgent, ClaudeClient)])
+    def agent_and_client_classes(self, request):
+        return request.param
+
     @pytest.fixture
     def config(self):
         return AgentConfig()
 
     @pytest.fixture
-    def agent(self, config):
-        return GptAgent(config)
+    def agent(self, agent_and_client_classes, config):
+        agent_class, _ = agent_and_client_classes
+        return agent_class(config)
 
     @pytest.fixture
-    def mock_client(self):
-        return resolve(GptClient)
+    def mock_client(self, agent_and_client_classes):
+        _, client_class = agent_and_client_classes
+        return resolve(client_class)
 
     def test_run_iteration(self, agent, mock_client):
         mock_message = Message(role="assistant", content="Test response")
@@ -136,21 +171,6 @@ class TestGptAgent:
         assert len(agent.memory) == 1
         assert agent.memory[0] == message
         assert agent.iterations == 1
-
-    def test_convert_tool_calls(self, agent):
-        tool_calls = [
-            ChatCompletionMessageToolCall(
-                id="1",
-                function=Function(name="test_tool", arguments='{"arg": "value"}'),
-                type="function",
-            )
-        ]
-        converted = agent.convert_tool_calls(tool_calls)
-        assert len(converted) == 1
-        assert isinstance(converted[0], ToolCall)
-        assert converted[0].id == "1"
-        assert converted[0].function == "test_tool"
-        assert converted[0].args == '{"arg": "value"}'
 
     def test_process_tool_calls(self, agent):
         tool_calls = [ToolCall(id="1", function="test_tool", args='{"arg": "value"}')]
@@ -193,13 +213,7 @@ class TestGptAgent:
         mock_message = Message(
             role="assistant",
             content="Response",
-            tool_calls=[
-                ChatCompletionMessageToolCall(
-                    id="1",
-                    function=Function(name="test_tool", arguments='{"arg": "value"}'),
-                    type="function",
-                )
-            ],
+            tool_calls=[ToolCall(id="1", function="test_tool", args="{'arg': 'value'}")],
         )
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
         mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))

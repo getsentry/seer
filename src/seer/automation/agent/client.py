@@ -29,6 +29,7 @@ class LlmClient(ABC):
     ) -> tuple[Message, Usage]:
         raise NotImplementedError
 
+    @abstractmethod
     def completion_with_parser(
         self,
         messages: list[Message],
@@ -47,6 +48,7 @@ class LlmClient(ABC):
         )
         return parser(message.content), message, usage
 
+    @abstractmethod
     def json_completion(
         self, messages: list[Message], model: str, system_prompt: Optional[str] = None
     ) -> tuple[dict[str, Any] | None, Message, Usage]:
@@ -116,7 +118,6 @@ class GptClient(LlmClient):
 
         return message, usage
 
-    @abstractmethod
     def completion_with_parser(
         self,
         messages: list[Message],
@@ -130,7 +131,6 @@ class GptClient(LlmClient):
             messages, parser, model, system_prompt, tools, response_format
         )
 
-    @abstractmethod
     def json_completion(
         self,
         messages: list[Message],

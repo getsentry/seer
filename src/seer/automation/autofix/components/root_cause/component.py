@@ -2,7 +2,7 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, GptAgent
-from seer.automation.agent.client import ClaudeClient
+from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.models import (
@@ -50,7 +50,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
         extracted_response = extract_text_inside_tags(response, "potential_root_causes")
 
-        formatter_response, formatter_usage = ClaudeClient().completion(
+        formatter_response, formatter_usage = GptClient().completion(
             [
                 Message(
                     role="user",
