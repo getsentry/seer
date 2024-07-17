@@ -34,7 +34,6 @@ jobs:
           cache-dependency-path: |
             requirements.txt
           install-cmd: pip install -r requirements-precommit.txt
-
       - name: Setup pre-commit
         run: |
           pre-commit install
@@ -49,14 +48,14 @@ jobs:
 
       - name: Get auth token
         id: token
-        if: ${{ steps.pre-commit_results.outcome == 'failure' }} 
+        if: ${{ steps.pre-commit_results.outcome == 'failure' }}
         uses: getsentry/action-github-app-token@v3.0.0
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Apply any pre-commit fixed files
-        if: ${{ steps.pre-commit_results.outcome == 'failure' }} 
+        if: ${{ steps.pre-commit_results.outcome == 'failure' }}
         # note: this runs "always" or else it's skipped when pre-commit fails
         uses: getsentry/action-github-commit@v2.1.0
         with:
