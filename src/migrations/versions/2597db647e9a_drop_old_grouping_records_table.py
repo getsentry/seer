@@ -1,7 +1,7 @@
 """drop old grouping_records table
 
 Revision ID: 2597db647e9a
-Revises: a0d00121d118
+Revises: d87a6410efe4
 Create Date: 2024-07-17 03:16:52.924194
 
 """
