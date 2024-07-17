@@ -146,6 +146,14 @@ class Module:
         _cur.injector = injector
         return injector
 
+    def entrypoint(self, c: _C) -> _C:
+        @functools.wraps(c)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            self.enable()
+            return c(*args, **kwargs)
+
+        return wrapper
+
     def __enter__(self):
         return self.enable()
 

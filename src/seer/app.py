@@ -45,7 +45,8 @@ from seer.automation.codebase.tasks import (
     index_namespace,
 )
 from seer.automation.utils import raise_if_no_genai_consent
-from seer.bootup import bootup
+from seer.bootup import bootup, module
+from seer.dependency_injection import inject
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
@@ -268,3 +269,9 @@ def ready_check():
 
 
 register_json_api_views(app)
+
+
+@module.entrypoint
+@inject
+def create_app():
+    pass
