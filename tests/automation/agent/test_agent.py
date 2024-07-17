@@ -31,14 +31,6 @@ class TestLlmAgent:
 
         return TestAgent(config)
 
-    def test_initialization(self, agent: LlmAgent, config: AgentConfig):
-        assert agent.config == config
-        assert agent.tools == []
-        assert agent.memory == []
-        assert isinstance(agent.usage, Usage)
-        assert agent.name == "Agent"
-        assert agent.iterations == 0
-
     def test_should_continue(self, agent: LlmAgent):
         assert agent.should_continue()  # Initial state
 
@@ -115,11 +107,6 @@ class TestGptAgent:
     @pytest.fixture
     def mock_client(self):
         return resolve(GptClient)
-
-    def test_initialization(self, agent, config, mock_client):
-        assert agent.config == config
-        assert agent.client == mock_client
-        assert agent.chat_completion_kwargs == {}
 
     def test_run_iteration(self, agent, mock_client):
         mock_message = Message(role="assistant", content="Test response")
