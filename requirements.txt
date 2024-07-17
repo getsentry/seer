@@ -12,7 +12,7 @@ Cython==3.0.2
 ephem==4.1.4
 filelock==3.12.2
 Flask==2.2.5
-fonttools==4.42.1
+fonttools==4.43.0
 fsspec==2023.6.0
 gunicorn==22.0.0
 holidays==0.31
