@@ -10,11 +10,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      contents: write
-      statuses: write
-
     steps:
       - uses: actions/checkout@v3
       - name: Get changed files
@@ -46,6 +41,14 @@ jobs:
           jq '.[]' --raw-output <<< '${{steps.changes.outputs.all_files}}' |
             # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
             xargs pre-commit run --files
+
+      - name: Get auth token
+        id: token
+        if: ${{ steps.pre-commit_results.outcome == 'failure' }} 
+        uses: getsentry/action-github-app-token@v2.0.0
+        with:
+          app_id: ${{ secrets.SENTRY_INTERNAL_APP_ID }}
+          private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Apply any pre-commit fixed files
         if: ${{ steps.pre-commit_results.outcome == 'failure' }} 
