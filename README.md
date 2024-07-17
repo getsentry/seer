@@ -8,12 +8,6 @@
 
 Autofix creates and uses a ChromaDB for every separate codebase. This can either be stored in a Google Cloud Storage (GCS) bucket, in your local filesystem, or you can make your own storage adapter.
 
-##### Local Workspace
-
-Autofix will need a local folder to use as its workspace, by default it uses `data/chroma/workspaces`.
-
-You can set the location in filesystem where Autofix will use as a workspace with `CODEBASE_WORKSPACE_DIR`.
-
 ##### Google Cloud Storage
 
 To use GCS, you need to set the following environment variables:

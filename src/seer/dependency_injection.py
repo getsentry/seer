@@ -56,6 +56,7 @@ class Labeled:
 class FactoryAnnotation:
     concrete_type: type
     is_collection: bool
+    is_type: bool
     label: str
 
     @classmethod
@@ -76,11 +77,23 @@ class FactoryAnnotation:
                 not inner.is_collection
             ), f"Cannot get_factory {source}: collections must be of concrete types, not other lists"
             return dataclasses.replace(inner, is_collection=True)
+        elif annotation.origin is type:
+            assert (
+                len(annotation.args) == 1
+            ), f"Cannot get_factory {source}: type requires at least one argument"
+            inner = FactoryAnnotation.from_annotation(annotation.args[0])
+            assert not inner.label, f"Cannot get_factory {source}: type has embedded Labeled"
+            assert (
+                not inner.is_collection and not inner.is_type
+            ), f"Cannot get_factory {source}: type factories must be of concrete types, not lists or other types"
+            return dataclasses.replace(inner, is_type=True)
 
         assert (
             annotation.origin is None
-        ), f"Cannot get_factory {source}, only concrete types or lists of concrete types are supported"
-        return FactoryAnnotation(concrete_type=annotation.source, is_collection=False, label="")
+        ), f"Cannot get_factory {source}, only concrete types, type annotations, or lists of concrete types are supported"
+        return FactoryAnnotation(
+            concrete_type=annotation.source, is_collection=False, is_type=False, label=""
+        )
 
     @classmethod
     def from_factory(cls, c: Callable) -> "FactoryAnnotation":

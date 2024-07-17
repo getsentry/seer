@@ -8,16 +8,52 @@ from seer.dependency_injection import FactoryAnnotation, Labeled, Module, inject
 
 def test_FactoryAnnotation_from_annotation() -> None:
     assert FactoryAnnotation.from_annotation(int) == FactoryAnnotation(
-        concrete_type=int, is_collection=False, label=""
+        concrete_type=int,
+        is_collection=False,
+        label="",
+        is_type=False,
     )
     assert FactoryAnnotation.from_annotation(
         Annotated[int, "a", Labeled("b"), Labeled("c")]
-    ) == FactoryAnnotation(concrete_type=int, is_collection=False, label="b")
+    ) == FactoryAnnotation(
+        concrete_type=int,
+        is_collection=False,
+        label="b",
+        is_type=False,
+    )
     assert FactoryAnnotation.from_annotation(
         Annotated[list[int], Labeled("b")]
-    ) == FactoryAnnotation(concrete_type=int, is_collection=True, label="b")
+    ) == FactoryAnnotation(
+        concrete_type=int,
+        is_collection=True,
+        label="b",
+        is_type=False,
+    )
     assert FactoryAnnotation.from_annotation(Annotated[list[int], "a"]) == FactoryAnnotation(
-        concrete_type=int, is_collection=True, label=""
+        concrete_type=int,
+        is_collection=True,
+        label="",
+        is_type=False,
+    )
+    assert FactoryAnnotation.from_annotation(type[int]) == FactoryAnnotation(
+        concrete_type=int,
+        is_collection=False,
+        label="",
+        is_type=True,
+    )
+    assert FactoryAnnotation.from_annotation(list[type[int]]) == FactoryAnnotation(
+        concrete_type=int,
+        is_collection=True,
+        label="",
+        is_type=True,
+    )
+    assert FactoryAnnotation.from_annotation(
+        Annotated[list[type[int]], Labeled("a")]
+    ) == FactoryAnnotation(
+        concrete_type=int,
+        is_collection=True,
+        label="a",
+        is_type=True,
     )
 
     with pytest.raises(AssertionError):

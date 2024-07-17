@@ -18,11 +18,6 @@ from seer.db import DbCodebaseNamespace, DbRepositoryInfo, Session
 
 
 class TestNamespaceManager(unittest.TestCase):
-    def setUp(self):
-        os.environ["CODEBASE_STORAGE_TYPE"] = "filesystem"
-        os.environ["CODEBASE_STORAGE_DIR"] = "data/tests/chroma/storage"
-        os.environ["CODEBASE_WORKSPACE_DIR"] = "data/tests/chroma/workspaces"
-
     def tearDown(self) -> None:
         FilesystemStorageAdapter.clear_all_storage()
         return super().tearDown()
@@ -57,9 +52,9 @@ class TestNamespaceManager(unittest.TestCase):
                     self.assertEqual(db_namespace.sha, "sha")
 
                     namespace = CodebaseNamespace.from_db(db_namespace)
-                    storage_location_path = FilesystemStorageAdapter.get_storage_location(
+                    storage_location_path = FilesystemStorageAdapter(
                         db_repo_info.id, namespace.slug
-                    )
+                    ).get_storage_location()
 
                     self.assertTrue(os.path.exists(storage_location_path))
 
@@ -540,13 +535,7 @@ class TestNamespaceManager(unittest.TestCase):
 
             self.assertIsInstance(namespace.storage_adapter, FilesystemStorageAdapter)
             if isinstance(namespace.storage_adapter, FilesystemStorageAdapter):
-                self.assertFalse(
-                    os.path.exists(
-                        namespace.storage_adapter.get_storage_location(
-                            namespace.repo_info.id, namespace.namespace.slug
-                        )
-                    )
-                )
+                self.assertFalse(os.path.exists(namespace.storage_adapter.get_storage_location()))
 
     def test_integrity_check_success(self):
         namespace = CodebaseNamespaceManager.create_repo(
