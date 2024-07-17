@@ -63,50 +63,6 @@ def upgrade():
     with op.batch_alter_table("grouping_records_new", schema=None) as batch_op:
         batch_op.create_unique_constraint("u_project_id_hash_composite", ["project_id", "hash"])
 
-    op.execute("ALTER TABLE IF EXISTS grouping_records RENAME to grouping_records_old;")
-    op.execute("ALTER TABLE grouping_records_new RENAME TO grouping_records;")
-    for i in range(100):
-        op.execute(f"ALTER TABLE grouping_records_new_p{i} RENAME TO grouping_records_p{i};")
-
 
 def downgrade():
-    op.execute("ALTER TABLE IF EXISTS grouping_records RENAME TO grouping_records_new;")
-
-    op.execute(
-        """
-        CREATE TABLE grouping_records (
-            id INTEGER NOT NULL,
-            project_id BIGINT NOT NULL,
-            hash VARCHAR(32) NOT NULL,
-            message VARCHAR NOT NULL,
-            error_type VARCHAR,
-            stacktrace_embedding VECTOR(768) NOT NULL,
-            PRIMARY KEY (id, project_id)
-        );
-        """
-    )
-
-    op.execute(
-        """
-        INSERT INTO grouping_records (id, project_id, message, error_type, stacktrace_embedding, hash)
-        SELECT id, project_id, message, error_type, stacktrace_embedding, hash
-        FROM grouping_records_new;
-        """
-    )
-
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_grouping_records_project_id ON grouping_records (project_id);"
-    )
-    op.execute(
-        """
-        CREATE INDEX IF NOT EXISTS ix_grouping_records_stacktrace_embedding_hnsw
-        ON grouping_records USING hnsw (stacktrace_embedding vector_cosine_ops)
-        WITH (m = 16, ef_construction = 64);
-        """
-    )
-
-    op.execute(
-        "ALTER TABLE grouping_records ADD CONSTRAINT u_project_id_hash_composite UNIQUE (project_id, hash);"
-    )
-
     op.execute("DROP TABLE IF EXISTS grouping_records_new CASCADE;")
