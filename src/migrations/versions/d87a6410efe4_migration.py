@@ -50,14 +50,14 @@ def upgrade():
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS ix_grouping_records_new_stacktrace_embedding_hnsw
+        CREATE INDEX ix_grouping_records_new_stacktrace_embedding_hnsw
         ON grouping_records_new USING hnsw (stacktrace_embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 200);
         """
     )
 
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_grouping_records_project_id ON grouping_records_new (project_id);"
+        "CREATE INDEX ix_grouping_records_new_project_id ON grouping_records_new (project_id);"
     )
 
     with op.batch_alter_table("grouping_records_new", schema=None) as batch_op:
