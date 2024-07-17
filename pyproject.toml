@@ -37,7 +37,7 @@
             "unidiff",
             "tree_sitter_languages",
             "tree_sitter",
-            "google-cloud-storage",
+            "google.cloud.*",
             "langfuse.*",
             "langfuse",
             "sklearn.dummy",

@@ -61,7 +61,7 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
         storage_dir = adapter.get_storage_dir()
         self.assertEqual(storage_dir, os.path.abspath("data/tests/chroma/storage"))
 
-        storage_location = adapter.get_storage_location(1, "test")
+        storage_location = adapter.get_storage_location()
         self.assertEqual(storage_location, os.path.abspath("data/tests/chroma/storage/1/test"))
 
         adapter.clear_all_storage()
@@ -69,7 +69,7 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
 
     def test_copy_to_workspace(self):
         adapter = FilesystemStorageAdapter(1, "test")
-        storage_location = adapter.get_storage_location(1, "test")
+        storage_location = adapter.get_storage_location()
 
         os.makedirs(storage_location, exist_ok=True)
         with open(os.path.join(storage_location, "test.txt"), "w") as f:
@@ -81,7 +81,7 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
 
     def test_save_to_storage(self):
         adapter = FilesystemStorageAdapter(1, "test")
-        storage_location = adapter.get_storage_location(1, "test")
+        storage_location = adapter.get_storage_location()
 
         os.makedirs(adapter.tmpdir, exist_ok=True)
         with open(os.path.join(adapter.tmpdir, "test.txt"), "w") as f:
@@ -104,13 +104,13 @@ class TestFilesystemStorageAdapter(unittest.TestCase):
 
     def test_save_to_storage_overwrites_existing_files(self):
         adapter = FilesystemStorageAdapter(1, "test")
-        storage_location = adapter.get_storage_location(1, "test")
+        storage_location = adapter.get_storage_location()
 
         os.makedirs(adapter.tmpdir, exist_ok=True)
         with open(os.path.join(adapter.tmpdir, "test.txt"), "w") as f:
             f.write("test")
 
-        storage_location = adapter.get_storage_location(1, "test")
+        storage_location = adapter.get_storage_location()
         os.makedirs(storage_location, exist_ok=True)
         with open(os.path.join(storage_location, "bad.txt"), "w") as f:
             f.write("bad")

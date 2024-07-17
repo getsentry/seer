@@ -73,8 +73,8 @@ class AppConfig(BaseModel):
 
 
 @module.provider
-def load_from_environment(environ: dict[str, str] = os.environ) -> AppConfig:
-    return AppConfig.model_validate(environ)
+def load_from_environment(environ: dict[str, str] | None = None) -> AppConfig:
+    return AppConfig.model_validate(environ or os.environ)
 
 
 @stub_module.provider

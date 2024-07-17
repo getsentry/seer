@@ -366,7 +366,7 @@ class CodebaseNamespaceManager:
         sha: str,
         tracking_branch: str | None = None,
         should_set_as_default: bool = False,
-        storage_type=injected,
+        storage_type: type[StorageAdapter] = injected,
     ):
         with Session() as session:
             existing_namespace = None

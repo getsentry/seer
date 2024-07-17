@@ -4,8 +4,7 @@ import os
 import shutil
 import tempfile
 
-# Why is this all good on pylance but mypy is complaining?
-from google.cloud import storage  # type: ignore
+from google.cloud import storage
 from google.cloud.storage import Bucket
 
 from seer.automation.autofix.utils import autofix_logger
@@ -60,9 +59,9 @@ class FilesystemStorageAdapter(StorageAdapter):
     def get_storage_dir(self):
         return self.app_config.CODEBASE_STORAGE_DIR
 
-    def get_storage_location(self, repo_id: int, namespace_slug: str):
+    def get_storage_location(self):
         storage_dir = self.get_storage_dir()
-        return os.path.join(storage_dir, f"{repo_id}/{namespace_slug}")
+        return os.path.join(storage_dir, f"{self.repo_id}/{self.namespace_slug}")
 
     @staticmethod
     @inject
@@ -70,7 +69,7 @@ class FilesystemStorageAdapter(StorageAdapter):
         shutil.rmtree(app_config.CODEBASE_STORAGE_DIR, ignore_errors=True)
 
     def copy_to_workspace(self):
-        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        storage_path = self.get_storage_location()
 
         if os.path.exists(storage_path):
             try:
@@ -82,7 +81,7 @@ class FilesystemStorageAdapter(StorageAdapter):
         return True
 
     def save_to_storage(self):
-        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        storage_path = self.get_storage_location()
 
         if os.path.exists(storage_path):
             try:
@@ -96,7 +95,7 @@ class FilesystemStorageAdapter(StorageAdapter):
         return True
 
     def delete_from_storage(self):
-        storage_path = self.get_storage_location(self.repo_id, self.namespace_slug)
+        storage_path = self.get_storage_location()
 
         if os.path.exists(storage_path):
             try:
