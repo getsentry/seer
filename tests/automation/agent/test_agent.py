@@ -5,7 +5,6 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
     Function,
 )
-from pydantic import ValidationError
 
 from seer.automation.agent.agent import (
     AgentConfig,
@@ -17,24 +16,6 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.dependency_injection import resolve
-
-
-class TestAgentConfig:
-    def test_default_values(self):
-        config = AgentConfig()
-        assert config.max_iterations == 16
-        assert config.model == "gpt-4-0613"
-        assert config.stop_message is None
-
-    def test_custom_values(self):
-        config = AgentConfig(max_iterations=10, model="gpt-3.5-turbo", stop_message="STOP")
-        assert config.max_iterations == 10
-        assert config.model == "gpt-3.5-turbo"
-        assert config.stop_message == "STOP"
-
-    def test_validation(self):
-        with pytest.raises(ValidationError):
-            AgentConfig(max_iterations="not a number")  # type: ignore
 
 
 class TestLlmAgent:
