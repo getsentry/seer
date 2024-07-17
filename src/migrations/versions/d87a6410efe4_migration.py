@@ -49,14 +49,15 @@ def upgrade():
     )
 
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_grouping_records_new_project_id ON grouping_records_new (project_id);"
-    )
-    op.execute(
         """
         CREATE INDEX IF NOT EXISTS ix_grouping_records_new_stacktrace_embedding_hnsw
         ON grouping_records_new USING hnsw (stacktrace_embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 200);
-    """
+        """
+    )
+
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_grouping_records_project_id ON grouping_records_new (project_id);"
     )
 
     with op.batch_alter_table("grouping_records_new", schema=None) as batch_op:
@@ -64,6 +65,8 @@ def upgrade():
 
     op.execute("ALTER TABLE IF EXISTS grouping_records RENAME to grouping_records_old;")
     op.execute("ALTER TABLE grouping_records_new RENAME TO grouping_records;")
+    for i in range(100):
+        op.execute(f"ALTER TABLE grouping_records_new_p{i} RENAME TO grouping_records_p{i};")
 
 
 def downgrade():
