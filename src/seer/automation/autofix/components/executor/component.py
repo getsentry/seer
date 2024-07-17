@@ -1,7 +1,7 @@
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, GptAgent
+from seer.automation.agent.agent import AgentConfig
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.executor.models import ExecutorOutput, ExecutorRequest
 from seer.automation.autofix.components.executor.prompts import ExecutionPrompts

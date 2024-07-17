@@ -1,9 +1,7 @@
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Optional
 
-from openai._types import NotGiven
-from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.client import DEFAULT_GPT_MODEL, ClaudeClient, GptClient, LlmClient
@@ -168,7 +166,7 @@ class GptAgent(LlmAgent):
         self.memory.append(message)
 
         if message.tool_calls:
-            self.process_tool_calls(converted_tool_calls)
+            self.process_tool_calls(message.tool_calls)
 
         self.iterations += 1
 
