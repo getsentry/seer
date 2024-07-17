@@ -1,5 +1,5 @@
-import logging
 import time
+import logging
 
 import sentry_sdk
 from flask import Flask, jsonify
