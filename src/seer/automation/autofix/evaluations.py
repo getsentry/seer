@@ -130,8 +130,8 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str) ->
         expected_diff=dataset_item.expected_output.get("diff"),
         predicted_diff=predicted_diff,
     )
-    response, usage = GptClient(model="gpt-4o-2024-05-13").completion(
-        messages=[Message(role="user", content=prompt)]
+    response, usage = GptClient().completion(
+        messages=[Message(role="user", content=prompt)], model="gpt-4o-2024-05-13"
     )
     if not response.content:
         return 0
