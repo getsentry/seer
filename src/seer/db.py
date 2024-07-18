@@ -233,26 +233,25 @@ class DbPrIdToAutofixRunIdMapping(Base):
 
 class DbGroupingRecord(Base):
     __tablename__ = "grouping_records"
+    __table_args__ = {"postgres_partition_by": "HASH (project_id)"}
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
     error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-    hash: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="00000000000000000000000000000000"
-    )
+    hash: Mapped[str] = mapped_column(String(32), nullable=False)
 
     __table_args__ = (
         Index(
-            "ix_grouping_records_stacktrace_embedding_hnsw",
+            "ix_grouping_records_new_stacktrace_embedding_hnsw",
             "stacktrace_embedding",
             postgresql_using="hnsw",
             postgresql_with={"m": 16, "ef_construction": 200},
             postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
         ),
         Index(
-            "ix_grouping_records_project_id",
+            "ix_grouping_records_new_project_id",
             "project_id",
         ),
-        UniqueConstraint("project_id", "hash", name="u_project_id_hash"),
+        UniqueConstraint("project_id", "hash", name="u_project_id_hash_composite"),
     )
