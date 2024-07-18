@@ -23,7 +23,7 @@ class AgentConfig(BaseModel):
     max_iterations: int = Field(
         default=16, description="Maximum number of iterations the agent can perform"
     )
-    model: str = Field(default="UNKNOWN", description="The model to be used by the agent")
+    model: str | None = Field(default=None, description="The model to be used by the agent")
     system_prompt: str | None = None
     stop_message: Optional[str] = Field(
         default=None, description="Message that signals the agent to stop"
@@ -168,7 +168,7 @@ class GptAgent(LlmAgent):
         name: str = "GptAgent",
     ):
         super().__init__(config, client, tools, memory, name)
-        if self.config.model == "UNKNOWN":
+        if not self.config.model:
             self.config.model = DEFAULT_GPT_MODEL
 
 
@@ -189,5 +189,5 @@ class ClaudeAgent(LlmAgent):
             memory,
             name,
         )
-        if self.config.model == "UNKNOWN":
+        if not self.config.model:
             self.config.model = DEFAULT_CLAUDE_MODEL

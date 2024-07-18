@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
@@ -143,7 +144,8 @@ class GptClient(LlmClient):
 class ClaudeClient(LlmClient):
     def __init__(self):
         self.anthropic_client = anthropic.AnthropicVertex(
-            project_id="ml-ai-420606", region="us-east5"
+            project_id=os.environ["GCP_PROJECT_ID"],
+            region="europe-west1" if os.environ["USE_EU_REGION"] == 1 else "us-east5",
         )
 
     @observe(as_type="generation")
