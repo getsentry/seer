@@ -21,9 +21,9 @@ from seer.automation.autofix.steps.planning_chain import (
     AutofixPlanningStepRequest,
 )
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
-from seer.automation.autofix.utils import escape_multi_xml, extract_xml_element_text
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PIPELINE_SYNC_SIGNAL
+from seer.automation.utils import escape_multi_xml, extract_xml_element_text
 
 
 @observe(name="Sync run evaluation on item")
