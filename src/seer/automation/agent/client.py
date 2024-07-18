@@ -23,7 +23,7 @@ class LlmClient(ABC):
     def completion(
         self,
         messages: list[Message],
-        model: str,
+        model: str | None,
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = [],
         response_format: Optional[dict] = None,
@@ -77,7 +77,7 @@ class GptClient(LlmClient):
     def completion(
         self,
         messages: list[Message],
-        model: str = DEFAULT_GPT_MODEL,
+        model: str | None = DEFAULT_GPT_MODEL,
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = None,
         response_format: Optional[dict] = None,
@@ -152,7 +152,7 @@ class ClaudeClient(LlmClient):
     def completion(
         self,
         messages: list[Message],
-        model: str = DEFAULT_CLAUDE_MODEL,
+        model: str | None = DEFAULT_CLAUDE_MODEL,
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = None,
         response_format: Optional[dict] = None,
