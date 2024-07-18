@@ -4,7 +4,7 @@ import sentry_sdk
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from celery_app.app import app as celery_app
+from celery_app.app import celery_app as celery_app
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.steps.create_index_step import (
     CodebaseIndexingStepRequest,

@@ -54,7 +54,7 @@ COPY supervisord.conf /etc/supervisord.conf
 # this skips annoying rebuilds where requirements would technically be met anyways.
 RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
 
-ENV FLASK_APP=src.seer.app:create_app()
+ENV FLASK_APP=src.seer.app:start_app()
 # Set in cloudbuild.yaml for production images
 ARG SEER_VERSION_SHA
 ENV SEER_VERSION_SHA ${SEER_VERSION_SHA}

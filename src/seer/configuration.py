@@ -40,6 +40,8 @@ class AppConfig(BaseModel):
     CODEBASE_STORAGE_TYPE: CodebaseStorageType = CodebaseStorageType.FILESYSTEM
     CODEBASE_STORAGE_DIR: ParsePath = os.path.abspath("data/chroma/storage")
 
+    SEER_VERSION_SHA: str = ""
+
     DATABASE_URL: str
     CELERY_BROKER_URL: str
     GITHUB_TOKEN: str = ""
@@ -53,6 +55,8 @@ class AppConfig(BaseModel):
     TORCH_NUM_THREADS: ParseInt = 1
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
+
+    CELERY_BROKER_URL: str = ""
 
     @property
     def is_production(self) -> bool:

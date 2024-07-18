@@ -1,8 +1,9 @@
 import logging
 import time
 
+import flask
 import sentry_sdk
-from flask import Flask, jsonify
+from flask import Blueprint, Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -45,7 +46,7 @@ from seer.automation.codebase.tasks import (
     index_namespace,
 )
 from seer.automation.utils import raise_if_no_genai_consent
-from seer.bootup import bootup, module
+from seer.bootup import bootup
 from seer.dependency_injection import inject
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
@@ -53,7 +54,6 @@ from seer.grouping.grouping import (
     DeleteGroupingRecordsByHashRequest,
     DeleteGroupingRecordsByHashResponse,
     GroupingRequest,
-    SimilarityBenchmarkResponse,
     SimilarityResponse,
 )
 from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
@@ -61,18 +61,8 @@ from seer.json_api import json_api, register_json_api_views
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
-app = Flask(__name__)
-bootup(
-    app,
-    [
-        FlaskIntegration(),
-        LoggingIntegration(
-            level=logging.DEBUG,  # Capture debug and above as breadcrumbs
-        ),
-    ],
-    init_migrations=True,
-    async_load_models=True,
-)
+app = flask.current_app
+blueprint = Blueprint("app", __name__)
 
 
 @json_api("/v0/issues/severity-score")
@@ -108,7 +98,6 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     )
 
     trends = BreakpointResponse(data=[x[1] for x in trend_percentage_list])
-    app.logger.debug("Trend results: %s", trends)
 
     return trends
 
@@ -134,7 +123,9 @@ def similarity_grouping_record_endpoint(
     return success
 
 
-@app.route("/v0/issues/similar-issues/grouping-record/delete/<int:project_id>", methods=["GET"])
+@blueprint.route(
+    "/v0/issues/similar-issues/grouping-record/delete/<int:project_id>", methods=["GET"]
+)
 def delete_grouping_record_endpoint(project_id: int):
     success = grouping_lookup().delete_grouping_records_for_project(project_id)
     return jsonify(success=success)
@@ -146,17 +137,6 @@ def delete_grouping_records_by_hash_endpoint(
 ) -> DeleteGroupingRecordsByHashResponse:
     success = grouping_lookup().delete_grouping_records_by_hash(data)
     return success
-
-
-@json_api("/v0/issues/similarity-embedding-benchmark")
-def similarity_embedding_benchmark_endpoint(data: GroupingRequest) -> SimilarityBenchmarkResponse:
-    start_time = time.time()
-    embedding = grouping_lookup().encode_text(data.stacktrace).astype("float32")
-    embedding_list = embedding.tolist()
-    end_time = time.time()
-    app.logger.debug(f"Embedding generation time: {end_time - start_time} seconds")
-
-    return SimilarityBenchmarkResponse(embedding=embedding_list)
 
 
 @json_api("/v1/automation/codebase/index/create")
@@ -247,7 +227,7 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     return anomaly_detection().store_data(data)
 
 
-@app.route("/health/live", methods=["GET"])
+@blueprint.route("/health/live", methods=["GET"])
 def health_check():
     from seer.inference_models import models_loading_status
 
@@ -256,7 +236,7 @@ def health_check():
     return "", 200
 
 
-@app.route("/health/ready", methods=["GET"])
+@blueprint.route("/health/ready", methods=["GET"])
 def ready_check():
     from seer.inference_models import models_loading_status
 
@@ -268,10 +248,18 @@ def ready_check():
     return "", 503
 
 
-register_json_api_views(app)
-
-
-@module.entrypoint
 @inject
-def create_app():
-    pass
+def start_app(base_app: Flask) -> Flask:
+    bootup(
+        base_app,
+        [
+            FlaskIntegration(),
+            LoggingIntegration(
+                level=logging.DEBUG,  # Capture debug and above as breadcrumbs
+            ),
+        ],
+        init_migrations=True,
+        async_load_models=True,
+    )
+    register_json_api_views(base_app)
+    return base_app
