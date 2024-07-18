@@ -114,11 +114,11 @@ def get_excludes_from_config(config_, type_="tables"):
     return excludes
 
 
-excluded_matches = config.get_section("exclude").get("matches", "").split(",")
+excluded_matches = (config.get_section("exclude") or {}).get("matches", "").split(",")
 
 
 def include_object(
-    obj: SchemaItem, name: str | None, type_: str, reflected: bool, compare_to: SchemaItem
+    obj: SchemaItem, name: str | None, type_: str, reflected: bool, compare_to: SchemaItem | None
 ):
     if name:
         for pattern in excluded_matches:
