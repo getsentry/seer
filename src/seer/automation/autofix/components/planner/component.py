@@ -26,7 +26,6 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
 
         agent = GptAgent(
             tools=tools.get_tools(),
-            memory=[],
             config=AgentConfig(system_prompt=PlanningPrompts.format_system_msg()),
         )
 
