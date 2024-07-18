@@ -231,16 +231,19 @@ class DbPrIdToAutofixRunIdMapping(Base):
     )
 
 
-class DbGroupingRecord(Base):
-    __tablename__ = "grouping_records"
-    __table_args__ = {"postgres_partition_by": "HASH (project_id)"}
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+class DbGroupingRecordBase:
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, server_default="nextval('grouping_records_id_seq')"
+    )
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
     error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     hash: Mapped[str] = mapped_column(String(32), nullable=False)
 
+
+class DbGroupingRecord(DbGroupingRecordBase, Base):
+    __tablename__ = "grouping_records"
     __table_args__ = (
         Index(
             "ix_grouping_records_new_stacktrace_embedding_hnsw",
@@ -254,4 +257,35 @@ class DbGroupingRecord(Base):
             "project_id",
         ),
         UniqueConstraint("project_id", "hash", name="u_project_id_hash_composite"),
+        {"postgresql_partition_by": "HASH (project_id)"},
     )
+
+
+globals().update(
+    {
+        f"DbGroupingRecord{i}": type(
+            f"DbGroupingRecord{i}",
+            (DbGroupingRecordBase, Base),
+            dict(
+                __tablename__=f"grouping_records_p{i}",
+                __table_args__=(
+                    Index(
+                        f"grouping_records_new_p{i}_stacktrace_embedding_idx",
+                        "stacktrace_embedding",
+                        postgresql_using="hnsw",
+                        postgresql_with={"m": 16, "ef_construction": 200},
+                        postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
+                    ),
+                    Index(
+                        f"grouping_records_new_p{i}_project_id_idx",
+                        "project_id",
+                    ),
+                    UniqueConstraint(
+                        "project_id", "hash", name=f"grouping_records_new_p{i}_project_id_hash_key"
+                    ),
+                ),
+            ),
+        )
+        for i in range(100)
+    }
+)
