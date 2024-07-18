@@ -23,6 +23,8 @@ def configure_environment():
 
 @pytest.fixture(autouse=True)
 def setup_app():
+    from flask_migrate import upgrade
+
     from seer.app import app
 
     reset_loading_state()
@@ -32,7 +34,7 @@ def setup_app():
         with Session() as session:
             session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             session.commit()
-        db.metadata.create_all(bind=db.engine)
+        upgrade()
     try:
         yield
     finally:
