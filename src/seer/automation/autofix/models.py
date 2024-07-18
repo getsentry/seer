@@ -70,6 +70,7 @@ class AutofixOutput(AutofixExecutionComplete):
 
 class AutofixEndpointResponse(BaseModel):
     started: bool
+    run_id: int
 
 
 class CustomRootCauseSelection(BaseModel):
@@ -179,7 +180,8 @@ class AutofixGroupState(BaseModel):
 
 
 class AutofixStateRequest(BaseModel):
-    group_id: int
+    group_id: int | None = None
+    run_id: int | None = None
 
 
 class AutofixPrIdRequest(BaseModel):
@@ -189,6 +191,7 @@ class AutofixPrIdRequest(BaseModel):
 
 class AutofixStateResponse(BaseModel):
     group_id: Optional[int]
+    run_id: Optional[int]
     state: Optional[dict]
 
 

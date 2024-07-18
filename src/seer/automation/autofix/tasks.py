@@ -57,14 +57,25 @@ def get_autofix_state_from_pr_id(provider: str, pr_id: int) -> ContinuationState
         return continuation
 
 
-def get_autofix_state(group_id: int) -> ContinuationState | None:
+def get_autofix_state(
+    *, group_id: int | None = None, run_id: int | None = None
+) -> ContinuationState | None:
     with Session() as session:
-        run_state = (
-            session.query(DbRunState)
-            .filter(DbRunState.group_id == group_id)
-            .order_by(DbRunState.id.desc())
-            .first()
-        )
+        run_state: DbRunState | None = None
+        if group_id is not None:
+            if run_id is not None:
+                raise ValueError("Either group_id or run_id must be provided, not both")
+            run_state = (
+                session.query(DbRunState)
+                .filter(DbRunState.group_id == group_id)
+                .order_by(DbRunState.id.desc())
+                .first()
+            )
+        elif run_id is not None:
+            run_state = session.query(DbRunState).filter(DbRunState.id == run_id).first()
+        else:
+            raise ValueError("Either group_id or run_id must be provided")
+
         if run_state is None:
             return None
 
@@ -82,7 +93,7 @@ def check_and_mark_if_timed_out(state: ContinuationState):
 
 def run_autofix_root_cause(
     request: AutofixRequest,
-):
+) -> int:
     state = ContinuationState.new(
         AutofixContinuation(request=request),
         group_id=request.issue.id,
@@ -98,7 +109,7 @@ def run_autofix_root_cause(
     # Process has no further work.
     if cur.status in AutofixStatus.terminal():
         logger.warning(f"Ignoring job, state {cur.status}")
-        return
+        return cur.run_id
 
     if request.options.disable_codebase_indexing:
         RootCauseStep.get_signature(
@@ -120,6 +131,8 @@ def run_autofix_root_cause(
             ),
             queue=CeleryQueues.DEFAULT,
         ).apply_async()
+
+    return cur.run_id
 
 
 def run_autofix_execution(request: AutofixUpdateRequest):

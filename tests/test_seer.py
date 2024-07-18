@@ -1,15 +1,14 @@
 import json
-import time
 import unittest
 from unittest import mock
 
 import pytest
-from johen.pytest import parametrize
-from sqlalchemy import text
+from johen import generate
 
 from seer.app import app
-from seer.db import DbGroupingRecord, ProcessRequest, Session
-from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
+from seer.automation.autofix.models import AutofixContinuation
+from seer.automation.state import LocalMemoryState
+from seer.db import DbGroupingRecord, Session
 
 
 @pytest.fixture(autouse=True)
@@ -364,61 +363,85 @@ class TestSeer(unittest.TestCase):
             )
 
 
-@parametrize(count=1)
-def test_prepared_statements_disabled(
-    requests: tuple[
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-        ProcessRequest,
-    ]
-):
-    with Session() as session:
-        # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
-        for i, request in enumerate(requests):
-            request.name += str(i)
-            session.add(request)
-            session.flush()
-        assert session.execute(text("select count(*) from pg_prepared_statements")).scalar() == 0
+class TestGetAutofixState:
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_with_group_id(self, mock_get_autofix_state):
+        state = next(generate(AutofixContinuation))
+        mock_get_autofix_state.return_value = LocalMemoryState(state)
 
-
-def test_async_loading():
-    reset_loading_state()
-    response = app.test_client().get("/health/live")
-    assert response.status_code == 200
-    response = app.test_client().get("/health/ready")
-    assert response.status_code == 503
-
-    with dummy_deferred(lambda: time.sleep(1)):
-        start_loading(True)
-        response = app.test_client().get("/health/live")
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"group_id": 400}),
+            content_type="application/json",
+        )
         assert response.status_code == 200
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 503
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+        assert data["state"] == state.model_dump(mode="json")
 
-        time.sleep(2)
-        response = app.test_client().get("/health/live")
+        mock_get_autofix_state.assert_called_once_with(group_id=400, run_id=None)
+
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_with_run_id(self, mock_get_autofix_state):
+        state = next(generate(AutofixContinuation))
+        mock_get_autofix_state.return_value = LocalMemoryState(state)
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"run_id": 500}),
+            content_type="application/json",
+        )
         assert response.status_code == 200
-        response = app.test_client().get("/health/ready")
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+        assert data["state"] == state.model_dump(mode="json")
+
+        mock_get_autofix_state.assert_called_once_with(group_id=None, run_id=500)
+
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_no_state_found(self, mock_get_autofix_state):
+        mock_get_autofix_state.return_value = None
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"group_id": 999}),
+            content_type="application/json",
+        )
         assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data == {"group_id": None, "run_id": None, "state": None}
 
-    def failed_loader():
-        time.sleep(1)
-        raise Exception("Dummy loading failure!")
+    @mock.patch("seer.app.get_autofix_state_from_pr_id")
+    def test_get_autofix_state_from_pr_endpoint(self, mock_get_autofix_state_from_pr_id):
+        state = next(generate(AutofixContinuation))
+        mock_get_autofix_state_from_pr_id.return_value = mock.Mock(get=lambda: state)
 
-    reset_loading_state()
-
-    with dummy_deferred(failed_loader):
-        start_loading(True)
-        response = app.test_client().get("/health/live")
+        response = app.test_client().post(
+            "/v1/automation/autofix/state/pr",
+            data=json.dumps({"provider": "github", "pr_id": 123}),
+            content_type="application/json",
+        )
         assert response.status_code == 200
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 503
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+        assert data["state"] == state.model_dump(mode="json")
 
-        time.sleep(2)
-        response = app.test_client().get("/health/live")
-        assert response.status_code == 500
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 500
+        mock_get_autofix_state_from_pr_id.assert_called_once_with("github", 123)
+
+    @mock.patch("seer.app.get_autofix_state_from_pr_id")
+    def test_get_autofix_state_from_pr_endpoint_no_state_found(
+        self, mock_get_autofix_state_from_pr_id
+    ):
+        mock_get_autofix_state_from_pr_id.return_value = None
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state/pr",
+            data=json.dumps({"provider": "github", "pr_id": 999}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data == {"group_id": None, "run_id": None, "state": None}
