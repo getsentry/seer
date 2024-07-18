@@ -1,8 +1,10 @@
 import logging
+import re
 from logging.config import fileConfig
 
 from alembic import context
 from flask import current_app
+from sqlalchemy.sql.schema import SchemaItem
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -94,10 +96,36 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=get_metadata(), **conf_args)
+        context.configure(
+            connection=connection,
+            target_metadata=get_metadata(),
+            include_object=include_object,
+            **conf_args,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
+
+
+def get_excludes_from_config(config_, type_="tables"):
+    excludes = config_.get(type_, None)
+    if excludes is not None:
+        excludes = excludes.split(",")
+    return excludes
+
+
+excluded_matches = (config.get_section("exclude") or {}).get("matches", "").split(",")
+
+
+def include_object(
+    obj: SchemaItem, name: str | None, type_: str, reflected: bool, compare_to: SchemaItem | None
+):
+    if name:
+        for pattern in excluded_matches:
+            if re.match(pattern, name):
+                return False
+
+    return True
 
 
 if context.is_offline_mode():
