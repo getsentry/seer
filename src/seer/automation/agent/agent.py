@@ -66,7 +66,6 @@ class LlmAgent(ABC):
 
         self.memory.append(message)
 
-
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 tool_response = self.call_tool(tool_call)
