@@ -14,11 +14,13 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Sequence,
     String,
     UniqueConstraint,
     delete,
     func,
     select,
+    text,
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
@@ -233,7 +235,10 @@ class DbPrIdToAutofixRunIdMapping(Base):
 
 class DbGroupingRecordBase:
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, server_default="nextval('grouping_records_id_seq')"
+        BigInteger,
+        Sequence("grouping_records_id_seq"),
+        primary_key=True,
+        server_default=text("nextval('grouping_records_id_seq')"),
     )
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
     message: Mapped[str] = mapped_column(String, nullable=False)
