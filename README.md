@@ -8,8 +8,8 @@ Seer uses docker compose to manage the development environment contained in `doc
 The first invocation of `devenv sync` or `direnv allow` can take a long time due to the complex
 contain image that will be built locally.  Generally it should be cached and more performant afterwards.
 
-Some unfortunate differences between `colima` and `docker` have been observed that may cause some issues.
-Ideally, using docker desktop will likely address some of these problems.
+For now, we recommend installing and using docker desktop over colima due to some differences
+in behavior in the tooling.
 
 ### Autofix
 
