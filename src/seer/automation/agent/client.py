@@ -144,7 +144,7 @@ class GptClient(LlmClient):
 class ClaudeClient(LlmClient):
     def __init__(self):
         self.anthropic_client = anthropic.AnthropicVertex(
-            project_id=os.environ["GCP_PROJECT_ID"],
+            project_id=os.environ["GOOGLE_CLOUD_PROJECT"],
             region="europe-west1" if os.environ["USE_EU_REGION"] == 1 else "us-east5",
         )
 
