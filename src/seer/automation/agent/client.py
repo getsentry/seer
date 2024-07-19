@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
 import anthropic
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 
 from seer.automation.agent.models import Message, ToolCall, Usage
@@ -148,7 +148,7 @@ class ClaudeClient(LlmClient):
             region="europe-west1" if os.environ["USE_EU_REGION"] == 1 else "us-east5",
         )
 
-    @observe(as_type="generation")
+    @observe(as_type="generation", name="Claude-generation")
     def completion(
         self,
         messages: list[Message],
@@ -238,6 +238,8 @@ class ClaudeClient(LlmClient):
             usage.prompt_tokens += completion.usage.input_tokens
             usage.completion_tokens += completion.usage.output_tokens
             usage.total_tokens += completion.usage.input_tokens + completion.usage.output_tokens
+
+        langfuse_context.update_current_observation(model=model, usage=usage)
 
         return message, usage
 
