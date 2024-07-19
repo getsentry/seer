@@ -111,11 +111,11 @@ class GptClient(LlmClient):
         )
         message = Message(content=response.content, role=response.role, tool_calls=tool_calls)
 
-        usage = Usage()
-        if completion.usage:
-            usage.completion_tokens += completion.usage.completion_tokens
-            usage.prompt_tokens += completion.usage.prompt_tokens
-            usage.total_tokens += completion.usage.total_tokens
+        usage = Usage(
+            completion_tokens=completion.usage.completion_tokens,
+            prompt_tokens=completion.usage.prompt_tokens,
+            total_tokens=completion.usage.total_tokens,
+        )
 
         return message, usage
 
@@ -233,11 +233,11 @@ class ClaudeClient(LlmClient):
                     0
                 ].id  # assumes we get only 1 tool call at a time, but we really don't use this field for tool_use blocks
 
-        usage = Usage()
-        if completion.usage:
-            usage.prompt_tokens += completion.usage.input_tokens
-            usage.completion_tokens += completion.usage.output_tokens
-            usage.total_tokens += completion.usage.input_tokens + completion.usage.output_tokens
+        usage = Usage(
+            completion_tokens=completion.usage.input_tokens,
+            prompt_tokens=completion.usage.output_tokens,
+            total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
+        )
 
         langfuse_context.update_current_observation(model=model, usage=usage)
 
