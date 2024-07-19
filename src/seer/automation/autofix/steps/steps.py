@@ -2,7 +2,7 @@ from typing import Any
 
 import sentry_sdk
 
-from celery_app.app import celery_app as celery_app
+from celery_app.app import celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
     DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS,

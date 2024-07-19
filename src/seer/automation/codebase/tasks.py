@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from celery_app.app import celery_app as celery_app
+from celery_app.app import celery_app
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.models import (
     CodebaseIndexStatus,

@@ -75,11 +75,6 @@ class AppConfig(BaseModel):
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
 
-        if self.has_sentry_integration:
-            assert (
-                self.JSON_API_SHARED_SECRETS
-            ), "JSON_API_SHARED_SECRETS required for sentry integration."
-
 
 @configuration_module.provider
 def load_from_environment(environ: dict[str, str] | None = None) -> AppConfig:

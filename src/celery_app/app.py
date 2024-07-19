@@ -8,16 +8,13 @@ from sentry_sdk.integrations.celery import CeleryIntegration
 
 from celery_app.config import CeleryConfig
 from seer.bootup import bootup
-from seer.dependency_injection import Module, inject, injected
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
-celery_module = Module()
-
 
 @signals.celeryd_init.connect
-@celery_module.entrypoint
 @inject
 def init_celery_app(*args: Any, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():

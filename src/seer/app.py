@@ -48,7 +48,7 @@ from seer.automation.codebase.tasks import (
 )
 from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup, module
-from seer.dependency_injection import inject
+from seer.dependency_injection import inject, injected
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
@@ -265,7 +265,7 @@ def base_app() -> Flask:
 
 
 @inject
-def start_app(app: Flask) -> Flask:
+def start_app(app: Flask = injected) -> Flask:
     bootup(
         start_model_loading=True,
         integrations=[
