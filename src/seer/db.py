@@ -1,6 +1,7 @@
 import contextlib
 import datetime
 import json
+from typing import Any
 
 import sqlalchemy
 from flask import Flask
@@ -11,21 +12,39 @@ from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Connection,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    Sequence,
     String,
     UniqueConstraint,
     delete,
     func,
     select,
+    text,
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
+
+
+@inject
+def initialize_database(
+    config: AppConfig = injected,
+    app: Flask = injected,
+):
+    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
+    db.init_app(app)
+    migrate.init_app(app, db)
+
+    with app.app_context():
+        Session.configure(bind=db.engine)
 
 
 class Base(DeclarativeBase):
@@ -235,43 +254,47 @@ class DbPrIdToAutofixRunIdMapping(Base):
     )
 
 
+def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:
+    for i in range(100):
+        connection.execute(
+            text(
+                f"""
+            CREATE TABLE grouping_records_p{i} PARTITION OF grouping_records
+            FOR VALUES WITH (MODULUS 100, REMAINDER {i});
+            """
+            )
+        )
+
+
 class DbGroupingRecord(Base):
     __tablename__ = "grouping_records"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    message: Mapped[str] = mapped_column(String, nullable=False)
-    error_type: Mapped[str] = mapped_column(String, nullable=True)
-    stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
-    hash: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="00000000000000000000000000000000"
-    )
-
     __table_args__ = (
         Index(
-            "ix_grouping_records_stacktrace_embedding_hnsw",
+            "ix_grouping_records_new_stacktrace_embedding_hnsw",
             "stacktrace_embedding",
             postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_with={"m": 16, "ef_construction": 200},
             postgresql_ops={"stacktrace_embedding": "vector_cosine_ops"},
         ),
         Index(
-            "ix_grouping_records_project_id",
+            "ix_grouping_records_new_project_id",
             "project_id",
         ),
-        UniqueConstraint("project_id", "hash", name="u_project_id_hash"),
+        UniqueConstraint("project_id", "hash", name="u_project_id_hash_composite"),
+        {
+            "postgresql_partition_by": "HASH (project_id)",
+            "listeners": [("after_create", create_grouping_partition)],
+        },
     )
 
-
-@inject
-def initialize_database(
-    config: AppConfig = injected,
-    app: Flask = injected,
-):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
-
-    db.init_app(app)
-    migrate.init_app(app, db)
-
-    with app.app_context():
-        Session.configure(bind=db.engine)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Sequence("grouping_records_id_seq"),
+        primary_key=True,
+        server_default=text("nextval('grouping_records_id_seq')"),
+    )
+    project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
+    message: Mapped[str] = mapped_column(String, nullable=False)
+    error_type: Mapped[str] = mapped_column(String, nullable=True)
+    stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
+    hash: Mapped[str] = mapped_column(String(32), nullable=False)

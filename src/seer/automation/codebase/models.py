@@ -261,6 +261,10 @@ class RepoAccessCheckResponse(BaseModel):
     has_access: bool
 
 
+class CodebaseIndexEndpointResponse(BaseModel):
+    started: bool
+
+
 class CodebaseStatusCheckResponse(BaseModel):
     status: str  # CodebaseIndexStatus, but not using the enum here because it breaks JSON schema generation
 

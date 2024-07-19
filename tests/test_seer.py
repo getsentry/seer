@@ -4,10 +4,13 @@ import unittest
 from unittest import mock
 
 import pytest
+from johen import generate
 from johen.pytest import parametrize
 from sqlalchemy import text
 
 from seer.app import app
+from seer.automation.autofix.models import AutofixContinuation
+from seer.automation.state import LocalMemoryState
 from seer.db import DbGroupingRecord, ProcessRequest, Session
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 
@@ -422,3 +425,87 @@ def test_async_loading():
         assert response.status_code == 500
         response = app.test_client().get("/health/ready")
         assert response.status_code == 500
+
+
+class TestGetAutofixState:
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_with_group_id(self, mock_get_autofix_state):
+        state = next(generate(AutofixContinuation))
+        mock_get_autofix_state.return_value = LocalMemoryState(state)
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"group_id": 400}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+        assert data["state"] == state.model_dump(mode="json")
+
+        mock_get_autofix_state.assert_called_once_with(group_id=400, run_id=None)
+
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_with_run_id(self, mock_get_autofix_state):
+        state = next(generate(AutofixContinuation))
+        mock_get_autofix_state.return_value = LocalMemoryState(state)
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"run_id": 500}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+        assert data["state"] == state.model_dump(mode="json")
+
+        mock_get_autofix_state.assert_called_once_with(group_id=None, run_id=500)
+
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_no_state_found(self, mock_get_autofix_state):
+        mock_get_autofix_state.return_value = None
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"group_id": 999}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data == {"group_id": None, "run_id": None, "state": None}
+
+    @mock.patch("seer.app.get_autofix_state_from_pr_id")
+    def test_get_autofix_state_from_pr_endpoint(self, mock_get_autofix_state_from_pr_id):
+        state = next(generate(AutofixContinuation))
+        mock_get_autofix_state_from_pr_id.return_value = mock.Mock(get=lambda: state)
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state/pr",
+            data=json.dumps({"provider": "github", "pr_id": 123}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+        assert data["state"] == state.model_dump(mode="json")
+
+        mock_get_autofix_state_from_pr_id.assert_called_once_with("github", 123)
+
+    @mock.patch("seer.app.get_autofix_state_from_pr_id")
+    def test_get_autofix_state_from_pr_endpoint_no_state_found(
+        self, mock_get_autofix_state_from_pr_id
+    ):
+        mock_get_autofix_state_from_pr_id.return_value = None
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state/pr",
+            data=json.dumps({"provider": "github", "pr_id": 999}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data == {"group_id": None, "run_id": None, "state": None}

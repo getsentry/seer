@@ -32,6 +32,7 @@ from seer.automation.autofix.tasks import (
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
+    CodebaseIndexEndpointResponse,
     CodebaseStatusCheckRequest,
     CodebaseStatusCheckResponse,
     CreateCodebaseRequest,
@@ -140,7 +141,7 @@ def delete_grouping_records_by_hash_endpoint(
 
 
 @json_api(blueprint, "/v1/automation/codebase/index/create")
-def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
+def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> CodebaseIndexEndpointResponse:
     raise_if_no_genai_consent(data.organization_id)
 
     namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
@@ -154,7 +155,7 @@ def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpoi
         queue=CeleryQueues.CUDA,
     )
 
-    return AutofixEndpointResponse(started=True)
+    return CodebaseIndexEndpointResponse(started=True)
 
 
 @json_api(blueprint, "/v1/automation/codebase/repo/check-access")
@@ -178,8 +179,8 @@ def get_codebase_index_status_endpoint(
 @json_api(blueprint, "/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     raise_if_no_genai_consent(data.organization_id)
-    run_autofix_root_cause(data)
-    return AutofixEndpointResponse(started=True)
+    run_id = run_autofix_root_cause(data)
+    return AutofixEndpointResponse(started=True, run_id=run_id)
 
 
 @json_api(blueprint, "/v1/automation/autofix/update")
@@ -190,19 +191,25 @@ def autofix_update_endpoint(
         run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_create_pr(data)
-    return AutofixEndpointResponse(started=True)
+    return AutofixEndpointResponse(started=True, run_id=data.run_id)
 
 
 @json_api(blueprint, "/v1/automation/autofix/state")
 def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
-    state = get_autofix_state(data.group_id)
+    state = get_autofix_state(group_id=data.group_id, run_id=data.run_id)
 
     if state:
         check_and_mark_if_timed_out(state)
 
-    return AutofixStateResponse(
-        group_id=data.group_id, state=state.get().model_dump(mode="json") if state else None
-    )
+        cur_state = state.get()
+
+        return AutofixStateResponse(
+            group_id=cur_state.request.issue.id,
+            run_id=cur_state.run_id,
+            state=cur_state.model_dump(mode="json"),
+        )
+
+    return AutofixStateResponse(group_id=None, run_id=None, state=None)
 
 
 @json_api(blueprint, "/v1/automation/autofix/state/pr")
@@ -210,11 +217,13 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
     state = get_autofix_state_from_pr_id(data.provider, data.pr_id)
 
     if state:
-        cur = state.get()
+        cur_state = state.get()
         return AutofixStateResponse(
-            group_id=cur.request.issue.id, state=cur.model_dump(mode="json")
+            group_id=cur_state.request.issue.id,
+            run_id=cur_state.run_id,
+            state=cur_state.model_dump(mode="json"),
         )
-    return AutofixStateResponse(group_id=None, state=None)
+    return AutofixStateResponse(group_id=None, run_id=None, state=None)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
