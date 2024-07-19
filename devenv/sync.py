@@ -11,7 +11,7 @@ def main(context: dict[str, str]) -> int:
     url, sha256 = config.get_python(reporoot, python_version)
     print(f"ensuring {repo} venv at {venv_dir}...")
     venv.ensure(venv_dir, python_version, url, sha256)
-    venv.sync(reporoot, venv_dir, f"{reporoot}/requirements.txt")
+    venv.sync(reporoot, venv_dir, requirements)
 
     print("Executing update tasks in Makefile...")
     proc.run(("make", "-C", reporoot, "update"), exit=True)
