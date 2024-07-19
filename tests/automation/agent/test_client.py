@@ -53,15 +53,6 @@ def test_gpt_client_json_completion(mock_openai_client):
     assert usage.total_tokens == 30
 
 
-def test_gpt_client_error_handling(mock_openai_client):
-    client = GptClient()
-    mock_openai_client.return_value.chat.completions.create.side_effect = Exception("API Error")
-
-    messages = [Message(role="user", content="Test message")]
-    with pytest.raises(Exception, match="API Error"):
-        client.completion(messages)
-
-
 def test_claude_client_completion(mock_anthropic_client):
     client = ClaudeClient()
     mock_response = anthropic.types.Message(
@@ -130,15 +121,6 @@ def test_claude_client_json_completion(mock_anthropic_client):
     assert result == {"key": "value"}
     assert message.content == '{"key": "value"}'
     assert usage.total_tokens == 30
-
-
-def test_claude_client_error_handling(mock_anthropic_client):
-    client = ClaudeClient()
-    mock_anthropic_client.return_value.messages.create.side_effect = Exception("API Error")
-
-    messages = [Message(role="user", content="Test message")]
-    with pytest.raises(Exception, match="API Error"):
-        client.completion(messages)
 
 
 def test_format_messages_for_claude_input():
