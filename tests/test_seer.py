@@ -392,7 +392,7 @@ def test_async_loading():
     assert response.status_code == 503
 
     with dummy_deferred(lambda: time.sleep(1)):
-        start_loading(True)
+        start_loading()
         response = app.test_client().get("/health/live")
         assert response.status_code == 200
         response = app.test_client().get("/health/ready")
@@ -411,7 +411,7 @@ def test_async_loading():
     reset_loading_state()
 
     with dummy_deferred(failed_loader):
-        start_loading(True)
+        start_loading()
         response = app.test_client().get("/health/live")
         assert response.status_code == 200
         response = app.test_client().get("/health/ready")

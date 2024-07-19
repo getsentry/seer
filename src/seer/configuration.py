@@ -1,10 +1,13 @@
 import os.path
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, Field
 
-from seer.bootup import module, stub_module
+from seer.dependency_injection import Module
+
+configuration_module = Module()
+configuration_test_module = Module()
 
 
 class CodebaseStorageType(str, Enum):
@@ -41,6 +44,7 @@ class AppConfig(BaseModel):
     CODEBASE_STORAGE_DIR: ParsePath = os.path.abspath("data/chroma/storage")
 
     SEER_VERSION_SHA: str = ""
+    SENTRY_DSN: str = ""
 
     DATABASE_URL: str
     CELERY_BROKER_URL: str
@@ -52,7 +56,7 @@ class AppConfig(BaseModel):
     CODEBASE_GCS_STORAGE_DIR: str = "tmp_jenn/dev/chroma/storage"
 
     JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
-    TORCH_NUM_THREADS: ParseInt = 1
+    TORCH_NUM_THREADS: ParseInt = 0
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
 
@@ -66,9 +70,10 @@ class AppConfig(BaseModel):
     def has_sentry_integration(self) -> bool:
         return not self.NO_SENTRY_INTEGRATION
 
-    def model_post_init(self, context: Any):
+    def do_validation(self):
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
+            assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
 
         if self.has_sentry_integration:
             assert (
@@ -76,24 +81,25 @@ class AppConfig(BaseModel):
             ), "JSON_API_SHARED_SECRETS required for sentry integration."
 
 
-@module.provider
+@configuration_module.provider
 def load_from_environment(environ: dict[str, str] | None = None) -> AppConfig:
     return AppConfig.model_validate(environ or os.environ)
 
 
-@stub_module.provider
+@configuration_test_module.provider
 def provide_test_defaults() -> AppConfig:
     """
     Load defaults into the base app config useful for tests
     """
 
-    base = load_from_environment(
-        {
-            **os.environ,
-            "NO_SENTRY_INTEGRATION": "true",
-        }
-    )
+    base = load_from_environment()
+
+    base.NO_SENTRY_INTEGRATION = True
     base.CODEBASE_STORAGE_DIR = os.path.abspath("data/tests/chroma/storage")
     base.CODEBASE_GCS_STORAGE_DIR = os.path.abspath("chroma-test/data/storage")
+    base.DATABASE_URL = base.DATABASE_URL.replace("db", "test-db")
 
     return base
+
+
+configuration_module.enable()

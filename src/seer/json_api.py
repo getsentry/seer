@@ -3,19 +3,17 @@ import hashlib
 import hmac
 import inspect
 import os
-from typing import Any, Callable, List, Tuple, Type, TypeVar, get_type_hints
+from typing import Any, Callable, Type, TypeVar, get_type_hints
 
 import sentry_sdk
-from flask import Flask, request
+from flask import Blueprint, request
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, Unauthorized
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
-view_functions: List[Tuple[str, Callable[[], Any], Type[BaseModel], Type[BaseModel]]] = []
 
-
-def json_api(url_rule: str) -> Callable[[_F], _F]:
+def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     def decorator(implementation: _F) -> _F:
         spec = inspect.getfullargspec(implementation)
         annotations = get_type_hints(implementation)
@@ -56,16 +54,11 @@ def json_api(url_rule: str) -> Callable[[_F], _F]:
             return result.model_dump()
 
         functools.update_wrapper(wrapper, implementation)
-        view_functions.append((url_rule, wrapper, request_annotation, response_annotation))
+        blueprint.add_url_rule(url_rule, view_func=wrapper, methods=["POST"])
 
         return implementation
 
     return decorator
-
-
-def register_json_api_views(app: Flask) -> None:
-    for url_rule, wrapper, _, _ in view_functions:
-        app.add_url_rule(url_rule, view_func=wrapper, methods=["POST"])
 
 
 def get_json_api_shared_secrets() -> list[str]:

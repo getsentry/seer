@@ -46,7 +46,7 @@ from seer.automation.codebase.tasks import (
     index_namespace,
 )
 from seer.automation.utils import raise_if_no_genai_consent
-from seer.bootup import bootup
+from seer.bootup import bootup, module
 from seer.dependency_injection import inject
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
@@ -57,7 +57,7 @@ from seer.grouping.grouping import (
     SimilarityResponse,
 )
 from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
-from seer.json_api import json_api, register_json_api_views
+from seer.json_api import json_api
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
@@ -65,7 +65,7 @@ app = flask.current_app
 blueprint = Blueprint("app", __name__)
 
 
-@json_api("/v0/issues/severity-score")
+@json_api(blueprint, "/v0/issues/severity-score")
 def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
     if data.trigger_error:
         raise Exception("oh no")
@@ -77,7 +77,7 @@ def severity_endpoint(data: SeverityRequest) -> SeverityResponse:
     return response
 
 
-@json_api("/trends/breakpoint-detector")
+@json_api(blueprint, "/trends/breakpoint-detector")
 def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     txns_data = data.data
 
@@ -102,7 +102,7 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
     return trends
 
 
-@json_api("/v0/issues/similar-issues")
+@json_api(blueprint, "/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
         sentry_sdk.set_tag("read_only", data.read_only)
@@ -112,7 +112,7 @@ def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     return similar_issues
 
 
-@json_api("/v0/issues/similar-issues/grouping-record")
+@json_api(blueprint, "/v0/issues/similar-issues/grouping-record")
 def similarity_grouping_record_endpoint(
     data: CreateGroupingRecordsRequest,
 ) -> BulkCreateGroupingRecordsResponse:
@@ -131,7 +131,7 @@ def delete_grouping_record_endpoint(project_id: int):
     return jsonify(success=success)
 
 
-@json_api("/v0/issues/similar-issues/grouping-record/delete-by-hash")
+@json_api(blueprint, "/v0/issues/similar-issues/grouping-record/delete-by-hash")
 def delete_grouping_records_by_hash_endpoint(
     data: DeleteGroupingRecordsByHashRequest,
 ) -> DeleteGroupingRecordsByHashResponse:
@@ -139,7 +139,7 @@ def delete_grouping_records_by_hash_endpoint(
     return success
 
 
-@json_api("/v1/automation/codebase/index/create")
+@json_api(blueprint, "/v1/automation/codebase/index/create")
 def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpointResponse:
     raise_if_no_genai_consent(data.organization_id)
 
@@ -157,12 +157,12 @@ def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> AutofixEndpoi
     return AutofixEndpointResponse(started=True)
 
 
-@json_api("/v1/automation/codebase/repo/check-access")
+@json_api(blueprint, "/v1/automation/codebase/repo/check-access")
 def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
     return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
 
 
-@json_api("/v1/automation/codebase/index/status")
+@json_api(blueprint, "/v1/automation/codebase/index/status")
 def get_codebase_index_status_endpoint(
     data: CodebaseStatusCheckRequest,
 ) -> CodebaseStatusCheckResponse:
@@ -175,14 +175,14 @@ def get_codebase_index_status_endpoint(
     )
 
 
-@json_api("/v1/automation/autofix/start")
+@json_api(blueprint, "/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     raise_if_no_genai_consent(data.organization_id)
     run_autofix_root_cause(data)
     return AutofixEndpointResponse(started=True)
 
 
-@json_api("/v1/automation/autofix/update")
+@json_api(blueprint, "/v1/automation/autofix/update")
 def autofix_update_endpoint(
     data: AutofixUpdateRequest,
 ) -> AutofixEndpointResponse:
@@ -193,7 +193,7 @@ def autofix_update_endpoint(
     return AutofixEndpointResponse(started=True)
 
 
-@json_api("/v1/automation/autofix/state")
+@json_api(blueprint, "/v1/automation/autofix/state")
 def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
     state = get_autofix_state(data.group_id)
 
@@ -205,7 +205,7 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
     )
 
 
-@json_api("/v1/automation/autofix/state/pr")
+@json_api(blueprint, "/v1/automation/autofix/state/pr")
 def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixStateResponse:
     state = get_autofix_state_from_pr_id(data.provider, data.pr_id)
 
@@ -217,12 +217,12 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
     return AutofixStateResponse(group_id=None, state=None)
 
 
-@json_api("/v1/anomaly-detection/detect")
+@json_api(blueprint, "/v1/anomaly-detection/detect")
 def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
     return anomaly_detection().detect_anomalies(data)
 
 
-@json_api("/v1/anomaly-detection/store")
+@json_api(blueprint, "/v1/anomaly-detection/store")
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     return anomaly_detection().store_data(data)
 
@@ -248,18 +248,22 @@ def ready_check():
     return "", 503
 
 
+@module.provider
+def base_app() -> Flask:
+    app = Flask(__name__)
+    app.register_blueprint(blueprint)
+    return app
+
+
 @inject
-def start_app(base_app: Flask) -> Flask:
+def start_app(app: Flask) -> Flask:
     bootup(
-        base_app,
-        [
+        start_model_loading=True,
+        integrations=[
             FlaskIntegration(),
             LoggingIntegration(
                 level=logging.DEBUG,  # Capture debug and above as breadcrumbs
             ),
         ],
-        init_migrations=True,
-        async_load_models=True,
     )
-    register_json_api_views(base_app)
-    return base_app
+    return app
