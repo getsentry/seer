@@ -29,13 +29,13 @@ class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
         )
 
         completion_result, usage = gpt_client.completion(
-            [
-                Message(role="system", content=RerankerPrompts.format_system_msg()),
+            messages=[
                 Message(
                     role="user",
                     content=RerankerPrompts.format_default_msg(request.query, code_dump),
                 ),
-            ]
+            ],
+            system_prompt=RerankerPrompts.format_system_msg(),
         )
 
         with self.context.state.update() as cur:

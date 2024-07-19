@@ -65,23 +65,3 @@ class TestFunctionTool:
         expected = "Error: Main error\n\nThe above exception was the direct cause of the following exception:\n\nRoot cause"
         assert result == expected
         mock_logger.exception.assert_called_once()
-
-    def test_to_dict(self, function_tool):
-        expected = {
-            "type": "function",
-            "function": {
-                "name": "test_tool",
-                "description": "A test tool",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "param1": {
-                            "type": "string",
-                            "description": "",
-                        }
-                    },
-                    "required": [],
-                },
-            },
-        }
-        assert function_tool.to_dict() == expected

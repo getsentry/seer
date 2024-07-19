@@ -86,15 +86,13 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
         data, message, usage = GptClient().json_completion(
             messages=[
                 Message(
-                    role="system", content=RetrieverPrompts.format_plan_item_query_system_msg()
-                ),
-                Message(
                     role="user",
                     content=RetrieverPrompts.format_plan_item_query_default_msg(
                         text=request.text, intent=request.intent
                     ),
                 ),
-            ]
+            ],
+            system_prompt=RetrieverPrompts.format_plan_item_query_system_msg(),
         )
 
         with self.context.state.update() as cur:

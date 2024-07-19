@@ -54,6 +54,8 @@ services:
             - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
             - GOOGLE_CLOUD_PROJECT=super-big-data
             - CODEBASE_STORAGE_TYPE=filesystem
+            - GOOGLE_CLOUD_PROJECT_ID=ml-ai-420606
+            - USE_EU_REGION=0
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:

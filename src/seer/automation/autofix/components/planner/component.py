@@ -1,8 +1,7 @@
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import GptAgent
-from seer.automation.agent.models import Message
+from seer.automation.agent.agent import AgentConfig, GptAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.planner.models import (
     PlanningOutput,
@@ -27,7 +26,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
 
         agent = GptAgent(
             tools=tools.get_tools(),
-            memory=[Message(role="system", content=PlanningPrompts.format_system_msg())],
+            config=AgentConfig(system_prompt=PlanningPrompts.format_system_msg()),
         )
 
         task_str = (
