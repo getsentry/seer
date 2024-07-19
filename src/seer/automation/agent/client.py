@@ -161,6 +161,55 @@ class ClaudeClient(LlmClient):
                 "A response format was specified for this completion, but Claude doesn't guarantee a correctly-formatted output"
             )
 
+        claude_messages = self._format_messages_for_claude_input(messages)
+
+        # ask Claude for a response
+        params: dict[str, Any] = {
+            "model": model,
+            "temperature": 0.0,
+            "max_tokens": 4096,
+            "messages": claude_messages,
+        }
+        if system_prompt:
+            params["system"] = system_prompt
+        if tools and len(tools) > 0:
+            tool_dicts = [tool.to_dict(model="claude") for tool in tools]
+            params["tools"] = tool_dicts
+        completion = self.anthropic_client.messages.create(**params)
+        message = self._format_claude_response_to_message(completion)
+
+        usage = Usage(
+            completion_tokens=completion.usage.input_tokens,
+            prompt_tokens=completion.usage.output_tokens,
+            total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
+        )
+
+        langfuse_context.update_current_observation(model=model, usage=usage)
+
+        return message, usage
+
+    def completion_with_parser(
+        self,
+        messages: list[Message],
+        parser: Callable[[str | None], T],
+        model: str = DEFAULT_CLAUDE_MODEL,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        response_format: dict | None = None,
+    ) -> tuple[T, Message, Usage]:
+        return super().completion_with_parser(
+            messages, parser, model, system_prompt, tools, response_format
+        )
+
+    def json_completion(
+        self,
+        messages: list[Message],
+        model: str = DEFAULT_CLAUDE_MODEL,
+        system_prompt: str | None = None,
+    ) -> tuple[dict[str, Any] | None, Message, Usage]:
+        return super().json_completion(messages, model, system_prompt)
+
+    def _format_messages_for_claude_input(self, messages: list[Message]) -> list[dict]:
         claude_messages = []
         for message in messages:
             if message.role == "tool":  # we're responding to Claude with a tool use result
@@ -197,22 +246,9 @@ class ClaudeClient(LlmClient):
                 claude_messages.append(
                     {"role": message.role, "content": [{"type": "text", "text": message.content}]}
                 )
+        return claude_messages
 
-        # ask Claude for a response
-        params: dict[str, Any] = {
-            "model": model,
-            "temperature": 0.0,
-            "max_tokens": 4096,
-            "messages": claude_messages,
-        }
-        if system_prompt:
-            params["system"] = system_prompt
-        if tools and len(tools) > 0:
-            tool_dicts = [tool.to_dict(model="claude") for tool in tools]
-            params["tools"] = tool_dicts
-        completion = self.anthropic_client.messages.create(**params)
-
-        # build message object with text + any tool calls
+    def _format_claude_response_to_message(self, completion: anthropic.types.Message) -> Message:
         message = Message(role=completion.role)
         for block in completion.content:
             if block.type == "text":
@@ -229,37 +265,7 @@ class ClaudeClient(LlmClient):
                 message.tool_call_id = message.tool_calls[
                     0
                 ].id  # assumes we get only 1 tool call at a time, but we really don't use this field for tool_use blocks
-
-        usage = Usage(
-            completion_tokens=completion.usage.input_tokens,
-            prompt_tokens=completion.usage.output_tokens,
-            total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
-        )
-
-        langfuse_context.update_current_observation(model=model, usage=usage)
-
-        return message, usage
-
-    def completion_with_parser(
-        self,
-        messages: list[Message],
-        parser: Callable[[str | None], T],
-        model: str = DEFAULT_CLAUDE_MODEL,
-        system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
-        response_format: dict | None = None,
-    ) -> tuple[T, Message, Usage]:
-        return super().completion_with_parser(
-            messages, parser, model, system_prompt, tools, response_format
-        )
-
-    def json_completion(
-        self,
-        messages: list[Message],
-        model: str = DEFAULT_CLAUDE_MODEL,
-        system_prompt: str | None = None,
-    ) -> tuple[dict[str, Any] | None, Message, Usage]:
-        return super().json_completion(messages, model, system_prompt)
+        return message
 
 
 @module.provider
