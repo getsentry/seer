@@ -92,3 +92,29 @@ def parse_json_with_keys(json_str: str, valid_keys: list[str]) -> dict[str, Any]
         json_dict[key] = value
 
     return json_dict
+
+
+def extract_json_from_text(string: str) -> dict | None:
+    """
+    If a string has text preceding and/or following a JSON string, as is common with LLM responses, remove it and parse the JSON.
+
+    Args:
+        string: A string containing the JSON data and any preceding/following text.
+
+    Returns:
+        A dictionary of the parsed JSON, or None if it can't be parsed.
+    """
+    try:
+        # Find the indices of the first '{' and the last '}'
+        start_index = string.find("{")
+        end_index = string.rfind("}")
+        if start_index == -1 or end_index == -1:
+            # No JSON found in the input string
+            return None
+
+        # Extract the JSON
+        json_string = string[start_index : end_index + 1]
+        json_object = json.loads(json_string)
+        return json_object, json_string
+    except json.JSONDecodeError:
+        return None

@@ -1,6 +1,6 @@
 import unittest
 
-from seer.automation.agent.utils import parse_json_with_keys
+from seer.automation.agent.utils import extract_json_from_text, parse_json_with_keys
 
 
 class TestParseJsonWithKeys(unittest.TestCase):
@@ -70,3 +70,55 @@ class TestParseJsonWithKeys(unittest.TestCase):
         valid_keys = ["value"]
         expected_output = {"value": "function sayHello() {\n  console.log('Hello\\nWorld');\n}"}
         self.assertEqual(parse_json_with_keys(input_str, valid_keys), expected_output)
+
+
+class TestExtractJsonFromText(unittest.TestCase):
+    def test_valid_json_with_surrounding_text(self):
+        input_string = 'Some text before {"key": "value"} and some text after'
+        expected_json = {"key": "value"}
+        expected_json_string = '{"key": "value"}'
+        result = extract_json_from_text(input_string)
+        self.assertEqual(result, (expected_json, expected_json_string))
+
+    def test_valid_json_with_preceding_text(self):
+        input_string = 'Some text before {"key": "value"}'
+        expected_json = {"key": "value"}
+        expected_json_string = '{"key": "value"}'
+        result = extract_json_from_text(input_string)
+        self.assertEqual(result, (expected_json, expected_json_string))
+
+    def test_valid_json_with_following_text(self):
+        input_string = '{"key": "value"} and some text after'
+        expected_json = {"key": "value"}
+        expected_json_string = '{"key": "value"}'
+        result = extract_json_from_text(input_string)
+        self.assertEqual(result, (expected_json, expected_json_string))
+
+    def test_valid_json_without_surrounding_text(self):
+        input_string = '{"key": "value"}'
+        expected_json = {"key": "value"}
+        expected_json_string = '{"key": "value"}'
+        result = extract_json_from_text(input_string)
+        self.assertEqual(result, (expected_json, expected_json_string))
+
+    def test_nested_json(self):
+        input_string = 'Text before {"outer": {"inner": "value"}} text after'
+        expected_json = {"outer": {"inner": "value"}}
+        expected_json_string = '{"outer": {"inner": "value"}}'
+        result = extract_json_from_text(input_string)
+        self.assertEqual(result, (expected_json, expected_json_string))
+
+    def test_no_json(self):
+        input_string = "This is a string without any JSON"
+        result = extract_json_from_text(input_string)
+        self.assertIsNone(result)
+
+    def test_invalid_json(self):
+        input_string = 'Text before {"key": "value" text after'
+        result = extract_json_from_text(input_string)
+        self.assertIsNone(result)
+
+    def test_empty_string(self):
+        input_string = ""
+        result = extract_json_from_text(input_string)
+        self.assertIsNone(result)

@@ -11,6 +11,7 @@ from langfuse.openai import openai
 
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.utils import extract_json_from_text
 from seer.bootup import module, stub_module
 
 logger = logging.getLogger("autofix")
@@ -57,11 +58,7 @@ class LlmClient(ABC):
             messages,
             model=model,
             system_prompt=system_prompt,
-            parser=lambda x: (
-                (json.loads(x) if x.startswith("{") else json.loads(x[x.find("{") :]))
-                if x
-                else None
-            ),
+            parser=lambda x: extract_json_from_text(x),
             response_format={"type": "json_object"},
         )
 
