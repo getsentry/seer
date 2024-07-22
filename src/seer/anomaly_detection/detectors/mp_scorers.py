@@ -11,16 +11,12 @@ class MPScorer(BaseModel, abc.ABC):
     """
 
     @abc.abstractmethod
-    def score(
-        self, ts: npt.NDArray, mp: npt.NDArray, mp_dist: npt.NDArray, window_size: int
-    ) -> tuple:
+    def score(self, mp: npt.NDArray, mp_dist: npt.NDArray, score_from: int | None) -> tuple:
         return NotImplemented
 
 
 class MPIRQScorer(MPScorer):
-    def score(
-        self, ts: npt.NDArray, mp: npt.NDArray, mp_dist: npt.NDArray, window_size: int
-    ) -> tuple:
+    def score(self, mp: npt.NDArray, mp_dist: npt.NDArray, score_from: int | None) -> tuple:
         """
         Concrete implementation of MPScorer that scores anomalies by computing the distance of the relevant MP distance from the
         mean using inter quartile range. This approach is not swayed by extreme values in MP distances. It also converts the score
@@ -68,9 +64,10 @@ class MPIRQScorer(MPScorer):
         [Q1, Q3] = np.quantile(mp_dist_finite, [0.15, 0.85])
         IQR_L = Q3 - Q1
         threshold_upper = Q3 + (1.5 * IQR_L)
-        scores = [
-            np.nan if np.isnan(val) or np.isinf(val) else val - threshold_upper for val in mp_dist
-        ]
+        scores = []
+        flags = []
+        for val in mp_dist[0 if score_from is None else score_from :]:
+            scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold_upper)
+            flags.append(to_flag(val, threshold_lower, threshold_upper))
 
-        flags = [to_flag(val, threshold_lower, threshold_upper) for val in mp_dist]
         return scores, flags

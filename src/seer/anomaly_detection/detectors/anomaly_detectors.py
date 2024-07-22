@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.normalizers import Normalizer
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
-from seer.anomaly_detection.models import Anomaly, TimeSeriesPoint
+from seer.anomaly_detection.models.internal import MPTimeSeriesAnomalies, TimeSeries
 
 logger = logging.getLogger("anomaly_detection")
 
@@ -35,7 +35,7 @@ class AnomalyDetector(BaseModel, abc.ABC):
     """
 
     @abc.abstractmethod
-    def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
+    def detect(self, timeseries: TimeSeries) -> TimeSeries:
         return NotImplemented
 
 
@@ -53,29 +53,21 @@ class MPBatchAnomalyDetector(AnomalyDetector):
     )
     normalizer: Normalizer = Field(..., description="Normalizer to use for normalizing data")
 
-    def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
+    def detect(self, timeseries: TimeSeries) -> TimeSeries:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
 
         Parameters:
-        timeseries: list[TimeSeriesPoint]
+        timeseries: TimeSeries
             The timeseries
 
         Returns:
-        The timeseries with each point of the timeseries updated with an anomaly scores and a flag
+        The input timeseries with an anomaly scores and a flag added
         """
-        mp, mp_dist, scores, flags, window_size = self._compute_matrix_profile(timeseries)
+        anomalies = self._compute_matrix_profile(timeseries)
+        timeseries.anomalies = anomalies
 
-        self._update_ts(timeseries, scores, flags)
         return timeseries
-
-    def _update_ts(self, timeseries: list[TimeSeriesPoint], scores: npt.NDArray, flags: list):
-        """
-        Update the timeseries with score and flag. This method does an inplace update.
-        """
-        for point, score, flag in zip(timeseries, scores, flags):
-            score = 0.0 if np.isnan(score) or score < 0 else score
-            point.anomaly = Anomaly(anomaly_score=score, anomaly_type=flag)
 
     def _get_mp_dist_from_mp(
         self,
@@ -117,7 +109,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         else:
             return mp_dist.astype(float)
 
-    def _compute_matrix_profile(self, timeseries: list[TimeSeriesPoint]) -> tuple:
+    def _compute_matrix_profile(self, timeseries: TimeSeries) -> MPTimeSeriesAnomalies:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
 
@@ -129,7 +121,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             A tuple with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
 
         """
-        ts_values = np.array([np.float64(point.value) for point in timeseries])
+        ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
         window_size = self.ws_selector.optimal_window_size(ts_values)
         logger.debug(f"window_size: {window_size}")
         if window_size <= 0:
@@ -147,8 +139,48 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             mp, ts_values, self.config.normalize_mp, pad_to_ts_len=True
         )
 
-        scores, flags = self.scorer.score(ts_values, mp, mp_dist, window_size)
-        return mp, mp_dist, scores, flags, window_size
+        scores, flags = self.scorer.score(mp, mp_dist, 0)
+
+        return MPTimeSeriesAnomalies(
+            flags=flags,
+            scores=scores,
+            matrix_profile=mp,
+            window_size=window_size,
+        )
+
+
+# class MPStreamAnomalyDetector(AnomalyDetector):
+#     config: MPConfig = Field(..., description="Configuration for the algorithm")
+#     scorer: MPScorer = Field(
+#         ..., description="The scorer to use for evaluating if a point is an anomaly or not"
+#     )
+#     normalizer: Normalizer = Field(..., description="Normalizer to use for normalizing data")
+#     base_timeseries: list[TimeSeriesPoint] = Field(..., description="Baseline timeseries to which streaming points will be added.")
+#     base_mp: npt.NDArray = Field(..., description="Matrix profile of the baseline timeseries.")
+#     window_size: int = Field(..., description="Window size to use for stream computation")
+
+#     def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
+#         # Initialize stumpi
+#         stream = stumpy.stumpi(ts, m=self.window_size, mp=self.base_mp, normalize=False, egress=False)
+#         for point in timeseries:
+#             # Evaluate MP for cur value
+#             stream.update(point.value)
+#             cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
+#             cur_mp_dist = stream.P_[-1]
+#             self.base_timeseries.append(point)
+#             self.base_mp = np.append(self.base_mp, cur_mp, axis=1)
+
+#             scores, flags = self.scorer.score([point.value], [cur_mp], [cur_mp_dist], self.window_size)
+
+#         # For each input point, add to stumpi and score it
+#         return [
+#             TimeSeriesPoint(
+#                 timestamp=point.timestamp,
+#                 value=point.value,
+#                 anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
+#             )
+#             for point in timeseries or []
+#         ]
 
 
 class DummyAnomalyDetector(AnomalyDetector):
@@ -156,12 +188,13 @@ class DummyAnomalyDetector(AnomalyDetector):
     Dummy anomaly detector used during dev work
     """
 
-    def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
-        return [
-            TimeSeriesPoint(
-                timestamp=point.timestamp,
-                value=point.value,
-                anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
-            )
-            for point in timeseries or []
-        ]
+    def detect(self, timeseries: TimeSeries) -> TimeSeries:
+        anomalies = MPTimeSeriesAnomalies(
+            flags=np.array(["none"] * len(timeseries.values)),
+            scores=np.array([np.float64(0.5)] * len(timeseries.values)),
+            matrix_profile=np.array([]),
+            window_size=0,
+        )
+        return TimeSeries(
+            timestamps=timeseries.timestamps, values=timeseries.values, anomalies=anomalies
+        )

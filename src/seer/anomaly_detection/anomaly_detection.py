@@ -10,8 +10,10 @@ from seer.anomaly_detection.detectors import (
     MPIRQScorer,
     SuSSWindowSizeSelector,
 )
-from seer.anomaly_detection.models import (
+from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
+from seer.anomaly_detection.models.external import (
     Alert,
+    Anomaly,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
@@ -26,18 +28,16 @@ class AnomalyDetection(BaseModel):
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
         if isinstance(request.context, Alert):
             logger.info(f"Detecting anomalies for alert ID: {request.context.id}")
-            ts = (
-                [
+            ts = []
+            if request.context.cur_window:
+                ts.append(
                     TimeSeriesPoint(
                         timestamp=request.context.cur_window.timestamp,
                         value=request.context.cur_window.value,
                     )
-                ]
-                if request.context.cur_window
-                else []
-            )
+                )
             dummy_detector = DummyAnomalyDetector()
-            updated = dummy_detector.detect(ts)
+            ts_updated = dummy_detector.detect(convert_external_ts_to_internal(ts))
         else:
             logger.info(
                 f"Detecting anomalies for time series with {len(request.context)} datapoints"
@@ -49,9 +49,16 @@ class AnomalyDetection(BaseModel):
                 ws_selector=SuSSWindowSizeSelector(),
                 normalizer=MinMaxNormalizer(),
             )
-            updated = batch_detector.detect(ts)
+            ts_updated = batch_detector.detect(convert_external_ts_to_internal(ts))
 
-        return DetectAnomaliesResponse(timeseries=updated)
+        for i, point in enumerate(ts):
+            if ts_updated.anomalies is None:
+                raise Exception("No anomalies available for the timeseries.")
+            point.anomaly = Anomaly(
+                anomaly_score=ts_updated.anomalies.scores[i],
+                anomaly_type=ts_updated.anomalies.flags[i],
+            )
+        return DetectAnomaliesResponse(timeseries=ts)
 
     def store_data(self, request: StoreDataRequest) -> StoreDataResponse:
         logger.info(f"Storing data for request: {request}")
