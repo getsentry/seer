@@ -60,8 +60,6 @@ class AppConfig(BaseModel):
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
 
-    CELERY_BROKER_URL: str = ""
-
     @property
     def is_production(self) -> bool:
         return not self.DEV

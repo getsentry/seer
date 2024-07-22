@@ -44,7 +44,7 @@ def bootup(
 
 @inject
 def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = injected) -> None:
-    def before_send(event: Event, hint: dict) -> Event:
+    def before_send(event: Event, hint: dict) -> Event | None:
         if "exc_info" in hint:
             exc_type, exc_value, tb = hint["exc_info"]
             # exclude errors intended for an AI agent, not Sentry

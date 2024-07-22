@@ -5,6 +5,7 @@ from celery import Celery
 
 from seer.bootup import module
 from seer.configuration import AppConfig
+from seer.dependency_injection import injected
 
 
 class CeleryConfig(dict[str, Any]):
@@ -17,7 +18,7 @@ class CeleryQueues(StrEnum):
 
 
 @module.provider
-def celery_config(app_config: AppConfig) -> CeleryConfig:
+def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
     return CeleryConfig(
         broker_url=app_config.CELERY_BROKER_URL,
         task_serializer="json",
@@ -40,7 +41,7 @@ def celery_config(app_config: AppConfig) -> CeleryConfig:
 
 
 @module.provider
-def create_celery_app(config: CeleryConfig) -> Celery:
+def create_celery_app(config: CeleryConfig = injected) -> Celery:
     app = Celery("seer")
     for k, v in config.items():
         setattr(app.conf, k, v)
