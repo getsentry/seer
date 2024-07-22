@@ -153,7 +153,7 @@ class Module:
             self.enable()
             return c(*args, **kwargs)
 
-        return wrapper  # type: ignorsrc/seer/configuration.py:63e
+        return wrapper  # type: ignore
 
     def __enter__(self):
         return self.enable()
