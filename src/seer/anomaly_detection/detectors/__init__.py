@@ -9,6 +9,7 @@ AnomalyDetector = anomaly_detectors.AnomalyDetector
 DummyAnomalyDetector = anomaly_detectors.DummyAnomalyDetector
 MPConfig = anomaly_detectors.MPConfig
 MPBatchAnomalyDetector = anomaly_detectors.MPBatchAnomalyDetector
+MPStreamAnomalyDetector = anomaly_detectors.MPStreamAnomalyDetector
 
 WindowSizeSelector = window_size_selectors.WindowSizeSelector
 SuSSWindowSizeSelector = window_size_selectors.SuSSWindowSizeSelector

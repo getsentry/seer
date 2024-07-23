@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import numpy.typing as npt
 import stumpy  # type: ignore # mypy throws "missing library stubs"
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.normalizers import Normalizer
@@ -139,7 +139,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             mp, ts_values, self.config.normalize_mp, pad_to_ts_len=True
         )
 
-        scores, flags = self.scorer.score(mp, mp_dist, 0)
+        scores, flags = self.scorer.score(mp, mp_dist)
 
         return MPTimeSeriesAnomalies(
             flags=flags,
@@ -149,38 +149,83 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         )
 
 
-# class MPStreamAnomalyDetector(AnomalyDetector):
-#     config: MPConfig = Field(..., description="Configuration for the algorithm")
-#     scorer: MPScorer = Field(
-#         ..., description="The scorer to use for evaluating if a point is an anomaly or not"
-#     )
-#     normalizer: Normalizer = Field(..., description="Normalizer to use for normalizing data")
-#     base_timeseries: list[TimeSeriesPoint] = Field(..., description="Baseline timeseries to which streaming points will be added.")
-#     base_mp: npt.NDArray = Field(..., description="Matrix profile of the baseline timeseries.")
-#     window_size: int = Field(..., description="Window size to use for stream computation")
+class MPStreamAnomalyDetector(AnomalyDetector):
+    config: MPConfig = Field(..., description="Configuration for the algorithm")
+    scorer: MPScorer = Field(
+        ..., description="The scorer to use for evaluating if a point is an anomaly or not"
+    )
+    normalizer: Normalizer = Field(..., description="Normalizer to use for normalizing data")
+    base_timestamps: npt.NDArray[np.float64] = Field(
+        ..., description="Baseline timeseries to which streaming points will be added."
+    )
+    base_values: npt.NDArray[np.float64] = Field(
+        ..., description="Baseline timeseries to which streaming points will be added."
+    )
+    base_mp: npt.NDArray = Field(..., description="Matrix profile of the baseline timeseries.")
+    window_size: int = Field(..., description="Window size to use for stream computation")
 
-#     def detect(self, timeseries: list[TimeSeriesPoint]) -> list[TimeSeriesPoint]:
-#         # Initialize stumpi
-#         stream = stumpy.stumpi(ts, m=self.window_size, mp=self.base_mp, normalize=False, egress=False)
-#         for point in timeseries:
-#             # Evaluate MP for cur value
-#             stream.update(point.value)
-#             cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
-#             cur_mp_dist = stream.P_[-1]
-#             self.base_timeseries.append(point)
-#             self.base_mp = np.append(self.base_mp, cur_mp, axis=1)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
-#             scores, flags = self.scorer.score([point.value], [cur_mp], [cur_mp_dist], self.window_size)
+    def detect(self, timeseries: TimeSeries) -> TimeSeries:
+        # Initialize stumpi
+        stream = stumpy.stumpi(
+            self.base_timestamps,
+            m=self.window_size,
+            mp=self.base_mp,
+            normalize=False,
+            egress=False,
+        )
 
-#         # For each input point, add to stumpi and score it
-#         return [
-#             TimeSeriesPoint(
-#                 timestamp=point.timestamp,
-#                 value=point.value,
-#                 anomaly=Anomaly(anomaly_type="none", anomaly_score=0.5),
-#             )
-#             for point in timeseries or []
-#         ]
+        # ts_train = stream.T_
+        # cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
+        # mp = np.vstack([mp[1:] if egress else mp, cur_mp])
+
+        # # Score it
+        # cur_scores, cur_flags = stream_score(ts_train, mp, np.array([stream.P_[-1]]), window_size)
+        # scores.extend(cur_scores)
+        # flags.extend(cur_flags)
+
+        scores = []
+        flags = []
+        for i, cur_val in enumerate(timeseries.values):
+
+            # Evaluate MP for cur value
+            # stream.update(value)
+            # cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
+            # cur_scores, cur_flags = self.scorer.stream_score(self.base_values, self.base_mp, np.array([stream.P_[-1]]))
+            # self.base_mp = np.vstack([self.base_mp, cur_mp])
+            # self.base_values = stream.T_
+            # # np.append(self.base_values, value)
+            # np.append(self.base_timestamps, timeseries.timestamps[i])
+            # scores.extend(cur_scores)
+            # flags.extend(cur_flags)
+            # Evaluate MP for cur value
+
+            stream.update(cur_val)
+
+            # Get the updated ts and mp
+            self.base_values = stream.T_
+            cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
+            self.base_mp = np.vstack([self.base_mp, cur_mp])
+            # if i < 5:
+            #     print(f'i:{i}; cur_val: {cur_val}; cur_mp: {cur_mp}')
+
+            # Score it
+            cur_scores, cur_flags = self.scorer.stream_score(
+                self.base_values, self.base_mp, np.array([stream.P_[-1]])
+            )
+            scores.extend(cur_scores)
+            flags.extend(cur_flags)
+
+            timeseries.anomalies = MPTimeSeriesAnomalies(
+                flags=flags,
+                scores=scores,
+                matrix_profile=self.base_mp,
+                window_size=self.window_size,
+            )
+        return timeseries
 
 
 class DummyAnomalyDetector(AnomalyDetector):
