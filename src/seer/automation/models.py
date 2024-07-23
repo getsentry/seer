@@ -144,15 +144,19 @@ class Stacktrace(BaseModel):
         """
         patterns = [
             (commonregex.email, "REDACTED_EMAIL"),
+            (
+                re.compile(
+                    r"((?:(?<![\d-])(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s])\d{3}[-.\s]\d{4}(?![\d-]))|(?:(?<![\d-])(?:(?:\(\+?\d{2}\))|(?:\+?\d{2}))\s\d{2}\s\d{3}\s\d{4}(?![\d-])))"
+                ),
+                "REDACTED_PHONE_NUMBER",
+            ),
             (commonregex.phones_with_exts, "REDACTED_PHONE_NUMBER"),
             (commonregex.credit_card, "REDACTED_CREDIT_CARD"),
             (commonregex.street_address, "REDACTED_STREET_ADDRESS"),
             (commonregex.po_box, "REDACTED_PO_BOX"),
-            (commonregex.zip_code, "REDACTED_ZIP_CODE"),
             (commonregex.ssn, "REDACTED_SSN"),
             (commonregex.price, "REDACTED_PRICE"),
             (commonregex.ip, "REDACTED_IP"),
-            (commonregex.ipv6, "REDACTED_IPv6"),
         ]
         for pattern in patterns:
             pattern, replacement = pattern
