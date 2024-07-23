@@ -33,6 +33,7 @@ from johen.generators.annotations import AnnotationProcessingContext
 
 _A = TypeVar("_A")
 _C = TypeVar("_C", bound=Callable[[], Any])
+_CK = TypeVar("_CK", bound=Callable)
 _T = TypeVar("_T", bound=type)
 
 
@@ -145,6 +146,14 @@ class Module:
         injector = Injector(self, _cur.injector)
         _cur.injector = injector
         return injector
+
+    def entrypoint(self, c: _CK) -> _CK:
+        @functools.wraps(c)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            self.enable()
+            return c(*args, **kwargs)
+
+        return wrapper  # type: ignore
 
     def __enter__(self):
         return self.enable()

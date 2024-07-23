@@ -7,6 +7,8 @@ from typing import Any, Callable, Literal, TypeVar
 import sentry_sdk
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 from seer.grouping.grouping import GroupingLookup
 from seer.severity.severity_inference import SeverityInference
 
@@ -65,7 +67,7 @@ def models_loading_status() -> LoadingResult:
     return _loading_result
 
 
-def start_loading(load_async: bool):
+def start_loading() -> threading.Thread:
     global _loading_result
 
     with _loading_lock:
@@ -89,9 +91,7 @@ def start_loading(load_async: bool):
 
     thread = threading.Thread(target=load)
     thread.start()
-
-    if not load_async:
-        thread.join(timeout=5)
+    return thread
 
 
 def reset_loading_state(state: LoadingResult = "pending"):
@@ -117,3 +117,14 @@ def dummy_deferred(c: Callable):
         yield
     finally:
         _deferred = old
+
+
+@inject
+def initialize_models(start_model_loading: bool, config: AppConfig = injected):
+    if start_model_loading:
+        start_loading()
+    torch_num_threads = config.TORCH_NUM_THREADS
+    if torch_num_threads:
+        import torch
+
+        torch.set_num_threads(torch_num_threads)

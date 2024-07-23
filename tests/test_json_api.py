@@ -1,11 +1,11 @@
 import os
 
 import pytest
-from flask import Flask
+from flask import Blueprint, Flask
 from johen import change_watcher
 from pydantic import BaseModel
 
-from seer.json_api import json_api, register_json_api_views, view_functions
+from seer.json_api import json_api
 
 
 class DummyRequest(BaseModel):
@@ -17,31 +17,18 @@ class DummyResponse(BaseModel):
     blah: str
 
 
-@pytest.fixture(autouse=True)
-def reset_view_functions():
-    old_view_functions = [*view_functions]
-    view_functions.clear()
-
-    try:
-        yield
-    finally:
-        view_functions.clear()
-        view_functions.extend(old_view_functions)
-
-
 def test_json_api_decorator():
     app = Flask(__name__)
+    blueprint = Blueprint("blueprint", __name__)
     test_client = app.test_client()
 
-    @json_api("/v0/some/url")
+    @json_api(blueprint, "/v0/some/url")
     def my_endpoint(request: DummyRequest) -> DummyResponse:
         assert request.thing == "thing"
         assert request.b == 12
         return DummyResponse(blah="do it")
 
-    register_json_api_views(app)
-    assert view_functions[0][2] == DummyRequest
-    assert view_functions[0][3] == DummyResponse
+    app.register_blueprint(blueprint)
 
     response = test_client.post("/v0/some/url", json={"thing": "thing", "b": 12})
     assert response.status_code == 200
@@ -52,14 +39,14 @@ def test_json_api_decorator():
 
 def test_json_api_signature_not_strict():
     app = Flask(__name__)
+    blueprint = Blueprint("blueprint", __name__)
     test_client = app.test_client()
 
-    @json_api("/v0/some/url")
+    @json_api(blueprint, "/v0/some/url")
     def my_endpoint(request: DummyRequest) -> DummyResponse:
         return DummyResponse(blah="do it")
 
-    register_json_api_views(app)
-
+    app.register_blueprint(blueprint)
     headers = {}
     payload = {"thing": "thing", "b": 12}
     status_code_watcher = change_watcher(
@@ -83,13 +70,14 @@ def test_json_api_signature_not_strict():
 @pytest.mark.skip(reason="Waiting to validate configuration in production")
 def test_json_api_signature_strict_mode():
     app = Flask(__name__)
+    blueprint = Blueprint("blueprint", __name__)
     test_client = app.test_client()
 
-    @json_api("/v0/some/url")
+    @json_api(blueprint, "/v0/some/url")
     def my_endpoint(request: DummyRequest) -> DummyResponse:
         return DummyResponse(blah="do it")
 
-    register_json_api_views(app)
+    app.register_blueprint(blueprint)
 
     headers = {}
     payload = {"thing": "thing", "b": 12}

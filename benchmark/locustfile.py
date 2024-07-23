@@ -2,23 +2,16 @@ import random
 
 from locust import HttpUser, task
 
+from seer.inference_models import grouping_lookup
+
 
 #  pip install locust and see https://docs.locust.io/en/stable/quickstart.html
 class SeerBenchmarkUser(HttpUser):
     @task
     def similarity_embedding(self):
         real_looking_stacktrace = generate_stacktrace(10)
-        self.client.post(
-            "/v0/issues/similarity-embedding-benchmark",
-            json={
-                "project_id": 1,
-                "hash": "abc",
-                "stacktrace": real_looking_stacktrace,
-                "message": "message",
-                "k": 1,
-                "threshold": 0.01,
-            },
-        )
+        embedding = grouping_lookup().encode_text(real_looking_stacktrace).astype("float32")
+        embedding.tolist()
 
     @task
     def bulk_request(self):
