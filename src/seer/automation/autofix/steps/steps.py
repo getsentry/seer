@@ -96,7 +96,7 @@ class AutofixPipelineStep(PipelineStep):
             cur.signals.append(signal)
 
     def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()
+        self.context.event_manager.on_error(str(exception))
 
     def _get_codebase_metadata(self, repo_external_id: str) -> dict[str, Any]:
         codebase = self.context.codebases.get(repo_external_id)
@@ -155,4 +155,4 @@ class AutofixParallelizedChainStep(AutofixPipelineStep, ParallelizedChainStep):
         return ParallelizedChainStepRequest.model_validate(data)
 
     def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()
+        self.context.event_manager.on_error(str(exception))
