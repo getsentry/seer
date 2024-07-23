@@ -310,8 +310,7 @@ class GroupingLookup:
                             index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
                         )
                     )
-
-            session.commit()
+                    session.commit()
 
         return groups_with_neighbor
 
