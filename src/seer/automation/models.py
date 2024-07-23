@@ -1,8 +1,10 @@
 import json
+import re
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
 
+import commonregex
 import sentry_sdk
 from johen.examples import Examples
 from johen.generators import specialized
@@ -131,7 +133,31 @@ class Stacktrace(BaseModel):
                 else ""
             )
             stack_str += "------\n"
+
+        stack_str = self._scrub_pii(stack_str)
         return stack_str
+
+    def _scrub_pii(self, text: str) -> str:
+        """
+        Remove any personally identifiable identification from the given text.
+        Not perfect, and is US/English-centric. Sometimes unintended strings get caught in the regex, too, so be careful.
+        """
+        patterns = [
+            (commonregex.email, "REDACTED_EMAIL"),
+            (commonregex.phones_with_exts, "REDACTED_PHONE_NUMBER"),
+            (commonregex.credit_card, "REDACTED_CREDIT_CARD"),
+            (commonregex.street_address, "REDACTED_STREET_ADDRESS"),
+            (commonregex.po_box, "REDACTED_PO_BOX"),
+            (commonregex.zip_code, "REDACTED_ZIP_CODE"),
+            (commonregex.ssn, "REDACTED_SSN"),
+            (commonregex.price, "REDACTED_PRICE"),
+            (commonregex.ip, "REDACTED_IP"),
+            (commonregex.ipv6, "REDACTED_IPv6"),
+        ]
+        for pattern in patterns:
+            pattern, replacement = pattern
+            text = re.sub(pattern, replacement, text)
+        return text
 
 
 class SentryStacktrace(TypedDict):

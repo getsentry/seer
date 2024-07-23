@@ -5,6 +5,7 @@
 certifi==2023.7.22
 charset-normalizer==2.0.12
 click==8.1.7
+commonregex @ git+https://github.com/madisonmay/CommonRegex.git@2425abdb79c8992b8b655c27e1fb195cc54457ab
 contourpy==1.1.0
 convertdate==2.4.0
 cycler==0.11.0
