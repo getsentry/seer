@@ -133,7 +133,7 @@ dmypy.json
 # intellij temporary docker file
 .Dockerfile.swp
 
-models
+/models
 
 # Mac specific
 .DS_Store
