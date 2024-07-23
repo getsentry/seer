@@ -144,7 +144,7 @@ class Stacktrace(BaseModel):
         checks = [
             (
                 re.compile(
-                    r"([a-z0-9!#$%&'*+/=?^_`{|}~-]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)",
+                    r"([a-z0-9!#$%&'*+\/=?^_`{|.}~-]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)",
                     re.IGNORECASE,
                 ),
                 "REDACTED_EMAIL",
@@ -163,7 +163,7 @@ class Stacktrace(BaseModel):
                 "REDACTED_PHONE_NUMBER",
             ),
             (
-                re.compile(r"((?:(?:\d{4}[- ]?){3}\d{4}|\d{15,16}))(?![\d])"),
+                re.compile("((?:(?:\\d{4}[- ]?){3}\\d{4}|\\d{15,16}))(?![\\d])"),
                 "REDACTED_CREDIT_CARD",
             ),
             (
@@ -176,7 +176,7 @@ class Stacktrace(BaseModel):
             (re.compile(r"P\.? ?O\.? Box \d+", re.IGNORECASE), "REDACTED_PO_BOX"),
             (
                 re.compile(
-                    r"(?!000|666|333)0*(?:[0-6][0-9][0-9]|[0-7][0-6][0-9]|[0-7][0-7][0-2])[- ](?!00)[0-9]{2}[- ](?!0000)[0-9]{4}",
+                    r"(?!000|666|333)0*(?:[0-6][0-9][0-9]|[0-7][0-6][0-9]|[0-7][0-7][0-2])[- ](?!00)[0-9]{2}[- ](?!0000)[0-9]{4}"
                 ),
                 "REDACTED_SSN",
             ),
