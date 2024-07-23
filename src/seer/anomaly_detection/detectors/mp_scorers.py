@@ -85,12 +85,7 @@ class MPIRQScorer(MPScorer):
                 return "anomaly_low"
             return "anomaly_high"
 
-        if len(mp_dist[~np.isfinite(mp_dist)]) > 0:
-            # TODO: Add sentry logging and metric here
-            logging.warn(
-                f"Ignoring {len(mp_dist[~np.isfinite(mp_dist)])} out of {len(mp_dist)} matrix profile distances that are infinite."
-            )
-
+        # Stumpy returns inf for the first timeseries[0:window_size - 2] entries. We just need to ignore those before scoring.
         mp_full_dist_finite = mp_full_dist[np.isfinite(mp_full_dist)]
 
         [Q1, Q3] = np.quantile(mp_full_dist_finite, [0.25, 0.75])

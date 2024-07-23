@@ -171,7 +171,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     def detect(self, timeseries: TimeSeries) -> TimeSeries:
         # Initialize stumpi
         stream = stumpy.stumpi(
-            self.base_timestamps,
+            self.base_values,
             m=self.window_size,
             mp=self.base_mp,
             normalize=False,
@@ -190,27 +190,12 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         scores = []
         flags = []
         for i, cur_val in enumerate(timeseries.values):
-
-            # Evaluate MP for cur value
-            # stream.update(value)
-            # cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
-            # cur_scores, cur_flags = self.scorer.stream_score(self.base_values, self.base_mp, np.array([stream.P_[-1]]))
-            # self.base_mp = np.vstack([self.base_mp, cur_mp])
-            # self.base_values = stream.T_
-            # # np.append(self.base_values, value)
-            # np.append(self.base_timestamps, timeseries.timestamps[i])
-            # scores.extend(cur_scores)
-            # flags.extend(cur_flags)
-            # Evaluate MP for cur value
-
             stream.update(cur_val)
 
             # Get the updated ts and mp
             self.base_values = stream.T_
             cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
             self.base_mp = np.vstack([self.base_mp, cur_mp])
-            # if i < 5:
-            #     print(f'i:{i}; cur_val: {cur_val}; cur_mp: {cur_mp}')
 
             # Score it
             cur_scores, cur_flags = self.scorer.stream_score(
