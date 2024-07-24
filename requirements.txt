@@ -102,5 +102,5 @@ chromadb==0.4.14
 google-cloud-storage==2.16.0
 google-cloud-aiplatform==1.59.0
 anthropic[vertex]==0.31.1
-langfuse @ git+https://github.com/jennmueng/langfuse-python.git@8e42a433e203ad39360339448b6c67b200661f66
+langfuse @ git+https://github.com/jennmueng/langfuse-python.git@0643fdd4a7511eba31b522362cfc929b20b37d3b
 watchdog

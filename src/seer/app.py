@@ -16,6 +16,7 @@ from seer.anomaly_detection.anomaly_detection import (
 )
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
+    AutofixEvaluationRequest,
     AutofixPrIdRequest,
     AutofixRequest,
     AutofixStateRequest,
@@ -28,6 +29,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
+    run_autofix_evaluation,
     run_autofix_execution,
     run_autofix_root_cause,
 )
@@ -48,7 +50,8 @@ from seer.automation.codebase.tasks import (
 )
 from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup, module
-from seer.dependency_injection import inject, injected
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected, resolve
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
@@ -224,6 +227,17 @@ def get_autofix_state_from_pr_endpoint(data: AutofixPrIdRequest) -> AutofixState
             state=cur_state.model_dump(mode="json"),
         )
     return AutofixStateResponse(group_id=None, run_id=None, state=None)
+
+
+@json_api(blueprint, "/v1/automation/autofix/evaluations/start")
+def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
+    config = resolve(AppConfig)
+    if not config.DEV:
+        raise RuntimeError("The evaluation endpoint is only available in development mode")
+
+    run_autofix_evaluation(data.dataset_name, data.run_name, is_test=data.test)
+
+    return AutofixEndpointResponse(started=True, run_id=-1)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
