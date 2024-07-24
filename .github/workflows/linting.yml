@@ -49,7 +49,7 @@ jobs:
       - name: Get auth token
         id: token
         if: ${{ steps.pre-commit_results.outcome == 'failure' }}
-        uses: getsentry/action-github-app-token@v3.0.0
+        uses: getsentry/action-github-app-token@v2.0.0
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
@@ -60,4 +60,4 @@ jobs:
         uses: getsentry/action-github-commit@31f6706ca1a7b9ad6d22c1b07bf3a92eabb05632
         with:
           github-token: ${{ steps.token.outputs.token }}
-          message: ':hammer_and_wrench: apply pre-commit fixes'
+          message: ":hammer_and_wrench: apply pre-commit fixes"
