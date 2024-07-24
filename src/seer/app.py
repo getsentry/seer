@@ -8,7 +8,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from celery_app.config import CeleryQueues
-from seer.anomaly_detection.anomaly_detection import (
+from seer.anomaly_detection.models.external import (
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
