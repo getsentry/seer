@@ -1,5 +1,5 @@
 import logging
-from typing import cast
+from typing import Literal, cast
 
 import sentry_sdk
 from langfuse import Langfuse
@@ -249,7 +249,12 @@ def run_autofix_evaluation(
 
 @celery_app.task()
 def run_autofix_evaluation_on_item(
-    *, item_id: str, run_name: str, run_type: str, item_index: int, item_count: int
+    *,
+    item_id: str,
+    run_name: str,
+    run_type: Literal["full", "root_cause"],
+    item_index: int,
+    item_count: int,
 ):
     langfuse = Langfuse()
 
