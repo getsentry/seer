@@ -143,7 +143,7 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
 
 
 @observe(name="Score fix")
-def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str) -> float:
+def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, model: str) -> float:
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
 
@@ -181,7 +181,7 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str) ->
         predicted_diff=predicted_diff,
     )
     response, usage = GptClient().completion(
-        messages=[Message(role="user", content=prompt)], model="gpt-4o-2024-05-13"
+        messages=[Message(role="user", content=prompt)], model=model
     )
     if not response.content:
         return 0
@@ -205,7 +205,7 @@ RootCauseScoreResult = TypedDict(
 
 @observe(name="Score root cause single it")
 def score_root_cause_single_it(
-    dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem]
+    dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], model: str
 ) -> list[float] | None:
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
@@ -248,7 +248,7 @@ def score_root_cause_single_it(
         predicted_solutions=solutions_str,
     )
     response, usage = GptClient().completion(
-        model="gpt-4o-2024-05-13", messages=[Message(role="user", content=prompt)]
+        model=model, messages=[Message(role="user", content=prompt)]
     )
     if not response.content:
         return None
@@ -263,9 +263,11 @@ def score_root_cause_single_it(
 
 
 @observe(name="Score one")
-def score_one(dataset_item: DatasetItemClient, predicted_diff_str: str, n_panel=3) -> float:
+def score_one(
+    dataset_item: DatasetItemClient, predicted_diff_str: str, n_panel: int, model: str
+) -> float:
     return round(
-        sum([score_fix_single_it(dataset_item, predicted_diff_str) for _ in range(n_panel)])
+        sum([score_fix_single_it(dataset_item, predicted_diff_str, model) for _ in range(n_panel)])
         / n_panel,
         2,
     )
@@ -273,12 +275,12 @@ def score_one(dataset_item: DatasetItemClient, predicted_diff_str: str, n_panel=
 
 @observe(name="Score root cause")
 def score_root_causes(
-    dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], n_panel=3
+    dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], n_panel: int, model: str
 ) -> RootCauseScoreResult:
     all_results: list[list[float]] = []
     i = 0
     while i < n_panel:
-        result = score_root_cause_single_it(dataset_item, causes)
+        result = score_root_cause_single_it(dataset_item, causes, model)
         if result is None or len(result) != len(causes):
             continue
         else:
@@ -298,3 +300,7 @@ def score_root_causes(
         "position_score": position_score,
         "mean_score": mean_score,
     }
+
+
+def make_score_name(model: str, n_panel: int, name: str) -> str:
+    return f"{name}_{model}_{n_panel}x_panel"

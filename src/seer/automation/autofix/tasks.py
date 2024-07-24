@@ -10,6 +10,7 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.evaluations import (
     RootCauseScoreResult,
+    make_score_name,
     score_one,
     score_root_causes,
     sync_run_evaluation_on_item,
@@ -258,6 +259,9 @@ def run_autofix_evaluation_on_item(
         f"Starting autofix evaluation for item {item_id}, number {item_index}/{item_count}, with run name '{run_name}'."
     )
 
+    scoring_n_panel = 5
+    scoring_model = "gpt-4o-2024-05-13"
+
     with dataset_item.observe(run_name=run_name) as trace_id:
         if run_type == "root_cause":
             causes: list[RootCauseAnalysisItem] | None = None
@@ -268,33 +272,47 @@ def run_autofix_evaluation_on_item(
 
             if causes:
                 root_cause_score: RootCauseScoreResult = score_root_causes(
-                    dataset_item, causes, n_panel=5, langfuse_session_id=trace_id
+                    dataset_item,
+                    causes,
+                    n_panel=scoring_n_panel,
+                    model=scoring_model,
+                    langfuse_session_id=trace_id,
                 )
 
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_error_weighted_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
                     value=root_cause_score.get("highest_score"),
                 )
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_highest_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="highest_score"
+                    ),
                     value=root_cause_score.get("highest_score"),
                 )
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_positioning_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="positioning_score"
+                    ),
                     value=root_cause_score.get("position_score"),
                 )
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_mean_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="mean_score"
+                    ),
                     value=root_cause_score.get("mean_score"),
                 )
             else:
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_error_weighted_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
                     value=0,
                 )
         else:
@@ -305,21 +323,33 @@ def run_autofix_evaluation_on_item(
                 logger.error(f"Error running evaluation: {e}")
 
             if diff:
-                score = score_one(dataset_item, diff, n_panel=5, langfuse_session_id=trace_id)
+                score = score_one(
+                    dataset_item,
+                    diff,
+                    n_panel=scoring_n_panel,
+                    model=scoring_model,
+                    langfuse_session_id=trace_id,
+                )
 
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_error_weighted_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
                     value=score,
                 )
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="score"
+                    ),
                     value=score,
                 )
             else:
                 langfuse.score(
                     trace_id=trace_id,
-                    name="gpt4o_n5_error_weighted_score",
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
                     value=0,
                 )
