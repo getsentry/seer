@@ -360,6 +360,7 @@ class RepoDefinition(BaseModel):
     owner: str
     name: str
     external_id: Annotated[str, Examples(specialized.ascii_words)]
+    base_commit_sha: Optional[str] = None
 
     @property
     def full_name(self):

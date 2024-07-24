@@ -1,7 +1,6 @@
-import os
-import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from github import UnknownObjectException
 from pydantic import ValidationError
 
@@ -9,28 +8,130 @@ from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
 
 
-class TestRepoClient(unittest.TestCase):
-    @patch("seer.automation.codebase.repo_client.Github")
-    @patch("seer.automation.codebase.repo_client.get_github_app_auth_and_installation")
-    def test_repo_client_accepts_github_provider(self, mock_get_github_auth, mock_github):
-        os.environ["GITHUB_APP_ID"] = "1337"
-        # Mocking Github class and get_github_auth function to simulate GitHub API responses and authentication
-        mock_github_instance = mock_github.return_value
-        mock_github_instance.get_repo.return_value.default_branch = "main"
+@pytest.fixture
+def mock_github():
+    with patch("seer.automation.codebase.repo_client.Github") as mock:
+        mock_instance = mock.return_value
+        mock_instance.get_repo.return_value.default_branch = "main"
+        mock_instance.get_repo.return_value.get_branch.return_value.commit.sha = "default_sha"
+        yield mock_instance
+
+
+@pytest.fixture
+def mock_get_github_auth():
+    with patch("seer.automation.codebase.repo_client.get_github_app_auth_and_installation") as mock:
+        yield mock
+
+
+@pytest.fixture
+def repo_definition():
+    return RepoDefinition(
+        provider="github",
+        owner="getsentry",
+        name="seer",
+        external_id="123",
+        base_commit_sha="test_sha",
+    )
+
+
+@pytest.fixture
+def repo_client(mock_github, mock_get_github_auth, repo_definition):
+    return RepoClient.from_repo_definition(repo_definition, "read")
+
+
+class TestRepoClient:
+
+    def test_repo_client_initialization(self, repo_client):
+        assert repo_client.provider == "github"
+        assert repo_client.repo_owner == "getsentry"
+        assert repo_client.repo_name == "seer"
+        assert repo_client.repo_external_id == "123"
+        assert repo_client.base_commit_sha == "test_sha"
+
+    def test_repo_client_initialization_without_base_commit_sha(
+        self, mock_github, mock_get_github_auth
+    ):
+        repo_def_without_sha = RepoDefinition(
+            provider="github", owner="getsentry", name="seer", external_id="123"
+        )
+        client = RepoClient.from_repo_definition(repo_def_without_sha, "read")
+        assert client.base_commit_sha == "default_sha"
+
+    def test_repo_client_accepts_github_provider(self, mock_github, mock_get_github_auth):
         client = RepoClient.from_repo_definition(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
             "read",
         )
-        self.assertEqual(client.provider, "github")
+        assert client.provider == "github"
 
     def test_repo_definition_rejects_unsupported_provider(self):
-        with self.assertRaises(ValidationError):
+        with pytest.raises(ValidationError):
             RepoDefinition(
                 provider="unsupported_provider",
                 owner="getsentry",
                 name="seer",
                 external_id="123",
             )
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    @patch("seer.automation.codebase.repo_client.tarfile.open")
+    def test_load_repo_to_tmp_dir(self, mock_tarfile, mock_requests, repo_client, tmp_path):
+        mock_requests.return_value.status_code = 200
+        mock_requests.return_value.content = b"test_content"
+
+        with patch(
+            "seer.automation.codebase.repo_client.tempfile.mkdtemp", return_value=str(tmp_path)
+        ):
+            tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+
+        assert tmp_dir == str(tmp_path)
+        assert tmp_repo_dir == str(tmp_path / "repo")
+        mock_requests.assert_called_once()
+        mock_tarfile.assert_called_once()
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_file_content(self, mock_requests, repo_client, mock_github):
+        mock_content = MagicMock()
+        mock_content.decoded_content = b"test content"
+        mock_github.get_repo.return_value.get_contents.return_value = mock_content
+
+        content = repo_client.get_file_content("test_file.py")
+
+        assert content == "test content"
+        mock_github.get_repo.return_value.get_contents.assert_called_with(
+            "test_file.py", ref="test_sha"
+        )
+
+    def test_get_valid_file_paths(self, repo_client, mock_github):
+        mock_tree = MagicMock()
+        mock_tree.tree = [MagicMock(path="file1.py"), MagicMock(path="file2.py")]
+        mock_tree.raw_data = {"truncated": False}
+        mock_github.get_repo.return_value.get_git_tree.return_value = mock_tree
+
+        file_paths = repo_client.get_valid_file_paths()
+
+        assert file_paths == {"file1.py", "file2.py"}
+        mock_github.get_repo.return_value.get_git_tree.assert_called_with(
+            "test_sha", recursive=True
+        )
+
+    def test_get_index_file_set(self, repo_client, mock_github):
+        mock_tree = MagicMock()
+        mock_tree.tree = [
+            MagicMock(path="file1.py", type="blob", size=1000, mode="100644"),
+            MagicMock(path="file2.py", type="blob", size=1000, mode="100644"),
+            MagicMock(path="large_file.py", type="blob", size=3 * 1024 * 1024, mode="100644"),
+            MagicMock(path="dir", type="tree"),
+        ]
+        mock_tree.raw_data = {"truncated": False}
+        mock_github.get_repo.return_value.get_git_tree.return_value = mock_tree
+
+        file_set = repo_client.get_index_file_set()
+
+        assert file_set == {"file1.py", "file2.py"}
+        mock_github.get_repo.return_value.get_git_tree.assert_called_with(
+            sha="test_sha", recursive=True
+        )
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -40,7 +141,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_write_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertFalse(result)
+        assert result is False
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -61,7 +162,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_write_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertTrue(result)
+        assert result is True
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -82,7 +183,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_write_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertFalse(result)
+        assert result is False
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -95,7 +196,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_write_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertFalse(result)
+        assert result is False
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -105,7 +206,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_read_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertFalse(result)
+        assert result is False
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -124,7 +225,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_read_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertTrue(result)
+        assert result is True
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -143,7 +244,7 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_read_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertFalse(result)
+        assert result is False
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -156,10 +257,10 @@ class TestRepoClient(unittest.TestCase):
         result = RepoClient.check_repo_read_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
-        self.assertFalse(result)
+        assert result is False
 
 
-class TestRepoClientIndexFileSet(unittest.TestCase):
+class TestRepoClientIndexFileSet:
     @patch("seer.automation.codebase.repo_client.Github")
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",

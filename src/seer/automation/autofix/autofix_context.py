@@ -89,7 +89,6 @@ class AutofixContext(PipelineContext):
                     request.organization_id,
                     request.project_id,
                     repo,
-                    request.base_commit_sha,
                     None,
                     state=state,
                     state_manager_class=AutofixCodebaseStateManager,

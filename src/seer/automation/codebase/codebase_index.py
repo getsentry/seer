@@ -90,25 +90,23 @@ class CodebaseIndex:
         organization: int,
         project: int,
         repo: RepoDefinition,
-        sha: str | None,
         tracking_branch: str | None,
         state: State,
         state_manager_class: Type[CodebaseStateManager],
         embedding_model: SentenceTransformer,
     ):
-        logger.debug(f"Loading workspace for {repo.full_name} ({sha or tracking_branch})")
+        logger.debug(f"Loading workspace for {repo.full_name} ({tracking_branch})")
         workspace = CodebaseNamespaceManager.load_workspace_for_repo_definition(
             organization=organization,
             project=project,
             repo=repo,
-            sha=sha,
             tracking_branch=tracking_branch,
         )
 
         logger.debug(
-            f"Loaded workspace for {repo.full_name} ({sha or tracking_branch})"
+            f"Loaded workspace for {repo.full_name} ({tracking_branch})"
             if workspace
-            else f"Failed to load workspace for {organization}/{project}/{repo.external_id} (repo: {repo.full_name} {sha or tracking_branch})"
+            else f"Failed to load workspace for {organization}/{project}/{repo.external_id} (repo: {repo.full_name} {tracking_branch})"
         )
 
         if workspace:

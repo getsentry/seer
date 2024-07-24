@@ -1,6 +1,5 @@
 import datetime
 import enum
-import hashlib
 from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
@@ -224,9 +223,6 @@ class AutofixRequest(BaseModel):
     repos: list[RepoDefinition]
     issue: IssueDetails
     invoking_user: Optional[AutofixUserDetails] = None
-    base_commit_sha: Optional[
-        Annotated[str, Examples(hashlib.sha1(s).hexdigest() for s in specialized.byte_strings)]
-    ] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
