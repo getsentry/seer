@@ -34,7 +34,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             RootCauseAnalysisPrompts.format_default_msg(
                 event=request.event_details,
                 instruction=request.instruction,
-            )
+            ),
+            context=self.context,
         )
 
         with self.context.state.update() as cur:

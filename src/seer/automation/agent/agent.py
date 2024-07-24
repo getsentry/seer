@@ -14,6 +14,8 @@ from seer.automation.agent.client import (
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
+from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.utils import extract_text_inside_tags
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -66,6 +68,21 @@ class LlmAgent(ABC):
 
         self.memory.append(message)
 
+        # log thoughts to the user
+        if message.content and self.context:
+            text_before_tag = message.content.split("<")[0]
+            thoughts_inside_tags = extract_text_inside_tags(
+                message.content, "thoughts", strip_newlines=False
+            )
+            text = ""
+            if thoughts_inside_tags:
+                text = thoughts_inside_tags
+            elif text_before_tag:
+                text = text_before_tag
+            if text:
+                self.context.event_manager.add_log("Thinking...")
+                self.context.event_manager.add_log(text)
+
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 tool_response = self.call_tool(tool_call)
@@ -98,7 +115,8 @@ class LlmAgent(ABC):
         # Continue in all other cases
         return True
 
-    def run(self, prompt: str):
+    def run(self, prompt: str, context: Optional[AutofixContext] = None):
+        self.context = context
         self.add_user_message(prompt)
         logger.debug(f"----[{self.name}] Running Agent----")
 

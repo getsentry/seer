@@ -36,7 +36,8 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
                 repo_name=request.repo_name,
                 event=request.event_details,
                 task=request.task,
-            )
+            ),
+            context=self.context,
         )
 
         with self.context.state.update() as cur:
