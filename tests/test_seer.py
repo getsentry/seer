@@ -382,7 +382,7 @@ class TestSeer(unittest.TestCase):
         # Assert that the response is correct
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.get_data(as_text=True))
-        self.assertEqual(response_data, {"started": True})
+        self.assertEqual(response_data, {"started": True, "run_id": -1})
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(
@@ -404,7 +404,7 @@ class TestSeer(unittest.TestCase):
         # Assert that the response is correct
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.get_data(as_text=True))
-        self.assertEqual(response_data, {"started": True})
+        self.assertEqual(response_data, {"started": True, "run_id": -1})
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(
@@ -567,6 +567,7 @@ def test_detected_celery_jobs():
         "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
         "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
         "seer.automation.autofix.steps.update_index_step.update_index_task",
+        "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
         "seer.automation.codebase.tasks.index_namespace",
         "seer.automation.codebase.tasks.update_codebase_index",
     ]
