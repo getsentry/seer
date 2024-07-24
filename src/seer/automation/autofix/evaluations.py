@@ -251,7 +251,7 @@ def score_root_cause_single_it(
         model=model, messages=[Message(role="user", content=prompt)]
     )
     if not response.content:
-        return None
+        raise ValueError("No response content")
 
     scores: list[float] = []
     for i in range(len(causes_xml)):
