@@ -57,7 +57,7 @@ jobs:
       - name: Apply any pre-commit fixed files
         if: ${{ steps.pre-commit_results.outcome == 'failure' }}
         # note: this runs "always" or else it's skipped when pre-commit fails
-        uses: getsentry/action-github-commit@v2.1.0
+        uses: getsentry/action-github-commit@v2.0.0
         with:
           github-token: ${{ steps.token.outputs.token }}
           message: ':hammer_and_wrench: apply pre-commit fixes'
