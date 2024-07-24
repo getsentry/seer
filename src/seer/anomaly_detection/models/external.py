@@ -26,7 +26,7 @@ class TimeSeriesPoint(BaseModel):
     anomaly: Optional[Anomaly] = None
 
 
-class ADConfig(BaseModel):
+class AnomalyDetectionConfig(BaseModel):
     time_period: TimePeriods = Field(
         ...,
         description="Aggregation window used in the time period, in minutes",
@@ -47,7 +47,7 @@ class ADConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
-class Alert(BaseModel):
+class AlertInSeer(BaseModel):
     id: int
     cur_window: Optional[TimeSeriesPoint] = Field(
         None, description="Timestamp and the measured value for current time window."
@@ -57,8 +57,8 @@ class Alert(BaseModel):
 class DetectAnomaliesRequest(BaseModel):
     organization_id: int
     project_id: int
-    config: ADConfig
-    context: Alert | List[TimeSeriesPoint] = Field(
+    config: AnomalyDetectionConfig
+    context: AlertInSeer | List[TimeSeriesPoint] = Field(
         ...,
         description="Context can be an alert identified by its id or a raw time series. If alert is provided then the system will pull the related timeseries from store else it will use the provided timeseries.",
     )
@@ -71,8 +71,8 @@ class DetectAnomaliesResponse(BaseModel):
 class StoreDataRequest(BaseModel):
     organization_id: int
     project_id: int
-    alert: Alert
-    config: ADConfig
+    alert: AlertInSeer
+    config: AnomalyDetectionConfig
     timeseries: List[TimeSeriesPoint]
 
 

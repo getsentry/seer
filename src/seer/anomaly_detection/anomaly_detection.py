@@ -12,7 +12,7 @@ from seer.anomaly_detection.detectors import (
 )
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
-    Alert,
+    AlertInSeer,
     Anomaly,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
@@ -26,7 +26,7 @@ logger = logging.getLogger("anomaly_detection")
 
 class AnomalyDetection(BaseModel):
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-        if isinstance(request.context, Alert):
+        if isinstance(request.context, AlertInSeer):
             logger.info(f"Detecting anomalies for alert ID: {request.context.id}")
             ts = []
             if request.context.cur_window:
