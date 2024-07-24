@@ -40,7 +40,8 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
                 event=request.event_details,
                 task_str=task_str,
                 instruction=request.instruction,
-            )
+            ),
+            context=self.context,
         )
 
         with self.context.state.update() as cur:
