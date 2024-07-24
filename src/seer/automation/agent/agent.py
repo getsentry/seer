@@ -61,7 +61,7 @@ class LlmAgent(ABC):
             tools=(self.tools if len(self.tools) > 0 else None),
         )
 
-    def run_iteration(self):
+    def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
         message, usage = self.get_completion()
@@ -69,7 +69,7 @@ class LlmAgent(ABC):
         self.memory.append(message)
 
         # log thoughts to the user
-        if message.content and self.context:
+        if message.content and context:
             text_before_tag = message.content.split("<")[0]
             thoughts_inside_tags = extract_text_inside_tags(
                 message.content, "thoughts", strip_newlines=False
@@ -80,8 +80,8 @@ class LlmAgent(ABC):
             elif text_before_tag:
                 text = text_before_tag
             if text:
-                self.context.event_manager.add_log("Thinking...")
-                self.context.event_manager.add_log(text)
+                context.event_manager.add_log("Thinking...")
+                context.event_manager.add_log(text)
 
         if message.tool_calls:
             for tool_call in message.tool_calls:
@@ -116,12 +116,11 @@ class LlmAgent(ABC):
         return True
 
     def run(self, prompt: str, context: Optional[AutofixContext] = None):
-        self.context = context
         self.add_user_message(prompt)
         logger.debug(f"----[{self.name}] Running Agent----")
 
         while self.should_continue():
-            self.run_iteration()
+            self.run_iteration(context=context)
 
         if self.iterations == self.config.max_iterations:
             raise MaxIterationsReachedException(
