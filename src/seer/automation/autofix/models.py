@@ -191,6 +191,7 @@ class AutofixPrIdRequest(BaseModel):
 class AutofixEvaluationRequest(BaseModel):
     dataset_name: str
     run_name: str
+    run_type: Literal["full", "root_cause"] = "full"
     test: bool = False
 
 
