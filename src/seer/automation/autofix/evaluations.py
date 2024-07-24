@@ -247,8 +247,8 @@ def score_root_cause_single_it(
         expected_output=expected_output.to_prompt_str(),
         predicted_solutions=solutions_str,
     )
-    response, usage = GptClient(model="gpt-4o-2024-05-13").completion(
-        messages=[Message(role="user", content=prompt)]
+    response, usage = GptClient().completion(
+        model="gpt-4o-2024-05-13", messages=[Message(role="user", content=prompt)]
     )
     if not response.content:
         return None
