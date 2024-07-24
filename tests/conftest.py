@@ -19,6 +19,7 @@ def test_module() -> Module:
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
     os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].replace("db", "test-db")
+    os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
 
 
 @pytest.fixture(autouse=True)
