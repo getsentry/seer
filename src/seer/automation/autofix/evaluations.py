@@ -140,7 +140,7 @@ def sync_run_execution(item: DatasetItemClient):
     changes = changes_step.changes
 
     if not changes:
-        return None
+        raise ValueError("No changes found, expected changes")
 
     diffs: list[str] = []
     for change in changes:
