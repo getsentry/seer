@@ -335,7 +335,13 @@ def run_autofix_evaluation_on_item(
                 logger.error(f"Error running evaluation: {e}")
 
             if diff:
-                score = score_one(dataset_item, diff, n_panel=5, langfuse_session_id=trace_id)
+                score = score_one(
+                    dataset_item,
+                    diff,
+                    n_panel=scoring_n_panel,
+                    model=scoring_model,
+                    langfuse_session_id=trace_id,
+                )
 
                 langfuse.score(
                     trace_id=trace_id,
