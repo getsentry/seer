@@ -284,6 +284,12 @@ def run_autofix_evaluation_on_item(
                     langfuse_session_id=trace_id,
                 )
 
+                # Will output 4 scores for a run item:
+                # - `"highest_score"`: The score for the highest scored cause out of all the returned root causes.
+                # - `"positioning_score"`: Positioning of the highest scored cause, if the highest scored cause is first, this score is `1.0`. If it is last, it will be `0.0`. The score is calculated proportional to the number of causes provided.
+                # - `"mean_score"`: The mean score of all the root causes.
+                # - `"error_weighted_score"` This score is the same as the highest score but scored 0 if there is an error or no root cause returned. This is used to weight the score in the aggregated run result.
+
                 langfuse.score(
                     trace_id=trace_id,
                     name=make_score_name(
