@@ -3,7 +3,7 @@ from typing import Any
 import sentry_sdk
 from langfuse.decorators import langfuse_context
 
-from celery_app.app import app as celery_app
+from celery_app.app import celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
     DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS,
@@ -99,7 +99,7 @@ class AutofixPipelineStep(PipelineStep):
             cur.signals.append(signal)
 
     def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()
+        self.context.event_manager.on_error(str(exception))
 
     def _get_codebase_metadata(self, repo_external_id: str) -> dict[str, Any]:
         codebase = self.context.codebases.get(repo_external_id)
@@ -158,4 +158,4 @@ class AutofixParallelizedChainStep(AutofixPipelineStep, ParallelizedChainStep):
         return ParallelizedChainStepRequest.model_validate(data)
 
     def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error()
+        self.context.event_manager.on_error(str(exception))

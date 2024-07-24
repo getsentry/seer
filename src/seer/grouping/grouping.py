@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 from seer.db import DbGroupingRecord, Session
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
-logger = logging.getLogger("grouping")
+logger = logging.getLogger(__name__)
 
 NN_GROUPING_DISTANCE = 0.01
 NN_SIMILARITY_DISTANCE = 0.05
@@ -46,10 +46,6 @@ class GroupingResponse(BaseModel):
 
 class SimilarityResponse(BaseModel):
     responses: List[GroupingResponse]
-
-
-class SimilarityBenchmarkResponse(BaseModel):
-    embedding: List[float]
 
 
 class CreateGroupingRecordData(BaseModel):
@@ -310,8 +306,7 @@ class GroupingLookup:
                             index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
                         )
                     )
-
-            session.commit()
+                    session.commit()
 
         return groups_with_neighbor
 

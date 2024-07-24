@@ -1,3 +1,3 @@
-import seer.automation.autofix.tasks  # noqa: F401
-import seer.automation.codebase.tasks  # noqa: F401
-from celery_app.app import app as celery_app  # noqa: F401
+# All tasks are part of the import dependency tree of starting from seer endpoints.
+# See the test_seer:test_detected_celery_jobs test
+import seer.app  # noqa: F401

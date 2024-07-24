@@ -3,7 +3,7 @@ from typing import Any
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from celery_app.app import app as celery_app
+from celery_app.app import celery_app
 from seer.automation.autofix.components.change_describer import (
     ChangeDescriptionComponent,
     ChangeDescriptionRequest,

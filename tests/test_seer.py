@@ -1,14 +1,19 @@
 import json
+import time
 import unittest
 from unittest import mock
 
 import pytest
 from johen import generate
+from johen.pytest import parametrize
+from sqlalchemy import text
 
+from celery_app.app import celery_app
 from seer.app import app
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.state import LocalMemoryState
-from seer.db import DbGroupingRecord, Session
+from seer.db import DbGroupingRecord, ProcessRequest, Session
+from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 
 
 @pytest.fixture(autouse=True)
@@ -363,6 +368,66 @@ class TestSeer(unittest.TestCase):
             )
 
 
+@parametrize(count=1)
+def test_prepared_statements_disabled(
+    requests: tuple[
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+        ProcessRequest,
+    ]
+):
+    with Session() as session:
+        # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
+        for i, request in enumerate(requests):
+            request.name += str(i)
+            session.add(request)
+            session.flush()
+        assert session.execute(text("select count(*) from pg_prepared_statements")).scalar() == 0
+
+
+def test_async_loading():
+    reset_loading_state()
+    response = app.test_client().get("/health/live")
+    assert response.status_code == 200
+    response = app.test_client().get("/health/ready")
+    assert response.status_code == 503
+
+    with dummy_deferred(lambda: time.sleep(1)):
+        start_loading()
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 200
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 503
+
+        time.sleep(2)
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 200
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 200
+
+    def failed_loader():
+        time.sleep(1)
+        raise Exception("Dummy loading failure!")
+
+    reset_loading_state()
+
+    with dummy_deferred(failed_loader):
+        start_loading()
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 200
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 503
+
+        time.sleep(2)
+        response = app.test_client().get("/health/live")
+        assert response.status_code == 500
+        response = app.test_client().get("/health/ready")
+        assert response.status_code == 500
+
+
 class TestGetAutofixState:
     @mock.patch("seer.app.get_autofix_state")
     def test_get_autofix_state_endpoint_with_group_id(self, mock_get_autofix_state):
@@ -445,3 +510,19 @@ class TestGetAutofixState:
         assert response.status_code == 200
         data = json.loads(response.get_data(as_text=True))
         assert data == {"group_id": None, "run_id": None, "state": None}
+
+
+def test_detected_celery_jobs():
+    assert sorted(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == [
+        "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
+        "seer.automation.autofix.steps.create_index_step.create_index_task",
+        "seer.automation.autofix.steps.create_missing_indexes_chain.create_missing_indexes_task",
+        "seer.automation.autofix.steps.execution_step.autofix_execution_task",
+        "seer.automation.autofix.steps.planning_chain.autofix_planning_task",
+        "seer.automation.autofix.steps.root_cause_step.root_cause_task",
+        "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
+        "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
+        "seer.automation.autofix.steps.update_index_step.update_index_task",
+        "seer.automation.codebase.tasks.index_namespace",
+        "seer.automation.codebase.tasks.update_codebase_index",
+    ]

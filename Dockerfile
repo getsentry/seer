@@ -34,10 +34,9 @@ RUN apt-get update && \
 COPY models/ models/
 
 # Copy setup files, requirements, and scripts
-COPY setup.py requirements.txt celeryworker.sh asyncworker.sh gunicorn.sh ./
+COPY setup.py requirements.txt celeryworker.sh gunicorn.sh ./
 
-# Make celeryworker.sh and asyncworker.sh executable
-RUN chmod +x ./celeryworker.sh ./asyncworker.sh ./gunicorn.sh
+RUN chmod +x ./celeryworker.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
@@ -54,7 +53,7 @@ COPY supervisord.conf /etc/supervisord.conf
 # this skips annoying rebuilds where requirements would technically be met anyways.
 RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
 
-ENV FLASK_APP=src.seer.app
+ENV FLASK_APP=src.seer.app:start_app()
 # Set in cloudbuild.yaml for production images
 ARG SEER_VERSION_SHA
 ENV SEER_VERSION_SHA ${SEER_VERSION_SHA}

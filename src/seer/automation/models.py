@@ -1,4 +1,5 @@
 import json
+import re
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
@@ -131,7 +132,70 @@ class Stacktrace(BaseModel):
                 else ""
             )
             stack_str += "------\n"
+
+        stack_str = self._scrub_pii(stack_str)
         return stack_str
+
+    def _scrub_pii(self, text: str) -> str:
+        """
+        Remove any personally identifiable identification from the given text.
+        Not perfect, and is US/English-centric. Sometimes unintended strings get caught in the regex, too, so be careful.
+        """
+        checks = [
+            (
+                re.compile(
+                    r"([a-z0-9!#$%&'*+\/=?^_`{|.}~-]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)",
+                    re.IGNORECASE,
+                ),
+                "REDACTED_EMAIL",
+            ),
+            (
+                re.compile(
+                    r"((?:(?<![\d-])(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s])\d{3}[-.\s]\d{4}(?![\d-]))|(?:(?<![\d-])(?:(?:\(\+?\d{2}\))|(?:\+?\d{2}))\s\d{2}\s\d{3}\s\d{4}(?![\d-])))"
+                ),
+                "REDACTED_PHONE_NUMBER",
+            ),
+            (
+                re.compile(
+                    r"((?:(?:\+?1\s*(?:[.-]\s*)?)?(?:\(\s*(?:[2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9])\s*\)|(?:[2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9]))\s*(?:[.-]\s*)?)?(?:[2-9]1[02-9]|[2-9][02-9]1|[2-9][02-9]{2})\s*(?:[.-]\s*)?(?:[0-9]{4})(?:\s*(?:#|x\.?|ext\.?|extension)\s*(?:\d+)?))",
+                    re.IGNORECASE,
+                ),
+                "REDACTED_PHONE_NUMBER",
+            ),
+            (
+                re.compile("((?:(?:\\d{4}[- ]?){3}\\d{4}|\\d{15,16}))(?![\\d])"),
+                "REDACTED_CREDIT_CARD",
+            ),
+            (
+                re.compile(
+                    r"\d{1,4} [\w\s]{1,20}(?:street|st|avenue|ave|road|rd|highway|hwy|square|sq|trail|trl|drive|dr|court|ct|park|parkway|pkwy|circle|cir|boulevard|blvd)\W?(?=\s|$)",
+                    re.IGNORECASE,
+                ),
+                "REDACTED_STREET_ADDRESS",
+            ),
+            (re.compile(r"P\.? ?O\.? Box \d+", re.IGNORECASE), "REDACTED_PO_BOX"),
+            (
+                re.compile(
+                    r"(?!000|666|333)0*(?:[0-6][0-9][0-9]|[0-7][0-6][0-9]|[0-7][0-7][0-2])[- ](?!00)[0-9]{2}[- ](?!0000)[0-9]{4}"
+                ),
+                "REDACTED_SSN",
+            ),
+            (
+                re.compile(r"[$]\s?[+-]?[0-9]{1,3}(?:(?:,?[0-9]{3}))*(?:\.[0-9]{1,2})?"),
+                "REDACTED_PRICE",
+            ),
+            (
+                re.compile(
+                    r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+                    re.IGNORECASE,
+                ),
+                "REDACTED_IP",
+            ),
+        ]
+        for check in checks:
+            pattern, replacement = check
+            text = re.sub(pattern, replacement, text)
+        return text
 
 
 class SentryStacktrace(TypedDict):

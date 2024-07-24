@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 import sqlalchemy
+from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
@@ -26,6 +27,24 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
+
+
+@inject
+def initialize_database(
+    config: AppConfig = injected,
+    app: Flask = injected,
+):
+    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
+    db.init_app(app)
+    migrate.init_app(app, db)
+
+    with app.app_context():
+        Session.configure(bind=db.engine)
 
 
 class Base(DeclarativeBase):
