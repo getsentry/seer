@@ -4,7 +4,7 @@ from typing import cast
 import sentry_sdk
 from langfuse import Langfuse
 
-from celery_app.app import app as celery_app
+from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.evaluations import score_one, sync_run_evaluation_on_item
