@@ -37,4 +37,7 @@ def handle_task_prerun(**kwargs):
 @signals.task_failure.connect
 def handle_task_failure(**kwargs):
 
+
+
+
     logger.error("Task failed", exc_info=kwargs["exception"])
