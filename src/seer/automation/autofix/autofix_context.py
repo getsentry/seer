@@ -221,9 +221,7 @@ class AutofixContext(PipelineContext):
         # we will remove that one if we go with the no-embedding approach
         repo_client = self.get_repo_client(repo_name)
 
-        file_contents = repo_client.get_file_content(
-            path, sha=self.state.get().request.base_commit_sha
-        )
+        file_contents = repo_client.get_file_content(path, sha=self.request.base_commit_sha)
 
         if not ignore_local_changes:
             cur_state = self.state.get()
