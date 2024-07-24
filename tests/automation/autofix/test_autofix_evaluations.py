@@ -373,7 +373,7 @@ class TestScoreRootCauseSingleIt:
             ),
         ]
 
-        result = score_root_cause_single_it(mock_dataset_item, causes)
+        result = score_root_cause_single_it(mock_dataset_item, causes, model="test_model")
 
         assert result == [0.8, 0.6]
         mock_gpt_instance.completion.assert_called_once()
@@ -394,7 +394,7 @@ class TestScoreRootCauseSingleIt:
             )
         ]
 
-        result = score_root_cause_single_it(mock_dataset_item, causes)
+        result = score_root_cause_single_it(mock_dataset_item, causes, model="test_model")
 
         assert result == [0]
 
@@ -412,7 +412,7 @@ class TestScoreRootCauseSingleIt:
         ]
 
         with pytest.raises(ValueError, match="Expected output is missing from dataset item"):
-            score_root_cause_single_it(mock_dataset_item, causes)
+            score_root_cause_single_it(mock_dataset_item, causes, model="test_model")
 
 
 class TestScoreRootCauses:
@@ -441,7 +441,7 @@ class TestScoreRootCauses:
             ),
         ]
 
-        result = score_root_causes(mock_dataset_item, causes, n_panel=3)
+        result = score_root_causes(mock_dataset_item, causes, n_panel=3, model="test_model")
 
         assert result == {"highest_score": 0.8, "position_score": 1.0, "mean_score": 0.7}
         assert mock_score_root_cause_single_it.call_count == 3
@@ -469,7 +469,7 @@ class TestScoreRootCauses:
             ),
         ]
 
-        result = score_root_causes(mock_dataset_item, causes, n_panel=2)
+        result = score_root_causes(mock_dataset_item, causes, n_panel=2, model="test_model")
 
         assert result == {"highest_score": 0.75, "position_score": 1.0, "mean_score": 0.65}
         assert mock_score_root_cause_single_it.call_count == 2
@@ -506,7 +506,7 @@ class TestScoreFixSingleIt:
         mock_gpt_client.return_value = mock_gpt_instance
         mock_gpt_instance.completion.return_value = (Mock(content="<score>0.8</score>"), None)
 
-        result = score_fix_single_it(mock_dataset_item, "predicted diff")
+        result = score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 
         assert result == 0.8
         mock_gpt_instance.completion.assert_called_once()
@@ -517,7 +517,7 @@ class TestScoreFixSingleIt:
         mock_gpt_client.return_value = mock_gpt_instance
         mock_gpt_instance.completion.return_value = (Mock(content="No score provided"), None)
 
-        result = score_fix_single_it(mock_dataset_item, "predicted diff")
+        result = score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 
         assert result == 0
 
@@ -525,7 +525,7 @@ class TestScoreFixSingleIt:
         mock_dataset_item.expected_output = None
 
         with pytest.raises(ValueError, match="Expected output is missing from dataset item"):
-            score_fix_single_it(mock_dataset_item, "predicted diff")
+            score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 
 
 class TestScoreOne:
@@ -537,7 +537,7 @@ class TestScoreOne:
     def test_score_one(self, mock_score_fix_single_it, mock_dataset_item):
         mock_score_fix_single_it.side_effect = [0.7, 0.8, 0.9]
 
-        result = score_one(mock_dataset_item, "predicted diff", n_panel=3)
+        result = score_one(mock_dataset_item, "predicted diff", n_panel=3, model="test_model")
 
         assert result == 0.8
         assert mock_score_fix_single_it.call_count == 3
@@ -546,7 +546,7 @@ class TestScoreOne:
     def test_score_one_custom_n_panel(self, mock_score_fix_single_it, mock_dataset_item):
         mock_score_fix_single_it.side_effect = [0.6, 0.8]
 
-        result = score_one(mock_dataset_item, "predicted diff", n_panel=2)
+        result = score_one(mock_dataset_item, "predicted diff", n_panel=2, model="test_model")
 
         assert result == 0.7
         assert mock_score_fix_single_it.call_count == 2
