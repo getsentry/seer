@@ -24,7 +24,7 @@ def test_module() -> Module:
 def configure_environment():
     os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
 
-    
+
 @pytest.fixture(autouse=True)
 def setup_app(test_module: Module):
     with configuration_test_module, test_module:
