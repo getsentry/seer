@@ -1,5 +1,6 @@
 import difflib
 import logging
+from functools import wraps
 from typing import List, Optional
 
 import numpy as np
@@ -9,6 +10,7 @@ import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.dialects.postgresql import insert
+from torch.cuda import OutOfMemoryError
 
 from seer.db import DbGroupingRecord, Session
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
@@ -112,6 +114,19 @@ def _load_model(model_path: str) -> SentenceTransformer:
     )
 
 
+def handle_out_of_memory(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except OutOfMemoryError:
+            logger.warning("Ran out of memory, clearing cache and retrying once")
+            torch.cuda.empty_cache()
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
 class GroupingLookup:
     model: SentenceTransformer
 
@@ -129,6 +144,7 @@ class GroupingLookup:
         self.encode_text("IndexError: list index out of range")  # Ensure warm start
 
     @sentry_sdk.tracing.trace
+    @handle_out_of_memory
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
         Encodes the stacktrace using the sentence transformer model.
@@ -139,6 +155,7 @@ class GroupingLookup:
         return self.model.encode(stacktrace)
 
     @sentry_sdk.tracing.trace
+    @handle_out_of_memory
     def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1) -> np.ndarray:
         """
         Encodes multiple stacktraces in batches using the sentence transformer model.
