@@ -203,7 +203,7 @@ RootCauseScoreResult = TypedDict(
 )
 
 
-@observe(name="Score root cause single it")
+@observe(name="Score root cause iteration")
 def score_root_cause_single_it(
     dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], model: str
 ) -> list[float] | None:
