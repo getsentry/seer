@@ -30,7 +30,7 @@ def main(context: dict[str, str]) -> int:
     # start colima if it's not already running
     colima.start(reporoot)
 
-    # print("Executing update tasks in Makefile...")
-    # proc.run(("make", "-C", reporoot, "update"), exit=True)
+    print("Executing update tasks in Makefile...")
+    proc.run(("make", "-C", reporoot, "update"), exit=True)
 
     return 0
