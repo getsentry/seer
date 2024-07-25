@@ -80,7 +80,6 @@ class LlmAgent(ABC):
             elif text_before_tag:
                 text = text_before_tag
             if text:
-                context.event_manager.add_log("Thinking...")
                 context.event_manager.add_log(text)
 
         if message.tool_calls:
