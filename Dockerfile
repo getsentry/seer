@@ -11,9 +11,16 @@ ENV PORT=$PORT
 ENV APP_HOME /app
 WORKDIR $APP_HOME
 
-# Install Python and pip
-RUN apt-get update && apt-get install -y software-properties-common && add-apt-repository ppa:deadsnakes/ppa
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3.11 python3-pip python3.11-dev
+# Install libpq-dev for psycopg & git for 'sentry-sdk[flask] @ git://' in requirements.txt
+RUN apt-get update && \
+    apt-get install -y \
+    python3.11 \
+    python3.11-pip \
+    python3.11-dev \
+    supervisor \
+    libpq-dev \
+    git && \
+    rm -rf /var/lib/apt/lists/*
 
 # Make python3.11 the default python version if necessary
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
@@ -23,20 +30,14 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 &
 RUN ln -s /usr/bin/python /usr/local/bin/python && \
     ln -s /usr/bin/python3 /usr/local/bin/python3
 
-# Install libpq-dev for psycopg & git for 'sentry-sdk @ git://' in requirements.txt
-RUN apt-get update && \
-    apt-get install -y supervisor \
-    libpq-dev \
-    git && \
-    rm -rf /var/lib/apt/lists/*
-
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
 
 # Copy setup files, requirements, and scripts
-COPY setup.py requirements.txt celeryworker.sh gunicorn.sh ./
+COPY setup.py requirements.txt celeryworker.sh asyncworker.sh gunicorn.sh ./
 
-RUN chmod +x ./celeryworker.sh ./gunicorn.sh
+# Make celeryworker.sh and asyncworker.sh executable
+RUN chmod +x ./celeryworker.sh ./asyncworker.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
@@ -53,7 +54,7 @@ COPY supervisord.conf /etc/supervisord.conf
 # this skips annoying rebuilds where requirements would technically be met anyways.
 RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
 
-ENV FLASK_APP=src.seer.app:start_app()
+ENV FLASK_APP=src.seer.app
 # Set in cloudbuild.yaml for production images
 ARG SEER_VERSION_SHA
 ENV SEER_VERSION_SHA ${SEER_VERSION_SHA}
