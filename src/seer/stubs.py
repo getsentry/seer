@@ -42,7 +42,7 @@ class DummySentenceTransformer(SentenceTransformer):
             bits.extend([0.0] * (self.embedding_size - len(bits)))
             embeddings_array.append(bits)
 
-        embeddings = np.array(embeddings_array)
+        embeddings: Union[List[Tensor], ndarray, Tensor] = np.array(embeddings_array)
         if convert_to_tensor:
             embeddings = torch.tensor(embeddings)
 
