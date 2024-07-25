@@ -1,7 +1,6 @@
 from typing import Any
 
 import sentry_sdk
-from langfuse.decorators import langfuse_context
 
 from celery_app.app import celery_app
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -75,8 +74,6 @@ class AutofixPipelineStep(PipelineStep):
             langfuse_tags = [
                 f"{key}:{value}" for key, value in tags.items() if value is not None
             ] + repo_tags
-
-            langfuse_context.update_current_trace(metadata=metadata, tags=langfuse_tags)
 
             return {
                 "langfuse_tags": langfuse_tags,
