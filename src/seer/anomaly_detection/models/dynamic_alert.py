@@ -43,10 +43,6 @@ class DynamicAlert(BaseModel):
                         "external_alert_id": self.external_alert_id,
                     },
                 )
-                delete_q = delete(DbDynamicAlertTimeSeries).where(
-                    DbDynamicAlertTimeSeries.external_alert_id == self.external_alert_id
-                )
-                session.execute(delete_q)
                 delete_q = delete(DbDynamicAlert).where(
                     DbDynamicAlert.external_alert_id == self.external_alert_id
                 )
@@ -56,7 +52,6 @@ class DynamicAlert(BaseModel):
             for point in timeseries:
                 new_record.timeseries.append(
                     DbDynamicAlertTimeSeries(
-                        external_alert_id=self.external_alert_id,
                         timestamp=datetime.datetime.fromtimestamp(point.timestamp),
                         value=point.value,
                     )

@@ -315,23 +315,34 @@ class DbDynamicAlert(Base):
     organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    config: Mapped[dict] = mapped_column(JSON, nullable=True)
-    timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship()
+    config: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship(
+        "DbDynamicAlertTimeSeries",
+        back_populates="dynamic_alert",
+        cascade="all, delete",
+        passive_deletes=True,
+    )
 
 
 class DbDynamicAlertTimeSeries(Base):
     __tablename__ = "dynamic_alert_time_series"
     __table_args__ = (
-        Index(
-            "ix_dynamic_alert_time_series_external_alert_id",
-            "external_alert_id",
-        ),
+        UniqueConstraint("dynamic_alert_id", "timestamp"),
+        Index("ix_dynamic_alert_time_series_alert_id_timestamp", "dynamic_alert_id", "timestamp"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     dynamic_alert_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(DbDynamicAlert.id), nullable=False
+        Integer, ForeignKey(DbDynamicAlert.id, ondelete="CASCADE"), nullable=False
     )
-    external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     timestamp: Mapped[datetime.datetime] = mapped_column(TIMESTAMP(timezone=False), nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
-    dynamic_alert = relationship("DbDynamicAlert")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    dynamic_alert = relationship(
+        "DbDynamicAlert",
+        back_populates="timeseries",
+    )
