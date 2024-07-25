@@ -3,7 +3,7 @@ import sys
 from typing import Annotated
 
 import structlog
-from gunicorn.glogging import Logger as GunicornBaseLogger
+from gunicorn.glogging import Logger as GunicornBaseLogger  # type: ignore[import-untyped]
 from structlog import get_logger
 
 from seer.dependency_injection import Labeled, Module, inject, injected

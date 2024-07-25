@@ -39,7 +39,7 @@ def handle_task_prerun(**kwargs):
     )
 
 
-@signals.task_internal_error.connect
+@signals.task_internal_error.connect  # type: ignore For some reason, any celery stubs library does not have this signal when it's actually present...
 def handle_task_internal_error(**kwargs):
     logger.error("Task internal error", exc_info=kwargs["exception"])
 
