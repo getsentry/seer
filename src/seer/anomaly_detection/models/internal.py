@@ -5,6 +5,8 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field
 
+from seer.db import DbDynamicAlert
+
 AnomalyFlags = Literal["none", "anomaly_low", "anomaly_high", "no_data"]
 Sensitivities = Literal["low", "medium", "high"]
 TimePeriods = Literal[15, 30, 60]
@@ -91,3 +93,30 @@ class MPTimeSeries(TimeSeries):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
+
+
+class DynamicAlert(BaseModel):
+    id: int
+    organization_id: int
+    project_id: int
+    external_alert_id: int
+    config: dict
+
+    @classmethod
+    def from_db(cls, db_repo: DbDynamicAlert) -> "DynamicAlert":
+        return cls(
+            id=db_repo.id,
+            organization_id=db_repo.organization_id,
+            project_id=db_repo.project_id,
+            external_alert_id=db_repo.external_alert_id,
+            config=db_repo.config,
+        )
+
+    def to_db_model(self) -> DbDynamicAlert:
+        return DbDynamicAlert(
+            id=self.id,
+            organization_id=self.organization_id,
+            project_id=self.project_id,
+            external_alert_id=self.external_alert_id,
+            config=self.config,
+        )

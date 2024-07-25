@@ -298,3 +298,40 @@ class DbGroupingRecord(Base):
     error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     hash: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class DbDynamicAlert(Base):
+    __tablename__ = "dynamic_alerts"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "project_id"),
+        Index(
+            "ix_dynamic_alert_organization_id_project_id",
+            "organization_id",
+            "project_id",
+        ),
+        UniqueConstraint("external_alert_id"),
+        Index(
+            "ix_dynamic_alert_external_alert_id",
+            "external_alert_id",
+        ),
+    )
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    config: Mapped[dict] = mapped_column(JSON, nullable=True)
+
+
+class DbDynamicAlertTimeSeries(Base):
+    __tablename__ = "dynamic_alert_time_series"
+    __table_args__ = (
+        Index(
+            "ix_dynamic_alert_time_series_external_alert_id",
+            "external_alert_id",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dynamic_alert_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(DbDynamicAlert.id), nullable=False
+    )
+    external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
