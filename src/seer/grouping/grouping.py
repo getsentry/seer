@@ -1,4 +1,5 @@
 import difflib
+import gc
 import logging
 from functools import wraps
 from typing import List, Optional
@@ -121,6 +122,7 @@ def handle_out_of_memory(func):
             return func(*args, **kwargs)
         except OutOfMemoryError:
             logger.warning("Ran out of memory, clearing cache and retrying once")
+            gc.collect()
             torch.cuda.empty_cache()
             return func(*args, **kwargs)
 
