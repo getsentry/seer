@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
-logger = logging.getLogger("anomaly_detection")
+logger = logging.getLogger(__name__)
 
 
 class MPScorer(BaseModel, abc.ABC):

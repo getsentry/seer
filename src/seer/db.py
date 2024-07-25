@@ -1,7 +1,7 @@
 import contextlib
 import datetime
 import json
-from typing import Any
+from typing import Any, List
 
 import sqlalchemy
 from flask import Flask
@@ -11,9 +11,11 @@ from pgvector.sqlalchemy import Vector  # type: ignore
 from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
+    TIMESTAMP,
     BigInteger,
     Connection,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -26,7 +28,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -303,12 +305,6 @@ class DbGroupingRecord(Base):
 class DbDynamicAlert(Base):
     __tablename__ = "dynamic_alerts"
     __table_args__ = (
-        UniqueConstraint("organization_id", "project_id"),
-        Index(
-            "ix_dynamic_alert_organization_id_project_id",
-            "organization_id",
-            "project_id",
-        ),
         UniqueConstraint("external_alert_id"),
         Index(
             "ix_dynamic_alert_external_alert_id",
@@ -320,6 +316,7 @@ class DbDynamicAlert(Base):
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     config: Mapped[dict] = mapped_column(JSON, nullable=True)
+    timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship()
 
 
 class DbDynamicAlertTimeSeries(Base):
@@ -335,3 +332,6 @@ class DbDynamicAlertTimeSeries(Base):
         Integer, ForeignKey(DbDynamicAlert.id), nullable=False
     )
     external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    timestamp: Mapped[datetime.datetime] = mapped_column(TIMESTAMP(timezone=False), nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    dynamic_alert = relationship("DbDynamicAlert")

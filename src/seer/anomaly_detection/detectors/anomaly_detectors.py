@@ -11,7 +11,7 @@ from seer.anomaly_detection.detectors.normalizers import Normalizer
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models.internal import MPTimeSeriesAnomalies, TimeSeries
 
-logger = logging.getLogger("anomaly_detection")
+logger = logging.getLogger(__name__)
 
 
 class MPConfig(BaseModel):
