@@ -53,9 +53,7 @@ class BaseTools:
             client = self.context.get_repo_client(repo_name)
             repo_name = client.repo_name
 
-        self.context.event_manager.add_log(
-            f"Taking a look at the document at `{input}` in `{repo_name}`..."
-        )
+        self.context.event_manager.add_log(f"Looked at `{input}` in `{repo_name}`")
 
         if file_contents:
             return file_contents
@@ -103,7 +101,7 @@ class BaseTools:
             output.append("Files:")
             output.extend(f"  {f}" for f in files)
 
-        self.context.event_manager.add_log(f"Looking through contents of `{path}`...")
+        self.context.event_manager.add_log(f"Looked through contents of `{path}`")
 
         joined = "\n".join(output)
         return f"<entries>\n{joined}\n</entries>"
@@ -143,7 +141,7 @@ class BaseTools:
             start_path=in_proximity_to,
         )
 
-        self.context.event_manager.add_log(f"Searching codebase for `{keyword}`...")
+        self.context.event_manager.add_log(f"Searched codebase for `{keyword}`")
         results = searcher.search(keyword)
 
         cleanup_dir(tmp_dir)
