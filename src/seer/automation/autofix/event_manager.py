@@ -6,14 +6,16 @@ from seer.automation.autofix.components.planner.models import PlanningOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
+    AutofixRootCauseUpdatePayload,
     AutofixStatus,
     ChangesStep,
     CodebaseChange,
+    CustomRootCauseSelection,
     DefaultStep,
     ProgressItem,
     ProgressType,
-    RootCauseSelection,
     RootCauseStep,
+    SuggestedFixRootCauseSelection,
 )
 from seer.automation.state import State
 
@@ -103,10 +105,26 @@ class AutofixEventManager:
             if indexing_step:
                 indexing_step.status = AutofixStatus.COMPLETED
 
-    def set_selected_root_cause(self, selection: RootCauseSelection):
+    def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
+        root_cause_selection: CustomRootCauseSelection | SuggestedFixRootCauseSelection | None = (
+            None
+        )
+        if payload.custom_root_cause:
+            root_cause_selection = CustomRootCauseSelection(
+                custom_root_cause=payload.custom_root_cause,
+            )
+        elif payload.cause_id is not None and payload.fix_id is not None:
+            root_cause_selection = SuggestedFixRootCauseSelection(
+                cause_id=payload.cause_id,
+                fix_id=payload.fix_id,
+            )
+
+        if root_cause_selection is None:
+            raise ValueError("Invalid root cause update payload")
+
         with self.state.update() as cur:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
-            root_cause_step.selection = selection
+            root_cause_step.selection = root_cause_selection
 
             cur.status = AutofixStatus.PROCESSING
 

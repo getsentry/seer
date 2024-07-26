@@ -69,7 +69,9 @@ class AutofixContext(PipelineContext):
         self.codebases = {}
 
         self.sentry_client = sentry_client
-        self.embedding_model = embedding_model or get_embedding_model()
+        self.embedding_model = embedding_model or (
+            get_embedding_model() if not skip_loading_codebase else None
+        )
 
         no_codebase_indexes = skip_loading_codebase or request.options.disable_codebase_indexing
 
@@ -87,7 +89,6 @@ class AutofixContext(PipelineContext):
                     request.organization_id,
                     request.project_id,
                     repo,
-                    request.base_commit_sha,
                     None,
                     state=state,
                     state_manager_class=AutofixCodebaseStateManager,

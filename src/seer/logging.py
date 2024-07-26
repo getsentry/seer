@@ -3,6 +3,7 @@ import sys
 from typing import Annotated
 
 import structlog
+from gunicorn.glogging import Logger as GunicornBaseLogger  # type: ignore[import-untyped]
 from structlog import get_logger
 
 from seer.dependency_injection import Labeled, Module, inject, injected
@@ -75,6 +76,12 @@ class StructLogHandler(logging.StreamHandler):
         except Exception:
             if logging.raiseExceptions:
                 raise
+
+
+class GunicornHealthCheckFilterLogger(GunicornBaseLogger):
+    def access(self, resp, req, environ, request_time):
+        if "/health" not in req.path:
+            super().access(resp, req, environ, request_time)
 
 
 throwaways = frozenset(

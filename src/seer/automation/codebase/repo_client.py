@@ -95,6 +95,7 @@ class RepoClient:
     repo_owner: str
     repo_name: str
     repo_external_id: str
+    base_commit_sha: str
 
     def __init__(
         self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
@@ -126,6 +127,7 @@ class RepoClient:
         self.repo_owner = repo_definition.owner
         self.repo_name = repo_definition.name
         self.repo_external_id = repo_definition.external_id
+        self.base_commit_sha = repo_definition.base_commit_sha or self.get_default_branch_head_sha()
 
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
@@ -188,7 +190,9 @@ class RepoClient:
     def compare(self, base: str, head: str):
         return self.repo.compare(base, head)
 
-    def load_repo_to_tmp_dir(self, sha: str) -> tuple[str, str]:
+    def load_repo_to_tmp_dir(self, sha: str | None = None) -> tuple[str, str]:
+        sha = sha or self.base_commit_sha
+
         # Check if output directory exists, if not create it
         tmp_dir = tempfile.mkdtemp(prefix=f"{self.repo_owner}-{self.repo_name}_{sha}")
         tmp_repo_dir = os.path.join(tmp_dir, "repo")
@@ -293,7 +297,7 @@ class RepoClient:
     def get_file_content(self, path: str, sha: str | None = None) -> str | None:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
-            sha = self.get_default_branch_head_sha()
+            sha = self.base_commit_sha
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
@@ -308,7 +312,7 @@ class RepoClient:
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
         if sha is None:
-            sha = self.get_default_branch_head_sha()
+            sha = self.base_commit_sha
 
         tree = self.repo.get_git_tree(sha, recursive=True)
 
@@ -417,8 +421,11 @@ class RepoClient:
         )
 
     def get_index_file_set(
-        self, sha: str, max_file_size_bytes=2 * 1024 * 1024, skip_empty_files=False
+        self, sha: str | None = None, max_file_size_bytes=2 * 1024 * 1024, skip_empty_files=False
     ) -> set[str]:
+        if sha is None:
+            sha = self.base_commit_sha
+
         tree = self.repo.get_git_tree(sha=sha, recursive=True)
 
         # Recursive tree requests are truncated at 100,000 entries or 7MB as noted @ https://docs.github.com/en/rest/git/trees?apiVersion=2022-11-28#get-a-tree

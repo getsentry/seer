@@ -25,11 +25,13 @@ def test_gpt_client_completion(mock_openai_client):
         choices=[Mock(message=Mock(content="Test response", role="assistant", tool_calls=None))],
         usage=Mock(completion_tokens=10, prompt_tokens=20, total_tokens=30),
     )
-    mock_openai_client.return_value.chat.completions.create.return_value = mock_response
+    mock_openai_client.chat.completions.create.return_value = mock_response
+    client.openai_client = mock_openai_client
 
     messages = [Message(role="user", content="Test message")]
     message, usage = client.completion(messages)
 
+    assert mock_openai_client.chat.completions.create.call_count == 1
     assert message.content == "Test response"
     assert message.role == "assistant"
     assert usage.completion_tokens == 10
@@ -43,11 +45,13 @@ def test_gpt_client_json_completion(mock_openai_client):
         choices=[Mock(message=Mock(content='{"key": "value"}', role="assistant", tool_calls=None))],
         usage=Mock(completion_tokens=10, prompt_tokens=20, total_tokens=30),
     )
-    mock_openai_client.return_value.chat.completions.create.return_value = mock_response
+    mock_openai_client.chat.completions.create.return_value = mock_response
+    client.openai_client = mock_openai_client
 
     messages = [Message(role="user", content="Get me some JSON")]
     result, message, usage = client.json_completion(messages, model="gpt-4")
 
+    assert mock_openai_client.chat.completions.create.call_count == 1
     assert result == {"key": "value"}
     assert message.content == '{"key": "value"}'
     assert usage.total_tokens == 30
@@ -63,11 +67,13 @@ def test_claude_client_completion(mock_anthropic_client):
         model="some-claude-model",
         usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
     )
-    mock_anthropic_client.return_value.messages.create.return_value = mock_response
+    mock_anthropic_client.messages.create.return_value = mock_response
+    client.anthropic_client = mock_anthropic_client
 
     messages = [Message(role="user", content="Hello Claude")]
     message, usage = client.completion(messages)
 
+    assert mock_anthropic_client.messages.create.call_count == 1
     assert message.content == "Claude response"
     assert message.role == "assistant"
     assert usage.completion_tokens == 20
@@ -92,11 +98,13 @@ def test_claude_client_tool_use(mock_anthropic_client):
         role="assistant",
         usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
     )
-    mock_anthropic_client.return_value.messages.create.return_value = mock_response
+    mock_anthropic_client.messages.create.return_value = mock_response
+    client.anthropic_client = mock_anthropic_client
 
     messages = [Message(role="user", content="Use a tool")]
     message, usage = client.completion(messages)
 
+    assert mock_anthropic_client.messages.create.call_count == 1
     assert message.role == "tool_use"
     assert message.tool_calls[0].id == "tool1"
     assert message.tool_calls[0].function == "search"
@@ -113,11 +121,13 @@ def test_claude_client_json_completion(mock_anthropic_client):
         model="some-claude-model",
         usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
     )
-    mock_anthropic_client.return_value.messages.create.return_value = mock_response
+    mock_anthropic_client.messages.create.return_value = mock_response
+    client.anthropic_client = mock_anthropic_client
 
     messages = [Message(role="user", content="Get me some JSON")]
     result, message, usage = client.json_completion(messages, model="claude-3")
 
+    assert mock_anthropic_client.messages.create.call_count == 1
     assert result == {"key": "value"}
     assert message.content == '{"key": "value"}'
     assert usage.total_tokens == 30

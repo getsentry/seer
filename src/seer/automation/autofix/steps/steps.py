@@ -71,12 +71,12 @@ class AutofixPipelineStep(PipelineStep):
                 "invoking_user": invoking_user,
                 "codebases": codebases,
             }
+            langfuse_tags = [
+                f"{key}:{value}" for key, value in tags.items() if value is not None
+            ] + repo_tags
 
             return {
-                "langfuse_tags": [
-                    f"{key}:{value}" for key, value in tags.items() if value is not None
-                ]
-                + repo_tags,
+                "langfuse_tags": langfuse_tags,
                 "langfuse_metadata": metadata,
                 "langfuse_session_id": str(cur.run_id),
                 "langfuse_user_id": f"org:{org_slug}" if org_slug else None,

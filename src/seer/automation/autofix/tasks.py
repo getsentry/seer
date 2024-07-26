@@ -1,10 +1,21 @@
 import logging
-from typing import cast
+from typing import Literal, cast
 
 import sentry_sdk
+from langfuse import Langfuse
 
+from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.evaluations import (
+    RootCauseScoreResult,
+    make_score_name,
+    score_one,
+    score_root_causes,
+    sync_run_evaluation_on_item,
+    sync_run_root_cause,
+)
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -13,9 +24,8 @@ from seer.automation.autofix.models import (
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
-    CustomRootCauseSelection,
-    SuggestedFixRootCauseSelection,
 )
+from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.create_missing_indexes_chain import (
     CreateAnyMissingCodebaseIndexesStepRequest,
@@ -93,38 +103,30 @@ def check_and_mark_if_timed_out(state: ContinuationState):
 
 def run_autofix_root_cause(
     request: AutofixRequest,
-) -> int:
-    state = ContinuationState.new(
-        AutofixContinuation(request=request),
-        group_id=request.issue.id,
-    )
+):
+    state = create_initial_autofix_run(request)
 
-    with state.update() as cur:
-        cur.mark_triggered()
-    cur = state.get()
-
-    event_manager = AutofixEventManager(state)
-    event_manager.send_root_cause_analysis_start()
+    cur_state = state.get()
 
     # Process has no further work.
-    if cur.status in AutofixStatus.terminal():
-        logger.warning(f"Ignoring job, state {cur.status}")
-        return cur.run_id
+    if cur_state.status in AutofixStatus.terminal():
+        logger.warning(f"Ignoring job, state {cur_state.status}")
+        return
 
     if request.options.disable_codebase_indexing:
         RootCauseStep.get_signature(
             RootCauseStepRequest(
-                run_id=cur.run_id,
+                run_id=cur_state.run_id,
             ),
             queue=CeleryQueues.DEFAULT,
         ).apply_async()
     else:
         CreateMissingIndexesStep.get_signature(
             CreateAnyMissingCodebaseIndexesStepRequest(
-                run_id=cur.run_id,
+                run_id=cur_state.run_id,
                 next=RootCauseStep.get_signature(
                     RootCauseStepRequest(
-                        run_id=cur.run_id,
+                        run_id=cur_state.run_id,
                     ),
                     queue=CeleryQueues.DEFAULT,
                 ),
@@ -132,7 +134,7 @@ def run_autofix_root_cause(
             queue=CeleryQueues.DEFAULT,
         ).apply_async()
 
-    return cur.run_id
+    return cur_state.run_id
 
 
 def run_autofix_execution(request: AutofixUpdateRequest):
@@ -149,21 +151,7 @@ def run_autofix_execution(request: AutofixUpdateRequest):
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
 
     try:
-        root_cause: CustomRootCauseSelection | SuggestedFixRootCauseSelection | None = None
-        if payload.custom_root_cause:
-            root_cause = CustomRootCauseSelection(
-                custom_root_cause=payload.custom_root_cause,
-            )
-        elif payload.cause_id is not None and payload.fix_id is not None:
-            root_cause = SuggestedFixRootCauseSelection(
-                cause_id=payload.cause_id,
-                fix_id=payload.fix_id,
-            )
-
-        if root_cause is None:
-            raise ValueError("Invalid root cause update payload")
-
-        event_manager.set_selected_root_cause(root_cause)
+        event_manager.set_selected_root_cause(payload)
         cur = state.get()
 
         # Process has no further work.
@@ -222,3 +210,157 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     )
 
     event_manager.send_pr_creation_complete()
+
+
+def run_autofix_evaluation(
+    dataset_name: str, run_name: str, run_type: str, n_runs_per_item: int = 1, is_test: bool = False
+):
+    langfuse = Langfuse()
+
+    dataset = langfuse.get_dataset(dataset_name)
+    items = dataset.items
+
+    if is_test:
+        items = items[:1]
+
+    logger.info(
+        f"Starting autofix evaluation for dataset {dataset_name} with run name '{run_name}'."
+    )
+    logger.info(f"Number of items: {len(items)}")
+    logger.info(f"Total number of runs: {len(items) * n_runs_per_item}")
+
+    for i, item in enumerate(items):
+        # Note: This will add ALL the dataset item runs into the CPU queue.
+        # As we are not going to be running this in prod yet, it's fine to leave as is.
+        # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
+        for _ in range(n_runs_per_item):
+            run_autofix_evaluation_on_item.apply_async(
+                (),
+                dict(
+                    item_id=item.id,
+                    run_name=run_name,
+                    run_type=run_type,
+                    item_index=i,
+                    item_count=len(items),
+                ),
+                queue=CeleryQueues.DEFAULT,
+            )
+
+
+@celery_app.task()
+def run_autofix_evaluation_on_item(
+    *,
+    item_id: str,
+    run_name: str,
+    run_type: Literal["full", "root_cause"],
+    item_index: int,
+    item_count: int,
+):
+    langfuse = Langfuse()
+
+    dataset_item = langfuse.get_dataset_item(item_id)
+
+    logger.info(
+        f"Starting autofix evaluation for item {item_id}, number {item_index}/{item_count}, with run name '{run_name}'."
+    )
+
+    scoring_n_panel = 5
+    scoring_model = "gpt-4o-2024-05-13"
+
+    with dataset_item.observe(run_name=run_name) as trace_id:
+        if run_type == "root_cause":
+            causes: list[RootCauseAnalysisItem] | None = None
+            try:
+                causes = sync_run_root_cause(dataset_item, langfuse_session_id=trace_id)
+            except Exception as e:
+                logger.error(f"Error running root cause analysis: {e}")
+
+            if causes:
+                root_cause_score: RootCauseScoreResult = score_root_causes(
+                    dataset_item,
+                    causes,
+                    n_panel=scoring_n_panel,
+                    model=scoring_model,
+                    langfuse_session_id=trace_id,
+                )
+
+                # Will output 4 scores for a run item:
+                # - `"highest_score"`: The score for the highest scored cause out of all the returned root causes.
+                # - `"positioning_score"`: Positioning of the highest scored cause, if the highest scored cause is first, this score is `1.0`. If it is last, it will be `0.0`. The score is calculated proportional to the number of causes provided.
+                # - `"mean_score"`: The mean score of all the root causes.
+                # - `"error_weighted_score"` This score is the same as the highest score but scored 0 if there is an error or no root cause returned. This is used to weight the score in the aggregated run result.
+
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
+                    value=root_cause_score.get("highest_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="highest_score"
+                    ),
+                    value=root_cause_score.get("highest_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="positioning_score"
+                    ),
+                    value=root_cause_score.get("position_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="mean_score"
+                    ),
+                    value=root_cause_score.get("mean_score"),
+                )
+            else:
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
+                    value=0,
+                )
+        else:
+            diff: str | None = None
+            try:
+                diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
+            except Exception as e:
+                logger.error(f"Error running evaluation: {e}")
+
+            if diff:
+                score = score_one(
+                    dataset_item,
+                    diff,
+                    n_panel=scoring_n_panel,
+                    model=scoring_model,
+                    langfuse_session_id=trace_id,
+                )
+
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
+                    value=score,
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="score"
+                    ),
+                    value=score,
+                )
+            else:
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+                    ),
+                    value=0,
+                )

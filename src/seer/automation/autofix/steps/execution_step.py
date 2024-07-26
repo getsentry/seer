@@ -41,7 +41,7 @@ def autofix_execution_task(*args, request: dict[str, Any]):
     AutofixExecutionStep(request).invoke()
 
 
-class AutofixExecutionStep(PipelineChain, AutofixPipelineStep):
+class AutofixExecutionStep(AutofixPipelineStep, PipelineChain):
     """
     This class represents the execution pipeline in the autofix system. It is responsible for
     executing the fixes suggested by the planning component based on the root cause analysis.

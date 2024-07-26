@@ -54,7 +54,7 @@ class BaseTools:
             repo_name = client.repo_name
 
         self.context.event_manager.add_log(
-            f"Taking a look at the document at {input} in {repo_name}."
+            f"Taking a look at the document at `{input}` in `{repo_name}`..."
         )
 
         if file_contents:
@@ -70,7 +70,7 @@ class BaseTools:
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name)
 
-        all_paths = repo_client.get_index_file_set(repo_client.get_default_branch_head_sha())
+        all_paths = repo_client.get_index_file_set()
 
         # Normalize the path
         normalized_path = path.strip("/") + "/" if path.strip("/") else ""
@@ -103,6 +103,8 @@ class BaseTools:
             output.append("Files:")
             output.extend(f"  {f}" for f in files)
 
+        self.context.event_manager.add_log(f"Looking through contents of `{path}`...")
+
         joined = "\n".join(output)
         return f"<entries>\n{joined}\n</entries>"
 
@@ -133,9 +135,7 @@ class BaseTools:
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name)
 
-        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(
-            repo_client.get_default_branch_head_sha()
-        )
+        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
 
         searcher = CodeSearcher(
             directory=tmp_repo_dir,
@@ -143,6 +143,7 @@ class BaseTools:
             start_path=in_proximity_to,
         )
 
+        self.context.event_manager.add_log(f"Searching codebase for `{keyword}`...")
         results = searcher.search(keyword)
 
         cleanup_dir(tmp_dir)
@@ -286,7 +287,7 @@ class CodeActionTools(BaseTools):
                 )
 
         self.context.event_manager.add_log(
-            f"Made a code change in {file_change.path} in {repo_name}."
+            f"Made a code change in `{file_change.path}` in `{repo_name}`."
         )
 
     @observe(name="Replace Snippet")

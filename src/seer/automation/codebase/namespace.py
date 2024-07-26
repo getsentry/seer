@@ -203,7 +203,6 @@ class CodebaseNamespaceManager:
         organization: int,
         project: int,
         repo: RepoDefinition,
-        sha: str | None = None,
         tracking_branch: str | None = None,
         storage_type: type[StorageAdapter] = injected,
     ) -> Self | None:
@@ -226,12 +225,12 @@ class CodebaseNamespaceManager:
                 return None
 
             db_namespace = None
-            if sha:
+            if repo.base_commit_sha:
                 db_namespace = (
                     session.query(DbCodebaseNamespace)
                     .filter(
                         DbCodebaseNamespace.repo_id == db_repo_info.id,
-                        DbCodebaseNamespace.sha == sha,
+                        DbCodebaseNamespace.sha == repo.base_commit_sha,
                     )
                     .one_or_none()
                 )

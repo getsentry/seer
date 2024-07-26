@@ -27,11 +27,22 @@ def capture_worker_name(sender, instance, **kwargs):
     os.environ["WORKER_NAME"] = "{0}".format(sender)
 
 
+@signals.after_task_publish.connect
+def handle_task_publish(sender, **kwargs):
+    logger.info(f"Task published, task: {sender}")
+
+
 @signals.task_prerun.connect
 def handle_task_prerun(**kwargs):
     logger.info(
         f"Task started, worker: {os.environ.get('WORKER_NAME')}, process: {billiard.process.current_process().index}"
     )
+
+
+# For some reason, any celery stubs library does not have this signal when it's actually present...
+@signals.task_internal_error.connect  # type: ignore
+def handle_task_internal_error(**kwargs):
+    logger.error("Task internal error", exc_info=kwargs["exception"])
 
 
 @signals.task_failure.connect
