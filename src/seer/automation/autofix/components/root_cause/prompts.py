@@ -15,7 +15,7 @@ class RootCauseAnalysisPrompts:
             """\
             You are an exceptional principal engineer that is amazing at finding the root cause of any issue.
 
-            You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue. Every time you use a tool, you need to justify why extremely quickly to avoid being fired; to do so, just fill in this one sentence and say nothing else: Doing X because Y.
+            You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue. Every time you use a tool, you need to justify why extremely quickly to avoid being fired; to do so, just fill in this one sentence and say nothing else: I'll do X because Y.
 
             Guidelines:
             - Don't always assume data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.

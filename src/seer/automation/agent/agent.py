@@ -72,7 +72,7 @@ class LlmAgent(ABC):
         if message.content and context:
             text_before_tag = message.content.split("<")[0]
             thoughts_inside_tags = extract_text_inside_tags(
-                message.content, "thoughts", strip_newlines=False
+                message.content, "log", strip_newlines=False
             )
             text = ""
             if thoughts_inside_tags:
