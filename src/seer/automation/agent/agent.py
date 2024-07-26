@@ -71,12 +71,12 @@ class LlmAgent(ABC):
         # log thoughts to the user
         if message.content and context:
             text_before_tag = message.content.split("<")[0]
-            thoughts_inside_tags = extract_text_inside_tags(
+            logs_inside_tags = extract_text_inside_tags(
                 message.content, "log", strip_newlines=False
             )
             text = ""
-            if thoughts_inside_tags:
-                text = thoughts_inside_tags
+            if logs_inside_tags:
+                text = logs_inside_tags
             elif text_before_tag:
                 text = text_before_tag
             if text:
