@@ -51,7 +51,7 @@ You can run Autofix evaluations by hitting `POST /v1/automation/autofix/evaluati
 {
   "dataset_name": string, // The name of the dataset to run on
   "run_name": string, // Whatever you want to name your run
-  "run_type: "full" | "root_cause", // The type of run you want to do
+  "run_type: "full" | "root_cause" | "execution", // The type of run you want to do
   "test": boolean // Set this to `true` if you just want to run on 1 item for testing the pipeline
 }
 ```

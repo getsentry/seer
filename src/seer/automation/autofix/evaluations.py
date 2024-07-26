@@ -1,5 +1,5 @@
 import textwrap
-from typing import TypedDict
+from typing import TypedDict, cast
 from xml.etree import ElementTree as ET
 
 from langfuse.client import DatasetItemClient
@@ -11,6 +11,8 @@ from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseAnalysisItemPromptXml,
+    RootCauseSuggestedFix,
+    RootCauseSuggestedFixSnippet,
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
@@ -74,6 +76,78 @@ def sync_run_root_cause(item: DatasetItemClient):
         raise ValueError("Expected root cause step")
 
     return root_cause_step.causes
+
+
+@observe(name="Sync run execution evaluation on item")
+def sync_run_execution(item: DatasetItemClient):
+    request = AutofixRequest.model_validate(item.input.get("request"))
+    request.options = AutofixRequestOptions(disable_codebase_indexing=True)
+
+    expected_output = RootCauseExpectedOutput.model_validate(
+        {
+            "diff": item.input.get("snippet_diff"),
+            "root_cause": item.input.get("root_cause"),
+            "solution_summary": item.input.get("solution_summary"),
+        }
+    )
+
+    state = create_initial_autofix_run(request)
+
+    event_manager = AutofixEventManager(state)
+    with state.update() as cur:
+        cur.signals.append(PIPELINE_SYNC_SIGNAL)
+
+        root_cause_step = cast(
+            RootCauseStepModel, cur.find_or_add(event_manager.root_cause_analysis_step)
+        )
+        root_cause_step.causes = [
+            RootCauseAnalysisItem(
+                title=expected_output.root_cause,
+                description="",
+                likelihood=1.0,
+                actionability=1.0,
+                suggested_fixes=[
+                    RootCauseSuggestedFix(
+                        title=expected_output.solution_summary,
+                        description="",
+                        snippet=RootCauseSuggestedFixSnippet(
+                            file_path=expected_output.diff.file_path,
+                            snippet=expected_output.diff.code_diff,
+                        ),
+                        elegance=1.0,
+                    )
+                ],
+            )
+        ]
+
+        run_id = cur.run_id
+
+    event_manager.set_selected_root_cause(
+        AutofixRootCauseUpdatePayload(
+            type=AutofixUpdateType.SELECT_ROOT_CAUSE,
+            cause_id=-1,
+            fix_id=-1,
+        )
+    )
+
+    AutofixPlanningStep.get_signature(AutofixPlanningStepRequest(run_id=run_id)).apply()
+
+    state_after_execution = state.get()
+    changes_step = state_after_execution.steps[-1]
+    if not isinstance(changes_step, ChangesStep):
+        raise ValueError("Expected changes step")
+
+    changes = changes_step.changes
+
+    if not changes:
+        raise ValueError("No changes found, expected changes")
+
+    diffs: list[str] = []
+    for change in changes:
+        if change.diff_str:
+            diffs.append(change.diff_str)
+
+    return "\n".join(diffs)
 
 
 @observe(name="Sync run evaluation on item")
