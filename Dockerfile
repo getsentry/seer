@@ -36,7 +36,6 @@ COPY models/ models/
 # Copy setup files, requirements, and scripts
 COPY setup.py requirements.txt celeryworker.sh gunicorn.sh ./
 
-# Make celeryworker.sh and asyncworker.sh executable
 RUN chmod +x ./celeryworker.sh ./gunicorn.sh
 
 # Install dependencies
