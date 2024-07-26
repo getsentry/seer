@@ -10,7 +10,10 @@ from seer.anomaly_detection.detectors import (
     MPIRQScorer,
     SuSSWindowSizeSelector,
 )
-from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
+from seer.anomaly_detection.models.converters import (
+    convert_external_ts_to_internal,
+    store_request_to_dynamic_alert,
+)
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     Anomaly,
@@ -21,7 +24,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesPoint,
 )
 
-logger = logging.getLogger("anomaly_detection")
+logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
@@ -61,5 +64,15 @@ class AnomalyDetection(BaseModel):
         return DetectAnomaliesResponse(timeseries=ts)
 
     def store_data(self, request: StoreDataRequest) -> StoreDataResponse:
-        logger.info(f"Storing data for request: {request}")
+
+        logger.info(
+            "store_alert_request",
+            extra={
+                "organization_id": request.organization_id,
+                "project_id": request.project_id,
+                "external_alert_id": request.alert.id,
+            },
+        )
+        dynamic_alert = store_request_to_dynamic_alert(request)
+        dynamic_alert.save(request.timeseries)
         return StoreDataResponse(success=True)
