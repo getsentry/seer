@@ -15,7 +15,7 @@ WORKDIR $APP_HOME
 RUN apt-get update && \
     apt-get install -y \
     python3.11 \
-    python3.11-pip \
+    python3-pip \
     python3.11-dev \
     supervisor \
     libpq-dev \
