@@ -268,6 +268,8 @@ def run_autofix_evaluation_on_item(
     scoring_n_panel = 5
     scoring_model = "gpt-4o-2024-05-13"
 
+    diff: str | None = None
+
     with dataset_item.observe(run_name=run_name) as trace_id:
         if run_type == "root_cause":
             causes: list[RootCauseAnalysisItem] | None = None
@@ -328,7 +330,6 @@ def run_autofix_evaluation_on_item(
                     value=0,
                 )
         elif run_type == "execution":
-            diff: str | None = None
             try:
                 diff = sync_run_execution(dataset_item, langfuse_session_id=trace_id)
             except Exception as e:
@@ -366,7 +367,6 @@ def run_autofix_evaluation_on_item(
                     value=0,
                 )
         else:
-            diff: str | None = None
             try:
                 diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
             except Exception as e:
