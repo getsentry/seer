@@ -48,11 +48,11 @@ class AppConfig(BaseModel):
 
     DATABASE_URL: str
     CELERY_BROKER_URL: str
-    GITHUB_TOKEN: str = ""
+    GITHUB_TOKEN: str | None = None
     GITHUB_APP_ID: str = ""
     GITHUB_PRIVATE_KEY: str = ""
-    GITHUB_SENTRY_APP_ID: str = ""
-    GITHUB_SENTRY_PRIVATE_KEY: str = ""
+    GITHUB_SENTRY_APP_ID: str | None = None
+    GITHUB_SENTRY_PRIVATE_KEY: str | None = None
 
     CODEBASE_GCS_STORAGE_BUCKET: str = "sentry-ml"
     CODEBASE_GCS_STORAGE_DIR: str = "tmp_jenn/dev/chroma/storage"
