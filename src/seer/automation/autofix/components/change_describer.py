@@ -34,7 +34,11 @@ class ChangeDescriptionPrompts:
             In the style of:
             {hint}
 
-            You must output a title and description of the changes in the JSON."""
+            You must output a title and description of the changes in the JSON, follow the format of:
+            {{
+                "title": "Title of the change",
+                "description": "Description of the change"
+            }}"""
         ).format(
             change_dump=change_dump,
             hint=hint,
