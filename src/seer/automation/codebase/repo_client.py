@@ -47,8 +47,9 @@ def get_repo_app_permissions(
         return None
 
 
-def get_github_token_auth():
-    github_token = os.environ.get("GITHUB_TOKEN")
+@inject
+def get_github_token_auth(config: AppConfig = injected) -> Auth.Token | None:
+    github_token = config.GITHUB_TOKEN
 
     if github_token is None:
         return None
@@ -58,8 +59,8 @@ def get_github_token_auth():
 
 @inject
 def get_write_app_credentials(config: AppConfig = injected) -> tuple[int | str | None, str | None]:
-    app_id = os.environ.get("GITHUB_APP_ID")
-    private_key = os.environ.get("GITHUB_PRIVATE_KEY")
+    app_id = config.GITHUB_APP_ID
+    private_key = config.GITHUB_PRIVATE_KEY
 
     if not app_id or not private_key:
         if not config.DEV:
@@ -76,8 +77,8 @@ def get_write_app_credentials(config: AppConfig = injected) -> tuple[int | str |
 
 @inject
 def get_read_app_credentials(config: AppConfig = injected) -> tuple[int | str | None, str | None]:
-    app_id = os.environ.get("GITHUB_SENTRY_APP_ID")
-    private_key = os.environ.get("GITHUB_SENTRY_PRIVATE_KEY")
+    app_id = config.GITHUB_SENTRY_APP_ID
+    private_key = config.GITHUB_SENTRY_PRIVATE_KEY
 
     if not app_id or not private_key:
         if not config.DEV:
