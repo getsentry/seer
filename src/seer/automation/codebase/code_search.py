@@ -73,7 +73,7 @@ class CodeSearcher:
                 score = self.calculate_proximity_score(file_path)
                 return SearchResult(relative_path=relative_path, matches=matches, score=score)
         except UnicodeDecodeError:
-            autofix_logger.error(f"Unable to read {file_path}")
+            autofix_logger.exception(f"Unable to read {file_path}")
         return None
 
     def search(self, keyword: str) -> List[SearchResult]:
