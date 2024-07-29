@@ -1,14 +1,12 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.models.internal import (
-    AnomalyFlags,
-    Directions,
-    Seasonalities,
-    Sensitivities,
-    TimePeriods,
-)
+AnomalyFlags = Literal["none", "anomaly_low", "anomaly_high", "no_data"]
+Sensitivities = Literal["low", "medium", "high"]
+TimePeriods = Literal[15, 30, 60]
+Directions = Literal["up", "down", "both"]
+Seasonalities = Literal["hourly", "daily", "weekly", "auto"]
 
 
 class Anomaly(BaseModel):

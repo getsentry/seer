@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.normalizers import Normalizer
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
-from seer.anomaly_detection.models.internal import MPTimeSeriesAnomalies, TimeSeries
+from seer.anomaly_detection.models import MPTimeSeriesAnomalies, TimeSeries, TimeSeriesAnomalies
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class AnomalyDetector(BaseModel, abc.ABC):
     """
 
     @abc.abstractmethod
-    def detect(self, timeseries: TimeSeries) -> TimeSeries:
+    def detect(self, timeseries: TimeSeries) -> TimeSeriesAnomalies:
         return NotImplemented
 
 
@@ -53,7 +53,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
     )
     normalizer: Normalizer = Field(..., description="Normalizer to use for normalizing data")
 
-    def detect(self, timeseries: TimeSeries) -> TimeSeries:
+    def detect(self, timeseries: TimeSeries) -> MPTimeSeriesAnomalies:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
 
@@ -64,10 +64,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        anomalies = self._compute_matrix_profile(timeseries)
-        timeseries.anomalies = anomalies
-
-        return timeseries
+        return self._compute_matrix_profile(timeseries)
 
     def _get_mp_dist_from_mp(
         self,
@@ -168,7 +165,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         arbitrary_types_allowed=True,
     )
 
-    def detect(self, timeseries: TimeSeries) -> TimeSeries:
+    def detect(self, timeseries: TimeSeries) -> MPTimeSeriesAnomalies:
         # Initialize stumpi
         stream = stumpy.stumpi(
             self.base_values,
@@ -177,15 +174,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             normalize=False,
             egress=False,
         )
-
-        # ts_train = stream.T_
-        # cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
-        # mp = np.vstack([mp[1:] if egress else mp, cur_mp])
-
-        # # Score it
-        # cur_scores, cur_flags = stream_score(ts_train, mp, np.array([stream.P_[-1]]), window_size)
-        # scores.extend(cur_scores)
-        # flags.extend(cur_flags)
 
         scores = []
         flags = []
@@ -204,13 +192,12 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             scores.extend(cur_scores)
             flags.extend(cur_flags)
 
-            timeseries.anomalies = MPTimeSeriesAnomalies(
-                flags=flags,
-                scores=scores,
-                matrix_profile=self.base_mp,
-                window_size=self.window_size,
-            )
-        return timeseries
+        return MPTimeSeriesAnomalies(
+            flags=flags,
+            scores=scores,
+            matrix_profile=self.base_mp,
+            window_size=self.window_size,
+        )
 
 
 class DummyAnomalyDetector(AnomalyDetector):
@@ -218,13 +205,11 @@ class DummyAnomalyDetector(AnomalyDetector):
     Dummy anomaly detector used during dev work
     """
 
-    def detect(self, timeseries: TimeSeries) -> TimeSeries:
+    def detect(self, timeseries: TimeSeries) -> TimeSeriesAnomalies:
         anomalies = MPTimeSeriesAnomalies(
             flags=np.array(["none"] * len(timeseries.values)),
             scores=np.array([np.float64(0.5)] * len(timeseries.values)),
             matrix_profile=np.array([]),
             window_size=0,
         )
-        return TimeSeries(
-            timestamps=timeseries.timestamps, values=timeseries.values, anomalies=anomalies
-        )
+        return anomalies
