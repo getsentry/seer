@@ -69,11 +69,12 @@ class AutofixContext(PipelineContext):
         self.codebases = {}
 
         self.sentry_client = sentry_client
-        self.embedding_model = embedding_model or (
-            get_embedding_model() if not skip_loading_codebase else None
-        )
 
         no_codebase_indexes = skip_loading_codebase or request.options.disable_codebase_indexing
+
+        self.embedding_model = embedding_model or (
+            get_embedding_model() if not no_codebase_indexes else None
+        )
 
         if no_codebase_indexes:
             with state.update() as cur:
