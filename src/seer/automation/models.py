@@ -271,6 +271,9 @@ class EventDetails(BaseModel):
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
+                    if not isinstance(exception.get("value"), str):
+                        exception["value"] = "Unknown exception value"
+                        sentry_sdk.capture_message(f"Malformed exception data: {exception}")
                     exceptions.append(ExceptionDetails.model_validate(exception))
             if entry.get("type") == "threads":
                 for thread in entry.get("data", {}).get("values", []):
