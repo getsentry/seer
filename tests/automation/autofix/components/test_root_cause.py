@@ -8,8 +8,8 @@ from seer.automation.autofix.components.root_cause.component import RootCauseAna
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseAnalysisOutput,
-    RootCauseSuggestedFix,
-    RootCauseSuggestedFixSnippet,
+    RootCauseRelevantCodeSnippet,
+    RootCauseRelevantContext,
 )
 
 
@@ -48,15 +48,15 @@ class TestRootCauseComponent:
         assert output.causes[0].description == "The root cause of the issue is ..."
         assert output.causes[0].likelihood == 0.9
         assert output.causes[0].actionability == 1.0
-        assert output.causes[0].suggested_fixes is None
+        assert output.causes[0].code_context is None
 
-    def test_root_cause_suggested_fix_response_parsing(
+    def test_root_cause_code_context_response_parsing(
         self, component, mock_gpt_agent, mock_gpt_client
     ):
-        mock_gpt_agent.return_value.run.return_value = "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><suggested_fixes><suggested_fix elegance='0.9'><title>Add Null Check</title><description>This fix involves adding ...</description><snippet file_path='some/app/path.py'>def foo():</snippet></suggested_fix></suggested_fixes></potential_cause></potential_root_causes>"
+        mock_gpt_agent.return_value.run.return_value = "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><code_context><code_snippet><title>Add Null Check</title><description>This fix involves adding ...</description><code file_path='some/app/path.py'>def foo():</code></code_snippet></code_context></potential_cause></potential_root_causes>"
         mock_gpt_client.return_value.completion.return_value = (
             MagicMock(
-                content="<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><suggested_fixes><suggested_fix elegance='0.9'><title>Add Null Check</title><description>This fix involves adding ...</description><snippet file_path='some/app/path.py'>def foo():</snippet></suggested_fix></suggested_fixes></potential_cause></potential_root_causes>"
+                content="<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><code_context><code_snippet><title>Add Null Check</title><description>This fix involves adding ...</description><code file_path='some/app/path.py'>def foo():</code></code_snippet></code_context></potential_cause></potential_root_causes>"
             ),
             None,
         )
@@ -69,13 +69,12 @@ class TestRootCauseComponent:
         assert output.causes[0].description == "The root cause of the issue is ..."
         assert output.causes[0].likelihood == 0.9
         assert output.causes[0].actionability == 1.0
-        assert output.causes[0].suggested_fixes is not None
-        assert len(output.causes[0].suggested_fixes) == 1
-        assert output.causes[0].suggested_fixes[0].title == "Add Null Check"
-        assert output.causes[0].suggested_fixes[0].description == "This fix involves adding ..."
-        assert output.causes[0].suggested_fixes[0].elegance == 0.9
-        assert output.causes[0].suggested_fixes[0].snippet.file_path == "some/app/path.py"
-        assert output.causes[0].suggested_fixes[0].snippet.snippet == "def foo():"
+        assert output.causes[0].code_context is not None
+        assert len(output.causes[0].code_context) == 1
+        assert output.causes[0].code_context[0].title == "Add Null Check"
+        assert output.causes[0].code_context[0].description == "This fix involves adding ..."
+        assert output.causes[0].code_context[0].snippet.file_path == "some/app/path.py"
+        assert output.causes[0].code_context[0].snippet.snippet == "def foo():"
 
     def test_root_cause_multiple_causes_response_parsing(
         self, component, mock_gpt_agent, mock_gpt_client
@@ -176,15 +175,14 @@ class TestRootCauseComponent:
                     description="Test Description",
                     likelihood=0.8,
                     actionability=0.9,
-                    suggested_fixes=[
-                        RootCauseSuggestedFix(
+                    code_context=[
+                        RootCauseRelevantContext(
                             id=0,
                             title="Test Fix",
                             description="Test Fix Description",
-                            snippet=RootCauseSuggestedFixSnippet(
+                            snippet=RootCauseRelevantCodeSnippet(
                                 file_path="test.py", snippet="def test():\n    pass"
                             ),
-                            elegance=0.7,
                         )
                     ],
                 )
@@ -197,17 +195,14 @@ class TestRootCauseComponent:
         assert output.causes[0].description == "Test Description"
         assert output.causes[0].likelihood == 0.8
         assert output.causes[0].actionability == 0.9
-        assert len(output.causes[0].suggested_fixes or []) == 1
-        if output.causes[0].suggested_fixes:
-            assert output.causes[0].suggested_fixes[0].id == 0
-            assert output.causes[0].suggested_fixes[0].title == "Test Fix"
-            assert output.causes[0].suggested_fixes[0].description == "Test Fix Description"
-            if output.causes[0].suggested_fixes[0].snippet:
-                assert output.causes[0].suggested_fixes[0].snippet.file_path == "test.py"
-                assert (
-                    output.causes[0].suggested_fixes[0].snippet.snippet == "def test():\n    pass"
-                )
-            assert output.causes[0].suggested_fixes[0].elegance == 0.7
+        assert len(output.causes[0].code_context or []) == 1
+        if output.causes[0].code_context:
+            assert output.causes[0].code_context[0].id == 0
+            assert output.causes[0].code_context[0].title == "Test Fix"
+            assert output.causes[0].code_context[0].description == "Test Fix Description"
+            if output.causes[0].code_context[0].snippet:
+                assert output.causes[0].code_context[0].snippet.file_path == "test.py"
+                assert output.causes[0].code_context[0].snippet.snippet == "def test():\n    pass"
 
     def test_no_root_causes_response(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"

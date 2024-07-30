@@ -11,8 +11,8 @@ from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseAnalysisItemPromptXml,
-    RootCauseSuggestedFix,
-    RootCauseSuggestedFixSnippet,
+    RootCauseRelevantCodeSnippet,
+    RootCauseRelevantContext,
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
@@ -106,15 +106,14 @@ def sync_run_execution(item: DatasetItemClient):
                 description="",
                 likelihood=1.0,
                 actionability=1.0,
-                suggested_fixes=[
-                    RootCauseSuggestedFix(
+                code_context=[
+                    RootCauseRelevantContext(
                         title=expected_output.solution_summary,
                         description="",
-                        snippet=RootCauseSuggestedFixSnippet(
+                        snippet=RootCauseRelevantCodeSnippet(
                             file_path=expected_output.diff.file_path,
                             snippet=expected_output.diff.code_diff,
                         ),
-                        elegance=1.0,
                     )
                 ],
             )
@@ -182,10 +181,10 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     cause = root_cause_step.causes[0]
     cause_id = cause.id
 
-    if not cause.suggested_fixes:
+    if not cause.code_context:
         return None
 
-    fix_id = cause.suggested_fixes[0].id
+    fix_id = cause.code_context[0].id
 
     event_manager = AutofixEventManager(state)
     event_manager.set_selected_root_cause(

@@ -74,7 +74,7 @@ class TestSyncRunEvaluationOnItem:
     def test_sync_run_evaluation_on_item_happy_path(self):
         # Setup state changes for root cause step
         root_cause_model = next(generate(RootCauseStepModel))
-        root_cause_model.causes = [Mock(id=1, suggested_fixes=[Mock(id=2)])]
+        root_cause_model.causes = [Mock(id=1, code_context=[Mock(id=2)])]
 
         def root_cause_apply_side_effect():
             with self.test_state.update() as cur:

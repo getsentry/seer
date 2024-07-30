@@ -15,12 +15,12 @@ class RootCauseAnalysisPrompts:
             """\
             You are an exceptional principal engineer that is amazing at finding the root cause of any issue.
 
-            You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue. Every time you use a tool, you need to justify why extremely quickly to avoid being fired; to do so, just fill in this one sentence and say nothing else: I'll do X because Y.
+            You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue.
+            Every time you use a tool, explain the reason using the following sentence and say nothing else: I'll do X because Y.
 
             Guidelines:
             - Don't always assume data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.
-            - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search or suggest changes in external libraries.
-            - You must only suggest actionable fixes that can be made in the immediate workable codebase. Do not suggest fixes with code snippets in external libraries.
+            - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search in external libraries.
             - If you are not able to find any potential root causes, return only <NO_ROOT_CAUSES>.
             - If multiple searches turn up no viable results, you should conclude the session.
 
@@ -45,9 +45,10 @@ class RootCauseAnalysisPrompts:
             Also think step-by-step before giving the final answer.
 
             When ready with your final answer, detail all the potential root causes of the issue inside wrapped with a <potential_root_causes></potential_root_causes> block.
-            - Each root cause should be inside its own <root_cause> block with its suggested fix in there too.
+            - Each root cause should be inside its own <root_cause> block.
+            - Include a title and description in each root cause.
             - Include float values from 0.0-1.0 of the likelihood and actionability of each root cause.
-            - If there is a clear and obvious fix to a given root cause, suggest a fix and provide a code snippet if possible. Suggest as many fixes as you can.
+            - In each root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want.
             - You MUST include the EXACT file name in the code snippets you provide. If you cannot, do not provide a code snippet."""
         ).format(
             error_str=event.format_event(),
@@ -62,11 +63,11 @@ class RootCauseAnalysisPrompts:
 
             {raw_root_cause_output}
 
-            Please format properly according to the following guidelines:
+            Please format the XML properly to match the following example:
 
             {root_cause_output_example_str}
 
-            Note: If the provided root cause analysis is not formatted properly, such as suggested fixes missing descriptions, you can derive them from the provided root cause analysis.
+            Note: If the provided root cause analysis is not formatted properly, such as code snippets missing descriptions, you can derive them from the provided root cause analysis.
 
             Return only the formatted root cause analysis:"""
         ).format(

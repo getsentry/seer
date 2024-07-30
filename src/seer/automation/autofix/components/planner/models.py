@@ -31,16 +31,16 @@ class RootCausePlanTaskPromptXml(PromptXmlModel, tag="task", skip_empty=True):
         return cls(
             title=root_cause.title,
             description=root_cause.description,
-            fix_title=root_cause.suggested_fixes[0].title if root_cause.suggested_fixes else None,
+            fix_title=root_cause.code_context[0].title if root_cause.code_context else None,
             fix_description=(
-                root_cause.suggested_fixes[0].description if root_cause.suggested_fixes else None
+                root_cause.code_context[0].description if root_cause.code_context else None
             ),
             fix_snippet=(
                 SnippetXml(
-                    file_path=root_cause.suggested_fixes[0].snippet.file_path,
-                    snippet=root_cause.suggested_fixes[0].snippet.snippet,
+                    file_path=root_cause.code_context[0].snippet.file_path,
+                    snippet=root_cause.code_context[0].snippet.snippet,
                 )
-                if root_cause.suggested_fixes and root_cause.suggested_fixes[0].snippet
+                if root_cause.code_context and root_cause.code_context[0].snippet
                 else None
             ),
         )

@@ -29,8 +29,8 @@ def root_cause_task(*args, request: Any):
 
 class RootCauseStep(AutofixPipelineStep):
     """
-    This class represents the root cause analysis pipeline in the autofix system. It is responsible for
-    analyzing the root cause of issues detected in the codebase and suggesting potential fixes.
+    This class represents the root cause analysis pipeline in the Autofix system. It is responsible for
+    analyzing the root cause of issues detected in the codebase.
     """
 
     name = "RootCauseStep"
@@ -62,5 +62,4 @@ class RootCauseStep(AutofixPipelineStep):
                 instruction=state.request.instruction,
             )
         )
-
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)

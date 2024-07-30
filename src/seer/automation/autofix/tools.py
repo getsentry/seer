@@ -141,7 +141,6 @@ class BaseTools:
             start_path=in_proximity_to,
         )
 
-        self.context.event_manager.add_log(f"Searched codebase for `{keyword}`")
         results = searcher.search(keyword)
 
         cleanup_dir(tmp_dir)
@@ -150,13 +149,19 @@ class BaseTools:
             return "No results found."
 
         result_str = ""
+        file_names = []
         for result in results:
             for match in result.matches:
                 match_xml = MatchXml(
                     path=result.relative_path,
                     context=match.context,
                 )
+                file_names.append(f"`{result.relative_path}`")
                 result_str += f"{match_xml.to_prompt_str()}\n\n"
+
+        self.context.event_manager.add_log(
+            f"Searched codebase for `{keyword}`, found {len(file_names)} result(s) in {', '.join(file_names)}"
+        )
 
         return result_str
 
