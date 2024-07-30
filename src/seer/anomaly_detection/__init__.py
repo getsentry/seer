@@ -1,0 +1,3 @@
+from seer.anomaly_detection import anomaly_detection_di
+
+anomaly_detection_module = anomaly_detection_di.anomaly_detection_module

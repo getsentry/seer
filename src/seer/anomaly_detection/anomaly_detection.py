@@ -1,17 +1,14 @@
 import logging
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
+from seer.anomaly_detection.accessors import AlertDataAccessor
+from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
 from seer.anomaly_detection.detectors import (
     AnomalyDetector,
-    MinMaxNormalizer,
     MPBatchAnomalyDetector,
-    MPConfig,
-    MPIRQScorer,
     MPStreamAnomalyDetector,
-    SuSSWindowSizeSelector,
 )
 from seer.anomaly_detection.models import TimeSeriesAnomalies
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
@@ -24,28 +21,26 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
     TimeSeriesPoint,
 )
+from seer.dependency_injection import inject, injected
 
+anomaly_detection_module.enable()
 logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
-    alert_data_accessor: AlertDataAccessor = Field(
-        DbAlertDataAccessor(), description="Accessor for alert data"
-    )
-
     def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
-        batch_detector: AnomalyDetector = MPBatchAnomalyDetector(
-            config=MPConfig(ignore_trivial=True, normalize_mp=False),
-            scorer=MPIRQScorer(),
-            ws_selector=SuSSWindowSizeSelector(),
-            normalizer=MinMaxNormalizer(),
-        )
+        batch_detector: AnomalyDetector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries))
         self._update_anomalies(timeseries, anomalies)
         return timeseries
 
-    def _online_detect(self, alert: AlertInSeer) -> List[TimeSeriesPoint]:
+    @inject
+    def _online_detect(
+        self,
+        alert: AlertInSeer,
+        alert_data_accessor: AlertDataAccessor = injected,
+    ) -> List[TimeSeriesPoint]:
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
@@ -57,7 +52,7 @@ class AnomalyDetection(BaseModel):
             )
 
         # Retrieve historic data
-        historic = self.alert_data_accessor.query(alert.id)
+        historic = alert_data_accessor.query(alert.id)
         if historic is None:
             raise Exception(f"Invalid alert id {alert.id}")
 
@@ -65,19 +60,11 @@ class AnomalyDetection(BaseModel):
 
         # Run batch detect on history data
         # TODO: This step can be optimized further by caching the matrix profile in the database
-        mp_config = MPConfig(ignore_trivial=True, normalize_mp=False)
-        batch_detector = MPBatchAnomalyDetector(
-            config=mp_config,
-            scorer=MPIRQScorer(),
-            ws_selector=SuSSWindowSizeSelector(),
-            normalizer=MinMaxNormalizer(),
-        )
+        batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(historic.timeseries)
 
         # Run stream detection
-        stream_detector = MPStreamAnomalyDetector(
-            config=mp_config,
-            scorer=MPIRQScorer(),
+        stream_detector: AnomalyDetector = MPStreamAnomalyDetector(
             base_timestamps=historic.timeseries.timestamps,
             base_values=historic.timeseries.values,
             base_mp=anomalies.matrix_profile,
@@ -87,9 +74,7 @@ class AnomalyDetection(BaseModel):
         self._update_anomalies(ts_external, streamed_anomalies)
 
         # Save new data point
-        self.alert_data_accessor.save_timepoint(
-            external_alert_id=alert.id, timepoint=ts_external[0]
-        )
+        alert_data_accessor.save_timepoint(external_alert_id=alert.id, timepoint=ts_external[0])
         # TODO: Clean up old data
         return ts_external
 
@@ -110,8 +95,10 @@ class AnomalyDetection(BaseModel):
         )
         return DetectAnomaliesResponse(timeseries=ts)
 
-    def store_data(self, request: StoreDataRequest) -> StoreDataResponse:
-
+    @inject
+    def store_data(
+        self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
+    ) -> StoreDataResponse:
         logger.info(
             "store_alert_request",
             extra={
@@ -120,7 +107,7 @@ class AnomalyDetection(BaseModel):
                 "external_alert_id": request.alert.id,
             },
         )
-        self.alert_data_accessor.save_alert(
+        alert_data_accessor.save_alert(
             organization_id=request.organization_id,
             project_id=request.project_id,
             external_alert_id=request.alert.id,
