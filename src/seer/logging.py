@@ -2,16 +2,11 @@ import logging
 import sys
 from typing import Annotated
 
-import google.cloud.logging
 import structlog
 from gunicorn.glogging import Logger as GunicornBaseLogger  # type: ignore[import-untyped]
 from structlog import get_logger
 
 from seer.dependency_injection import Labeled, Module, inject, injected
-
-# Setup GCP Logging
-client = google.cloud.logging.Client()
-client.setup_logging()
 
 DefaultLoggingHandlers = Annotated[list[logging.Handler], Labeled("default")]
 LogLevel = Annotated[int, Labeled("log_level")]
