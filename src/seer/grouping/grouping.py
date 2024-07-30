@@ -178,48 +178,44 @@ class GroupingLookup:
         distance: float,
         k: int,
         hnsw_candidates: int = 100,
-        hnsw_distance: float = 0.95,
+        hnsw_distance: float = 0.05,
     ) -> List[tuple[DbGroupingRecord, float]]:
         custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
 
         candidates = (
-            session.query(
-                DbGroupingRecord,
-                DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label("distance"),
-            )
+            session.query(DbGroupingRecord)
             .filter(
                 DbGroupingRecord.project_id == project_id,
                 DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding)
                 <= max(distance, hnsw_distance),
                 DbGroupingRecord.hash != hash,
             )
-            .order_by("distance")
+            .order_by(DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding))
             .limit(max(k, hnsw_candidates))
             .execution_options(**custom_options)
             .all()
         )
 
-        reranked_candidates = self.rerank_candidates(candidates, embedding)
+        reranked_candidates = self.rerank_candidates(candidates, embedding, distance)
 
         return reranked_candidates[:k]
 
     @staticmethod
     @sentry_sdk.tracing.trace
-    def rerank_candidates(candidates, embedding):
+    def rerank_candidates(
+        candidates: List[DbGroupingRecord], embedding: np.ndarray, distance: float
+    ) -> List[tuple[DbGroupingRecord, float]]:
         embedding_norm = np.linalg.norm(embedding)
 
-        def cosine_distance(candidate_embedding, candidate_norm):
+        def cosine_distance(candidate_embedding):
+            candidate_norm = np.linalg.norm(candidate_embedding)
             dot_product = np.dot(candidate_embedding, embedding)
             return 1 - dot_product / (candidate_norm * embedding_norm)
 
         reranked = [
-            (
-                candidate,
-                cosine_distance(
-                    candidate.stacktrace_embedding, np.linalg.norm(candidate.stacktrace_embedding)
-                ),
-            )
-            for candidate, _ in candidates
+            (candidate, cosine_distance(candidate.stacktrace_embedding))
+            for candidate in candidates
+            if cosine_distance(candidate.stacktrace_embedding) <= distance
         ]
         return sorted(reranked, key=lambda x: x[1])
 
