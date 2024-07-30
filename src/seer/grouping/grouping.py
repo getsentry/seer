@@ -177,23 +177,51 @@ class GroupingLookup:
         hash: str,
         distance: float,
         k: int,
+        hnsw_candidates: int = 100,
+        hnsw_distance: float = 0.95,
     ) -> List[tuple[DbGroupingRecord, float]]:
         custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
-        query = (
+
+        candidates = (
             session.query(
                 DbGroupingRecord,
                 DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding).label("distance"),
             )
             .filter(
                 DbGroupingRecord.project_id == project_id,
-                DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= distance,
+                DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding)
+                <= max(distance, hnsw_distance),
                 DbGroupingRecord.hash != hash,
             )
             .order_by("distance")
-            .limit(k)
+            .limit(max(k, hnsw_candidates))
             .execution_options(**custom_options)
+            .all()
         )
-        return query.all()
+
+        reranked_candidates = self.rerank_candidates(candidates, embedding)
+
+        return reranked_candidates[:k]
+
+    @staticmethod
+    @sentry_sdk.tracing.trace
+    def rerank_candidates(candidates, embedding):
+        embedding_norm = np.linalg.norm(embedding)
+
+        def cosine_distance(candidate_embedding, candidate_norm):
+            dot_product = np.dot(candidate_embedding, embedding)
+            return 1 - dot_product / (candidate_norm * embedding_norm)
+
+        reranked = [
+            (
+                candidate,
+                cosine_distance(
+                    candidate.stacktrace_embedding, np.linalg.norm(candidate.stacktrace_embedding)
+                ),
+            )
+            for candidate, _ in candidates
+        ]
+        return sorted(reranked, key=lambda x: x[1])
 
     @sentry_sdk.tracing.trace
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
