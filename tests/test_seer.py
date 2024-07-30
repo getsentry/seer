@@ -375,6 +375,8 @@ class TestSeer(unittest.TestCase):
             "run_name": "test_run",
             "run_type": "full",
             "test": False,
+            "random_for_test": False,
+            "run_on_item_id": None,
         }
 
         # Make a POST request to the endpoint
@@ -391,7 +393,12 @@ class TestSeer(unittest.TestCase):
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(
-            "test_dataset", "test_run", "full", is_test=False
+            "test_dataset",
+            "test_run",
+            "full",
+            is_test=False,
+            random_for_test=False,
+            run_on_item_id=None,
         )
 
     @mock.patch("seer.app.run_autofix_evaluation")
@@ -418,7 +425,48 @@ class TestSeer(unittest.TestCase):
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(
-            "test_dataset", "test_run", "root_cause", is_test=True
+            "test_dataset",
+            "test_run",
+            "root_cause",
+            is_test=True,
+            random_for_test=False,
+            run_on_item_id=None,
+        )
+
+    @mock.patch("seer.app.run_autofix_evaluation")
+    def test_autofix_evaluation_start_endpoint_with_run_on_item_id(
+        self, mock_run_autofix_evaluation
+    ):
+        # Prepare test data with run_on_item_id
+        test_data = {
+            "dataset_name": "test_dataset",
+            "run_name": "test_run",
+            "run_type": "full",
+            "test": False,
+            "random_for_test": False,
+            "run_on_item_id": "specific_item_id",
+        }
+
+        # Make a POST request to the endpoint
+        response = app.test_client().post(
+            "/v1/automation/autofix/evaluations/start",
+            data=json.dumps(test_data),
+            content_type="application/json",
+        )
+
+        # Assert that the response is correct
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.get_data(as_text=True))
+        self.assertEqual(response_data, {"started": True, "run_id": -1})
+
+        # Assert that run_autofix_evaluation was called with the correct arguments
+        mock_run_autofix_evaluation.assert_called_once_with(
+            "test_dataset",
+            "test_run",
+            "full",
+            is_test=False,
+            random_for_test=False,
+            run_on_item_id="specific_item_id",
         )
 
 
