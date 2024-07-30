@@ -88,6 +88,7 @@ class BaseTools:
         )
 
         if not dirs and not files:
+            self.context.event_manager.add_log(f"Couldn't find anything inside `{path}`")
             return f"<no entries found in directory '{path or '/'}'>"
 
         # Format the output
