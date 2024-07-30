@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 NN_GROUPING_DISTANCE = 0.01
 NN_GROUPING_HNSW_DISTANCE = 0.05
+NN_GROUPING_HNSW_CANDIDATES = 100
 NN_SIMILARITY_DISTANCE = 0.05
 
 
@@ -248,6 +249,8 @@ class GroupingLookup:
                 issue.hash,
                 NN_SIMILARITY_DISTANCE if issue.read_only else issue.threshold,
                 issue.k,
+                issue.hnsw_candidates,
+                issue.hnsw_distance,
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
@@ -330,6 +333,8 @@ class GroupingLookup:
                     entry.hash,
                     NN_GROUPING_DISTANCE,
                     1,
+                    NN_GROUPING_HNSW_CANDIDATES,
+                    NN_GROUPING_HNSW_DISTANCE,
                 )
 
                 if nearest_neighbor:
