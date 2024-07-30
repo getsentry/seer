@@ -39,8 +39,8 @@ class MPIRQScorer(MPScorer):
         Returns:
             tuple with list of scores and list of flags, where each flag is one of
             * "none" - indicating not an anomaly
-            * "anomaly_low" - indicating anomaly but only with a lower threshold
-            * "anomaly_high" - indicating anomaly with a higher threshold
+            * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
+            * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
 
         def to_flag(mp_dist, threshold_lower, threshold_upper):
@@ -49,8 +49,8 @@ class MPIRQScorer(MPScorer):
             if mp_dist < threshold_lower:
                 return "none"
             if mp_dist < threshold_upper:
-                return "anomaly_low"
-            return "anomaly_high"
+                return "anomaly_lower_confidence"
+            return "anomaly_higher_confidence"
 
         if len(mp_dist[~np.isfinite(mp_dist)]) > 0:
             # TODO: Add sentry logging and metric here

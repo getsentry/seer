@@ -1,19 +1,20 @@
 import logging
+from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.detectors import (
-    DummyAnomalyDetector,
+    AnomalyDetector,
     MinMaxNormalizer,
     MPBatchAnomalyDetector,
     MPConfig,
     MPIRQScorer,
+    MPStreamAnomalyDetector,
     SuSSWindowSizeSelector,
 )
-from seer.anomaly_detection.models.converters import (
-    convert_external_ts_to_internal,
-    store_request_to_dynamic_alert,
-)
+from seer.anomaly_detection.models import TimeSeriesAnomalies
+from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     Anomaly,
@@ -28,39 +29,85 @@ logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
-    def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-        if isinstance(request.context, AlertInSeer):
-            logger.info(f"Detecting anomalies for alert ID: {request.context.id}")
-            ts = []
-            if request.context.cur_window:
-                ts.append(
-                    TimeSeriesPoint(
-                        timestamp=request.context.cur_window.timestamp,
-                        value=request.context.cur_window.value,
-                    )
-                )
-            dummy_detector = DummyAnomalyDetector()
-            ts_updated = dummy_detector.detect(convert_external_ts_to_internal(ts))
-        else:
-            logger.info(
-                f"Detecting anomalies for time series with {len(request.context)} datapoints"
-            )
-            ts = request.context
-            batch_detector = MPBatchAnomalyDetector(
-                config=MPConfig(ignore_trivial=True, normalize_mp=False),
-                scorer=MPIRQScorer(),
-                ws_selector=SuSSWindowSizeSelector(),
-                normalizer=MinMaxNormalizer(),
-            )
-            ts_updated = batch_detector.detect(convert_external_ts_to_internal(ts))
+    alert_data_accessor: AlertDataAccessor = Field(
+        DbAlertDataAccessor(), description="Accessor for alert data"
+    )
 
-        for i, point in enumerate(ts):
-            if ts_updated.anomalies is None:
-                raise Exception("No anomalies available for the timeseries.")
-            point.anomaly = Anomaly(
-                anomaly_score=ts_updated.anomalies.scores[i],
-                anomaly_type=ts_updated.anomalies.flags[i],
+    def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
+        logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
+        batch_detector: AnomalyDetector = MPBatchAnomalyDetector(
+            config=MPConfig(ignore_trivial=True, normalize_mp=False),
+            scorer=MPIRQScorer(),
+            ws_selector=SuSSWindowSizeSelector(),
+            normalizer=MinMaxNormalizer(),
+        )
+        anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries))
+        self._update_anomalies(timeseries, anomalies)
+        return timeseries
+
+    def _online_detect(self, alert: AlertInSeer) -> List[TimeSeriesPoint]:
+        logger.info(f"Detecting anomalies for alert ID: {alert.id}")
+        ts_external: List[TimeSeriesPoint] = []
+        if alert.cur_window:
+            ts_external.append(
+                TimeSeriesPoint(
+                    timestamp=alert.cur_window.timestamp,
+                    value=alert.cur_window.value,
+                )
             )
+
+        # Retrieve historic data
+        historic = self.alert_data_accessor.query(alert.id)
+        if historic is None:
+            raise Exception(f"Invalid alert id {alert.id}")
+
+        # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
+
+        # Run batch detect on history data
+        # TODO: This step can be optimized further by caching the matrix profile in the database
+        mp_config = MPConfig(ignore_trivial=True, normalize_mp=False)
+        batch_detector = MPBatchAnomalyDetector(
+            config=mp_config,
+            scorer=MPIRQScorer(),
+            ws_selector=SuSSWindowSizeSelector(),
+            normalizer=MinMaxNormalizer(),
+        )
+        anomalies = batch_detector.detect(historic.timeseries)
+
+        # Run stream detection
+        stream_detector = MPStreamAnomalyDetector(
+            config=mp_config,
+            scorer=MPIRQScorer(),
+            base_timestamps=historic.timeseries.timestamps,
+            base_values=historic.timeseries.values,
+            base_mp=anomalies.matrix_profile,
+            window_size=anomalies.window_size,
+        )
+        streamed_anomalies = stream_detector.detect(convert_external_ts_to_internal(ts_external))
+        self._update_anomalies(ts_external, streamed_anomalies)
+
+        # Save new data point
+        self.alert_data_accessor.save_timepoint(
+            external_alert_id=alert.id, timepoint=ts_external[0]
+        )
+        # TODO: Clean up old data
+        return ts_external
+
+    def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):
+        if anomalies is None:
+            raise Exception("No anomalies available for the timeseries.")
+        for i, point in enumerate(ts_external):
+            point.anomaly = Anomaly(
+                anomaly_score=anomalies.scores[i],
+                anomaly_type=anomalies.flags[i],
+            )
+
+    def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
+        ts: List[TimeSeriesPoint] = (
+            self._online_detect(request.context)
+            if isinstance(request.context, AlertInSeer)
+            else self._batch_detect(request.context)
+        )
         return DetectAnomaliesResponse(timeseries=ts)
 
     def store_data(self, request: StoreDataRequest) -> StoreDataResponse:
@@ -73,6 +120,11 @@ class AnomalyDetection(BaseModel):
                 "external_alert_id": request.alert.id,
             },
         )
-        dynamic_alert = store_request_to_dynamic_alert(request)
-        dynamic_alert.save(request.timeseries)
+        self.alert_data_accessor.save_alert(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            external_alert_id=request.alert.id,
+            config=request.config,
+            timeseries=request.timeseries,
+        )
         return StoreDataResponse(success=True)

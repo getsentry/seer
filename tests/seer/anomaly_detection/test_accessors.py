@@ -1,0 +1,179 @@
+import unittest
+
+from seer.anomaly_detection.accessors import DbAlertDataAccessor
+from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
+from seer.db import DbDynamicAlert, Session
+
+
+class TestDbAlertDataAccessor(unittest.TestCase):
+    def test_save_alert(self):
+        organization_id = 100
+        project_id = 101
+        external_alert_id = 10
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
+        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
+
+        # Verify saving
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=[point1, point2],
+        )
+
+        with Session() as session:
+            self.assertEqual(
+                session.query(DbDynamicAlert).count(), 1, "One and only one dynamic alert row saved"
+            )
+            self.assertEqual(
+                session.query(DbDynamicAlert)
+                .filter_by(external_alert_id=external_alert_id)
+                .count(),
+                1,
+                f"One and only one dynamic alert with the external_alert_id {external_alert_id}",
+            )
+        alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
+        self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
+        self.assertEqual(
+            alert_from_db.organization_id,
+            organization_id,
+            "Organization id should match",
+        )
+        self.assertEqual(alert_from_db.project_id, project_id, "Project id should match")
+        self.assertEqual(
+            alert_from_db.external_alert_id,
+            external_alert_id,
+            "external_alert_id id should match",
+        )
+        self.assertEqual(
+            alert_from_db.config.time_period,
+            config.time_period,
+            "time_period in config should match",
+        )
+
+        self.assertEqual(
+            alert_from_db.config.sensitivity,
+            config.sensitivity,
+            "sensitivity in config should match",
+        )
+
+        self.assertEqual(
+            alert_from_db.config.direction, config.direction, "direction in config should match"
+        )
+
+        self.assertEqual(
+            alert_from_db.config.expected_seasonality,
+            config.expected_seasonality,
+            "seasonality in config should match",
+        )
+
+        self.assertEqual(
+            len(alert_from_db.timeseries.timestamps), 2, "Must have two data points in timeseries"
+        )
+        self.assertEqual(
+            len(alert_from_db.timeseries.values), 2, "Must have two data points in timeseries"
+        )
+        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
+
+        # Verify updating an existing alert
+        organization_id = 1001
+        project_id = 1002
+        config = AnomalyDetectionConfig(
+            time_period=30, sensitivity="low", direction="up", expected_seasonality="auto"
+        )
+
+        # Adding a new timepoint with an existing timestamp should fail
+        with self.assertRaises(Exception):
+            alert_data_accessor.save_timepoint(external_alert_id, point1)
+
+        # Adding a new timepoint with new timestamp should succeed
+        point3 = TimeSeriesPoint(timestamp=3000.0, value=500.0)
+        alert_data_accessor.save_timepoint(external_alert_id, point3)
+        alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
+        self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
+        self.assertEqual(
+            len(alert_from_db.timeseries.timestamps), 3, "Must have three data points in timeseries"
+        )
+        self.assertEqual(
+            len(alert_from_db.timeseries.values), 3, "Must have three data points in timeseries"
+        )
+        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
+        self.assertEqual(alert_from_db.timeseries.timestamps[2], point3.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[2], point3.value)
+
+        # Resaving an existing alert should update existing data, including overwritinf the entire time series
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=[point1],
+        )
+
+        with Session() as session:
+            self.assertEqual(
+                session.query(DbDynamicAlert).count(), 1, "One and only one dynamic alert row saved"
+            )
+            self.assertEqual(
+                session.query(DbDynamicAlert)
+                .filter_by(external_alert_id=external_alert_id)
+                .count(),
+                1,
+                f"One and only one dynamic alert with the external_alert_id {external_alert_id}",
+            )
+            # This time around we check the data by directly querying the table instead of using the DbAlertDataAccessor class
+            db_dynamic_alert = (
+                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).first()
+            )
+            self.assertIsNotNone(db_dynamic_alert, "Should retrieve the alert record")
+            self.assertEqual(
+                db_dynamic_alert.organization_id,
+                organization_id,
+                "Organization id should match",
+            )
+            self.assertEqual(db_dynamic_alert.project_id, project_id, "Project id should match")
+            self.assertEqual(
+                db_dynamic_alert.external_alert_id,
+                external_alert_id,
+                "external_alert_id id should match",
+            )
+            self.assertEqual(
+                db_dynamic_alert.config["time_period"],
+                config.time_period,
+                "time_period in config should match",
+            )
+
+            self.assertEqual(
+                db_dynamic_alert.config["sensitivity"],
+                config.sensitivity,
+                "time_period in config should match",
+            )
+
+            self.assertEqual(
+                db_dynamic_alert.config["direction"],
+                config.direction,
+                "time_period in config should match",
+            )
+
+            self.assertEqual(
+                db_dynamic_alert.config["expected_seasonality"],
+                config.expected_seasonality,
+                "time_period in config should match",
+            )
+
+            self.assertEqual(
+                len(db_dynamic_alert.timeseries), 1, "Must have only one data point in timeseries"
+            )
+            self.assertEqual(db_dynamic_alert.timeseries[0].timestamp.timestamp(), point1.timestamp)
+            self.assertAlmostEqual(db_dynamic_alert.timeseries[0].value, point1.value)
