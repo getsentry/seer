@@ -1,6 +1,7 @@
-from typing import Annotated, Optional, Union
+import textwrap
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
 
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
@@ -19,7 +20,7 @@ class SnippetXml(PromptXmlModel, tag="snippet"):
     snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
 
 
-class RootCausePlanTaskPromptXml(PromptXmlModel, tag="task", skip_empty=True):
+class RootCausePlanTaskPromptXml(PromptXmlModel, tag="root_cause", skip_empty=True):
     title: str = element()
     description: str = element()
     fix_title: Optional[str] = element()
@@ -50,6 +51,51 @@ class PlanStep(BaseModel):
     id: int
     title: str
     text: str
+
+
+class PlanTaskPromptXml(PromptXmlModel, tag="step"):
+    file_path: str = attr()
+    repo_name: str = attr()
+    type: str = attr()  # This is not a literal in order for pydantic-xml to work
+    diff: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
+    description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
+    commit_message: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
+
+    @field_validator("diff")
+    @classmethod
+    def clean_diff(cls, v: str) -> str:
+        lines = v.split("\n")
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+
+    @classmethod
+    def get_example(cls):
+        return cls(
+            file_path="path/to/file.py",
+            repo_name="owner/repo",
+            type="Either 'file_change', 'file_create', or 'file_delete'",
+            description="Describe what you are doing here in detail like you are explaining it to a software engineer.",
+            diff=textwrap.dedent(
+                """\
+                # Here provide the EXACT unified diff of the code change required to accomplish this step. Make sure the diff is complete and the code is EXACTLY matching the files you see. For example:
+                --- a/path/to/file.py
+                +++ b/path/to/file.py
+                @@ -1,3 +1,3 @@
+                    return 'fab'
+                 y = 2
+                 x = 1
+                -def foo():
+                +def foo():
+                    return 'foo'
+                 def bar():
+                    return 'bar'
+                """
+            ),
+            commit_message="Fix the foo() function by returning 'bar'",
+        )
 
 
 class ReplaceCodePromptXml(PromptXmlModel, tag="code_change"):
@@ -95,14 +141,14 @@ class CreateFilePromptXml(PromptXmlModel, tag="create_file"):
 
 
 class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
-    tasks: list[Union[CreateFilePromptXml, ReplaceCodePromptXml]]
+    tasks: list[PlanTaskPromptXml]
 
     @classmethod
     def get_example(cls):
         return cls(
             tasks=[
-                ReplaceCodePromptXml.get_example(),
-                CreateFilePromptXml.get_example(),
+                PlanTaskPromptXml.get_example(),
+                PlanTaskPromptXml.get_example(),
             ]
         )
 
@@ -118,4 +164,10 @@ class PlanningOutputPromptXml(PromptXmlModel, tag="planning_output"):
 
 
 class PlanningOutput(BaseComponentOutput):
-    tasks: list[Union[CreateFilePromptXml, ReplaceCodePromptXml]]
+    tasks: list[PlanTaskPromptXml]
+
+
+class FuzzyDiffChunk(BaseModel):
+    header: str
+    original_chunk: str
+    new_chunk: str

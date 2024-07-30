@@ -11,9 +11,9 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
-from seer.automation.autofix.steps.execution_step import (
-    AutofixExecutionStep,
-    AutofixExecutionStepRequest,
+from seer.automation.autofix.steps.change_describer_step import (
+    AutofixChangeDescriberRequest,
+    AutofixChangeDescriberStep,
 )
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
@@ -76,17 +76,9 @@ class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
 
         self.context.event_manager.send_planning_result(planning_output)
 
-        if not planning_output:
-            return
-
-        # Call the first step in the execution chain
         self.next(
-            AutofixExecutionStep.get_signature(
-                AutofixExecutionStepRequest(
-                    **self.step_request_fields,
-                    task_index=0,
-                    planning_output=planning_output,
-                )
+            AutofixChangeDescriberStep.get_signature(
+                AutofixChangeDescriberRequest(**self.step_request_fields)
             ),
-            queue=CeleryQueues.DEFAULT if self.context.skip_loading_codebase else CeleryQueues.CUDA,
+            queue=CeleryQueues.DEFAULT,
         )

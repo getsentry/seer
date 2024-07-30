@@ -41,29 +41,44 @@ class TestFindOriginalSnippet(unittest.TestCase):
         )
         self.assertIsNone(find_original_snippet(snippet, file_contents))
 
-    def test_find_original_snippet_with_ellipsis(self):
-        snippet = "def example_function():\n    ...\n    pass"
+    def test_find_original_snippet_multiple_similar_pieces(self):
+        snippet = "def example_function():\n    print('Hello')"
         file_contents = textwrap.dedent(
             """\
             def example_function():
-                print("Doing something")
+                print('Hi')
+
+            def unrelated_function():
                 pass
+
+            def example_function():
+                print('Hello')
+
+            def another_example_function():
+                print('Hello')
             """
         )
-        self.assertIsNotNone(find_original_snippet(snippet, file_contents))
+        expected_result = ("def example_function():\n    print('Hello')", 6, 8)
+        self.assertEqual(
+            find_original_snippet(snippet, file_contents, threshold=0.95), expected_result
+        )
 
-    def test_find_original_snippet_with_multiline_ellipsis(self):
-        snippet = "def example_function():\n    ...\n    pass\n    # ...\n    pass"
+    def test_find_original_snippet_fuzzy_match(self):
+        snippet = "def example_function():\n    print('Hello, world!')"
         file_contents = textwrap.dedent(
             """\
             def example_function():
-                print("Doing something")
-                print("Doing something else")
-                pass
+                print('Hello world!')  # Missing comma
 
-            def another_function():
-                print("Goodbye, world!")
+            def unrelated_function():
                 pass
             """
         )
-        self.assertIsNotNone(find_original_snippet(snippet, file_contents))
+        expected_result = (
+            "def example_function():\n    print('Hello world!')  # Missing comma",
+            0,
+            2,
+        )
+        self.assertEqual(
+            find_original_snippet(snippet, file_contents, threshold=0.75), expected_result
+        )
