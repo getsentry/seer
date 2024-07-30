@@ -14,8 +14,7 @@ from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 # ALERT: Using magic number four. This is temporary code that ensures that AutopFix uses all 4
 # cuda devices available. This "4" should match the number of celery sub-processes configured in celeryworker.sh.
 EXPECTED_CUDA_DEVICES = 4
-logger = logging.getLogger("autofix")
-automation_logger = logging.getLogger("automation")
+logger = logging.getLogger(__name__)
 
 
 class ConsentError(Exception):

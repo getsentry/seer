@@ -1,5 +1,6 @@
 import abc
 import datetime
+import logging
 import os
 import shutil
 import tempfile
@@ -7,11 +8,12 @@ import tempfile
 from google.cloud import storage
 from google.cloud.storage import Bucket
 
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.utils import cleanup_dir
 from seer.bootup import module
 from seer.configuration import AppConfig, CodebaseStorageType
 from seer.dependency_injection import inject, injected
+
+logger = logging.getLogger(__name__)
 
 
 class StorageAdapter(abc.ABC):
@@ -33,7 +35,7 @@ class StorageAdapter(abc.ABC):
         try:
             cleanup_dir(self.tmpdir)
         except Exception as e:
-            autofix_logger.exception(e)
+            logger.exception(e)
 
     @abc.abstractmethod
     def copy_to_workspace(self) -> bool:
@@ -75,7 +77,7 @@ class FilesystemStorageAdapter(StorageAdapter):
             try:
                 shutil.copytree(storage_path, self.tmpdir, dirs_exist_ok=True)
             except Exception as e:
-                autofix_logger.exception(e)
+                logger.exception(e)
                 return False
 
         return True
@@ -87,7 +89,7 @@ class FilesystemStorageAdapter(StorageAdapter):
             try:
                 shutil.rmtree(storage_path, ignore_errors=False)
             except Exception as e:
-                autofix_logger.exception(e)
+                logger.exception(e)
                 return False
 
         shutil.copytree(self.tmpdir, storage_path, dirs_exist_ok=True)
@@ -101,7 +103,7 @@ class FilesystemStorageAdapter(StorageAdapter):
             try:
                 shutil.rmtree(storage_path, ignore_errors=False)
             except Exception as e:
-                autofix_logger.exception(e)
+                logger.exception(e)
                 return False
 
         return True
@@ -141,11 +143,9 @@ class GcsStorageAdapter(StorageAdapter):
                     blob.custom_time = datetime.datetime.now()
                     blob.patch()
 
-            autofix_logger.debug(
-                f"Downloaded files from {storage_prefix} to workspace: {self.tmpdir}"
-            )
+            logger.debug(f"Downloaded files from {storage_prefix} to workspace: {self.tmpdir}")
         except Exception as e:
-            autofix_logger.exception(e)
+            logger.exception(e)
             return False
 
         return True
@@ -174,11 +174,9 @@ class GcsStorageAdapter(StorageAdapter):
 
                     blob.upload_from_filename(file_path)
 
-            autofix_logger.debug(
-                f"Uploaded files from workspace: {self.tmpdir} to {storage_prefix}"
-            )
+            logger.debug(f"Uploaded files from workspace: {self.tmpdir} to {storage_prefix}")
         except Exception as e:
-            autofix_logger.exception(e)
+            logger.exception(e)
             return False
 
         return True
@@ -190,7 +188,7 @@ class GcsStorageAdapter(StorageAdapter):
             blobs = list(self.get_bucket().list_blobs(prefix=storage_prefix))
             self.get_bucket().delete_blobs(blobs)
         except Exception as e:
-            autofix_logger.exception(e)
+            logger.exception(e)
             return False
 
         return True
@@ -198,7 +196,7 @@ class GcsStorageAdapter(StorageAdapter):
 
 @module.provider
 def get_storage_adapter_class(config: AppConfig = injected) -> type[StorageAdapter]:
-    autofix_logger.debug(f"Using storage type: {config.CODEBASE_STORAGE_TYPE}")
+    logger.debug(f"Using storage type: {config.CODEBASE_STORAGE_TYPE}")
 
     if config.CODEBASE_STORAGE_TYPE == CodebaseStorageType.FILESYSTEM:
         return FilesystemStorageAdapter

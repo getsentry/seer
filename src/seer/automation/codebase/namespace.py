@@ -1,4 +1,5 @@
 import datetime
+import logging
 import time
 from typing import Mapping, Optional, Self
 
@@ -7,7 +8,6 @@ import numpy as np
 import sentry_sdk
 from chromadb.api import API as ChromaClient
 
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.models import (
     BaseDocumentChunk,
     ChunkQueryResult,
@@ -21,6 +21,8 @@ from seer.automation.codebase.storage_adapters import StorageAdapter
 from seer.automation.models import RepoDefinition
 from seer.db import DbCodebaseNamespace, DbCodebaseNamespaceMutex, DbRepositoryInfo, Session
 from seer.dependency_injection import inject, injected
+
+logger = logging.getLogger(__name__)
 
 
 class CodebaseNamespaceManager:
@@ -70,14 +72,14 @@ class CodebaseNamespaceManager:
 
     @staticmethod
     def _clear_mutex(namespace_id: int):
-        autofix_logger.debug(f"Mutex for namespace {namespace_id} is being cleared...")
+        logger.debug(f"Mutex for namespace {namespace_id} is being cleared...")
         with Session() as session:
             session.query(DbCodebaseNamespaceMutex).filter_by(namespace_id=namespace_id).delete()
             session.commit()
 
     @staticmethod
     def _set_mutex(namespace_id: int):
-        autofix_logger.debug(f"Mutex for namespace {namespace_id} is being set...")
+        logger.debug(f"Mutex for namespace {namespace_id} is being set...")
         with Session() as session:
             mutex = DbCodebaseNamespaceMutex(
                 namespace_id=namespace_id, created_at=datetime.datetime.now()
@@ -99,13 +101,13 @@ class CodebaseNamespaceManager:
                         minutes=CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES
                     )
                 ):
-                    autofix_logger.warning(
+                    logger.warning(
                         f"Mutex for namespace {namespace_id} has been held for more than {CodebaseNamespaceManager.NAMESPACE_MUTEX_TIMEOUT_MINUTES} minutes"
                     )
                     CodebaseNamespaceManager._clear_mutex(namespace_id)
                     break
 
-                autofix_logger.debug(f"Mutex for namespace {namespace_id} is held, waiting...")
+                logger.debug(f"Mutex for namespace {namespace_id} is held, waiting...")
                 time.sleep(1)
 
     @staticmethod
@@ -219,7 +221,7 @@ class CodebaseNamespaceManager:
             )
 
             if db_repo_info is None:
-                autofix_logger.debug(
+                logger.debug(
                     f"Failed to get repo info for org {organization}, project {project}, external_id {repo.external_id}"
                 )
                 return None
@@ -250,7 +252,7 @@ class CodebaseNamespaceManager:
                 db_namespace = session.get(DbCodebaseNamespace, db_repo_info.default_namespace)
 
             if db_namespace is None:
-                autofix_logger.debug(
+                logger.debug(
                     f"Failed to get namespace info for org {organization}, project {project}, external_id {repo.external_id}"
                 )
                 return None
@@ -283,7 +285,7 @@ class CodebaseNamespaceManager:
         should_set_as_default: bool = False,
         storage_type: type[StorageAdapter] = injected,
     ):
-        autofix_logger.info(
+        logger.info(
             f"Creating new repo for {organization}/{project}/{repo.external_id} (repo: {repo.full_name})"
         )
         with Session() as session:
@@ -391,12 +393,12 @@ class CodebaseNamespaceManager:
                 raise ValueError(f"Repository with id {repo_id} not found")
 
             if existing_namespace:
-                autofix_logger.info(
+                logger.info(
                     f"Using existing namespace for {db_repo_info.external_id} namespace id: {existing_namespace.id}"
                 )
                 db_namespace = existing_namespace
             else:
-                autofix_logger.info(
+                logger.info(
                     f"Creating namespace with existing repo for {db_repo_info.organization}/{db_repo_info.project}/{db_repo_info.external_id} (repo: {db_repo_info.external_slug})"
                 )
                 db_namespace = DbCodebaseNamespace(
@@ -501,7 +503,7 @@ class CodebaseNamespaceManager:
 
         if not matches:
             missing_paths = paths - all_retrieved_paths
-            autofix_logger.debug(f"Paths mismatch: {missing_paths}")
+            logger.debug(f"Paths mismatch: {missing_paths}")
 
         return matches
 
@@ -618,21 +620,21 @@ class CodebaseNamespaceManager:
         self._set_mutex(self.namespace.id)
 
         if not self.storage_adapter.save_to_storage():
-            autofix_logger.error(f"Failed to save workspace for namespace {self.namespace.id}")
+            logger.error(f"Failed to save workspace for namespace {self.namespace.id}")
             return
 
         self.save_records()
 
         self._clear_mutex(self.namespace.id)
 
-        autofix_logger.info(f"Saved workspace for namespace {self.namespace.id}")
+        logger.info(f"Saved workspace for namespace {self.namespace.id}")
 
     def delete(self):
         self._wait_for_mutex_clear(self.namespace.id)
         self._set_mutex(self.namespace.id)
 
         if not self.storage_adapter.delete_from_storage():
-            autofix_logger.error(f"Failed to delete workspace for namespace {self.namespace.id}")
+            logger.error(f"Failed to delete workspace for namespace {self.namespace.id}")
 
         with Session() as session:
             session.query(DbCodebaseNamespaceMutex).filter_by(
@@ -647,12 +649,12 @@ class CodebaseNamespaceManager:
 
             session.commit()
 
-        autofix_logger.info(f"Deleted workspace for namespace {self.namespace.id}")
+        logger.info(f"Deleted workspace for namespace {self.namespace.id}")
 
     def cleanup(self):
         self.storage_adapter.clear_workspace()
 
-        autofix_logger.info(f"Cleaned up workspace for namespace {self.namespace.id}")
+        logger.info(f"Cleaned up workspace for namespace {self.namespace.id}")
 
     def _log_accessed_at(self):
         with Session() as session:
