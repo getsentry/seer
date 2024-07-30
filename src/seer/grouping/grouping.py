@@ -33,7 +33,7 @@ class GroupingRequest(BaseModel):
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
-    hnsw_candidates: int = 100
+    hnsw_candidates: int = NN_GROUPING_HNSW_CANDIDATES
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
 
     @field_validator("stacktrace", "message")
