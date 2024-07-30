@@ -1,3 +1,4 @@
+import logging
 import os.path
 from enum import Enum
 from typing import Annotated
@@ -5,6 +6,8 @@ from typing import Annotated
 from pydantic import BaseModel, BeforeValidator, Field
 
 from seer.dependency_injection import Module
+
+logger = logging.getLogger(__name__)
 
 configuration_module = Module()
 configuration_test_module = Module()
@@ -74,14 +77,15 @@ class AppConfig(BaseModel):
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
+
             assert self.GITHUB_APP_ID, "GITHUB_APP_ID required for production!"
             assert self.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY required for production!"
-            assert (
-                self.DEV or self.GITHUB_SENTRY_APP_ID
-            ), "GITHUB_SENTRY_APP_ID required for production!"
-            assert (
-                self.DEV or self.GITHUB_SENTRY_PRIVATE_KEY
-            ), "GITHUB_SENTRY_PRIVATE_KEY required for production!"
+
+            # These are not required for production but is needed to work for customers that don't want PRs to be made.
+            if not self.DEV and not self.GITHUB_SENTRY_APP_ID:
+                logger.warn("GITHUB_SENTRY_APP_ID is missing in production!")
+            if not self.DEV and not self.GITHUB_SENTRY_PRIVATE_KEY:
+                logger.warn("GITHUB_SENTRY_PRIVATE_KEY is missing in production!")
 
 
 @configuration_module.provider
