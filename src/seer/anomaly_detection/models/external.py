@@ -2,7 +2,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AnomalyFlags = Literal["none", "anomaly_low", "anomaly_high", "no_data"]
+AnomalyFlags = Literal["none", "anomaly_lower_confidence", "anomaly_higher_confidence", "no_data"]
 Sensitivities = Literal["low", "medium", "high"]
 TimePeriods = Literal[15, 30, 60]
 Directions = Literal["up", "down", "both"]
@@ -12,7 +12,7 @@ Seasonalities = Literal["hourly", "daily", "weekly", "auto"]
 class Anomaly(BaseModel):
     anomaly_type: AnomalyFlags = Field(
         ...,
-        description="Indicates result of the anomaly detection algorithm. 'none' means no anomaly detected, 'anomaly_low' means lower threshold, 'anomaly_high' means higher threshold, 'no_data' means time series did not have enough data to run anomaly detection.",
+        description="Indicates result of the anomaly detection algorithm. 'none' means no anomaly detected, 'anomaly_lower_confidence' means lower threshold, 'anomaly_higher_confidence' means higher threshold, 'no_data' means time series did not have enough data to run anomaly detection.",
     )
 
     anomaly_score: Optional[float] = Field(None, description="Computed anomaly score")
