@@ -14,7 +14,7 @@ class PlanningPrompts:
 
             You are giving tasks to a coding agent that will perform code changes based on your instructions. The tasks must be clear and detailed enough that the coding agent can perform the task without any additional information.
 
-            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets. Every time you use a tool, you need to justify why extremely quickly to avoid being fired; to do so, just fill in this one sentence in the <log> tag and say nothing else: I'll do X because Y.
+            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets. Every time you use a tool, explain the reason using the following sentence and say nothing else: I'm doing X because Y.
 
             Your output must use the below format and use the types of steps provided:
             {steps_example_str}
