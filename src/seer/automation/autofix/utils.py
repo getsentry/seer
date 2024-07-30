@@ -1,9 +1,6 @@
 import difflib
-import logging
 import random
 import re
-
-autofix_logger = logging.getLogger("autofix")
 
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
 

@@ -1,3 +1,4 @@
+import logging
 import textwrap
 from typing import Mapping, cast
 
@@ -12,7 +13,6 @@ from seer.automation.autofix.models import (
     CommittedPullRequestDetails,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument, QueryResultDocumentChunk
@@ -25,6 +25,8 @@ from seer.automation.state import State
 from seer.automation.utils import AgentError, get_embedding_model, get_sentry_client
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
+
+logger = logging.getLogger(__name__)
 
 RepoExternalId = str
 RepoInternalId = int
@@ -111,7 +113,7 @@ class AutofixContext(PipelineContext):
         self.state = state
         self.skip_loading_codebase = no_codebase_indexes
 
-        autofix_logger.info(
+        logger.info(
             f"AutofixContext initialized with run_id {self.run_id}, {'without codebase indexing' if self.skip_loading_codebase else 'with codebase indexing'}"
         )
 
@@ -311,7 +313,7 @@ class AutofixContext(PipelineContext):
                         )
 
                         if branch_ref is None:
-                            autofix_logger.warning("Failed to create branch from changes")
+                            logger.warning("Failed to create branch from changes")
                             return None
 
                         pr_title = f"""🤖 {change_state.title}"""
@@ -377,12 +379,12 @@ class AutofixContext(PipelineContext):
             response = self.sentry_client.call("get_organization_slug", org_id=organization_id)
             slug = None if response is None else response.get("slug", None)
             if slug is None:
-                autofix_logger.warn(
+                logger.warn(
                     f"Slug lookup call for organization {organization_id} succeeded but returned value None."
                 )
         except Exception as e:
-            autofix_logger.warn(f"Failed to get slug for organization {organization_id}")
-            autofix_logger.exception(e)
+            logger.warn(f"Failed to get slug for organization {organization_id}")
+            logger.exception(e)
             sentry_sdk.capture_exception(e)
             slug = None
         return slug

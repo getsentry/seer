@@ -1,3 +1,4 @@
+import logging
 import textwrap
 
 from langfuse.decorators import observe
@@ -6,10 +7,11 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.models import DocumentChunkPromptXml, QueryResultDocumentChunk
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import PromptXmlModel
+
+logger = logging.getLogger(__name__)
 
 
 class RetrieverRequest(BaseComponentRequest):
@@ -99,11 +101,11 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
             cur.usage += usage
 
         if data is None or "queries" not in data:
-            autofix_logger.warning(f"No search queries found for instruction: '{request.text}'")
+            logger.warning(f"No search queries found for instruction: '{request.text}'")
             return None
 
         queries = data["queries"]
-        autofix_logger.debug(f"Search queries: {queries}")
+        logger.debug(f"Search queries: {queries}")
         self.context.event_manager.add_log(f"Searched with queries: {queries}")
 
         unique_chunks: dict[str, QueryResultDocumentChunk] = {}
@@ -113,6 +115,6 @@ class RetrieverComponent(BaseComponent[RetrieverRequest, RetrieverOutput]):
                 unique_chunks[chunk.hash] = chunk
         chunks = list(unique_chunks.values())
 
-        autofix_logger.debug(f"Retrieved {len(chunks)} unique chunks.")
+        logger.debug(f"Retrieved {len(chunks)} unique chunks.")
 
         return RetrieverOutput(chunks=chunks)

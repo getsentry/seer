@@ -8,7 +8,8 @@ from celery import Task, signature
 from pydantic import BaseModel, Field
 
 from seer.automation.state import State
-from seer.automation.utils import automation_logger
+
+logger = logging.getLogger(__name__)
 
 Signature = Any
 SerializedSignature = Any
@@ -97,7 +98,7 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
             def process(self, msg, kwargs):
                 return f"[{name}] {msg}", kwargs
 
-        return PipelineLoggingAdapter(automation_logger)
+        return PipelineLoggingAdapter(logger)
 
     @staticmethod
     @abc.abstractmethod

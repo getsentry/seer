@@ -14,7 +14,7 @@ from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import extract_json_from_text
 from seer.bootup import module, stub_module
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

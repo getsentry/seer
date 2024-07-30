@@ -34,7 +34,7 @@ from seer.automation.state import State
 from seer.db import DbRepositoryInfo, Session
 from seer.utils import class_method_lru_cache
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 class CodebaseIndex:

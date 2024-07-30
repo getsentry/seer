@@ -21,7 +21,7 @@ from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.models import FileChange
 from seer.automation.utils import AgentError
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 class BaseTools:

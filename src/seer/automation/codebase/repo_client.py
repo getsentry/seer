@@ -20,7 +20,7 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.utils import class_method_lru_cache
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 def get_github_app_auth_and_installation(
