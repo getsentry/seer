@@ -1,10 +1,10 @@
 import json
+import sentry_sdk
 import re
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
 
-import sentry_sdk
 from johen.examples import Examples
 from johen.generators import specialized
 from pydantic import (
