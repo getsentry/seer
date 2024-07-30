@@ -30,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 class AnomalyDetection(BaseModel):
     alert_data_accessor: AlertDataAccessor = Field(
-        DbAlertDataAccessor(),
-        description="Alert data accessor for saving and retrieving alert history data",
+        DbAlertDataAccessor(), description="Accessor for alert data"
     )
 
     def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
@@ -79,7 +78,6 @@ class AnomalyDetection(BaseModel):
         stream_detector = MPStreamAnomalyDetector(
             config=mp_config,
             scorer=MPIRQScorer(),
-            normalizer=MinMaxNormalizer(),
             base_timestamps=historic.timeseries.timestamps,
             base_values=historic.timeseries.values,
             base_mp=anomalies.matrix_profile,

@@ -3,7 +3,6 @@ import datetime
 import logging
 from typing import List
 
-# import numpy.typing as npt
 import numpy as np
 from pydantic import BaseModel
 from sqlalchemy import delete

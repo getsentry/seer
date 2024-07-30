@@ -132,8 +132,9 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             normalize=False,
         )
 
+        # we do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
         mp_dist = self._get_mp_dist_from_mp(
-            mp, ts_values, self.config.normalize_mp, pad_to_ts_len=True
+            mp, ts_values, normalize_mp_dist=False, pad_to_ts_len=True
         )
 
         scores, flags = self.scorer.score(mp, mp_dist)
@@ -151,7 +152,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     scorer: MPScorer = Field(
         ..., description="The scorer to use for evaluating if a point is an anomaly or not"
     )
-    normalizer: Normalizer = Field(..., description="Normalizer to use for normalizing data")
     base_timestamps: npt.NDArray[np.float64] = Field(
         ..., description="Baseline timeseries to which streaming points will be added."
     )
@@ -177,7 +177,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
 
         scores = []
         flags = []
-        for i, cur_val in enumerate(timeseries.values):
+        for cur_val in timeseries.values:
             stream.update(cur_val)
 
             # Get the updated ts and mp
