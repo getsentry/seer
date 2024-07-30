@@ -19,6 +19,7 @@ from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 logger = logging.getLogger(__name__)
 
 NN_GROUPING_DISTANCE = 0.01
+NN_GROUPING_HNSW_DISTANCE = 0.05
 NN_SIMILARITY_DISTANCE = 0.05
 
 
@@ -31,6 +32,8 @@ class GroupingRequest(BaseModel):
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
     read_only: bool = False
+    hnsw_candidates: int = 100
+    hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
 
     @field_validator("stacktrace", "message")
     @classmethod
@@ -177,8 +180,8 @@ class GroupingLookup:
         hash: str,
         distance: float,
         k: int,
-        hnsw_candidates: int = 100,
-        hnsw_distance: float = 0.05,
+        hnsw_candidates: int,
+        hnsw_distance: float,
     ) -> List[tuple[DbGroupingRecord, float]]:
         custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
 
@@ -196,9 +199,15 @@ class GroupingLookup:
             .all()
         )
 
-        reranked_candidates = self.rerank_candidates(candidates, embedding, distance)
+        reranked = self.rerank_candidates(candidates, embedding, distance)
 
-        return reranked_candidates[:k]
+        if candidates and reranked and candidates[0].hash != reranked[0][0].hash:
+            sentry_sdk.metrics.incr(
+                key="reranking_changed_output",
+                value=1,
+            )
+
+        return reranked[:k]
 
     @staticmethod
     @sentry_sdk.tracing.trace
