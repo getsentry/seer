@@ -1,8 +1,10 @@
+import logging
 import os
 from typing import List, Optional
 
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.codebase.models import Match, SearchResult
+
+logger = logging.getLogger(__name__)
 
 
 class CodeSearcher:
@@ -54,9 +56,7 @@ class CodeSearcher:
 
         try:
             if os.path.getsize(file_path) > self.max_file_size_bytes:
-                autofix_logger.debug(
-                    f"Skipping {file_path} as it exceeds the maximum file size limit."
-                )
+                logger.debug(f"Skipping {file_path} as it exceeds the maximum file size limit.")
                 return None
 
             with open(file_path, "r", encoding="utf-8") as f:
@@ -73,7 +73,7 @@ class CodeSearcher:
                 score = self.calculate_proximity_score(file_path)
                 return SearchResult(relative_path=relative_path, matches=matches, score=score)
         except UnicodeDecodeError:
-            autofix_logger.exception(f"Unable to read {file_path}")
+            logger.exception(f"Unable to read {file_path}")
         return None
 
     def search(self, keyword: str) -> List[SearchResult]:

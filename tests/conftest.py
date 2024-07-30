@@ -8,6 +8,7 @@ from johen.generators import pydantic, sqlalchemy
 from sqlalchemy import text
 
 from celery_app.config import CeleryConfig
+from seer.app import module
 from seer.bootup import bootup, stub_module
 from seer.configuration import configuration_test_module
 from seer.db import Session, db
@@ -27,7 +28,7 @@ def configure_environment():
 
 @pytest.fixture(autouse=True)
 def setup_app(test_module: Module):
-    with configuration_test_module, test_module:
+    with module, configuration_test_module, test_module:
         reset_loading_state()
         bootup(start_model_loading=False, integrations=[])
         app = resolve(Flask)

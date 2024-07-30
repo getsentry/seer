@@ -1,3 +1,5 @@
+import logging
+
 import sentry_sdk
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -11,9 +13,10 @@ from seer.automation.autofix.components.reranker.models import (
     RerankerRequest,
 )
 from seer.automation.autofix.components.reranker.prompts import RerankerPrompts
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
 from seer.automation.utils import escape_multi_xml
+
+logger = logging.getLogger(__name__)
 
 
 class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
@@ -42,7 +45,7 @@ class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
             cur.usage += usage
 
         if not completion_result.content:
-            autofix_logger.warning("Reranker agent did not return a valid response")
+            logger.warning("Reranker agent did not return a valid response")
             return RerankerOutput(chunks=[])
 
         snippet_ids = RawRerankerResult.from_xml(
@@ -62,7 +65,7 @@ class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
 
             if not chunk:
                 # Go forward, but we should log this.
-                autofix_logger.exception(
+                logger.exception(
                     ValueError(
                         f"Snippet with hash {short_snippet_hash} not found in the input chunks"
                     )

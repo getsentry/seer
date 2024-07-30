@@ -1,3 +1,5 @@
+import logging
+
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
@@ -12,9 +14,10 @@ from seer.automation.autofix.components.root_cause.models import (
 )
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.tools import BaseTools
-from seer.automation.autofix.utils import autofix_logger
 from seer.automation.component import BaseComponent
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+
+logger = logging.getLogger(__name__)
 
 
 class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCauseAnalysisOutput]):
@@ -42,7 +45,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             cur.usage += agent.usage
 
         if not response:
-            autofix_logger.warning("Root Cause Analysis agent did not return a valid response")
+            logger.warning("Root Cause Analysis agent did not return a valid response")
             return None
 
         if "<NO_ROOT_CAUSES>" in response:
@@ -63,7 +66,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             cur.usage += formatter_usage
 
         if not formatter_response.content:
-            autofix_logger.warning("Root Cause Analysis formatter did not return a valid response")
+            logger.warning("Root Cause Analysis formatter did not return a valid response")
             return None
 
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(

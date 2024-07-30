@@ -16,7 +16,7 @@ from seer.automation.codebase.ast import (
 from seer.automation.codebase.models import BaseDocumentChunk, Document
 from seer.utils import class_method_lru_cache
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 class TempChunk(BaseModel):

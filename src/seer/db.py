@@ -346,3 +346,6 @@ class DbDynamicAlertTimeSeries(Base):
         "DbDynamicAlert",
         back_populates="timeseries",
     )
+
+    def __str__(self):
+        return f"timstamp: {self.timestamp}, value: {self.value}"

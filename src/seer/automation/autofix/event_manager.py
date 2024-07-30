@@ -19,7 +19,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.state import State
 
-logger = logging.getLogger("autofix")
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
