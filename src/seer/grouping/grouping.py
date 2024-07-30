@@ -207,6 +207,11 @@ class GroupingLookup:
                 key="reranking_changed_output",
                 value=1,
             )
+            logger.info(
+                "Reranking changed output: original_hash=%s, new_hash=%s",
+                candidates[0].hash,
+                reranked[0][0].hash,
+            )
 
         return reranked[:k]
 
