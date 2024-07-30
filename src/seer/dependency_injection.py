@@ -30,6 +30,8 @@ import threading
 from typing import Annotated, Any, Callable, TypeVar
 
 from johen.generators.annotations import AnnotationProcessingContext
+from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 
 _A = TypeVar("_A")
 _C = TypeVar("_C", bound=Callable[[], Any])
@@ -118,6 +120,12 @@ class FactoryAnnotation:
         ), "Cannot decorate function with required kwd args"
         return FactoryAnnotation.from_annotation(rv)
 
+    @classmethod
+    def from_field(cls, f: FieldInfo) -> "FactoryAnnotation":
+        base = FactoryAnnotation.from_annotation(f.annotation)
+        label = next((arg.label for arg in f.metadata if isinstance(arg, Labeled)), "")
+        return dataclasses.replace(base, label=label)
+
 
 class FactoryNotFound(Exception):
     pass
@@ -191,6 +199,15 @@ def inject(c: _A) -> _A:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         new_kwds = {**kwargs}
 
+        if inspect.isclass(original_type) and issubclass(original_type, BaseModel):
+            for k, f in original_type.model_fields.items():
+                if f.default is injected or f.default_factory is injected:
+                    annotation = f.annotation
+                    if not annotation:
+                        raise AssertionError(f"Cannot inject argument {k} as it lacks annotations")
+                    resolved = resolve_annotation(FactoryAnnotation.from_field(f), f)
+                    new_kwds[k] = resolved
+
         if argspec.defaults:
             offset = len(argspec.args) - len(argspec.defaults)
             for i, d in enumerate(argspec.defaults):
@@ -224,21 +241,22 @@ def inject(c: _A) -> _A:
 
 
 def resolve(source: type[_A]) -> _A:
+    key = FactoryAnnotation.from_annotation(source)
+    return resolve_annotation(key, source)
+
+
+def resolve_annotation(key: FactoryAnnotation, source: Any) -> Any:
     if _cur.injector is None:
         raise FactoryNotFound(f"Cannot resolve '{source}', no module injector is currently active.")
-
-    key = FactoryAnnotation.from_annotation(source)
-
     if _cur.seen is None:
         _cur.seen = []
-
     try:
         if key in _cur.seen:
             raise FactoryNotFound(
                 f"Circular dependency: {' -> '.join(str(k) for k in _cur.seen)} -> {key}"
             )
         _cur.seen.append(key)
-        return _cur.injector.get(source)
+        return _cur.injector.get(source, key=key)
     finally:
         _cur.seen.clear()
 
@@ -255,8 +273,10 @@ class Injector:
             return _cur.injector._cache
         return self._cache
 
-    def get(self, source: type[_A]) -> _A:
-        key = FactoryAnnotation.from_annotation(source)
+    def get(self, source: type[_A], key: FactoryAnnotation | None = None) -> _A:
+        if key is None:
+            key = FactoryAnnotation.from_annotation(source)
+
         if key in self.cache:
             return self.cache[key]
 
@@ -264,7 +284,7 @@ class Injector:
             f = self.module.registry[key]
         except KeyError:
             if self.parent is not None:
-                return self.parent.get(source)
+                return self.parent.get(source, key=key)
             raise FactoryNotFound(f"No registered factory for {source}")
 
         rv = self.cache[key] = f()

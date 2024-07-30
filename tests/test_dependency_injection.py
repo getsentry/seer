@@ -2,6 +2,7 @@ import dataclasses
 from typing import Annotated, Any, Mapping
 
 import pytest
+from pydantic import BaseModel
 
 from seer.dependency_injection import FactoryAnnotation, Labeled, Module, inject, injected, resolve
 
@@ -111,8 +112,7 @@ def test_injections():
         config_a: Annotated[str, Labeled("a")] = injected
 
     @module.provider
-    @dataclasses.dataclass
-    class ServiceB:
+    class ServiceB(BaseModel):
         service_a: ServiceA = injected
         config_b: Annotated[str, Labeled("b")] = injected
 
