@@ -5,6 +5,9 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
+from seer.anomaly_detection.detectors.mp_utils import MPUtils
+from seer.dependency_injection import inject, injected
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,15 +46,6 @@ class MPIRQScorer(MPScorer):
             * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
 
-        def to_flag(mp_dist, threshold_lower, threshold_upper):
-            if np.isnan(mp_dist):
-                return "none"
-            if mp_dist < threshold_lower:
-                return "none"
-            if mp_dist < threshold_upper:
-                return "anomaly_lower_confidence"
-            return "anomaly_higher_confidence"
-
         if len(mp_dist[~np.isfinite(mp_dist)]) > 0:
             # TODO: Add sentry logging and metric here
             pass
@@ -69,21 +63,13 @@ class MPIRQScorer(MPScorer):
         flags = []
         for val in mp_dist:
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold_upper)
-            flags.append(to_flag(val, threshold_lower, threshold_upper))
+            flags.append(self._to_flag(val, threshold_lower, threshold_upper))
 
         return scores, flags
 
-    def stream_score(self, ts, mp, mp_dist):
-        mp_full_dist = self._get_mp_dist_from_mp(mp, normalize_mp_dist=False, pad_to_len=len(ts))
-
-        def to_flag(mp_dist, threshold_lower, threshold_upper):
-            if np.isnan(mp_dist):
-                return "none"
-            if mp_dist < threshold_lower:
-                return "none"
-            if mp_dist < threshold_upper:
-                return "anomaly_low"
-            return "anomaly_high"
+    @inject
+    def stream_score(self, ts, mp, mp_dist, mp_utils: MPUtils = injected):
+        mp_full_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts))
 
         # Stumpy returns inf for the first timeseries[0:window_size - 2] entries. We just need to ignore those before scoring.
         mp_full_dist_finite = mp_full_dist[np.isfinite(mp_full_dist)]
@@ -99,15 +85,14 @@ class MPIRQScorer(MPScorer):
             np.nan if np.isnan(val) or np.isinf(val) else val - threshold_upper for val in mp_dist
         ]
 
-        flags = [to_flag(val, threshold_lower, threshold_upper) for val in mp_dist]
+        flags = [self._to_flag(val, threshold_lower, threshold_upper) for val in mp_dist]
         return scores, flags
 
-    def _get_mp_dist_from_mp(self, mp, normalize_mp_dist, pad_to_len):
-        mp_dist = mp[:, 0]
-        if pad_to_len is not None:
-            nan_value_count = np.empty(pad_to_len - len(mp_dist))
-            nan_value_count.fill(np.nan)
-            mp_dist_updated = np.concatenate((nan_value_count, mp_dist))
-            return mp_dist_updated.astype(np.float64)
-        else:
-            return mp_dist.astype(np.float64)
+    def _to_flag(self, mp_dist, threshold_lower, threshold_upper):
+        if np.isnan(mp_dist):
+            return "none"
+        if mp_dist < threshold_lower:
+            return "none"
+        if mp_dist < threshold_upper:
+            return "anomaly_lower_confidence"
+        return "anomaly_higher_confidence"
