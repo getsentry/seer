@@ -193,6 +193,8 @@ class AutofixEvaluationRequest(BaseModel):
     run_name: str
     run_type: Literal["root_cause", "full", "execution"] = "full"
     test: bool = False
+    run_on_item_id: Optional[str] = None
+    random_for_test: bool = False
 
 
 class AutofixStateResponse(BaseModel):

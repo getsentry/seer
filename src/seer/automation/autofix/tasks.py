@@ -1,4 +1,5 @@
 import logging
+import random
 from typing import Literal, cast
 
 import sentry_sdk
@@ -214,15 +215,27 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
 
 
 def run_autofix_evaluation(
-    dataset_name: str, run_name: str, run_type: str, n_runs_per_item: int = 1, is_test: bool = False
+    dataset_name: str,
+    run_name: str,
+    run_type: str,
+    n_runs_per_item: int = 1,
+    is_test: bool = False,
+    random_for_test: bool = True,
+    run_on_item_id: str | None = None,
 ):
     langfuse = Langfuse()
 
     dataset = langfuse.get_dataset(dataset_name)
     items = dataset.items
 
-    if is_test:
-        items = items[:1]
+    if run_on_item_id:
+        items = [item for item in items if item.id == run_on_item_id]
+
+    if is_test and not run_on_item_id:
+        if random_for_test:
+            items = random.sample(items, 1)
+        else:
+            items = items[:1]
 
     logger.info(
         f"Starting autofix evaluation for dataset {dataset_name} with run name '{run_name}'."
