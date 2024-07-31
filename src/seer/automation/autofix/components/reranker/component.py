@@ -14,7 +14,7 @@ from seer.automation.autofix.components.reranker.models import (
 )
 from seer.automation.autofix.components.reranker.prompts import RerankerPrompts
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml
+from seer.automation.utils import escape_multi_xml, remove_cdata
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,10 @@ class RerankerComponent(BaseComponent[RerankerRequest, RerankerOutput]):
             logger.warning("Reranker agent did not return a valid response")
             return RerankerOutput(chunks=[])
 
-        snippet_ids = RawRerankerResult.from_xml(
-            f"<reranker_result>{escape_multi_xml(completion_result.content, ['thoughts'])}</reranker_result>"
+        snippet_ids = remove_cdata(
+            RawRerankerResult.from_xml(
+                f"<reranker_result>{escape_multi_xml(completion_result.content, ['thoughts'])}</reranker_result>"
+            )
         ).snippet_ids
 
         # Sanity log if we ever get a hash collision

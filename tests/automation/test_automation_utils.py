@@ -13,6 +13,7 @@ from seer.automation.utils import (
     extract_text_inside_tags,
     extract_xml_element_text,
     raise_if_no_genai_consent,
+    remove_cdata,
 )
 
 
@@ -93,3 +94,8 @@ class TestXmlUtils:
     def test_extract_xml_element_text_missing(self):
         element = Element("root")
         assert extract_xml_element_text(element, "child") is None
+
+    def test_remove_cdata(self):
+        assert remove_cdata("<![CDATA[Hello World]]>") == "Hello World"
+        assert remove_cdata("No CDATA here") == "No CDATA here"
+        assert remove_cdata("<![CDATA[Line1\nLine2]]>") == "Line1\nLine2"

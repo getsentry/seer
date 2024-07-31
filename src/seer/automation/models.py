@@ -390,11 +390,11 @@ class PromptXmlModel(BaseXmlModel):
             if elem.text:
                 stripped = elem.text.strip("\n")
                 if stripped:
-                    elem.text = "\n" + stripped + "\n"
+                    elem.text = "\n<![CDATA[" + stripped + "]]>\n"
             if elem.tail:
                 stripped = elem.tail.strip("\n")
                 if stripped:
-                    elem.tail = "\n" + stripped + "\n"
+                    elem.tail = "<![CDATA[\n" + stripped + "]]>\n"
 
     def to_prompt_str(self) -> str:
         tree: ET.Element = self.to_xml_tree()
