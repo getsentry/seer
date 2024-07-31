@@ -1,6 +1,7 @@
 import unittest
 import uuid
 
+import numpy as np
 from johen import change_watcher
 from johen.pytest import parametrize
 
@@ -366,6 +367,8 @@ class TestGrouping(unittest.TestCase):
             )
 
         response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        for group_response in response.groups_with_neighbor.values():
+            group_response.stacktrace_distance = round(group_response.stacktrace_distance, 3)
         assert response == BulkCreateGroupingRecordsResponse(
             success=True, groups_with_neighbor=expected_groups_with_neighbor
         )
@@ -411,6 +414,40 @@ class TestGrouping(unittest.TestCase):
                 session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
             )
             assert len(records) == 0
+
+    def test_rerank_candidates(self):
+        """
+        Test that the rerank_candidates method correctly reranks candidates based on cosine distance.
+        """
+        # Create mock candidates with incorrect initial ordering
+        embedding = np.array([1, 2, 3], dtype=np.float32)
+        candidates = [
+            DbGroupingRecord(stacktrace_embedding=np.array([7, 8, 9], dtype=np.float32)),
+            DbGroupingRecord(stacktrace_embedding=np.array([4, 5, 6], dtype=np.float32)),
+            DbGroupingRecord(stacktrace_embedding=np.array([1, 2, 3], dtype=np.float32)),
+            DbGroupingRecord(stacktrace_embedding=np.array([-1, -2, -3], dtype=np.float32)),
+        ]
+
+        # Set a distance threshold that includes all candidates except for the one that is reversed
+        distance_threshold = 0.05
+
+        # Rerank candidates
+        reranked = grouping_lookup().rerank_candidates(candidates, embedding, distance_threshold)
+
+        # Check that the order is correct after reranking
+        self.assertEqual(len(reranked), 3)
+        self.assertAlmostEqual(reranked[0][1], 0.0, places=6)  # Should be exact match
+        self.assertAlmostEqual(reranked[1][1], 0.0253682, places=6)
+        self.assertAlmostEqual(reranked[2][1], 0.0405881, places=6)
+
+        # Check that the order of candidates is corrected
+        self.assertEqual(reranked[0][0], candidates[2])  # [1, 2, 3] should be first now
+        self.assertEqual(reranked[1][0], candidates[1])  # [4, 5, 6] should be second
+        self.assertEqual(reranked[2][0], candidates[0])  # [7, 8, 9] should be 3rd
+
+        # Verify that the initial order was incorrect
+        self.assertNotEqual(candidates[0], reranked[0][0])
+        self.assertNotEqual(candidates[2], reranked[2][0])
 
 
 @parametrize(count=1)
