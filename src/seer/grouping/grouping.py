@@ -2,7 +2,7 @@ import difflib
 import gc
 import logging
 from functools import wraps
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import sentry_sdk
@@ -295,9 +295,10 @@ class GroupingLookup:
     def cosine_distance(
         embedding: np.ndarray,
         candidate_embedding: np.ndarray,
-        embedding_norm: Optional[float] = None,
+        embedding_norm: np.floating[Any] | None = None,
     ) -> float:
-        embedding_norm = embedding_norm if embedding_norm is not None else np.linalg.norm(embedding)
+        if embedding_norm is None:
+            embedding_norm = np.linalg.norm(embedding)
 
         candidate_norm = np.linalg.norm(candidate_embedding)
         dot_product = np.dot(candidate_embedding, embedding)
