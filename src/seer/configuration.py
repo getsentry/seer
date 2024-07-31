@@ -57,6 +57,10 @@ class AppConfig(BaseModel):
     GITHUB_SENTRY_APP_ID: str | None = None
     GITHUB_SENTRY_PRIVATE_KEY: str | None = None
 
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_HOST: str = ""
+
     CODEBASE_GCS_STORAGE_BUCKET: str = "sentry-ml"
     CODEBASE_GCS_STORAGE_DIR: str = "tmp_jenn/dev/chroma/storage"
 
@@ -77,6 +81,10 @@ class AppConfig(BaseModel):
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
+
+            assert self.LANGFUSE_HOST, "LANGFUSE_HOST required for production!"
+            assert self.LANGFUSE_PUBLIC_KEY, "LANGFUSE_PUBLIC_KEY required for production!"
+            assert self.LANGFUSE_SECRET_KEY, "LANGFUSE_SECRET_KEY required for production!"
 
             assert self.GITHUB_APP_ID, "GITHUB_APP_ID required for production!"
             assert self.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY required for production!"
@@ -105,6 +113,9 @@ def provide_test_defaults() -> AppConfig:
     base.CODEBASE_STORAGE_DIR = os.path.abspath("data/tests/chroma/storage")
     base.CODEBASE_GCS_STORAGE_DIR = os.path.abspath("chroma-test/data/storage")
     base.DATABASE_URL = base.DATABASE_URL.replace("db", "test-db")
+    base.LANGFUSE_HOST = ""
+    base.LANGFUSE_PUBLIC_KEY = ""
+    base.LANGFUSE_SECRET_KEY = ""
 
     return base
 

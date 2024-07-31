@@ -10,6 +10,7 @@ from seer.configuration import AppConfig
 from seer.db import initialize_database
 from seer.dependency_injection import Module, inject, injected
 from seer.inference_models import initialize_models
+from seer.langfuse import initialize_langfuse_context
 from seer.logging import initialize_logs
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ def bootup(
     config.do_validation()
     initialize_database()
     initialize_models(start_model_loading)
+    initialize_langfuse_context()
 
 
 @inject
