@@ -98,14 +98,14 @@ Autofix is an AI agent that identifies root causes of Sentry issues and suggests
 
 Send a POST request to `/v1/automation/autofix/evaluations/start` with the following JSON body:
 
-```json
+```jsonc
 {
-"dataset_name": "string",
-"run_name": "string",
-"run_type": "full | root_cause | execution",
-"test": boolean,
-"random_for_test": boolean,
-"run_on_item_id": "string"
+"dataset_name": "string", // Name of the dataset to run on (currently only internal datasets available)
+"run_name": "string", // Custom name for your evaluation run
+"run_type": "full | root_cause | execution", // Type of evaluation to perform
+"test": boolean, // Set to true to run on a single item (for testing)
+"random_for_test": boolean, // Set to true to use a random item when testing (requires "test": true)
+"run_on_item_id": "string" // Specific item ID to run on (optional)
 }
 ```
 
