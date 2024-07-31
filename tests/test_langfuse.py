@@ -5,7 +5,7 @@ from langfuse import Langfuse
 
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.dependency_injection import Module, resolve
-from seer.langfuse import append_langfuse_trace_tags, initialize_langfuse_context, provide_langfuse
+from seer.langfuse import append_langfuse_trace_tags, provide_langfuse
 
 langfuse_configuration_test_module = Module()
 
@@ -30,32 +30,6 @@ def provide_langfuse_mock() -> Langfuse:
 def setup_langfuse_config():
     with langfuse_configuration_test_module:
         yield
-
-
-class TestInitializeLangfuseContext:
-    @patch("seer.langfuse.langfuse_context")
-    def test_initialize_langfuse_context(self, mock_langfuse_context):
-        # The environment variables are now mocked, so we don't need to set them on the config object
-
-        initialize_langfuse_context()
-
-        mock_langfuse_context.configure.assert_called_once_with(
-            public_key="public_key",
-            secret_key="secret_key",
-            host="https://api.langfuse.com",
-            enabled=True,
-        )
-
-    @patch("seer.langfuse.langfuse_context")
-    def test_initialize_langfuse_context_disabled(self, mock_langfuse_context):
-
-        resolve(AppConfig).LANGFUSE_HOST = ""
-
-        initialize_langfuse_context()
-
-        mock_langfuse_context.configure.assert_called_once_with(
-            public_key="public_key", secret_key="secret_key", host="", enabled=False
-        )
 
 
 class TestProvideLangfuse:
