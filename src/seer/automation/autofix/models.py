@@ -76,12 +76,11 @@ class CustomRootCauseSelection(BaseModel):
     custom_root_cause: str
 
 
-class SuggestedFixRootCauseSelection(BaseModel):
+class CodeContextRootCauseSelection(BaseModel):
     cause_id: int
-    fix_id: int
 
 
-RootCauseSelection = Union[CustomRootCauseSelection, SuggestedFixRootCauseSelection]
+RootCauseSelection = Union[CustomRootCauseSelection, CodeContextRootCauseSelection]
 
 
 class CommittedPullRequestDetails(BaseModel):
@@ -252,7 +251,6 @@ class AutofixUpdateType(str, enum.Enum):
 class AutofixRootCauseUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
     cause_id: int | None = None
-    fix_id: int | None = None
     custom_root_cause: str | None = None
 
 
@@ -326,25 +324,13 @@ class AutofixContinuation(AutofixGroupState):
         root_cause_step = self.find_step(id="root_cause_analysis")
         if root_cause_step and isinstance(root_cause_step, RootCauseStep):
             if root_cause_step.selection:
-                if isinstance(root_cause_step.selection, SuggestedFixRootCauseSelection):
+                if isinstance(root_cause_step.selection, CodeContextRootCauseSelection):
                     cause = next(
                         cause
                         for cause in root_cause_step.causes
                         if cause.id == root_cause_step.selection.cause_id
                     )
-
-                    if cause.suggested_fixes:
-                        fix = next(
-                            fix
-                            for fix in cause.suggested_fixes
-                            if fix.id == root_cause_step.selection.fix_id
-                        )
-
-                        cause = cause.model_copy()
-
-                        cause.suggested_fixes = [fix]
-
-                        return cause
+                    return cause
                 elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
                     return root_cause_step.selection.custom_root_cause
         return None

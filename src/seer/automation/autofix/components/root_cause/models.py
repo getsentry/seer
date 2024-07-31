@@ -9,7 +9,7 @@ from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 
 
-class SnippetPromptXml(PromptXmlModel, tag="snippet"):
+class SnippetPromptXml(PromptXmlModel, tag="code"):
     file_path: str = attr()
     snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
 
@@ -17,36 +17,33 @@ class SnippetPromptXml(PromptXmlModel, tag="snippet"):
     def get_example(cls):
         return cls(
             file_path="path/to/file.py",
-            snippet="# This snippet is optional. If there is a direct code fix then include it, if not then don't\ndef foo():\n    return 'bar'\n",
+            snippet="def foo():\n    return 'bar'\n",
         )
 
 
-class RootCauseSuggestedFixSnippet(BaseModel):
+class RootCauseRelevantCodeSnippet(BaseModel):
     file_path: str
     snippet: str
 
 
-class RootCauseSuggestedFix(BaseModel):
+class RootCauseRelevantContext(BaseModel):
     id: int = -1
     title: str
     description: str
-    snippet: Optional[RootCauseSuggestedFixSnippet] = None
-    elegance: float
+    snippet: Optional[RootCauseRelevantCodeSnippet] = None
 
 
-class RootCauseSuggestedFixPromptXml(PromptXmlModel, tag="suggested_fix", skip_empty=True):
+class RootCauseRelevantContextPromptXml(PromptXmlModel, tag="code_snippet", skip_empty=True):
     title: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
     description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
     snippet: Optional[SnippetPromptXml] = None
-    elegance: float = attr()
 
     @classmethod
     def get_example(cls):
         return cls(
-            title="Fix the foo() function by returning 'bar'",
-            description="This is the ideal fix because... 'bar' is the wrong value because it should be 'baz' instead of 'bar', doing so affects...\nMake sure you use expert judgement and suggest a staff engineer level fix.",
+            title="`foo()` returns the wrong value",
+            description="The issue happens because `foo()` always returns `bar`, as seen in this snippet, when it should return `baz`.",
             snippet=SnippetPromptXml.get_example(),
-            elegance=0.5,
         )
 
 
@@ -56,15 +53,15 @@ class RootCauseAnalysisItem(BaseModel):
     description: str
     likelihood: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
     actionability: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
-    suggested_fixes: Optional[list[RootCauseSuggestedFix]] = None
+    code_context: Optional[list[RootCauseRelevantContext]] = None
 
 
-class RootCauseAnalysisSuggestedFixesPromptXml(PromptXmlModel, tag="suggested_fixes"):
-    fixes: list[RootCauseSuggestedFixPromptXml]
+class RootCauseAnalysisRelevantContextPromptXml(PromptXmlModel, tag="code_context"):
+    snippets: list[RootCauseRelevantContextPromptXml]
 
     @classmethod
     def get_example(cls):
-        return cls(fixes=[RootCauseSuggestedFixPromptXml.get_example()])
+        return cls(snippets=[RootCauseRelevantContextPromptXml.get_example()])
 
 
 class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip_empty=True):
@@ -72,16 +69,16 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
     description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
     likelihood: float = attr()
     actionability: float = attr()
-    suggested_fixes: Optional[RootCauseAnalysisSuggestedFixesPromptXml] = None
+    relevant_code: Optional[RootCauseAnalysisRelevantContextPromptXml] = None
 
     @classmethod
     def get_example(cls):
         return cls(
-            title="The foo() function is returning the wrong value",
+            title="foo() is returning the wrong value",
             likelihood=0.8,
             actionability=1.0,
-            description="The root cause of the issue is that the foo() function is returning the wrong value",
-            suggested_fixes=RootCauseAnalysisSuggestedFixesPromptXml.get_example(),
+            description="The foo() function is returning the wrong value due to a typo in bar().",
+            relevant_code=RootCauseAnalysisRelevantContextPromptXml.get_example(),
         )
 
     @classmethod
@@ -91,26 +88,25 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
             likelihood=model.likelihood,
             actionability=model.actionability,
             description=model.description,
-            suggested_fixes=(
-                RootCauseAnalysisSuggestedFixesPromptXml(
-                    fixes=[
-                        RootCauseSuggestedFixPromptXml(
-                            title=fix.title,
-                            description=fix.description,
+            relevant_code=(
+                RootCauseAnalysisRelevantContextPromptXml(
+                    snippets=[
+                        RootCauseRelevantContextPromptXml(
+                            title=snippet.title,
+                            description=snippet.description,
                             snippet=(
                                 SnippetPromptXml(
-                                    file_path=fix.snippet.file_path,
-                                    snippet=fix.snippet.snippet,
+                                    file_path=snippet.snippet.file_path,
+                                    snippet=snippet.snippet.snippet,
                                 )
-                                if fix.snippet
+                                if snippet.snippet
                                 else None
                             ),
-                            elegance=fix.elegance,
                         )
-                        for fix in model.suggested_fixes
+                        for snippet in model.code_context
                     ]
                 )
-                if model.suggested_fixes
+                if model.code_context
                 else None
             ),
         )
@@ -119,8 +115,8 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
         return RootCauseAnalysisItem.model_validate(
             {
                 **self.model_dump(),
-                "suggested_fixes": (
-                    self.suggested_fixes.model_dump()["fixes"] if self.suggested_fixes else None
+                "code_context": (
+                    self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
                 ),
             }
         )
@@ -135,17 +131,11 @@ class MultipleRootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="potential_ro
             causes=[
                 RootCauseAnalysisItemPromptXml.get_example(),
                 RootCauseAnalysisItemPromptXml(
-                    title="All these helper functions seem to be called on the api request POST .../v1/foo, and the request is malformed",
-                    likelihood=0.5,
-                    actionability=0.1,
-                    description="The root cause of the issue is that all these helper functions seem to be called on the api request POST .../v1/foo, and the request is malformed",
-                ),
-                RootCauseAnalysisItemPromptXml(
-                    title="The upstream bar() function sends an incorrect value to foo(), which itself does not have validation, causing this downstream error",
+                    title="bar() sends an incorrect value to foo(), which itself does not have validation",
                     likelihood=0.2,
                     actionability=1.0,
-                    description="The root cause of the issue is that the upstream bar() function sends an incorrect value to foo(), which itself does not have validation",
-                    suggested_fix=RootCauseSuggestedFixPromptXml.get_example(),
+                    description="The upstream bar() function sends an incorrect value to foo(), which itself does not have validation, causing this error downstream.",
+                    relevant_code=RootCauseAnalysisRelevantContextPromptXml.get_example(),
                 ),
             ]
         )

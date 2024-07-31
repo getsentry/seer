@@ -152,6 +152,30 @@ def escape_multi_xml(s: str, tags: list[str]) -> str:
     return s
 
 
+def remove_cdata(obj):
+    """
+    Recursively remove CDATA wrappings from any object.
+    This is useful for objects created directly from XML that required CDATA to be well-formed.
+    """
+
+    def remove_cdata_from_string(s):
+        cdata_pattern = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
+        return cdata_pattern.sub(r"\1", s)
+
+    if isinstance(obj, dict):
+        return {key: remove_cdata(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [remove_cdata(item) for item in obj]
+    elif isinstance(obj, str):
+        return remove_cdata_from_string(obj)
+    elif hasattr(obj, "__dict__"):  # Handle custom objects
+        for attr in vars(obj):
+            setattr(obj, attr, remove_cdata(getattr(obj, attr)))
+        return obj
+    else:
+        return obj
+
+
 def extract_text_inside_tags(content: str, tag: str, strip_newlines: bool = True) -> str:
     """
     Extract the text inside the specified XML tag.
@@ -191,6 +215,6 @@ def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
     el = element.find(tag)
 
     if el is not None:
-        return (el.text or "").strip()
+        return remove_cdata((el.text or "")).strip()
 
     return None

@@ -6,7 +6,7 @@ from langfuse.client import DatasetItemClient
 
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
-    RootCauseSuggestedFix,
+    RootCauseRelevantContext,
 )
 from seer.automation.autofix.evaluations import (
     score_fix_single_it,
@@ -86,7 +86,7 @@ class TestSyncRunEvaluationOnItem:
     def test_sync_run_evaluation_on_item_happy_path(self):
         # Setup state changes for root cause step
         root_cause_model = next(generate(RootCauseStepModel))
-        root_cause_model.causes = [Mock(id=1, suggested_fixes=[Mock(id=2)])]
+        root_cause_model.causes = [Mock(id=1, code_context=[Mock(id=2)])]
 
         def root_cause_apply_side_effect():
             with self.test_state.update() as cur:
@@ -168,8 +168,8 @@ class TestSyncRunEvaluationOnItem:
         assert result is None
         assert not self.mock_planning_step.get_signature.called
 
-    def test_sync_run_evaluation_on_item_no_suggested_fixes(self):
-        # Setup state changes for root cause step with causes but no suggested fixes
+    def test_sync_run_evaluation_on_item_no_code_context(self):
+        # Setup state changes for root cause step with causes but no code context
         root_cause_model = RootCauseStepModel(
             id="root_cause_analysis",
             title="Root Cause Analysis",
@@ -180,7 +180,7 @@ class TestSyncRunEvaluationOnItem:
                     description="Test cause description",
                     likelihood=0.8,
                     actionability=0.7,
-                    suggested_fixes=[],
+                    code_context=[],
                 )
             ],
         )
@@ -211,9 +211,11 @@ class TestSyncRunEvaluationOnItem:
                     description="Test cause description",
                     likelihood=0.8,
                     actionability=0.7,
-                    suggested_fixes=[
-                        RootCauseSuggestedFix(
-                            id=2, title="Test Fix", description="Test fix description", elegance=0.9
+                    code_context=[
+                        RootCauseRelevantContext(
+                            id=2,
+                            title="Test Fix",
+                            description="Test fix description",
                         )
                     ],
                 )
@@ -286,7 +288,7 @@ class TestSyncRunRootCause:
 
     def test_sync_run_root_cause_happy_path(self):
         root_cause_model = next(generate(RootCauseStepModel))
-        root_cause_model.causes = [Mock(id=1, suggested_fixes=[Mock(id=2)])]
+        root_cause_model.causes = [Mock(id=1, code_context=[Mock(id=2)])]
 
         def root_cause_apply_side_effect():
             with self.test_state.update() as cur:

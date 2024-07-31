@@ -1,8 +1,8 @@
 from seer.automation.autofix.components.planner.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
-    RootCauseSuggestedFix,
-    RootCauseSuggestedFixSnippet,
+    RootCauseRelevantCodeSnippet,
+    RootCauseRelevantContext,
 )
 
 
@@ -15,15 +15,14 @@ class TestPlannerModels:
                 description="description",
                 likelihood=0.5,
                 actionability=0.75,
-                suggested_fixes=[
-                    RootCauseSuggestedFix(
+                code_context=[
+                    RootCauseRelevantContext(
                         id=2,
                         title="fix_title",
                         description="fix_description",
-                        snippet=RootCauseSuggestedFixSnippet(
+                        snippet=RootCauseRelevantCodeSnippet(
                             file_path="file_path", snippet="snippet"
                         ),
-                        elegance=0.2,
                     )
                 ],
             )

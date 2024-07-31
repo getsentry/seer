@@ -13,7 +13,7 @@ from seer.automation.autofix.components.planner.prompts import PlanningPrompts
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml
+from seer.automation.utils import escape_multi_xml, remove_cdata
 
 
 class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
@@ -50,8 +50,8 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
         if not response:
             return None
 
-        cleaned_response = escape_multi_xml(
-            response, ["thoughts", "snippet", "reference_snippet", "new_snippet"]
+        cleaned_response = remove_cdata(
+            escape_multi_xml(response, ["thoughts", "snippet", "reference_snippet", "new_snippet"])
         )
 
         return PlanningOutputPromptXml.from_xml(

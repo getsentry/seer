@@ -10,12 +10,12 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     ChangesStep,
     CodebaseChange,
+    CodeContextRootCauseSelection,
     CustomRootCauseSelection,
     DefaultStep,
     ProgressItem,
     ProgressType,
     RootCauseStep,
-    SuggestedFixRootCauseSelection,
 )
 from seer.automation.state import State
 
@@ -106,17 +106,14 @@ class AutofixEventManager:
                 indexing_step.status = AutofixStatus.COMPLETED
 
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
-        root_cause_selection: CustomRootCauseSelection | SuggestedFixRootCauseSelection | None = (
-            None
-        )
+        root_cause_selection: CustomRootCauseSelection | CodeContextRootCauseSelection | None = None
         if payload.custom_root_cause:
             root_cause_selection = CustomRootCauseSelection(
                 custom_root_cause=payload.custom_root_cause,
             )
-        elif payload.cause_id is not None and payload.fix_id is not None:
-            root_cause_selection = SuggestedFixRootCauseSelection(
+        elif payload.cause_id is not None:
+            root_cause_selection = CodeContextRootCauseSelection(
                 cause_id=payload.cause_id,
-                fix_id=payload.fix_id,
             )
 
         if root_cause_selection is None:

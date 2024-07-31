@@ -15,7 +15,7 @@ from seer.automation.autofix.components.root_cause.models import (
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from seer.automation.utils import escape_multi_xml, extract_text_inside_tags, remove_cdata
 
 logger = logging.getLogger(__name__)
 
@@ -69,19 +69,21 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             logger.warning("Root Cause Analysis formatter did not return a valid response")
             return None
 
-        xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(formatter_response.content, ['thoughts', 'snippet', 'title', 'description'])}</root>"
+        xml_response = remove_cdata(
+            RootCauseAnalysisOutputPromptXml.from_xml(
+                f"<root>{escape_multi_xml(formatter_response.content, ['thoughts', 'snippet', 'title', 'description'])}</root>"
+            )
         )
 
-        # Assign the ids to be the numerical indices of the causes and suggested fixes
+        # Assign the ids to be the numerical indices of the causes and relevant code context
         causes = []
         for i, cause in enumerate(xml_response.potential_root_causes.causes):
             cause_model = cause.to_model()
             cause_model.id = i
 
-            if cause_model.suggested_fixes:
-                for j, suggested_fix in enumerate(cause_model.suggested_fixes):
-                    suggested_fix.id = j
+            if cause_model.code_context:
+                for j, snippet in enumerate(cause_model.code_context):
+                    snippet.id = j
 
             causes.append(cause_model)
 
