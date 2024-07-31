@@ -1,176 +1,88 @@
-# seer
 
-## Using Seer
+# Seer
 
-## Docker
+![Seer Logo](seer.png)
 
-Seer uses docker compose to manage the development environment contained in `docker-compose.yml`.
-The first invocation of `devenv sync` or `direnv allow` can take a long time due to the complex
-contain image that will be built locally.  Generally it should be cached and more performant afterwards.
+Seer is a service that provides AI capabilities to Sentry, running inference on Sentry issues and providing insights to users.
 
+> 📣 Seer is currently in early development and not yet compatible with self-hosted Sentry instances.
 
-### Autofix
+## Setup for Sentry Employees
 
-#### Codebase Index Storage
+These instructions require access to internal Sentry resources.
 
-Autofix creates and uses a ChromaDB for every separate codebase. This can either be stored in a Google Cloud Storage (GCS) bucket, in your local filesystem, or you can make your own storage adapter.
+### Prerequisites
 
-##### Google Cloud Storage
+1. Install [direnv](https://direnv.net/) or a similar tool
+2. Install [pyenv](https://github.com/pyenv/pyenv) and configure Python 3.11
+3. Install [Docker](https://www.docker.com/get-started)
+4. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
 
-To use GCS, you need to set the following environment variables:
+### Environment Setup
 
-```txt
-GOOGLE_APPLICATION_CREDENTIALS=<path to your GCS credentials file>
-GOOGLE_CLOUD_PROJECT=<your GCS project ID>
-```
-
-Then, you can define your storage bucket with:
-
-```txt
-CODEBASE_STORAGE_TYPE=gcs
-CODEBASE_GCS_STORAGE_BUCKET=<your GCS bucket name>
-CODEBASE_GCS_STORAGE_DIR=<path within gcs bucket>
-```
-
-##### Local Filesystem
-
-To use local filesystem, you can set the following environment variable:
-
-```txt
-CODEBASE_STORAGE_TYPE=filesystem
-CODEBASE_STORAGE_DIR=<path to your local directory>
-```
-
-#### Running Autofix Evaluations
-
-You can run Autofix evaluations by hitting `POST /v1/automation/autofix/evaluations/start` with
-
-```
-{
-  "dataset_name": string, // The name of the dataset to run on
-  "run_name": string, // Whatever you want to name your run
-  "run_type: "full" | "root_cause" | "execution", // The type of run you want to do
-  "test": boolean // Set this to `true` if you just want to run on 1 item for testing the pipeline
-  "random_for_test": boolean // Set this to `true` if you want to run on a random item for testing the pipeline, needs to be paired with `test: true`
-  "run_on_item_id": string // The item id to run on if you want to run on a specific item
-}
-```
-
-Note: We don't have any public dataset posted yet, currently we are using internal datasets.
-
-## Local Development
-
-### Setup
-
-Use `direnv` or a similar tool that sources `.envrc`. It will check your python version and setup virtualenv for you:
-
-```bash
-direnv allow
-```
-
-Recommended to use `pyenv` or similar python environment manager so as to be able to use differing python versions between sentry projects.
-
-> You will need pyenv installed and configured for python 3.11 before running `direnv allow`.
-
-### Environment variables
-
-Create `.env` in the root of the project and set the environment variables that are in `.env.example` to the actual values.
-
-> The example shows `GITHUB_PRIVATE_KEY` and `GITHUB_APP_ID`. You can also use just `GITHUB_TOKEN` instead, which you can get from GitHub Settings/Developer Setttings/Personal Access Tokens.
-> For local development, set `NO_SENTRY_INTEGRATION=1` and set `NO_REAL_MODELS=1`.
-
-In your rc file, add `export SENTRY_AUTH_TOKEN=<your sentry auth token>`.
-
-### Install GCloud CLI
-
-Refer <https://cloud.google.com/sdk/docs/install>. We use the `super-big-data` project.
+1. Clone the repository and navigate to the project root
+2. Run `direnv allow` to set up the Python environment
+3. Create a `.env` file based on `.env.example` and set the required values
+4. Add `export SENTRY_AUTH_TOKEN=<your token>` to your shell's RC file
 
 ### Model Artifacts
 
-You will need model artifacts to run inference in seer, get them from gcs by:
+Download model artifacts:
 
 ```bash
 gsutil cp -r gs://sentry-ml/seer/models ./models
 ```
 
-### Running
 
-To run for development locally in one go, including building the docker image and rabbitmq container, run:
+### Running Seer
 
-```bash
-make dev # runs docker compose up --build
-```
+1. Start the development environment:
 
-If you see database-related errors, try `make update` (see the Applying Migrations section below).
+   ```bash
+   make dev
+   ```
 
-#### Running Autofix with Sentry
+2. If you encounter database errors, run:
 
-For the full Autofix experience, you'll want to use the UI in `sentry`.
+   ```bash
+   make update
+   ```
 
-Port `9091` will be exposed which is what the local `sentry` application will look for to connect to the service.
+## Integrating with Local Sentry
 
-In `~/.sentry/sentry.conf.py`, make sure you have the below to access Autofix and Seer in your local `sentry` instance:
+1. Expose port 9091 in your local Sentry configuration
+2. Add the following to `~/.sentry/sentry.conf.py`:
 
-```yaml
-SEER_RPC_SHARED_SECRET=["seers-also-very-long-value-haha"]
-SENTRY_FEATURES['projects:ai-autofix'] = True
-SENTRY_FEATURES['organizations:issue-details-autofix-ui'] = True
-```
+   ```python
+   SEER_RPC_SHARED_SECRET = ["seers-also-very-long-value-haha"]
+   SENTRY_FEATURES['projects:ai-autofix'] = True
+   SENTRY_FEATURES['organizations:issue-details-autofix-ui'] = True
+   ```
 
-You will not be able to get GenAI data consent locally, so you may need to hardcode [this line](https://github.com/getsentry/sentry/blob/c4848fa48c92a9dd40649a4f94072c4154d6d564/static/app/components/events/autofix/useAutofixSetup.tsx#L50-L54) in `sentry` to `Boolean(true)`.
+3. For local development, you may need to bypass certain checks in the Sentry codebase
+4. Restart both Sentry and Seer
 
-You may also have to comment out [this GitHub check](https://github.com/getsentry/sentry/blob/3f6b07dbd53386c8b8bb44a84fbffcdd5d59f16f/src/sentry/api/endpoints/group_ai_autofix.py#L199-L203) in order to use Autofix from the UI locally, if no GitHub repositories are linked to your project.
+## Development Commands
 
-Make sure to restart `sentry` and `seer`.
+- Apply database migrations: `make update`
+- Create new migrations: `make migration`
+- Run type checker: `make mypy`
+- Run tests: `make test`
+- Open a shell: `make shell`
 
-Now in the Sentry interface, you should be able to start Autofix from an event.
+### Reset Development Environment
 
-### Database Stuff
-
-#### Applying Migrations
-
-```bash
-make update
-```
-
-This will apply all migrations to the database and create new image.
-
-#### Creating Migrations
+To start fresh:
 
 ```bash
-make migration
-```
-
-### Running Mypy type checker
-
-```bash
-make mypy
-```
-
-### Running Tests
-
-```bash
-make test
-```
-
-### Opening a shell
-
-```bash
-make shell
-```
-
-### Resetting Dev Environment
-
-If you run into any data issue or connection issue and want to start from scratch, run the following set of commands from the command shell inside the seer repo:
-
-```
+bash
 docker compose down --volumes
 make update && make dev
 ```
 
-### Using Langfuse
+## Langfuse Integration
 
-We publish our Langfuse traces to our Langfuse instance. Set the following environment variables:
+To enable Langfuse tracing, set these environment variables:
 
 ```bash
 LANGFUSE_SECRET_KEY=...
@@ -178,4 +90,23 @@ LANGFUSE_PUBLIC_KEY=...
 LANGFUSE_HOST=...
 ```
 
-to use it. Otherwise leaving them unset will disable the instrumentation.
+## Autofix
+
+Autofix is an AI agent that identifies root causes of Sentry issues and suggests fixes.
+
+### Running Evaluations
+
+Send a POST request to `/v1/automation/autofix/evaluations/start` with the following JSON body:
+
+```json
+{
+"dataset_name": "string",
+"run_name": "string",
+"run_type": "full | root_cause | execution",
+"test": boolean,
+"random_for_test": boolean,
+"run_on_item_id": "string"
+}
+```
+
+Note: Currently, only internal datasets are available.
