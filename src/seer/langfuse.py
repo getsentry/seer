@@ -11,16 +11,6 @@ logger = logging.getLogger(__name__)
 langfuse_module = Module()
 
 
-@inject
-def initialize_langfuse_context(config: AppConfig = injected):
-    langfuse_context.configure(
-        public_key=config.LANGFUSE_PUBLIC_KEY,
-        secret_key=config.LANGFUSE_SECRET_KEY,
-        host=config.LANGFUSE_HOST,
-        enabled=bool(config.LANGFUSE_HOST),
-    )
-
-
 @langfuse_module.provider
 def provide_langfuse(config: AppConfig = injected) -> Langfuse:
     return Langfuse(
