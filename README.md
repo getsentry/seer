@@ -5,11 +5,11 @@
 
 Seer is a service that provides AI capabilities to Sentry, running inference on Sentry issues and providing insights to users.
 
-> 📣 Seer is currently in early development and not yet compatible with self-hosted Sentry instances.
+> 📣 Seer is currently in early development and not yet compatible with self-hosted Sentry instances. Stay tuned for updates!
 
-## Setup for Sentry Employees
+## Setup
 
-These instructions require access to internal Sentry resources.
+These instructions require access to internal Sentry resources, and are intended for internal Sentry employees.
 
 ### Prerequisites
 
