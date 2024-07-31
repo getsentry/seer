@@ -12,7 +12,7 @@ class MPUtils(BaseModel):
     def get_mp_dist_from_mp(
         self,
         mp: npt.NDArray,
-        pad_to_len: int | None,
+        pad_to_len: int | None = None,
         mp_config: MPConfig = injected,
         normalizer: Normalizer = injected,
     ) -> npt.NDArray[np.float64]:
