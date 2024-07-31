@@ -179,8 +179,8 @@ class ClaudeClient(LlmClient):
         message = self._format_claude_response_to_message(completion)
 
         usage = Usage(
-            completion_tokens=completion.usage.input_tokens,
-            prompt_tokens=completion.usage.output_tokens,
+            completion_tokens=completion.usage.output_tokens,
+            prompt_tokens=completion.usage.input_tokens,
             total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
         )
 
