@@ -5,7 +5,7 @@ from langfuse import Langfuse
 
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.dependency_injection import Module, resolve
-from seer.langfuse import append_langfuse_trace_tags, initialize_langfuse_context
+from seer.langfuse import append_langfuse_trace_tags, initialize_langfuse_context, provide_langfuse
 
 langfuse_configuration_test_module = Module()
 
@@ -55,6 +55,32 @@ class TestInitializeLangfuseContext:
 
         mock_langfuse_context.configure.assert_called_once_with(
             public_key="public_key", secret_key="secret_key", host="", enabled=False
+        )
+
+
+class TestProvideLangfuse:
+    @patch("seer.langfuse.Langfuse")
+    def test_provide_langfuse(self, mock_langfuse):
+        provide_langfuse()
+
+        mock_langfuse.assert_called_once_with(
+            public_key="public_key",
+            secret_key="secret_key",
+            host="https://api.langfuse.com",
+            enabled=True,
+        )
+
+    @patch("seer.langfuse.Langfuse")
+    def test_provide_langfuse_disabled(self, mock_langfuse):
+        resolve(AppConfig).LANGFUSE_HOST = ""
+
+        provide_langfuse()
+
+        mock_langfuse.assert_called_once_with(
+            public_key="public_key",
+            secret_key="secret_key",
+            host="",
+            enabled=False,
         )
 
 
