@@ -77,14 +77,10 @@ class AppConfig(BaseModel):
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
-            assert self.GITHUB_APP_ID, "GITHUB_APP_ID required for production!"
-            assert self.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY required for production!"
-            assert (
-                self.DEV or self.GITHUB_SENTRY_APP_ID
-            ), "GITHUB_SENTRY_APP_ID required for production!"
-            assert (
-                self.DEV or self.GITHUB_SENTRY_PRIVATE_KEY
-            ), "GITHUB_SENTRY_PRIVATE_KEY required for production!"
+
+            assert self.LANGFUSE_HOST, "LANGFUSE_HOST required for production!"
+            assert self.LANGFUSE_PUBLIC_KEY, "LANGFUSE_PUBLIC_KEY required for production!"
+            assert self.LANGFUSE_SECRET_KEY, "LANGFUSE_SECRET_KEY required for production!"
 
             assert self.GITHUB_APP_ID, "GITHUB_APP_ID required for production!"
             assert self.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY required for production!"
