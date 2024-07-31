@@ -1,7 +1,15 @@
+import textwrap
+
 import pytest
 
-from seer.automation.autofix.components.coding.models import FuzzyDiffChunk
-from seer.automation.autofix.components.coding.utils import extract_diff_chunks
+from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanTaskPromptXml
+from seer.automation.autofix.components.coding.utils import (
+    extract_diff_chunks,
+    task_to_file_change,
+    task_to_file_create,
+    task_to_file_delete,
+)
+from seer.automation.models import FileChange
 
 
 class TestExtractDiffChunks:
@@ -121,3 +129,159 @@ class TestExtractDiffChunks:
         assert len(result) == 1
         assert result[0].original_chunk == "\nRemoved line\n\nNo change"
         assert result[0].new_chunk == "\nAdded line\n\nNo change"
+
+
+class TestTaskToFileCreate:
+    def test_valid_file_create_task(self):
+        task = PlanTaskPromptXml(
+            file_path="new_file.py",
+            repo_name="test_repo",
+            type="file_create",
+            diff="@@ -0,0 +1,3 @@\n+def new_function():\n+    return 'Hello, World!'\n+",
+            description="Create a new file with a simple function",
+            commit_message="Add new_file.py with new_function",
+        )
+        result = task_to_file_create(task)
+        assert isinstance(result, FileChange)
+        assert result.change_type == "create"
+        assert result.path == "new_file.py"
+        assert result.new_snippet == "def new_function():\n    return 'Hello, World!'\n"
+
+    def test_invalid_task_type(self):
+        task = PlanTaskPromptXml(
+            file_path="existing_file.py",
+            repo_name="test_repo",
+            type="file_change",
+            diff="@@ -1,1 +1,1 @@\n-old content\n+new content",
+            description="Modify existing file",
+            commit_message="Update existing_file.py",
+        )
+        with pytest.raises(ValueError, match="Expected file_create task, got: file_change"):
+            task_to_file_create(task)
+
+    def test_multiple_diff_chunks(self):
+        task = PlanTaskPromptXml(
+            file_path="new_file.py",
+            repo_name="test_repo",
+            type="file_create",
+            diff="@@ -0,0 +1,2 @@\n+def func1():\n+    pass\n@@ -0,0 +3,4 @@\n+def func2():\n+    pass\n",
+            description="Create a new file with two functions",
+            commit_message="Add new_file.py with two functions",
+        )
+        with pytest.raises(ValueError, match="Expected exactly one diff chunk for file creation"):
+            task_to_file_create(task)
+
+
+class TestTaskToFileDelete:
+    def test_valid_file_delete_task(self):
+        task = PlanTaskPromptXml(
+            file_path="obsolete_file.py",
+            repo_name="test_repo",
+            type="file_delete",
+            diff="",  # No diff needed for file deletion
+            description="Remove obsolete file",
+            commit_message="Delete obsolete_file.py",
+        )
+        result = task_to_file_delete(task)
+        assert isinstance(result, FileChange)
+        assert result.change_type == "delete"
+        assert result.path == "obsolete_file.py"
+
+    def test_invalid_task_type(self):
+        task = PlanTaskPromptXml(
+            file_path="existing_file.py",
+            repo_name="test_repo",
+            type="file_change",
+            diff="@@ -1,1 +1,1 @@\n-old content\n+new content",
+            description="Modify existing file",
+            commit_message="Update existing_file.py",
+        )
+        with pytest.raises(ValueError, match="Expected file_delete task, got: file_change"):
+            task_to_file_delete(task)
+
+
+class TestTaskToFileChange:
+    def test_valid_file_change_task(self):
+        task = PlanTaskPromptXml(
+            file_path="existing_file.py",
+            repo_name="test_repo",
+            type="file_change",
+            diff="@@ -1,3 +1,3 @@\n def existing_function():\n-    return 'Hello'\n+    return 'Hello, World!'",
+            description="Update return value of existing_function",
+            commit_message="Modify existing_function in existing_file.py",
+        )
+        file_content = "def existing_function():\n    return 'Hello'\n"
+        result = task_to_file_change(task, file_content)
+        assert len(result) == 1
+        assert isinstance(result[0], FileChange)
+        assert result[0].change_type == "edit"
+        assert result[0].path == "existing_file.py"
+        assert result[0].reference_snippet == "def existing_function():\n    return 'Hello'"
+        assert result[0].new_snippet == "def existing_function():\n    return 'Hello, World!'"
+
+    def test_indented_subsnippet(self):
+        task = PlanTaskPromptXml(
+            file_path="existing_file.py",
+            repo_name="test_repo",
+            type="file_change",
+            diff="@@ -3,3 +3,3 @@\n     def inner_function():\n-        return 'Old'\n+        return 'New'",
+            description="Update return value of inner_function",
+            commit_message="Modify inner_function in existing_file.py",
+        )
+        file_content = textwrap.dedent(
+            """\
+                def outer_function():
+                    # Some comment
+                    def inner_function():
+                        return 'Old'
+                    # Another comment
+                    print("Hello")
+            """
+        )
+        result = task_to_file_change(task, file_content)
+        assert len(result) == 1
+        assert isinstance(result[0], FileChange)
+        assert result[0].change_type == "edit"
+        assert result[0].path == "existing_file.py"
+        assert result[0].reference_snippet == "    def inner_function():\n        return 'Old'"
+        assert result[0].new_snippet == "    def inner_function():\n        return 'New'"
+
+    def test_invalid_task_type(self):
+        task = PlanTaskPromptXml(
+            file_path="new_file.py",
+            repo_name="test_repo",
+            type="file_create",
+            diff="@@ -0,0 +1,3 @@\n+def new_function():\n+    pass\n",
+            description="Create a new file",
+            commit_message="Add new_file.py",
+        )
+        with pytest.raises(ValueError, match="Expected file_change task, got: file_create"):
+            task_to_file_change(task, "")
+
+    def test_snippet_not_found(self):
+        task = PlanTaskPromptXml(
+            file_path="existing_file.py",
+            repo_name="test_repo",
+            type="file_change",
+            diff="@@ -1,3 +1,3 @@\n def non_existing_function():\n-    return 'Old'\n+    return 'New'",
+            description="Update non-existing function",
+            commit_message="Modify non_existing_function in existing_file.py",
+        )
+        file_content = "def existing_function():\n    return 'Hello'\n"
+        result = task_to_file_change(task, file_content)
+        assert len(result) == 0
+
+    def test_multiple_chunks(self):
+        task = PlanTaskPromptXml(
+            file_path="existing_file.py",
+            repo_name="test_repo",
+            type="file_change",
+            diff="@@ -1,3 +1,3 @@\n def func1():\n-    return 'Old1'\n+    return 'New1'\n@@ -5,3 +5,3 @@\n def func2():\n-    return 'Old2'\n+    return 'New2'",
+            description="Update two functions",
+            commit_message="Modify func1 and func2 in existing_file.py",
+        )
+        file_content = "def func1():\n    return 'Old1'\n\ndef func2():\n    return 'Old2'\n"
+        result = task_to_file_change(task, file_content)
+        assert len(result) == 2
+        assert result[0].new_snippet == "def func1():\n    return 'New1'"
+        assert result[1].new_snippet == "def func2():\n    return 'New2'"
