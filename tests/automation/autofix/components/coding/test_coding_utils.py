@@ -1,7 +1,7 @@
 import pytest
 
-from seer.automation.autofix.components.planner.models import FuzzyDiffChunk
-from seer.automation.autofix.components.planner.utils import extract_diff_chunks
+from seer.automation.autofix.components.coding.models import FuzzyDiffChunk
+from seer.automation.autofix.components.coding.utils import extract_diff_chunks
 
 
 class TestExtractDiffChunks:

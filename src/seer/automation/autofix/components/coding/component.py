@@ -5,14 +5,14 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, GptAgent
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.planner.models import (
+from seer.automation.autofix.components.coding.models import (
     PlanningOutput,
     PlanningOutputPromptXml,
     PlanningRequest,
     RootCausePlanTaskPromptXml,
 )
-from seer.automation.autofix.components.planner.prompts import PlanningPrompts
-from seer.automation.autofix.components.planner.utils import extract_diff_chunks
+from seer.automation.autofix.components.coding.prompts import PlanningPrompts
+from seer.automation.autofix.components.coding.utils import extract_diff_chunks
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.autofix.utils import find_original_snippet

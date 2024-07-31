@@ -2,7 +2,7 @@ import dataclasses
 import logging
 from typing import Literal
 
-from seer.automation.autofix.components.planner.models import PlanningOutput
+from seer.automation.autofix.components.coding.models import PlanningOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,

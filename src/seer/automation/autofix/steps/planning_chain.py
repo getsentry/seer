@@ -5,8 +5,8 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
-from seer.automation.autofix.components.planner.component import PlanningComponent
-from seer.automation.autofix.components.planner.models import PlanningRequest
+from seer.automation.autofix.components.coding.component import PlanningComponent
+from seer.automation.autofix.components.coding.models import PlanningRequest
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,

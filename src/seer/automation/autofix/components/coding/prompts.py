@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.autofix.components.planner.models import PlanStepsPromptXml
+from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.prompts import format_instruction
 from seer.automation.models import EventDetails
 

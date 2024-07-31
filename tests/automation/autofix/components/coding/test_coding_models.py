@@ -1,4 +1,4 @@
-from seer.automation.autofix.components.planner.models import RootCausePlanTaskPromptXml
+from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseRelevantCodeSnippet,

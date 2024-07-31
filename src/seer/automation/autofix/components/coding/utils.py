@@ -1,6 +1,6 @@
 from langfuse.decorators import observe
 
-from seer.automation.autofix.components.planner.models import FuzzyDiffChunk
+from seer.automation.autofix.components.coding.models import FuzzyDiffChunk
 
 
 @observe(name="Extract diff original/replacement chunks")
