@@ -1,7 +1,7 @@
 
 # Seer
 
-![Seer Logo](seer.png)
+<img src="seer.png" alt="Seer Logo" width="128">
 
 Seer is a service that provides AI capabilities to Sentry, running inference on Sentry issues and providing insights to users.
 
