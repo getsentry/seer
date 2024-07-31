@@ -111,10 +111,9 @@ class AutofixEventManager:
             root_cause_selection = CustomRootCauseSelection(
                 custom_root_cause=payload.custom_root_cause,
             )
-        elif payload.cause_id is not None and payload.fix_id is not None:
+        elif payload.cause_id is not None:
             root_cause_selection = CodeContextRootCauseSelection(
                 cause_id=payload.cause_id,
-                fix_id=payload.fix_id,
             )
 
         if root_cause_selection is None:

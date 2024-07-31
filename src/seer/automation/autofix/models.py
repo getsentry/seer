@@ -78,7 +78,6 @@ class CustomRootCauseSelection(BaseModel):
 
 class CodeContextRootCauseSelection(BaseModel):
     cause_id: int
-    fix_id: int
 
 
 RootCauseSelection = Union[CustomRootCauseSelection, CodeContextRootCauseSelection]
@@ -252,7 +251,6 @@ class AutofixUpdateType(str, enum.Enum):
 class AutofixRootCauseUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
     cause_id: int | None = None
-    fix_id: int | None = None
     custom_root_cause: str | None = None
 
 
@@ -332,19 +330,7 @@ class AutofixContinuation(AutofixGroupState):
                         for cause in root_cause_step.causes
                         if cause.id == root_cause_step.selection.cause_id
                     )
-
-                    if cause.code_context:
-                        fix = next(
-                            fix
-                            for fix in cause.code_context
-                            if fix.id == root_cause_step.selection.fix_id
-                        )
-
-                        cause = cause.model_copy()
-
-                        cause.code_context = [fix]
-
-                        return cause
+                    return cause
                 elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
                     return root_cause_step.selection.custom_root_cause
         return None

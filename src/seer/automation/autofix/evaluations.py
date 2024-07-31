@@ -125,7 +125,6 @@ def sync_run_execution(item: DatasetItemClient):
         AutofixRootCauseUpdatePayload(
             type=AutofixUpdateType.SELECT_ROOT_CAUSE,
             cause_id=-1,
-            fix_id=-1,
         )
     )
 
@@ -184,14 +183,11 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     if not cause.code_context:
         return None
 
-    fix_id = cause.code_context[0].id
-
     event_manager = AutofixEventManager(state)
     event_manager.set_selected_root_cause(
         AutofixRootCauseUpdatePayload(
             type=AutofixUpdateType.SELECT_ROOT_CAUSE,
             cause_id=cause_id,
-            fix_id=fix_id,
         )
     )
 
