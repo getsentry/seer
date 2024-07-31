@@ -76,8 +76,8 @@ def test_claude_client_completion(mock_anthropic_client):
     assert mock_anthropic_client.messages.create.call_count == 1
     assert message.content == "Claude response"
     assert message.role == "assistant"
-    assert usage.completion_tokens == 20
-    assert usage.prompt_tokens == 10
+    assert usage.completion_tokens == 10
+    assert usage.prompt_tokens == 20
     assert usage.total_tokens == 30
 
 
