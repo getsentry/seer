@@ -5,8 +5,8 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
-from seer.automation.autofix.components.coding.component import PlanningComponent
-from seer.automation.autofix.components.coding.models import PlanningRequest
+from seer.automation.autofix.components.coding.component import CodingComponent
+from seer.automation.autofix.components.coding.models import CodingRequest
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
@@ -20,7 +20,7 @@ from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineChain, PipelineStepTaskRequest
 
 
-class AutofixPlanningStepRequest(PipelineStepTaskRequest):
+class AutofixCodingStepRequest(PipelineStepTaskRequest):
     pass
 
 
@@ -28,53 +28,53 @@ class AutofixPlanningStepRequest(PipelineStepTaskRequest):
     time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
-def autofix_planning_task(*args, request: dict[str, Any]):
-    AutofixPlanningStep(request).invoke()
+def autofix_coding_task(*args, request: dict[str, Any]):
+    AutofixCodingStep(request).invoke()
 
 
-class AutofixPlanningStep(PipelineChain, AutofixPipelineStep):
+class AutofixCodingStep(PipelineChain, AutofixPipelineStep):
     """
     This class represents the execution pipeline in the autofix system. It is responsible for
-    executing the fixes suggested by the planning component based on the root cause analysis.
+    executing the fixes suggested by the coding component based on the root cause analysis.
     """
 
-    name = "AutofixPlanningChainStep"
+    name = "AutofixCodingStep"
 
     @staticmethod
-    def _instantiate_request(request: dict[str, Any]) -> AutofixPlanningStepRequest:
-        return AutofixPlanningStepRequest.model_validate(request)
+    def _instantiate_request(request: dict[str, Any]) -> AutofixCodingStepRequest:
+        return AutofixCodingStepRequest.model_validate(request)
 
     @staticmethod
     def get_task():
-        return autofix_planning_task
+        return autofix_coding_task
 
-    @observe(name="Autofix - Planning Step")
-    @ai_track(description="Autofix - Planning Step")
+    @observe(name="Autofix - Plan+Code Step")
+    @ai_track(description="Autofix - Plan+Code Step")
     def _invoke(self, **kwargs):
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
-        self.context.event_manager.send_planning_start()
+        self.context.event_manager.send_coding_start()
 
         if not self.context.skip_loading_codebase and self.context.has_missing_codebase_indexes():
-            raise ValueError("Codebase indexes must be created before planning")
+            raise ValueError("Codebase indexes must be created before coding")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()
 
         if not root_cause_and_fix:
-            raise ValueError("Root cause analysis must be performed before planning")
+            raise ValueError("Root cause analysis must be performed before coding")
 
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
 
-        planning_output = PlanningComponent(self.context).invoke(
-            PlanningRequest(
+        coding_output = CodingComponent(self.context).invoke(
+            CodingRequest(
                 event_details=event_details,
                 root_cause_and_fix=root_cause_and_fix,
                 instruction=state.request.instruction,
             )
         )
 
-        self.context.event_manager.send_planning_result(planning_output)
+        self.context.event_manager.send_coding_result(coding_output)
 
         self.next(
             AutofixChangeDescriberStep.get_signature(

@@ -6,12 +6,12 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.agent import AgentConfig, GptAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
-    PlanningOutput,
-    PlanningOutputPromptXml,
-    PlanningRequest,
+    CodingOutput,
+    CodingOutputPromptXml,
+    CodingRequest,
     RootCausePlanTaskPromptXml,
 )
-from seer.automation.autofix.components.coding.prompts import PlanningPrompts
+from seer.automation.autofix.components.coding.prompts import CodingPrompts
 from seer.automation.autofix.components.coding.utils import extract_diff_chunks
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
@@ -24,17 +24,17 @@ from seer.langfuse import append_langfuse_trace_tags
 logger = logging.getLogger(__name__)
 
 
-class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
+class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     context: AutofixContext
 
-    @observe(name="Planning")
-    @ai_track(description="Planning")
-    def invoke(self, request: PlanningRequest) -> PlanningOutput | None:
+    @observe(name="Plan+Code")
+    @ai_track(description="Plan+Code")
+    def invoke(self, request: CodingRequest) -> CodingOutput | None:
         tools = BaseTools(self.context)
 
         agent = GptAgent(
             tools=tools.get_tools(),
-            config=AgentConfig(system_prompt=PlanningPrompts.format_system_msg()),
+            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg()),
         )
 
         task_str = (
@@ -44,7 +44,7 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
         )
 
         response = agent.run(
-            PlanningPrompts.format_default_msg(
+            CodingPrompts.format_default_msg(
                 event=request.event_details,
                 task_str=task_str,
                 instruction=request.instruction,
@@ -58,11 +58,11 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
         with self.context.state.update() as cur:
             cur.usage += agent.usage
 
-        planning_output = PlanningOutputPromptXml.from_xml(
-            f"<planning_output>{remove_cdata(escape_multi_xml(response, ['thoughts', 'diff']))}</planning_output>"
+        coding_output = CodingOutputPromptXml.from_xml(
+            f"<coding_output>{remove_cdata(escape_multi_xml(response, ['thoughts', 'diff']))}</coding_output>"
         ).to_model()
 
-        for task in planning_output.tasks:
+        for task in coding_output.tasks:
             repo_client = self.context.get_repo_client(task.repo_name)
             if task.type == "file_change":
                 diff_chunks = extract_diff_chunks(task.diff)
@@ -126,4 +126,4 @@ class PlanningComponent(BaseComponent[PlanningRequest, PlanningOutput]):
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
 
-        return planning_output
+        return coding_output

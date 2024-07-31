@@ -29,13 +29,10 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
+from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
 from seer.automation.autofix.steps.create_missing_indexes_chain import (
     CreateAnyMissingCodebaseIndexesStepRequest,
     CreateMissingIndexesStep,
-)
-from seer.automation.autofix.steps.planning_chain import (
-    AutofixPlanningStep,
-    AutofixPlanningStepRequest,
 )
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.models import InitializationError
@@ -148,7 +145,7 @@ def run_autofix_execution(request: AutofixUpdateRequest):
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
-    event_manager.send_planning_start()
+    event_manager.send_coding_start()
 
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
 
@@ -162,8 +159,8 @@ def run_autofix_execution(request: AutofixUpdateRequest):
             return
 
         if cur.request.options.disable_codebase_indexing:
-            AutofixPlanningStep.get_signature(
-                AutofixPlanningStepRequest(
+            AutofixCodingStep.get_signature(
+                AutofixCodingStepRequest(
                     run_id=cur.run_id,
                 ),
                 queue=CeleryQueues.DEFAULT,
@@ -172,8 +169,8 @@ def run_autofix_execution(request: AutofixUpdateRequest):
             CreateMissingIndexesStep.get_signature(
                 CreateAnyMissingCodebaseIndexesStepRequest(
                     run_id=cur.run_id,
-                    next=AutofixPlanningStep.get_signature(
-                        AutofixPlanningStepRequest(
+                    next=AutofixCodingStep.get_signature(
+                        AutofixCodingStepRequest(
                             run_id=cur.run_id,
                         ),
                         queue=CeleryQueues.DEFAULT,

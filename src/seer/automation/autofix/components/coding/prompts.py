@@ -5,7 +5,7 @@ from seer.automation.autofix.prompts import format_instruction
 from seer.automation.models import EventDetails
 
 
-class PlanningPrompts:
+class CodingPrompts:
     @staticmethod
     def format_system_msg():
         return textwrap.dedent(

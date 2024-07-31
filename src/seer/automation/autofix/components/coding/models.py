@@ -9,7 +9,7 @@ from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 
 
-class PlanningRequest(BaseComponentRequest):
+class CodingRequest(BaseComponentRequest):
     event_details: EventDetails
     root_cause_and_fix: RootCauseAnalysisItem | str
     instruction: Optional[str] = None
@@ -98,48 +98,6 @@ class PlanTaskPromptXml(PromptXmlModel, tag="step"):
         )
 
 
-class ReplaceCodePromptXml(PromptXmlModel, tag="code_change"):
-    file_path: str = attr()
-    repo_name: str = attr()
-    reference_snippet: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    new_snippet: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    new_imports: Optional[Annotated[str, StringConstraints(strip_whitespace=True)]] = element(
-        default=None
-    )
-    description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    commit_message: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-
-    @classmethod
-    def get_example(cls):
-        return cls(
-            file_path="path/to/file.py",
-            repo_name="owner/repo",
-            description="Describe what you are doing here in detail like you are explaining it to a software engineer.",
-            reference_snippet="This is the reference snippet, use this to find the code to replace",
-            new_snippet="This is the new snippet, this can be an empty opening/closing tag if you are deleting code",
-            new_imports="Optional, import statements that need to be added to the TOP of the file",
-            commit_message="Fix the foo() function by returning 'bar'",
-        )
-
-
-class CreateFilePromptXml(PromptXmlModel, tag="create_file"):
-    file_path: str = attr()
-    repo_name: str = attr()
-    snippet: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    commit_message: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-
-    @classmethod
-    def get_example(cls):
-        return cls(
-            file_path="path/to/file.py",
-            repo_name="owner/repo",
-            description="Describe what you are doing here in detail like you are explaining it to a software engineer.",
-            snippet="# This is the new file content",
-            commit_message="Create the foo() function that returns 'bar'",
-        )
-
-
 class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
     tasks: list[PlanTaskPromptXml]
 
@@ -153,17 +111,17 @@ class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
         )
 
 
-class PlanningOutputPromptXml(PromptXmlModel, tag="planning_output"):
+class CodingOutputPromptXml(PromptXmlModel, tag="coding_output"):
     thoughts: Optional[str] = element(default=None)
     content: Optional[str] = None
     # Order matters here, don't move plan_steps before thoughts
     plan_steps: PlanStepsPromptXml
 
     def to_model(self):
-        return PlanningOutput.model_validate(self.plan_steps.model_dump())
+        return CodingOutput.model_validate(self.plan_steps.model_dump())
 
 
-class PlanningOutput(BaseComponentOutput):
+class CodingOutput(BaseComponentOutput):
     tasks: list[PlanTaskPromptXml]
 
 

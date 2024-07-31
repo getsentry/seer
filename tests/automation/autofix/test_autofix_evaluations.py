@@ -63,7 +63,7 @@ class TestSyncRunEvaluationOnItem:
         )
         self.patch_root_cause_step = patch("seer.automation.autofix.evaluations.RootCauseStep")
         self.patch_event_manager = patch("seer.automation.autofix.evaluations.AutofixEventManager")
-        self.patch_planning_step = patch("seer.automation.autofix.evaluations.AutofixPlanningStep")
+        self.patch_planning_step = patch("seer.automation.autofix.evaluations.AutofixCodingStep")
 
         # Start patches
         self.mock_create_initial_run = self.patch_create_initial_run.start()

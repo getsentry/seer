@@ -621,7 +621,7 @@ def test_detected_celery_jobs():
         "seer.automation.autofix.steps.create_index_step.create_index_task",
         "seer.automation.autofix.steps.create_missing_indexes_chain.create_missing_indexes_task",
         "seer.automation.autofix.steps.execution_step.autofix_execution_task",
-        "seer.automation.autofix.steps.planning_chain.autofix_planning_task",
+        "seer.automation.autofix.steps.planning_chain.autofix_coding_task",
         "seer.automation.autofix.steps.root_cause_step.root_cause_task",
         "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
         "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
