@@ -35,6 +35,7 @@ class GroupingRequest(BaseModel):
     read_only: bool = False
     hnsw_candidates: int = NN_GROUPING_HNSW_CANDIDATES
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
+    use_reranking: bool = False
 
     @field_validator("stacktrace", "message")
     @classmethod
@@ -67,6 +68,11 @@ class CreateGroupingRecordsRequest(BaseModel):
     data: List[CreateGroupingRecordData]
     stacktrace_list: List[str]
     encode_stacktrace_batch_size: int = 1
+    threshold: float = NN_GROUPING_DISTANCE
+    k: int = 1
+    hnsw_candidates: int = NN_GROUPING_HNSW_CANDIDATES
+    hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
+    use_reranking: bool = False
 
 
 class BulkCreateGroupingRecordsResponse(BaseModel):
@@ -183,6 +189,76 @@ class GroupingLookup:
         k: int,
         hnsw_candidates: int,
         hnsw_distance: float,
+        use_reranking: bool,
+    ) -> List[tuple[DbGroupingRecord, float]]:
+        """
+        Query the nearest k neighbors for a given embedding.
+
+        This method performs a similarity search to find the k nearest neighbors
+        for the provided embedding. It can reranking based on the
+        `use_reranking` parameter.
+
+        Args:
+            session (sqlalchemy.orm.Session): The database session.
+            embedding (np.ndarray): The embedding to search for similar records.
+            project_id (int): The ID of the project to search within.
+            hash (str): The hash to exclude from the search results.
+            distance (float): The maximum cosine distance for similarity.
+            k (int): The number of nearest neighbors to return.
+            hnsw_candidates (int): The number of candidates for HNSW search (used with reranking).
+            hnsw_distance (float): The maximum distance for HNSW search (used with reranking).
+            use_reranking (bool): Whether to use reranking in the search process.
+
+        Returns:
+            List[tuple[DbGroupingRecord, float]]: A list of tuples containing the nearest
+            neighbor records and their distances.
+        """
+        if use_reranking:
+            return self._query_with_reranking(
+                session, embedding, project_id, hash, distance, k, hnsw_candidates, hnsw_distance
+            )
+        else:
+            return self._query_without_reranking(session, embedding, project_id, hash, distance, k)
+
+    def _query_without_reranking(
+        self,
+        session: sqlalchemy.orm.Session,
+        embedding: np.ndarray,
+        project_id: int,
+        hash: str,
+        distance: float,
+        k: int,
+    ) -> List[tuple[DbGroupingRecord, float]]:
+        custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
+
+        candidates = (
+            session.query(DbGroupingRecord)
+            .filter(
+                DbGroupingRecord.project_id == project_id,
+                DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding) <= distance,
+                DbGroupingRecord.hash != hash,
+            )
+            .order_by(DbGroupingRecord.stacktrace_embedding.cosine_distance(embedding))
+            .limit(k)
+            .execution_options(**custom_options)
+            .all()
+        )
+
+        return [
+            (candidate, self.cosine_distance(embedding, candidate.stacktrace_embedding))
+            for candidate in candidates
+        ]
+
+    def _query_with_reranking(
+        self,
+        session: sqlalchemy.orm.Session,
+        embedding: np.ndarray,
+        project_id: int,
+        hash: str,
+        distance: float,
+        k: int,
+        hnsw_candidates: int,
+        hnsw_distance: float,
     ) -> List[tuple[DbGroupingRecord, float]]:
         custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
 
@@ -216,22 +292,31 @@ class GroupingLookup:
         return reranked[:k]
 
     @staticmethod
+    def cosine_distance(
+        embedding: np.ndarray,
+        candidate_embedding: np.ndarray,
+        embedding_norm: Optional[float] = None,
+    ) -> float:
+        embedding_norm = embedding_norm if embedding_norm is not None else np.linalg.norm(embedding)
+
+        candidate_norm = np.linalg.norm(candidate_embedding)
+        dot_product = np.dot(candidate_embedding, embedding)
+        return 1 - dot_product / (candidate_norm * embedding_norm)
+
     @sentry_sdk.tracing.trace
     def rerank_candidates(
-        candidates: List[DbGroupingRecord], embedding: np.ndarray, distance: float
+        self, candidates: List[DbGroupingRecord], embedding: np.ndarray, distance: float
     ) -> List[tuple[DbGroupingRecord, float]]:
         embedding_norm = np.linalg.norm(embedding)
 
-        def cosine_distance(candidate_embedding):
-            candidate_norm = np.linalg.norm(candidate_embedding)
-            dot_product = np.dot(candidate_embedding, embedding)
-            return 1 - dot_product / (candidate_norm * embedding_norm)
+        reranked = []
+        for candidate in candidates:
+            cos_distance = self.cosine_distance(
+                embedding, candidate.stacktrace_embedding, embedding_norm
+            )
+            if cos_distance <= distance:
+                reranked.append((candidate, cos_distance))
 
-        reranked = [
-            (candidate, cosine_distance(candidate.stacktrace_embedding))
-            for candidate in candidates
-            if cosine_distance(candidate.stacktrace_embedding) <= distance
-        ]
         return sorted(reranked, key=lambda x: x[1])
 
     @sentry_sdk.tracing.trace
@@ -256,6 +341,7 @@ class GroupingLookup:
                 issue.k,
                 issue.hnsw_candidates,
                 issue.hnsw_distance,
+                issue.use_reranking,
             )
 
             # If no existing groups within the threshold, insert the request as a new GroupingRecord
@@ -336,10 +422,11 @@ class GroupingLookup:
                     embedding,
                     entry.project_id,
                     entry.hash,
-                    NN_GROUPING_DISTANCE,
-                    1,
-                    NN_GROUPING_HNSW_CANDIDATES,
-                    NN_GROUPING_HNSW_DISTANCE,
+                    data.threshold,
+                    data.k,
+                    data.hnsw_candidates,
+                    data.hnsw_distance,
+                    data.use_reranking,
                 )
 
                 if nearest_neighbor:

@@ -13,6 +13,7 @@ from seer.app import app
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.state import LocalMemoryState
 from seer.db import DbGroupingRecord, ProcessRequest, Session
+from seer.grouping.grouping import CreateGroupingRecordData, CreateGroupingRecordsRequest
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 
 
@@ -310,22 +311,22 @@ class TestSeer(unittest.TestCase):
     def test_similarity_grouping_record_endpoint_valid(self):
         """Test the similarity grouping record endpoint"""
         hashes = [str(i) * 32 for i in range(5)]
-        record_requests = {
-            "data": [
-                {
-                    "group_id": i,
-                    "hash": hashes[i],
-                    "project_id": 1,
-                    "message": "message " + str(i),
-                }
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
                 for i in range(5)
             ],
-            "stacktrace_list": ["stacktrace " + str(i) for i in range(5)],
-        }
+            stacktrace_list=["stacktrace " + str(i) for i in range(5)],
+        )
 
         response = app.test_client().post(
             "/v0/issues/similar-issues/grouping-record",
-            data=json.dumps(record_requests),
+            data=record_requests.json(),
             content_type="application/json",
         )
         output = json.loads(response.get_data(as_text=True))
@@ -341,22 +342,22 @@ class TestSeer(unittest.TestCase):
         different lengths
         """
         hashes = [str(i) * 32 for i in range(5, 7)]
-        record_requests = {
-            "data": [
-                {
-                    "group_id": i,
-                    "hash": hashes[i],
-                    "project_id": 1,
-                    "message": "message " + str(i),
-                }
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message="message " + str(i),
+                )
                 for i in range(2)
             ],
-            "stacktrace_list": ["stacktrace " + str(i) for i in range(3)],
-        }
+            stacktrace_list=["stacktrace " + str(i) for i in range(3)],
+        )
 
         response = app.test_client().post(
             "/v0/issues/similar-issues/grouping-record",
-            data=json.dumps(record_requests),
+            data=record_requests.json(),
             content_type="application/json",
         )
         output = json.loads(response.get_data(as_text=True))
