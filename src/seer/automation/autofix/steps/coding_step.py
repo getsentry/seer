@@ -51,6 +51,8 @@ class AutofixCodingStep(PipelineChain, AutofixPipelineStep):
     @observe(name="Autofix - Plan+Code Step")
     @ai_track(description="Autofix - Plan+Code Step")
     def _invoke(self, **kwargs):
+        self.logger.info("Executing Autofix - Plan+Code Step")
+
         self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_coding_start()
 
