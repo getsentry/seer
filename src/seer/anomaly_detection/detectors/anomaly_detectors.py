@@ -81,7 +81,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         # we do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
 
-        scores, flags = scorer.score(mp, mp_dist)
+        scores, flags = scorer.score(mp_dist, mp_dist_baseline=None)
 
         return MPTimeSeriesAnomalies(
             flags=flags,
@@ -106,7 +106,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     )
 
     @inject
-    def detect(self, timeseries: TimeSeries, scorer: MPScorer = injected) -> MPTimeSeriesAnomalies:
+    def detect(
+        self, timeseries: TimeSeries, scorer: MPScorer = injected, mp_utils: MPUtils = injected
+    ) -> MPTimeSeriesAnomalies:
         # Initialize stumpi
         stream = stumpy.stumpi(
             self.base_values,
@@ -119,19 +121,21 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         scores = []
         flags = []
         for cur_val in timeseries.values:
+            # Update the sumpi stream processor with new data
             stream.update(cur_val)
 
-            # Get the updated ts and mp
-            self.base_values = stream.T_
+            # Get the matrix profile for the new data and score it
             cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
-            self.base_mp = np.vstack([self.base_mp, cur_mp])
-
-            # Score it
-            cur_scores, cur_flags = scorer.stream_score(
-                self.base_values, self.base_mp, np.array([stream.P_[-1]])
+            mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
+            cur_scores, cur_flags = scorer.score(
+                mp_dist_to_score=np.array([stream.P_[-1]]), mp_dist_baseline=mp_dist_baseline
             )
             scores.extend(cur_scores)
             flags.extend(cur_flags)
+
+            # Add new data point as well as its matrix profile to baseline
+            self.base_values = stream.T_
+            self.base_mp = np.vstack([self.base_mp, cur_mp])
 
         return MPTimeSeriesAnomalies(
             flags=flags,
