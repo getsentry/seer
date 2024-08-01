@@ -29,9 +29,7 @@ class CodingPrompts:
             Given the issue:
             {event_str}
 
-
-
-            The root cause of the issue has been identified and a fix has been suggested. The fix is as follows:
+            The root cause of the issue has been identified and context about the issue has been provided:
             {task_str}
 
             Break down the task of fixing the issue into steps. Since you are a principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution.
