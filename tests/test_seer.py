@@ -616,17 +616,18 @@ class TestGetAutofixState:
 
 
 def test_detected_celery_jobs():
-    assert sorted(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == [
-        "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
-        "seer.automation.autofix.steps.create_index_step.create_index_task",
-        "seer.automation.autofix.steps.create_missing_indexes_chain.create_missing_indexes_task",
-        "seer.automation.autofix.steps.execution_step.autofix_execution_task",
-        "seer.automation.autofix.steps.planning_chain.autofix_coding_task",
-        "seer.automation.autofix.steps.root_cause_step.root_cause_task",
-        "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
-        "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
-        "seer.automation.autofix.steps.update_index_step.update_index_task",
-        "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
-        "seer.automation.codebase.tasks.index_namespace",
-        "seer.automation.codebase.tasks.update_codebase_index",
-    ]
+    assert set(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == set(
+        [
+            "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
+            "seer.automation.autofix.steps.create_index_step.create_index_task",
+            "seer.automation.autofix.steps.create_missing_indexes_chain.create_missing_indexes_task",
+            "seer.automation.autofix.steps.coding_step.autofix_coding_task",
+            "seer.automation.autofix.steps.root_cause_step.root_cause_task",
+            "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
+            "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
+            "seer.automation.autofix.steps.update_index_step.update_index_task",
+            "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
+            "seer.automation.codebase.tasks.index_namespace",
+            "seer.automation.codebase.tasks.update_codebase_index",
+        ]
+    )
