@@ -59,7 +59,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     role="user",
                     content=RootCauseAnalysisPrompts.root_cause_formatter_msg(extracted_response),
                 )
-            ]
+            ],
+            model="gpt-4o-mini-2024-07-18",
         )
 
         with self.context.state.update() as cur:
