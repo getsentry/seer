@@ -21,7 +21,7 @@ from seer.automation.autofix.components.root_cause.models import RootCauseAnalys
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
-from seer.automation.utils import escape_multi_xml, remove_cdata
+from seer.automation.utils import escape_multi_xml
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             cur.usage += agent.usage
 
         coding_output = CodingOutputPromptXml.from_xml(
-            f"<coding_output>{remove_cdata(escape_multi_xml(response, ['thoughts', 'diff']))}</coding_output>"
+            f"<coding_output>{escape_multi_xml(response, ['thoughts', 'diff'])}</coding_output>"
         ).to_model()
 
         for task in coding_output.tasks:
