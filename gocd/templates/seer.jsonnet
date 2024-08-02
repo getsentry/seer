@@ -10,6 +10,7 @@ local pipedream_config = {
     'customer-3',
     'customer-4',
     'customer-6',
+    'customer-7',
   ],
   materials: {
     seer_repo: {
