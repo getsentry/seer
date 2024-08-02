@@ -181,7 +181,12 @@ class BaseTools:
             FunctionTool(
                 name="expand_document",
                 fn=self.expand_document,
-                description="Given a document path, returns the entire document text.",
+                description=textwrap.dedent(
+                    """\
+                    Given a document path, returns the entire document text.
+                    - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
+                    - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
+                ),
                 parameters=[
                     {
                         "name": "input",

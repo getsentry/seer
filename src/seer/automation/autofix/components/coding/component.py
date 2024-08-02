@@ -50,7 +50,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         )
 
         response = agent.run(
-            CodingPrompts.format_default_msg(
+            CodingPrompts.format_fix_discovery_msg(
                 event=request.event_details,
                 task_str=task_str,
                 instruction=request.instruction,
@@ -58,14 +58,23 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             context=self.context,
         )
 
-        if not response:
-            return None
-
+        prev_usage = agent.usage
         with self.context.state.update() as cur:
             cur.usage += agent.usage
 
+        if not response:
+            return None
+
+        final_response = agent.run(CodingPrompts.format_fix_msg())
+
+        with self.context.state.update() as cur:
+            cur.usage += agent.usage - prev_usage
+
+        if not final_response:
+            return None
+
         coding_output = CodingOutputPromptXml.from_xml(
-            f"<coding_output>{escape_multi_xml(response, ['thoughts', 'diff'])}</coding_output>"
+            f"<coding_output>{escape_multi_xml(final_response, ['thoughts', 'diff', 'description', 'commit_message'])}</coding_output>"
         ).to_model()
 
         for task in coding_output.tasks:

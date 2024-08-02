@@ -4,7 +4,10 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
 
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.components.root_cause.models import (
+    RootCauseAnalysisItem,
+    RootCauseRelevantContext,
+)
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 
@@ -20,29 +23,41 @@ class SnippetXml(PromptXmlModel, tag="snippet"):
     snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
 
 
+class CodeContextXml(PromptXmlModel, tag="code_context"):
+    title: str = element()
+    description: str = element()
+    snippet: SnippetXml = element()
+
+    @classmethod
+    def from_root_cause_context(cls, context: RootCauseRelevantContext):
+        return cls(
+            title=context.title,
+            description=context.description,
+            snippet=(
+                SnippetXml(file_path=context.snippet.file_path, snippet=context.snippet.snippet)
+                if context.snippet
+                else None
+            ),
+        )
+
+
 class RootCausePlanTaskPromptXml(PromptXmlModel, tag="root_cause", skip_empty=True):
     title: str = element()
     description: str = element()
-    fix_title: Optional[str] = element()
-    fix_description: Optional[str] = element()
-    fix_snippet: Optional[SnippetXml]
+    contexts: list[CodeContextXml]
 
     @classmethod
     def from_root_cause(cls, root_cause: RootCauseAnalysisItem):
         return cls(
             title=root_cause.title,
             description=root_cause.description,
-            fix_title=root_cause.code_context[0].title if root_cause.code_context else None,
-            fix_description=(
-                root_cause.code_context[0].description if root_cause.code_context else None
-            ),
-            fix_snippet=(
-                SnippetXml(
-                    file_path=root_cause.code_context[0].snippet.file_path,
-                    snippet=root_cause.code_context[0].snippet.snippet,
-                )
-                if root_cause.code_context and root_cause.code_context[0].snippet
-                else None
+            contexts=(
+                [
+                    CodeContextXml.from_root_cause_context(context)
+                    for context in root_cause.code_context
+                ]
+                if root_cause.code_context
+                else []
             ),
         )
 
@@ -72,7 +87,9 @@ class PlanTaskPromptXml(PromptXmlModel, tag="step"):
         return "\n".join(lines).strip()
 
     @classmethod
-    def get_example(cls):
+    def get_example(
+        cls,
+    ):
         return cls(
             file_path="path/to/file.py",
             repo_name="owner/repo",
@@ -80,21 +97,24 @@ class PlanTaskPromptXml(PromptXmlModel, tag="step"):
             description="Describe what you are doing here in detail like you are explaining it to a software engineer.",
             diff=textwrap.dedent(
                 """\
-                # Here provide the EXACT unified diff of the code change required to accomplish this step. Make sure the diff is complete and the code is EXACTLY matching the files you see. For example:
+                # Here provide the EXACT unified diff of the code change required to accomplish this step.
+                # You must prefix lines that are removed with a '-' and lines that are added with a '+'. Context lines around the change are required and must be prefixed with a space.
+                # Make sure the diff is complete and the code is EXACTLY matching the files you see.
+                # For example:
                 --- a/path/to/file.py
                 +++ b/path/to/file.py
                 @@ -1,3 +1,3 @@
                     return 'fab'
-                 y = 2
-                 x = 1
+                    y = 2
+                    x = 1
                 -def foo():
                 +def foo():
                     return 'foo'
-                 def bar():
+                    def bar():
                     return 'bar'
                 """
             ),
-            commit_message="Fix the foo() function by returning 'bar'",
+            commit_message="Provide a commit message that describes the change you are making",
         )
 
 
