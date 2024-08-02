@@ -110,11 +110,8 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup"):
         sentry_sdk.set_tag("read_only", data.read_only)
-        sentry_sdk.set_tag("stacktrace_len", len(data.stacktrace))
+        sentry_sdk.set_data("stacktrace_len", len(data.stacktrace))
         sentry_sdk.set_tag("request_hash", data.hash)
-        sentry_sdk.metrics.distribution(
-            key="stacktrace_len", value=len(data.stacktrace), unit="none"
-        )
         similar_issues = grouping_lookup().get_nearest_neighbors(data)
     return similar_issues
 
