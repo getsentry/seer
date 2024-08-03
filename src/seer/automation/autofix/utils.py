@@ -44,7 +44,7 @@ def get_last_non_empty_line(text: str) -> str:
 
 
 def find_original_snippet(
-    snippet: str, file_contents: str, threshold=0.9
+    snippet: str, file_contents: str, threshold=0.8, initial_line_threshold=0.9
 ) -> tuple[str, int, int] | None:
     """
     This function finds the original snippet of code in a file given a snippet and the file contents.
@@ -52,86 +52,53 @@ def find_original_snippet(
     Parameters:
     snippet (str): A string containing a snippet of code.
     file_contents (str): A string containing the contents of a file.
+    threshold (float): The similarity threshold for the entire snippet.
+    initial_line_threshold (float): The similarity threshold for the initial line to start searching.
 
-    The function works by splitting the snippet and the file contents into lines and comparing them line by line.
-    It uses the compute_similarity function to find the first line of the snippet in the file.
-    It then continues comparing the following lines, handling ellipsis cases, until it finds a discrepancy or reaches the end of the snippet.
-    If the last line of the snippet is not at least `threshold` similar to the corresponding line in the file, it returns None.
-    Otherwise, it returns the original snippet from the file.
+    The function first searches for a line in the file that matches the first non-empty line of the snippet
+    with a similarity above the initial_line_threshold. It then continues from that point to match the
+    rest of the snippet, handling ellipsis cases and using the compute_similarity function to compare
+    the accumulated snippet with the file contents.
 
     Returns:
-    str: The original snippet from the file, or None if the snippet could not be found.
+    tuple[str, int, int] | None: A tuple containing the original snippet from the file, start index, and end index,
+                                 or None if the snippet could not be found.
     """
-    snippet_lines = snippet.split("\n")
+    snippet_lines = [line for line in snippet.split("\n") if line.strip()]
     file_lines = file_contents.split("\n")
 
-    first_line = snippet_lines[0].strip()
-    while first_line == "":
-        snippet_lines = snippet_lines[1:]
-        if len(snippet_lines) == 0:
-            return None
-        first_line = snippet_lines[0].strip()
+    # Find the first non-empty line in the snippet
+    first_snippet_line = next((line for line in snippet_lines if line.strip()), "")
 
-    snippet_start = None
-    for i, file_line in enumerate(file_lines):
-        if compute_similarity(first_line, file_line) > threshold:
-            snippet_start = i
-            break
+    # Search for a matching initial line in the file
+    for start_index, file_line in enumerate(file_lines):
+        if compute_similarity(first_snippet_line, file_line) >= initial_line_threshold:
+            accumulated_snippet = ""
+            snippet_index = 0
+            file_index = start_index
 
-    if snippet_start is None:
-        return None
+            while snippet_index < len(snippet_lines) and file_index < len(file_lines):
+                file_line = file_lines[file_index].strip()
 
-    ellipsis_comment_cases = ["// ...", "# ...", "/* ... */"]
-    ellipsis_found = False
-    snippet_index = 0
-    file_line_index = snippet_start
-    while snippet_index < len(snippet_lines) and file_line_index < len(file_lines):
-        snippet_line = snippet_lines[snippet_index]
+                if not file_line:
+                    file_index += 1
+                    continue
 
-        if not ellipsis_found:
-            ellipsis_found = snippet_line.strip() == "..." or any(
-                s in snippet_line for s in ellipsis_comment_cases
-            )
-            if ellipsis_found:
-                snippet_index += 1
-                if snippet_index >= len(snippet_lines):
-                    break
-                snippet_line = snippet_lines[snippet_index]
+                accumulated_snippet += file_line + "\n"
+                similarity = compute_similarity(
+                    "\n".join(snippet_lines[: snippet_index + 1]), accumulated_snippet
+                )
 
-        file_line = file_lines[file_line_index]
+                if similarity >= threshold:
+                    snippet_index += 1
 
-        if snippet_line.strip() == "":
-            snippet_index += 1
-            continue
-        if file_line.strip() == "":
-            file_line_index += 1
-            continue
+                file_index += 1
 
-        similarity = compute_similarity(snippet_line, file_line)
+            if snippet_index == len(snippet_lines):
+                # All lines in the snippet have been matched
+                return "\n".join(file_lines[start_index:file_index]), start_index, file_index
 
-        if ellipsis_found and similarity < threshold:
-            file_line_index += 1
-        else:
-            ellipsis_found = False
-            if similarity < threshold:
-                snippet_index = 0
-                file_line_index += 1
-            else:
-                snippet_index += 1
-                file_line_index += 1
-    final_file_snippet = "\n".join(file_lines[snippet_start:file_line_index])
-
-    # Ensure the last line of the file is at least `threshold` similar to the last line of the snippet
-    if (
-        compute_similarity(
-            get_last_non_empty_line("\n".join(snippet_lines)),
-            get_last_non_empty_line(final_file_snippet),
-        )
-        < threshold
-    ):
-        return None
-
-    return final_file_snippet, snippet_start, file_line_index
+    return None
 
 
 def sanitize_branch_name(title: str) -> str:

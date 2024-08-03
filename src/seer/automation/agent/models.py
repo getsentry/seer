@@ -21,6 +21,13 @@ class Usage(BaseModel):
             total_tokens=self.total_tokens + other.total_tokens,
         )
 
+    def __sub__(self, other: "Usage"):
+        return Usage(
+            completion_tokens=self.completion_tokens - other.completion_tokens,
+            prompt_tokens=self.prompt_tokens - other.prompt_tokens,
+            total_tokens=self.total_tokens - other.total_tokens,
+        )
+
 
 class Message(BaseModel):
     content: Optional[str] = None

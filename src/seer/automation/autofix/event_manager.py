@@ -2,7 +2,7 @@ import dataclasses
 import logging
 from typing import Literal
 
-from seer.automation.autofix.components.planner.models import PlanningOutput
+from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -132,14 +132,14 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_planning_start(self):
+    def send_coding_start(self):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_planning_result(self, result: PlanningOutput | None):
+    def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR

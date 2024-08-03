@@ -1,4 +1,4 @@
-from seer.automation.autofix.components.planner.models import RootCausePlanTaskPromptXml
+from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseRelevantCodeSnippet,
@@ -30,9 +30,9 @@ class TestPlannerModels:
 
         assert prompt_xml.title == "title"
         assert prompt_xml.description == "description"
-        assert prompt_xml.fix_title == "fix_title"
-        assert prompt_xml.fix_description == "fix_description"
-        assert prompt_xml.fix_snippet is not None
-        if prompt_xml.fix_snippet is not None:
-            assert prompt_xml.fix_snippet.file_path == "file_path"
-            assert prompt_xml.fix_snippet.snippet == "snippet"
+        assert prompt_xml.contexts[0].title == "fix_title"
+        assert prompt_xml.contexts[0].description == "fix_description"
+        assert prompt_xml.contexts[0].snippet is not None
+        if prompt_xml.contexts[0].snippet is not None:
+            assert prompt_xml.contexts[0].snippet.file_path == "file_path"
+            assert prompt_xml.contexts[0].snippet.snippet == "snippet"

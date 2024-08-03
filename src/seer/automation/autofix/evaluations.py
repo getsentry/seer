@@ -24,10 +24,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.models import RootCauseStep as RootCauseStepModel
 from seer.automation.autofix.runs import create_initial_autofix_run
-from seer.automation.autofix.steps.planning_chain import (
-    AutofixPlanningStep,
-    AutofixPlanningStepRequest,
-)
+from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 from seer.automation.pipeline import PIPELINE_SYNC_SIGNAL
@@ -128,7 +125,7 @@ def sync_run_execution(item: DatasetItemClient):
         )
     )
 
-    AutofixPlanningStep.get_signature(AutofixPlanningStepRequest(run_id=run_id)).apply()
+    AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
 
     state_after_execution = state.get()
     changes_step = state_after_execution.steps[-1]
@@ -191,7 +188,7 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
         )
     )
 
-    AutofixPlanningStep.get_signature(AutofixPlanningStepRequest(run_id=run_id)).apply()
+    AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
 
     state_after_execution = state.get()
     changes_step = state_after_execution.steps[-1]
