@@ -276,19 +276,7 @@ class GroupingLookup:
             .all()
         )
 
-        reranked = self.rerank_candidates(candidates, embedding, distance)
-
-        if candidates and reranked and candidates[0].hash != reranked[0][0].hash:
-            sentry_sdk.metrics.incr(
-                key="reranking_changed_output",
-                value=1,
-            )
-            logger.info(
-                "Reranking changed output: original_hash=%s, new_hash=%s",
-                candidates[0].hash,
-                reranked[0][0].hash,
-            )
-
+        reranked = self.rerank_candidates(candidates, embedding, distance, hash)
         return reranked[:k]
 
     @staticmethod
@@ -306,7 +294,7 @@ class GroupingLookup:
 
     @sentry_sdk.tracing.trace
     def rerank_candidates(
-        self, candidates: List[DbGroupingRecord], embedding: np.ndarray, distance: float
+        self, candidates: List[DbGroupingRecord], embedding: np.ndarray, distance: float, hash: str
     ) -> List[tuple[DbGroupingRecord, float]]:
         embedding_norm = np.linalg.norm(embedding)
 
@@ -318,7 +306,26 @@ class GroupingLookup:
             if cos_distance <= distance:
                 reranked.append((candidate, cos_distance))
 
-        return sorted(reranked, key=lambda x: x[1])
+        reranked = sorted(reranked, key=lambda x: x[1])
+
+        if candidates and reranked and candidates[0].hash != reranked[0][0].hash:
+            span = sentry_sdk.Hub.current.scope.span
+            if span:
+                span.set_data("reranking_changed_output", 1)
+                span.set_data("event_hash", hash)
+                span.set_data("original_hash", candidates[0].hash)
+                span.set_data("new_hash", reranked[0][0].hash)
+
+            logger.info(
+                "Reranking changed output: event_hash=%s, original_hash=%s, original_distance=%.4f, new_hash=%s, new_distance=%.4f",
+                hash,
+                candidates[0].hash,
+                self.cosine_distance(embedding, candidates[0].stacktrace_embedding, embedding_norm),
+                reranked[0][0].hash,
+                reranked[0][1],
+            )
+
+        return reranked
 
     @sentry_sdk.tracing.trace
     def get_nearest_neighbors(self, issue: GroupingRequest) -> SimilarityResponse:
