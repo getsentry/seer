@@ -11,7 +11,7 @@ from seer.automation.models import EventDetails, PromptXmlModel
 
 class SnippetPromptXml(PromptXmlModel, tag="code"):
     file_path: str = attr()
-    repo_name: str = attr()
+    repo_name: Optional[str] = attr()
     snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
 
     @classmethod
@@ -25,7 +25,7 @@ class SnippetPromptXml(PromptXmlModel, tag="code"):
 
 class RootCauseRelevantCodeSnippet(BaseModel):
     file_path: str
-    repo_name: str
+    repo_name: Optional[str]
     snippet: str
 
 
