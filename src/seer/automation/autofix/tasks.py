@@ -22,6 +22,7 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
+    AutofixEvaluationRequest,
     AutofixRequest,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
@@ -211,46 +212,39 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     event_manager.send_pr_creation_complete()
 
 
-def run_autofix_evaluation(
-    dataset_name: str,
-    run_name: str,
-    run_type: str,
-    n_runs_per_item: int = 1,
-    is_test: bool = False,
-    random_for_test: bool = True,
-    run_on_item_id: str | None = None,
-):
+def run_autofix_evaluation(request: AutofixEvaluationRequest):
     langfuse = Langfuse()
 
-    dataset = langfuse.get_dataset(dataset_name)
+    dataset = langfuse.get_dataset(request.dataset_name)
     items = dataset.items
 
-    if run_on_item_id:
-        items = [item for item in items if item.id == run_on_item_id]
+    if request.run_on_item_id:
+        items = [item for item in items if item.id == request.run_on_item_id]
 
-    if is_test and not run_on_item_id:
-        if random_for_test:
+    if request.test and not request.run_on_item_id:
+        if request.random_for_test:
             items = random.sample(items, 1)
         else:
             items = items[:1]
 
     logger.info(
-        f"Starting autofix evaluation for dataset {dataset_name} with run name '{run_name}'."
+        f"Starting autofix evaluation for dataset {request.dataset_name} with run name '{request.run_name}'."
     )
     logger.info(f"Number of items: {len(items)}")
-    logger.info(f"Total number of runs: {len(items) * n_runs_per_item}")
+    logger.info(f"Total number of runs: {len(items) * request.n_runs_per_item}")
 
     for i, item in enumerate(items):
         # Note: This will add ALL the dataset item runs into the CPU queue.
         # As we are not going to be running this in prod yet, it's fine to leave as is.
         # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
-        for _ in range(n_runs_per_item):
+        for _ in range(request.n_runs_per_item):
             run_autofix_evaluation_on_item.apply_async(
                 (),
                 dict(
                     item_id=item.id,
-                    run_name=run_name,
-                    run_type=run_type,
+                    run_name=request.run_name,
+                    run_description=request.run_description,
+                    run_type=request.run_type,
                     item_index=i,
                     item_count=len(items),
                 ),
@@ -263,6 +257,7 @@ def run_autofix_evaluation_on_item(
     *,
     item_id: str,
     run_name: str,
+    run_description: str,
     run_type: Literal["execution", "full", "root_cause"],
     item_index: int,
     item_count: int,
@@ -280,7 +275,7 @@ def run_autofix_evaluation_on_item(
 
     diff: str | None = None
 
-    with dataset_item.observe(run_name=run_name) as trace_id:
+    with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
         if run_type == "root_cause":
             causes: list[RootCauseAnalysisItem] | None = None
             try:
