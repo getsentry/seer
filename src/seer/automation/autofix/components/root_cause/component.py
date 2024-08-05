@@ -52,7 +52,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         if "<NO_ROOT_CAUSES>" in response:
             return None
 
-        agent.config.model = "gpt-4o-mini-2024-07-18"
         formatter_response = agent.run(RootCauseAnalysisPrompts.root_cause_formatter_msg())
 
         with self.context.state.update() as cur:

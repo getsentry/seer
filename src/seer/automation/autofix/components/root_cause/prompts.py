@@ -17,14 +17,13 @@ class RootCauseAnalysisPrompts:
 
             You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue.
 
-            <guidelines>
+            # Guidelines:
             - Don't always assume data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.
             - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search in external libraries.
             - If you are not able to find any potential root causes, return only <NO_ROOT_CAUSES>.
             - If multiple searches turn up no viable results, you should conclude the session.
-            - Do not use tools/functions with tags such as by writing <multi_tool_use.parallel> or <functions.keyword_search>, this is incorrect tool usage.
-            - Every time you do something, explain and justify the reason inside a <log></log> block such as: I'll do X because Y.
-            </guidelines>
+            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            - You also MUST think step-by-step before giving the final answer.
 
             It is important that we find all the potential root causes of the issue, so provide as many possibilities as you can for the root cause, ordered from most likely to least likely."""
         ).format(
@@ -43,15 +42,16 @@ class RootCauseAnalysisPrompts:
 
             {instruction_str}
 
-            EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you inside a <thoughts></thoughts> block.
-            You also MUST think step-by-step inside a <thoughts></thoughts> block before giving the final answer.
+            When ready with your final answer, detail all the potential root causes of the issue.
 
-            When ready with your final answer, detail all the potential root causes of the issue inside wrapped with a <potential_root_causes></potential_root_causes> block.
+            # Guidelines:
             - Each root cause should be inside its own <root_cause> block.
             - Include a title and description in each root cause.
             - Include float values from 0.0-1.0 of the likelihood and actionability of each root cause.
             - In each root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want. Within your snippets, you may highlight specific lines with a comment beginning with ***.
-            - You MUST include the EXACT file name in the code snippets you provide. If you cannot, do not provide a code snippet."""
+            - You MUST include the EXACT file name in the code snippets you provide. If you cannot, do not provide a code snippet.
+            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            - You also MUST think step-by-step before giving the final answer."""
         ).format(
             error_str=event.format_event(),
             instruction_str=format_instruction(instruction),
