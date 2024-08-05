@@ -311,8 +311,7 @@ class GroupingLookup:
         if candidates and reranked and candidates[0].hash != reranked[0][0].hash:
             span = sentry_sdk.Hub.current.scope.span
             if span:
-                current_rerank_count = span.get_data("reranking_changed_output") or 0
-                span.set_data("reranking_changed_output", current_rerank_count + 1)
+                span.set_data("reranking_changed_output", 1)
                 span.set_data("event_hash", hash)
                 span.set_data("original_hash", candidates[0].hash)
                 span.set_data("new_hash", reranked[0][0].hash)
