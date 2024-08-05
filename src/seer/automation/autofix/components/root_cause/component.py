@@ -4,8 +4,6 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, GptAgent
-from seer.automation.agent.client import GptClient
-from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisOutput,
@@ -15,7 +13,7 @@ from seer.automation.autofix.components.root_cause.models import (
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
-from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from seer.automation.utils import escape_multi_xml
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +41,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             context=self.context,
         )
 
+        original_usage = agent.usage
         with self.context.state.update() as cur:
             cur.usage += agent.usage
 
@@ -53,27 +52,18 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         if "<NO_ROOT_CAUSES>" in response:
             return None
 
-        extracted_response = extract_text_inside_tags(response, "potential_root_causes")
-
-        formatter_response, formatter_usage = GptClient().completion(
-            [
-                Message(
-                    role="user",
-                    content=RootCauseAnalysisPrompts.root_cause_formatter_msg(extracted_response),
-                )
-            ],
-            model="gpt-4o-mini-2024-07-18",
-        )
+        agent.config.model = "gpt-4o-mini-2024-07-18"
+        formatter_response = agent.run(RootCauseAnalysisPrompts.root_cause_formatter_msg())
 
         with self.context.state.update() as cur:
-            cur.usage += formatter_usage
+            cur.usage += agent.usage - original_usage
 
-        if not formatter_response.content:
+        if not formatter_response:
             logger.warning("Root Cause Analysis formatter did not return a valid response")
             return None
 
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(formatter_response.content, ['thoughts', 'title', 'description', 'code'])}</root>"
+            f"<root>{escape_multi_xml(formatter_response, ['thoughts', 'title', 'description', 'code'])}</root>"
         )
 
         # Assign the ids to be the numerical indices of the causes and relevant code context
