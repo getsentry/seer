@@ -422,17 +422,27 @@ class TestGrouping(unittest.TestCase):
         # Create mock candidates with incorrect initial ordering
         embedding = np.array([1, 2, 3], dtype=np.float32)
         candidates = [
-            DbGroupingRecord(stacktrace_embedding=np.array([7, 8, 9], dtype=np.float32)),
-            DbGroupingRecord(stacktrace_embedding=np.array([4, 5, 6], dtype=np.float32)),
-            DbGroupingRecord(stacktrace_embedding=np.array([1, 2, 3], dtype=np.float32)),
-            DbGroupingRecord(stacktrace_embedding=np.array([-1, -2, -3], dtype=np.float32)),
+            DbGroupingRecord(
+                stacktrace_embedding=np.array([7, 8, 9], dtype=np.float32), hash="a" * 32
+            ),
+            DbGroupingRecord(
+                stacktrace_embedding=np.array([4, 5, 6], dtype=np.float32), hash="b" * 32
+            ),
+            DbGroupingRecord(
+                stacktrace_embedding=np.array([1, 2, 3], dtype=np.float32), hash="c" * 32
+            ),
+            DbGroupingRecord(
+                stacktrace_embedding=np.array([-1, -2, -3], dtype=np.float32), hash="d" * 32
+            ),
         ]
 
         # Set a distance threshold that includes all candidates except for the one that is reversed
         distance_threshold = 0.05
 
         # Rerank candidates
-        reranked = grouping_lookup().rerank_candidates(candidates, embedding, distance_threshold)
+        reranked = grouping_lookup().rerank_candidates(
+            candidates, embedding, distance_threshold, "abcdef"
+        )
 
         # Check that the order is correct after reranking
         self.assertEqual(len(reranked), 3)
