@@ -110,6 +110,7 @@ def sync_run_execution(item: DatasetItemClient):
                         snippet=RootCauseRelevantCodeSnippet(
                             file_path=expected_output.diff.file_path,
                             snippet=expected_output.diff.code_diff,
+                            repo_name="",
                         ),
                     )
                 ],

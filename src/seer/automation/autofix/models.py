@@ -190,10 +190,12 @@ class AutofixPrIdRequest(BaseModel):
 class AutofixEvaluationRequest(BaseModel):
     dataset_name: str
     run_name: str
+    run_description: Optional[str] = None
     run_type: Literal["root_cause", "full", "execution"] = "full"
     test: bool = False
     run_on_item_id: Optional[str] = None
     random_for_test: bool = False
+    n_runs_per_item: int = 1
 
 
 class AutofixStateResponse(BaseModel):

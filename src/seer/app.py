@@ -235,14 +235,7 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
     if not config.DEV:
         raise RuntimeError("The evaluation endpoint is only available in development mode")
 
-    run_autofix_evaluation(
-        data.dataset_name,
-        data.run_name,
-        data.run_type,
-        is_test=data.test,
-        random_for_test=data.random_for_test,
-        run_on_item_id=data.run_on_item_id,
-    )
+    run_autofix_evaluation(data)
 
     return AutofixEndpointResponse(started=True, run_id=-1)
 

@@ -45,7 +45,7 @@ class TestRootCauseComponent:
     def test_root_cause_code_context_response_parsing(self, component, mock_gpt_agent):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
-            "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><code_context><code_snippet><title>Add Null Check</title><description>This fix involves adding ...</description><code file_path='some/app/path.py'>def foo():</code></code_snippet></code_context></potential_cause></potential_root_causes>",
+            "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><code_context><code_snippet><title>Add Null Check</title><description>This fix involves adding ...</description><code file_path='some/app/path.py' repo_name='owner/repo'>def foo():</code></code_snippet></code_context></potential_cause></potential_root_causes>",
         ]
 
         output = component.invoke(MagicMock())
@@ -61,6 +61,7 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context[0].title == "Add Null Check"
         assert output.causes[0].code_context[0].description == "This fix involves adding ..."
         assert output.causes[0].code_context[0].snippet.file_path == "some/app/path.py"
+        assert output.causes[0].code_context[0].snippet.repo_name == "owner/repo"
         assert output.causes[0].code_context[0].snippet.snippet == "def foo():"
 
     def test_root_cause_multiple_causes_response_parsing(self, component, mock_gpt_agent):
@@ -138,7 +139,9 @@ class TestRootCauseComponent:
                             title="Test Fix",
                             description="Test Fix Description",
                             snippet=RootCauseRelevantCodeSnippet(
-                                file_path="test.py", snippet="def test():\n    pass"
+                                file_path="test.py",
+                                snippet="def test():\n    pass",
+                                repo_name="owner/repo",
                             ),
                         )
                     ],
@@ -160,6 +163,7 @@ class TestRootCauseComponent:
             if output.causes[0].code_context[0].snippet:
                 assert output.causes[0].code_context[0].snippet.file_path == "test.py"
                 assert output.causes[0].code_context[0].snippet.snippet == "def test():\n    pass"
+                assert output.causes[0].code_context[0].snippet.repo_name == "owner/repo"
 
     def test_no_root_causes_response(self, component, mock_gpt_agent):
         mock_gpt_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"
