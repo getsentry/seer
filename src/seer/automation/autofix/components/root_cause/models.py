@@ -11,18 +11,21 @@ from seer.automation.models import EventDetails, PromptXmlModel
 
 class SnippetPromptXml(PromptXmlModel, tag="code"):
     file_path: str = attr()
+    repo_name: str = attr()
     snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
 
     @classmethod
     def get_example(cls):
         return cls(
             file_path="path/to/file.py",
+            repo_name="owner/repo",
             snippet="def foo():\n    return 'bar'\n",
         )
 
 
 class RootCauseRelevantCodeSnippet(BaseModel):
     file_path: str
+    repo_name: str
     snippet: str
 
 
@@ -98,6 +101,7 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
                                 SnippetPromptXml(
                                     file_path=snippet.snippet.file_path,
                                     snippet=snippet.snippet.snippet,
+                                    repo_name=snippet.snippet.repo_name,
                                 )
                                 if snippet.snippet
                                 else None
