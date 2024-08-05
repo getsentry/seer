@@ -21,7 +21,7 @@ class TestPlannerModels:
                         title="fix_title",
                         description="fix_description",
                         snippet=RootCauseRelevantCodeSnippet(
-                            file_path="file_path", snippet="snippet"
+                            file_path="file_path", snippet="snippet", repo_name="owner/repo"
                         ),
                     )
                 ],

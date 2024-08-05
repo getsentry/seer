@@ -49,7 +49,7 @@ class RootCauseAnalysisPrompts:
             - Include a title and description in each root cause.
             - Include float values from 0.0-1.0 of the likelihood and actionability of each root cause.
             - In each root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want. Within your snippets, you may highlight specific lines with a comment beginning with ***.
-            - You MUST include the EXACT file name in the code snippets you provide. If you cannot, do not provide a code snippet."""
+            - You MUST include the EXACT file name and repository name in the code snippets you provide. If you cannot, do not provide a code snippet."""
         ).format(
             error_str=event.format_event(),
             instruction_str=format_instruction(instruction),
