@@ -7,8 +7,8 @@ from seer.automation.agent.agent import AgentConfig, GptAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodingOutput,
-    CodingOutputPromptXml,
     CodingRequest,
+    PlanStepsPromptXml,
     RootCausePlanTaskPromptXml,
 )
 from seer.automation.autofix.components.coding.prompts import CodingPrompts
@@ -21,7 +21,7 @@ from seer.automation.autofix.components.root_cause.models import RootCauseAnalys
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
-from seer.automation.utils import escape_multi_xml
+from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +73,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         if not final_response:
             return None
 
-        coding_output = CodingOutputPromptXml.from_xml(
-            f"<coding_output>{escape_multi_xml(final_response, ['thoughts', 'diff', 'description', 'commit_message'])}</coding_output>"
+        plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
+
+        coding_output = PlanStepsPromptXml.from_xml(
+            f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
         ).to_model()
 
         for task in coding_output.tasks:

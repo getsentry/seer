@@ -130,15 +130,8 @@ class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
             ]
         )
 
-
-class CodingOutputPromptXml(PromptXmlModel, tag="coding_output"):
-    thoughts: Optional[str] = element(default=None)
-    content: Optional[str] = None
-    # Order matters here, don't move plan_steps before thoughts
-    plan_steps: PlanStepsPromptXml
-
     def to_model(self):
-        return CodingOutput.model_validate(self.plan_steps.model_dump())
+        return CodingOutput.model_validate(self.model_dump())
 
 
 class CodingOutput(BaseComponentOutput):
