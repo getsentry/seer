@@ -64,8 +64,12 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         extracted_text = extract_text_inside_tags(formatter_response, "potential_root_causes")
 
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root>{escape_multi_xml(extracted_text, ['thoughts', 'title', 'description', 'code'])}</root>"
+            f"<root><potential_root_causes>{escape_multi_xml(extracted_text, ['thoughts', 'title', 'description', 'code'])}</potential_root_causes></root>"
         )
+
+        if not xml_response.potential_root_causes.causes:
+            logger.warning("Root Cause Analysis formatter did not return causes")
+            return None
 
         # Assign the ids to be the numerical indices of the causes and relevant code context
         causes = []
