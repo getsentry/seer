@@ -351,6 +351,11 @@ class AutofixContinuation(AutofixGroupState):
                 break
         self.steps = steps_to_keep
 
+    def clear_file_changes(self):
+        for key, codebase in self.codebases.items():
+            codebase.file_changes = []
+            self.codebases[key] = codebase
+
     @property
     def is_running(self):
         return self.status == AutofixStatus.PROCESSING or self.status == AutofixStatus.PENDING

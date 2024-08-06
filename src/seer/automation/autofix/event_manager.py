@@ -123,6 +123,7 @@ class AutofixEventManager:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
             root_cause_step.selection = root_cause_selection
             cur.delete_steps_after(root_cause_step)
+            cur.clear_file_changes()
 
             cur.status = AutofixStatus.PROCESSING
 
