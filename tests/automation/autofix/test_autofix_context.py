@@ -14,7 +14,6 @@ from seer.automation.autofix.models import (
     StepType,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.codebase.models import QueryResultDocumentChunk
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition, SentryEventData
 from seer.automation.state import LocalMemoryState
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
@@ -22,9 +21,7 @@ from seer.db import DbPrIdToAutofixRunIdMapping, Session
 
 class TestAutofixContext(unittest.TestCase):
     def setUp(self):
-        self.mock_codebase_index = MagicMock()
         self.mock_repo_client = MagicMock()
-        self.mock_codebase_index.repo_client = self.mock_repo_client
         error_event = next(generate(SentryEventData))
         self.state = LocalMemoryState(
             AutofixContinuation(
@@ -41,23 +38,6 @@ class TestAutofixContext(unittest.TestCase):
             MagicMock(),
             MagicMock(),
         )
-        self.autofix_context.codebases = MagicMock()
-        self.autofix_context.codebases.get.return_value = self.mock_codebase_index
-
-    def test_multi_codebase_query(self):
-        chunks: list[QueryResultDocumentChunk] = []
-        for _ in range(8):
-            chunks.append(next(generate(QueryResultDocumentChunk)))
-
-        self.autofix_context.codebases = {
-            "1": MagicMock(query=MagicMock(return_value=chunks[:3])),
-            "2": MagicMock(query=MagicMock(return_value=chunks[3:])),
-        }
-
-        sorted_chunks = sorted(chunks, key=lambda x: x.distance)
-        result_chunks = self.autofix_context.query_all_codebases("test", top_k=8)
-
-        self.assertEqual(result_chunks, sorted_chunks)
 
 
 class TestAutofixContextPrCommit(unittest.TestCase):
@@ -73,9 +53,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                 ),
             )
         )
-        self.autofix_context = AutofixContext(
-            self.state, MagicMock(), MagicMock(), skip_loading_codebase=True
-        )
+        self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch("seer.automation.autofix.autofix_context.RepoClient")

@@ -1,6 +1,5 @@
 import logging
 import os.path
-from enum import Enum
 from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, Field
@@ -11,11 +10,6 @@ logger = logging.getLogger(__name__)
 
 configuration_module = Module()
 configuration_test_module = Module()
-
-
-class CodebaseStorageType(str, Enum):
-    FILESYSTEM = "filesystem"
-    GCS = "gcs"
 
 
 def parse_int_from_env(data: str) -> int:
@@ -43,9 +37,6 @@ ParsePath = Annotated[str, BeforeValidator(as_absolute_path)]
 
 
 class AppConfig(BaseModel):
-    CODEBASE_STORAGE_TYPE: CodebaseStorageType = CodebaseStorageType.FILESYSTEM
-    CODEBASE_STORAGE_DIR: ParsePath = os.path.abspath("data/chroma/storage")
-
     SEER_VERSION_SHA: str = ""
     SENTRY_DSN: str = ""
 
@@ -60,9 +51,6 @@ class AppConfig(BaseModel):
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""
-
-    CODEBASE_GCS_STORAGE_BUCKET: str = "sentry-ml"
-    CODEBASE_GCS_STORAGE_DIR: str = "tmp_jenn/dev/chroma/storage"
 
     JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
     TORCH_NUM_THREADS: ParseInt = 0
@@ -110,8 +98,6 @@ def provide_test_defaults() -> AppConfig:
     base = load_from_environment()
 
     base.NO_SENTRY_INTEGRATION = True
-    base.CODEBASE_STORAGE_DIR = os.path.abspath("data/tests/chroma/storage")
-    base.CODEBASE_GCS_STORAGE_DIR = os.path.abspath("chroma-test/data/storage")
     base.DATABASE_URL = base.DATABASE_URL.replace("db", "test-db")
     base.LANGFUSE_HOST = ""
     base.LANGFUSE_PUBLIC_KEY = ""

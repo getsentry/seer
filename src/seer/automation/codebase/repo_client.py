@@ -13,7 +13,6 @@ from github.Repository import Repository
 from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
-from seer.automation.codebase.models import RepositoryInfo
 from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.models import FileChange, InitializationError, RepoDefinition
 from seer.configuration import AppConfig
@@ -163,10 +162,6 @@ class RepoClient:
             return cls(*get_write_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
-
-    @classmethod
-    def from_repo_info(cls, repo_info: RepositoryInfo, type: Literal["read", "write"]):
-        return cls.from_repo_definition(repo_info.to_repo_definition(), type)
 
     @property
     def repo_full_name(self):

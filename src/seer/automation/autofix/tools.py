@@ -6,10 +6,6 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.retriever import RetrieverRequest
-from seer.automation.autofix.components.retriever_with_reranker import (
-    RetrieverWithRerankerComponent,
-)
 from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.utils import cleanup_dir
@@ -24,18 +20,6 @@ class BaseTools:
     def __init__(self, context: AutofixContext, retrieval_top_k: int = 8):
         self.context = context
         self.retrieval_top_k = retrieval_top_k
-
-    @observe(name="Codebase Search")
-    @ai_track(description="Codebase Search")
-    def codebase_retriever(self, query: str, intent: str):
-        component = RetrieverWithRerankerComponent(self.context)
-
-        output = component.invoke(RetrieverRequest(text=query, intent=intent, top_k=16))
-
-        if not output:
-            return "No results found."
-
-        return output.to_xml().to_prompt_str()
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
@@ -229,31 +213,5 @@ class BaseTools:
                 ],
             ),
         ]
-
-        if not self.context.skip_loading_codebase:
-            tools.append(
-                FunctionTool(
-                    name="codebase_search",
-                    description=textwrap.dedent(
-                        """\
-                        Search for code snippets in the codebase.
-                        - Providing long and detailed queries with entire code snippets will yield better results.
-                        - This tool cannot search for code snippets outside the immediate codebase such as in external libraries."""
-                    ),
-                    parameters=[
-                        {
-                            "name": "query",
-                            "type": "string",
-                            "description": "The query to search for.",
-                        },
-                        {
-                            "name": "intent",
-                            "type": "string",
-                            "description": "The intent of the search, provide a short description of what you're looking for.",
-                        },
-                    ],
-                    fn=self.codebase_retriever,
-                )
-            )
 
         return tools

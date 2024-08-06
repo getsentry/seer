@@ -3,7 +3,6 @@ import textwrap
 from typing import Mapping, cast
 
 import sentry_sdk
-from sentence_transformers import SentenceTransformer
 
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
@@ -13,16 +12,15 @@ from seer.automation.autofix.models import (
     CommittedPullRequestDetails,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.codebase.codebase_index import CodebaseIndex
 from seer.automation.codebase.file_patches import make_file_patches
-from seer.automation.codebase.models import BaseDocument, QueryResultDocumentChunk
+from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
-from seer.automation.utils import AgentError, get_embedding_model, get_sentry_client
+from seer.automation.utils import AgentError, get_sentry_client
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
 
@@ -48,7 +46,6 @@ class AutofixCodebaseStateManager(CodebaseStateManager):
 
 class AutofixContext(PipelineContext):
     state: State[AutofixContinuation]
-    codebases: dict[str, CodebaseIndex]
     repos: list[RepoDefinition]
 
     event_manager: AutofixEventManager
@@ -59,8 +56,6 @@ class AutofixContext(PipelineContext):
         state: State[AutofixContinuation],
         sentry_client: RpcClient,
         event_manager: AutofixEventManager,
-        embedding_model: SentenceTransformer | None = None,
-        skip_loading_codebase: bool = False,
     ):
         request = state.get().request
 
@@ -68,54 +63,20 @@ class AutofixContext(PipelineContext):
         self.project_id = request.project_id
         self.repos = request.repos
 
-        self.codebases = {}
-
         self.sentry_client = sentry_client
 
-        no_codebase_indexes = skip_loading_codebase or request.options.disable_codebase_indexing
-
-        self.embedding_model = embedding_model or (
-            get_embedding_model() if not no_codebase_indexes else None
-        )
-
-        if no_codebase_indexes:
-            with state.update() as cur:
-                for repo in request.repos:
-                    if repo.external_id not in cur.codebases:
-                        cur.codebases[repo.external_id] = CodebaseState(
-                            file_changes=[],
-                            repo_external_id=repo.external_id,
-                        )
-        else:
+        with state.update() as cur:
             for repo in request.repos:
-                codebase_index = CodebaseIndex.from_repo_definition(
-                    request.organization_id,
-                    request.project_id,
-                    repo,
-                    None,
-                    state=state,
-                    state_manager_class=AutofixCodebaseStateManager,
-                    embedding_model=self.embedding_model,
-                )
-
-                if codebase_index:
-                    self.codebases[codebase_index.repo_info.external_id] = codebase_index
-                    with state.update() as cur:
-                        if codebase_index.repo_info.external_id not in cur.codebases:
-                            cur.codebases[codebase_index.repo_info.external_id] = CodebaseState(
-                                repo_id=codebase_index.repo_info.id,
-                                namespace_id=codebase_index.namespace.id,
-                                file_changes=[],
-                                repo_external_id=codebase_index.repo_info.external_id,
-                            )
+                if repo.external_id not in cur.codebases:
+                    cur.codebases[repo.external_id] = CodebaseState(
+                        file_changes=[],
+                        repo_external_id=repo.external_id,
+                    )
 
         self.event_manager = event_manager
         self.state = state
-        self.skip_loading_codebase = no_codebase_indexes
 
-        logger.info(
-            f"AutofixContext initialized with run_id {self.run_id}, {'without codebase indexing' if self.skip_loading_codebase else 'with codebase indexing'}"
-        )
+        logger.info(f"AutofixContext initialized with run_id {self.run_id}")
 
     @classmethod
     def from_run_id(cls, run_id: int):
@@ -144,43 +105,8 @@ class AutofixContext(PipelineContext):
         repos_by_key: dict[RepoKey, RepoDefinition] = {
             repo.external_id: repo for repo in self.repos
         }
-        for codebase_state in self.codebases.values():
-            external_id = codebase_state.repo_info.external_id
-
-            repo = next(
-                (repo for repo in self.repos if repo.external_id == external_id),
-                None,
-            )
-            if repo:
-                repos_by_key[codebase_state.repo_info.id] = repo
 
         return repos_by_key
-
-    def has_missing_codebase_indexes(self) -> bool:
-        for repo in self.repos:
-            codebase = self.codebases.get(repo.external_id)
-            if codebase is None or not codebase.workspace.is_ready():
-                return True
-
-        return False
-
-    def has_codebase_indexing_run(self) -> bool:
-        return self.state.get().find_step(id=self.event_manager.indexing_step.id) is not None
-
-    def create_codebase_index(self, repo: RepoDefinition) -> CodebaseIndex:
-        namespace_id = CodebaseIndex.create(
-            self.organization_id,
-            self.project_id,
-            repo,
-        )
-        codebase_index = CodebaseIndex.index(
-            namespace_id,
-            embedding_model=self.embedding_model,
-        )
-
-        self.codebases[codebase_index.repo_info.id] = codebase_index
-
-        return codebase_index
 
     def get_repo_client(self, repo_name: str | None = None, repo_external_id: str | None = None):
         """
@@ -214,9 +140,6 @@ class AutofixContext(PipelineContext):
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        # @jennmueng: This functionality is duplicated with get_documents in CodebaseIndex,
-        # that one is needed for uses within that class,
-        # we will remove that one if we go with the no-embedding approach
         repo_client = self.get_repo_client(repo_name)
 
         file_contents = repo_client.get_file_content(path)
@@ -229,18 +152,6 @@ class AutofixContext(PipelineContext):
                 file_contents = file_change.apply(file_contents)
 
         return file_contents
-
-    def query_all_codebases(self, query: str, top_k: int = 4) -> list[QueryResultDocumentChunk]:
-        """
-        Queries all codebases for top_k chunks matching the specified query and returns the only the overall top_k closest matches.
-        """
-        chunks: list[QueryResultDocumentChunk] = []
-        for codebase in self.codebases.values():
-            chunks.extend(codebase.query(query, top_k=2 * top_k))
-
-        chunks.sort(key=lambda x: x.distance)
-
-        return chunks[:top_k]
 
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """
@@ -407,7 +318,3 @@ class AutofixContext(PipelineContext):
         ]
 
         return make_file_patches(file_changes, document_paths, original_documents)
-
-    def cleanup(self):
-        for codebase in self.codebases.values():
-            codebase.cleanup()

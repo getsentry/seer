@@ -43,15 +43,6 @@ class AutofixPipelineStep(PipelineStep):
             group_id = cur.request.issue.id
             group_short_id = cur.request.issue.short_id
             invoking_user = cur.request.invoking_user
-            codebases = [
-                (
-                    self._get_codebase_metadata(codebase.repo_external_id)
-                    if codebase.repo_external_id
-                    else None
-                )
-                for codebase in cur.codebases.values()
-            ]
-            codebases = list(filter(None, codebases))
 
             org_slug = self.context.get_org_slug(cur.request.organization_id)
 
@@ -60,7 +51,7 @@ class AutofixPipelineStep(PipelineStep):
                 "org_id": cur.request.organization_id,
                 "project_id": cur.request.project_id,
                 "group_id": group_id,
-                "codebase_indexing": not cur.request.options.disable_codebase_indexing,
+                "codebase_indexing": False,
             }
             repo_tags = [f"repo:{repo.full_name}" for repo in cur.request.repos]
             repo_tags_dict = {tag: 1 for tag in repo_tags}
@@ -69,7 +60,6 @@ class AutofixPipelineStep(PipelineStep):
                 "org_slug": org_slug,
                 "group": {"id": group_id, "short_id": group_short_id},
                 "invoking_user": invoking_user,
-                "codebases": codebases,
             }
             langfuse_tags = [
                 f"{key}:{value}" for key, value in tags.items() if value is not None
@@ -97,20 +87,6 @@ class AutofixPipelineStep(PipelineStep):
 
     def _handle_exception(self, exception: Exception):
         self.context.event_manager.on_error(str(exception))
-
-    def _get_codebase_metadata(self, repo_external_id: str) -> dict[str, Any]:
-        codebase = self.context.codebases.get(repo_external_id)
-        if codebase:
-            return {
-                "repo_id": codebase.repo_info.id,
-                "namespace_id": codebase.namespace.id,
-                "external_id": codebase.repo_info.external_id,
-                "external_slug": codebase.repo_info.external_slug,
-                "namespace_status": codebase.namespace.status,
-                "namespace_tracking_branch": codebase.namespace.tracking_branch,
-                "sha": codebase.namespace.sha,
-            }
-        return {}
 
 
 @celery_app.task(

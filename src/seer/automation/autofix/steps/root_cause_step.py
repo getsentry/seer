@@ -46,11 +46,7 @@ class RootCauseStep(AutofixPipelineStep):
     @observe(name="Autofix - Root Cause Step")
     @ai_track(description="Autofix - Root Cause Step")
     def _invoke(self, **kwargs):
-        self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_root_cause_analysis_start()
-
-        if not self.context.skip_loading_codebase and self.context.has_missing_codebase_indexes():
-            raise RuntimeError("Codebase indexes must be created before root cause analysis")
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])

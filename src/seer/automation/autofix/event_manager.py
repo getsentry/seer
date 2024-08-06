@@ -41,13 +41,6 @@ class AutofixEventManager:
         )
 
     @property
-    def indexing_step(self) -> DefaultStep:
-        return DefaultStep(
-            id="codebase_indexing",
-            title="Codebase Indexing",
-        )
-
-    @property
     def plan_step(self) -> DefaultStep:
         return DefaultStep(
             id="plan",
@@ -90,20 +83,6 @@ class AutofixEventManager:
             else:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
-
-    def send_codebase_indexing_start(self):
-        with self.state.update() as cur:
-            indexing_step = cur.find_or_add(self.indexing_step)
-            indexing_step.status = AutofixStatus.PROCESSING
-
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_codebase_indexing_complete_if_exists(self):
-        with self.state.update() as cur:
-            indexing_step = cur.find_step(id=self.indexing_step.id)
-
-            if indexing_step:
-                indexing_step.status = AutofixStatus.COMPLETED
 
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
         root_cause_selection: CustomRootCauseSelection | CodeContextRootCauseSelection | None = None

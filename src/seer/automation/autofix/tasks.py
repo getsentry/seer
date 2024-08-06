@@ -31,10 +31,6 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
-from seer.automation.autofix.steps.create_missing_indexes_chain import (
-    CreateAnyMissingCodebaseIndexesStepRequest,
-    CreateMissingIndexesStep,
-)
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.models import InitializationError
 from seer.automation.utils import (
@@ -113,26 +109,11 @@ def run_autofix_root_cause(
         logger.warning(f"Ignoring job, state {cur_state.status}")
         return
 
-    if request.options.disable_codebase_indexing:
-        RootCauseStep.get_signature(
-            RootCauseStepRequest(
-                run_id=cur_state.run_id,
-            ),
-            queue=CeleryQueues.DEFAULT,
-        ).apply_async()
-    else:
-        CreateMissingIndexesStep.get_signature(
-            CreateAnyMissingCodebaseIndexesStepRequest(
-                run_id=cur_state.run_id,
-                next=RootCauseStep.get_signature(
-                    RootCauseStepRequest(
-                        run_id=cur_state.run_id,
-                    ),
-                    queue=CeleryQueues.DEFAULT,
-                ),
-            ),
-            queue=CeleryQueues.DEFAULT,
-        ).apply_async()
+    RootCauseStep.get_signature(
+        RootCauseStepRequest(
+            run_id=cur_state.run_id,
+        )
+    ).apply_async()
 
     return cur_state.run_id
 
@@ -159,26 +140,11 @@ def run_autofix_execution(request: AutofixUpdateRequest):
             logger.warning(f"Ignoring job, state {cur.status}")
             return
 
-        if cur.request.options.disable_codebase_indexing:
-            AutofixCodingStep.get_signature(
-                AutofixCodingStepRequest(
-                    run_id=cur.run_id,
-                ),
-                queue=CeleryQueues.DEFAULT,
-            ).apply_async()
-        else:
-            CreateMissingIndexesStep.get_signature(
-                CreateAnyMissingCodebaseIndexesStepRequest(
-                    run_id=cur.run_id,
-                    next=AutofixCodingStep.get_signature(
-                        AutofixCodingStepRequest(
-                            run_id=cur.run_id,
-                        ),
-                        queue=CeleryQueues.DEFAULT,
-                    ),
-                ),
-                queue=CeleryQueues.DEFAULT,
-            ).apply_async()
+        AutofixCodingStep.get_signature(
+            AutofixCodingStepRequest(
+                run_id=cur.run_id,
+            ),
+        ).apply_async()
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
@@ -197,10 +163,7 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
 
     event_manager = AutofixEventManager(state)
     context = AutofixContext(
-        state=state,
-        sentry_client=get_sentry_client(),
-        event_manager=event_manager,
-        skip_loading_codebase=True,
+        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
     )
 
     event_manager.send_pr_creation_start()

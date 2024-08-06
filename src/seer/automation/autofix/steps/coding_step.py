@@ -53,11 +53,7 @@ class AutofixCodingStep(PipelineChain, AutofixPipelineStep):
     def _invoke(self, **kwargs):
         self.logger.info("Executing Autofix - Plan+Code Step")
 
-        self.context.event_manager.send_codebase_indexing_complete_if_exists()
         self.context.event_manager.send_coding_start()
-
-        if not self.context.skip_loading_codebase and self.context.has_missing_codebase_indexes():
-            raise ValueError("Codebase indexes must be created before coding")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()

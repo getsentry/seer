@@ -7,7 +7,6 @@ from flask import Blueprint, Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
-from celery_app.config import CeleryQueues
 from seer.anomaly_detection.models.external import (
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
@@ -34,20 +33,12 @@ from seer.automation.autofix.tasks import (
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
-    CodebaseIndexEndpointResponse,
     CodebaseStatusCheckRequest,
     CodebaseStatusCheckResponse,
-    CreateCodebaseRequest,
-    IndexNamespaceTaskRequest,
     RepoAccessCheckRequest,
     RepoAccessCheckResponse,
 )
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.tasks import (
-    create_codebase_index,
-    get_codebase_index_status,
-    index_namespace,
-)
 from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
@@ -143,24 +134,6 @@ def delete_grouping_records_by_hash_endpoint(
     return success
 
 
-@json_api(blueprint, "/v1/automation/codebase/index/create")
-def create_codebase_index_endpoint(data: CreateCodebaseRequest) -> CodebaseIndexEndpointResponse:
-    raise_if_no_genai_consent(data.organization_id)
-
-    namespace_id = create_codebase_index(data.organization_id, data.project_id, data.repo)
-
-    index_namespace.apply_async(
-        (
-            IndexNamespaceTaskRequest(
-                namespace_id=namespace_id,
-            ).model_dump(mode="json"),
-        ),
-        queue=CeleryQueues.CUDA,
-    )
-
-    return CodebaseIndexEndpointResponse(started=True)
-
-
 @json_api(blueprint, "/v1/automation/codebase/repo/check-access")
 def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
     return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
@@ -170,13 +143,8 @@ def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckR
 def get_codebase_index_status_endpoint(
     data: CodebaseStatusCheckRequest,
 ) -> CodebaseStatusCheckResponse:
-    return CodebaseStatusCheckResponse(
-        status=get_codebase_index_status(
-            organization_id=data.organization_id,
-            project_id=data.project_id,
-            repo=data.repo,
-        )
-    )
+    # TODO: Remove this once sentry side is updated
+    return CodebaseStatusCheckResponse(status="up_to_date")
 
 
 @json_api(blueprint, "/v1/automation/autofix/start")

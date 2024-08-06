@@ -11,6 +11,8 @@ from sqlalchemy import text
 from celery_app.app import celery_app
 from seer.app import app
 from seer.automation.autofix.models import AutofixContinuation, AutofixEvaluationRequest
+from seer.automation.codebase.models import CodebaseStatusCheckRequest, CodebaseStatusCheckResponse
+from seer.automation.models import RepoDefinition
 from seer.automation.state import LocalMemoryState
 from seer.db import DbGroupingRecord, ProcessRequest, Session
 from seer.grouping.grouping import CreateGroupingRecordData, CreateGroupingRecordsRequest
@@ -458,6 +460,37 @@ class TestSeer(unittest.TestCase):
         mock_run_autofix_evaluation.assert_called_once_with(test_data)
 
 
+class TestGetCodebaseIndexStatusEndpoint(unittest.TestCase):
+    @mock.patch("seer.app.CodebaseStatusCheckResponse")
+    def test_get_codebase_index_status_endpoint(self, mock_response):
+        # Prepare test data
+        test_data = CodebaseStatusCheckRequest(
+            organization_id=123,
+            project_id=456,
+            repo=RepoDefinition(
+                provider="github", owner="test-owner", name="test-repo", external_id="test-repo-id"
+            ),
+        )
+
+        # Mock the response
+        mock_response.return_value = CodebaseStatusCheckResponse(status="up_to_date")
+
+        # Make a POST request to the endpoint
+        response = app.test_client().post(
+            "/v1/automation/codebase/index/status",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        # Assert that the response is correct
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.get_data(as_text=True))
+        self.assertEqual(response_data, {"status": "up_to_date"})
+
+        # Assert that CodebaseStatusCheckResponse was called with the correct status
+        mock_response.assert_called_once_with(status="up_to_date")
+
+
 @parametrize(count=1)
 def test_prepared_statements_disabled(
     requests: tuple[
@@ -606,15 +639,10 @@ def test_detected_celery_jobs():
     assert set(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == set(
         [
             "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
-            "seer.automation.autofix.steps.create_index_step.create_index_task",
-            "seer.automation.autofix.steps.create_missing_indexes_chain.create_missing_indexes_task",
             "seer.automation.autofix.steps.coding_step.autofix_coding_task",
             "seer.automation.autofix.steps.root_cause_step.root_cause_task",
             "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
             "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
-            "seer.automation.autofix.steps.update_index_step.update_index_task",
             "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
-            "seer.automation.codebase.tasks.index_namespace",
-            "seer.automation.codebase.tasks.update_codebase_index",
         ]
     )
