@@ -1,10 +1,22 @@
+import datetime
 import json
 import unittest
+from unittest.mock import Mock, patch
 
 from johen.pytest import parametrize
 from pydantic import ValidationError
 
-from seer.automation.autofix.models import AutofixRequest, IssueDetails, RepoDefinition
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.models import (
+    AutofixContinuation,
+    AutofixRequest,
+    AutofixStatus,
+    CodeContextRootCauseSelection,
+    DefaultStep,
+    IssueDetails,
+    RepoDefinition,
+    RootCauseStep,
+)
 from seer.automation.models import (
     EventDetails,
     SentryEventData,
@@ -202,6 +214,140 @@ class TestAutofixRequest(unittest.TestCase):
             issue=issue_details,
         )
         self.assertEqual(len(autofix_request.repos), 2)
+
+
+class TestAutofixContinuation(unittest.TestCase):
+    def setUp(self):
+        self.request = Mock(spec=AutofixRequest)
+        self.continuation = AutofixContinuation(request=self.request)
+
+    def test_find_step(self):
+        step1 = DefaultStep(id="step1", title="test")
+        step2 = DefaultStep(id="step2", title="test")
+        self.continuation.steps = [step1, step2]
+
+        self.assertEqual(self.continuation.find_step(id="step1"), step1)
+        self.assertEqual(self.continuation.find_step(id="step2"), step2)
+        self.assertIsNone(self.continuation.find_step(id="step3"))
+
+    def test_find_or_add(self):
+        step1 = DefaultStep(id="step1", title="test")
+        self.continuation.steps = [step1]
+
+        # Test finding existing step
+        found_step = self.continuation.find_or_add(step1)
+        self.assertEqual(found_step, step1)
+        self.assertEqual(len(self.continuation.steps), 1)
+
+        # Test adding new step
+        step2 = DefaultStep(id="step2", title="test")
+        added_step = self.continuation.find_or_add(step2)
+        self.assertEqual(added_step.id, "step2")
+        self.assertEqual(added_step.index, 1)
+        self.assertEqual(len(self.continuation.steps), 2)
+
+    def test_make_step_latest(self):
+        step1 = DefaultStep(id="step1", title="test")
+        step2 = DefaultStep(id="step2", title="test")
+        step3 = DefaultStep(id="step3", title="test")
+        self.continuation.steps = [step1, step2, step3]
+
+        self.continuation.make_step_latest(step2)
+        self.assertEqual(self.continuation.steps, [step1, step3, step2])
+
+    def test_mark_all_steps_completed(self):
+        step1 = DefaultStep(id="step1", status=AutofixStatus.PROCESSING, title="test")
+        step2 = DefaultStep(id="step2", status=AutofixStatus.PENDING, title="test")
+        self.continuation.steps = [step1, step2]
+
+        self.continuation.mark_all_steps_completed()
+        self.assertEqual(step1.status, AutofixStatus.COMPLETED)
+        self.assertEqual(step2.status, AutofixStatus.COMPLETED)
+
+    def test_mark_running_steps_errored(self):
+        step1 = DefaultStep(id="step1", status=AutofixStatus.PROCESSING, title="test")
+        step2 = DefaultStep(id="step2", status=AutofixStatus.PENDING, title="test")
+        substep = DefaultStep(id="substep", status=AutofixStatus.PROCESSING, title="test")
+        step1.progress = [substep]
+        self.continuation.steps = [step1, step2]
+
+        self.continuation.mark_running_steps_errored()
+        self.assertEqual(step1.status, AutofixStatus.ERROR)
+        self.assertEqual(step2.status, AutofixStatus.PENDING)
+        self.assertEqual(substep.status, AutofixStatus.ERROR)
+
+    def test_set_last_step_completed_message(self):
+        step = DefaultStep(id="step1", title="test")
+        self.continuation.steps = [step]
+
+        self.continuation.set_last_step_completed_message("Test message")
+        self.assertEqual(step.completedMessage, "Test message")
+
+    def test_get_selected_root_cause_and_fix(self):
+        root_cause_step = RootCauseStep(id="root_cause_analysis", title="test")
+        cause = RootCauseAnalysisItem(
+            id=1, title="test", description="test", likelihood=0.5, actionability=0.5
+        )
+        root_cause_step.causes = [cause]
+        root_cause_step.selection = CodeContextRootCauseSelection(cause_id=1)
+        self.continuation.steps = [root_cause_step]
+
+        result = self.continuation.get_selected_root_cause_and_fix()
+        self.assertEqual(result, cause)
+
+    def test_mark_triggered(self):
+        with patch("datetime.datetime") as mock_datetime:
+            mock_now = datetime.datetime.now()
+            mock_datetime.now.return_value = mock_now
+            self.continuation.mark_triggered()
+            self.assertEqual(self.continuation.last_triggered_at, mock_now)
+
+    def test_mark_updated(self):
+        with patch("datetime.datetime") as mock_datetime:
+            mock_now = datetime.datetime.now()
+            mock_datetime.now.return_value = mock_now
+            self.continuation.mark_updated()
+            self.assertEqual(self.continuation.updated_at, mock_now)
+
+    def test_delete_steps_after(self):
+        step1 = DefaultStep(id="step1", title="test")
+        step2 = DefaultStep(id="step2", title="test")
+        step3 = DefaultStep(id="step3", title="test")
+        self.continuation.steps = [step1, step2, step3]
+
+        self.continuation.delete_steps_after(step2)
+        self.assertEqual(self.continuation.steps, [step1, step2])
+
+    def test_clear_file_changes(self):
+        codebase1 = Mock()
+        codebase2 = Mock()
+        self.continuation.codebases = {"repo1": codebase1, "repo2": codebase2}
+
+        self.continuation.clear_file_changes()
+        self.assertEqual(codebase1.file_changes, [])
+        self.assertEqual(codebase2.file_changes, [])
+
+    def test_is_running(self):
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.assertTrue(self.continuation.is_running)
+
+        self.continuation.status = AutofixStatus.PENDING
+        self.assertTrue(self.continuation.is_running)
+
+        self.continuation.status = AutofixStatus.COMPLETED
+        self.assertFalse(self.continuation.is_running)
+
+    def test_has_timed_out(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            seconds=3601
+        )  # Assuming AUTOFIX_HARD_TIME_OUT_SECS = 3600
+
+        self.assertTrue(self.continuation.has_timed_out)
+
+        self.continuation.last_triggered_at = now - datetime.timedelta(seconds=3599)
+        self.assertFalse(self.continuation.has_timed_out)
 
 
 @parametrize
