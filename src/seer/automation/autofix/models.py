@@ -343,6 +343,14 @@ class AutofixContinuation(AutofixGroupState):
     def mark_updated(self):
         self.updated_at = datetime.datetime.now()
 
+    def delete_steps_after(self, step: Step):
+        steps_to_keep = []
+        for cur_step in self.steps:
+            steps_to_keep.append(cur_step)
+            if step.id == cur_step.id:
+                break
+        self.steps = steps_to_keep
+
     @property
     def is_running(self):
         return self.status == AutofixStatus.PROCESSING or self.status == AutofixStatus.PENDING
