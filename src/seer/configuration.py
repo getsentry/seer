@@ -98,8 +98,6 @@ def provide_test_defaults() -> AppConfig:
     base = load_from_environment()
 
     base.NO_SENTRY_INTEGRATION = True
-    base.CODEBASE_STORAGE_DIR = os.path.abspath("data/tests/chroma/storage")
-    base.CODEBASE_GCS_STORAGE_DIR = os.path.abspath("chroma-test/data/storage")
     base.DATABASE_URL = base.DATABASE_URL.replace("db", "test-db")
     base.LANGFUSE_HOST = ""
     base.LANGFUSE_PUBLIC_KEY = ""
