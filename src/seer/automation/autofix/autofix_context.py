@@ -140,9 +140,6 @@ class AutofixContext(PipelineContext):
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        # @jennmueng: This functionality is duplicated with get_documents in CodebaseIndex,
-        # that one is needed for uses within that class,
-        # we will remove that one if we go with the no-embedding approach
         repo_client = self.get_repo_client(repo_name)
 
         file_contents = repo_client.get_file_content(path)
