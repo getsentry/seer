@@ -181,62 +181,6 @@ class ProcessRequest(Base):
         )
 
 
-class DbRepositoryInfo(Base):
-    __tablename__ = "repositories"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    organization: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    project: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    provider: Mapped[str] = mapped_column(String, nullable=False)
-    external_slug: Mapped[str] = mapped_column(String, nullable=False)
-    external_id: Mapped[str] = mapped_column(String, nullable=False)
-    default_namespace: Mapped[int] = mapped_column(Integer, nullable=True)
-    __table_args__ = (
-        UniqueConstraint("organization", "project", "provider", "external_id"),
-        Index(
-            "ix_repository_organization_project_provider_slug",
-            "organization",
-            "project",
-            "provider",
-            "external_id",
-        ),
-    )
-
-
-class DbCodebaseNamespace(Base):
-    __tablename__ = "codebase_namespaces"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    repo_id: Mapped[int] = mapped_column(Integer, ForeignKey(DbRepositoryInfo.id), nullable=False)
-    sha: Mapped[str] = mapped_column(String(40), nullable=False)
-    tracking_branch: Mapped[str] = mapped_column(String, nullable=True)
-
-    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
-
-    updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
-    )
-    accessed_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
-    )
-
-    __table_args__ = (
-        UniqueConstraint("repo_id", "sha"),
-        UniqueConstraint("repo_id", "tracking_branch"),
-        Index("ix_codebase_namespace_repo_id_sha", "repo_id", "sha"),
-        Index("ix_codebase_namespace_repo_id_tracking_branch", "repo_id", "tracking_branch"),
-    )
-
-
-class DbCodebaseNamespaceMutex(Base):
-    __tablename__ = "codebase_namespace_mutex"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    namespace_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(DbCodebaseNamespace.id), nullable=False
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
-    )
-
-
 class DbRunState(Base):
     __tablename__ = "run_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
