@@ -25,7 +25,7 @@ class SnippetPromptXml(PromptXmlModel, tag="code"):
 
 class RootCauseRelevantCodeSnippet(BaseModel):
     file_path: str
-    repo_name: Optional[str]
+    repo_name: Optional[str] = None
     snippet: str
 
 
