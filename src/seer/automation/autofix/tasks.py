@@ -112,7 +112,8 @@ def run_autofix_root_cause(
     RootCauseStep.get_signature(
         RootCauseStepRequest(
             run_id=cur_state.run_id,
-        )
+        ),
+        queue=CeleryQueues.DEFAULT,
     ).apply_async()
 
     return cur_state.run_id
@@ -144,6 +145,7 @@ def run_autofix_execution(request: AutofixUpdateRequest):
             AutofixCodingStepRequest(
                 run_id=cur.run_id,
             ),
+            queue=CeleryQueues.DEFAULT,
         ).apply_async()
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
