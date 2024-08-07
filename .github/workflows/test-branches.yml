@@ -18,7 +18,7 @@ jobs:
 
     env:
       TEST: 1
-      NO_SENTRY_INTEGRATION: 1
+      EXTRA_COMPOSE_TEST_OPTIONS: "-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1"
 
     steps:
       - uses: actions/checkout@v3
@@ -53,7 +53,7 @@ jobs:
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: '.artifacts/coverage.xml'
+          files: ".artifacts/coverage.xml"
           override_commit: ${{ github.event.pull_request.head.sha }}
           plugin: noop
           verbose: true
