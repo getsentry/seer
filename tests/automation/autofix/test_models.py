@@ -309,14 +309,23 @@ class TestAutofixContinuation(unittest.TestCase):
             self.continuation.mark_updated()
             self.assertEqual(self.continuation.updated_at, mock_now)
 
-    def test_delete_steps_after(self):
+    def test_delete_steps(self):
         step1 = DefaultStep(id="step1", title="test")
         step2 = DefaultStep(id="step2", title="test")
         step3 = DefaultStep(id="step3", title="test")
         self.continuation.steps = [step1, step2, step3]
 
-        self.continuation.delete_steps_after(step2)
+        self.continuation.delete_steps(step2)
         self.assertEqual(self.continuation.steps, [step1, step2])
+
+    def test_delete_steps_including_self(self):
+        step1 = DefaultStep(id="step1", title="test")
+        step2 = DefaultStep(id="step2", title="test")
+        step3 = DefaultStep(id="step3", title="test")
+        self.continuation.steps = [step1, step2, step3]
+
+        self.continuation.delete_steps(step2, include_current=True)
+        self.assertEqual(self.continuation.steps, [step1])
 
     def test_clear_file_changes(self):
         codebase1 = Mock()
