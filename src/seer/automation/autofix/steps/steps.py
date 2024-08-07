@@ -94,16 +94,21 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             sentry_sdk.capture_message(f"Done for signal {repr(signal)}")
             cur.signals.append(signal)
 
-    def _handle_exception(self, exception: Exception):
-        retries = sum(
+    def get_retry_count(self) -> int:
+        return sum(
             1
             for signal in self.context.signals
             if signal.startswith(make_retry_prefix(self.step_key))
         )
+
+    def _handle_exception(self, exception: Exception):
+        retries = self.get_retry_count()
         if self.max_retries > retries:
             self.logger.info(f"Retrying {self.step_key}, {retries + 1}/{self.max_retries} times")
             original_request = self.request.model_dump(mode="json")
             original_request.pop("step_id")
+
+            self.context.event_manager.add_log("**Something went wrong, let me try this again...**")
 
             with self.context.state.update() as cur:
                 cur.signals.append(make_retry_signal(self.step_key, retries + 1))
