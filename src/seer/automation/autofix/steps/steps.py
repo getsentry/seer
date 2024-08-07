@@ -1,3 +1,4 @@
+import abc
 from typing import Any
 
 import sentry_sdk
@@ -7,6 +8,7 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.pipeline import (
     DEFAULT_PIPELINE_STEP_HARD_TIME_LIMIT_SECS,
     DEFAULT_PIPELINE_STEP_SOFT_TIME_LIMIT_SECS,
+    PipelineChain,
     PipelineContext,
     PipelineStep,
     PipelineStepTaskRequest,
@@ -16,11 +18,18 @@ from seer.automation.steps import (
     ParallelizedChainStep,
     ParallelizedChainStepRequest,
 )
-from seer.automation.utils import make_done_signal
+from seer.automation.utils import make_done_signal, make_retry_prefix, make_retry_signal
 
 
-class AutofixPipelineStep(PipelineStep):
+class AutofixPipelineStep(PipelineChain, PipelineStep):
     context: AutofixContext
+
+    @property
+    @abc.abstractmethod
+    def step_key(self) -> str:
+        pass
+
+    max_retries: int = 0
 
     @staticmethod
     def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
@@ -86,7 +95,22 @@ class AutofixPipelineStep(PipelineStep):
             cur.signals.append(signal)
 
     def _handle_exception(self, exception: Exception):
-        self.context.event_manager.on_error(str(exception))
+        retries = sum(
+            1
+            for signal in self.context.signals
+            if signal.startswith(make_retry_prefix(self.step_key))
+        )
+        if self.max_retries < retries:
+            self.logger.info(f"Retrying {self.step_key}, {retries + 1}/{self.max_retries} times")
+            original_request = self.request.model_dump(mode="json")
+            original_request.pop("step_id")
+
+            self.context.signals.append(make_retry_signal(self.step_key, retries + 1))
+
+            self.next(self.get_signature(self._instantiate_request(original_request)))
+        else:
+            self.logger.error(f"Failed to run {self.step_key} after {self.max_retries} retries")
+            self.context.event_manager.on_error(str(exception))
 
 
 @celery_app.task(
@@ -101,6 +125,10 @@ class AutofixParallelizedChainConditionalStep(
     AutofixPipelineStep, ParallelizedChainConditionalStep
 ):
     name = "AutofixParallelizedChainConditionalStep"
+
+    @property
+    def step_key(self) -> str:
+        return "parallelized_chain_conditional"
 
     @staticmethod
     def get_task():
@@ -117,6 +145,10 @@ def autofix_parallelized_chain_step_task(*args, request: Any):
 
 class AutofixParallelizedChainStep(AutofixPipelineStep, ParallelizedChainStep):
     name = "AutofixParallelizedChainStep"
+
+    @property
+    def step_key(self) -> str:
+        return "parallelized_chain"
 
     @staticmethod
     def _get_conditional_step_class() -> type[ParallelizedChainConditionalStep]:
