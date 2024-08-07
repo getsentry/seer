@@ -80,6 +80,24 @@ class TestAutofixPipelineStep:
     def test_max_retries_default(self, mock_step):
         assert mock_step.max_retries == 0
 
+    def test_get_retry_count_no_retries(self, mock_step):
+        mock_step.context.signals = []
+        assert mock_step.get_retry_count() == 0
+
+    def test_get_retry_count_with_retries(self, mock_step):
+        mock_step.context.signals = ["retry:mock_step:1", "retry:mock_step:2"]
+        assert mock_step.get_retry_count() == 2
+
+    def test_get_retry_count_with_mixed_signals(self, mock_step):
+        mock_step.context.signals = ["retry:mock_step:1", "other_signal", "retry:mock_step:2"]
+        assert mock_step.get_retry_count() == 2
+
+    @patch("seer.automation.autofix.steps.steps.make_retry_prefix")
+    def test_get_retry_count_with_custom_prefix(self, mock_make_retry_prefix, mock_step):
+        mock_make_retry_prefix.return_value = "custom_retry:"
+        mock_step.context.signals = ["custom_retry:1", "custom_retry:2", "other_signal"]
+        assert mock_step.get_retry_count() == 2
+
     @patch("seer.automation.autofix.steps.steps.make_retry_prefix")
     @patch("seer.automation.autofix.steps.steps.make_retry_signal")
     def test_handle_exception_no_retry(
