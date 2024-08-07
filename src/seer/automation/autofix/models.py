@@ -343,13 +343,10 @@ class AutofixContinuation(AutofixGroupState):
     def mark_updated(self):
         self.updated_at = datetime.datetime.now()
 
-    def delete_steps_after(self, step: Step):
-        steps_to_keep = []
-        for cur_step in self.steps:
-            steps_to_keep.append(cur_step)
-            if step.id == cur_step.id:
-                break
-        self.steps = steps_to_keep
+    def delete_steps(self, step: Step, include_current: bool = False):
+        found_index = next((i for i, s in enumerate(self.steps) if s.id == step.id), -1)
+        if found_index != -1:
+            self.steps = self.steps[: found_index + (0 if include_current else 1)]
 
     def clear_file_changes(self):
         for key, codebase in self.codebases.items():

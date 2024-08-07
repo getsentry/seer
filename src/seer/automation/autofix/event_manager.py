@@ -16,6 +16,7 @@ from seer.automation.autofix.models import (
     ProgressItem,
     ProgressType,
     RootCauseStep,
+    Step,
 )
 from seer.automation.state import State
 
@@ -84,6 +85,11 @@ class AutofixEventManager:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
 
+    def clear_steps_from(self, step: Step):
+        with self.state.update() as cur:
+            cur.delete_steps(step, include_current=True)
+            cur.clear_file_changes()
+
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
         root_cause_selection: CustomRootCauseSelection | CodeContextRootCauseSelection | None = None
         if payload.custom_root_cause:
@@ -101,7 +107,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
             root_cause_step.selection = root_cause_selection
-            cur.delete_steps_after(root_cause_step)
+            cur.delete_steps(root_cause_step, include_current=False)
             cur.clear_file_changes()
 
             cur.status = AutofixStatus.PROCESSING

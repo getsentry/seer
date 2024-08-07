@@ -100,12 +100,13 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             for signal in self.context.signals
             if signal.startswith(make_retry_prefix(self.step_key))
         )
-        if self.max_retries < retries:
+        if self.max_retries > retries:
             self.logger.info(f"Retrying {self.step_key}, {retries + 1}/{self.max_retries} times")
             original_request = self.request.model_dump(mode="json")
             original_request.pop("step_id")
 
-            self.context.signals.append(make_retry_signal(self.step_key, retries + 1))
+            with self.context.state.update() as cur:
+                cur.signals.append(make_retry_signal(self.step_key, retries + 1))
 
             self.next(self.get_signature(self._instantiate_request(original_request)))
         else:

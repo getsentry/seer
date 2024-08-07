@@ -38,7 +38,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     name = "AutofixChangeDescriberStep"
     request: AutofixChangeDescriberRequest
 
-    max_retries = 2
+    max_retries = 1
 
     @property
     def step_key(self) -> str:

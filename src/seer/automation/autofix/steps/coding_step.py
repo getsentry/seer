@@ -39,7 +39,7 @@ class AutofixCodingStep(AutofixPipelineStep):
     """
 
     name = "AutofixCodingStep"
-    max_retries = 3
+    max_retries = 2
 
     @property
     def step_key(self) -> str:
@@ -56,6 +56,8 @@ class AutofixCodingStep(AutofixPipelineStep):
     @observe(name="Autofix - Plan+Code Step")
     @ai_track(description="Autofix - Plan+Code Step")
     def _invoke(self, **kwargs):
+        self.context.event_manager.clear_steps_from(self.context.event_manager.plan_step)
+
         self.logger.info("Executing Autofix - Plan+Code Step")
 
         self.context.event_manager.send_coding_start()
