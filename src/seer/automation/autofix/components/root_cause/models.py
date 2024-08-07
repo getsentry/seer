@@ -77,10 +77,10 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
     @classmethod
     def get_example(cls):
         return cls(
-            title="foo() is returning the wrong value",
+            title="Summarize the root cause here in a few words.",
             likelihood=0.8,
             actionability=1.0,
-            description="The foo() function is returning the wrong value due to a typo in bar().",
+            description="Explain the root cause in full detail here with the full chain of reasoning behind it.",
             relevant_code=RootCauseAnalysisRelevantContextPromptXml.get_example(),
         )
 
@@ -135,10 +135,10 @@ class MultipleRootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="potential_ro
             causes=[
                 RootCauseAnalysisItemPromptXml.get_example(),
                 RootCauseAnalysisItemPromptXml(
-                    title="bar() sends an incorrect value to foo(), which itself does not have validation",
+                    title="Summarize the root cause here in a few words.",
                     likelihood=0.2,
                     actionability=1.0,
-                    description="The upstream bar() function sends an incorrect value to foo(), which itself does not have validation, causing this error downstream.",
+                    description="Explain the root cause in full detail here with the full chain of reasoning behind it.",
                     relevant_code=RootCauseAnalysisRelevantContextPromptXml.get_example(),
                 ),
             ]
