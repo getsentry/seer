@@ -35,7 +35,9 @@ class BaseTools:
         if file_contents:
             return file_contents
 
-        return "<document with the provided path not found>"
+        # show potential corrected paths if nothing was found here
+        other_paths = self._get_potential_abs_paths(input, repo_name)
+        return f"<document with the provided path not found/>\n{other_paths}".strip()
 
     @observe(name="List Directory")
     @ai_track(description="List Directory")
@@ -44,11 +46,8 @@ class BaseTools:
         Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name)
-
         all_paths = repo_client.get_index_file_set()
-
-        # Normalize the path
-        normalized_path = path.strip("/") + "/" if path.strip("/") else ""
+        normalized_path = self._normalize_path(path)
 
         # Filter paths to include only those directly under the specified path + remove duplicates and sort
         unique_direct_children = sorted(
@@ -65,10 +64,46 @@ class BaseTools:
         )
 
         if not dirs and not files:
-            self.context.event_manager.add_log(f"Couldn't find anything inside `{path}`")
-            return f"<no entries found in directory '{path or '/'}'>"
+            # show potential corrected paths if nothing was found here
+            other_paths = self._get_potential_abs_paths(path, repo_name)
+            return f"<no entries found in directory '{path or '/'}'/>\n{other_paths}".strip()
 
-        # Format the output
+        joined = self._format_list_directory_output(dirs, files)
+        return f"<entries>\n{joined}\n</entries>"
+
+    def _get_potential_abs_paths(self, path: str, repo_name: str | None = None) -> str:
+        """
+        Gets possible full paths for a given path.
+        For example, example/path/ might actually be located at src/example/path/
+        This is useful in the case that the model is using an incomplete path.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        all_paths = repo_client.get_index_file_set()
+        normalized_path = self._normalize_path(path)
+
+        # Filter paths to include parents + remove duplicates and sort
+        unique_parents = sorted(
+            set(
+                p.split(normalized_path)[0] + normalized_path
+                for p in all_paths
+                if normalized_path in p and p != normalized_path
+            )
+        )
+
+        if not unique_parents:
+            return ""
+
+        joined = "\n".join(unique_parents)
+        return f"<did you mean>\n{joined}\n</did you mean>"
+
+    def _normalize_path(self, path: str) -> str:
+        """
+        Ensures paths don't start with a slash, but do end in one, such as example/path/
+        """
+        normalized_path = path.strip("/") + "/" if path.strip("/") else ""
+        return normalized_path
+
+    def _format_list_directory_output(self, dirs: list[str], files: list[str]) -> str:
         output = []
         if dirs:
             output.append("Directories:")
@@ -79,10 +114,8 @@ class BaseTools:
             output.append("Files:")
             output.extend(f"  {f}" for f in files)
 
-        self.context.event_manager.add_log(f"Looked through contents of `{path}`")
-
         joined = "\n".join(output)
-        return f"<entries>\n{joined}\n</entries>"
+        return joined
 
     def _separate_dirs_and_files(
         self, parent_path: str, direct_children: list[str], all_paths: set
