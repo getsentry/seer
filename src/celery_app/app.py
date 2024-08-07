@@ -29,7 +29,10 @@ def capture_worker_name(sender, instance, **kwargs):
 
 @signals.after_task_publish.connect
 def handle_task_publish(sender, **kwargs):
-    logger.info(f"Task published, task: {sender}")
+    routing_key = kwargs.get("routing_key")
+    exchange = kwargs.get("exchange")
+
+    logger.info(f"Task published, task: {sender}, routing_key: {routing_key}, exchange: {exchange}")
 
 
 @signals.task_prerun.connect

@@ -30,11 +30,7 @@ def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
             CeleryQueues.DEFAULT: {
                 "exchange": CeleryQueues.DEFAULT,
                 "routing_key": CeleryQueues.DEFAULT,
-            },
-            CeleryQueues.CUDA: {
-                "exchange": CeleryQueues.CUDA,
-                "routing_key": CeleryQueues.CUDA,
-            },
+            }
         },
         result_backend="rpc://",
     )
