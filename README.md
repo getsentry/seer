@@ -102,10 +102,12 @@ Send a POST request to `/v1/automation/autofix/evaluations/start` with the follo
 {
 "dataset_name": "string", // Name of the dataset to run on (currently only internal datasets available)
 "run_name": "string", // Custom name for your evaluation run
+"run_description": "string", // Description of your evaluation run
 "run_type": "full | root_cause | execution", // Type of evaluation to perform
 "test": boolean, // Set to true to run on a single item (for testing)
 "random_for_test": boolean, // Set to true to use a random item when testing (requires "test": true)
-"run_on_item_id": "string" // Specific item ID to run on (optional)
+"run_on_item_id": "string", // Specific item ID to run on (optional)
+"n_runs_per_item": int // Number of runs to perform per item (optional, default 1)
 }
 ```
 
