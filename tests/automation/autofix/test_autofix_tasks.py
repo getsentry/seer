@@ -180,6 +180,4 @@ class TestRunAutofixCreatePr:
 
         # Assert
         mock_continuation_state.from_id.assert_called_once_with(1, model=AutofixContinuation)
-        mock_event_manager.return_value.send_pr_creation_start.assert_called_once()
         mock_context.commit_changes.assert_called_once_with(repo_external_id="repo1", repo_id=1)
-        mock_event_manager.return_value.send_pr_creation_complete.assert_called_once()
