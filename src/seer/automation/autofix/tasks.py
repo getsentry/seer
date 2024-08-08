@@ -168,13 +168,9 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
         state=state, sentry_client=get_sentry_client(), event_manager=event_manager
     )
 
-    event_manager.send_pr_creation_start()
-
     context.commit_changes(
         repo_external_id=request.payload.repo_external_id, repo_id=request.payload.repo_id
     )
-
-    event_manager.send_pr_creation_complete()
 
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):

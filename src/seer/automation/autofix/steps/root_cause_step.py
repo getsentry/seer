@@ -58,4 +58,5 @@ class RootCauseStep(AutofixPipelineStep):
                 instruction=state.request.instruction,
             )
         )
+
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)

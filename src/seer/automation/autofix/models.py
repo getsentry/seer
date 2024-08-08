@@ -1,5 +1,6 @@
 import datetime
 import enum
+import uuid
 from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
@@ -107,7 +108,8 @@ class StepType(str, enum.Enum):
 
 
 class BaseStep(BaseModel):
-    id: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    key: str | None = None  # TODO: Make this required when we won't be breaking existing runs.
     title: str
     type: StepType = StepType.DEFAULT
 
@@ -132,6 +134,24 @@ class BaseStep(BaseModel):
         base_step.index = len(self.progress)
         self.progress.append(base_step)
         return base_step
+
+    def model_copy_with_new_id(self):
+        new_step = self.model_copy()
+        new_step.id = str(uuid.uuid4())
+        return new_step
+
+    def ensure_uuid_id(self):
+        if self.id and not self.is_valid_uuid(self.id):
+            self.key = self.id
+            self.id = str(uuid.uuid4())
+
+    @staticmethod
+    def is_valid_uuid(uuid_string: str) -> bool:
+        try:
+            uuid.UUID(uuid_string)
+            return True
+        except (ValueError, TypeError):
+            return False
 
 
 class DefaultStep(BaseStep):
@@ -272,30 +292,38 @@ class AutofixUpdateRequest(BaseModel):
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
 
-    def find_step(self, *, id: str) -> Step | None:
-        for step in self.steps:
-            if step.id == id:
+    def find_step(self, *, id: str | None = None, key: str | None = None) -> Step | None:
+        for step in self.steps[::-1]:
+            if id and step.id == id:
+                return step
+            if key and step.key == key:
+                return step
+            if id and key and step.id == id and step.key == key:
                 return step
         return None
 
     def find_or_add(self, base_step: Step) -> Step:
-        existing = self.find_step(id=base_step.id)
+        existing = self.find_step(key=base_step.key)
         if existing:
             return existing
 
-        base_step = base_step.model_copy()
-        base_step.index = len(self.steps)
-        self.steps.append(base_step)
-        return base_step
+        base_step = base_step.model_copy_with_new_id()
+        return self.add_step(base_step)
+
+    def add_step(self, step: Step):
+        step.index = len(self.steps)
+        self.steps.append(step)
+        return step
 
     def make_step_latest(self, step: Step):
         if step in self.steps:
             self.steps.remove(step)
             self.steps.append(step)
 
-    def mark_all_steps_completed(self):
+    def mark_all_running_steps_completed(self):
         for step in self.steps:
-            step.status = AutofixStatus.COMPLETED
+            if step.status == AutofixStatus.PROCESSING or step.status == AutofixStatus.PENDING:
+                step.status = AutofixStatus.COMPLETED
 
     def _mark_steps_errored(self, status_condition: AutofixStatus):
         did_mark = False
@@ -323,7 +351,7 @@ class AutofixContinuation(AutofixGroupState):
             self.steps[-1].completedMessage = message
 
     def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
-        root_cause_step = self.find_step(id="root_cause_analysis")
+        root_cause_step = self.find_step(key="root_cause_analysis")
         if root_cause_step and isinstance(root_cause_step, RootCauseStep):
             if root_cause_step.selection:
                 if isinstance(root_cause_step.selection, CodeContextRootCauseSelection):
@@ -343,13 +371,10 @@ class AutofixContinuation(AutofixGroupState):
     def mark_updated(self):
         self.updated_at = datetime.datetime.now()
 
-    def delete_steps_after(self, step: Step):
-        steps_to_keep = []
-        for cur_step in self.steps:
-            steps_to_keep.append(cur_step)
-            if step.id == cur_step.id:
-                break
-        self.steps = steps_to_keep
+    def delete_steps(self, step: Step, include_current: bool = False):
+        found_index = next((i for i, s in enumerate(self.steps) if s.id == step.id), -1)
+        if found_index != -1:
+            self.steps = self.steps[: found_index + (0 if include_current else 1)]
 
     def clear_file_changes(self):
         for key, codebase in self.codebases.items():
