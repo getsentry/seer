@@ -275,8 +275,10 @@ class GroupingLookup:
             .execution_options(**custom_options)
             .all()
         )
-
-        reranked = self.rerank_candidates(candidates, embedding, distance, hash)
+        with sentry_sdk.start_span("seer.grouping.rerank_candidates") as span:
+            span.set_attribute("candidates", len(candidates))
+            span.set_attribute("distance", distance)
+            reranked = self.rerank_candidates(candidates, embedding, distance, hash)
         return reranked[:k]
 
     @staticmethod
