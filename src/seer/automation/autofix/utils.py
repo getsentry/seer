@@ -64,6 +64,9 @@ def find_original_snippet(
     tuple[str, int, int] | None: A tuple containing the original snippet from the file, start index, and end index,
                                  or None if the snippet could not be found.
     """
+    if snippet.strip() == "":
+        return None
+
     snippet_lines = [line for line in snippet.split("\n") if line.strip()]
     file_lines = file_contents.split("\n")
 
