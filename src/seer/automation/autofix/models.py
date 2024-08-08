@@ -295,11 +295,9 @@ class AutofixContinuation(AutofixGroupState):
 
     def find_step(self, *, id: str | None = None, key: str | None = None) -> Step | None:
         for step in self.steps[::-1]:
-            if id and step.id == id:
+            if step.id == id:
                 return step
-            if key and step.key == key:
-                return step
-            if id and key and step.id == id and step.key == key:
+            if key is not None and step.key == key:
                 return step
         return None
 
