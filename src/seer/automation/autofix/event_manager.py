@@ -57,7 +57,9 @@ class AutofixEventManager:
     def send_root_cause_analysis_pending(self):
         with self.state.update() as cur:
             step = cur.add_step(self.root_cause_analysis_processing_step)
-            step.status = AutofixStatus.PROCESSING
+            step.status = (
+                AutofixStatus.PROCESSING
+            )  # We want it to be spinning on the UI, not a grey pending, so we just make it processing.
 
     def send_root_cause_analysis_start(self):
         with self.state.update() as cur:
