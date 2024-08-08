@@ -132,6 +132,11 @@ def task_to_file_change(task: PlanTaskPromptXml, file_content: str) -> list[File
     diff_chunks = extract_diff_chunks(task.diff)
 
     for chunk in diff_chunks:
+        if chunk.original_chunk == chunk.new_chunk:
+            continue
+        if chunk.original_chunk.strip() == "":
+            raise ValueError(f"Original chunk is empty for task: {task}")
+
         result = find_original_snippet(
             chunk.original_chunk,
             file_content,

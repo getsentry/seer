@@ -38,6 +38,8 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     name = "AutofixChangeDescriberStep"
     request: AutofixChangeDescriberRequest
 
+    max_retries = 1
+
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixChangeDescriberRequest:
         return AutofixChangeDescriberRequest.model_validate(request)
