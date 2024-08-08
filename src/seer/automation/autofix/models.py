@@ -36,7 +36,6 @@ class ProgressItem(BaseModel):
 class AutofixStatus(enum.Enum):
     COMPLETED = "COMPLETED"
     ERROR = "ERROR"
-    PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
     CANCELLED = "CANCELLED"
@@ -108,12 +107,14 @@ class StepType(str, enum.Enum):
 
 
 class BaseStep(BaseModel):
+    # The id is a unique identifier for each individual step.
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # The key is to determine the kind of step, such as root_cause or changes.
     key: str | None = None  # TODO: Make this required when we won't be breaking existing runs.
     title: str
     type: StepType = StepType.DEFAULT
 
-    status: AutofixStatus = AutofixStatus.PENDING
+    status: AutofixStatus = AutofixStatus.PROCESSING
 
     index: int = -1
     progress: list["ProgressItem | Step"] = Field(default_factory=list)
@@ -184,7 +185,7 @@ class CodebaseState(BaseModel):
 class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
-    status: AutofixStatus = AutofixStatus.PENDING
+    status: AutofixStatus = AutofixStatus.PROCESSING
     codebases: dict[str, CodebaseState] = Field(default_factory=dict)
     usage: Usage = Field(default_factory=Usage)
     last_triggered_at: Optional[
@@ -320,31 +321,23 @@ class AutofixContinuation(AutofixGroupState):
             self.steps.remove(step)
             self.steps.append(step)
 
-    def mark_all_running_steps_completed(self):
+    def mark_running_steps_completed(self):
         for step in self.steps:
-            if step.status == AutofixStatus.PROCESSING or step.status == AutofixStatus.PENDING:
+            if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.COMPLETED
 
-    def _mark_steps_errored(self, status_condition: AutofixStatus):
+    def mark_running_steps_errored(self):
         did_mark = False
         for step in self.steps:
-            if step.status == status_condition:
+            if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.ERROR
                 did_mark = True
                 for substep in step.progress:
                     if isinstance(substep, (DefaultStep, RootCauseStep, ChangesStep)):
                         if substep.status == AutofixStatus.PROCESSING:
                             substep.status = AutofixStatus.ERROR
-                        if substep.status == AutofixStatus.PENDING:
-                            substep.status = AutofixStatus.CANCELLED
 
         return did_mark
-
-    def mark_running_steps_errored(self):
-        did_mark = self._mark_steps_errored(AutofixStatus.PROCESSING)
-
-        if not did_mark:
-            self._mark_steps_errored(AutofixStatus.PENDING)
 
     def set_last_step_completed_message(self, message: str):
         if self.steps:
@@ -371,7 +364,7 @@ class AutofixContinuation(AutofixGroupState):
     def mark_updated(self):
         self.updated_at = datetime.datetime.now()
 
-    def delete_steps(self, step: Step, include_current: bool = False):
+    def delete_steps_after(self, step: Step, include_current: bool = False):
         found_index = next((i for i, s in enumerate(self.steps) if s.id == step.id), -1)
         if found_index != -1:
             self.steps = self.steps[: found_index + (0 if include_current else 1)]
@@ -383,7 +376,7 @@ class AutofixContinuation(AutofixGroupState):
 
     @property
     def is_running(self):
-        return self.status == AutofixStatus.PROCESSING or self.status == AutofixStatus.PENDING
+        return self.status == AutofixStatus.PROCESSING
 
     @property
     def has_timed_out(self, now: datetime.datetime | None = None) -> bool:

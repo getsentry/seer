@@ -360,12 +360,12 @@ class TestAutofixContinuation(unittest.TestCase):
 
     def test_mark_all_running_steps_completed(self):
         step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
-        step2 = DefaultStep(key="step2", status=AutofixStatus.PENDING, title="test")
+        step2 = DefaultStep(key="step2", status=AutofixStatus.PROCESSING, title="test")
         step3 = DefaultStep(key="step3", status=AutofixStatus.COMPLETED, title="test")
         step4 = DefaultStep(key="step4", status=AutofixStatus.ERROR, title="test")
         self.continuation.steps = [step1, step2, step3, step4]
 
-        self.continuation.mark_all_running_steps_completed()
+        self.continuation.mark_running_steps_completed()
         self.assertEqual(step1.status, AutofixStatus.COMPLETED)
         self.assertEqual(step2.status, AutofixStatus.COMPLETED)
         self.assertEqual(step3.status, AutofixStatus.COMPLETED)
@@ -373,14 +373,14 @@ class TestAutofixContinuation(unittest.TestCase):
 
     def test_mark_running_steps_errored(self):
         step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
-        step2 = DefaultStep(key="step2", status=AutofixStatus.PENDING, title="test")
+        step2 = DefaultStep(key="step2", status=AutofixStatus.PROCESSING, title="test")
         substep = DefaultStep(key="substep", status=AutofixStatus.PROCESSING, title="test")
         step1.progress = [substep]
         self.continuation.steps = [step1, step2]
 
         self.continuation.mark_running_steps_errored()
         self.assertEqual(step1.status, AutofixStatus.ERROR)
-        self.assertEqual(step2.status, AutofixStatus.PENDING)
+        self.assertEqual(step2.status, AutofixStatus.PROCESSING)
         self.assertEqual(substep.status, AutofixStatus.ERROR)
 
     def test_set_last_step_completed_message(self):
@@ -416,22 +416,22 @@ class TestAutofixContinuation(unittest.TestCase):
             self.continuation.mark_updated()
             self.assertEqual(self.continuation.updated_at, mock_now)
 
-    def test_delete_steps(self):
+    def test_delete_steps_after(self):
         step1 = DefaultStep(key="step1", title="test")
         step2 = DefaultStep(key="step2", title="test")
         step3 = DefaultStep(key="step3", title="test")
         self.continuation.steps = [step1, step2, step3]
 
-        self.continuation.delete_steps(step2)
+        self.continuation.delete_steps_after(step2)
         self.assertEqual(self.continuation.steps, [step1, step2])
 
-    def test_delete_steps_including_self(self):
+    def test_delete_steps_after_including_self(self):
         step1 = DefaultStep(key="step1", title="test")
         step2 = DefaultStep(key="step2", title="test")
         step3 = DefaultStep(key="step3", title="test")
         self.continuation.steps = [step1, step2, step3]
 
-        self.continuation.delete_steps(step2, include_current=True)
+        self.continuation.delete_steps_after(step2, include_current=True)
         self.assertEqual(self.continuation.steps, [step1])
 
     def test_clear_file_changes(self):
@@ -447,7 +447,7 @@ class TestAutofixContinuation(unittest.TestCase):
         self.continuation.status = AutofixStatus.PROCESSING
         self.assertTrue(self.continuation.is_running)
 
-        self.continuation.status = AutofixStatus.PENDING
+        self.continuation.status = AutofixStatus.PROCESSING
         self.assertTrue(self.continuation.is_running)
 
         self.continuation.status = AutofixStatus.COMPLETED

@@ -108,7 +108,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     id="changes",
                     title="changes_title",
                     type=StepType.CHANGES,
-                    status=AutofixStatus.PENDING,
+                    status=AutofixStatus.PROCESSING,
                     index=0,
                     changes=[
                         CodebaseChange(

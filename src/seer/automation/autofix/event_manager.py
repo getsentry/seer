@@ -60,7 +60,7 @@ class AutofixEventManager:
             for step in cur.steps:
                 step.ensure_uuid_id()
 
-    def send_root_cause_analysis_pending(self):
+    def send_root_cause_analysis_will_start(self):
         with self.state.update() as cur:
             step = cur.add_step(self.root_cause_analysis_processing_step)
             step.status = (
@@ -71,10 +71,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_processing_step)
 
-            if (
-                root_cause_step.status != AutofixStatus.PROCESSING
-                and root_cause_step.status != AutofixStatus.PENDING
-            ):
+            if root_cause_step.status != AutofixStatus.PROCESSING:
                 root_cause_step = cur.add_step(self.root_cause_analysis_processing_step)
 
             root_cause_step.status = AutofixStatus.PROCESSING
@@ -113,7 +110,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
             root_cause_step.selection = root_cause_selection
-            cur.delete_steps(root_cause_step, include_current=False)
+            cur.delete_steps_after(root_cause_step, include_current=False)
             cur.clear_file_changes()
 
             cur.status = AutofixStatus.PROCESSING
@@ -134,7 +131,7 @@ class AutofixEventManager:
 
     def send_coding_complete(self, codebase_changes: list[CodebaseChange]):
         with self.state.update() as cur:
-            cur.mark_all_running_steps_completed()
+            cur.mark_running_steps_completed()
 
             changes_step = cur.find_or_add(self.changes_step)
             changes_step.status = AutofixStatus.COMPLETED

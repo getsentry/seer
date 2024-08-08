@@ -109,7 +109,7 @@ class TestRunAutofixRootCause:
         # Setup
         mock_request = MagicMock(spec=AutofixRequest)
         mock_state = MagicMock()
-        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PENDING)
+        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PROCESSING)
         mock_create_initial_autofix_run.return_value = mock_state
 
         mock_signature = MagicMock()
@@ -137,7 +137,7 @@ class TestRunAutofixExecution:
         mock_request.payload = MagicMock(spec=AutofixRootCauseUpdatePayload)
 
         mock_state = MagicMock()
-        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PENDING)
+        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PROCESSING)
         mock_continuation_state.from_id.return_value = mock_state
 
         mock_signature = MagicMock()

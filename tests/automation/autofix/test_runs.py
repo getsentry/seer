@@ -51,7 +51,7 @@ class TestRuns:
         mock_state.get.assert_called_once()
 
         self.mock_event_manager.assert_called_once_with(mock_state)
-        self.mock_event_manager.return_value.send_root_cause_analysis_pending.assert_called_once()
+        self.mock_event_manager.return_value.send_root_cause_analysis_will_start.assert_called_once()
 
         assert result == mock_state
 
