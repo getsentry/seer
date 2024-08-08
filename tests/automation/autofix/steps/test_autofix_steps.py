@@ -55,16 +55,12 @@ class TestAutofixPipelineStep:
     @pytest.fixture
     def mock_step(self):
         class MockStep(AutofixPipelineStep):
-            @property
-            def step_key(self):
-                return "mock_step"
-
             @classmethod
             def get_task(cls):
                 return MagicMock()
 
             def _instantiate_request(self, request):
-                return MagicMock()
+                return MagicMock(**request)
 
             def _instantiate_context(self, request):
                 return MagicMock()
@@ -74,9 +70,6 @@ class TestAutofixPipelineStep:
 
         return MockStep({"run_id": 1, "step_id": 1})
 
-    def test_step_key_property(self, mock_step):
-        assert mock_step.step_key == "mock_step"
-
     def test_max_retries_default(self, mock_step):
         assert mock_step.max_retries == 0
 
@@ -85,11 +78,11 @@ class TestAutofixPipelineStep:
         assert mock_step.get_retry_count() == 0
 
     def test_get_retry_count_with_retries(self, mock_step):
-        mock_step.context.signals = ["retry:mock_step:1", "retry:mock_step:2"]
+        mock_step.context.signals = ["retry:1:1", "retry:1:2"]
         assert mock_step.get_retry_count() == 2
 
     def test_get_retry_count_with_mixed_signals(self, mock_step):
-        mock_step.context.signals = ["retry:mock_step:1", "other_signal", "retry:mock_step:2"]
+        mock_step.context.signals = ["retry:1:1", "other_signal", "retry:1:2"]
         assert mock_step.get_retry_count() == 2
 
     @patch("seer.automation.autofix.steps.steps.make_retry_prefix")
@@ -103,7 +96,7 @@ class TestAutofixPipelineStep:
     def test_handle_exception_no_retry(
         self, mock_make_retry_signal, mock_make_retry_prefix, mock_step
     ):
-        mock_make_retry_prefix.return_value = "retry:mock_step:"
+        mock_make_retry_prefix.return_value = "retry:1:"
         mock_step.context.signals = []
         mock_step.context.event_manager.on_error = MagicMock()
         mock_step.next = MagicMock()
@@ -119,8 +112,8 @@ class TestAutofixPipelineStep:
     def test_handle_exception_with_retry(
         self, mock_make_retry_signal, mock_make_retry_prefix, mock_step
     ):
-        mock_make_retry_prefix.return_value = "retry:mock_step:"
-        mock_make_retry_signal.return_value = "retry:mock_step:1"
+        mock_make_retry_prefix.return_value = "retry:1:"
+        mock_make_retry_signal.return_value = "retry:1:1"
         mock_step.max_retries = 1
         mock_step.context.signals = []
         mock_step.context.state.update = MagicMock()
@@ -130,18 +123,20 @@ class TestAutofixPipelineStep:
         exception = Exception("Test error")
         mock_step._handle_exception(exception)
 
-        mock_make_retry_signal.assert_called_once_with("mock_step", 1)
+        mock_make_retry_signal.assert_called_once_with(1, 1)
         mock_step.next.assert_called_once()
-        mock_step.context.event_manager.on_error.assert_not_called()
+        mock_step.context.event_manager.on_error.assert_called_once_with(
+            str(exception), should_completely_error=False
+        )
 
     @patch("seer.automation.autofix.steps.steps.make_retry_prefix")
     @patch("seer.automation.autofix.steps.steps.make_retry_signal")
     def test_handle_exception_max_retries_reached(
         self, mock_make_retry_signal, mock_make_retry_prefix, mock_step
     ):
-        mock_make_retry_prefix.return_value = "retry:mock_step:"
+        mock_make_retry_prefix.return_value = "retry:1:"
         mock_step.max_retries = 1
-        mock_step.context.signals = ["retry:mock_step:1"]
+        mock_step.context.signals = ["retry:1:1"]
         mock_step.context.event_manager.on_error = MagicMock()
         mock_step.next = MagicMock()
 

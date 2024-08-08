@@ -41,10 +41,6 @@ class AutofixCodingStep(AutofixPipelineStep):
     name = "AutofixCodingStep"
     max_retries = 2
 
-    @property
-    def step_key(self) -> str:
-        return "coding"
-
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixCodingStepRequest:
         return AutofixCodingStepRequest.model_validate(request)
@@ -56,7 +52,7 @@ class AutofixCodingStep(AutofixPipelineStep):
     @observe(name="Autofix - Plan+Code Step")
     @ai_track(description="Autofix - Plan+Code Step")
     def _invoke(self, **kwargs):
-        self.context.event_manager.clear_steps_from(self.context.event_manager.plan_step)
+        self.context.event_manager.clear_file_changes()
 
         self.logger.info("Executing Autofix - Plan+Code Step")
 
@@ -80,6 +76,9 @@ class AutofixCodingStep(AutofixPipelineStep):
         )
 
         self.context.event_manager.send_coding_result(coding_output)
+
+        if self.get_retry_count() < 1:
+            raise ValueError("Coding step must be retried at least once")
 
         self.next(
             AutofixChangeDescriberStep.get_signature(

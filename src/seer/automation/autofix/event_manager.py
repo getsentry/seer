@@ -1,6 +1,5 @@
 import dataclasses
 import logging
-from typing import Literal
 
 from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
@@ -16,7 +15,6 @@ from seer.automation.autofix.models import (
     ProgressItem,
     ProgressType,
     RootCauseStep,
-    Step,
 )
 from seer.automation.state import State
 
@@ -30,42 +28,47 @@ class AutofixEventManager:
     @property
     def root_cause_analysis_processing_step(self) -> DefaultStep:
         return DefaultStep(
-            id="root_cause_analysis_processing",
-            title="Analyze Issue",
+            key="root_cause_analysis_processing",
+            title="Analyzing the Issue",
         )
 
     @property
     def root_cause_analysis_step(self) -> RootCauseStep:
         return RootCauseStep(
-            id="root_cause_analysis",
+            key="root_cause_analysis",
             title="Root Cause Analysis",
         )
 
     @property
     def plan_step(self) -> DefaultStep:
         return DefaultStep(
-            id="plan",
+            key="plan",
             title="Create Fix",
         )
 
     @property
     def changes_step(self) -> ChangesStep:
         return ChangesStep(
-            id="changes",
+            key="changes",
             title="Changes",
             changes=[],
         )
 
     def send_root_cause_analysis_pending(self):
         with self.state.update() as cur:
-            root_cause_step = cur.find_or_add(self.root_cause_analysis_processing_step)
-            root_cause_step.status = AutofixStatus.PENDING
-
-            cur.status = AutofixStatus.PROCESSING
+            step = cur.add_step(self.root_cause_analysis_processing_step)
+            step.status = AutofixStatus.PROCESSING
 
     def send_root_cause_analysis_start(self):
         with self.state.update() as cur:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_processing_step)
+
+            if (
+                root_cause_step.status != AutofixStatus.PROCESSING
+                and root_cause_step.status != AutofixStatus.PENDING
+            ):
+                root_cause_step = cur.add_step(self.root_cause_analysis_processing_step)
+
             root_cause_step.status = AutofixStatus.PROCESSING
             cur.make_step_latest(root_cause_step)
 
@@ -84,11 +87,6 @@ class AutofixEventManager:
             else:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
-
-    def clear_steps_from(self, step: Step):
-        with self.state.update() as cur:
-            cur.delete_steps(step, include_current=True)
-            cur.clear_file_changes()
 
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
         root_cause_selection: CustomRootCauseSelection | CodeContextRootCauseSelection | None = None
@@ -112,16 +110,9 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_planning_pending(self):
-        with self.state.update() as cur:
-            root_cause_step = cur.find_or_add(self.plan_step)
-            root_cause_step.status = AutofixStatus.PENDING
-
-            cur.status = AutofixStatus.PROCESSING
-
     def send_coding_start(self):
         with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
+            plan_step = cur.add_step(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
@@ -131,61 +122,16 @@ class AutofixEventManager:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
-            if result:
-                for i, child_step in enumerate(result.tasks):
-                    step = plan_step.find_or_add_child(
-                        DefaultStep(
-                            id=str(i),
-                            title=child_step.commit_message,
-                        )
-                    )
-                    step.status = AutofixStatus.PENDING
-
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
-    def send_execution_step_start(self, execution_id: int):
+    def send_coding_complete(self, codebase_changes: list[CodebaseChange]):
         with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
-            execution_step = plan_step.find_child(id=str(execution_id))
-            if execution_step:
-                execution_step.status = AutofixStatus.PROCESSING
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_execution_step_result(
-        self, execution_id: int, status: Literal[AutofixStatus.COMPLETED, AutofixStatus.ERROR]
-    ):
-        with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
-            execution_step = plan_step.find_child(id=str(execution_id))
-            if execution_step:
-                execution_step.status = status
-
-            cur.status = (
-                AutofixStatus.PROCESSING
-                if status == AutofixStatus.COMPLETED
-                else AutofixStatus.ERROR
-            )
-
-    def send_execution_complete(self, codebase_changes: list[CodebaseChange]):
-        with self.state.update() as cur:
-            cur.mark_all_steps_completed()
+            cur.mark_all_running_steps_completed()
 
             changes_step = cur.find_or_add(self.changes_step)
             changes_step.status = AutofixStatus.COMPLETED
             changes_step.changes = codebase_changes
 
-            cur.status = AutofixStatus.COMPLETED
-
-    def send_pr_creation_start(self):
-        with self.state.update() as cur:
-            changes_step = cur.find_or_add(self.changes_step)
-            changes_step.status = AutofixStatus.PROCESSING
-            cur.status = AutofixStatus.PROCESSING
-
-    def send_pr_creation_complete(self):
-        with self.state.update() as cur:
-            changes_step = cur.find_or_add(self.changes_step)
-            changes_step.status = AutofixStatus.COMPLETED
             cur.status = AutofixStatus.COMPLETED
 
     def add_log(self, message: str):
@@ -224,9 +170,16 @@ class AutofixEventManager:
                     )
                 )
 
-    def on_error(self, error_msg: str = "Something went wrong"):
+    def on_error(
+        self, error_msg: str = "Something went wrong", should_completely_error: bool = True
+    ):
         with self.state.update() as cur:
             cur.mark_running_steps_errored()
             cur.set_last_step_completed_message(error_msg)
 
-            cur.status = AutofixStatus.ERROR
+            if should_completely_error:
+                cur.status = AutofixStatus.ERROR
+
+    def clear_file_changes(self):
+        with self.state.update() as cur:
+            cur.clear_file_changes()

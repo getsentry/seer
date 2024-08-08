@@ -40,10 +40,6 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
 
     max_retries = 1
 
-    @property
-    def step_key(self) -> str:
-        return "change_describer"
-
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixChangeDescriberRequest:
         return AutofixChangeDescriberRequest.model_validate(request)
@@ -95,4 +91,4 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
 
                     codebase_changes.append(change)
 
-        self.context.event_manager.send_execution_complete(codebase_changes)
+        self.context.event_manager.send_coding_complete(codebase_changes)

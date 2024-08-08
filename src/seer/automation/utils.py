@@ -86,12 +86,12 @@ def make_done_signal(id: str | int) -> str:
     return f"done:{id}"
 
 
-def make_retry_prefix(step_key: str) -> str:
-    return f"retry:{step_key}:"
+def make_retry_prefix(step_id: int) -> str:
+    return f"retry:{step_id}:"
 
 
-def make_retry_signal(step_key: str, retry_attempt_no: int) -> str:
-    return f"{make_retry_prefix(step_key)}{retry_attempt_no}"
+def make_retry_signal(step_id: int, retry_attempt_no: int) -> str:
+    return f"{make_retry_prefix(step_id)}{retry_attempt_no}"
 
 
 def process_repo_provider(provider: str) -> str:

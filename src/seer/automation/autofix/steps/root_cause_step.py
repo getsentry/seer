@@ -35,10 +35,6 @@ class RootCauseStep(AutofixPipelineStep):
 
     name = "RootCauseStep"
 
-    @property
-    def step_key(self) -> str:
-        return "root_cause"
-
     max_retries = 2
 
     @staticmethod
@@ -52,9 +48,6 @@ class RootCauseStep(AutofixPipelineStep):
     @observe(name="Autofix - Root Cause Step")
     @ai_track(description="Autofix - Root Cause Step")
     def _invoke(self, **kwargs):
-        self.context.event_manager.clear_steps_from(
-            self.context.event_manager.root_cause_analysis_step
-        )
         self.context.event_manager.send_root_cause_analysis_start()
 
         state = self.context.state.get()
@@ -67,5 +60,8 @@ class RootCauseStep(AutofixPipelineStep):
                 instruction=state.request.instruction,
             )
         )
+
+        if self.get_retry_count() < 1:
+            raise Exception("Root cause analysis failed")
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
