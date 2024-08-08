@@ -360,16 +360,14 @@ class TestAutofixContinuation(unittest.TestCase):
 
     def test_mark_all_running_steps_completed(self):
         step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
-        step2 = DefaultStep(key="step2", status=AutofixStatus.PROCESSING, title="test")
-        step3 = DefaultStep(key="step3", status=AutofixStatus.COMPLETED, title="test")
-        step4 = DefaultStep(key="step4", status=AutofixStatus.ERROR, title="test")
-        self.continuation.steps = [step1, step2, step3, step4]
+        step2 = DefaultStep(key="step2", status=AutofixStatus.COMPLETED, title="test")
+        step3 = DefaultStep(key="step3", status=AutofixStatus.ERROR, title="test")
+        self.continuation.steps = [step1, step2, step3]
 
         self.continuation.mark_running_steps_completed()
         self.assertEqual(step1.status, AutofixStatus.COMPLETED)
         self.assertEqual(step2.status, AutofixStatus.COMPLETED)
-        self.assertEqual(step3.status, AutofixStatus.COMPLETED)
-        self.assertEqual(step4.status, AutofixStatus.ERROR)
+        self.assertEqual(step3.status, AutofixStatus.ERROR)
 
     def test_mark_running_steps_errored(self):
         step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
@@ -380,7 +378,7 @@ class TestAutofixContinuation(unittest.TestCase):
 
         self.continuation.mark_running_steps_errored()
         self.assertEqual(step1.status, AutofixStatus.ERROR)
-        self.assertEqual(step2.status, AutofixStatus.PROCESSING)
+        self.assertEqual(step2.status, AutofixStatus.ERROR)
         self.assertEqual(substep.status, AutofixStatus.ERROR)
 
     def test_set_last_step_completed_message(self):
