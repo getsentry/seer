@@ -34,7 +34,7 @@ def autofix_coding_task(*args, request: dict[str, Any]):
 
 class AutofixCodingStep(PipelineChain, AutofixPipelineStep):
     """
-    This class represents the execution pipeline in the autofix system. It is responsible for
+    This class represents the coding step in the autofix pipeline. It is responsible for
     executing the fixes suggested by the coding component based on the root cause analysis.
     """
 
@@ -51,6 +51,8 @@ class AutofixCodingStep(PipelineChain, AutofixPipelineStep):
     @observe(name="Autofix - Plan+Code Step")
     @ai_track(description="Autofix - Plan+Code Step")
     def _invoke(self, **kwargs):
+        self.context.event_manager.clear_file_changes()
+
         self.logger.info("Executing Autofix - Plan+Code Step")
 
         self.context.event_manager.send_coding_start()

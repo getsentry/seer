@@ -19,14 +19,12 @@ def mock_request():
         repos=[],
         issue=IssueDetails(id=123, title="Test Issue", short_id="TEST-123", events=[]),
         invoking_user=None,
-        base_commit_sha=None,
         instruction=None,
         options=AutofixRequestOptions(),
     )
 
 
 class TestRuns:
-
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         self.mock_event_manager = patch("seer.automation.autofix.runs.AutofixEventManager").start()
@@ -53,7 +51,7 @@ class TestRuns:
         mock_state.get.assert_called_once()
 
         self.mock_event_manager.assert_called_once_with(mock_state)
-        self.mock_event_manager.return_value.send_root_cause_analysis_start.assert_called_once()
+        self.mock_event_manager.return_value.send_root_cause_analysis_will_start.assert_called_once()
 
         assert result == mock_state
 
