@@ -77,9 +77,6 @@ class AutofixCodingStep(AutofixPipelineStep):
 
         self.context.event_manager.send_coding_result(coding_output)
 
-        if self.get_retry_count() < 1:
-            raise ValueError("Coding step must be retried at least once")
-
         self.next(
             AutofixChangeDescriberStep.get_signature(
                 AutofixChangeDescriberRequest(**self.step_request_fields)

@@ -61,7 +61,4 @@ class RootCauseStep(AutofixPipelineStep):
             )
         )
 
-        if self.get_retry_count() < 1:
-            raise Exception("Root cause analysis failed")
-
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
