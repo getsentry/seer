@@ -82,3 +82,13 @@ class TestFindOriginalSnippet(unittest.TestCase):
         self.assertEqual(
             find_original_snippet(snippet, file_contents, threshold=0.75), expected_result
         )
+
+    def test_find_original_snippet_empty_snippet(self):
+        snippet = ""
+        file_contents = textwrap.dedent(
+            """\
+            def example_function():
+                pass
+            """
+        )
+        self.assertIsNone(find_original_snippet(snippet, file_contents))

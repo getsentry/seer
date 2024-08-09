@@ -17,7 +17,7 @@ from seer.automation.autofix.steps.change_describer_step import (
 )
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
-from seer.automation.pipeline import PipelineChain, PipelineStepTaskRequest
+from seer.automation.pipeline import PipelineStepTaskRequest
 
 
 class AutofixCodingStepRequest(PipelineStepTaskRequest):
@@ -32,13 +32,14 @@ def autofix_coding_task(*args, request: dict[str, Any]):
     AutofixCodingStep(request).invoke()
 
 
-class AutofixCodingStep(PipelineChain, AutofixPipelineStep):
+class AutofixCodingStep(AutofixPipelineStep):
     """
     This class represents the coding step in the autofix pipeline. It is responsible for
     executing the fixes suggested by the coding component based on the root cause analysis.
     """
 
     name = "AutofixCodingStep"
+    max_retries = 2
 
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixCodingStepRequest:

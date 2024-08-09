@@ -35,6 +35,8 @@ class RootCauseStep(AutofixPipelineStep):
 
     name = "RootCauseStep"
 
+    max_retries = 2
+
     @staticmethod
     def get_task():
         return root_cause_task
