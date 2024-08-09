@@ -22,7 +22,6 @@ from seer.automation.utils import make_done_signal, make_retry_prefix, make_retr
 
 class AutofixPipelineStep(PipelineChain, PipelineStep):
     context: AutofixContext
-    request: PipelineStepTaskRequest
 
     # Default to no retries, child classes will override this.
     max_retries: int = 0
@@ -131,7 +130,7 @@ def autofix_parallelized_conditional_step_task(*args, request: Any):
 
 
 class AutofixParallelizedChainConditionalStep(
-    AutofixPipelineStep, ParallelizedChainConditionalStep
+    ParallelizedChainConditionalStep, AutofixPipelineStep
 ):
     name = "AutofixParallelizedChainConditionalStep"
 
@@ -148,7 +147,7 @@ def autofix_parallelized_chain_step_task(*args, request: Any):
     AutofixParallelizedChainStep(request).invoke()
 
 
-class AutofixParallelizedChainStep(AutofixPipelineStep, ParallelizedChainStep):
+class AutofixParallelizedChainStep(ParallelizedChainStep, AutofixPipelineStep):
     name = "AutofixParallelizedChainStep"
 
     @staticmethod
