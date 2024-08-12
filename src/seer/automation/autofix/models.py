@@ -381,13 +381,6 @@ class AutofixContinuation(AutofixGroupState):
         if self.is_running and self.last_triggered_at:
             now = datetime.datetime.now()
 
-            print(
-                "1",
-                self.updated_at
-                and self.updated_at + datetime.timedelta(seconds=AUTOFIX_UPDATE_TIMEOUT_SECS)
-                <= now,
-            )
-
             # If it's still processing and there hasn't been an update in 90 seconds, we consider it timed out.
             if (
                 self.updated_at
