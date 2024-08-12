@@ -100,7 +100,7 @@ def get_all_autofix_runs_after(after: datetime.datetime):
 @celery_app.task(time_limit=15)
 def check_and_mark_recent_autofix_runs():
     logger.info("Checking and marking recent autofix runs")
-    after = datetime.datetime.now() - datetime.timedelta(hours=1)
+    after = datetime.datetime.now() - datetime.timedelta(hours=1, minutes=15)
     logger.info(f"Getting all autofix runs after {after}")
     runs = get_all_autofix_runs_after(after)
     logger.info(f"Got {len(runs)} runs")
@@ -134,8 +134,7 @@ def run_autofix_root_cause(
         RootCauseStepRequest(
             run_id=cur_state.run_id,
         ),
-        # queue=CeleryQueues.DEFAULT,
-        queue="BAD QUEUE1",
+        queue=CeleryQueues.DEFAULT,
     ).apply_async()
 
     return cur_state.run_id
