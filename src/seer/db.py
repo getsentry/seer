@@ -193,6 +193,12 @@ class DbRunState(Base):
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
 
+    __table_args__ = (
+        Index("ix_run_state_group_id", "group_id"),
+        Index("ix_run_state_updated_at", "updated_at"),
+        Index("ix_run_state_last_triggered_at", "last_triggered_at"),
+    )
+
 
 class DbPrIdToAutofixRunIdMapping(Base):
     __tablename__ = "autofix_pr_id_to_run_id"
