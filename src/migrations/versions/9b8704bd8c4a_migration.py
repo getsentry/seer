@@ -6,8 +6,14 @@ Create Date: 2024-08-12 21:28:06.063355
 
 """
 
+import json
+import logging
+from datetime import datetime
+
 import sqlalchemy as sa
 from alembic import op
+
+logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic.
 revision = "9b8704bd8c4a"
@@ -35,13 +41,30 @@ def upgrade():
         )
 
     # Update the columns with values from the 'value' column or default to current timestamp
-    op.execute(
-        """
-        UPDATE run_state
-        SET updated_at = COALESCE((value->>'updated_at')::timestamp, NOW()),
-            last_triggered_at = COALESCE((value->>'last_triggered_at')::timestamp, NOW())
-        """
-    )
+    connection = op.get_bind()
+    results = connection.execute(sa.text("SELECT id, value FROM run_state")).fetchall()
+
+    for row in results:
+        id, value = row
+        updated_at = datetime.utcnow()
+        last_triggered_at = datetime.utcnow()
+
+        try:
+            if value:
+                updated_at = value.get("updated_at", updated_at)
+                last_triggered_at = value.get("last_triggered_at", last_triggered_at)
+        except json.JSONDecodeError:
+            # If JSON is invalid, use current timestamp
+            logger.error(f"Invalid JSON for run_state {id}: {value}")
+            pass
+
+        # Update the row with new values
+        connection.execute(
+            sa.text(
+                "UPDATE run_state SET updated_at = :updated_at, last_triggered_at = :last_triggered_at WHERE id = :id"
+            ),
+            {"id": id, "updated_at": updated_at, "last_triggered_at": last_triggered_at},
+        )
 
     # Make the columns non-nullable
     with op.batch_alter_table("run_state", schema=None) as batch_op:
