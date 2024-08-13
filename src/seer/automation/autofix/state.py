@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.state import DbState
+from seer.db import DbRunState, Session
 
 
 @dataclasses.dataclass
@@ -15,4 +16,13 @@ class ContinuationState(DbState[AutofixContinuation]):
 
     def set(self, state: AutofixContinuation):
         state.mark_updated()
-        super().set(state)
+
+        with Session() as session:
+            db_state = DbRunState(
+                id=self.id,
+                value=state.model_dump(mode="json"),
+                updated_at=state.updated_at,
+                last_triggered_at=state.last_triggered_at,
+            )
+            session.merge(db_state)
+            session.commit()
