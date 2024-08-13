@@ -8,6 +8,7 @@ from johen.pytest import parametrize
 from pydantic import ValidationError
 
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
@@ -455,12 +456,55 @@ class TestAutofixContinuation(unittest.TestCase):
         now = datetime.datetime.now()
         self.continuation.status = AutofixStatus.PROCESSING
         self.continuation.last_triggered_at = now - datetime.timedelta(
-            seconds=3601
-        )  # Assuming AUTOFIX_HARD_TIME_OUT_SECS = 3600
-
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS + 1
+        )
         self.assertTrue(self.continuation.has_timed_out)
 
-        self.continuation.last_triggered_at = now - datetime.timedelta(seconds=3599)
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS - 1
+        )
+        self.assertFalse(self.continuation.has_timed_out)
+
+    def test_has_timed_out_not_running(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.COMPLETED
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS + 1
+        )
+        self.assertFalse(self.continuation.has_timed_out)
+
+    def test_has_timed_out_no_last_triggered(self):
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = None
+        self.assertFalse(self.continuation.has_timed_out)
+
+    def test_has_timed_out_with_update(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS - 1
+        )
+        self.continuation.updated_at = now - datetime.timedelta(
+            seconds=AUTOFIX_UPDATE_TIMEOUT_SECS - 1
+        )
+        self.assertFalse(self.continuation.has_timed_out)
+
+        self.continuation.updated_at = now - datetime.timedelta(
+            seconds=AUTOFIX_UPDATE_TIMEOUT_SECS + 1
+        )
+        self.assertTrue(self.continuation.has_timed_out)
+
+    def test_has_timed_out_edge_cases(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS, seconds=1
+        )
+        self.assertTrue(self.continuation.has_timed_out)
+
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS, seconds=-1
+        )
         self.assertFalse(self.continuation.has_timed_out)
 
 

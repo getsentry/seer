@@ -34,9 +34,9 @@ RUN ln -s /usr/bin/python /usr/local/bin/python && \
 COPY models/ models/
 
 # Copy setup files, requirements, and scripts
-COPY setup.py requirements.txt celeryworker.sh gunicorn.sh ./
+COPY setup.py requirements.txt celeryworker.sh celerybeat.sh gunicorn.sh ./
 
-RUN chmod +x ./celeryworker.sh ./gunicorn.sh
+RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh
 
 # Install dependencies
 RUN pip install --upgrade pip==24.0
