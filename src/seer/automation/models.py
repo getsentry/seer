@@ -124,7 +124,7 @@ class Stacktrace(BaseModel):
                 textwrap.dedent(
                     """\
                 ---
-                variables:
+                Variable values at the time of the exception:
                 {vars_json_str}
                 """
                 ).format(vars_json_str=json.dumps(frame.vars, indent=2))
@@ -257,10 +257,19 @@ class ThreadDetails(BaseModel):
         )
 
 
+class BreadcrumbsDetails(BaseModel):
+    type: str
+    message: Optional[str] = None
+    category: str
+    data: Optional[dict] = None
+    level: str
+
+
 class EventDetails(BaseModel):
     title: str
     exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=False)
     threads: list[ThreadDetails] = Field(default_factory=list, exclude=False)
+    breadcrumbs: list[BreadcrumbsDetails] = Field(default_factory=list, exclude=False)
 
     @classmethod
     def from_event(cls, error_event: SentryEventData):
@@ -268,11 +277,12 @@ class EventDetails(BaseModel):
 
         exceptions: list[ExceptionDetails] = []
         threads: list[ThreadDetails] = []
+        breadcrumbs: list[BreadcrumbsDetails] = []
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
                     exceptions.append(ExceptionDetails.model_validate(exception))
-            if entry.get("type") == "threads":
+            elif entry.get("type") == "threads":
                 for thread in entry.get("data", {}).get("values", []):
                     thread_details = ThreadDetails.model_validate(thread)
                     if (
@@ -281,40 +291,47 @@ class EventDetails(BaseModel):
                         and len(threads) < MAX_THREADS
                     ):
                         threads.append(thread_details)
+            elif entry.get("type") == "breadcrumbs":
+                all_breadcrumbs = entry.get("data", {}).get("values", [])
+                for breadcrumb in all_breadcrumbs[-10:]:  # only look at the most recent breadcrumbs
+                    crumb_details = BreadcrumbsDetails.model_validate(breadcrumb)
+                    if "[Filtered]" in (crumb_details.message or "") or "[Filtered]" in (
+                        str(crumb_details.data) or ""
+                    ):
+                        continue
+                    breadcrumbs.append(crumb_details)
 
-        return cls(title=error_event.get("title"), exceptions=exceptions, threads=threads)
+        return cls(
+            title=error_event.get("title"),
+            exceptions=exceptions,
+            threads=threads,
+            breadcrumbs=breadcrumbs,
+        )
 
     def format_event(self):
         return textwrap.dedent(
             """\
-            <issue>
-            <error_message>
             {title}
-            </error_message>
+            Exceptions:
             {exceptions}
-            {threads}
-            </issue>"""
+            ----------
+            Event Logs:
+            {breadcrumbs}
+            ----------
+            """
         ).format(
             title=self.title,
             exceptions=self.format_exceptions(),
-            threads=self.format_threads(),
+            breadcrumbs=self.format_breadcrumbs(),
         )
 
     def format_exceptions(self):
         return "\n".join(
             textwrap.dedent(
                 """\
-                    <exception_{i}>
-                    <exception_type>
-                    {exception_type}
-                    </exception_type>
-                    <exception_message>
-                    {exception_message}
-                    </exception_message>
-                    <stacktrace>
+                    <exception_{i} type="{exception_type}" message="{exception_message}">
                     {stacktrace}
-                    </stacktrace>
-                    </exception_{i}>"""
+                    </exception{i}>"""
             ).format(
                 i=i,
                 exception_type=exception.type,
@@ -345,6 +362,35 @@ class EventDetails(BaseModel):
                 stacktrace=thread.stacktrace.to_str() if thread.stacktrace else "",
             )
             for thread in self.threads
+        )
+
+    def format_breadcrumbs(self):
+        return "\n".join(
+            textwrap.dedent(
+                """\
+                <event_log_{i} type="{breadcrumb_type}" category="{breadcrumb_category}" level="{level}">
+                {content}
+                </event_log_{i}>"""
+            ).format(
+                i=i,
+                breadcrumb_type=breadcrumb.type,
+                breadcrumb_category=breadcrumb.category,
+                content="\n".join(
+                    filter(
+                        None,
+                        [
+                            f"{breadcrumb.message}\n" if breadcrumb.message else "",
+                            (
+                                f"{str({k: v for k, v in breadcrumb.data.items() if v})}\n"
+                                if breadcrumb.data
+                                else ""
+                            ),
+                        ],
+                    )
+                ),
+                level=breadcrumb.level,
+            )
+            for i, breadcrumb in enumerate(self.breadcrumbs)
         )
 
 

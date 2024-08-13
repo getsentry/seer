@@ -5,7 +5,6 @@ from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPromptXml,
 )
 from seer.automation.autofix.prompts import format_instruction
-from seer.automation.models import EventDetails
 
 
 class RootCauseAnalysisPrompts:
@@ -32,7 +31,7 @@ class RootCauseAnalysisPrompts:
 
     @staticmethod
     def format_default_msg(
-        event: EventDetails,
+        event: str,
         instruction: Optional[str] = None,
     ):
         return textwrap.dedent(
@@ -53,7 +52,7 @@ class RootCauseAnalysisPrompts:
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
-            error_str=event.format_event(),
+            error_str=event,
             instruction_str=format_instruction(instruction),
         )
 

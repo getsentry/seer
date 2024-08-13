@@ -4,6 +4,8 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, GptAgent
+from seer.automation.agent.client import GptClient
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodingOutput,
@@ -43,6 +45,17 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             config=AgentConfig(system_prompt=CodingPrompts.format_system_msg()),
         )
 
+        # preprocess event information
+        event_details_response, _ = GptClient().completion(
+            messages=[
+                Message(
+                    content=f"We have lots of information available for debugging an issue in our code below. Reproduce the info exactly as it is now, but exclude any useless information.\n\n{request.event_details.format_event()}"
+                ),
+            ],
+            model="gpt-4o-mini-2024-07-18",
+        )
+        simplified_event_details = event_details_response.content
+
         task_str = (
             RootCausePlanTaskPromptXml.from_root_cause(request.root_cause_and_fix).to_prompt_str()
             if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
@@ -51,7 +64,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         response = agent.run(
             CodingPrompts.format_fix_discovery_msg(
-                event=request.event_details,
+                event=simplified_event_details,
                 task_str=task_str,
                 instruction=request.instruction,
             ),

@@ -42,7 +42,7 @@ class Message(BaseModel):
     tool_call_id: Optional[str] = None
 
     def to_message(self) -> dict[str, Any]:
-        message: dict[str, Any] = dict(content=self.content, role=self.role)
+        message: dict[str, Any] = dict(content=self.content if self.content else "", role=self.role)
 
         if self.tool_calls:
             tool_calls = [tool_call.model_dump(mode="json") for tool_call in self.tool_calls]

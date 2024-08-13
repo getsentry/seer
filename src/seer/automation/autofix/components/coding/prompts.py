@@ -2,7 +2,6 @@ import textwrap
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.prompts import format_instruction
-from seer.automation.models import EventDetails
 
 
 class CodingPrompts:
@@ -20,7 +19,7 @@ class CodingPrompts:
         )
 
     @staticmethod
-    def format_fix_discovery_msg(event: EventDetails, task_str: str, instruction: str | None):
+    def format_fix_discovery_msg(event: str, task_str: str, instruction: str | None):
         return textwrap.dedent(
             """\
             Given the issue:
@@ -46,7 +45,7 @@ class CodingPrompts:
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
-            event_str=event.format_event(),
+            event_str=event,
             task_str=task_str,
             instruction=format_instruction(instruction),
         )
