@@ -14,6 +14,6 @@ def create_initial_autofix_run(request: AutofixRequest):
     cur = state.get()
 
     event_manager = AutofixEventManager(state)
-    event_manager.send_root_cause_analysis_start()
+    event_manager.send_root_cause_analysis_will_start()
 
     return state

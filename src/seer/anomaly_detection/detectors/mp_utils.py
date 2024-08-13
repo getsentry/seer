@@ -36,7 +36,9 @@ class MPUtils(BaseModel):
         The distances as a numpy array of floats
         """
         mp_dist = mp[:, 0]
-        if mp_config.normalize_mp:
+        if mp_config is not None and mp_config.normalize_mp:
+            if normalizer is None:
+                raise Exception("Need normalizer to normalize MP")
             mp_dist = normalizer.normalize(mp_dist)
 
         if pad_to_len is not None:

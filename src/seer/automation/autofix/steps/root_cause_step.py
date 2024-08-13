@@ -35,6 +35,8 @@ class RootCauseStep(AutofixPipelineStep):
 
     name = "RootCauseStep"
 
+    max_retries = 2
+
     @staticmethod
     def get_task():
         return root_cause_task
@@ -58,4 +60,5 @@ class RootCauseStep(AutofixPipelineStep):
                 instruction=state.request.instruction,
             )
         )
+
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)

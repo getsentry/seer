@@ -1,5 +1,6 @@
 import datetime
 import enum
+import uuid
 from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
@@ -9,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from seer.automation.agent.models import Usage
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_SECS
+from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
 
 
@@ -35,7 +36,6 @@ class ProgressItem(BaseModel):
 class AutofixStatus(enum.Enum):
     COMPLETED = "COMPLETED"
     ERROR = "ERROR"
-    PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
     CANCELLED = "CANCELLED"
@@ -107,11 +107,14 @@ class StepType(str, enum.Enum):
 
 
 class BaseStep(BaseModel):
-    id: str
+    # The id is a unique identifier for each individual step.
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # The key is to determine the kind of step, such as root_cause or changes.
+    key: str | None = None  # TODO: Make this required when we won't be breaking existing runs.
     title: str
     type: StepType = StepType.DEFAULT
 
-    status: AutofixStatus = AutofixStatus.PENDING
+    status: AutofixStatus = AutofixStatus.PROCESSING
 
     index: int = -1
     progress: list["ProgressItem | Step"] = Field(default_factory=list)
@@ -132,6 +135,24 @@ class BaseStep(BaseModel):
         base_step.index = len(self.progress)
         self.progress.append(base_step)
         return base_step
+
+    def model_copy_with_new_id(self):
+        new_step = self.model_copy()
+        new_step.id = str(uuid.uuid4())
+        return new_step
+
+    def ensure_uuid_id(self):
+        if self.id and not self.is_valid_uuid(self.id):
+            self.key = self.id
+            self.id = str(uuid.uuid4())
+
+    @staticmethod
+    def is_valid_uuid(uuid_string: str) -> bool:
+        try:
+            uuid.UUID(uuid_string)
+            return True
+        except (ValueError, TypeError):
+            return False
 
 
 class DefaultStep(BaseStep):
@@ -164,7 +185,7 @@ class CodebaseState(BaseModel):
 class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
-    status: AutofixStatus = AutofixStatus.PENDING
+    status: AutofixStatus = AutofixStatus.PROCESSING
     codebases: dict[str, CodebaseState] = Field(default_factory=dict)
     usage: Usage = Field(default_factory=Usage)
     last_triggered_at: Optional[
@@ -272,58 +293,56 @@ class AutofixUpdateRequest(BaseModel):
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
 
-    def find_step(self, *, id: str) -> Step | None:
-        for step in self.steps:
+    def find_step(self, *, id: str | None = None, key: str | None = None) -> Step | None:
+        for step in self.steps[::-1]:
             if step.id == id:
+                return step
+            if key is not None and step.key == key:
                 return step
         return None
 
     def find_or_add(self, base_step: Step) -> Step:
-        existing = self.find_step(id=base_step.id)
+        existing = self.find_step(key=base_step.key)
         if existing:
             return existing
 
-        base_step = base_step.model_copy()
-        base_step.index = len(self.steps)
-        self.steps.append(base_step)
-        return base_step
+        base_step = base_step.model_copy_with_new_id()
+        return self.add_step(base_step)
+
+    def add_step(self, step: Step):
+        step.index = len(self.steps)
+        self.steps.append(step)
+        return step
 
     def make_step_latest(self, step: Step):
         if step in self.steps:
             self.steps.remove(step)
             self.steps.append(step)
 
-    def mark_all_steps_completed(self):
+    def mark_running_steps_completed(self):
         for step in self.steps:
-            step.status = AutofixStatus.COMPLETED
+            if step.status == AutofixStatus.PROCESSING:
+                step.status = AutofixStatus.COMPLETED
 
-    def _mark_steps_errored(self, status_condition: AutofixStatus):
+    def mark_running_steps_errored(self):
         did_mark = False
         for step in self.steps:
-            if step.status == status_condition:
+            if step.status == AutofixStatus.PROCESSING:
                 step.status = AutofixStatus.ERROR
                 did_mark = True
                 for substep in step.progress:
                     if isinstance(substep, (DefaultStep, RootCauseStep, ChangesStep)):
                         if substep.status == AutofixStatus.PROCESSING:
                             substep.status = AutofixStatus.ERROR
-                        if substep.status == AutofixStatus.PENDING:
-                            substep.status = AutofixStatus.CANCELLED
 
         return did_mark
-
-    def mark_running_steps_errored(self):
-        did_mark = self._mark_steps_errored(AutofixStatus.PROCESSING)
-
-        if not did_mark:
-            self._mark_steps_errored(AutofixStatus.PENDING)
 
     def set_last_step_completed_message(self, message: str):
         if self.steps:
             self.steps[-1].completedMessage = message
 
     def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
-        root_cause_step = self.find_step(id="root_cause_analysis")
+        root_cause_step = self.find_step(key="root_cause_analysis")
         if root_cause_step and isinstance(root_cause_step, RootCauseStep):
             if root_cause_step.selection:
                 if isinstance(root_cause_step.selection, CodeContextRootCauseSelection):
@@ -343,13 +362,10 @@ class AutofixContinuation(AutofixGroupState):
     def mark_updated(self):
         self.updated_at = datetime.datetime.now()
 
-    def delete_steps_after(self, step: Step):
-        steps_to_keep = []
-        for cur_step in self.steps:
-            steps_to_keep.append(cur_step)
-            if step.id == cur_step.id:
-                break
-        self.steps = steps_to_keep
+    def delete_steps_after(self, step: Step, include_current: bool = False):
+        found_index = next((i for i, s in enumerate(self.steps) if s.id == step.id), -1)
+        if found_index != -1:
+            self.steps = self.steps[: found_index + (0 if include_current else 1)]
 
     def clear_file_changes(self):
         for key, codebase in self.codebases.items():
@@ -358,15 +374,23 @@ class AutofixContinuation(AutofixGroupState):
 
     @property
     def is_running(self):
-        return self.status == AutofixStatus.PROCESSING or self.status == AutofixStatus.PENDING
+        return self.status == AutofixStatus.PROCESSING
 
     @property
-    def has_timed_out(self, now: datetime.datetime | None = None) -> bool:
+    def has_timed_out(self) -> bool:
         if self.is_running and self.last_triggered_at:
-            if now is None:
-                now = datetime.datetime.now()
+            now = datetime.datetime.now()
+
+            # If it's still processing and there hasn't been an update in 90 seconds, we consider it timed out.
+            if (
+                self.updated_at
+                and self.updated_at + datetime.timedelta(seconds=AUTOFIX_UPDATE_TIMEOUT_SECS) <= now
+            ):
+                return True
+
+            # If an autofix run has been running for more than 10 minutes, we consider it timed out.
             return (
-                self.last_triggered_at + datetime.timedelta(seconds=AUTOFIX_HARD_TIME_OUT_SECS)
+                self.last_triggered_at + datetime.timedelta(minutes=AUTOFIX_HARD_TIME_OUT_MINS)
                 < now
             )
         return False

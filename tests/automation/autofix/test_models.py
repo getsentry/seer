@@ -1,16 +1,19 @@
 import datetime
 import json
 import unittest
+import uuid
 from unittest.mock import Mock, patch
 
 from johen.pytest import parametrize
 from pydantic import ValidationError
 
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
     AutofixStatus,
+    BaseStep,
     CodeContextRootCauseSelection,
     DefaultStep,
     IssueDetails,
@@ -216,12 +219,94 @@ class TestAutofixRequest(unittest.TestCase):
         self.assertEqual(len(autofix_request.repos), 2)
 
 
+class TestAutofixStep(unittest.TestCase):
+    def test_ensure_uuid_id(self):
+        # Test with a non-UUID id
+        step = DefaultStep(id="non-uuid-id", key="original-key", title="Test Step")
+        step.ensure_uuid_id()
+        self.assertTrue(BaseStep.is_valid_uuid(step.id))
+        self.assertEqual(step.key, "non-uuid-id")
+
+        # Test with a valid UUID id
+        valid_uuid = str(uuid.uuid4())
+        step = DefaultStep(id=valid_uuid, key="original-key", title="Test Step")
+        original_id = step.id
+        step.ensure_uuid_id()
+        self.assertEqual(step.id, original_id)
+        self.assertEqual(step.key, "original-key")
+
+    def test_is_valid_uuid(self):
+        # Test with a valid UUID
+        valid_uuid = str(uuid.uuid4())
+        self.assertTrue(BaseStep.is_valid_uuid(valid_uuid))
+
+        # Test with an invalid UUID
+        invalid_uuid = "not-a-uuid"
+        self.assertFalse(BaseStep.is_valid_uuid(invalid_uuid))
+
+        # Test with an empty string
+        self.assertFalse(BaseStep.is_valid_uuid(""))
+
+        # Test with a None value
+        self.assertFalse(BaseStep.is_valid_uuid(None))  # type: ignore
+
+
 class TestAutofixContinuation(unittest.TestCase):
     def setUp(self):
         self.request = Mock(spec=AutofixRequest)
         self.continuation = AutofixContinuation(request=self.request)
 
-    def test_find_step(self):
+    def test_auto_generated_step_ids(self):
+        # Create steps without specifying IDs
+        step1 = DefaultStep(key="step1", title="Test Step 1")
+        step2 = DefaultStep(key="step2", title="Test Step 2")
+
+        # Add steps to the continuation
+        added_step1 = self.continuation.add_step(step1)
+        added_step2 = self.continuation.add_step(step2)
+
+        # Check that IDs were auto-generated
+        self.assertIsNotNone(added_step1.id)
+        self.assertIsNotNone(added_step2.id)
+
+        # Check that the IDs are strings (UUIDs)
+        self.assertIsInstance(added_step1.id, str)
+        self.assertIsInstance(added_step2.id, str)
+
+        # Check that the IDs are unique
+        self.assertNotEqual(added_step1.id, added_step2.id)
+
+        # Verify that we can find steps by their auto-generated IDs
+        self.assertEqual(self.continuation.find_step(id=added_step1.id), added_step1)
+        self.assertEqual(self.continuation.find_step(id=added_step2.id), added_step2)
+
+    def test_model_copy_with_new_id(self):
+        original_step = DefaultStep(key="original", title="Original Step")
+        self.continuation.add_step(original_step)
+
+        copied_step = original_step.model_copy_with_new_id()
+
+        # Check that a new ID was generated
+        self.assertNotEqual(original_step.id, copied_step.id)
+
+        # Check that other attributes remain the same
+        self.assertEqual(original_step.key, copied_step.key)
+        self.assertEqual(original_step.title, copied_step.title)
+
+        # Add the copied step and verify it can be found by its new ID
+        added_copied_step = self.continuation.add_step(copied_step)
+        self.assertEqual(self.continuation.find_step(id=copied_step.id), added_copied_step)
+
+    def test_find_step_by_key(self):
+        step1 = DefaultStep(key="step1", title="test")
+        step2 = DefaultStep(key="step2", title="test")
+        self.continuation.steps = [step1, step2]
+
+        self.assertEqual(self.continuation.find_step(key="step1"), step1)
+        self.assertEqual(self.continuation.find_step(key="step2"), step2)
+        self.assertIsNone(self.continuation.find_step(key="step3"))
+
+    def test_find_step_by_id(self):
         step1 = DefaultStep(id="step1", title="test")
         step2 = DefaultStep(id="step2", title="test")
         self.continuation.steps = [step1, step2]
@@ -230,8 +315,27 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertEqual(self.continuation.find_step(id="step2"), step2)
         self.assertIsNone(self.continuation.find_step(id="step3"))
 
+    def test_add_step(self):
+        step1 = DefaultStep(key="step1", title="test")
+        step2 = DefaultStep(key="step2", title="test")
+
+        # Add first step
+        added_step1 = self.continuation.add_step(step1)
+        self.assertEqual(added_step1.index, 0)
+        self.assertEqual(len(self.continuation.steps), 1)
+        self.assertEqual(self.continuation.steps[0], added_step1)
+
+        # Add second step
+        added_step2 = self.continuation.add_step(step2)
+        self.assertEqual(added_step2.index, 1)
+        self.assertEqual(len(self.continuation.steps), 2)
+        self.assertEqual(self.continuation.steps[1], added_step2)
+
+        # Verify both steps are in the continuation
+        self.assertEqual(self.continuation.steps, [added_step1, added_step2])
+
     def test_find_or_add(self):
-        step1 = DefaultStep(id="step1", title="test")
+        step1 = DefaultStep(key="step1", title="test")
         self.continuation.steps = [step1]
 
         # Test finding existing step
@@ -240,51 +344,53 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertEqual(len(self.continuation.steps), 1)
 
         # Test adding new step
-        step2 = DefaultStep(id="step2", title="test")
+        step2 = DefaultStep(key="step2", title="test")
         added_step = self.continuation.find_or_add(step2)
-        self.assertEqual(added_step.id, "step2")
+        self.assertEqual(added_step.key, "step2")
         self.assertEqual(added_step.index, 1)
         self.assertEqual(len(self.continuation.steps), 2)
 
     def test_make_step_latest(self):
-        step1 = DefaultStep(id="step1", title="test")
-        step2 = DefaultStep(id="step2", title="test")
-        step3 = DefaultStep(id="step3", title="test")
+        step1 = DefaultStep(key="step1", title="test")
+        step2 = DefaultStep(key="step2", title="test")
+        step3 = DefaultStep(key="step3", title="test")
         self.continuation.steps = [step1, step2, step3]
 
         self.continuation.make_step_latest(step2)
         self.assertEqual(self.continuation.steps, [step1, step3, step2])
 
-    def test_mark_all_steps_completed(self):
-        step1 = DefaultStep(id="step1", status=AutofixStatus.PROCESSING, title="test")
-        step2 = DefaultStep(id="step2", status=AutofixStatus.PENDING, title="test")
-        self.continuation.steps = [step1, step2]
+    def test_mark_all_running_steps_completed(self):
+        step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
+        step2 = DefaultStep(key="step2", status=AutofixStatus.COMPLETED, title="test")
+        step3 = DefaultStep(key="step3", status=AutofixStatus.ERROR, title="test")
+        self.continuation.steps = [step1, step2, step3]
 
-        self.continuation.mark_all_steps_completed()
+        self.continuation.mark_running_steps_completed()
         self.assertEqual(step1.status, AutofixStatus.COMPLETED)
         self.assertEqual(step2.status, AutofixStatus.COMPLETED)
+        self.assertEqual(step3.status, AutofixStatus.ERROR)
 
     def test_mark_running_steps_errored(self):
-        step1 = DefaultStep(id="step1", status=AutofixStatus.PROCESSING, title="test")
-        step2 = DefaultStep(id="step2", status=AutofixStatus.PENDING, title="test")
-        substep = DefaultStep(id="substep", status=AutofixStatus.PROCESSING, title="test")
+        step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
+        step2 = DefaultStep(key="step2", status=AutofixStatus.PROCESSING, title="test")
+        substep = DefaultStep(key="substep", status=AutofixStatus.PROCESSING, title="test")
         step1.progress = [substep]
         self.continuation.steps = [step1, step2]
 
         self.continuation.mark_running_steps_errored()
         self.assertEqual(step1.status, AutofixStatus.ERROR)
-        self.assertEqual(step2.status, AutofixStatus.PENDING)
+        self.assertEqual(step2.status, AutofixStatus.ERROR)
         self.assertEqual(substep.status, AutofixStatus.ERROR)
 
     def test_set_last_step_completed_message(self):
-        step = DefaultStep(id="step1", title="test")
+        step = DefaultStep(key="step1", title="test")
         self.continuation.steps = [step]
 
         self.continuation.set_last_step_completed_message("Test message")
         self.assertEqual(step.completedMessage, "Test message")
 
     def test_get_selected_root_cause_and_fix(self):
-        root_cause_step = RootCauseStep(id="root_cause_analysis", title="test")
+        root_cause_step = RootCauseStep(key="root_cause_analysis", title="test")
         cause = RootCauseAnalysisItem(
             id=1, title="test", description="test", likelihood=0.5, actionability=0.5
         )
@@ -310,13 +416,22 @@ class TestAutofixContinuation(unittest.TestCase):
             self.assertEqual(self.continuation.updated_at, mock_now)
 
     def test_delete_steps_after(self):
-        step1 = DefaultStep(id="step1", title="test")
-        step2 = DefaultStep(id="step2", title="test")
-        step3 = DefaultStep(id="step3", title="test")
+        step1 = DefaultStep(key="step1", title="test")
+        step2 = DefaultStep(key="step2", title="test")
+        step3 = DefaultStep(key="step3", title="test")
         self.continuation.steps = [step1, step2, step3]
 
         self.continuation.delete_steps_after(step2)
         self.assertEqual(self.continuation.steps, [step1, step2])
+
+    def test_delete_steps_after_including_self(self):
+        step1 = DefaultStep(key="step1", title="test")
+        step2 = DefaultStep(key="step2", title="test")
+        step3 = DefaultStep(key="step3", title="test")
+        self.continuation.steps = [step1, step2, step3]
+
+        self.continuation.delete_steps_after(step2, include_current=True)
+        self.assertEqual(self.continuation.steps, [step1])
 
     def test_clear_file_changes(self):
         codebase1 = Mock()
@@ -331,7 +446,7 @@ class TestAutofixContinuation(unittest.TestCase):
         self.continuation.status = AutofixStatus.PROCESSING
         self.assertTrue(self.continuation.is_running)
 
-        self.continuation.status = AutofixStatus.PENDING
+        self.continuation.status = AutofixStatus.PROCESSING
         self.assertTrue(self.continuation.is_running)
 
         self.continuation.status = AutofixStatus.COMPLETED
@@ -341,12 +456,55 @@ class TestAutofixContinuation(unittest.TestCase):
         now = datetime.datetime.now()
         self.continuation.status = AutofixStatus.PROCESSING
         self.continuation.last_triggered_at = now - datetime.timedelta(
-            seconds=3601
-        )  # Assuming AUTOFIX_HARD_TIME_OUT_SECS = 3600
-
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS + 1
+        )
         self.assertTrue(self.continuation.has_timed_out)
 
-        self.continuation.last_triggered_at = now - datetime.timedelta(seconds=3599)
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS - 1
+        )
+        self.assertFalse(self.continuation.has_timed_out)
+
+    def test_has_timed_out_not_running(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.COMPLETED
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS + 1
+        )
+        self.assertFalse(self.continuation.has_timed_out)
+
+    def test_has_timed_out_no_last_triggered(self):
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = None
+        self.assertFalse(self.continuation.has_timed_out)
+
+    def test_has_timed_out_with_update(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS - 1
+        )
+        self.continuation.updated_at = now - datetime.timedelta(
+            seconds=AUTOFIX_UPDATE_TIMEOUT_SECS - 1
+        )
+        self.assertFalse(self.continuation.has_timed_out)
+
+        self.continuation.updated_at = now - datetime.timedelta(
+            seconds=AUTOFIX_UPDATE_TIMEOUT_SECS + 1
+        )
+        self.assertTrue(self.continuation.has_timed_out)
+
+    def test_has_timed_out_edge_cases(self):
+        now = datetime.datetime.now()
+        self.continuation.status = AutofixStatus.PROCESSING
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS, seconds=1
+        )
+        self.assertTrue(self.continuation.has_timed_out)
+
+        self.continuation.last_triggered_at = now - datetime.timedelta(
+            minutes=AUTOFIX_HARD_TIME_OUT_MINS, seconds=-1
+        )
         self.assertFalse(self.continuation.has_timed_out)
 
 

@@ -1,3 +1,4 @@
+import datetime
 import logging
 import random
 from typing import Literal, cast
@@ -90,11 +91,31 @@ def get_autofix_state(
         return continuation
 
 
+def get_all_autofix_runs_after(after: datetime.datetime):
+    with Session() as session:
+        runs = session.query(DbRunState).filter(DbRunState.last_triggered_at > after).all()
+        return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
+
+
+@celery_app.task(time_limit=15)
+def check_and_mark_recent_autofix_runs():
+    logger.info("Checking and marking recent autofix runs")
+    after = datetime.datetime.now() - datetime.timedelta(hours=1, minutes=15)
+    logger.info(f"Getting all autofix runs after {after}")
+    runs = get_all_autofix_runs_after(after)
+    logger.info(f"Got {len(runs)} runs")
+    for run in runs:
+        check_and_mark_if_timed_out(run)
+
+
 def check_and_mark_if_timed_out(state: ContinuationState):
     with state.update() as cur:
-        if cur.has_timed_out:
+        if cur.is_running and cur.has_timed_out:
             cur.mark_running_steps_errored()
             cur.status = AutofixStatus.ERROR
+
+            # Will log to Sentry. We will have an alert set up to notify us when this happens.
+            logger.error(f"Autofix run {cur.run_id} has timed out")
 
 
 def run_autofix_root_cause(
@@ -168,13 +189,9 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
         state=state, sentry_client=get_sentry_client(), event_manager=event_manager
     )
 
-    event_manager.send_pr_creation_start()
-
     context.commit_changes(
         repo_external_id=request.payload.repo_external_id, repo_id=request.payload.repo_id
     )
-
-    event_manager.send_pr_creation_complete()
 
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):

@@ -186,6 +186,18 @@ class DbRunState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     value: Mapped[dict] = mapped_column(JSON, nullable=False)
+    last_triggered_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    __table_args__ = (
+        Index("ix_run_state_group_id", "group_id"),
+        Index("ix_run_state_updated_at", "updated_at"),
+        Index("ix_run_state_last_triggered_at", "last_triggered_at"),
+    )
 
 
 class DbPrIdToAutofixRunIdMapping(Base):

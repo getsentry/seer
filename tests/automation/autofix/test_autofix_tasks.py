@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock, patch
+import datetime
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from johen import generate
@@ -12,6 +13,7 @@ from seer.automation.autofix.models import (
     AutofixUpdateRequest,
 )
 from seer.automation.autofix.tasks import (
+    check_and_mark_recent_autofix_runs,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
@@ -109,7 +111,7 @@ class TestRunAutofixRootCause:
         # Setup
         mock_request = MagicMock(spec=AutofixRequest)
         mock_state = MagicMock()
-        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PENDING)
+        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PROCESSING)
         mock_create_initial_autofix_run.return_value = mock_state
 
         mock_signature = MagicMock()
@@ -137,7 +139,7 @@ class TestRunAutofixExecution:
         mock_request.payload = MagicMock(spec=AutofixRootCauseUpdatePayload)
 
         mock_state = MagicMock()
-        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PENDING)
+        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PROCESSING)
         mock_continuation_state.from_id.return_value = mock_state
 
         mock_signature = MagicMock()
@@ -180,6 +182,36 @@ class TestRunAutofixCreatePr:
 
         # Assert
         mock_continuation_state.from_id.assert_called_once_with(1, model=AutofixContinuation)
-        mock_event_manager.return_value.send_pr_creation_start.assert_called_once()
         mock_context.commit_changes.assert_called_once_with(repo_external_id="repo1", repo_id=1)
-        mock_event_manager.return_value.send_pr_creation_complete.assert_called_once()
+
+
+class TestCheckAndMarkRecentAutofixRuns:
+    @patch("seer.automation.autofix.tasks.datetime")
+    @patch("seer.automation.autofix.tasks.get_all_autofix_runs_after")
+    @patch("seer.automation.autofix.tasks.check_and_mark_if_timed_out")
+    @patch("seer.automation.autofix.tasks.logger")
+    def test_check_and_mark_recent_autofix_runs(
+        self, mock_logger, mock_check_and_mark, mock_get_runs, mock_datetime
+    ):
+        # Setup
+        mock_now = datetime.datetime(2023, 1, 1, 12, 0, 0)
+        mock_datetime.datetime.now.return_value = mock_now
+        mock_one_hour_ago = mock_now - datetime.timedelta(hours=1)
+        mock_datetime.timedelta.return_value = datetime.timedelta(hours=1)
+
+        mock_run1 = MagicMock()
+        mock_run2 = MagicMock()
+        mock_get_runs.return_value = [mock_run1, mock_run2]
+
+        # Execute
+        check_and_mark_recent_autofix_runs()
+
+        # Assert
+        mock_datetime.datetime.now.assert_called_once()
+        mock_datetime.timedelta.assert_called_once_with(hours=1, minutes=15)
+        mock_get_runs.assert_called_once_with(mock_one_hour_ago)
+        mock_logger.info.assert_any_call("Checking and marking recent autofix runs")
+        mock_logger.info.assert_any_call(f"Getting all autofix runs after {mock_one_hour_ago}")
+        mock_logger.info.assert_any_call("Got 2 runs")
+        mock_check_and_mark.assert_has_calls([call(mock_run1), call(mock_run2)])
+        assert mock_check_and_mark.call_count == 2
