@@ -39,6 +39,8 @@ from seer.automation.codebase.models import (
     RepoAccessCheckResponse,
 )
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.summarize.issue import summarize_issue
+from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
@@ -206,6 +208,11 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
     run_autofix_evaluation(data)
 
     return AutofixEndpointResponse(started=True, run_id=-1)
+
+
+@json_api(blueprint, "/v1/automation/summarize/issue")
+def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueResponse:
+    return summarize_issue(data)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
