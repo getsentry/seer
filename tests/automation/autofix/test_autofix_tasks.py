@@ -208,7 +208,7 @@ class TestCheckAndMarkRecentAutofixRuns:
 
         # Assert
         mock_datetime.datetime.now.assert_called_once()
-        mock_datetime.timedelta.assert_called_once_with(hours=1)
+        mock_datetime.timedelta.assert_called_once_with(hours=1, minutes=15)
         mock_get_runs.assert_called_once_with(mock_one_hour_ago)
         mock_logger.info.assert_any_call("Checking and marking recent autofix runs")
         mock_logger.info.assert_any_call(f"Getting all autofix runs after {mock_one_hour_ago}")
