@@ -51,9 +51,8 @@ def upgrade():
 
         try:
             if value:
-                json_value = json.loads(value)
-                updated_at = json_value.get("updated_at", updated_at)
-                last_triggered_at = json_value.get("last_triggered_at", last_triggered_at)
+                updated_at = value.get("updated_at", updated_at)
+                last_triggered_at = value.get("last_triggered_at", last_triggered_at)
         except json.JSONDecodeError:
             # If JSON is invalid, use current timestamp
             logger.error(f"Invalid JSON for run_state {id}: {value}")
