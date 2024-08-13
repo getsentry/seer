@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
 
-@signals.celeryd_init.connect
+@celery_app.on_configure.connect
 @inject
 def init_celery_app(*args: Any, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
