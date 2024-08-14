@@ -31,6 +31,9 @@ class TestRuns:
         self.mock_continuation_state = patch(
             "seer.automation.autofix.runs.ContinuationState"
         ).start()
+        self.mock_autofix_continuation = patch(
+            "seer.automation.autofix.runs.AutofixContinuation"
+        ).start()
         yield
         patch.stopall()
 
@@ -38,15 +41,15 @@ class TestRuns:
         # Set up mock for ContinuationState
         mock_state = MagicMock()
         self.mock_continuation_state.new.return_value = mock_state
-        mock_state.get.return_value = AutofixContinuation(request=mock_request)
+
+        expected_state = AutofixContinuation(request=mock_request)
+        self.mock_autofix_continuation.return_value = expected_state
 
         # Call the function
         result = create_initial_autofix_run(mock_request)
 
         # Assertions
-        self.mock_continuation_state.new.assert_called_once_with(
-            AutofixContinuation(request=mock_request), group_id=mock_request.issue.id
-        )
+        self.mock_autofix_continuation.assert_called_once_with(request=mock_request)
         mock_state.update.assert_called_once()
         mock_state.get.assert_called_once()
 

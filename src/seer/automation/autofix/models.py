@@ -188,12 +188,12 @@ class AutofixGroupState(BaseModel):
     status: AutofixStatus = AutofixStatus.PROCESSING
     codebases: dict[str, CodebaseState] = Field(default_factory=dict)
     usage: Usage = Field(default_factory=Usage)
-    last_triggered_at: Optional[
-        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
-    ] = None
-    updated_at: Optional[
-        Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)]
-    ] = None
+    last_triggered_at: Annotated[
+        datetime.datetime, Examples(datetime.datetime.now() for _ in gen)
+    ] = Field(default_factory=datetime.datetime.now)
+    updated_at: Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)] = (
+        Field(default_factory=datetime.datetime.now)
+    )
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
 
