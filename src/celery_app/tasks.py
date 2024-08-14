@@ -11,7 +11,7 @@ from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
 @celery.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(
-        crontab(minute=0, hour="*"),
+        crontab(minute="0", hour="*"),
         check_and_mark_recent_autofix_runs.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
         name="Check and mark recent autofix runs every hour",
     )
