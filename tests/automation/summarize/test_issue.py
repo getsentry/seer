@@ -18,14 +18,13 @@ class TestSummarizeIssue:
         return SummarizeIssueRequest(group_id=1, issue=next(generate(IssueDetails)))
 
     def test_summarize_issue_success(self, mock_gpt_client, sample_request):
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = "Test content"
-        mock_completion.choices[0].message.refusal = None
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
-
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
-            cause_of_issue="Test cause", impact="Test impact"
+            reason_step_by_step=[],
+            summary_of_issue="Test summary",
+            affects_what_functionality="Test functionality",
+            known_customer_impact="Test impact",
+            customer_impact_is_known=True,
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
@@ -36,23 +35,20 @@ class TestSummarizeIssue:
 
         assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 1
-        assert result.summary == "Test cause"
-        assert result.impact == "Test impact"
+        assert result.summary == "Test summary"
+        assert result.impact == "Test functionality Test impact"
 
     def test_summarize_issue_refusal(self, mock_gpt_client, sample_request):
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = "Test content"
-        mock_completion.choices[0].message.refusal = "Test refusal"
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
+        mock_structured_completion = MagicMock()
+        mock_structured_completion.choices[0].message.refusal = "I refuse!"
+        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
+            mock_structured_completion
+        )
 
-        with pytest.raises(RuntimeError, match="Test refusal"):
+        with pytest.raises(RuntimeError, match="I refuse!"):
             summarize_issue(sample_request, gpt_client=mock_gpt_client)
 
     def test_summarize_issue_parsing_failure(self, mock_gpt_client, sample_request):
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = "Test content"
-        mock_completion.choices[0].message.refusal = None
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
 
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = None
@@ -70,14 +66,13 @@ class TestSummarizeIssue:
         mock_event_details.format_event.return_value = "Formatted event details"
         mock_from_event.return_value = mock_event_details
 
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = "Test content"
-        mock_completion.choices[0].message.refusal = None
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
-
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
-            cause_of_issue="Test cause", impact="Test impact"
+            reason_step_by_step=[],
+            summary_of_issue="Test summary",
+            affects_what_functionality="Test functionality",
+            known_customer_impact="Test impact",
+            customer_impact_is_known=False,
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
@@ -90,7 +85,7 @@ class TestSummarizeIssue:
         mock_event_details.format_event.assert_called_once()
         assert (
             "Formatted event details"
-            in mock_gpt_client.openai_client.chat.completions.create.call_args[1]["messages"][0][
-                "content"
-            ]
+            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
+                0
+            ]["content"]
         )
