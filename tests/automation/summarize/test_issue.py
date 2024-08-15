@@ -21,10 +21,9 @@ class TestSummarizeIssue:
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
-            summary_of_issue="Test summary",
-            affects_what_functionality="Test functionality",
-            known_customer_impact="Test impact",
-            customer_impact_is_known=True,
+            summary_of_issue_details="Test summary",
+            summary_of_functionality_affected="Test functionality",
+            headline_summary="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
@@ -36,7 +35,8 @@ class TestSummarizeIssue:
         assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 1
         assert result.summary == "Test summary"
-        assert result.impact == "Test functionality Test impact"
+        assert result.impact == "Test functionality"
+        assert result.headline == "Test headline"
 
     def test_summarize_issue_refusal(self, mock_gpt_client, sample_request):
         mock_structured_completion = MagicMock()
@@ -69,10 +69,9 @@ class TestSummarizeIssue:
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
-            summary_of_issue="Test summary",
-            affects_what_functionality="Test functionality",
-            known_customer_impact="Test impact",
-            customer_impact_is_known=False,
+            summary_of_issue_details="Test summary",
+            summary_of_functionality_affected="Test functionality",
+            headline_summary="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
