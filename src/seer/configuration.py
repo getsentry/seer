@@ -1,5 +1,7 @@
 import logging
 import os.path
+import uuid
+from functools import cached_property
 from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, Field
@@ -57,6 +59,12 @@ class AppConfig(BaseModel):
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
 
+    SMOKE_CHECK: ParseBool = False
+
+    @cached_property
+    def smoke_test_id(self) -> str:
+        return str(uuid.uuid4())
+
     @property
     def is_production(self) -> bool:
         return not self.DEV
@@ -102,6 +110,7 @@ def provide_test_defaults() -> AppConfig:
     base.LANGFUSE_HOST = ""
     base.LANGFUSE_PUBLIC_KEY = ""
     base.LANGFUSE_SECRET_KEY = ""
+    base.SMOKE_CHECK = True
 
     return base
 

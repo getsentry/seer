@@ -18,6 +18,7 @@ RUN apt-get update && \
     python3-pip \
     python3.11-dev \
     supervisor \
+    curl \
     libpq-dev \
     git && \
     rm -rf /var/lib/apt/lists/*
