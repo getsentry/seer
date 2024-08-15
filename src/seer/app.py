@@ -233,7 +233,7 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
 def health_check():
     from seer.inference_models import models_loading_status
 
-    if models_loading_status() == "failed":
+    if models_loading_status() == LoadingResult.FAILED:
         return "Models failed to load", 500
     return "", 200
 

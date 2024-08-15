@@ -585,18 +585,18 @@ def test_async_loading():
 
         reset_loading_state()
 
-    with dummy_deferred(failed_loader):
-        start_loading()
-        response = app.test_client().get("/health/live")
-        assert response.status_code == 200
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 503
+        with dummy_deferred(failed_loader):
+            start_loading()
+            response = app.test_client().get("/health/live")
+            assert response.status_code == 200
+            response = app.test_client().get("/health/ready")
+            assert response.status_code == 503
 
-        time.sleep(2)
-        response = app.test_client().get("/health/live")
-        assert response.status_code == 500
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 500
+            time.sleep(2)
+            response = app.test_client().get("/health/live")
+            assert response.status_code == 500
+            response = app.test_client().get("/health/ready")
+            assert response.status_code == 500
 
 
 class TestGetAutofixState:

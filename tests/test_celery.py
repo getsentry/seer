@@ -1,6 +1,6 @@
-from multiprocessing import Process
+from celery import Celery
 
-from celery_app.app import celery_app
+from celery_app.app import celery_app, setup_celery_entrypoint
 from celery_app.config import CeleryConfig
 from seer.dependency_injection import resolve
 
@@ -15,22 +15,19 @@ def test_detected_celery_jobs():
             "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
             "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
             "seer.automation.autofix.tasks.check_and_mark_recent_autofix_runs",
+            "seer.smoke_test.smoke_test",
         ]
     )
 
 
 def test_celery_app_configuration():
-    assert not celery_app.finalized
+    app = Celery(__name__)
+    setup_celery_entrypoint(app)
+    assert not app.finalized
 
-    def _test_celery_app_configuration():
-        celery_app.finalize()
-        assert celery_app.conf.task_queues == resolve(CeleryConfig)["task_queues"]
+    app.finalize()
+    celery_app.finalize()
+    assert app.conf.task_queues == resolve(CeleryConfig)["task_queues"]
+    assert celery_app.conf.task_queues == app.conf.task_queues
 
-    p = Process(target=_test_celery_app_configuration)
-    p.start()
-    p.join()
-    assert (
-        p.exitcode == 0
-    ), "celery app initialization test failed in separate process, check logs above"
-
-    assert not celery_app.finalized
+    assert app.finalized
