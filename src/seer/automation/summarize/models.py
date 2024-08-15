@@ -10,5 +10,6 @@ class SummarizeIssueRequest(BaseModel):
 
 class SummarizeIssueResponse(BaseModel):
     group_id: int
+    headline: str
     summary: str
     impact: str
