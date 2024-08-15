@@ -17,9 +17,9 @@ class Step(BaseModel):
 
 class IssueSummary(BaseModel):
     reason_step_by_step: list[Step]
-    summary_of_issue_details: str
+    summary_of_issue_at_code_level: str
     summary_of_functionality_affected: str
-    headline_summary: str
+    five_to_ten_word_headline: str
 
 
 @observe(name="Summarize Issue")
@@ -28,14 +28,16 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
     event_details = EventDetails.from_event(request.issue.events[0])
 
     prompt = textwrap.dedent(
-        '''Our code is broken! Please summarize the issue below in 1 short sentence so our engineers can immediately understand what's wrong and respond.
+        """Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
         {event_details}
 
         Your #1 goal is to help our engineers immediately understand the issue and act!
 
         Regarding the issue summary, state clearly and concisely what's going wrong and why. Do not just restate the error message, as that wastes our time! Look deeper into the details provided to paint the full picture and find the key insight of what's going wrong.
 
-        Regarding affected functionality, your goal is to help our engineers immediately understand what SPECIFIC application or service functionality is related to this code issue. Do NOT try to conclude root causes or suggest solutions. Don't even talk about the mechanical details, but rather speak more to the overall task that is failing."'''
+        At the code level, our engineers need to get into the nitty gritty mechanical details of what's going wrong.
+
+        Regarding affected functionality, your goal is to help our engineers immediately understand what SPECIFIC application or service functionality is related to this code issue. Do NOT try to conclude root causes or suggest solutions. Don't even talk about the mechanical details, but rather speak more to the overall task that is failing. Get straight to the point without being overconfident."""
     ).format(event_details=event_details.format_event())
 
     message_dicts: list[ChatCompletionMessageParam] = [
@@ -59,9 +61,9 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         raise RuntimeError("Failed to parse message")
 
     res = completion.choices[0].message.parsed
-    summary = res.summary_of_issue_details
+    summary = res.summary_of_issue_at_code_level
     impact = res.summary_of_functionality_affected
-    headline = res.headline_summary
+    headline = res.five_to_ten_word_headline
 
     return SummarizeIssueResponse(
         group_id=request.group_id,

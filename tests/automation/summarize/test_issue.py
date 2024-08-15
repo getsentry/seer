@@ -21,9 +21,9 @@ class TestSummarizeIssue:
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
-            summary_of_issue_details="Test summary",
+            summary_of_issue_at_code_level="Test summary",
             summary_of_functionality_affected="Test functionality",
-            headline_summary="Test headline",
+            five_to_ten_word_headline="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
@@ -69,9 +69,9 @@ class TestSummarizeIssue:
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
-            summary_of_issue_details="Test summary",
+            summary_of_issue_at_code_level="Test summary",
             summary_of_functionality_affected="Test functionality",
-            headline_summary="Test headline",
+            five_to_ten_word_headline="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
