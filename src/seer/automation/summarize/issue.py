@@ -10,9 +10,17 @@ from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIss
 from seer.dependency_injection import inject, injected
 
 
+class Step(BaseModel):
+    reasoning: str
+    justification: str
+
+
 class IssueSummary(BaseModel):
-    cause_of_issue: str
-    impact: str
+    reason_step_by_step: list[Step]
+    summary_of_issue: str
+    affects_what_functionality: str
+    known_customer_impact: str
+    customer_impact_is_known: bool
 
 
 @observe(name="Summarize Issue")
@@ -21,23 +29,13 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
     event_details = EventDetails.from_event(request.issue.events[0])
 
     prompt = textwrap.dedent(
-        """\
-        You are an exceptional developer that understands the issue and can summarize it in 1-2 sentences.
+        '''Our code is broken! Please summarize the issue below in 1 sentence so our engineers can immediately understand what's wrong and respond.
         {event_details}
 
-        Analyze the issue, find the root cause, and summarize it in 1-2 sentences. In your answer, make sure to use backticks to highlight code snippets, output two results:
-
-        # Cause of issue
-        - 1 sentence, be extremely verbose with the exact snippets of code that are causing the issue.
-        - Be extremely short and specific.
-        - When talking about pieces of code, try to shorten it, so for example, instead of saying `foo.1.Def.bar` was undefined, say `Def` was undefined. Or saying if `foo.bar.baz.Class` is missing input field `bam.bar.Object` say `Class` is missing input field `Object`.
-        - A developer that sees this should know exactly what to fix right away.
-
-        # The impact on the system and users
-        - 1 sentence, be extremely verbose with how this issue affects the system and end users.
-        - Be extremely short and specific.
-
-        Reason & explain the thought process step-by-step before giving the answers."""
+        Your #1 goal is to help our engineers immediately understand the issue and act!
+        Regarding the issue summary, state clearly and concisely what is going wrong in the code and why.
+        Regarding affected functionality, your goal is to help our engineers immediately understand what SPECIFIC application or service functionality is related to this code issue. Do NOT try to conclude root causes or suggest solutions. Use a complete sentence.
+        Regarding known impact, if you don't know for sure the impact, just say "Not enough information to assess user impact."'''
     ).format(event_details=event_details.format_event())
 
     message_dicts: list[ChatCompletionMessageParam] = [
@@ -47,54 +45,30 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         },
     ]
 
-    completion = gpt_client.openai_client.chat.completions.create(
+    completion = gpt_client.openai_client.beta.chat.completions.parse(
         model="gpt-4o-mini-2024-07-18",
         messages=message_dicts,
-        temperature=0.0,
-        max_tokens=2048,
-    )
-
-    message = completion.choices[0].message
-
-    if message.refusal:
-        raise RuntimeError(message.refusal)
-
-    message_dicts.append(
-        {
-            "content": message.content,
-            "role": "assistant",
-        }
-    )
-
-    formatting_prompt = textwrap.dedent(
-        """\
-        Format your answer to the following schema."""
-    )
-    message_dicts.append(
-        {
-            "content": formatting_prompt,
-            "role": "user",
-        }
-    )
-
-    structured_completion = gpt_client.openai_client.beta.chat.completions.parse(
-        model="gpt-4o-mini-2024-07-18",
-        messages=message_dicts,
-        temperature=0.0,
-        max_tokens=2048,
         response_format=IssueSummary,
+        temperature=0.0,
+        max_tokens=2048,
     )
-
-    structured_message = structured_completion.choices[0].message
-
+    structured_message = completion.choices[0].message
     if structured_message.refusal:
         raise RuntimeError(structured_message.refusal)
-
     if not structured_message.parsed:
         raise RuntimeError("Failed to parse message")
 
+    res = completion.choices[0].message.parsed
+    summary = res.summary_of_issue
+    impact = res.affects_what_functionality
+    if (
+        "Not enough information to assess user impact" not in res.known_customer_impact
+        or res.customer_impact_is_known
+    ):
+        impact += f" {res.known_customer_impact}"
+
     return SummarizeIssueResponse(
         group_id=request.group_id,
-        summary=structured_message.parsed.cause_of_issue,
-        impact=structured_message.parsed.impact,
+        summary=summary,
+        impact=impact,
     )

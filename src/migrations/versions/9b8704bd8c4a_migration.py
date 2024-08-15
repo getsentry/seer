@@ -51,8 +51,8 @@ def upgrade():
 
         try:
             if value:
-                updated_at = value.get("updated_at", updated_at)
-                last_triggered_at = value.get("last_triggered_at", last_triggered_at)
+                updated_at = value.get("updated_at") or updated_at
+                last_triggered_at = value.get("last_triggered_at") or last_triggered_at
         except json.JSONDecodeError:
             # If JSON is invalid, use current timestamp
             logger.error(f"Invalid JSON for run_state {id}: {value}")
@@ -68,8 +68,8 @@ def upgrade():
 
     # Make the columns non-nullable
     with op.batch_alter_table("run_state", schema=None) as batch_op:
-        batch_op.alter_column("updated_at", nullable=False)
-        batch_op.alter_column("last_triggered_at", nullable=False)
+        batch_op.alter_column("updated_at", nullable=False, server_default=sa.func.now())
+        batch_op.alter_column("last_triggered_at", nullable=False, server_default=sa.func.now())
 
     # ### end Alembic commands ###
 

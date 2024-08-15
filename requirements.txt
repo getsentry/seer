@@ -29,7 +29,6 @@ networkx==3.1
 numpy==1.26.1
 onnx==1.16.0
 openai==1.40.1
-openai-multi-tool-use-parallel-patch==0.2.0
 optimum==1.16.2
 packaging
 pandas==2.0.3
@@ -102,6 +101,6 @@ chromadb==0.4.14
 google-cloud-storage==2.16.0
 google-cloud-aiplatform==1.60.0
 anthropic[vertex]==0.31.2
-langfuse @ git+https://github.com/jennmueng/langfuse-python.git@0643fdd4a7511eba31b522362cfc929b20b37d3b
+langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
 watchdog
 stumpy==1.12.0
