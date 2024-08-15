@@ -23,7 +23,7 @@ These instructions require access to internal Sentry resources, and are intended
 1. Clone the repository and navigate to the project root
 2. Run `direnv allow` to set up the Python environment
 3. Create a `.env` file based on `.env.example` and set the required values
-4. Add `export SENTRY_AUTH_TOKEN=<your token>` to your shell's RC file
+4. (Optional) Add `export SENTRY_AUTH_TOKEN=<your token>` to your shell's RC file
 
 ### Model Artifacts
 
@@ -61,6 +61,9 @@ gsutil cp -r gs://sentry-ml/seer/models ./models
 
 3. For local development, you may need to bypass certain checks in the Sentry codebase
 4. Restart both Sentry and Seer
+
+> [!NOTE]
+> Set `NO_SENTRY_INTEGRATION=1` in `.env` to ignore Local Sentry Integration
 
 ## Development Commands
 
