@@ -97,12 +97,6 @@ def get_all_autofix_runs_after(after: datetime.datetime):
         return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
 
 
-def get_all_autofix_runs_before(before: datetime.datetime):
-    with Session() as session:
-        runs = session.query(DbRunState).filter(DbRunState.last_triggered_at < before).all()
-        return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
-
-
 def delete_all_runs_before(before: datetime.datetime):
     with Session() as session:
         deleted_count = (
