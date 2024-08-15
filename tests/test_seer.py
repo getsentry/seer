@@ -645,5 +645,6 @@ def test_detected_celery_jobs():
             "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
             "seer.automation.autofix.tasks.check_and_mark_recent_autofix_runs",
             "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
+            "seer.automation.autofix.tasks.delete_old_autofix_runs",
         ]
     )

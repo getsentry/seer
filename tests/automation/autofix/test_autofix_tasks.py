@@ -14,6 +14,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
+    delete_old_autofix_runs,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     run_autofix_create_pr,
@@ -215,3 +216,28 @@ class TestCheckAndMarkRecentAutofixRuns:
         mock_logger.info.assert_any_call("Got 2 runs")
         mock_check_and_mark.assert_has_calls([call(mock_run1), call(mock_run2)])
         assert mock_check_and_mark.call_count == 2
+
+
+class TestDeleteOldAutofixRuns:
+    @patch("seer.automation.autofix.tasks.datetime")
+    @patch("seer.automation.autofix.tasks.delete_all_runs_before")
+    @patch("seer.automation.autofix.tasks.logger")
+    def test_delete_old_autofix_runs(self, mock_logger, mock_delete_runs, mock_datetime):
+        # Setup
+        mock_now = datetime.datetime(2023, 1, 1, 12, 0, 0)
+        mock_datetime.datetime.now.return_value = mock_now
+        mock_many_days_ago = mock_now - datetime.timedelta(days=100)
+        mock_datetime.timedelta.return_value = datetime.timedelta(days=100)
+
+        mock_delete_runs.return_value = 2
+
+        # Execute
+        delete_old_autofix_runs()
+
+        # Assert
+        mock_datetime.datetime.now.assert_called_once()
+        mock_datetime.timedelta.assert_called_once_with(days=90)
+        mock_delete_runs.assert_called_once_with(mock_many_days_ago)
+        mock_logger.info.assert_any_call("Deleting old Autofix runs for 90 day time-to-live")
+        mock_logger.info.assert_any_call("Deleted 2 runs")
+        assert mock_delete_runs.call_count == 1
