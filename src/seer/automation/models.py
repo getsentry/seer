@@ -31,7 +31,7 @@ class StacktraceFrame(BaseModel):
         )
     )
 
-    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
+    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = None
     filename: Optional[Annotated[str, Examples(specialized.file_names)]]
     abs_path: Optional[Annotated[str, Examples(specialized.file_paths)]]
     line_no: Optional[int]
@@ -82,8 +82,8 @@ class Stacktrace(BaseModel):
         stacktrace_frames = []
         for frame in frames:
             if isinstance(frame, dict):
-                if "function" not in frame or frame["function"] is None:
-                    frame["function"] = "unknown_function"
+                if "function" not in frame:
+                    frame["function"] = None
                 try:
                     stacktrace_frames.append(StacktraceFrame.model_validate(frame))
                 except ValidationError:
@@ -110,12 +110,13 @@ class Stacktrace(BaseModel):
                 else "[Line: Unknown]"
             )
 
+            function = frame.function if frame.function else "Unknown function"
             if frame.filename:
-                stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+                stack_str += f" {function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             elif frame.package:
-                stack_str += f" {frame.function} in package {frame.package} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+                stack_str += f" {function} in package {frame.package} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             else:
-                stack_str += f" {frame.function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+                stack_str += f" {function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
 
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
