@@ -16,6 +16,7 @@ from seer.anomaly_detection.models.converters import convert_external_ts_to_inte
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     Anomaly,
+    AnomalyDetectionConfig,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
@@ -29,12 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
-
     @sentry_sdk.trace
-    def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
+    def _batch_detect(self, timeseries: List[TimeSeriesPoint], config: AnomalyDetectionConfig):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector: AnomalyDetector = MPBatchAnomalyDetector()
-        anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries))
+        anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries), config)
         self._update_anomalies(timeseries, anomalies)
         return timeseries
 
@@ -43,6 +43,7 @@ class AnomalyDetection(BaseModel):
     def _online_detect(
         self,
         alert: AlertInSeer,
+        config: AnomalyDetectionConfig,
         alert_data_accessor: AlertDataAccessor = injected,
     ) -> List[TimeSeriesPoint]:
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
@@ -65,7 +66,7 @@ class AnomalyDetection(BaseModel):
         # Run batch detect on history data
         # TODO: This step can be optimized further by caching the matrix profile in the database
         batch_detector = MPBatchAnomalyDetector()
-        anomalies = batch_detector.detect(historic.timeseries)
+        anomalies = batch_detector.detect(historic.timeseries, config)
 
         # Run stream detection
         stream_detector: AnomalyDetector = MPStreamAnomalyDetector(
@@ -74,7 +75,9 @@ class AnomalyDetection(BaseModel):
             base_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
         )
-        streamed_anomalies = stream_detector.detect(convert_external_ts_to_internal(ts_external))
+        streamed_anomalies = stream_detector.detect(
+            convert_external_ts_to_internal(ts_external), config
+        )
         self._update_anomalies(ts_external, streamed_anomalies)
 
         # Save new data point
@@ -93,9 +96,9 @@ class AnomalyDetection(BaseModel):
 
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
         ts: List[TimeSeriesPoint] = (
-            self._online_detect(request.context)
+            self._online_detect(request.context, request.config)
             if isinstance(request.context, AlertInSeer)
-            else self._batch_detect(request.context)
+            else self._batch_detect(request.context, request.config)
         )
         return DetectAnomaliesResponse(timeseries=ts)
 
