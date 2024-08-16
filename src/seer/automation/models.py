@@ -92,7 +92,7 @@ class Stacktrace(BaseModel):
             else:
                 stacktrace_frames.append(frame)
 
-        return stacktrace_frames
+        return cls._trim_frames(stacktrace_frames)
 
     def to_str(self, max_frames: int = 16, in_app_only: bool = False):
         stack_str = ""
@@ -196,6 +196,37 @@ class Stacktrace(BaseModel):
             pattern, replacement = check
             text = re.sub(pattern, replacement, text)
         return text
+
+    @staticmethod
+    def _trim_frames(frames: list[StacktraceFrame], frame_allowance=16):
+        frames_len = len(frames)
+        if frames_len <= frame_allowance:
+            return frames
+
+        app_frames = [frame for frame in frames if frame.in_app]
+        system_frames = [frame for frame in frames if not frame.in_app]
+
+        app_count = len(app_frames)
+        system_allowance = max(frame_allowance - app_count, 0)
+        app_allowance = frame_allowance - system_allowance
+
+        if system_allowance > 0:
+            # prioritize trimming system frames
+            half_system = system_allowance // 2
+            kept_system_frames = system_frames[:half_system] + system_frames[-half_system:]
+        else:
+            kept_system_frames = []
+
+        if app_allowance > 0:
+            half_app = app_allowance // 2
+            kept_app_frames = app_frames[:half_app] + app_frames[-half_app:]
+        else:
+            kept_app_frames = []
+
+        # combine and sort the kept frames based on their original order
+        kept_frames = kept_system_frames + kept_app_frames
+        kept_frames.sort(key=lambda frame: frames.index(frame))
+        return kept_frames
 
 
 class SentryStacktrace(TypedDict):
