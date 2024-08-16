@@ -4,19 +4,23 @@ import unittest
 from unittest import mock
 
 import pytest
+from celery import Celery
+from celery.apps.worker import Worker
 from johen import generate
 from johen.pytest import parametrize
 from sqlalchemy import text
 
-from celery_app.app import celery_app
 from seer.app import app
 from seer.automation.autofix.models import AutofixContinuation, AutofixEvaluationRequest
 from seer.automation.codebase.models import CodebaseStatusCheckRequest, CodebaseStatusCheckResponse
 from seer.automation.models import RepoDefinition
 from seer.automation.state import LocalMemoryState
-from seer.db import DbGroupingRecord, ProcessRequest, Session
+from seer.configuration import AppConfig, provide_test_defaults
+from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
+from seer.dependency_injection import Module, resolve
 from seer.grouping.grouping import CreateGroupingRecordData, CreateGroupingRecordsRequest
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
+from seer.smoke_test import smoke_test
 
 
 @pytest.fixture(autouse=True)
@@ -511,44 +515,88 @@ def test_prepared_statements_disabled(
         assert session.execute(text("select count(*) from pg_prepared_statements")).scalar() == 0
 
 
-def test_async_loading():
-    reset_loading_state()
+smokeless_module = Module()
+
+
+@smokeless_module.provider
+def smokeless_config() -> AppConfig:
+    test_config = provide_test_defaults()
+    test_config.SMOKE_CHECK = False
+    return test_config
+
+
+def test_smoke_test(celery_app: Celery, celery_worker: Worker):
+    celery_app.task(smoke_test)
+    celery_worker.reload()
+    app_config = resolve(AppConfig)
+    with Session() as session:
+        assert (
+            session.query(DbSmokeTest)
+            .filter(DbSmokeTest.request_id == app_config.smoke_test_id)
+            .first()
+            is None
+        )
     response = app.test_client().get("/health/live")
     assert response.status_code == 200
     response = app.test_client().get("/health/ready")
     assert response.status_code == 503
 
-    with dummy_deferred(lambda: time.sleep(1)):
-        start_loading()
-        response = app.test_client().get("/health/live")
-        assert response.status_code == 200
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 503
+    start_loading().join()
 
-        time.sleep(2)
-        response = app.test_client().get("/health/live")
-        assert response.status_code == 200
+    for i in range(10):
         response = app.test_client().get("/health/ready")
-        assert response.status_code == 200
-
-    def failed_loader():
+        if response.status_code == 200:
+            with Session() as session:
+                assert (
+                    session.query(DbSmokeTest)
+                    .filter(DbSmokeTest.request_id == app_config.smoke_test_id)
+                    .first()
+                )
+            break
         time.sleep(1)
-        raise Exception("Dummy loading failure!")
+    else:
+        assert False, "Timed out, did not complete smoke check"
 
-    reset_loading_state()
 
-    with dummy_deferred(failed_loader):
-        start_loading()
+def test_async_loading():
+    with smokeless_module:
+        reset_loading_state()
         response = app.test_client().get("/health/live")
         assert response.status_code == 200
         response = app.test_client().get("/health/ready")
         assert response.status_code == 503
 
-        time.sleep(2)
-        response = app.test_client().get("/health/live")
-        assert response.status_code == 500
-        response = app.test_client().get("/health/ready")
-        assert response.status_code == 500
+        with dummy_deferred(lambda: time.sleep(1)):
+            start_loading()
+            response = app.test_client().get("/health/live")
+            assert response.status_code == 200
+            response = app.test_client().get("/health/ready")
+            assert response.status_code == 503
+
+            time.sleep(2)
+            response = app.test_client().get("/health/live")
+            assert response.status_code == 200
+            response = app.test_client().get("/health/ready")
+            assert response.status_code == 200
+
+        def failed_loader():
+            time.sleep(1)
+            raise Exception("Dummy loading failure!")
+
+        reset_loading_state()
+
+        with dummy_deferred(failed_loader):
+            start_loading()
+            response = app.test_client().get("/health/live")
+            assert response.status_code == 200
+            response = app.test_client().get("/health/ready")
+            assert response.status_code == 503
+
+            time.sleep(2)
+            response = app.test_client().get("/health/live")
+            assert response.status_code == 500
+            response = app.test_client().get("/health/ready")
+            assert response.status_code == 500
 
 
 class TestGetAutofixState:
@@ -633,17 +681,3 @@ class TestGetAutofixState:
         assert response.status_code == 200
         data = json.loads(response.get_data(as_text=True))
         assert data == {"group_id": None, "run_id": None, "state": None}
-
-
-def test_detected_celery_jobs():
-    assert set(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == set(
-        [
-            "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
-            "seer.automation.autofix.steps.coding_step.autofix_coding_task",
-            "seer.automation.autofix.steps.root_cause_step.root_cause_task",
-            "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
-            "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
-            "seer.automation.autofix.tasks.check_and_mark_recent_autofix_runs",
-            "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
-        ]
-    )

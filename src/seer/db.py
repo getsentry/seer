@@ -1,7 +1,7 @@
 import contextlib
 import datetime
 import json
-from typing import Any, List
+from typing import Any, List, Optional
 
 import sqlalchemy
 from flask import Flask
@@ -305,3 +305,12 @@ class DbDynamicAlertTimeSeries(Base):
 
     def __str__(self):
         return f"timstamp: {self.timestamp}, value: {self.value}"
+
+
+class DbSmokeTest(Base):
+    __tablename__ = "smoke_tests"
+
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    request_id: Mapped[str] = mapped_column(String(128), index=True, unique=True, nullable=False)
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
