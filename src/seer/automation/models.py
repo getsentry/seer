@@ -31,7 +31,7 @@ class StacktraceFrame(BaseModel):
         )
     )
 
-    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = "unknown_function"
+    function: Optional[Annotated[str, Examples(specialized.ascii_words)]] = None
     filename: Optional[Annotated[str, Examples(specialized.file_names)]]
     abs_path: Optional[Annotated[str, Examples(specialized.file_paths)]]
     line_no: Optional[int]
@@ -82,8 +82,8 @@ class Stacktrace(BaseModel):
         stacktrace_frames = []
         for frame in frames:
             if isinstance(frame, dict):
-                if "function" not in frame or frame["function"] is None:
-                    frame["function"] = "unknown_function"
+                if "function" not in frame:
+                    frame["function"] = None
                 try:
                     stacktrace_frames.append(StacktraceFrame.model_validate(frame))
                 except ValidationError:
