@@ -101,12 +101,13 @@ def delete_all_runs_before(before: datetime.datetime, batch_size=500):
     deleted_count = 0
     while True:
         with Session() as session:
-            count = (
-                session.query(DbRunState)
+            subquery = (
+                session.query(DbRunState.id)
                 .filter(DbRunState.last_triggered_at < before)
                 .limit(batch_size)
-                .delete()
+                .subquery()
             )
+            count = session.query(DbRunState).filter(DbRunState.id.in_(subquery)).delete()
             session.commit()
             deleted_count += count
             if count == 0:

@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from johen import generate
-from sqlalchemy.sql import operators
 
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -221,50 +220,74 @@ class TestCheckAndMarkRecentAutofixRuns:
 
 
 class TestDeleteOldAutofixRuns:
-    @patch("seer.automation.autofix.tasks.datetime")
-    @patch("seer.automation.autofix.tasks.delete_all_runs_before")
-    @patch("seer.automation.autofix.tasks.logger")
-    def test_delete_old_autofix_runs(self, mock_logger, mock_delete_runs, mock_datetime):
-        # Setup
-        mock_now = datetime.datetime(2023, 1, 1, 12, 0, 0)
-        mock_datetime.datetime.now.return_value = mock_now
-        mock_many_days_ago = mock_now - datetime.timedelta(days=100)
-        mock_datetime.timedelta.return_value = datetime.timedelta(days=100)
+    def test_old_data_is_deleted(self):
+        old_run = DbRunState(
+            last_triggered_at=datetime.datetime.now() - datetime.timedelta(days=100),
+            value="test_value",
+        )
+        with Session() as session:
+            session.add(old_run)
+            session.commit()
 
-        mock_delete_runs.return_value = 2
-
-        # Execute
-        delete_old_autofix_runs()
-
-        # Assert
-        mock_datetime.datetime.now.assert_called_once()
-        mock_datetime.timedelta.assert_called_once_with(days=90)
-        mock_delete_runs.assert_called_once_with(mock_many_days_ago)
-        mock_logger.info.assert_any_call("Deleting old Autofix runs for 90 day time-to-live")
-        mock_logger.info.assert_any_call("Deleted 2 runs")
-        assert mock_delete_runs.call_count == 1
-
-    @patch("seer.automation.autofix.tasks.Session")
-    def test_delete_all_runs_before(self, MockSession):
-        # Setup the mock session
-        mock_session = MockSession.return_value.__enter__.return_value
-        before_date = datetime.datetime(2023, 1, 1)
-        mock_query = mock_session.query.return_value
-        mock_filter = mock_query.filter.return_value
-        mock_filter.delete.return_value = 10  # Assume 10 rows are deleted
-
+        before_date = datetime.datetime.now() - datetime.timedelta(days=90)
         deleted_count = delete_all_runs_before(before_date)
 
-        # Assertions
-        mock_session.query.assert_called_once_with(DbRunState)
+        with Session() as session:
+            remaining_run = session.query(DbRunState).filter(DbRunState.id == old_run.id).first()
+        assert remaining_run is None
+        assert deleted_count == 1
 
-        assert mock_query.filter.called
-        args, kwargs = mock_query.filter.call_args
-        assert len(args), 1
-        assert args[0].left == DbRunState.last_triggered_at
-        assert args[0].right.value == before_date
-        assert args[0].operator == operators.lt
+    def test_data_not_deleted_within_ttl(self):
+        recent_run = DbRunState(
+            last_triggered_at=datetime.datetime.now() - datetime.timedelta(days=80),
+            value="test_value",
+        )
+        with Session() as session:
+            session.add(recent_run)
+            session.commit()
 
-        mock_filter.delete.assert_called_once()
-        mock_session.commit.assert_called_once()
-        assert deleted_count == 10
+        before_date = datetime.datetime.now() - datetime.timedelta(days=90)
+        deleted_count = delete_all_runs_before(before_date)
+
+        with Session() as session:
+            remaining_run = session.query(DbRunState).filter(DbRunState.id == recent_run.id).first()
+        assert remaining_run is not None
+        assert deleted_count == 0
+
+    def test_batch_delete(self):
+        old_runs = [
+            DbRunState(
+                last_triggered_at=datetime.datetime.now() - datetime.timedelta(days=100),
+                value="test_value",
+            )
+            for _ in range(25)
+        ]
+        with Session() as session:
+            session.bulk_save_objects(old_runs)
+            session.commit()
+
+        before_date = datetime.datetime.now() - datetime.timedelta(days=90)
+        deleted_count = delete_all_runs_before(before_date, batch_size=10)
+
+        with Session() as session:
+            remaining_runs = (
+                session.query(DbRunState).filter(DbRunState.last_triggered_at < before_date).count()
+            )
+        assert remaining_runs == 0
+        assert deleted_count == 25
+
+    def test_delete_old_autofix_runs_task(self):
+        old_run = DbRunState(
+            last_triggered_at=datetime.datetime.now() - datetime.timedelta(days=100),
+            value="test_value",
+        )
+        with Session() as session:
+            session.add(old_run)
+            session.commit()
+
+        # Celery task
+        delete_old_autofix_runs()
+
+        with Session() as session:
+            remaining_run = session.query(DbRunState).filter(DbRunState.id == old_run.id).first()
+        assert remaining_run is None
