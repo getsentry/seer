@@ -681,4 +681,3 @@ class TestGetAutofixState:
         assert response.status_code == 200
         data = json.loads(response.get_data(as_text=True))
         assert data == {"group_id": None, "run_id": None, "state": None}
-
