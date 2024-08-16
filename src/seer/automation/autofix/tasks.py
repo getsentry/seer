@@ -4,6 +4,7 @@ import random
 from typing import Literal, cast
 
 import sentry_sdk
+import sqlalchemy.sql as sql
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
@@ -97,7 +98,7 @@ def get_all_autofix_runs_after(after: datetime.datetime):
         return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
 
 
-def delete_all_runs_before(before: datetime.datetime, batch_size=500):
+def delete_all_runs_before(before: datetime.datetime, batch_size=1000):
     deleted_count = 0
     while True:
         with Session() as session:
@@ -107,11 +108,21 @@ def delete_all_runs_before(before: datetime.datetime, batch_size=500):
                 .limit(batch_size)
                 .subquery()
             )
-            count = session.query(DbRunState).filter(DbRunState.id.in_(subquery)).delete()
+            count = (
+                session.query(DbRunState)
+                .filter(sql.exists().where(DbRunState.id == subquery.c.id))
+                .delete()
+            )
             session.commit()
+
             deleted_count += count
             if count == 0:
                 break
+            sentry_sdk.metrics.incr(
+                key="autofix_state_TTL_deletion",
+                value=count,
+            )
+
     return deleted_count
 
 
