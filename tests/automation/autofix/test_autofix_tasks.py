@@ -252,6 +252,7 @@ class TestDeleteOldAutofixRuns:
         with Session() as session:
             remaining_run = session.query(DbRunState).filter(DbRunState.id == recent_run.id).first()
         assert remaining_run is not None
+        assert remaining_run.last_triggered_at > before_date
         assert deleted_count == 0
 
     def test_batch_delete(self):
