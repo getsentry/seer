@@ -21,6 +21,7 @@ from seer.automation.autofix.models import (
     RootCauseStep,
 )
 from seer.automation.models import (
+    BreadcrumbsDetails,
     EventDetails,
     SentryEventData,
     SentryEventEntryDataValue,
@@ -60,6 +61,121 @@ class TestStacktraceHelpers(unittest.TestCase):
         stacktrace = Stacktrace(frames=frames)
         expected_str = " helper in file utils.py in repo my_repo [Line 15] (Not in app)\n    helper()  <-- SUSPECT LINE\n------\n main in file app.py in repo my_repo [Line 10, column 20] (In app)\n    main()  <-- SUSPECT LINE\n------\n"
         self.assertEqual(stacktrace.to_str(), expected_str)
+
+    def test_stacktrace_no_frames(self):
+        stacktrace = Stacktrace(frames=[])
+        expected_str = ""
+        self.assertEqual(stacktrace.to_str(), expected_str)
+
+    def test_stacktrace_frame_without_context(self):
+        frames = [
+            StacktraceFrame(
+                function="main",
+                filename="app.py",
+                abs_path="/path/to/app.py",
+                line_no=10,
+                col_no=20,
+                context=[],
+                repo_name="my_repo",
+                repo_id=1,
+                in_app=True,
+            ),
+        ]
+        stacktrace = Stacktrace(frames=frames)
+        expected_str = (
+            " main in file app.py in repo my_repo [Line 10, column 20] (In app)\n------\n"
+        )
+        self.assertEqual(stacktrace.to_str(), expected_str)
+
+    def test_stacktrace_frame_no_function_no_filename(self):
+        frames = [
+            StacktraceFrame(
+                function=None,
+                filename=None,
+                abs_path=None,
+                line_no=10,
+                col_no=20,
+                context=[(10, "    unknown()")],
+                repo_name=None,
+                repo_id=None,
+                in_app=True,
+            ),
+        ]
+        stacktrace = Stacktrace(frames=frames)
+        expected_str = " Unknown function in unknown file [Line 10, column 20] (In app)\n    unknown()  <-- SUSPECT LINE\n------\n"
+        self.assertEqual(stacktrace.to_str(), expected_str)
+
+    def test_stacktrace_max_frames(self):
+        frames = [
+            StacktraceFrame(
+                function=f"function_{i}",
+                filename=f"file_{i}.py",
+                abs_path=f"/path/to/file_{i}.py",
+                line_no=i * 10,
+                col_no=None,
+                context=[(i * 10, f"    function_{i}()")],
+                repo_name="my_repo",
+                repo_id=1,
+                in_app=(i % 2 == 0),
+            )
+            for i in range(20)
+        ]
+        stacktrace = Stacktrace(frames=frames)
+        result_str = stacktrace.to_str(max_frames=5)
+        self.assertEqual(result_str.count("------"), 5)
+
+    def test_event_no_entries(self):
+        event = SentryEventData(title="title", entries=[])
+        event_details = EventDetails.from_event(event)
+        self.assertEqual(len(event_details.exceptions), 0)
+        self.assertEqual(len(event_details.threads), 0)
+        self.assertEqual(len(event_details.breadcrumbs), 0)
+
+    def test_event_multiple_breadcrumbs(self):
+        breadcrumbs = [
+            BreadcrumbsDetails(
+                type="log",
+                category="category",
+                level="info",
+                message=f"Message {i}",
+                data={},
+                title="title",
+            )
+            for i in range(15)
+        ]
+        event = SentryEventData(
+            title="title",
+            entries=[
+                {
+                    "type": "breadcrumbs",
+                    "data": {"values": [breadcrumb.model_dump() for breadcrumb in breadcrumbs]},
+                }
+            ],
+        )
+        event_details = EventDetails.from_event(event)
+        formatted_breadcrumbs = event_details.format_breadcrumbs()
+
+        # check that only the last 10 breadcrumbs are present in the formatted output
+        for i in range(5, 15):
+            self.assertIn(f"Message {i}\n", formatted_breadcrumbs)
+        for i in range(5):
+            self.assertNotIn(f"Message {i}\n", formatted_breadcrumbs)
+
+    def test_event_invalid_thread_data(self):
+        invalid_thread_data = {
+            "id": 1,
+            "name": "Invalid Thread",
+            "state": "invalid_state",
+            "current": True,
+            "crashed": False,
+            "main": False,
+            "stacktrace": None,
+        }
+        event = SentryEventData(
+            title="title", entries=[{"type": "threads", "data": {"values": [invalid_thread_data]}}]
+        )
+        event_details = EventDetails.from_event(event)
+        self.assertEqual(len(event_details.threads), 0)
 
     def test_stacktrace_to_str_cutoff(self):
         frames = [
@@ -576,4 +692,4 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
             vars_str = json.dumps(frame.vars, indent=2)
             assert vars_str in stack_str
         else:
-            assert "---\nvariables" not in stack_str
+            assert "---\nVariable" not in stack_str
