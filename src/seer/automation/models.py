@@ -333,7 +333,7 @@ class EventDetails(BaseModel):
                     breadcrumbs.append(crumb_details)
 
         return cls(
-            title=error_event.get("title") if error_event.get("title") else "Error",
+            title=error_event.get("title"),
             exceptions=exceptions,
             threads=threads,
             breadcrumbs=breadcrumbs,
