@@ -4,6 +4,7 @@ import random
 from typing import Literal, cast
 
 import sentry_sdk
+import sqlalchemy.sql as sql
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
@@ -97,6 +98,34 @@ def get_all_autofix_runs_after(after: datetime.datetime):
         return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
 
 
+def delete_all_runs_before(before: datetime.datetime, batch_size=1000):
+    deleted_count = 0
+    while True:
+        with Session() as session:
+            subquery = (
+                session.query(DbRunState.id)
+                .filter(DbRunState.last_triggered_at < before)
+                .limit(batch_size)
+                .subquery()
+            )
+            count = (
+                session.query(DbRunState)
+                .filter(sql.exists().where(DbRunState.id == subquery.c.id))
+                .delete()
+            )
+            session.commit()
+
+            deleted_count += count
+            if count == 0:
+                break
+            sentry_sdk.metrics.incr(
+                key="autofix_state_TTL_deletion",
+                value=count,
+            )
+
+    return deleted_count
+
+
 @celery_app.task(time_limit=15)
 def check_and_mark_recent_autofix_runs():
     logger.info("Checking and marking recent autofix runs")
@@ -106,6 +135,15 @@ def check_and_mark_recent_autofix_runs():
     logger.info(f"Got {len(runs)} runs")
     for run in runs:
         check_and_mark_if_timed_out(run)
+
+
+@celery_app.task(time_limit=30)
+def delete_old_autofix_runs():
+    logger.info("Deleting old Autofix runs for 90 day time-to-live")
+    before = datetime.datetime.now() - datetime.timedelta(days=90)  # over 90 days old
+    deleted_count = delete_all_runs_before(before)
+    print(deleted_count)
+    logger.info(f"Deleted {deleted_count} runs")
 
 
 def check_and_mark_if_timed_out(state: ContinuationState):

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import configparser
 
-from devenv.lib import colima, limactl, config, proc, venv
 from devenv import constants
+from devenv.lib import colima, config, limactl, proc, venv
 
 
 def main(context: dict[str, str]) -> int:
