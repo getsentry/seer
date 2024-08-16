@@ -197,7 +197,8 @@ class Stacktrace(BaseModel):
             text = re.sub(pattern, replacement, text)
         return text
 
-    def _trim_frames(frames: list[StacktraceFrame], frame_allowance=1):  # TODO make 16
+    @staticmethod
+    def _trim_frames(frames: list[StacktraceFrame], frame_allowance=16):
         frames_len = len(frames)
         if frames_len <= frame_allowance:
             return frames
@@ -332,7 +333,7 @@ class EventDetails(BaseModel):
                     breadcrumbs.append(crumb_details)
 
         return cls(
-            title=error_event.get("title"),
+            title=error_event.get("title") if error_event.get("title") else "Error",
             exceptions=exceptions,
             threads=threads,
             breadcrumbs=breadcrumbs,
