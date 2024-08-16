@@ -110,12 +110,13 @@ class Stacktrace(BaseModel):
                 else "[Line: Unknown]"
             )
 
+            function = frame.function if frame.function else "Unknown function"
             if frame.filename:
-                stack_str += f" {frame.function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+                stack_str += f" {function} in file {frame.filename}{repo_str} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             elif frame.package:
-                stack_str += f" {frame.function} in package {frame.package} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+                stack_str += f" {function} in package {frame.package} {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
             else:
-                stack_str += f" {frame.function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
+                stack_str += f" {function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
 
             for ctx in frame.context:
                 is_suspect_line = ctx[0] == frame.line_no
