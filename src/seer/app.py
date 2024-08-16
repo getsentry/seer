@@ -55,8 +55,12 @@ from seer.grouping.grouping import (
 )
 from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
 from seer.json_api import json_api
+from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
+from seer.smoke_test import check_smoke_test
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
+
+logger = logging.getLogger(__name__)
 
 app = flask.current_app
 blueprint = Blueprint("app", __name__)
@@ -229,19 +233,26 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
 def health_check():
     from seer.inference_models import models_loading_status
 
-    if models_loading_status() == "failed":
+    if models_loading_status() == LoadingResult.FAILED:
         return "Models failed to load", 500
     return "", 200
 
 
 @blueprint.route("/health/ready", methods=["GET"])
-def ready_check():
+@inject
+def ready_check(app_config: AppConfig = injected):
     from seer.inference_models import models_loading_status
 
     status = models_loading_status()
-    if status == "failed":
+    logger.info(f"Model loading status: {status}")
+    if app_config.SMOKE_CHECK:
+        smoke_status = check_smoke_test()
+        logger.info(f"Celery smoke status: {smoke_status}")
+        status = min(status, smoke_status)
+
+    if status == LoadingResult.FAILED:
         return "", 500
-    if status == "done":
+    if status == LoadingResult.DONE:
         return "", 200
     return "", 503
 

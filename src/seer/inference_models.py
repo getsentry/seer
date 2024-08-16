@@ -2,7 +2,7 @@ import contextlib
 import functools
 import os
 import threading
-from typing import Any, Callable, Literal, TypeVar
+from typing import Any, Callable, TypeVar
 
 import sentry_sdk
 
@@ -10,6 +10,7 @@ from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.grouping.grouping import GroupingLookup
+from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityInference
 
 root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
@@ -55,11 +56,9 @@ def anomaly_detection() -> AnomalyDetection:
     return AnomalyDetection()
 
 
-LoadingResult = Literal["pending", "loading", "done", "failed"]
-
 _loading_lock: threading.RLock = threading.RLock()
 _loading_thread: threading.Thread | None = None
-_loading_result: LoadingResult = "pending"
+_loading_result: LoadingResult = LoadingResult.PENDING
 
 
 def models_loading_status() -> LoadingResult:
@@ -71,11 +70,11 @@ def start_loading() -> threading.Thread:
     global _loading_result
 
     with _loading_lock:
-        if _loading_result != "pending":
+        if _loading_result != LoadingResult.PENDING:
             raise RuntimeError(
                 "start_loading invoked, but loading already started.  call reset_loading_state"
             )
-        _loading_result = "loading"
+        _loading_result = LoadingResult.LOADING
 
     def load():
         global _loading_result
@@ -83,18 +82,18 @@ def start_loading() -> threading.Thread:
             for item in _deferred:
                 item()
             with _loading_lock:
-                _loading_result = "done"
+                _loading_result = LoadingResult.DONE
         except Exception:
             sentry_sdk.capture_exception()
             with _loading_lock:
-                _loading_result = "failed"
+                _loading_result = LoadingResult.FAILED
 
     thread = threading.Thread(target=load)
     thread.start()
     return thread
 
 
-def reset_loading_state(state: LoadingResult = "pending"):
+def reset_loading_state(state: LoadingResult = LoadingResult.PENDING):
     global _loading_thread, _deferred, _loading_result
 
     with _loading_lock:

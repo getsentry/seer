@@ -1,5 +1,4 @@
 import os
-from typing import Any
 
 import johen
 import pytest
@@ -12,7 +11,7 @@ from seer.app import module
 from seer.bootup import bootup, stub_module
 from seer.configuration import configuration_test_module
 from seer.db import Session, db
-from seer.dependency_injection import Module, inject, resolve
+from seer.dependency_injection import Module, resolve
 from seer.inference_models import reset_loading_state
 
 
@@ -32,6 +31,8 @@ def setup_app(test_module: Module):
         reset_loading_state()
         bootup(start_model_loading=False, integrations=[])
         app = resolve(Flask)
+        app.testing = True
+        app.config["PROPAGATE_EXCEPTIONS"] = True
 
         # Clean up and recreate the database using the `create_all` rather than invoking migrations over and over
         # is much more efficient in practice.
@@ -55,11 +56,10 @@ pytest_plugins = (
 
 
 @pytest.fixture(scope="session")
-@inject
 # The pytest celery plugin depends on putting the celery config into a pytest fixture, so we inject it
 # and return it to place it in fixture namespace.
-def celery_config(setup_app: Any, celery_config: CeleryConfig):
-    return celery_config
+def celery_config():
+    return resolve(CeleryConfig)
 
 
 @pytest.fixture(autouse=True)
