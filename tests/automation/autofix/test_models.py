@@ -114,6 +114,30 @@ class TestStacktraceHelpers(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(stacktrace._scrub_pii(text), expected)
 
+    def test_trim_frames(self):
+        frames = [
+            StacktraceFrame(
+                in_app=True, filename="test", abs_path="test", line_no=1, col_no=1, context=[]
+            )
+            for _ in range(10)
+        ] + [
+            StacktraceFrame(
+                in_app=False, filename="test", abs_path="test", line_no=1, col_no=1, context=[]
+            )
+            for _ in range(10)
+        ]
+        result = Stacktrace._trim_frames(frames, frame_allowance=16)
+
+        # assert the result has the correct length
+        self.assertEqual(len(result), 16)
+        # assert all app frames are kept
+        self.assertEqual(len([f for f in result if f.in_app]), 10)
+        # assert the remaining frames are system frames
+        self.assertEqual(len([f for f in result if not f.in_app]), 6)
+        # assert the first and last system frames are kept
+        self.assertFalse(result[10].in_app)
+        self.assertFalse(result[-1].in_app)
+
 
 class TestRepoDefinition(unittest.TestCase):
     def test_repo_definition_creation(self):
