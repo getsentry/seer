@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from johen import generate
+from sqlalchemy.sql import operators
 
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -14,6 +15,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
+    delete_all_runs_before,
     delete_old_autofix_runs,
     get_autofix_state,
     get_autofix_state_from_pr_id,
@@ -241,3 +243,28 @@ class TestDeleteOldAutofixRuns:
         mock_logger.info.assert_any_call("Deleting old Autofix runs for 90 day time-to-live")
         mock_logger.info.assert_any_call("Deleted 2 runs")
         assert mock_delete_runs.call_count == 1
+
+    @patch("seer.automation.autofix.tasks.Session")
+    def test_delete_all_runs_before(self, MockSession):
+        # Setup the mock session
+        mock_session = MockSession.return_value.__enter__.return_value
+        before_date = datetime.datetime(2023, 1, 1)
+        mock_query = mock_session.query.return_value
+        mock_filter = mock_query.filter.return_value
+        mock_filter.delete.return_value = 10  # Assume 10 rows are deleted
+
+        deleted_count = delete_all_runs_before(before_date)
+
+        # Assertions
+        mock_session.query.assert_called_once_with(DbRunState)
+
+        assert mock_query.filter.called
+        args, kwargs = mock_query.filter.call_args
+        assert len(args), 1
+        assert args[0].left == DbRunState.last_triggered_at
+        assert args[0].right.value == before_date
+        assert args[0].operator == operators.lt
+
+        mock_filter.delete.assert_called_once()
+        mock_session.commit.assert_called_once()
+        assert deleted_count == 10
