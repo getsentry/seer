@@ -26,6 +26,25 @@ def configure_environment():
     os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
 
 
+@pytest.fixture
+def alembic_config():
+    """Override this fixture to configure the exact alembic context setup required."""
+    return {"file": "migrations/alembic.ini"}
+
+
+@pytest.fixture
+def alembic_runner(alembic_config, alembic_engine):
+    """Produce an alembic migration context in which to execute alembic tests."""
+    import pytest_alembic
+    from app import create_app  # <--- this line and the next are dependent on your app structure
+
+    app = create_app()
+
+    with app.app_context():
+        with pytest_alembic.runner(config=alembic_config, engine=alembic_engine) as runner:
+            yield runner
+
+
 @pytest.fixture(autouse=True)
 def setup_app(test_module: Module):
     with module, configuration_test_module, test_module:
