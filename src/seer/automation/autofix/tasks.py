@@ -97,13 +97,21 @@ def get_all_autofix_runs_after(after: datetime.datetime):
         return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
 
 
-def delete_all_runs_before(before: datetime.datetime):
-    with Session() as session:
-        deleted_count = (
-            session.query(DbRunState).filter(DbRunState.last_triggered_at < before).delete()
-        )
-        session.commit()
-        return deleted_count
+def delete_all_runs_before(before: datetime.datetime, batch_size=500):
+    deleted_count = 0
+    while True:
+        with Session() as session:
+            count = (
+                session.query(DbRunState)
+                .filter(DbRunState.last_triggered_at < before)
+                .limit(batch_size)
+                .delete()
+            )
+            session.commit()
+            deleted_count += count
+            if count == 0:
+                break
+    return deleted_count
 
 
 @celery_app.task(time_limit=15)
