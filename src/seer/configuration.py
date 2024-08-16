@@ -52,7 +52,10 @@ class AppConfig(BaseModel):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""
 
+    API_PUBLIC_KEY: str = ""
     JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
+    ENFORCE_API_AUTH: ParseBool = False  # Used for both API Tokens and RPC Secrets
+
     TORCH_NUM_THREADS: ParseInt = 0
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
@@ -66,6 +69,11 @@ class AppConfig(BaseModel):
         return not self.NO_SENTRY_INTEGRATION
 
     def do_validation(self):
+        if self.ENFORCE_API_AUTH:
+            assert (
+                self.JSON_API_SHARED_SECRETS or self.API_PUBLIC_KEY
+            ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY required if ENFORCE_API_AUTH is true!"
+
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"

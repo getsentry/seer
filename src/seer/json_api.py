@@ -2,19 +2,23 @@ import functools
 import hashlib
 import hmac
 import inspect
-import os
 from typing import Any, Callable, Type, TypeVar, get_type_hints
 
+import jwt
 import sentry_sdk
 from flask import Blueprint, request
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, Unauthorized
 
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
+
 _F = TypeVar("_F", bound=Callable[..., Any])
 
 
 def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
-    def decorator(implementation: _F) -> _F:
+    @inject
+    def decorator(implementation: _F, config: AppConfig = injected) -> _F:
         spec = inspect.getfullargspec(implementation)
         annotations = get_type_hints(implementation)
         try:
@@ -37,6 +41,28 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
                     raise Unauthorized("Rpcsignature did not match for given url and data")
+            elif auth_header.startswith("Bearer "):
+                token = auth_header.split()[1]
+                try:
+                    try:
+                        # Verify the JWT token using PyJWT
+                        jwt.decode(token, config.API_PUBLIC_KEY, algorithms=["RS256"])
+
+                        # Optionally, you can add additional checks here
+                        # For example, checking the 'exp' claim for token expiration
+                        # or verifying specific claims in the token payload
+
+                        # If the token is successfully decoded and verified,
+                        # the function will continue execution
+                    except jwt.ExpiredSignatureError:
+                        raise Unauthorized("Token has expired")
+                    except jwt.InvalidTokenError:
+                        raise Unauthorized("Invalid token")
+                except Exception as e:
+                    sentry_sdk.capture_exception(e)
+                    raise Unauthorized("Invalid Bearer token")
+            elif config.ENFORCE_API_AUTH:
+                raise Unauthorized("Authorization header is missing or invalid")
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
@@ -61,8 +87,9 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     return decorator
 
 
-def get_json_api_shared_secrets() -> list[str]:
-    result = os.environ.get("JSON_API_SHARED_SECRETS", "").split()
+@inject
+def get_json_api_shared_secrets(config: AppConfig = injected) -> list[str]:
+    result = config.JSON_API_SHARED_SECRETS
     # TODO: Add this back in after we confirm with safer behavior.
     # if not result:
     #     raise ValueError(
