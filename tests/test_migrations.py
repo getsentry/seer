@@ -1,27 +1,10 @@
 from pytest_alembic import MigrationContext
-from sqlalchemy import insert, text
+from sqlalchemy import insert
 
 from seer.db import DbRunState, Session
 
 
 def test_run_state_migration(alembic_runner: MigrationContext):
-    def f():
-        with alembic_runner.connection_executor.connection.connect() as c:
-            return c.execute(
-                text(
-                    """
-            SELECT
-        table_schema || '.' || table_name
-    FROM
-        information_schema.tables
-    WHERE
-        table_type = 'BASE TABLE'
-    AND
-        table_schema NOT IN ('pg_catalog', 'information_schema');
-            """
-                )
-            ).all()
-
     alembic_runner.migrate_up_before("9b8704bd8c4a")
 
     with Session() as session:
