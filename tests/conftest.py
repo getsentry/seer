@@ -4,6 +4,7 @@ import johen
 import pytest
 from flask import Flask
 from johen.generators import pydantic, sqlalchemy
+from pytest_alembic import Config
 from sqlalchemy import text
 
 from celery_app.config import CeleryConfig
@@ -27,20 +28,24 @@ def configure_environment():
 
 @pytest.fixture
 def alembic_config():
-    """Override this fixture to configure the exact alembic context setup required."""
-    return {"file": "migrations/alembic.ini"}
+    return Config.from_raw_config({"file": "../src/migrations/alembic.ini"})
 
 
 @pytest.fixture
-def alembic_runner(alembic_config, alembic_engine):
-    """Produce an alembic migration context in which to execute alembic tests."""
+def alembic_runner(alembic_config: Config, setup_app):
     import pytest_alembic
-    from app import create_app  # <--- this line and the next are dependent on your app structure
 
-    app = create_app()
+    app = resolve(Flask)
 
     with app.app_context():
-        with pytest_alembic.runner(config=alembic_config, engine=alembic_engine) as runner:
+        db.metadata.drop_all(bind=db.engine)
+        with db.engine.connect() as c:
+            c.execute(text("""DROP SCHEMA public CASCADE"""))
+            c.execute(text("""CREATE SCHEMA public;"""))
+            c.commit()
+
+        with pytest_alembic.runner(config=alembic_config, engine=db.engine) as runner:
+            runner.set_revision("base")
             yield runner
 
 

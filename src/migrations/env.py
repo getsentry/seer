@@ -93,7 +93,9 @@ def run_migrations_online():
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
 
-    connectable = get_engine()
+    connectable = context.config.attributes.get("connection", None)
+    if connectable is None:
+        connectable = get_engine()
 
     with connectable.connect() as connection:
         context.configure(
