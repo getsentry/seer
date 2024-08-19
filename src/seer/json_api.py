@@ -13,6 +13,7 @@ from google.cloud import secretmanager
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, Unauthorized
 
+from seer.bootup import module, stub_module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
@@ -29,12 +30,41 @@ def access_secret(project_id: str, secret_id: str, version_id: str = "latest"):
 def get_public_key_from_secret(project_id: str, secret_id: str, version_id: str = "latest"):
     pem_data = access_secret(project_id, secret_id, version_id)
     public_key = serialization.load_pem_public_key(pem_data.encode(), backend=default_backend())
-    return public_key
+    public_key_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    return public_key_bytes
+
+
+class PublicKeyBytes(BaseModel):
+    bytes: bytes | None
+
+
+@module.provider
+def provide_public_key(config: AppConfig = injected) -> PublicKeyBytes:  # type: ignore
+    return PublicKeyBytes(
+        bytes=(
+            get_public_key_from_secret(
+                config.GOOGLE_CLOUD_PROJECT_ID, config.API_PUBLIC_KEY_SECRET_ID
+            )
+            if config.GOOGLE_CLOUD_PROJECT_ID and config.API_PUBLIC_KEY_SECRET_ID
+            else None
+        )
+    )
+
+
+@stub_module.provider
+def provide_public_key_stub() -> PublicKeyBytes:  # type: ignore
+    return PublicKeyBytes(bytes=None)
 
 
 def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     @inject
-    def decorator(implementation: _F, config: AppConfig = injected) -> _F:
+    def decorator(
+        implementation: _F, config: AppConfig = injected, public_key: PublicKeyBytes = injected
+    ) -> _F:
         spec = inspect.getfullargspec(implementation)
         annotations = get_type_hints(implementation)
         try:
@@ -61,15 +91,10 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                 token = auth_header.split()[1]
                 try:
                     try:
+                        if public_key.bytes is None:
+                            raise Unauthorized("Public key is not available")
                         # Verify the JWT token using PyJWT
-                        public_key = get_public_key_from_secret(
-                            config.GOOGLE_CLOUD_PROJECT_ID, config.API_PUBLIC_KEY_SECRET_ID
-                        )
-                        public_key_bytes = public_key.public_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                        )
-                        jwt.decode(token, public_key_bytes, algorithms=["RS256"])
+                        jwt.decode(token, public_key.bytes, algorithms=["RS256"])
 
                         # Optionally, you can add additional checks here
                         # For example, checking the 'exp' claim for token expiration

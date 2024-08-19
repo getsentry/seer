@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
-from seer.json_api import json_api
+from seer.json_api import PublicKeyBytes, json_api
 
 
 class DummyRequest(BaseModel):
@@ -33,6 +33,9 @@ def test_json_api_decorator():
         return DummyResponse(blah="do it")
 
     app.register_blueprint(blueprint)
+
+    app_config = resolve(AppConfig)
+    app_config.ENFORCE_API_AUTH = False
 
     response = test_client.post("/v0/some/url", json={"thing": "thing", "b": 12})
     assert response.status_code == 200
@@ -84,7 +87,9 @@ def test_json_api_bearer_token_auth():
 
     app_config = resolve(AppConfig)
     app_config.ENFORCE_API_AUTH = True
-    app_config.API_PUBLIC_KEY = "mock_public_key"
+
+    pk = resolve(PublicKeyBytes)
+    pk.bytes = b"mock_public_key"
 
     with patch("seer.json_api.jwt.decode") as mock_jwt_decode:
         # Test valid token
@@ -94,7 +99,7 @@ def test_json_api_bearer_token_auth():
         )
         assert response.status_code == 200
         mock_jwt_decode.assert_called_once_with(
-            "valid_token", "mock_public_key", algorithms=["RS256"]
+            "valid_token", b"mock_public_key", algorithms=["RS256"]
         )
 
         # Test invalid token
