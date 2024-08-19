@@ -6,7 +6,10 @@ from typing import Any, Callable, Type, TypeVar, get_type_hints
 
 import jwt
 import sentry_sdk
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from flask import Blueprint, request
+from google.cloud import secretmanager
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, Unauthorized
 
@@ -14,6 +17,19 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def access_secret(project_id: str, secret_id: str, version_id: str = "latest"):
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode("UTF-8")
+
+
+def get_public_key_from_secret(project_id: str, secret_id: str, version_id: str = "latest"):
+    pem_data = access_secret(project_id, secret_id, version_id)
+    public_key = serialization.load_pem_public_key(pem_data.encode(), backend=default_backend())
+    return public_key
 
 
 def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
@@ -46,7 +62,14 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                 try:
                     try:
                         # Verify the JWT token using PyJWT
-                        jwt.decode(token, config.API_PUBLIC_KEY, algorithms=["RS256"])
+                        public_key = get_public_key_from_secret(
+                            config.GOOGLE_CLOUD_PROJECT_ID, config.API_PUBLIC_KEY_SECRET_ID
+                        )
+                        public_key_bytes = public_key.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        )
+                        jwt.decode(token, public_key_bytes, algorithms=["RS256"])
 
                         # Optionally, you can add additional checks here
                         # For example, checking the 'exp' claim for token expiration
@@ -56,8 +79,11 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                         # the function will continue execution
                     except jwt.ExpiredSignatureError:
                         raise Unauthorized("Token has expired")
+                    except jwt.InvalidSignatureError:
+                        raise Unauthorized("Invalid signature")
                     except jwt.InvalidTokenError:
                         raise Unauthorized("Invalid token")
+
                 except Exception as e:
                     sentry_sdk.capture_exception(e)
                     raise Unauthorized("Invalid Bearer token")

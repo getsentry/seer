@@ -52,9 +52,11 @@ class AppConfig(BaseModel):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""
 
-    API_PUBLIC_KEY: str = ""
+    API_PUBLIC_KEY_SECRET_ID: str = ""
     JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
     ENFORCE_API_AUTH: ParseBool = False  # Used for both API Tokens and RPC Secrets
+
+    GOOGLE_CLOUD_PROJECT_ID: str = ""
 
     TORCH_NUM_THREADS: ParseInt = 0
     NO_SENTRY_INTEGRATION: ParseBool = False
@@ -71,8 +73,8 @@ class AppConfig(BaseModel):
     def do_validation(self):
         if self.ENFORCE_API_AUTH:
             assert (
-                self.JSON_API_SHARED_SECRETS or self.API_PUBLIC_KEY
-            ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY required if ENFORCE_API_AUTH is true!"
+                self.JSON_API_SHARED_SECRETS or self.API_PUBLIC_KEY_SECRET_ID
+            ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY_SECRET_ID required if ENFORCE_API_AUTH is true!"
 
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
