@@ -193,7 +193,8 @@ class BaseTools:
         repo_client = self.context.get_repo_client(repo_name=repo_name)
         all_paths = repo_client.get_index_file_set()
         found = [path for path in all_paths if os.path.basename(path) == filename]
-
+        if len(found) == 0:
+            return f"no file with name {filename} found in repository"
         return ",".join(found)
 
     def get_tools(self):
