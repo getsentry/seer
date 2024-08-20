@@ -4,7 +4,6 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, ClaudeAgent
-from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
@@ -52,6 +51,9 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         coding_output = PlanStepsPromptXml.from_xml(
             f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
         ).to_model()
+
+        if not coding_output.tasks:
+            raise ValueError("No tasks found in coding output")
 
         file_changes: list[FileChange] = []
         for task in coding_output.tasks:

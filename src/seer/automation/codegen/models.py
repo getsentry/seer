@@ -7,19 +7,6 @@ from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, RepoDefinition
 
 
-class CodegenUnitTestsRequest(BaseModel):
-    repo: RepoDefinition
-    pr_id: int  # The PR number
-
-
-class CodegenUnitTestsResponse(BaseModel):
-    run_id: int
-
-
-class CodegenUnitTestsStateRequest(BaseModel):
-    run_id: int
-
-
 class CodegenStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -37,6 +24,15 @@ class CodegenState(BaseModel):
     signals: list[str] = Field(default_factory=list)
 
 
+class CodeUnitTestOutput(BaseComponentOutput):
+    diffs: list[FileChange]
+
+
+class CodegenUnitTestsRequest(BaseModel):
+    repo: RepoDefinition
+    pr_id: int  # The PR number
+
+
 class CodegenContinuation(CodegenState):
     request: CodegenUnitTestsRequest
 
@@ -51,5 +47,18 @@ class CodeUnitTestRequest(BaseComponentRequest):
     diff: str
 
 
-class CodeUnitTestOutput(BaseComponentOutput):
-    diffs: list[FileChange]
+class CodegenUnitTestsResponse(BaseModel):
+    run_id: int
+
+
+class CodegenUnitTestsStateRequest(BaseModel):
+    run_id: int
+
+
+class CodegenUnitTestsStateResponse(BaseModel):
+    run_id: int
+    status: CodegenStatus
+    changes: list[FileChange]
+    triggered_at: datetime.datetime
+    updated_at: datetime.datetime
+    completed_at: datetime.datetime | None = None

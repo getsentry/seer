@@ -1,19 +1,14 @@
-import datetime
-
-from pydantic import BaseModel
-
 from celery_app.config import CeleryQueues
-from seer.automation.agent.client import GptClient
 from seer.automation.codegen.models import (
     CodegenContinuation,
     CodegenStatus,
     CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
+    CodegenUnitTestsStateRequest,
 )
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.state import DbState
-from seer.db import DbRunState, Session
 
 
 def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[CodegenContinuation]:
@@ -48,3 +43,8 @@ def codegen_unittest(request: CodegenUnitTestsRequest):
     UnittestStep.get_signature(unittest_request, queue=CeleryQueues.DEFAULT).apply_async()
 
     return CodegenUnitTestsResponse(run_id=cur_state.run_id)
+
+
+def get_unittest_state(request: CodegenUnitTestsStateRequest):
+    state = CodegenContinuationState.from_id(request.run_id, model=CodegenContinuation)
+    return state.get()

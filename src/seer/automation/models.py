@@ -489,6 +489,7 @@ class FileChange(BaseModel):
     reference_snippet: Optional[str] = None
     new_snippet: Optional[str] = None
     description: Optional[str] = None
+    commit_message: Optional[str] = None
 
     def apply(self, file_contents: str | None) -> str | None:
         if self.change_type == "create":

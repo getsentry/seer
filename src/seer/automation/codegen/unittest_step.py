@@ -4,12 +4,10 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
-from celery_app.config import CeleryQueues
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
-from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodeUnitTestRequest
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.codegen.unit_test_coding_component import UnitTestCodingComponent
@@ -51,6 +49,7 @@ class UnittestStep(CodegenStep):
     @ai_track(description="Codegen - Unittest Step")
     def _invoke(self, **kwargs):
         self.logger.info("Executing Codegen - Unittest Step")
+        self.context.event_manager.mark_running()
 
         repo_client = self.context.get_repo_client()
         pr = repo_client.repo.get_pull(self.request.pr_id)
@@ -68,14 +67,6 @@ class UnittestStep(CodegenStep):
 
         if unittest_output:
             for file_change in unittest_output.diffs:
-                self.append_file_change(file_change)
+                self.context.event_manager.append_file_change(file_change)
 
-        self.send_unittest_result(unittest_output)
-
-        # Add the next step in the pipeline here if needed
-        # self.next(
-        #     NextStep.get_signature(
-        #         NextStepRequest(**self.step_request_fields)
-        #     ),
-        #     queue=CeleryQueues.DEFAULT,
-        # )
+        self.context.event_manager.mark_completed()

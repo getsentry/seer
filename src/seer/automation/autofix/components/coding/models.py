@@ -9,7 +9,7 @@ from seer.automation.autofix.components.root_cause.models import (
     RootCauseRelevantContext,
 )
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import EventDetails, FileChange, PromptXmlModel
+from seer.automation.models import EventDetails, PromptXmlModel
 
 
 class CodingRequest(BaseComponentRequest):
@@ -142,11 +142,3 @@ class FuzzyDiffChunk(BaseModel):
     header: str
     original_chunk: str
     new_chunk: str
-
-
-class CodeUnitTestRequest(BaseComponentRequest):
-    diff: str
-
-
-class CodeUnitTestOutput(BaseComponentOutput):
-    diffs: list[FileChange]

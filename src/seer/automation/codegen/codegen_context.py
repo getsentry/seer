@@ -1,6 +1,7 @@
 import logging
 
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codegen.codegen_event_manager import CodegenEventManager
 from seer.automation.codegen.models import CodegenContinuation
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
@@ -16,6 +17,7 @@ RepoIdentifiers = tuple[RepoExternalId, RepoInternalId]
 
 class CodegenContext(PipelineContext):
     state: CodegenContinuationState
+    event_manager: CodegenEventManager
     repo: RepoDefinition
 
     def __init__(
@@ -26,6 +28,7 @@ class CodegenContext(PipelineContext):
 
         self.repo = request.repo
         self.state = state
+        self.event_manager = CodegenEventManager(state)
 
         logger.info(f"CodegenContext initialized with run_id {self.run_id}")
 

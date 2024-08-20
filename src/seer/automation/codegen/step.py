@@ -2,10 +2,8 @@ from typing import Any
 
 import sentry_sdk
 
-from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodegenStatus
-from seer.automation.models import FileChange
 from seer.automation.pipeline import PipelineContext, PipelineStep, PipelineStepTaskRequest
 from seer.automation.utils import make_done_signal
 
@@ -62,12 +60,3 @@ class CodegenStep(PipelineStep):
             current_state.status = CodegenStatus.ERRORED
             sentry_sdk.set_context("codegen_state", current_state.dict())
             sentry_sdk.capture_exception(exception)
-
-    def append_file_change(self, file_change: FileChange):
-        with self.context.state.update() as current_state:
-            current_state.file_changes.append(file_change)
-
-    def send_unittest_result(self, unittest_output: Any):
-        # Implement the logic to send unittest result
-        # This might involve updating the state or sending a message
-        pass
