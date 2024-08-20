@@ -59,7 +59,7 @@ class CodingUnitTestPrompts:
             {diff_str}
 
             # Your goal:
-            Write unit tests for the lines that have been identified as lacking test coverage. You should first explain in clear and definite terms what you are adding. Then add the unit test so that the lines that initially missed test coverage have it.
+            Write unit tests that cover the changes in the diff. You should first explain in clear and definite terms what you are adding. Then add the unit test such that lines modified, added or deleted are covered.
 
             When ready with your final answer, detail the explanation of the test wrapped with a <explanation></explanation> block. Your output must follow the format properly according to the following guidelines:
 
