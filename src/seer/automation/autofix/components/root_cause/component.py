@@ -3,7 +3,7 @@ import logging
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, GptAgent
+from seer.automation.agent.agent import AgentConfig, ClaudeAgent
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -28,7 +28,12 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     def invoke(self, request: RootCauseAnalysisRequest) -> RootCauseAnalysisOutput | None:
         tools = BaseTools(self.context)
 
-        agent = GptAgent(
+        # agent = GptAgent(
+        #     tools=tools.get_tools(),
+        #     config=AgentConfig(
+        #         system_prompt=RootCauseAnalysisPrompts.format_system_msg(), max_iterations=24
+        #     ),
+        agent = ClaudeAgent(
             tools=tools.get_tools(),
             config=AgentConfig(
                 system_prompt=RootCauseAnalysisPrompts.format_system_msg(), max_iterations=24

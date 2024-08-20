@@ -43,7 +43,7 @@ class PublicKeyBytes(BaseModel):
 
 
 @module.provider
-def provide_public_key(config: AppConfig = injected) -> PublicKeyBytes:  # type: ignore
+def provide_public_key(config: AppConfig = injected) -> PublicKeyBytes:
     return PublicKeyBytes(
         bytes=(
             get_public_key_from_secret(
@@ -56,7 +56,7 @@ def provide_public_key(config: AppConfig = injected) -> PublicKeyBytes:  # type:
 
 
 @stub_module.provider
-def provide_public_key_stub() -> PublicKeyBytes:  # type: ignore
+def provide_public_key_stub() -> PublicKeyBytes:
     return PublicKeyBytes(bytes=None)
 
 
