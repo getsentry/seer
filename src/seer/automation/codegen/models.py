@@ -1,10 +1,44 @@
-from pydantic import BaseModel
+import datetime
+from enum import Enum
+
+from pydantic import BaseModel, Field
+
+from seer.automation.models import RepoDefinition
 
 
 class CodegenUnitTestsRequest(BaseModel):
-    repo_external_id: str  # The Github repo id
+    repo: RepoDefinition
     pr_id: int  # The PR number
 
 
 class CodegenUnitTestsResponse(BaseModel):
     run_id: int
+
+
+class CodegenUnitTestsStateRequest(BaseModel):
+    run_id: int
+
+
+class CodegenStatus(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    ERRORED = "errored"
+
+
+class CodegenState(BaseModel):
+    run_id: int = -1
+    status: CodegenStatus = CodegenStatus.PENDING
+    triggered_at: datetime.datetime
+    completed_at: datetime.datetime | None = None
+    signals: list[str] = Field(default_factory=list)
+
+
+class CodegenContinuation(CodegenState):
+    request: CodegenUnitTestsRequest
+
+    def mark_triggered(self):
+        self.last_triggered_at = datetime.datetime.now()
+
+    def mark_updated(self):
+        self.updated_at = datetime.datetime.now()

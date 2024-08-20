@@ -185,6 +185,7 @@ class DbRunState(Base):
     __tablename__ = "run_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    type: Mapped[str] = mapped_column(String, nullable=False, default="autofix")
     value: Mapped[dict] = mapped_column(JSON, nullable=False)
     last_triggered_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
