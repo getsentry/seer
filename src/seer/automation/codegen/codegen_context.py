@@ -50,9 +50,24 @@ class CodegenContext(PipelineContext):
         with self.state.update() as state:
             state.signals = value
 
-    def get_repo_client(self):
+    def get_repo_client(self, repo_name: str | None = None):
         """
         Gets a repo client for the current single repo or for a given repo name.
         If there are more than 1 repos, a repo name must be provided.
         """
         return RepoClient.from_repo_definition(self.repo, "read")
+
+    def get_file_contents(
+        self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
+    ) -> str | None:
+        repo_client = self.get_repo_client()
+
+        file_contents = repo_client.get_file_content(path)
+
+        if not ignore_local_changes:
+            cur_state = self.state.get()
+            current_file_changes = list(filter(lambda x: x.path == path, cur_state.file_changes))
+            for file_change in current_file_changes:
+                file_contents = file_change.apply(file_contents)
+
+        return file_contents

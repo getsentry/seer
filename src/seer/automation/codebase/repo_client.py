@@ -438,3 +438,19 @@ class RepoClient:
                 file_set.add(file.path)
 
         return file_set
+
+    def get_diff_content(self, base: str, head: str) -> str:
+        comparison = self.compare(base, head)
+        diff_url = comparison.diff_url
+
+        # Use the same headers as in get_commit_file_diffs method
+        requester = self.repo._requester
+        headers = {
+            "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
+            "User-Agent": requester._Requester__userAgent,  # type: ignore
+        }
+
+        response = requests.get(diff_url, headers=headers)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        return response.text

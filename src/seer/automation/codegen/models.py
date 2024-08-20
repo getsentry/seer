@@ -3,7 +3,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from seer.automation.models import RepoDefinition
+from seer.automation.component import BaseComponentOutput, BaseComponentRequest
+from seer.automation.models import FileChange, RepoDefinition
 
 
 class CodegenUnitTestsRequest(BaseModel):
@@ -28,8 +29,10 @@ class CodegenStatus(str, Enum):
 
 class CodegenState(BaseModel):
     run_id: int = -1
+    file_changes: list[FileChange] = Field(default_factory=list)
     status: CodegenStatus = CodegenStatus.PENDING
-    triggered_at: datetime.datetime
+    last_triggered_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
+    updated_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
 
@@ -42,3 +45,11 @@ class CodegenContinuation(CodegenState):
 
     def mark_updated(self):
         self.updated_at = datetime.datetime.now()
+
+
+class CodeUnitTestRequest(BaseComponentRequest):
+    diff: str
+
+
+class CodeUnitTestOutput(BaseComponentOutput):
+    diffs: list[FileChange]

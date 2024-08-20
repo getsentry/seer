@@ -5,18 +5,16 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, ClaudeAgent
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.coding.models import (
-    CodeUnitTestOutput,
-    CodeUnitTestRequest,
-    PlanStepsPromptXml,
-)
-from seer.automation.autofix.components.coding.prompts import CodingUnitTestPrompts
+from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
     task_to_file_create,
     task_to_file_delete,
 )
 from seer.automation.autofix.tools import BaseTools
+from seer.automation.codegen.codegen_context import CodegenContext
+from seer.automation.codegen.models import CodeUnitTestOutput, CodeUnitTestRequest
+from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
@@ -25,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOutput]):
-    context: AutofixContext
+    context: CodegenContext
 
     @observe(name="Plan+UnitTest")
     @ai_track(description="Plan+UnitTest")
@@ -43,13 +41,13 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             CodingUnitTestPrompts.format_unit_test_msg(diff_str=request.diff)
         )
 
-        with self.context.state.update() as cur:
-            cur.usage += agent.usage
+        # with self.context.state.update() as cur:
+        #     cur.usage += agent.usage
 
         if not final_response:
             return None
 
-        plan_steps_content = extract_text_inside_tags(final_response, "explanation")
+        plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
 
         coding_output = PlanStepsPromptXml.from_xml(
             f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"

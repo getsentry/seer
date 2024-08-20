@@ -54,7 +54,7 @@ services:
             - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
             - GOOGLE_CLOUD_PROJECT_ID=ml-ai-420606
             - API_PUBLIC_KEY_SECRET_ID=seer-staging-api-public-key
-            - ENFORCE_API_AUTH=1
+            - ENFORCE_API_AUTH=0
             - USE_EU_REGION=0
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
