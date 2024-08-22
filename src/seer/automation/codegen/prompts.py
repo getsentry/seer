@@ -18,7 +18,55 @@ class CodingUnitTestPrompts:
         )
 
     @staticmethod
-    def format_unit_test_msg(diff_str):
+    def format_plan_step_msg(diff_str: str):
+        return textwrap.dedent(
+            """\
+            You are given the below code changes as a diff:
+            {diff_str}
+
+            # Your goal:
+            Provide the most actionable and effective steps to add unit tests to ensure test coverage for all the changes in the diff.
+
+            Since you are an exceptional principal engineer, your unit tests should not just add trivial tests, but should add meaningful ones that test all changed functionality. Your list of steps should be detailed enough so that following it exactly will lead to complete test coverage of the code changed in the given diff.
+
+            When ready with your final answer, detail the precise plan to add unit tests.
+
+            # Guidelines:
+            - No placeholders are allowed, the unit test must be clear and detailed.
+            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix.
+            - The unit tests must be comprehensive. Do not provide temporary examples, placeholders or incomplete ones.
+            - In your suggested unit tests, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
+            - All your changes should be in test files.
+            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            - You also MUST think step-by-step before giving the final answer."""
+        ).format(
+            diff_str=diff_str,
+        )
+
+    @staticmethod
+    def format_find_unit_test_pattern_step_msg(diff_str: str):
+        return textwrap.dedent(
+            """\
+            You are given the below code changes as a diff:
+            {diff_str}
+
+            # Your goal:
+            Look at existing unit tests in the code and succinctly describe, in clear terms, the main highlights of how they are to designed.
+
+            Since you are an exceptional principal engineer, your description should not be trivial. Your description should be detailed enough so that following it exactly will lead to writing good and executable unit tests that follow the same design pattern.
+
+            # Guidelines:
+            - You do not have to explain each test and what it is testing. Just identify the basic libraries used as well as how the tests are structured.
+            - If the codebase has no relevant tests then return the exact phrase "No relevant tests in the codebase"
+            - Make sure you use the tools provided to look through the codebase and at the files that contain existing unit tests, even if they are not fully related to the changes in the given diff.
+            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            - You also MUST think step-by-step before giving the final answer."""
+        ).format(
+            diff_str=diff_str,
+        )
+
+    @staticmethod
+    def format_unit_test_msg(diff_str, test_design_hint):
         example = PlanTaskPromptXml(
             file_path="path/to/file.py",
             repo_name="owner/repo",
@@ -58,19 +106,27 @@ class CodingUnitTestPrompts:
             You are given a code diff:
             {diff_str}
 
+            You are also given the following test design guidelines:
+            {test_design_hint}
+
             # Your goal:
-            Write unit tests that cover the changes in the diff. You should first explain in clear and definite terms what you are adding. Then add the unit test such that lines modified, added or deleted are covered.
+            Write unit tests that cover the changes in the diff. You should first explain in clear and definite terms what you are adding. Then add the unit test such that lines modified, added or deleted are covered. Create multiple test files if required and cover code changed in all the files.
 
             When ready with your final answer, detail the explanation of the test wrapped with a <explanation></explanation> block. Your output must follow the format properly according to the following guidelines:
 
             {steps_example_str}
 
             # Guidelines:
+            _ Closely follow the guidelines provided to design the tests
             - Each file change must be a separate step and be explicit and clear.
-              - You MUST include exact file paths for each step you provide. If you cannot, find the correct path.
+            - You MUST include exact file paths for each step you provide. If you cannot, find the correct path.
             - No placeholders are allowed, the steps must be clear and detailed.
             - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps.
             - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
-        ).format(diff_str=diff_str, steps_example_str=prompt_obj.to_prompt_str())
+        ).format(
+            diff_str=diff_str,
+            test_design_hint=test_design_hint,
+            steps_example_str=prompt_obj.to_prompt_str(),
+        )

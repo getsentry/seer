@@ -1,9 +1,9 @@
 import logging
 
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, ClaudeAgent
+from seer.automation.agent.agent import AgentConfig, ClaudeAgent, LlmAgent
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
@@ -24,9 +24,23 @@ logger = logging.getLogger(__name__)
 class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOutput]):
     context: CodegenContext
 
-    @observe(name="Plan+UnitTest")
-    @ai_track(description="Plan+UnitTest")
+    @observe(name="Analyze existing test design")
+    @ai_track(description="AnalyzeTestDesign")
+    def _get_test_design_summary(self, agent: LlmAgent, prompt: str):
+        return agent.run(prompt)
+
+    @observe(name="Create plan")
+    @ai_track(description="GetTestPlan")
+    def _get_plan(self, agent: LlmAgent, prompt: str) -> str:
+        return agent.run(prompt)
+
+    @observe(name="Generate test tasks")
+    @ai_track(description="GenerateTests")
+    def _generate_tests(self, agent: LlmAgent, prompt: str) -> str:
+        return agent.run(prompt=prompt)
+
     def invoke(self, request: CodeUnitTestRequest) -> CodeUnitTestOutput | None:
+        langfuse_context.update_current_trace(user_id="ram")
         tools = BaseTools(self.context)
 
         agent = ClaudeAgent(
@@ -36,17 +50,31 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             ),
         )
 
-        final_response = agent.run(
-            CodingUnitTestPrompts.format_unit_test_msg(diff_str=request.diff)
+        existing_test_design_response = self._get_test_design_summary(
+            agent=agent,
+            prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
+                diff_str=request.diff
+            ),
         )
 
-        # with self.context.state.update() as cur:
-        #     cur.usage += agent.usage
+        self._get_plan(
+            agent=agent, prompt=CodingUnitTestPrompts.format_plan_step_msg(diff_str=request.diff)
+        )
+
+        final_response = self._generate_tests(
+            agent=agent,
+            prompt=CodingUnitTestPrompts.format_unit_test_msg(
+                diff_str=request.diff, test_design_hint=existing_test_design_response
+            ),
+        )
 
         if not final_response:
             return None
 
         plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
+
+        if len(plan_steps_content) == 0:
+            raise ValueError("Failed to extract plan_steps from the planning step of LLM")
 
         coding_output = PlanStepsPromptXml.from_xml(
             f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
@@ -66,21 +94,12 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
 
                 for change in task_to_file_change(task, file_content):
                     file_changes.append(change)
-                #     self._append_file_change(repo_client.repo_external_id, change)
             elif task.type == "file_delete":
                 change = task_to_file_delete(task)
                 file_changes.append(change)
-                # self._append_file_change(
-                #     repo_client.repo_external_id,
-                #     change,
-                # )
             elif task.type == "file_create":
                 change = task_to_file_create(task)
                 file_changes.append(change)
-                # self._append_file_change(
-                #     repo_client.repo_external_id,
-                #     task_to_file_create(task),
-                # )
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
 
