@@ -54,10 +54,7 @@ class UnittestStep(CodegenStep):
         repo_client = self.context.get_repo_client()
         pr = repo_client.repo.get_pull(self.request.pr_id)
 
-        base_sha = pr.base.sha
-        head_sha = pr.head.sha
-
-        diff_content = repo_client.get_diff_content(base_sha, head_sha)
+        diff_content = repo_client.get_pr_diff_content(pr.url)
 
         unittest_output = UnitTestCodingComponent(self.context).invoke(
             CodeUnitTestRequest(
