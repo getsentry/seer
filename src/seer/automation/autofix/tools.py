@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 import os
 import textwrap
@@ -197,6 +198,23 @@ class BaseTools:
             return f"no file with name {filename} found in repository"
         return ",".join(found)
 
+    @observe(name="File Search Wildcard")
+    @ai_track(description="File Search Wildcard")
+    def file_search_wildcard(
+        self,
+        pattern: str,
+        repo_name: str | None = None,
+    ):
+        """
+        Given a filename pattern with wildcards, returns the list of file paths that match the pattern.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        all_paths = repo_client.get_index_file_set()
+        found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
+        if len(found) == 0:
+            return f"No files matching pattern '{pattern}' found in repository"
+        return "\n".join(found)
+
     def get_tools(self):
         tools = [
             FunctionTool(
@@ -275,6 +293,23 @@ class BaseTools:
                         "name": "filename",
                         "type": "string",
                         "description": "The file to search for.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
+                ],
+            ),
+            FunctionTool(
+                name="file_search_wildcard",
+                fn=self.file_search_wildcard,
+                description="Searches for files in a folder using a wildcard pattern.",
+                parameters=[
+                    {
+                        "name": "pattern",
+                        "type": "string",
+                        "description": "The wildcard pattern to match files.",
                     },
                     {
                         "name": "repo_name",

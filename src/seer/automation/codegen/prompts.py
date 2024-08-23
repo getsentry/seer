@@ -119,6 +119,7 @@ class CodingUnitTestPrompts:
             # Guidelines:
             _ Closely follow the guidelines provided to design the tests
             - Each file change must be a separate step and be explicit and clear.
+            - Before adding new files check if a file exists with same name and if it can be edited instead
             - You MUST include exact file paths for each step you provide. If you cannot, find the correct path.
             - No placeholders are allowed, the steps must be clear and detailed.
             - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps.
