@@ -1,10 +1,9 @@
-import os
-
-import pytest
 from flask import Blueprint, Flask
 from johen import change_watcher
 from pydantic import BaseModel
 
+from seer.configuration import AppConfig
+from seer.dependency_injection import Module
 from seer.json_api import json_api
 
 
@@ -37,37 +36,6 @@ def test_json_api_decorator():
     assert my_endpoint(DummyRequest(thing="thing", b=12)) == DummyResponse(blah="do it")
 
 
-def test_json_api_signature_not_strict():
-    app = Flask(__name__)
-    blueprint = Blueprint("blueprint", __name__)
-    test_client = app.test_client()
-
-    @json_api(blueprint, "/v0/some/url")
-    def my_endpoint(request: DummyRequest) -> DummyResponse:
-        return DummyResponse(blah="do it")
-
-    app.register_blueprint(blueprint)
-    headers = {}
-    payload = {"thing": "thing", "b": 12}
-    status_code_watcher = change_watcher(
-        lambda: test_client.post("/v0/some/url", json=payload, headers=headers).status_code
-    )
-
-    with status_code_watcher as changed:
-        os.environ["JSON_API_SHARED_SECRETS"] = "secret-one secret-two"
-        headers["Authorization"] = "Rpcsignature rpc0:some-token"
-
-    assert changed.result == 200
-
-    with status_code_watcher as changed:
-        headers["Authorization"] = (
-            "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
-        )
-
-    assert changed.result == 200
-
-
-@pytest.mark.skip(reason="Waiting to validate configuration in production")
 def test_json_api_signature_strict_mode():
     app = Flask(__name__)
     blueprint = Blueprint("blueprint", __name__)
@@ -85,16 +53,18 @@ def test_json_api_signature_strict_mode():
         lambda: test_client.post("/v0/some/url", json=payload, headers=headers).status_code
     )
 
-    with status_code_watcher as changed:
-        os.environ["JSON_API_SHARED_SECRETS"] = "secret-one secret-two"
-        headers["Authorization"] = "Rpcsignature rpc0:some-token"
+    with Module() as injector:
+        injector.get(AppConfig).JSON_API_SHARED_SECRETS = ["secret-one", "secret-two"]
 
-    assert changed.from_value(200)
-    assert changed.to_value(401)
+        with status_code_watcher as changed:
+            headers["Authorization"] = "Rpcsignature rpc0:some-token"
 
-    with status_code_watcher as changed:
-        headers["Authorization"] = (
-            "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
-        )
+        assert changed.from_value(200)
+        assert changed.to_value(401)
 
-    assert changed.to_value(200)
+        with status_code_watcher as changed:
+            headers["Authorization"] = (
+                "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
+            )
+
+        assert changed.to_value(200)
