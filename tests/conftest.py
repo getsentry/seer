@@ -1,3 +1,4 @@
+import logging
 import os
 
 import johen
@@ -15,6 +16,8 @@ from seer.db import Session, db
 from seer.dependency_injection import Module, resolve
 from seer.inference_models import reset_loading_state
 
+logger = logging.getLogger(__name__)
+
 
 @pytest.fixture
 def test_module() -> Module:
@@ -28,7 +31,7 @@ def configure_environment():
 
 @pytest.fixture
 def alembic_config():
-    return Config.from_raw_config({"file": "../src/migrations/alembic.ini"})
+    return Config.from_raw_config({"file": "/app/src/migrations/alembic.ini"})
 
 
 @pytest.fixture
