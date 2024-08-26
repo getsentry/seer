@@ -229,13 +229,15 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
 
 @json_api(blueprint, "/v1/anomaly-detection/store")
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
-    try:
-        with sentry_sdk.start_transaction(op="db", name="store anomaly detection data"):
+    with sentry_sdk.start_transaction(op="db", name="Store anomaly detection data"):
+        try:
+            logger.info(f'Anomaly Detection data to store: {data}') # TODO: Ensure this does not log the entire timeseries
             response = anomaly_detection().store_data(data)
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
 
-    return response
+        logger.info(f'Anomaly Detection store data success: {response}')
+        return response
 
 
 @blueprint.route("/health/live", methods=["GET"])
