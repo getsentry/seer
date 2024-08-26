@@ -1,9 +1,11 @@
+import logging
 import os
 
 import johen
 import pytest
 from flask import Flask
 from johen.generators import pydantic, sqlalchemy
+from pytest_alembic import Config
 from sqlalchemy import text
 
 from celery_app.config import CeleryConfig
@@ -14,6 +16,8 @@ from seer.db import Session, db
 from seer.dependency_injection import Module, resolve
 from seer.inference_models import reset_loading_state
 
+logger = logging.getLogger(__name__)
+
 
 @pytest.fixture
 def test_module() -> Module:
@@ -23,6 +27,29 @@ def test_module() -> Module:
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
     os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
+
+
+@pytest.fixture
+def alembic_config():
+    return Config.from_raw_config({"file": "/app/src/migrations/alembic.ini"})
+
+
+@pytest.fixture
+def alembic_runner(alembic_config: Config, setup_app):
+    import pytest_alembic
+
+    app = resolve(Flask)
+
+    with app.app_context():
+        db.metadata.drop_all(bind=db.engine)
+        with db.engine.connect() as c:
+            c.execute(text("""DROP SCHEMA public CASCADE"""))
+            c.execute(text("""CREATE SCHEMA public;"""))
+            c.commit()
+
+        with pytest_alembic.runner(config=alembic_config, engine=db.engine) as runner:
+            runner.set_revision("base")
+            yield runner
 
 
 @pytest.fixture(autouse=True)
