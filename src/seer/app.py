@@ -221,12 +221,21 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
 def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-    return anomaly_detection().detect_anomalies(data)
+    try:
+        return anomaly_detection().detect_anomalies(data)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/store")
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
-    return anomaly_detection().store_data(data)
+    try:
+        with sentry_sdk.start_transaction(op="db", name="store anomaly detection data"):
+            response = anomaly_detection().store_data(data)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+
+    return response
 
 
 @blueprint.route("/health/live", methods=["GET"])

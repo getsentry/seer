@@ -1,4 +1,5 @@
 import logging
+import sentry_sdk
 from typing import List
 
 from pydantic import BaseModel
@@ -74,7 +75,8 @@ class AnomalyDetection(BaseModel):
         self._update_anomalies(ts_external, streamed_anomalies)
 
         # Save new data point
-        alert_data_accessor.save_timepoint(external_alert_id=alert.id, timepoint=ts_external[0])
+        with sentry_sdk.start_span(description="Save anomaly timepoint"):
+            alert_data_accessor.save_timepoint(external_alert_id=alert.id, timepoint=ts_external[0])
         # TODO: Clean up old data
         return ts_external
 
@@ -99,19 +101,21 @@ class AnomalyDetection(BaseModel):
     def store_data(
         self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
     ) -> StoreDataResponse:
-        logger.info(
-            "store_alert_request",
-            extra={
-                "organization_id": request.organization_id,
-                "project_id": request.project_id,
-                "external_alert_id": request.alert.id,
-            },
-        )
-        alert_data_accessor.save_alert(
-            organization_id=request.organization_id,
-            project_id=request.project_id,
-            external_alert_id=request.alert.id,
-            config=request.config,
-            timeseries=request.timeseries,
-        )
-        return StoreDataResponse(success=True)
+        with sentry_sdk.start_span(description="Store data"):
+            logger.info(
+                "store_alert_request",
+                extra={
+                    "organization_id": request.organization_id,
+                    "project_id": request.project_id,
+                    "external_alert_id": request.alert.id,
+                },
+            )
+            with sentry_sdk.start_span(description="Save alert"):
+                alert_data_accessor.save_alert(
+                    organization_id=request.organization_id,
+                    project_id=request.project_id,
+                    external_alert_id=request.alert.id,
+                    config=request.config,
+                    timeseries=request.timeseries,
+                )
+            return StoreDataResponse(success=True)
