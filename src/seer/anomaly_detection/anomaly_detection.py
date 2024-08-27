@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
+
+    @sentry_sdk.trace
     def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector: AnomalyDetector = MPBatchAnomalyDetector()
@@ -37,6 +39,7 @@ class AnomalyDetection(BaseModel):
         return timeseries
 
     @inject
+    @sentry_sdk.trace
     def _online_detect(
         self,
         alert: AlertInSeer,
@@ -60,7 +63,7 @@ class AnomalyDetection(BaseModel):
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
         # Run batch detect on history data
-        # TODO: This step can be optimized further by caching the matrix profile in the database
+        # TODO: This step can be optimized further by caching the matrix profile in the database     
         batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(historic.timeseries)
 
@@ -75,8 +78,7 @@ class AnomalyDetection(BaseModel):
         self._update_anomalies(ts_external, streamed_anomalies)
 
         # Save new data point
-        with sentry_sdk.start_span(description="Save anomaly timepoint"):
-            alert_data_accessor.save_timepoint(external_alert_id=alert.id, timepoint=ts_external[0])
+        alert_data_accessor.save_timepoint(external_alert_id=alert.id, timepoint=ts_external[0])
         # TODO: Clean up old data
         return ts_external
 
@@ -101,21 +103,20 @@ class AnomalyDetection(BaseModel):
     def store_data(
         self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
     ) -> StoreDataResponse:
-        with sentry_sdk.start_span(description="Store data"):
-            logger.info(
-                "store_alert_request",
-                extra={
-                    "organization_id": request.organization_id,
-                    "project_id": request.project_id,
-                    "external_alert_id": request.alert.id,
-                },
-            )
-            with sentry_sdk.start_span(description="Save alert"):
-                alert_data_accessor.save_alert(
-                    organization_id=request.organization_id,
-                    project_id=request.project_id,
-                    external_alert_id=request.alert.id,
-                    config=request.config,
-                    timeseries=request.timeseries,
-                )
-            return StoreDataResponse(success=True)
+        logger.info(
+            "store_alert_request",
+            extra={
+                "organization_id": request.organization_id,
+                "project_id": request.project_id,
+                "external_alert_id": request.alert.id,
+            },
+        )
+
+        alert_data_accessor.save_alert(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            external_alert_id=request.alert.id,
+            config=request.config,
+            timeseries=request.timeseries,
+        )
+        return StoreDataResponse(success=True)
