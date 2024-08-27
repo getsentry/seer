@@ -3,13 +3,13 @@
 
 <img src="seer.png" alt="Seer Logo" width="128">
 
-Seer is a service that provides AI capabilities to Sentry, running inference on Sentry issues and providing insights to users.
+Seer is a service that provides AI capabilities to Sentry by running inference on Sentry issues and providing user insights.
 
 > 📣 Seer is currently in early development and not yet compatible with self-hosted Sentry instances. Stay tuned for updates!
 
 ## Setup
 
-These instructions require access to internal Sentry resources, and are intended for internal Sentry employees.
+These instructions require access to internal Sentry resources and are intended for internal Sentry employees.
 
 ### Prerequisites
 
@@ -23,7 +23,7 @@ These instructions require access to internal Sentry resources, and are intended
 1. Clone the repository and navigate to the project root
 2. Run `direnv allow` to set up the Python environment
 3. Create a `.env` file based on `.env.example` and set the required values
-4. (Optional) Add `export SENTRY_AUTH_TOKEN=<your token>` to your shell's RC file
+4. (Optional) Add `SENTRY_AUTH_TOKEN=<your token>` to your `.env` file
 
 ### Model Artifacts
 
@@ -32,7 +32,6 @@ Download model artifacts:
 ```bash
 gsutil cp -r gs://sentry-ml/seer/models ./models
 ```
-
 
 ### Running Seer
 
@@ -67,11 +66,11 @@ gsutil cp -r gs://sentry-ml/seer/models ./models
 
 ## Development Commands
 
-- Apply database migrations: `make update`
-- Create new migrations: `make migration`
-- Run type checker: `make mypy`
-- Run tests: `make test`
-- Open a shell: `make shell`
+* Apply database migrations: `make update`
+* Create new migrations: `make migration`
+* Run type checker: `make mypy`
+* Run tests: `make test`
+* Open a shell: `make shell`
 
 ### Reset Development Environment
 
