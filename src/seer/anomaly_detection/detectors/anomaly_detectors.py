@@ -1,9 +1,9 @@
 import abc
 import logging
-import sentry_sdk
 
 import numpy as np
 import numpy.typing as npt
+import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,7 +45,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         The input timeseries with an anomaly scores and a flag added
         """
         return self._compute_matrix_profile(timeseries)
-
 
     @inject
     @sentry_sdk.trace

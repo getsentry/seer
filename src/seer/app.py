@@ -225,7 +225,8 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
     return anomaly_detection().detect_anomalies(data)
-    
+
+
 @json_api(blueprint, "/v1/anomaly-detection/store")
 @sentry_sdk.trace
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
