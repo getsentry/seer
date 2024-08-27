@@ -6,6 +6,9 @@ from seer.automation.models import IssueDetails
 class SummarizeIssueRequest(BaseModel):
     group_id: int
     issue: IssueDetails
+    organization_id: int | None = None
+    organization_slug: str | None = None
+    project_id: int | None = None
 
 
 class SummarizeIssueResponse(BaseModel):

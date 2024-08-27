@@ -71,3 +71,23 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         summary=summary,
         impact=impact,
     )
+
+
+def run_summarize_issue(request: SummarizeIssueRequest):
+    langfuse_tags = []
+    if request.organization_slug:
+        langfuse_tags.append(f"org:{request.organization_slug}")
+    if request.project_id:
+        langfuse_tags.append(f"project:{request.project_id}")
+    if request.group_id:
+        langfuse_tags.append(f"group:{request.group_id}")
+
+    extra_kwargs = {
+        "langfuse_tags": langfuse_tags,
+        "langfuse_session_id": f"group:{request.group_id}",
+        "langfuse_user_id": (
+            f"org:{request.organization_slug}" if request.organization_slug else None
+        ),
+    }
+
+    return summarize_issue(request, **extra_kwargs)
