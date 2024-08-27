@@ -222,25 +222,16 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 @json_api(blueprint, "/v1/anomaly-detection/detect")
 @sentry_sdk.trace
 def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-    try:
-        sentry_sdk.set_tag("organization_id", data.organization_id)
-        sentry_sdk.set_tag("project_id", data.project_id)
-        return anomaly_detection().detect_anomalies(data)
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
-
-
+    sentry_sdk.set_tag("organization_id", data.organization_id)
+    sentry_sdk.set_tag("project_id", data.project_id)
+    return anomaly_detection().detect_anomalies(data)
+    
 @json_api(blueprint, "/v1/anomaly-detection/store")
 @sentry_sdk.trace
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
-    try:
-        sentry_sdk.set_tag("organization_id", data.organization_id)
-        sentry_sdk.set_tag("project_id", data.project_id)
-        response = anomaly_detection().store_data(data)
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
-
-    return response
+    sentry_sdk.set_tag("organization_id", data.organization_id)
+    sentry_sdk.set_tag("project_id", data.project_id)
+    return anomaly_detection().store_data(data)
 
 
 @blueprint.route("/health/live", methods=["GET"])

@@ -44,10 +44,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        try:
-            return self._compute_matrix_profile(timeseries)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
+        return self._compute_matrix_profile(timeseries)
+
 
     @inject
     @sentry_sdk.trace

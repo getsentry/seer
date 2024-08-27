@@ -92,11 +92,14 @@ class AnomalyDetection(BaseModel):
             )
 
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-        ts: List[TimeSeriesPoint] = (
-            self._online_detect(request.context)
-            if isinstance(request.context, AlertInSeer)
-            else self._batch_detect(request.context)
-        )
+        try:
+            ts: List[TimeSeriesPoint] = (
+                self._online_detect(request.context)
+                if isinstance(request.context, AlertInSeer)
+                else self._batch_detect(request.context)
+            )
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
         return DetectAnomaliesResponse(timeseries=ts)
 
     @inject
