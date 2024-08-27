@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
-
+    
     @sentry_sdk.trace
     def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
@@ -111,7 +111,6 @@ class AnomalyDetection(BaseModel):
                 "external_alert_id": request.alert.id,
             },
         )
-
         alert_data_accessor.save_alert(
             organization_id=request.organization_id,
             project_id=request.project_id,

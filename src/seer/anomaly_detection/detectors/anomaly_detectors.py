@@ -49,8 +49,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         except Exception as e:
             sentry_sdk.capture_exception(e)
 
-    @sentry_sdk.trace
     @inject
+    @sentry_sdk.trace
     def _compute_matrix_profile(
         self,
         timeseries: TimeSeries,
