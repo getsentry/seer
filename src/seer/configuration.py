@@ -85,11 +85,14 @@ class AppConfig(BaseModel):
             assert self.GITHUB_APP_ID, "GITHUB_APP_ID required for production!"
             assert self.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY required for production!"
 
+            if not self.JSON_API_SHARED_SECRETS:
+                logger.warning("No JSON_API_SHARED_SECRETS was configured for this environment")
+
             # These are not required for production but is needed to work for customers that don't want PRs to be made.
             if not self.DEV and not self.GITHUB_SENTRY_APP_ID:
-                logger.warn("GITHUB_SENTRY_APP_ID is missing in production!")
+                logger.warning("GITHUB_SENTRY_APP_ID is missing in production!")
             if not self.DEV and not self.GITHUB_SENTRY_PRIVATE_KEY:
-                logger.warn("GITHUB_SENTRY_PRIVATE_KEY is missing in production!")
+                logger.warning("GITHUB_SENTRY_PRIVATE_KEY is missing in production!")
 
 
 @configuration_module.provider

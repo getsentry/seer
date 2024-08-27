@@ -2,13 +2,18 @@ import functools
 import hashlib
 import hmac
 import inspect
-import os
+import logging
 from typing import Any, Callable, Type, TypeVar, get_type_hints
 
 import sentry_sdk
 from flask import Blueprint, request
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, Unauthorized
+
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
+
+logger = logging.getLogger(__name__)
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -28,7 +33,8 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                 "json_api implementations must have one non keyword, argument, annotated with a BaseModel and a BaseModel return value"
             )
 
-        def wrapper() -> Any:
+        @inject
+        def wrapper(config: AppConfig = injected) -> Any:
             raw_data = request.get_data()
             auth_header = request.headers.get("Authorization", "")
 
@@ -37,6 +43,10 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
                     raise Unauthorized("Rpcsignature did not match for given url and data")
+            else:
+                if config.is_production:
+                    logger.warning(f"Found unexpected authorization header: {auth_header}")
+                    raise Unauthorized("Rpcsignature was not included in authorization header!")
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
@@ -61,17 +71,8 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     return decorator
 
 
-def get_json_api_shared_secrets() -> list[str]:
-    result = os.environ.get("JSON_API_SHARED_SECRETS", "").split()
-    # TODO: Add this back in after we confirm with safer behavior.
-    # if not result:
-    #     raise ValueError(
-    #         "JSON_API_SHARED_SECRETS environment variable required to support signature based auth."
-    #     )
-    return result
-
-
-def compare_signature(url: str, body: bytes, signature: str) -> bool:
+@inject
+def compare_signature(url: str, body: bytes, signature: str, config: AppConfig = injected) -> bool:
     """
     Compare request data + signature signed by one of the shared secrets.
     Once a key has been able to validate the signature other keys will
@@ -81,12 +82,11 @@ def compare_signature(url: str, body: bytes, signature: str) -> bool:
     if not signature:
         return True
 
-    secrets = get_json_api_shared_secrets()
+    secrets = config.JSON_API_SHARED_SECRETS
 
     if not signature.startswith("rpc0:"):
         sentry_sdk.capture_message("Signature did not start with rpc0:")
-        return True
-        # return False
+        return False
 
     _, signature_data = signature.split(":", 2)
     signature_input = b"%s:%s" % (
@@ -103,5 +103,4 @@ def compare_signature(url: str, body: bytes, signature: str) -> bool:
             sentry_sdk.capture_message("Signature did not match hmac")
 
     sentry_sdk.capture_message("No signature matches found")
-    return True
-    # return False
+    return False
