@@ -189,12 +189,9 @@ class AutofixContext(PipelineContext):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
                 if (
-                    (repo_external_id is None and repo_id is None)
-                    or codebase_state.repo_external_id == repo_external_id
-                    # TODO: Remove this when repo_id is removed from the model
-                    or codebase_state.repo_id == repo_id
-                ):
-                    changes_step = state.find_step(id="changes")
+                    repo_external_id is None and repo_id is None
+                ) or codebase_state.repo_external_id == repo_external_id:
+                    changes_step = state.find_step(key="changes")
                     if not changes_step:
                         raise ValueError("Changes step not found")
                     changes_step = cast(ChangesStep, changes_step)
@@ -203,8 +200,6 @@ class AutofixContext(PipelineContext):
                             change
                             for change in changes_step.changes
                             if change.repo_external_id == codebase_state.repo_external_id
-                            # TODO: Remove this when repo_id is removed from the model
-                            or change.repo_id == codebase_state.repo_id
                         ),
                         None,
                     )
