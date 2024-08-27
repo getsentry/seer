@@ -4,7 +4,7 @@ import pytest
 from johen import generate
 
 from seer.automation.models import IssueDetails
-from seer.automation.summarize.issue import summarize_issue
+from seer.automation.summarize.issue import run_summarize_issue, summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 
 
@@ -88,3 +88,45 @@ class TestSummarizeIssue:
                 0
             ]["content"]
         )
+
+
+class TestRunSummarizeIssue:
+    @patch("seer.automation.summarize.issue.summarize_issue")
+    def test_run_summarize_issue_langfuse_metadata(self, mock_summarize_issue):
+        # Create a sample request
+        request = SummarizeIssueRequest(
+            group_id=123,
+            issue=next(generate(IssueDetails)),
+            organization_id=456,
+            organization_slug="test-org",
+            project_id=789,
+        )
+
+        # Call the function
+        run_summarize_issue(request)
+
+        # Assert that summarize_issue was called with the correct langfuse metadata
+        mock_summarize_issue.assert_called_once()
+        call_kwargs = mock_summarize_issue.call_args[1]
+
+        assert call_kwargs["langfuse_tags"] == ["org:test-org", "project:789", "group:123"]
+        assert call_kwargs["langfuse_session_id"] == "group:123"
+        assert call_kwargs["langfuse_user_id"] == "org:test-org"
+
+    @patch("seer.automation.summarize.issue.summarize_issue")
+    def test_run_summarize_issue_langfuse_metadata_no_org_slug(self, mock_summarize_issue):
+        # Create a sample request without organization_slug
+        request = SummarizeIssueRequest(
+            group_id=123, issue=next(generate(IssueDetails)), organization_id=456, project_id=789
+        )
+
+        # Call the function
+        run_summarize_issue(request)
+
+        # Assert that summarize_issue was called with the correct langfuse metadata
+        mock_summarize_issue.assert_called_once()
+        call_kwargs = mock_summarize_issue.call_args[1]
+
+        assert call_kwargs["langfuse_tags"] == ["project:789", "group:123"]
+        assert call_kwargs["langfuse_session_id"] == "group:123"
+        assert call_kwargs["langfuse_user_id"] is None
