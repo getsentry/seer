@@ -165,7 +165,7 @@ class AutofixContext(PipelineContext):
 
             valid_file_paths = repo_client.get_valid_file_paths()
             for frame in stacktrace.frames:
-                if frame.in_app and frame.repo_id is None:
+                if frame.in_app and frame.repo_name is None:
                     if frame.filename in valid_file_paths:
                         frame.repo_name = repo.full_name
                     else:

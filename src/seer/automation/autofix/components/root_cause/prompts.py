@@ -4,7 +4,7 @@ from typing import Optional
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPromptXml,
 )
-from seer.automation.autofix.prompts import format_instruction
+from seer.automation.autofix.prompts import format_instruction, format_repo_names
 
 
 class RootCauseAnalysisPrompts:
@@ -32,15 +32,16 @@ class RootCauseAnalysisPrompts:
     @staticmethod
     def format_default_msg(
         event: str,
+        repo_names: list[str],
         instruction: Optional[str] = None,
     ):
         return textwrap.dedent(
             """\
+            {repo_names_str}
             Given the issue:
             {error_str}
 
             {instruction_str}
-
             When ready with your final answer, detail all the potential root causes of the issue.
 
             # Guidelines:
@@ -53,6 +54,7 @@ class RootCauseAnalysisPrompts:
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
             error_str=event,
+            repo_names_str=format_repo_names(repo_names),
             instruction_str=format_instruction(instruction),
         )
 
