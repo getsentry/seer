@@ -63,7 +63,7 @@ class AnomalyDetection(BaseModel):
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
         # Run batch detect on history data
-        # TODO: This step can be optimized further by caching the matrix profile in the database     
+        # TODO: This step can be optimized further by caching the matrix profile in the database
         batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(historic.timeseries)
 
