@@ -180,7 +180,8 @@ class AutofixContext(PipelineContext):
         Annotate exceptions with the correct repo each frame is pointing to and fix the filenames
         """
         for exception in event.exceptions:
-            self._process_stacktrace_paths(exception.stacktrace)
+            if exception.stacktrace:
+                self._process_stacktrace_paths(exception.stacktrace)
         for thread in event.threads:
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)

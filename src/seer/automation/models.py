@@ -256,7 +256,7 @@ class SentryEventData(TypedDict):
 class ExceptionDetails(BaseModel):
     type: str
     value: Optional[str] = ""
-    stacktrace: Stacktrace
+    stacktrace: Optional[Stacktrace] = None
 
     @field_validator("stacktrace", mode="before")
     @classmethod
