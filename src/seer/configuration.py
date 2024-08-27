@@ -79,10 +79,10 @@ class AppConfig(BaseModel):
         return not self.NO_SENTRY_INTEGRATION
 
     def do_validation(self):
-        if self.IGNORE_API_AUTH:
+        if not self.IGNORE_API_AUTH:
             assert (
                 self.JSON_API_SHARED_SECRETS or self.API_PUBLIC_KEY_SECRET_ID
-            ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY_SECRET_ID required if IGNORE_API_AUTH is true!"
+            ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY_SECRET_ID required if IGNORE_API_AUTH is false!"
 
         if self.is_production:
             assert self.has_sentry_integration, "Sentry integration required for production mode."
