@@ -225,7 +225,6 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     try:
         sentry_sdk.set_tag("organization_id", data.organization_id)
         sentry_sdk.set_tag("project_id", data.project_id)
-        logger.info(f'Anomaly Detection request with organization_id: {data.organization_id}, project_id: {data.project_id}')
         return anomaly_detection().detect_anomalies(data)
     except Exception as e:
         sentry_sdk.capture_exception(e)
@@ -237,7 +236,6 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     try:
         sentry_sdk.set_tag("organization_id", data.organization_id)
         sentry_sdk.set_tag("project_id", data.project_id)
-        logger.info(f'Anomaly Detection to store with organization_id: {data.organization_id}, project_id: {data.project_id}')
         response = anomaly_detection().store_data(data)
     except Exception as e:
         sentry_sdk.capture_exception(e)
