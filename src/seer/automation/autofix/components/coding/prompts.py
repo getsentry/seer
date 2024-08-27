@@ -1,7 +1,7 @@
 import textwrap
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
-from seer.automation.autofix.prompts import format_instruction
+from seer.automation.autofix.prompts import format_instruction, format_repo_names
 
 
 class CodingPrompts:
@@ -19,12 +19,16 @@ class CodingPrompts:
         )
 
     @staticmethod
-    def format_fix_discovery_msg(event: str, task_str: str, instruction: str | None):
+    def format_fix_discovery_msg(
+        event: str, task_str: str, repo_names: list[str], instruction: str | None
+    ):
         return textwrap.dedent(
             """\
+            {repo_names_str}
+
             Given the issue:
             {event_str}
-
+            {instruction}
             The root cause of the issue has been identified and context about the issue has been provided:
             {task_str}
 
@@ -47,6 +51,7 @@ class CodingPrompts:
         ).format(
             event_str=event,
             task_str=task_str,
+            repo_names_str=format_repo_names(repo_names),
             instruction=format_instruction(instruction),
         )
 

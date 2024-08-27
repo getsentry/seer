@@ -46,10 +46,13 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         )
         simplified_event_details = event_details_response.content
 
+        state = self.context.state.get()
+
         response = agent.run(
             RootCauseAnalysisPrompts.format_default_msg(
                 event=simplified_event_details,
                 instruction=request.instruction,
+                repo_names=[repo.full_name for repo in state.request.repos],
             ),
             context=self.context,
         )

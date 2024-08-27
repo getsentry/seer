@@ -62,10 +62,13 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             else request.root_cause_and_fix
         )
 
+        state = self.context.state.get()
+
         response = agent.run(
             CodingPrompts.format_fix_discovery_msg(
                 event=simplified_event_details,
                 task_str=task_str,
+                repo_names=[repo.full_name for repo in state.request.repos],
                 instruction=request.instruction,
             ),
             context=self.context,
