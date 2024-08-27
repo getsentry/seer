@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from flask import Blueprint, request
 from google.cloud import secretmanager
 from pydantic import BaseModel, ValidationError
-from werkzeug.exceptions import BadRequest, Unauthorized
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
 
 from seer.bootup import module, stub_module
 from seer.configuration import AppConfig
@@ -95,31 +95,32 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             elif auth_header.startswith("Bearer "):
                 token = auth_header.split()[1]
                 try:
-                    try:
-                        if public_key.bytes is None:
-                            raise Unauthorized("Public key is not available")
-                        # Verify the JWT token using PyJWT
-                        jwt.decode(token, public_key.bytes, algorithms=["RS256"])
+                    if public_key.bytes is None:
+                        raise Unauthorized("Public key is not available")
+                    # Verify the JWT token using PyJWT
+                    jwt.decode(token, public_key.bytes, algorithms=["RS256"])
 
-                        # Optionally, you can add additional checks here
-                        # For example, checking the 'exp' claim for token expiration
-                        # or verifying specific claims in the token payload
+                    # Optionally, you can add additional checks here
+                    # For example, checking the 'exp' claim for token expiration
+                    # or verifying specific claims in the token payload
 
-                        # If the token is successfully decoded and verified,
-                        # the function will continue execution
-                    except jwt.ExpiredSignatureError:
-                        raise Unauthorized("Token has expired")
-                    except jwt.InvalidSignatureError:
-                        raise Unauthorized("Invalid signature")
-                    except jwt.InvalidTokenError:
-                        raise Unauthorized("Invalid token")
-
+                    # If the token is successfully decoded and verified,
+                    # the function will continue execution
+                except jwt.ExpiredSignatureError:
+                    raise Unauthorized("Token has expired")
+                except jwt.InvalidSignatureError:
+                    raise Unauthorized("Invalid signature")
+                except jwt.InvalidTokenError:
+                    raise Unauthorized("Invalid token")
                 except Exception as e:
                     sentry_sdk.capture_exception(e)
-                    raise Unauthorized("Invalid Bearer token")
+                    print(e)
+                    raise InternalServerError("Something went wrong with the Bearer token auth")
             elif not config.IGNORE_API_AUTH and config.is_production:
                 logger.warning(f"Found unexpected authorization header: {auth_header}")
-                raise Unauthorized("Rpcsignature was not included in authorization header!")
+                raise Unauthorized(
+                    "Neither Rpcsignature nor a Bearer token was included in authorization header!"
+                )
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
