@@ -1,5 +1,6 @@
 import abc
 import logging
+import sentry_sdk
 
 import numpy as np
 import numpy.typing as npt
@@ -31,6 +32,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
     This class encapsulates the logic for using Matrix Profile for batch anomaly detection.
     """
 
+    @sentry_sdk.trace
     def detect(self, timeseries: TimeSeries) -> MPTimeSeriesAnomalies:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
@@ -42,8 +44,12 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        return self._compute_matrix_profile(timeseries)
+        try:
+            return self._compute_matrix_profile(timeseries)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
 
+    @sentry_sdk.trace
     @inject
     def _compute_matrix_profile(
         self,
@@ -106,6 +112,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     )
 
     @inject
+    @sentry_sdk.trace
     def detect(
         self, timeseries: TimeSeries, scorer: MPScorer = injected, mp_utils: MPUtils = injected
     ) -> MPTimeSeriesAnomalies:
