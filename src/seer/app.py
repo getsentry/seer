@@ -220,24 +220,29 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
+@sentry_sdk.trace
 def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
     try:
+        sentry_sdk.set_tag("organization_id", data.organization_id)
+        sentry_sdk.set_tag("project_id", data.project_id)
+        logger.info(f'Anomaly Detection request with organization_id: {data.organization_id}, project_id: {data.project_id}')
         return anomaly_detection().detect_anomalies(data)
     except Exception as e:
         sentry_sdk.capture_exception(e)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/store")
+@sentry_sdk.trace
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
-    with sentry_sdk.start_transaction(op="db", name="Store anomaly detection data"):
-        try:
-            logger.info(f'Anomaly Detection data to store: {data}') # TODO: Ensure this does not log the entire timeseries
-            response = anomaly_detection().store_data(data)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
+    try:
+        sentry_sdk.set_tag("organization_id", data.organization_id)
+        sentry_sdk.set_tag("project_id", data.project_id)
+        logger.info(f'Anomaly Detection to store with organization_id: {data.organization_id}, project_id: {data.project_id}')
+        response = anomaly_detection().store_data(data)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
 
-        logger.info(f'Anomaly Detection store data success: {response}')
-        return response
+    return response
 
 
 @blueprint.route("/health/live", methods=["GET"])
