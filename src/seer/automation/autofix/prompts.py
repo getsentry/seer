@@ -2,13 +2,15 @@ import textwrap
 
 
 def format_instruction(instruction: str | None):
-    return textwrap.dedent(  # The leading newline is intentional
-        f"""\
-        \
-        Instructions have been provided. Please ensure that they are reflected in your work:
-        \"{instruction}\"
-        \
-        """
+    return (
+        "\n"
+        + textwrap.dedent(  # The newlines are intentional
+            f"""\
+            Instructions have been provided. Please ensure that they are reflected in your work:
+            \"{instruction}\"
+            """
+        )
+        + "\n"
         if instruction
         else ""
     )
