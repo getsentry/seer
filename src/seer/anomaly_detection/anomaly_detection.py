@@ -1,6 +1,7 @@
 import logging
 from typing import List
 
+import sentry_sdk
 from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
+
+    @sentry_sdk.trace
     def _batch_detect(self, timeseries: List[TimeSeriesPoint]):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector: AnomalyDetector = MPBatchAnomalyDetector()
@@ -36,6 +39,7 @@ class AnomalyDetection(BaseModel):
         return timeseries
 
     @inject
+    @sentry_sdk.trace
     def _online_detect(
         self,
         alert: AlertInSeer,

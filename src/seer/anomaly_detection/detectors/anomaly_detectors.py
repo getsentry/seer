@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import numpy.typing as npt
+import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,6 +32,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
     This class encapsulates the logic for using Matrix Profile for batch anomaly detection.
     """
 
+    @sentry_sdk.trace
     def detect(self, timeseries: TimeSeries) -> MPTimeSeriesAnomalies:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
@@ -45,6 +47,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         return self._compute_matrix_profile(timeseries)
 
     @inject
+    @sentry_sdk.trace
     def _compute_matrix_profile(
         self,
         timeseries: TimeSeries,
@@ -106,6 +109,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     )
 
     @inject
+    @sentry_sdk.trace
     def detect(
         self, timeseries: TimeSeries, scorer: MPScorer = injected, mp_utils: MPUtils = injected
     ) -> MPTimeSeriesAnomalies:
