@@ -53,6 +53,10 @@ COPY supervisord.conf /etc/supervisord.conf
 # this skips annoying rebuilds where requirements would technically be met anyways.
 RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
 
+# Set min TLS protocol to TLSv1.0
+RUN sed -i 's/MinProtocol = TLSv1.2/MinProtocol = TLSv1/' /etc/ssl/openssl.cnf \
+    && sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = DEFAULT@SECLEVEL=1/' /etc/ssl/openssl.cnf
+
 ENV FLASK_APP=src.seer.app:start_app()
 # Set in cloudbuild.yaml for production images
 ARG SEER_VERSION_SHA
