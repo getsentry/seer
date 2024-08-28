@@ -689,7 +689,7 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
 
     for frame in stacktrace.frames:
         if frame.vars:
-            vars_str = json.dumps(frame.vars, indent=2)
+            vars_str = json.dumps(StacktraceFrame._trim_vars(frame.vars), indent=2)
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str

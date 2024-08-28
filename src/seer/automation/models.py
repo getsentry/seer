@@ -42,6 +42,24 @@ class StacktraceFrame(BaseModel):
     vars: Optional[dict[str, Any]] = None
     package: Optional[str] = None
 
+    @field_validator("vars", mode="before")
+    @classmethod
+    def validate_vars(cls, vars: Optional[dict[str, Any]]):
+        if not vars or len(vars.keys()) <= 4:
+            return vars
+        return cls._trim_vars(vars)
+    
+    @staticmethod
+    def _trim_vars(vars: dict[str, Any]):
+        # use rough heuristics to guess which variable values to delete to attempt to trim
+        trimmed_vars = {}
+        for key, val in vars.items():
+            if key.startswith("__") and key.endswith("__"):
+                continue
+            if val.startswith("<") and val.endswith(">"):
+                continue
+            trimmed_vars[key] = val
+        return trimmed_vars
 
 class SentryFrame(TypedDict):
     absPath: Optional[str]
