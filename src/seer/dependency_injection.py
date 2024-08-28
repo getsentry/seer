@@ -145,10 +145,10 @@ class Module:
         self.registry[key] = c
         return c
 
-    def constant(self, annotation: type[_A], val: _A) -> _A:
+    def constant(self, annotation: type[_A], val: _A) -> "Module":
         key = FactoryAnnotation.from_annotation(annotation)
         self.registry[key] = lambda: val
-        return val
+        return self
 
     def enable(self):
         injector = Injector(self, _cur.injector)
@@ -160,6 +160,14 @@ class Module:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             self.enable()
             return c(*args, **kwargs)
+
+        return wrapper  # type: ignore
+
+    def __call__(self, c: _CK) -> _CK:
+        @functools.wraps(c)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            with self:
+                return c(*args, **kwargs)
 
         return wrapper  # type: ignore
 
@@ -216,12 +224,12 @@ def inject(c: _A) -> _A:
 
                 if d is injected and len(args) <= arg_idx and arg_name not in new_kwds:
                     try:
-                        resolved = resolve(argspec.annotations[arg_name])
+                        annotation = argspec.annotations[arg_name]
                     except KeyError:
                         raise AssertionError(
                             f"Cannot inject argument {arg_name} as it lacks annotations"
                         )
-
+                    resolved = resolve(annotation)
                     new_kwds[arg_name] = resolved
 
         if argspec.kwonlydefaults:
