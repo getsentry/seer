@@ -88,7 +88,9 @@ class TestSummarizeIssue:
         mock_event_details.format_event.assert_called_once()
         assert (
             "Formatted event details"
-            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][1]["content"]
+            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
+                1
+            ]["content"]
         )
 
 

@@ -9,6 +9,7 @@ from seer.automation.models import EventDetails
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.dependency_injection import inject, injected
 
+
 class IssueSummary(BaseModel):
     one_sentence_summary_of_main_issue_at_code_level: str
     one_sentence_summary_of_connected_issues_at_code_level: str
@@ -18,18 +19,26 @@ class IssueSummary(BaseModel):
     factual_issue_description_under_10_words: str
 
 
-
 @observe(name="Summarize Issue")
 @inject
 def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = injected):
     event_details = EventDetails.from_event(request.issue.events[0])
-    connected_event_details = [EventDetails.from_event(issue.events[0]) for issue in request.connected_issues] if request.connected_issues else []
+    connected_event_details = (
+        [EventDetails.from_event(issue.events[0]) for issue in request.connected_issues]
+        if request.connected_issues
+        else []
+    )
 
     connected_issues_input = ""
     trace_summary_prompt = ""
     final_summary_trace_details = ""
     if connected_event_details:
-        connected_issues = "\n----\n".join([f"Connected Issue:\n{event.format_event()}" for _, event in enumerate(connected_event_details)])
+        connected_issues = "\n----\n".join(
+            [
+                f"Connected Issue:\n{event.format_event()}"
+                for _, event in enumerate(connected_event_details)
+            ]
+        )
         connected_issues_input = f"""
         Also, we know about some other issues that occurred in the same application trace, listed below. This issue occurred somewhere alongside these:
         {connected_issues}
@@ -38,7 +47,7 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         final_summary_trace_details = "Include details from the trace if they will be useful to our engineers in understanding this issue."
 
     prompt = textwrap.dedent(
-        f'''Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
+        f"""Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
 
         The issue: {event_details.format_event()}
 
@@ -50,13 +59,13 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         {trace_summary_prompt}
         - Final summary: Write a 1-2 line summary of the specific details of the issue. {final_summary_trace_details}
         - Write a multi-line-headline-like summary of the specific application functionality or tasks affected by the issue, but don't overconfidently declare something broken or comment broadly on user impact.
-        - Write a headline-like summary of the overall issue.'''
+        - Write a headline-like summary of the overall issue."""
     )
 
     message_dicts: list[ChatCompletionMessageParam] = [
         {
             "content": "You speak only in news headlines (you can use multiple headlines for multiple sentences). Only use words that add value to our engineers who are debugging the issue under a time crunch. The more specific and granular you are, the faster our engineers can act. Handwavy broad talk about the service or application is a waste of time.",
-            "role": "system"
+            "role": "system",
         },
         {
             "content": prompt,

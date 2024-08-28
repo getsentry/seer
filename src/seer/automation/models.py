@@ -48,7 +48,7 @@ class StacktraceFrame(BaseModel):
         if not vars or len(vars.keys()) <= 4:
             return vars
         return cls._trim_vars(vars)
-    
+
     @staticmethod
     def _trim_vars(vars: dict[str, Any]):
         # use rough heuristics to guess which variable values to delete to attempt to trim
@@ -60,6 +60,7 @@ class StacktraceFrame(BaseModel):
                 continue
             trimmed_vars[key] = val
         return trimmed_vars
+
 
 class SentryFrame(TypedDict):
     absPath: Optional[str]
