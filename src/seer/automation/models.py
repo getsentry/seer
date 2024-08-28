@@ -56,7 +56,7 @@ class StacktraceFrame(BaseModel):
         for key, val in vars.items():
             if key.startswith("__") and key.endswith("__"):
                 continue
-            if val.startswith("<") and val.endswith(">"):
+            if str(val).startswith("<") and str(val).endswith(">"):
                 continue
             trimmed_vars[key] = val
         return trimmed_vars
