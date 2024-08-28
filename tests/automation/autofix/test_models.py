@@ -257,36 +257,30 @@ class TestStacktraceHelpers(unittest.TestCase):
     def test_trim_vars(self):
         self.assertEqual(StacktraceFrame._trim_vars({}), {})
 
-        input_dict = {'a': 1, 'b': 2, 'c': 3, 'd': 4}
+        input_dict = {"a": 1, "b": 2, "c": 3, "d": 4}
         self.assertEqual(StacktraceFrame._trim_vars(input_dict), input_dict)
 
         input_dict = {
-            'a': 1,
-            'b': 2,
-            'c': 3,
-            'd': 4,
-            'e': 5,
-            '__special__': 'ignored',
-            'object': '<object object at 0x...>',
-            'normal_string': 'keep_me'
+            "a": 1,
+            "b": 2,
+            "c": 3,
+            "d": 4,
+            "e": 5,
+            "__special__": "ignored",
+            "object": "<object object at 0x...>",
+            "normal_string": "keep_me",
         }
-        expected_output = {
-            'a': 1,
-            'b': 2,
-            'c': 3,
-            'd': 4,
-            'e': 5,
-            'normal_string': 'keep_me'
-        }
+        expected_output = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "normal_string": "keep_me"}
         self.assertEqual(StacktraceFrame._trim_vars(input_dict), expected_output)
 
         input_dict = {
-            '__special1__': 'ignored',
-            '__special2__': 'also_ignored',
-            'object1': '<object object at 0x...>',
-            'object2': '<function func at 0x...>'
+            "__special1__": "ignored",
+            "__special2__": "also_ignored",
+            "object1": "<object object at 0x...>",
+            "object2": "<function func at 0x...>",
         }
         self.assertEqual(StacktraceFrame._trim_vars(input_dict), {})
+
 
 class TestRepoDefinition(unittest.TestCase):
     def test_repo_definition_creation(self):
