@@ -1,13 +1,13 @@
 import abc
 import datetime
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 from pydantic import BaseModel
 from sqlalchemy import delete
 
-from seer.anomaly_detection.models import DynamicAlert, TimeSeries
+from seer.anomaly_detection.models import DynamicAlert, MPTimeSeries, TimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session
 
@@ -27,11 +27,18 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         external_alert_id: int,
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
+        anomalies: TimeSeriesAnomalies,
+        anomaly_algo_data: dict,
     ):
         return NotImplemented
 
     @abc.abstractmethod
-    def save_timepoint(self, external_alert_id: int, timepoint: TimeSeriesPoint):
+    def save_timepoint(
+        self,
+        external_alert_id: int,
+        timepoint: TimeSeriesPoint,
+        anomaly_algo_data: Optional[dict],
+    ):
         return NotImplemented
 
 
@@ -52,10 +59,12 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 )
                 return None
 
-            timeseries: TimeSeries = TimeSeries(
+            timeseries: MPTimeSeries = MPTimeSeries(
                 timestamps=np.empty([len(alert_info.timeseries)]),
                 values=np.empty([len(alert_info.timeseries)]),
+                window_size=alert_info.anomaly_algo_data.get("window_size"),
             )
+
             for i, point in enumerate(alert_info.timeseries):
                 np.put(timeseries.timestamps, i, point.timestamp.timestamp())
                 np.put(timeseries.values, i, point.value)
@@ -75,6 +84,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
         external_alert_id: int,
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
+        anomalies: TimeSeriesAnomalies,
+        anomaly_algo_data: dict,
     ):
         with Session() as session:
             existing_records = (
@@ -96,7 +107,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     DbDynamicAlert.external_alert_id == external_alert_id
                 )
                 session.execute(delete_q)
-
+            algo_data = anomalies.get_anomaly_algo_data()
             new_record = DbDynamicAlert(
                 organization_id=organization_id,
                 project_id=project_id,
@@ -106,14 +117,23 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     DbDynamicAlertTimeSeries(
                         timestamp=datetime.datetime.fromtimestamp(point.timestamp),
                         value=point.value,
+                        anomaly_type=anomalies.flags[i],
+                        anomaly_score=anomalies.scores[i],
+                        anomaly_algo_data=algo_data[i],
                     )
-                    for point in timeseries
+                    for i, point in enumerate(timeseries)
                 ],
+                anomaly_algo_data=anomaly_algo_data,
             )
             session.add(new_record)
             session.commit()
 
-    def save_timepoint(self, external_alert_id: int, timepoint: TimeSeriesPoint):
+    def save_timepoint(
+        self,
+        external_alert_id: int,
+        timepoint: TimeSeriesPoint,
+        anomaly_algo_data: Optional[dict],
+    ):
         with Session() as session:
             existing = (
                 session.query(DbDynamicAlert)
@@ -127,6 +147,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 dynamic_alert_id=existing.id,
                 timestamp=datetime.datetime.fromtimestamp(timepoint.timestamp),
                 value=timepoint.value,
+                anomaly_algo_data=anomaly_algo_data,
             )
+            if timepoint.anomaly is not None:
+                new_record.anomaly_type = timepoint.anomaly.anomaly_type
+                new_record.anomaly_score = timepoint.anomaly.anomaly_score
             session.add(new_record)
             session.commit()

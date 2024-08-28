@@ -15,7 +15,7 @@ class Anomaly(BaseModel):
         description="Indicates result of the anomaly detection algorithm. 'none' means no anomaly detected, 'anomaly_lower_confidence' means lower threshold, 'anomaly_higher_confidence' means higher threshold, 'no_data' means time series did not have enough data to run anomaly detection.",
     )
 
-    anomaly_score: Optional[float] = Field(None, description="Computed anomaly score")
+    anomaly_score: float = Field(..., description="Computed anomaly score")
 
 
 class TimeSeriesPoint(BaseModel):

@@ -1,17 +1,13 @@
 import logging
-from typing import List
+from typing import List, Tuple
 
 import sentry_sdk
 from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
-from seer.anomaly_detection.detectors import (
-    AnomalyDetector,
-    MPBatchAnomalyDetector,
-    MPStreamAnomalyDetector,
-)
-from seer.anomaly_detection.models import TimeSeriesAnomalies
+from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
+from seer.anomaly_detection.models import MPTimeSeriesAnomalies, TimeSeriesAnomalies
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
@@ -31,12 +27,14 @@ logger = logging.getLogger(__name__)
 
 class AnomalyDetection(BaseModel):
     @sentry_sdk.trace
-    def _batch_detect(self, timeseries: List[TimeSeriesPoint], config: AnomalyDetectionConfig):
+    def _batch_detect(
+        self, timeseries: List[TimeSeriesPoint], config: AnomalyDetectionConfig
+    ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
-        batch_detector: AnomalyDetector = MPBatchAnomalyDetector()
+        batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries), config)
         self._update_anomalies(timeseries, anomalies)
-        return timeseries
+        return timeseries, anomalies
 
     @inject
     @sentry_sdk.trace
@@ -45,7 +43,7 @@ class AnomalyDetection(BaseModel):
         alert: AlertInSeer,
         config: AnomalyDetectionConfig,
         alert_data_accessor: AlertDataAccessor = injected,
-    ) -> List[TimeSeriesPoint]:
+    ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
@@ -69,7 +67,7 @@ class AnomalyDetection(BaseModel):
         anomalies = batch_detector.detect(historic.timeseries, config)
 
         # Run stream detection
-        stream_detector: AnomalyDetector = MPStreamAnomalyDetector(
+        stream_detector = MPStreamAnomalyDetector(
             base_timestamps=historic.timeseries.timestamps,
             base_values=historic.timeseries.values,
             base_mp=anomalies.matrix_profile,
@@ -81,9 +79,13 @@ class AnomalyDetection(BaseModel):
         self._update_anomalies(ts_external, streamed_anomalies)
 
         # Save new data point
-        alert_data_accessor.save_timepoint(external_alert_id=alert.id, timepoint=ts_external[0])
+        alert_data_accessor.save_timepoint(
+            external_alert_id=alert.id,
+            timepoint=ts_external[0],
+            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data()[0],
+        )
         # TODO: Clean up old data
-        return ts_external
+        return ts_external, streamed_anomalies
 
     def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):
         if anomalies is None:
@@ -95,7 +97,7 @@ class AnomalyDetection(BaseModel):
             )
 
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-        ts: List[TimeSeriesPoint] = (
+        ts, _ = (
             self._online_detect(request.context, request.config)
             if isinstance(request.context, AlertInSeer)
             else self._batch_detect(request.context, request.config)
@@ -106,19 +108,37 @@ class AnomalyDetection(BaseModel):
     def store_data(
         self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
     ) -> StoreDataResponse:
+        # Ensure we have at least 7 days of data in the time series
+        if len(request.timeseries) < int(7 * 24 * 60 / request.config.time_period):
+            logger.error(
+                "insufficient_timeseries_data",
+                extra={
+                    "organization_id": request.organization_id,
+                    "project_id": request.project_id,
+                    "external_alert_id": request.alert.id,
+                    "num_datapoints": len(request.timeseries),
+                    "minimum_required": int(7 * 24 * 50 / request.config.time_period),
+                },
+            )
+            raise Exception(f"Insufficient time series data for alert {request.alert.id}")
+
         logger.info(
             "store_alert_request",
             extra={
                 "organization_id": request.organization_id,
                 "project_id": request.project_id,
                 "external_alert_id": request.alert.id,
+                "num_datapoints": len(request.timeseries),
             },
         )
+        ts, anomalies = self._batch_detect(request.timeseries, request.config)
         alert_data_accessor.save_alert(
             organization_id=request.organization_id,
             project_id=request.project_id,
             external_alert_id=request.alert.id,
             config=request.config,
-            timeseries=request.timeseries,
+            timeseries=ts,
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": anomalies.window_size},
         )
         return StoreDataResponse(success=True)

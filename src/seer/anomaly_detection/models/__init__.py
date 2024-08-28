@@ -8,5 +8,6 @@ TimeSeriesAnomalies = timeseries_anomalies.TimeSeriesAnomalies
 Sensitivities = external.Sensitivities
 Directions = external.Directions
 AnomalyFlags = external.AnomalyFlags
+Anomaly = external.Anomaly
 AnomalyDetectionConfig = external.AnomalyDetectionConfig
 TimeSeriesPoint = external.TimeSeriesPoint

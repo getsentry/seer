@@ -272,6 +272,7 @@ class DbDynamicAlert(Base):
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
+    anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
@@ -295,6 +296,11 @@ class DbDynamicAlertTimeSeries(Base):
     )
     timestamp: Mapped[datetime.datetime] = mapped_column(TIMESTAMP(timezone=False), nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
+    anomaly_type: Mapped[str] = mapped_column(String, nullable=False)
+    anomaly_score: Mapped[float] = mapped_column(Float, nullable=False)
+    # TODO: Make this model extensible so that other algorithms, in addition to matrix profile, are supported. For now storing it as
+    # JSON field that can be extended.
+    anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
@@ -304,7 +310,7 @@ class DbDynamicAlertTimeSeries(Base):
     )
 
     def __str__(self):
-        return f"timstamp: {self.timestamp}, value: {self.value}"
+        return f"timstamp: {self.timestamp}, value: {self.value}, anomaly_type:{self.anomaly_type}"
 
 
 class DbSmokeTest(Base):
