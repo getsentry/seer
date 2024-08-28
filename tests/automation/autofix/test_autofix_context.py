@@ -105,7 +105,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             }
             cur.steps = [
                 ChangesStep(
-                    id="changes",
+                    key="changes",
                     title="changes_title",
                     type=StepType.CHANGES,
                     status=AutofixStatus.PROCESSING,
