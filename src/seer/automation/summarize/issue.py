@@ -26,19 +26,44 @@ class IssueSummary(BaseModel):
 @inject
 def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = injected):
     event_details = EventDetails.from_event(request.issue.events[0])
+    connected_event_details = (
+        [
+            EventDetails.from_event(issue.events[0])
+            for issue in request.connected_issues
+            if issue.events
+        ]
+        if request.connected_issues
+        else []
+    )
+
+    connected_issues_input = ""
+    if connected_event_details:
+        connected_issues = "\n----\n".join(
+            [
+                f"Connected Issue:\n{event.format_event()}"
+                for _, event in enumerate(connected_event_details)
+            ]
+        )
+        connected_issues_input = f"""
+        Also, we know about some other issues that occurred in the same application trace, listed below.  The main issue occurred somewhere alongside these:
+        {connected_issues}
+        """
 
     prompt = textwrap.dedent(
-        """Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
-        {event_details}
+        f"""Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
 
-        Your #1 goal is to help our engineers immediately understand the issue and act!
+        The main issue: {event_details.format_event()}
+
+        {connected_issues_input}
+
+        Your #1 goal is to help our engineers immediately understand the main issue and act!
 
         Regarding the issue summary, state clearly and concisely what's going wrong and why. Do not just restate the error message, as that wastes our time! Look deeper into the details provided to paint the full picture and find the key insight of what's going wrong.
 
-        At the code level, our engineers need to get into the nitty gritty mechanical details of what's going wrong.
+        At the code level, our engineers need to get into the nitty gritty mechanical details of what's going wrong. The insight may be in the stacktrace, error message, event logs, or connected issues. It's up to you to highlight the relevant details!
 
-        Regarding affected functionality, your goal is to help our engineers immediately understand what SPECIFIC application or service functionality is related to this code issue. Do NOT try to conclude root causes or suggest solutions. Don't even talk about the mechanical details, but rather speak more to the overall task that is failing. Get straight to the point without being overconfident."""
-    ).format(event_details=event_details.format_event())
+        Regarding affected functionality, your goal is to help our engineers immediately understand what SPECIFIC application or service functionality is related to this code issue. Do NOT try to conclude root causes or suggest solutions. Don't even talk about the mechanical details, but rather speak more to the overall task that is affected. Don't comment on the severity of the issue or user impact."""
+    )
 
     message_dicts: list[ChatCompletionMessageParam] = [
         {

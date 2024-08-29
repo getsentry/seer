@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 from seer.automation.models import IssueDetails
@@ -9,6 +11,7 @@ class SummarizeIssueRequest(BaseModel):
     organization_id: int | None = None
     organization_slug: str | None = None
     project_id: int | None = None
+    connected_issues: Optional[list[IssueDetails]] = None
 
 
 class SummarizeIssueResponse(BaseModel):

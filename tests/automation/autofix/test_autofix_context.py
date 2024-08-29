@@ -14,7 +14,17 @@ from seer.automation.autofix.models import (
     StepType,
 )
 from seer.automation.autofix.state import ContinuationState
-from seer.automation.models import FileChange, IssueDetails, RepoDefinition, SentryEventData
+from seer.automation.models import (
+    EventDetails,
+    ExceptionDetails,
+    FileChange,
+    IssueDetails,
+    RepoDefinition,
+    SentryEventData,
+    Stacktrace,
+    StacktraceFrame,
+    ThreadDetails,
+)
 from seer.automation.state import LocalMemoryState
 from seer.db import DbPrIdToAutofixRunIdMapping, Session
 
@@ -59,6 +69,60 @@ class TestAutofixContext(unittest.TestCase):
         AutofixContext(state, MagicMock(), mock_event_manager)
 
         mock_event_manager.migrate_step_keys.assert_called_once()
+
+    def test_process_event_paths(self):
+        mock_event = EventDetails(
+            title="title",
+            exceptions=[
+                ExceptionDetails(stacktrace=None, type="type"),
+                ExceptionDetails(
+                    type="type",
+                    stacktrace=Stacktrace(
+                        frames=[
+                            StacktraceFrame(
+                                filename="test_file.py",
+                                in_app=True,
+                                repo_name=None,
+                                context=[],
+                                abs_path="path",
+                                line_no=1,
+                                col_no=1,
+                            )
+                        ]
+                    ),
+                ),
+            ],
+            threads=[
+                ThreadDetails(
+                    id=1,
+                    stacktrace=Stacktrace(
+                        frames=[
+                            StacktraceFrame(
+                                filename="another_file.py",
+                                in_app=True,
+                                repo_name=None,
+                                context=[],
+                                abs_path="path",
+                                line_no=1,
+                                col_no=1,
+                            )
+                        ]
+                    ),
+                ),
+                ThreadDetails(id=1, stacktrace=None),
+            ],
+        )
+
+        self.autofix_context._process_stacktrace_paths = MagicMock()
+        self.autofix_context.process_event_paths(mock_event)
+
+        self.assertEqual(self.autofix_context._process_stacktrace_paths.call_count, 2)
+        self.autofix_context._process_stacktrace_paths.assert_any_call(
+            mock_event.exceptions[1].stacktrace
+        )
+        self.autofix_context._process_stacktrace_paths.assert_any_call(
+            mock_event.threads[0].stacktrace
+        )
 
 
 class TestAutofixContextPrCommit(unittest.TestCase):

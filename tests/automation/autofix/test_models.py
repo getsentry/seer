@@ -254,6 +254,17 @@ class TestStacktraceHelpers(unittest.TestCase):
         self.assertFalse(result[10].in_app)
         self.assertFalse(result[-1].in_app)
 
+    def test_trim_vars(self):
+        self.assertEqual(StacktraceFrame._trim_vars({}, "def foo():"), {})
+
+        input_dict = {
+            "bar": 1,
+            "baz": 5,
+            "foo": "ignored",
+        }
+        expected_output = {"bar": 1, "foo": "ignored"}
+        self.assertEqual(StacktraceFrame._trim_vars(input_dict, "def foo(bar):"), expected_output)
+
 
 class TestRepoDefinition(unittest.TestCase):
     def test_repo_definition_creation(self):
@@ -689,7 +700,7 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
 
     for frame in stacktrace.frames:
         if frame.vars:
-            vars_str = json.dumps(frame.vars, indent=2)
+            vars_str = json.dumps(StacktraceFrame._trim_vars(frame.vars), indent=2)
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str
