@@ -11,11 +11,18 @@ from seer.dependency_injection import inject, injected
 
 
 class IssueSummary(BaseModel):
+    reason_step_by_step: str
+    summary_of_issue_at_code_level: str
+    summary_of_functionality_touched: str
+    factual_issue_description_under_10_words: str
+
+
+class IssueSummaryWithTrace(BaseModel):
     one_sentence_summary_of_main_issue_at_code_level: str
     one_sentence_summary_of_connected_issues_at_code_level: str
     insights_from_trace_at_code_level: str
     final_summary: str
-    summary_of_affected_functionality: str
+    summary_of_functionality_touched: str
     factual_issue_description_under_10_words: str
 
 
@@ -47,8 +54,12 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         Also, we know about some other issues that occurred in the same application trace, listed below. This issue occurred somewhere alongside these:
         {connected_issues}
         """
-        trace_summary_prompt = "- Describe insights from the trace; i.e. is this issue caused by another issue, or is it causing another issue, or are there other issues following the same pattern with some variations? Specifically mention other issues in the trace if there is anything to conclude. Be specific with code details and how these issues interact if at all."
-        final_summary_trace_details = "Include details from the trace if they will be useful to our engineers in understanding this issue."
+
+        trace_summary_prompt = """- Summarize the main issue at a code level standalone.
+        - Summarize the connected issues at a code level standalone.
+        - Describe insights from the trace; i.e. is this issue caused by another issue, or is it causing another issue, or are there other issues following the same pattern with some variations? Specifically mention other issues in the trace if there is anything to conclude. Be specific with code details and how these issues interact if at all."""
+
+        final_summary_trace_details = "Make connections to details from the trace if they will be useful to our engineers in understanding this issue."
 
     prompt = textwrap.dedent(
         f"""Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
@@ -58,12 +69,11 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         {connected_issues_input}
 
         Your #1 goal is to help our engineers immediately understand the main issue and act! Follow the below plan, giving detailed yet concise answers:
-        - Summarize the main issue at a code level standalone.
-        - Summarize the connected issues at a code level standalone.
+
         {trace_summary_prompt}
-        - Final summary: Write a 1-2 line summary of the specific details of the issue. {final_summary_trace_details}
-        - Write a multi-line-headline-like summary of the specific application functionality or tasks affected by the issue, but don't overconfidently declare something broken or comment broadly on user impact.
-        - Write a headline-like summary of the overall issue."""
+        - Write a 1-2 line final summary of the specific code details of the issue. State clearly and concisely what's going wrong and why. Do not just restate the error message, as that wastes our time! Look deeper into the details provided to paint the full picture and find the key insight of what's going wrong. At the code level, our engineers need to get into the nitty gritty mechanical details of what's going wrong. {final_summary_trace_details}
+        - Summarize what SPECIFIC functionality is touched by the issue. Do NOT try to conclude root causes or suggest solutions. Don't even talk about the mechanical details, but rather speak more to the overall task that is failing. Get straight to the point!
+        - Write a professional headline-like summary of the overall issue."""
     )
 
     message_dicts: list[ChatCompletionMessageParam] = [
@@ -80,7 +90,7 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
     completion = gpt_client.openai_client.beta.chat.completions.parse(
         model="gpt-4o-mini-2024-07-18",
         messages=message_dicts,
-        response_format=IssueSummary,
+        response_format=IssueSummaryWithTrace if connected_event_details else IssueSummary,
         temperature=0.0,
         max_tokens=2048,
     )
@@ -91,8 +101,8 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         raise RuntimeError("Failed to parse message")
 
     res = completion.choices[0].message.parsed
-    summary = res.final_summary
-    impact = res.summary_of_affected_functionality
+    summary = res.final_summary if connected_event_details else res.summary_of_issue_at_code_level
+    impact = res.functionality_touched
     headline = res.factual_issue_description_under_10_words
 
     return SummarizeIssueResponse(

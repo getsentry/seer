@@ -27,7 +27,7 @@ class TestSummarizeIssue:
             one_sentence_summary_of_connected_issues_at_code_level="test",
             insights_from_trace_at_code_level="test",
             final_summary="Test summary",
-            summary_of_affected_functionality="Test functionality",
+            summary_of_functionality_touched="Test functionality",
             factual_issue_description_under_10_words="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
@@ -77,7 +77,7 @@ class TestSummarizeIssue:
             one_sentence_summary_of_connected_issues_at_code_level="test",
             insights_from_trace_at_code_level="test",
             final_summary="Test summary",
-            summary_of_affected_functionality="Test functionality",
+            summary_of_functionality_touched="Test functionality",
             factual_issue_description_under_10_words="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
