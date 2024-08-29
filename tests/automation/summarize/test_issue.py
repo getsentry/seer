@@ -15,7 +15,10 @@ class TestSummarizeIssue:
 
     @pytest.fixture
     def sample_request(self):
-        return SummarizeIssueRequest(group_id=1, issue=next(generate(IssueDetails)))
+        iterator = generate(IssueDetails)
+        return SummarizeIssueRequest(
+            group_id=1, issue=next(iterator), connected_issues=[next(iterator), next(iterator)]
+        )
 
     def test_summarize_issue_success(self, mock_gpt_client, sample_request):
         mock_structured_completion = MagicMock()
@@ -65,7 +68,7 @@ class TestSummarizeIssue:
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
     def test_summarize_issue_event_details(self, mock_from_event, mock_gpt_client, sample_request):
         mock_event_details = Mock()
-        mock_event_details.format_event.return_value = "Formatted event details"
+        mock_event_details.format_event.side_effect = ["foo details", "bar details", "baz details"]
         mock_from_event.return_value = mock_event_details
 
         mock_structured_completion = MagicMock()
@@ -84,10 +87,24 @@ class TestSummarizeIssue:
 
         summarize_issue(sample_request, gpt_client=mock_gpt_client)
 
-        mock_from_event.assert_called_once_with(sample_request.issue.events[0])
-        mock_event_details.format_event.assert_called_once()
+        mock_from_event.assert_any_call(sample_request.issue.events[0])
+        mock_from_event.assert_any_call(sample_request.connected_issues[0].events[0])
+        mock_from_event.assert_any_call(sample_request.connected_issues[1].events[0])
+        assert mock_event_details.format_event.call_count == 3
         assert (
-            "Formatted event details"
+            "foo details"
+            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
+                1
+            ]["content"]
+        )
+        assert (
+            "bar details"
+            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
+                1
+            ]["content"]
+        )
+        assert (
+            "baz details"
             in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
                 1
             ]["content"]

@@ -24,7 +24,11 @@ class IssueSummary(BaseModel):
 def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = injected):
     event_details = EventDetails.from_event(request.issue.events[0])
     connected_event_details = (
-        [EventDetails.from_event(issue.events[0]) for issue in request.connected_issues]
+        [
+            EventDetails.from_event(issue.events[0])
+            for issue in request.connected_issues
+            if issue.events
+        ]
         if request.connected_issues
         else []
     )
