@@ -23,7 +23,7 @@ class TimeSeriesAnomalies(BaseModel, abc.ABC):
     )
 
     @abc.abstractmethod
-    def get_anomaly_algo_data(self) -> List[Optional[Dict]]:
+    def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
         return NotImplemented
 
     # @root_validator(pre=False)
@@ -45,10 +45,15 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
 
     window_size: int = Field(..., description="Window size used to build the matrix profile")
 
-    def get_anomaly_algo_data(self) -> List[Optional[Dict]]:
-        # Matrix profile is not available for the first (window_size -1) time steps. Need to set them to None.
-        algo_data: List[Optional[Dict]] = [None] * (self.window_size - 1)
+    def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
+        algo_data: List[Optional[Dict]] = []
+        if len(self.matrix_profile) < front_pad_to_len:
+            algo_data = [None] * (front_pad_to_len - len(self.matrix_profile))
 
         for dist, index, l_index, r_index in self.matrix_profile:
             algo_data.append({"dist": dist, "idx": index, "l_idx": l_index, "r_idx": r_index})
         return algo_data
+
+    @staticmethod
+    def extract_algo_data(map: dict):
+        return map.get("dist"), map.get("idx"), map.get("l_idx"), map.get("r_idx")

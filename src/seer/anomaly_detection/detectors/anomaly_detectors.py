@@ -138,46 +138,56 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomalies:
-        # Initialize stumpi
-        stream = stumpy.stumpi(
-            self.base_values,
-            m=self.window_size,
-            mp=self.base_mp,
-            normalize=False,
-            egress=False,
-        )
-
-        scores = []
-        flags = []
-        for cur_val in timeseries.values:
-            # Update the sumpi stream processor with new data
-            stream.update(cur_val)
-
-            # Get the matrix profile for the new data and score it
-            cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
-            mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
-            cur_scores, cur_flags = scorer.stream_score(
-                ts_value=cur_val,
-                mp_dist=stream.P_[-1],
-                sensitivity=config.sensitivity,
-                direction=config.direction,
-                window_size=self.window_size,
-                ts_baseline=self.base_values,
-                mp_dist_baseline=mp_dist_baseline,
+        stream = None
+        with sentry_sdk.start_span(description="Initializing MP stream"):
+            # Initialize stumpi
+            stream = stumpy.stumpi(
+                self.base_values,
+                m=self.window_size,
+                mp=self.base_mp,
+                normalize=False,
+                egress=False,
             )
-            scores.extend(cur_scores)
-            flags.extend(cur_flags)
 
-            # Add new data point as well as its matrix profile to baseline
-            self.base_values = stream.T_
-            self.base_mp = np.vstack([self.base_mp, cur_mp])
+        with sentry_sdk.start_span(description="Stream compute MP"):
+            scores = []
+            flags = []
+            streamed_mp = []
+            for cur_val in timeseries.values:
+                # Update the sumpi stream processor with new data
+                stream.update(cur_val)
 
-        return MPTimeSeriesAnomalies(
-            flags=flags,
-            scores=scores,
-            matrix_profile=self.base_mp,
-            window_size=self.window_size,
-        )
+                # Get the matrix profile for the new data and score it
+                cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
+                streamed_mp.append(cur_mp)
+                mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
+                cur_scores, cur_flags = scorer.stream_score(
+                    ts_value=cur_val,
+                    mp_dist=stream.P_[-1],
+                    sensitivity=config.sensitivity,
+                    direction=config.direction,
+                    window_size=self.window_size,
+                    ts_baseline=self.base_values,
+                    mp_dist_baseline=mp_dist_baseline,
+                )
+                scores.extend(cur_scores)
+                flags.extend(cur_flags)
+
+                # Add new data point as well as its matrix profile to baseline
+                self.base_values = stream.T_
+                self.base_mp = np.vstack([self.base_mp, cur_mp])
+
+            return MPTimeSeriesAnomalies(
+                flags=flags,
+                scores=scores,
+                matrix_profile=stumpy.mparray.mparray(
+                    streamed_mp,
+                    k=1,
+                    m=self.window_size,
+                    excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
+                ),
+                window_size=self.window_size,
+            )
 
 
 class DummyAnomalyDetector(AnomalyDetector):

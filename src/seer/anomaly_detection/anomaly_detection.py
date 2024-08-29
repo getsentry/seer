@@ -31,6 +31,20 @@ class AnomalyDetection(BaseModel):
     def _batch_detect(
         self, timeseries: List[TimeSeriesPoint], config: AnomalyDetectionConfig
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
+        """
+        Stateless batch anomaly detection on entire timeseries as provided. In batch mode, analysis of a
+        single timestep is dependent on the time steps on either side of it.
+
+        Parameters:
+        timeseries: TimeSeries
+            The full timeseries
+
+        config: AnomalyDetectionConfig
+            Parameters for tweaking the AD algorithm
+
+        Returns:
+        Tuple with input timeseries and identified anomalies
+        """
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries), config)
@@ -44,6 +58,21 @@ class AnomalyDetection(BaseModel):
         config: AnomalyDetectionConfig,
         alert_data_accessor: AlertDataAccessor = injected,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
+        """
+        Online anomaly detection for a new incoming timestep of an existing alert. In this mode, the new timestep is
+        analyzed using historic timesteps from the datastore
+
+        Parameters:
+        alert: AlertInSeer
+            Alert id as well as the new time step to evaluate
+
+        config: AnomalyDetectionConfig
+            Parameters for tweaking the AD algorithm
+
+        Returns:
+        Tuple with input timeseries and identified anomalies
+        """
+
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
@@ -59,12 +88,11 @@ class AnomalyDetection(BaseModel):
         if historic is None:
             raise Exception(f"Invalid alert id {alert.id}")
 
-        # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
+        if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
+            raise Exception("Invalid state")
+        anomalies: MPTimeSeriesAnomalies = historic.anomalies
 
-        # Run batch detect on history data
-        # TODO: This step can be optimized further by caching the matrix profile in the database
-        batch_detector = MPBatchAnomalyDetector()
-        anomalies = batch_detector.detect(historic.timeseries, config)
+        # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
         # Run stream detection
         stream_detector = MPStreamAnomalyDetector(
@@ -82,22 +110,41 @@ class AnomalyDetection(BaseModel):
             external_alert_id=alert.id,
             timepoint=ts_external[0],
             anomaly=streamed_anomalies,
-            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data()[-1],
+            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0],
         )
         # TODO: Clean up old data
         return ts_external, streamed_anomalies
 
-    @inject
+    def _min_required_timesteps(self, time_period, min_num_days=7):
+        return int(min_num_days * 24 * 60 / time_period)
+
     @sentry_sdk.trace
     def _combo_detect(
         self, ts_with_history: TimeSeriesWithHistory, config: AnomalyDetectionConfig
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
-        if len(ts_with_history.history) < int(7 * 24 * 60 / config.time_period):
+        """
+        Stateless online anomaly detection for a part of a time series. This function takes two parts of the time series -
+        historic time steps and current time steps. Each time step in the current section is evaluated in a streaming fashion
+        against the historic data
+
+        Parameters:
+        ts_with_history: TimeSeriesWithHistory
+            A full time series split into history and current
+
+        config: AnomalyDetectionConfig
+            Parameters for tweaking the AD algorithm
+
+        Returns:
+        Tuple with input timeseries and identified anomalies
+        """
+
+        min_len = self._min_required_timesteps(config.time_period)
+        if len(ts_with_history.history) < min_len:
             logger.error(
                 "insufficient_history_data",
                 extra={
                     "num_datapoints": len(ts_with_history.history),
-                    "minimum_required": int(7 * 24 * 50 / config.time_period),
+                    "minimum_required": min_len,
                 },
             )
             raise Exception("Insufficient history data")
@@ -135,21 +182,44 @@ class AnomalyDetection(BaseModel):
             )
 
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
+        """
+        Main entry point for anomaly detection.
+
+        Parameters:
+        request: DetectAnomaliesRequest
+            Anomaly detection request that has either a complete time series or an alert reference.
+        """
         if isinstance(request.context, AlertInSeer):
-            ts, anomalies = self._online_detect(request.context, request.config)
+            transaction_name = "Stream AD for alert"
         elif isinstance(request.context, TimeSeriesWithHistory):
-            ts, anomalies = self._combo_detect(request.context, request.config)
+            transaction_name = "Stream AD for timeseries with history"
         else:
-            ts, anomalies = self._batch_detect(request.context, request.config)
-        self._update_anomalies(ts, anomalies)
-        return DetectAnomaliesResponse(timeseries=ts)
+            transaction_name = "Batch AD for timeseries"
+
+        with sentry_sdk.start_transaction(op="task", name=transaction_name):
+            if isinstance(request.context, AlertInSeer):
+                ts, anomalies = self._online_detect(request.context, request.config)
+            elif isinstance(request.context, TimeSeriesWithHistory):
+                ts, anomalies = self._combo_detect(request.context, request.config)
+            else:
+                ts, anomalies = self._batch_detect(request.context, request.config)
+            self._update_anomalies(ts, anomalies)
+            return DetectAnomaliesResponse(timeseries=ts)
 
     @inject
     def store_data(
         self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
     ) -> StoreDataResponse:
+        """
+        Main entry point for storing time series data for an alert.
+
+        Parameters:
+        request: StoreDataRequest
+            Alert information along with underlying time series data
+        """
         # Ensure we have at least 7 days of data in the time series
-        if len(request.timeseries) < int(7 * 24 * 60 / request.config.time_period):
+        min_len = self._min_required_timesteps(request.config.time_period)
+        if len(request.timeseries) < min_len:
             logger.error(
                 "insufficient_timeseries_data",
                 extra={
@@ -157,7 +227,7 @@ class AnomalyDetection(BaseModel):
                     "project_id": request.project_id,
                     "external_alert_id": request.alert.id,
                     "num_datapoints": len(request.timeseries),
-                    "minimum_required": int(7 * 24 * 50 / request.config.time_period),
+                    "minimum_required": min_len,
                 },
             )
             raise Exception(f"Insufficient time series data for alert {request.alert.id}")
