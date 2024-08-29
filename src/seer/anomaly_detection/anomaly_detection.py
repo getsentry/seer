@@ -18,6 +18,7 @@ from seer.anomaly_detection.models.external import (
     StoreDataRequest,
     StoreDataResponse,
     TimeSeriesPoint,
+    TimeSeriesWithHistory,
 )
 from seer.dependency_injection import inject, injected
 
@@ -33,7 +34,6 @@ class AnomalyDetection(BaseModel):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries), config)
-        self._update_anomalies(timeseries, anomalies)
         return timeseries, anomalies
 
     @inject
@@ -76,15 +76,53 @@ class AnomalyDetection(BaseModel):
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
         )
-        self._update_anomalies(ts_external, streamed_anomalies)
 
         # Save new data point
         alert_data_accessor.save_timepoint(
             external_alert_id=alert.id,
             timepoint=ts_external[0],
-            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data()[0],
+            anomaly=streamed_anomalies,
+            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data()[-1],
         )
         # TODO: Clean up old data
+        return ts_external, streamed_anomalies
+
+    @inject
+    @sentry_sdk.trace
+    def _combo_detect(
+        self, ts_with_history: TimeSeriesWithHistory, config: AnomalyDetectionConfig
+    ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
+        if len(ts_with_history.history) < int(7 * 24 * 60 / config.time_period):
+            logger.error(
+                "insufficient_history_data",
+                extra={
+                    "num_datapoints": len(ts_with_history.history),
+                    "minimum_required": int(7 * 24 * 50 / config.time_period),
+                },
+            )
+            raise Exception("Insufficient history data")
+
+        logger.info(
+            f"Detecting anomalies for time series with {len(ts_with_history.current)} datapoints and history of {len(ts_with_history.history)} datapoints"
+        )
+        ts_external: List[TimeSeriesPoint] = ts_with_history.current
+
+        historic = convert_external_ts_to_internal(ts_with_history.history)
+
+        # Run batch detect on history data
+        batch_detector = MPBatchAnomalyDetector()
+        anomalies = batch_detector.detect(historic, config)
+
+        # Run stream detection on current data
+        stream_detector = MPStreamAnomalyDetector(
+            base_timestamps=historic.timestamps,
+            base_values=historic.values,
+            base_mp=anomalies.matrix_profile,
+            window_size=anomalies.window_size,
+        )
+        streamed_anomalies = stream_detector.detect(
+            convert_external_ts_to_internal(ts_external), config
+        )
         return ts_external, streamed_anomalies
 
     def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):
@@ -97,11 +135,13 @@ class AnomalyDetection(BaseModel):
             )
 
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
-        ts, _ = (
-            self._online_detect(request.context, request.config)
-            if isinstance(request.context, AlertInSeer)
-            else self._batch_detect(request.context, request.config)
-        )
+        if isinstance(request.context, AlertInSeer):
+            ts, anomalies = self._online_detect(request.context, request.config)
+        elif isinstance(request.context, TimeSeriesWithHistory):
+            ts, anomalies = self._combo_detect(request.context, request.config)
+        else:
+            ts, anomalies = self._batch_detect(request.context, request.config)
+        self._update_anomalies(ts, anomalies)
         return DetectAnomaliesResponse(timeseries=ts)
 
     @inject

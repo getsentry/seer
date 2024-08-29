@@ -37,6 +37,7 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         self,
         external_alert_id: int,
         timepoint: TimeSeriesPoint,
+        anomaly: TimeSeriesAnomalies,
         anomaly_algo_data: Optional[dict],
     ):
         return NotImplemented
@@ -132,6 +133,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         self,
         external_alert_id: int,
         timepoint: TimeSeriesPoint,
+        anomaly: TimeSeriesAnomalies,
         anomaly_algo_data: Optional[dict],
     ):
         with Session() as session:
@@ -147,10 +149,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 dynamic_alert_id=existing.id,
                 timestamp=datetime.datetime.fromtimestamp(timepoint.timestamp),
                 value=timepoint.value,
+                anomaly_type=anomaly.flags[0],
+                anomaly_score=anomaly.scores[0],
                 anomaly_algo_data=anomaly_algo_data,
             )
-            if timepoint.anomaly is not None:
-                new_record.anomaly_type = timepoint.anomaly.anomaly_type
-                new_record.anomaly_score = timepoint.anomaly.anomaly_score
             session.add(new_record)
             session.commit()

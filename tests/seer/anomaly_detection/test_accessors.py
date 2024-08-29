@@ -114,7 +114,15 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             anomaly=Anomaly(anomaly_type="none", anomaly_score=1.0),
         )
         alert_data_accessor.save_timepoint(
-            external_alert_id, point3, anomaly_algo_data={"dummy": 10}
+            external_alert_id,
+            point3,
+            anomaly=MPTimeSeriesAnomalies(
+                flags=["none"],
+                scores=[0.8],
+                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                window_size=1,
+            ),
+            anomaly_algo_data={"dummy": 10},
         )
         alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
         self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")

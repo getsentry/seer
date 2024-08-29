@@ -52,13 +52,22 @@ class AlertInSeer(BaseModel):
     )
 
 
+class TimeSeriesWithHistory(BaseModel):
+    history: List[TimeSeriesPoint] = Field(
+        ..., description="Historic data that will be used for anomaly detection"
+    )
+    current: List[TimeSeriesPoint] = Field(
+        ..., description="Current time steps of time series for anomaly detection"
+    )
+
+
 class DetectAnomaliesRequest(BaseModel):
     organization_id: int
     project_id: int
     config: AnomalyDetectionConfig
-    context: AlertInSeer | List[TimeSeriesPoint] = Field(
+    context: AlertInSeer | List[TimeSeriesPoint] | TimeSeriesWithHistory = Field(
         ...,
-        description="Context can be an alert identified by its id or a raw time series. If alert is provided then the system will pull the related timeseries from store else it will use the provided timeseries.",
+        description="Context can be an alert identified by its id or a raw time series or a time series split into history and current. If alert is provided then the system will pull the related timeseries from store. If raw timeseries is present then batch anomaly detection is run for the entire timeseries. If timeseries with history is provided then matrix profile computed on the history data is used to do streaming anomaly detection on current data.",
     )
 
 

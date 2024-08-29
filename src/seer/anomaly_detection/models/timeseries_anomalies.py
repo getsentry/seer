@@ -49,6 +49,6 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
         # Matrix profile is not available for the first (window_size -1) time steps. Need to set them to None.
         algo_data: List[Optional[Dict]] = [None] * (self.window_size - 1)
 
-        for dist, index, l_index, _ in self.matrix_profile:
-            algo_data.append({"mp_dist": dist, "mp_index": index, "mp_left_index": l_index})
+        for dist, index, l_index, r_index in self.matrix_profile:
+            algo_data.append({"dist": dist, "idx": index, "l_idx": l_index, "r_idx": r_index})
         return algo_data
