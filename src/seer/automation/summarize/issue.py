@@ -102,7 +102,7 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
 
     res = completion.choices[0].message.parsed
     summary = res.final_summary if connected_event_details else res.summary_of_issue_at_code_level
-    impact = res.functionality_touched
+    impact = res.summary_of_functionality_touched
     headline = res.factual_issue_description_under_10_words
 
     return SummarizeIssueResponse(
