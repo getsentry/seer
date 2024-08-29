@@ -23,12 +23,10 @@ class TestSummarizeIssue:
     def test_summarize_issue_success(self, mock_gpt_client, sample_request):
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
-            one_sentence_summary_of_main_issue_at_code_level="test",
-            one_sentence_summary_of_connected_issues_at_code_level="test",
-            insights_from_trace_at_code_level="test",
-            final_summary="Test summary",
-            summary_of_functionality_touched="Test functionality",
-            factual_issue_description_under_10_words="Test headline",
+            reason_step_by_step=[],
+            summary_of_issue_at_code_level="Test summary",
+            summary_of_functionality_affected="Test functionality",
+            five_to_ten_word_headline="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
@@ -73,12 +71,10 @@ class TestSummarizeIssue:
 
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
-            one_sentence_summary_of_main_issue_at_code_level="test",
-            one_sentence_summary_of_connected_issues_at_code_level="test",
-            insights_from_trace_at_code_level="test",
-            final_summary="Test summary",
-            summary_of_functionality_touched="Test functionality",
-            factual_issue_description_under_10_words="Test headline",
+            reason_step_by_step=[],
+            summary_of_issue_at_code_level="Test summary",
+            summary_of_functionality_affected="Test functionality",
+            five_to_ten_word_headline="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
@@ -94,19 +90,19 @@ class TestSummarizeIssue:
         assert (
             "foo details"
             in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
-                1
+                0
             ]["content"]
         )
         assert (
             "bar details"
             in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
-                1
+                0
             ]["content"]
         )
         assert (
             "baz details"
             in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
-                1
+                0
             ]["content"]
         )
 
