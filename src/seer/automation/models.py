@@ -14,6 +14,7 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
+    ValidationInfo,
     field_validator,
 )
 from pydantic.alias_generators import to_camel, to_snake
@@ -44,21 +45,21 @@ class StacktraceFrame(BaseModel):
 
     @field_validator("vars", mode="before")
     @classmethod
-    def validate_vars(cls, vars: Optional[dict[str, Any]]):
-        if not vars or len(vars.keys()) <= 4:
+    def validate_vars(cls, vars: Optional[dict[str, Any]], info: ValidationInfo):
+        if not vars or "context" not in info.data or not info.data["context"]:
             return vars
-        return cls._trim_vars(vars)
+        code_str = ""
+        for _, line in info.data["context"]:
+            code_str += line + "\n"
+        return cls._trim_vars(vars, code_str)
 
     @staticmethod
-    def _trim_vars(vars: dict[str, Any]):
-        # use rough heuristics to guess which variable values to delete to attempt to trim
+    def _trim_vars(vars: dict[str, Any], code_context: str):
+        # only keep variables mentioned in the context of the stacktrace frame
         trimmed_vars = {}
         for key, val in vars.items():
-            if key.startswith("__") and key.endswith("__"):
-                continue
-            if str(val).startswith("<") and str(val).endswith(">"):
-                continue
-            trimmed_vars[key] = val
+            if key in code_context:
+                trimmed_vars[key] = val
         return trimmed_vars
 
 
