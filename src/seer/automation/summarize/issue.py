@@ -17,8 +17,8 @@ class Step(BaseModel):
 
 class IssueSummary(BaseModel):
     reason_step_by_step: list[Step]
-    summary_of_issue_at_code_level: str
-    summary_of_functionality_affected: str
+    summary_of_the_issue_based_on_your_step_by_step_reasoning: str
+    summary_of_the_functionality_affected: str
     five_to_ten_word_headline: str
 
 
@@ -45,14 +45,14 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
             ]
         )
         connected_issues_input = f"""
-        Also, we know about some other issues that occurred in the same application trace, listed below.  The main issue occurred somewhere alongside these:
+        Also, we know about some other issues that occurred in the same application trace, listed below. The issue above occurred somewhere alongside these:
         {connected_issues}
         """
 
     prompt = textwrap.dedent(
         f"""Our code is broken! Please summarize the issue below in a few short sentences so our engineers can immediately understand what's wrong and respond.
 
-        The main issue: {event_details.format_event()}
+        The issue: {event_details.format_event()}
 
         {connected_issues_input}
 
@@ -60,7 +60,7 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
 
         Regarding the issue summary, state clearly and concisely what's going wrong and why. Do not just restate the error message, as that wastes our time! Look deeper into the details provided to paint the full picture and find the key insight of what's going wrong.
 
-        At the code level, our engineers need to get into the nitty gritty mechanical details of what's going wrong. The insight may be in the stacktrace, error message, event logs, or connected issues. It's up to you to highlight the relevant details!
+        Our engineers need to get into the nitty gritty mechanical details of what's going wrong. The insight may be in the stacktrace, error message, event logs, or connected issues. Highlight the most important details across all the context you have that are relevant to the main issue!
 
         Regarding affected functionality, your goal is to help our engineers immediately understand what SPECIFIC application or service functionality is related to this code issue. Do NOT try to conclude root causes or suggest solutions. Don't even talk about the mechanical details, but rather speak more to the overall task that is affected. Don't comment on the severity of the issue or user impact."""
     )
@@ -86,8 +86,8 @@ def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = inje
         raise RuntimeError("Failed to parse message")
 
     res = completion.choices[0].message.parsed
-    summary = res.summary_of_issue_at_code_level
-    impact = res.summary_of_functionality_affected
+    summary = res.summary_of_the_issue_based_on_your_step_by_step_reasoning
+    impact = res.summary_of_the_functionality_affected
     headline = res.five_to_ten_word_headline
 
     return SummarizeIssueResponse(
