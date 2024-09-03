@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from seer.automation.agent.client import GptClient
 from seer.automation.models import EventDetails
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
+from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
 
 
@@ -115,4 +116,11 @@ def run_summarize_issue(request: SummarizeIssueRequest):
         ),
     }
 
-    return summarize_issue(request, **extra_kwargs)
+    summary = summarize_issue(request, **extra_kwargs)
+
+    with Session() as session:
+        db_state = DbIssueSummary(group_id=request.group_id, summary=summary.model_dump(mode="json"))
+        session.merge(db_state)
+        session.commit()
+
+    return summary
