@@ -90,6 +90,8 @@ def task_to_file_create(task: PlanTaskPromptXml) -> FileChange:
         change_type="create",
         path=task.file_path,
         new_snippet=diff_chunks[0].new_chunk,
+        description=task.description,
+        commit_message=task.commit_message,
     )
 
 
@@ -110,6 +112,8 @@ def task_to_file_delete(task: PlanTaskPromptXml) -> FileChange:
     return FileChange(
         change_type="delete",
         path=task.file_path,
+        description=task.description,
+        commit_message=task.commit_message,
     )
 
 
@@ -153,6 +157,7 @@ def task_to_file_change(task: PlanTaskPromptXml, file_content: str) -> list[File
                     reference_snippet=original_snippet,
                     new_snippet=chunk.new_chunk,
                     description=task.description,
+                    commit_message=task.commit_message,
                 )
             )
         else:

@@ -359,7 +359,7 @@ class RepoClient:
 
             self.repo.update_file(
                 change.path,
-                change.description or "File change",
+                change.commit_message or "File change",
                 new_contents or "",
                 contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
                 branch=branch_ref,
