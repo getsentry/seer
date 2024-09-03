@@ -1,6 +1,9 @@
 import unittest
 
+import numpy as np
+
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
+from seer.anomaly_detection.models import Anomaly, MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, Session
 
@@ -15,7 +18,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         )
         point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
         point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
-
+        anomalies = MPTimeSeriesAnomalies(
+            flags=["none", "none"],
+            scores=[1.0, 0.95],
+            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            window_size=1,
+        )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -24,6 +32,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             external_alert_id=external_alert_id,
             config=config,
             timeseries=[point1, point2],
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 1},
         )
 
         with Session() as session:
@@ -78,9 +88,9 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         self.assertEqual(
             len(alert_from_db.timeseries.values), 2, "Must have two data points in timeseries"
         )
-        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[0](), point1.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
-        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1](), point2.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
 
         # Verify updating an existing alert
@@ -92,11 +102,28 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
         # Adding a new timepoint with an existing timestamp should fail
         with self.assertRaises(Exception):
-            alert_data_accessor.save_timepoint(external_alert_id, point1)
+            alert_data_accessor.save_timepoint(
+                external_alert_id, point1, anomaly_algo_data={"dummy": 10}
+            )
 
         # Adding a new timepoint with new timestamp should succeed
-        point3 = TimeSeriesPoint(timestamp=3000.0, value=500.0)
-        alert_data_accessor.save_timepoint(external_alert_id, point3)
+        point3 = TimeSeriesPoint(
+            timestamp=3000.0,
+            value=500.0,
+            anomaly_algo_data={"dummy": 10},
+            anomaly=Anomaly(anomaly_type="none", anomaly_score=1.0),
+        )
+        alert_data_accessor.save_timepoint(
+            external_alert_id,
+            point3,
+            anomaly=MPTimeSeriesAnomalies(
+                flags=["none"],
+                scores=[0.8],
+                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                window_size=1,
+            ),
+            anomaly_algo_data={"dummy": 10},
+        )
         alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
         self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
         self.assertEqual(
@@ -105,11 +132,11 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         self.assertEqual(
             len(alert_from_db.timeseries.values), 3, "Must have three data points in timeseries"
         )
-        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[0](), point1.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
-        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1](), point2.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
-        self.assertEqual(alert_from_db.timeseries.timestamps[2], point3.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[2](), point3.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[2], point3.value)
 
         # Resaving an existing alert should update existing data, including overwritinf the entire time series
@@ -119,6 +146,13 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             external_alert_id=external_alert_id,
             config=config,
             timeseries=[point1],
+            anomalies=MPTimeSeriesAnomalies(
+                flags=["none"],
+                scores=[1.0],
+                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                window_size=1,
+            ),
+            anomaly_algo_data={"window_size": 1},
         )
 
         with Session() as session:

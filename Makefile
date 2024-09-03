@@ -21,11 +21,16 @@ shell: .env # Opens a bash shell in the context of the project
 .PHONY: update
 update: .env # Updates the project's docker compose image.
 	docker compose build
+	docker compose run app flask db history
 	docker compose run app flask db upgrade
 
 .PHONY: db_downgrade
 db_downgrade: .env # Downgrades the db by one upgrade script each time it is run.
 	docker compose run app flask db downgrade
+
+.PHONY: db_reset
+db_reset: .env
+	docker compose down --volumes
 
 .PHONY: dev
 dev: .env # Starts the webserver based on the current src on port 9091

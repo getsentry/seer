@@ -29,6 +29,9 @@ class TimeSeries(BaseModel):
         arbitrary_types_allowed=True,
     )
 
+    def get_anomaly_algo_data(self) -> Optional[dict]:
+        return None
+
     # @root_validator(pre=False)
     # def validate_lengths_should_match(cls, field_values):
     #     # Do the validation instead of printing
@@ -56,3 +59,6 @@ class MPTimeSeries(TimeSeries):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
+
+    def get_anomaly_algo_data(self) -> Optional[dict]:
+        return None if self.anomalies is None else {"window_size": self.anomalies.window_size}

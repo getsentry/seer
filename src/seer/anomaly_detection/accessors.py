@@ -1,13 +1,20 @@
 import abc
 import datetime
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
+import sentry_sdk
+import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
 
-from seer.anomaly_detection.models import DynamicAlert, TimeSeries
+from seer.anomaly_detection.models import (
+    DynamicAlert,
+    MPTimeSeries,
+    MPTimeSeriesAnomalies,
+    TimeSeriesAnomalies,
+)
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session
 
@@ -27,15 +34,67 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         external_alert_id: int,
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
+        anomalies: TimeSeriesAnomalies,
+        anomaly_algo_data: dict,
     ):
         return NotImplemented
 
     @abc.abstractmethod
-    def save_timepoint(self, external_alert_id: int, timepoint: TimeSeriesPoint):
+    def save_timepoint(
+        self,
+        external_alert_id: int,
+        timepoint: TimeSeriesPoint,
+        anomaly: TimeSeriesAnomalies,
+        anomaly_algo_data: Optional[dict],
+    ):
         return NotImplemented
 
 
 class DbAlertDataAccessor(AlertDataAccessor):
+
+    @sentry_sdk.trace
+    def _hydrate_alert(self, db_alert: DbDynamicAlert) -> DynamicAlert:
+        window_size = db_alert.anomaly_algo_data.get("window_size")
+        flags = []
+        scores = []
+        mp = []
+        ts = []
+        values = []
+        for point in db_alert.timeseries:
+            ts.append(point.timestamp.timestamp)
+            values.append(point.value)
+            flags.append(point.anomaly_type)
+            scores.append(point.anomaly_score)
+            if point.anomaly_algo_data is not None:
+                dist, idx, l_idx, r_idx = MPTimeSeriesAnomalies.extract_algo_data(
+                    point.anomaly_algo_data
+                )
+                mp.append([dist, idx, l_idx, r_idx])
+
+        anomalies = MPTimeSeriesAnomalies(
+            flags=flags,
+            scores=scores,
+            matrix_profile=stumpy.mparray.mparray(
+                mp,
+                k=1,
+                m=window_size,
+                excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
+            ),
+            window_size=window_size,
+        )
+        return DynamicAlert(
+            organization_id=db_alert.organization_id,
+            project_id=db_alert.project_id,
+            external_alert_id=db_alert.external_alert_id,
+            config=AnomalyDetectionConfig.model_validate(db_alert.config),
+            timeseries=MPTimeSeries(
+                timestamps=np.array(ts),
+                values=np.array(values),
+            ),
+            anomalies=anomalies,
+        )
+
+    @sentry_sdk.trace
     def query(self, external_alert_id: int) -> DynamicAlert | None:
         with Session() as session:
             alert_info = (
@@ -51,23 +110,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     },
                 )
                 return None
+            return self._hydrate_alert(alert_info)
 
-            timeseries: TimeSeries = TimeSeries(
-                timestamps=np.empty([len(alert_info.timeseries)]),
-                values=np.empty([len(alert_info.timeseries)]),
-            )
-            for i, point in enumerate(alert_info.timeseries):
-                np.put(timeseries.timestamps, i, point.timestamp.timestamp())
-                np.put(timeseries.values, i, point.value)
-
-            return DynamicAlert(
-                organization_id=alert_info.organization_id,
-                project_id=alert_info.project_id,
-                external_alert_id=external_alert_id,
-                config=AnomalyDetectionConfig.model_validate(alert_info.config),
-                timeseries=timeseries,
-            )
-
+    @sentry_sdk.trace
     def save_alert(
         self,
         organization_id: int,
@@ -75,6 +120,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
         external_alert_id: int,
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
+        anomalies: TimeSeriesAnomalies,
+        anomaly_algo_data: dict,
     ):
         with Session() as session:
             existing_records = (
@@ -96,7 +143,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     DbDynamicAlert.external_alert_id == external_alert_id
                 )
                 session.execute(delete_q)
-
+            algo_data = anomalies.get_anomaly_algo_data(len(timeseries))
             new_record = DbDynamicAlert(
                 organization_id=organization_id,
                 project_id=project_id,
@@ -106,14 +153,25 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     DbDynamicAlertTimeSeries(
                         timestamp=datetime.datetime.fromtimestamp(point.timestamp),
                         value=point.value,
+                        anomaly_type=anomalies.flags[i],
+                        anomaly_score=anomalies.scores[i],
+                        anomaly_algo_data=algo_data[i],
                     )
-                    for point in timeseries
+                    for i, point in enumerate(timeseries)
                 ],
+                anomaly_algo_data=anomaly_algo_data,
             )
             session.add(new_record)
             session.commit()
 
-    def save_timepoint(self, external_alert_id: int, timepoint: TimeSeriesPoint):
+    @sentry_sdk.trace
+    def save_timepoint(
+        self,
+        external_alert_id: int,
+        timepoint: TimeSeriesPoint,
+        anomaly: TimeSeriesAnomalies,
+        anomaly_algo_data: Optional[dict],
+    ):
         with Session() as session:
             existing = (
                 session.query(DbDynamicAlert)
@@ -127,6 +185,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 dynamic_alert_id=existing.id,
                 timestamp=datetime.datetime.fromtimestamp(timepoint.timestamp),
                 value=timepoint.value,
+                anomaly_type=anomaly.flags[0],
+                anomaly_score=anomaly.scores[0],
+                anomaly_algo_data=anomaly_algo_data,
             )
             session.add(new_record)
             session.commit()
