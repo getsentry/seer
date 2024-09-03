@@ -15,14 +15,17 @@ class TestSummarizeIssue:
 
     @pytest.fixture
     def sample_request(self):
-        return SummarizeIssueRequest(group_id=1, issue=next(generate(IssueDetails)))
+        iterator = generate(IssueDetails)
+        return SummarizeIssueRequest(
+            group_id=1, issue=next(iterator), connected_issues=[next(iterator), next(iterator)]
+        )
 
     def test_summarize_issue_success(self, mock_gpt_client, sample_request):
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
-            summary_of_issue_at_code_level="Test summary",
-            summary_of_functionality_affected="Test functionality",
+            summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
+            summary_of_the_functionality_affected="Test functionality",
             five_to_ten_word_headline="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
@@ -63,14 +66,14 @@ class TestSummarizeIssue:
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
     def test_summarize_issue_event_details(self, mock_from_event, mock_gpt_client, sample_request):
         mock_event_details = Mock()
-        mock_event_details.format_event.return_value = "Formatted event details"
+        mock_event_details.format_event.side_effect = ["foo details", "bar details", "baz details"]
         mock_from_event.return_value = mock_event_details
 
         mock_structured_completion = MagicMock()
         mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
-            summary_of_issue_at_code_level="Test summary",
-            summary_of_functionality_affected="Test functionality",
+            summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
+            summary_of_the_functionality_affected="Test functionality",
             five_to_ten_word_headline="Test headline",
         )
         mock_structured_completion.choices[0].message.refusal = None
@@ -80,10 +83,24 @@ class TestSummarizeIssue:
 
         summarize_issue(sample_request, gpt_client=mock_gpt_client)
 
-        mock_from_event.assert_called_once_with(sample_request.issue.events[0])
-        mock_event_details.format_event.assert_called_once()
+        mock_from_event.assert_any_call(sample_request.issue.events[0])
+        mock_from_event.assert_any_call(sample_request.connected_issues[0].events[0])
+        mock_from_event.assert_any_call(sample_request.connected_issues[1].events[0])
+        assert mock_event_details.format_event.call_count == 3
         assert (
-            "Formatted event details"
+            "foo details"
+            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
+                0
+            ]["content"]
+        )
+        assert (
+            "bar details"
+            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
+                0
+            ]["content"]
+        )
+        assert (
+            "baz details"
             in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
                 0
             ]["content"]
@@ -93,6 +110,10 @@ class TestSummarizeIssue:
 class TestRunSummarizeIssue:
     @patch("seer.automation.summarize.issue.summarize_issue")
     def test_run_summarize_issue_langfuse_metadata(self, mock_summarize_issue):
+        mock_summarize_issue.return_value = SummarizeIssueResponse(
+            group_id=1, headline="headline", summary="summary", impact="impact"
+        )
+
         # Create a sample request
         request = SummarizeIssueRequest(
             group_id=123,
@@ -115,6 +136,10 @@ class TestRunSummarizeIssue:
 
     @patch("seer.automation.summarize.issue.summarize_issue")
     def test_run_summarize_issue_langfuse_metadata_no_org_slug(self, mock_summarize_issue):
+        mock_summarize_issue.return_value = SummarizeIssueResponse(
+            group_id=1, headline="headline", summary="summary", impact="impact"
+        )
+
         # Create a sample request without organization_slug
         request = SummarizeIssueRequest(
             group_id=123, issue=next(generate(IssueDetails)), organization_id=456, project_id=789

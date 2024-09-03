@@ -320,3 +320,13 @@ class DbSmokeTest(Base):
     request_id: Mapped[str] = mapped_column(String(128), index=True, unique=True, nullable=False)
     started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     completed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class DbIssueSummary(Base):
+    __tablename__ = "issue_summary"
+
+    group_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    summary: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )

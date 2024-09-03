@@ -14,6 +14,7 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
+    ValidationInfo,
     field_validator,
 )
 from pydantic.alias_generators import to_camel, to_snake
@@ -41,6 +42,25 @@ class StacktraceFrame(BaseModel):
     in_app: bool = False
     vars: Optional[dict[str, Any]] = None
     package: Optional[str] = None
+
+    @field_validator("vars", mode="before")
+    @classmethod
+    def validate_vars(cls, vars: Optional[dict[str, Any]], info: ValidationInfo):
+        if not vars or "context" not in info.data or not info.data["context"]:
+            return vars
+        code_str = ""
+        for _, line in info.data["context"]:
+            code_str += line + "\n"
+        return cls._trim_vars(vars, code_str)
+
+    @staticmethod
+    def _trim_vars(vars: dict[str, Any], code_context: str):
+        # only keep variables mentioned in the context of the stacktrace frame
+        trimmed_vars = {}
+        for key, val in vars.items():
+            if key in code_context:
+                trimmed_vars[key] = val
+        return trimmed_vars
 
 
 class SentryFrame(TypedDict):
@@ -254,9 +274,9 @@ class SentryEventData(TypedDict):
 
 
 class ExceptionDetails(BaseModel):
-    type: str
+    type: Optional[str] = ""
     value: Optional[str] = ""
-    stacktrace: Stacktrace
+    stacktrace: Optional[Stacktrace] = None
 
     @field_validator("stacktrace", mode="before")
     @classmethod
@@ -360,13 +380,13 @@ class EventDetails(BaseModel):
         return "\n".join(
             textwrap.dedent(
                 """\
-                    <exception_{i} type="{exception_type}" message="{exception_message}">
+                    <exception_{i}{exception_type}{exception_message}>
                     {stacktrace}
                     </exception{i}>"""
             ).format(
                 i=i,
-                exception_type=exception.type,
-                exception_message=exception.value,
+                exception_type=f' type="{exception.type}"' if exception.type else "",
+                exception_message=f' message="{exception.value}"' if exception.value else "",
                 stacktrace=(
                     exception.stacktrace.to_str(in_app_only=True) if exception.stacktrace else ""
                 ),
