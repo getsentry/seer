@@ -274,7 +274,7 @@ class SentryEventData(TypedDict):
 
 
 class ExceptionDetails(BaseModel):
-    type: str
+    type: Optional[str] = ""
     value: Optional[str] = ""
     stacktrace: Optional[Stacktrace] = None
 
@@ -380,13 +380,13 @@ class EventDetails(BaseModel):
         return "\n".join(
             textwrap.dedent(
                 """\
-                    <exception_{i} type="{exception_type}" message="{exception_message}">
+                    <exception_{i}{exception_type}{exception_message}>
                     {stacktrace}
                     </exception{i}>"""
             ).format(
                 i=i,
-                exception_type=exception.type,
-                exception_message=exception.value,
+                exception_type=f' type="{exception.type}"' if exception.type else "",
+                exception_message=f' message="{exception.value}"' if exception.value else "",
                 stacktrace=(
                     exception.stacktrace.to_str(in_app_only=True) if exception.stacktrace else ""
                 ),
