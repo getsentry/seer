@@ -51,6 +51,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         response = agent.run(
             RootCauseAnalysisPrompts.format_default_msg(
                 event=simplified_event_details,
+                summary=request.summary,
                 instruction=request.instruction,
                 repo_names=[repo.full_name for repo in state.request.repos],
             ),
