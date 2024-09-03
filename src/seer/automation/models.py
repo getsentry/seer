@@ -289,14 +289,20 @@ class ExceptionDetails(BaseModel):
 
 
 class ThreadDetails(BaseModel):
-    id: int
-    name: Optional[str] = None
-    crashed: Optional[bool] = False
-    current: Optional[bool] = False
-    state: Optional[str] = None
-    main: Optional[bool] = False
+   id: int
+   name: Optional[str] = None
+   crashed: Optional[bool] = False
+   current: Optional[bool] = False
+   state: Optional[str] = None
+   main: Optional[bool] = False
+   stacktrace: Optional[Stacktrace] = None
 
-    stacktrace: Optional[Stacktrace] = None
+   @field_validator("id", mode="before")
+   @classmethod
+   def validate_id(cls, v):
+       if v is None:
+           raise ValueError("id cannot be None")
+       return v
 
     @field_validator("stacktrace", mode="before")
     @classmethod
