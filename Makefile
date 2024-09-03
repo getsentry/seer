@@ -21,6 +21,7 @@ shell: .env # Opens a bash shell in the context of the project
 .PHONY: update
 update: .env # Updates the project's docker compose image.
 	docker compose build
+	docker compose run app flask db history
 	docker compose run app flask db upgrade
 
 .PHONY: db_downgrade
