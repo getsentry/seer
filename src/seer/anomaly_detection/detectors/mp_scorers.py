@@ -159,8 +159,24 @@ class MPIRQScorer(MPScorer):
         return "anomaly_higher_confidence"
 
     def _adjust_flag_for_vicinity(
-        self, flag: AnomalyFlags, ts_value: float, context: npt.NDArray[np.float64]
+        self, ts_value: float, flag: AnomalyFlags, context: npt.NDArray[np.float64]
     ) -> AnomalyFlags:
+        """
+        This method adjusts the severity of a detected anomaly based on the underlying time step's proximity to peaks and troughs.
+        The intuition is that for our alerting and metrics use case, an anomaly near peak or trough is more critical than one that is not.
+        Current approach is to use the inter quartile range from a subsequence of the time series, identified by the context parameter.
+
+        Parameters:
+        ts_value: float
+            The time step being analyzied for anomaly
+
+        flag: AnomalyFlags
+            Anomaly identified before applying this peak-trough logic
+
+        context: npt.NDArray[np.float64]
+            Time series subsequence that is used for teak-trough detection
+
+        """
         if flag == "anomaly_higher_confidence" or flag == "anomaly_lower_confidence":
             [Q1, Q3] = np.quantile(context, [0.25, 0.75])
             IQR = Q3 - Q1
