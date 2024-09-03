@@ -119,7 +119,9 @@ def run_summarize_issue(request: SummarizeIssueRequest):
     summary = summarize_issue(request, **extra_kwargs)
 
     with Session() as session:
-        db_state = DbIssueSummary(group_id=request.group_id, summary=summary.model_dump(mode="json"))
+        db_state = DbIssueSummary(
+            group_id=request.group_id, summary=summary.model_dump(mode="json")
+        )
         session.merge(db_state)
         session.commit()
 
