@@ -146,7 +146,7 @@ class MPIRQScorer(MPScorer):
         score = 0.0 if np.isnan(mp_dist) or np.isinf(mp_dist) else mp_dist - threshold_upper
         flag = self._to_flag(mp_dist, threshold_lower, threshold_upper)
         # anomaly identified. apply logic to check for peak and trough
-        flag = self._adjust_flag_for_vicinity(flag, ts_value, ts_baseline[-2 * window_size :])
+        flag = self._adjust_flag_for_vicinity(ts_value, flag, ts_baseline[-2 * window_size :])
         return [score], [flag]
 
     def _to_flag(self, mp_dist: float, threshold_lower: float, threshold_upper: float):
