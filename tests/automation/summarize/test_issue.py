@@ -110,6 +110,10 @@ class TestSummarizeIssue:
 class TestRunSummarizeIssue:
     @patch("seer.automation.summarize.issue.summarize_issue")
     def test_run_summarize_issue_langfuse_metadata(self, mock_summarize_issue):
+        mock_summarize_issue.return_value = SummarizeIssueResponse(
+            group_id=1, headline="headline", summary="summary", impact="impact"
+        )
+
         # Create a sample request
         request = SummarizeIssueRequest(
             group_id=123,
@@ -132,6 +136,10 @@ class TestRunSummarizeIssue:
 
     @patch("seer.automation.summarize.issue.summarize_issue")
     def test_run_summarize_issue_langfuse_metadata_no_org_slug(self, mock_summarize_issue):
+        mock_summarize_issue.return_value = SummarizeIssueResponse(
+            group_id=1, headline="headline", summary="summary", impact="impact"
+        )
+
         # Create a sample request without organization_slug
         request = SummarizeIssueRequest(
             group_id=123, issue=next(generate(IssueDetails)), organization_id=456, project_id=789
