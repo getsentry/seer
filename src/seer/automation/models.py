@@ -288,8 +288,9 @@ class ExceptionDetails(BaseModel):
         )
 
 
+
 class ThreadDetails(BaseModel):
-    id: int
+    id: Optional[int] = None
     name: Optional[str] = None
     crashed: Optional[bool] = False
     current: Optional[bool] = False
