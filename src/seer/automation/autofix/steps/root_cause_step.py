@@ -58,14 +58,15 @@ class RootCauseStep(AutofixPipelineStep):
         self.context.process_event_paths(event_details)
 
         group_id = state.request.issue.id
-        summary = None
-        with Session() as session:
-            group_summary = session.get(DbIssueSummary, group_id)
-            if group_summary:
-                try:
-                    summary = IssueSummary.model_validate(group_summary.summary)
-                except ValidationError:
-                    pass
+        summary = state.request.issue_summary
+        if not summary:
+            with Session() as session:
+                group_summary = session.get(DbIssueSummary, group_id)
+                if group_summary:
+                    try:
+                        summary = IssueSummary.model_validate(group_summary.summary)
+                    except ValidationError:
+                        pass
 
         root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
             RootCauseAnalysisRequest(
