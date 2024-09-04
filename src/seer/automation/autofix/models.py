@@ -181,8 +181,16 @@ class CodebaseState(BaseModel):
     repo_id: int | None = None
     namespace_id: int | None = None
     repo_external_id: str | None = None
-    file_changes: list[FileChange] = []
 
+    def validate_namespace_id(self, session):
+        if self.namespace_id is not None:
+            try:
+                session.query(CodebaseNamespace).filter_by(id=self.namespace_id).one()
+            except NoResultFound:
+                raise ValueError(f"Namespace ID {self.namespace_id} does not exist in the codebase_namespaces table")
+
+
+    file_changes: list[FileChange] = []
 
 class AutofixGroupState(BaseModel):
     run_id: int = -1
