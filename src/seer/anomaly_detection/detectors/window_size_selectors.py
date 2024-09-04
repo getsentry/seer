@@ -97,10 +97,9 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
         min_score = self._score(time_series, time_series.shape[0] - 1, stats)
 
         exp = 0
-
-        # exponential search (to find window size interval)
         found_window = False
-        for _ in range(10000):
+
+        while 2**exp < np.iinfo(np.integer).max:
             window_size = 2**exp
 
             if window_size < lbound:
@@ -120,7 +119,7 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
         if not found_window:
             raise Exception("Search for optimal window failed.")
 
-        lbound, ubound = max(lbound, 2 ** (exp - 1)), 2**exp + 1
+        lbound, ubound = max(lbound, 2 ** (exp - 1)), min(2**exp + 1, np.iinfo(np.integer).max)
 
         # binary search (to find window size in interval)
         while lbound <= ubound:
