@@ -192,7 +192,7 @@ class DbRunState(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
-    pr_id = relationship("DbPrIdToAutofixRunIdMapping", cascade="all, delete")
+    pr_id: Mapped[int] = relationship("DbPrIdToAutofixRunIdMapping", cascade="all, delete")
 
     __table_args__ = (
         Index("ix_run_state_group_id", "group_id"),
