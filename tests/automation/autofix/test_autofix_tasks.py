@@ -292,3 +292,33 @@ class TestDeleteOldAutofixRuns:
         with Session() as session:
             remaining_run = session.query(DbRunState).filter(DbRunState.id == old_run.id).first()
         assert remaining_run is None
+
+    def test_delete_with_mapped_pr(self):
+        old_run = DbRunState(
+            id=789,
+            last_triggered_at=datetime.datetime.now() - datetime.timedelta(days=100),
+            value="test_value",
+        )
+        mapped_pr = DbPrIdToAutofixRunIdMapping(
+            provider="github",
+            pr_id=123,
+            run_id=789,
+        )
+        with Session() as session:
+            session.add(old_run)
+            session.add(mapped_pr)
+            session.commit()
+
+        before_date = datetime.datetime.now() - datetime.timedelta(days=90)
+        deleted_count = delete_all_runs_before(before_date)
+
+        with Session() as session:
+            remaining_run = session.query(DbRunState).filter(DbRunState.id == old_run.id).first()
+            remaining_pr = (
+                session.query(DbPrIdToAutofixRunIdMapping)
+                .filter(DbPrIdToAutofixRunIdMapping.run_id == old_run.id)
+                .first()
+            )
+        assert remaining_run is None
+        assert remaining_pr is None
+        assert deleted_count == 1

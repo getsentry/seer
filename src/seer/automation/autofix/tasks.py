@@ -142,7 +142,6 @@ def delete_old_autofix_runs():
     logger.info("Deleting old Autofix runs for 90 day time-to-live")
     before = datetime.datetime.now() - datetime.timedelta(days=90)  # over 90 days old
     deleted_count = delete_all_runs_before(before)
-    print(deleted_count)
     logger.info(f"Deleted {deleted_count} runs")
 
 
