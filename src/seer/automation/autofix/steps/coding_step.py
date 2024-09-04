@@ -1,6 +1,7 @@
 from typing import Any
 
 from langfuse.decorators import observe
+from pydantic import ValidationError
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
@@ -18,6 +19,8 @@ from seer.automation.autofix.steps.change_describer_step import (
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
+from seer.automation.summarize.issue import IssueSummary
+from seer.db import DbIssueSummary, Session
 
 
 class AutofixCodingStepRequest(PipelineStepTaskRequest):
@@ -67,11 +70,23 @@ class AutofixCodingStep(AutofixPipelineStep):
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
 
+        group_id = state.request.issue.id
+        summary = state.request.issue_summary
+        if not summary:
+            with Session() as session:
+                group_summary = session.get(DbIssueSummary, group_id)
+                if group_summary:
+                    try:
+                        summary = IssueSummary.model_validate(group_summary.summary)
+                    except ValidationError:
+                        pass
+
         coding_output = CodingComponent(self.context).invoke(
             CodingRequest(
                 event_details=event_details,
                 root_cause_and_fix=root_cause_and_fix,
                 instruction=state.request.instruction,
+                summary=summary,
             )
         )
 
