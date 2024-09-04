@@ -2,8 +2,8 @@ import logging
 import textwrap
 from typing import Mapping, cast
 
-from pydantic import ValidationError
 import sentry_sdk
+from pydantic import ValidationError
 
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (

@@ -1,7 +1,6 @@
 from typing import Any
 
 from langfuse.decorators import observe
-from pydantic import ValidationError
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
@@ -14,8 +13,6 @@ from seer.automation.autofix.config import (
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
-from seer.automation.summarize.issue import IssueSummary
-from seer.db import DbIssueSummary, Session
 
 
 class RootCauseStepRequest(PipelineStepTaskRequest):
