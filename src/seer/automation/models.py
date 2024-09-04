@@ -309,11 +309,11 @@ class ThreadDetails(BaseModel):
 
 
 class BreadcrumbsDetails(BaseModel):
-    type: str
+    type: Optional[str] = None
     message: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     data: Optional[dict] = None
-    level: str
+    level: Optional[str] = None
 
 
 class EventDetails(BaseModel):
@@ -419,13 +419,15 @@ class EventDetails(BaseModel):
         return "\n".join(
             textwrap.dedent(
                 """\
-                <event_log_{i} type="{breadcrumb_type}" category="{breadcrumb_category}" level="{level}">
+                <event_log_{i}{breadcrumb_type}{breadcrumb_category}{level}>
                 {content}
                 </event_log_{i}>"""
             ).format(
                 i=i,
-                breadcrumb_type=breadcrumb.type,
-                breadcrumb_category=breadcrumb.category,
+                breadcrumb_type=f' type="{breadcrumb.type}"' if breadcrumb.type else "",
+                breadcrumb_category=(
+                    f' category="{breadcrumb.category}"' if breadcrumb.category else ""
+                ),
                 content="\n".join(
                     filter(
                         None,
@@ -439,7 +441,7 @@ class EventDetails(BaseModel):
                         ],
                     )
                 ),
-                level=breadcrumb.level,
+                level=f' level="{breadcrumb.level}"' if breadcrumb.level else "",
             )
             for i, breadcrumb in enumerate(self.breadcrumbs)
         )
