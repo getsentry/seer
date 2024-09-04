@@ -31,7 +31,7 @@ class TestRootCauseStep(unittest.TestCase):
                     summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
                     summary_of_the_functionality_affected="impact",
                     five_to_ten_word_headline="headline",
-                )
+                ),
             )
         )
 
