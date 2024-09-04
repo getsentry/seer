@@ -2,6 +2,7 @@ import unittest
 
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
 
+
 class TestMPUtils(unittest.TestCase):
 
     def setUp(self):
