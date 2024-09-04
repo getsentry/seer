@@ -192,6 +192,7 @@ class DbRunState(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
+    pr_id: Mapped[int] = relationship("DbPrIdToAutofixRunIdMapping", cascade="all, delete")
 
     __table_args__ = (
         Index("ix_run_state_group_id", "group_id"),
@@ -205,7 +206,9 @@ class DbPrIdToAutofixRunIdMapping(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider: Mapped[str] = mapped_column(String, nullable=False)
     pr_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    run_id: Mapped[int] = mapped_column(ForeignKey(DbRunState.id), nullable=False)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey(DbRunState.id, ondelete="CASCADE"), nullable=False
+    )
     __table_args__ = (
         UniqueConstraint("provider", "pr_id", "run_id"),
         Index("ix_autofix_pr_id_to_run_id_provider_pr_id", "provider", "pr_id"),
