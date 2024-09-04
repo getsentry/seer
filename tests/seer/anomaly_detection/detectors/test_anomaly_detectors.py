@@ -24,7 +24,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
     def setUp(self):
         self.detector = MPStreamAnomalyDetector()
 
-    def test_optimal_window_size(self):
+    def test_detect(self):
         # TODO: Import time series
         # time_series = []
         pass
