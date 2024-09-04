@@ -67,11 +67,16 @@ class AutofixCodingStep(AutofixPipelineStep):
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
 
+        summary = state.request.issue_summary
+        if not summary:
+            summary = self.context.get_issue_summary()
+
         coding_output = CodingComponent(self.context).invoke(
             CodingRequest(
                 event_details=event_details,
                 root_cause_and_fix=root_cause_and_fix,
                 instruction=state.request.instruction,
+                summary=summary,
             )
         )
 

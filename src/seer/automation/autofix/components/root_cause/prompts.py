@@ -4,7 +4,8 @@ from typing import Optional
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPromptXml,
 )
-from seer.automation.autofix.prompts import format_instruction, format_repo_names
+from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
+from seer.automation.summarize.issue import IssueSummary
 
 
 class RootCauseAnalysisPrompts:
@@ -34,11 +35,12 @@ class RootCauseAnalysisPrompts:
         event: str,
         repo_names: list[str],
         instruction: Optional[str] = None,
+        summary: Optional[IssueSummary] = None,
     ):
         return textwrap.dedent(
             """\
             {repo_names_str}
-            Given the issue:
+            Given the issue: {summary_str}
             {error_str}
 
             {instruction_str}
@@ -56,6 +58,7 @@ class RootCauseAnalysisPrompts:
             error_str=event,
             repo_names_str=format_repo_names(repo_names),
             instruction_str=format_instruction(instruction),
+            summary_str=format_summary(summary),
         )
 
     @staticmethod

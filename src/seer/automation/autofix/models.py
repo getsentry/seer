@@ -12,6 +12,7 @@ from seer.automation.agent.models import Usage
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
+from seer.automation.summarize.issue import IssueSummary
 
 
 class FileChangeError(Exception):
@@ -249,6 +250,7 @@ class AutofixRequest(BaseModel):
     issue: IssueDetails
     invoking_user: Optional[AutofixUserDetails] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
+    issue_summary: Optional[IssueSummary] = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 
