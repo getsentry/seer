@@ -212,6 +212,26 @@ class DbPrIdToAutofixRunIdMapping(Base):
     )
 
 
+class CodebaseNamespace(Base):
+    __tablename__ = "codebase_namespaces"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    repo_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    tracking_branch: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("repo_id", "sha"),
+        UniqueConstraint("repo_id", "tracking_branch"),
+    )
+
+
+class CodebaseNamespaceMutex(Base):
+    __tablename__ = "codebase_namespace_mutex"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    namespace_id: Mapped[int] = mapped_column(Integer, ForeignKey("codebase_namespaces.id"), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+
+
 def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:
     for i in range(100):
         connection.execute(
