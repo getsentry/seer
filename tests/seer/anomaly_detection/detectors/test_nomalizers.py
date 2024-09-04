@@ -4,6 +4,7 @@ import numpy as np
 
 from seer.anomaly_detection.detectors.normalizers import MinMaxNormalizer
 
+
 class TestNormalizer(unittest.TestCase):
 
     def setUp(self):
