@@ -57,16 +57,9 @@ class RootCauseStep(AutofixPipelineStep):
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
 
-        group_id = state.request.issue.id
         summary = state.request.issue_summary
         if not summary:
-            with Session() as session:
-                group_summary = session.get(DbIssueSummary, group_id)
-                if group_summary:
-                    try:
-                        summary = IssueSummary.model_validate(group_summary.summary)
-                    except ValidationError:
-                        pass
+            summary = self.context.get_issue_summary()
 
         root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
             RootCauseAnalysisRequest(

@@ -2,6 +2,7 @@ import logging
 import textwrap
 from typing import Mapping, cast
 
+from pydantic import ValidationError
 import sentry_sdk
 
 from seer.automation.autofix.event_manager import AutofixEventManager
@@ -20,8 +21,9 @@ from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
+from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import AgentError, get_sentry_client
-from seer.db import DbPrIdToAutofixRunIdMapping, Session
+from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, Session
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
@@ -103,6 +105,17 @@ class AutofixContext(PipelineContext):
     def signals(self, value: list[str]):
         with self.state.update() as state:
             state.signals = value
+
+    def get_issue_summary(self) -> IssueSummary | None:
+        group_id = self.state.get().request.issue.id
+        with Session() as session:
+            group_summary = session.get(DbIssueSummary, group_id)
+            if group_summary:
+                try:
+                    return IssueSummary.model_validate(group_summary.summary)
+                except ValidationError:
+                    return None
+        return None
 
     def repos_by_key(self) -> Mapping[RepoKey, RepoDefinition]:
         repos_by_key: dict[RepoKey, RepoDefinition] = {
