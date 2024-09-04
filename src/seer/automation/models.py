@@ -425,7 +425,9 @@ class EventDetails(BaseModel):
             ).format(
                 i=i,
                 breadcrumb_type=f' type="{breadcrumb.type}"' if breadcrumb.type else "",
-                breadcrumb_category=f' category="{breadcrumb.category}"' if breadcrumb.category else "",
+                breadcrumb_category=(
+                    f' category="{breadcrumb.category}"' if breadcrumb.category else ""
+                ),
                 content="\n".join(
                     filter(
                         None,
