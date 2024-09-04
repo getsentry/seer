@@ -99,6 +99,7 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
         exp = 0
         found_window = False
 
+        # exponential search (to find window size interval) with limit to avoid overflow
         while 2**exp < np.iinfo(np.integer).max:
             window_size = 2**exp
 
