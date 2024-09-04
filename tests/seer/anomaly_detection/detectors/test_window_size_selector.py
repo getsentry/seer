@@ -12,10 +12,8 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
 
     def test_optimal_window_size_constant_series(self):
         ts = np.array([5.0] * 700)
-        window_size = self.selector.optimal_window_size(ts)
-        self.assertEqual(
-            window_size, 10, "Window size for constant series should be the lower bound."
-        )
+        with self.assertRaises(Exception, msg="Search for optimal window failed."):
+            self.selector.optimal_window_size(ts)
 
     def test_optimal_window_size_linear_series(self):
         ts = np.linspace(1, 100, 100)
