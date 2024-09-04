@@ -9,6 +9,7 @@ from seer.anomaly_detection.models.external import (
     DetectAnomaliesResponse,
     StoreDataRequest,
     StoreDataResponse,
+    TimeSeriesPoint,
 )
 from tests.seer.anomaly_detection.timeseries.timeseries import context
 
@@ -19,7 +20,7 @@ class TestAnomalyDetection(unittest.TestCase):
 
     def test_detect_anomalies(self):
 
-        # setup different params for online and batch detection
+        # Set up respective params for detection types (batch, online, combo)
 
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
@@ -34,24 +35,25 @@ class TestAnomalyDetection(unittest.TestCase):
 
         responseBatch = AnomalyDetection().detect_anomalies(request=requestBatch)
 
-        # assert that the response is a timeseries (DetectAnomaliesResponse)
+        # response is a timeseries (DetectAnomaliesResponse)
         self.assertIsInstance(responseBatch, DetectAnomaliesResponse)
 
+        # assert that specific values of response are expected?
+
         # Online Detection
-        # contextOnline = AlertInSeer(id=1)
+        contextOnline = AlertInSeer(id=1000, cur_window=TimeSeriesPoint(timestamp=501, value=0.5))
 
-        # requestOnline = DetectAnomaliesRequest(
-        #     organization_id=1,
-        #     project_id=1,
-        #     config=config,
-        #     context=contextOnline
-        # )
+        requestOnline = DetectAnomaliesRequest(
+            organization_id=1, project_id=1, config=config, context=contextOnline
+        )
 
-        # responseOnline = AnomalyDetection().detect_anomalies(request=requestOnline)
+        responseOnline = AnomalyDetection().detect_anomalies(request=requestOnline)
 
-        # # assert that the response is a timeseries (DetectAnomaliesResponse)
-        # self.assertIsInstance(responseOnline, DetectAnomaliesRequest)
+        # assert that the response is a timeseries (DetectAnomaliesResponse)
+        self.assertIsInstance(responseOnline, DetectAnomaliesResponse)
         # self.assertIsInstance(responseOnline.timeseries, List[TimeSeriesPoint])
+
+        # TODO: Combo detection
 
     def test_store_data(self):
 

@@ -81,6 +81,10 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
         """
         ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
+        print("#####################################")
+        print(ts_values.shape)
+        print(ts_values)
+        print("#####################################")
         window_size = ws_selector.optimal_window_size(ts_values)
         logger.debug(f"window_size: {window_size}")
         if window_size <= 0:
