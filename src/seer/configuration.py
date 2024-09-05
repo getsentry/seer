@@ -64,6 +64,9 @@ class AppConfig(BaseModel):
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
 
+    GOOGLE_CLOUD_PROJECT: str = ""
+    USE_EU_REGION: ParseBool = False
+
     SMOKE_CHECK: ParseBool = False
 
     @cached_property
