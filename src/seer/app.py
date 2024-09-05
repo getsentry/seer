@@ -39,6 +39,13 @@ from seer.automation.codebase.models import (
     RepoAccessCheckResponse,
 )
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codegen.models import (
+    CodegenUnitTestsRequest,
+    CodegenUnitTestsResponse,
+    CodegenUnitTestsStateRequest,
+    CodegenUnitTestsStateResponse,
+)
+from seer.automation.codegen.tasks import codegen_unittest, get_unittest_state
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import raise_if_no_genai_consent
@@ -212,6 +219,27 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
     run_autofix_evaluation(data)
 
     return AutofixEndpointResponse(started=True, run_id=-1)
+
+
+@json_api(blueprint, "/v1/automation/codegen/unit-tests")
+def codegen_unit_tests_endpoint(data: CodegenUnitTestsRequest) -> CodegenUnitTestsResponse:
+    return codegen_unittest(data)
+
+
+@json_api(blueprint, "/v1/automation/codegen/unit-tests/state")
+def codegen_unit_tests_state_endpoint(
+    data: CodegenUnitTestsStateRequest,
+) -> CodegenUnitTestsStateResponse:
+    state = get_unittest_state(data)
+
+    return CodegenUnitTestsStateResponse(
+        run_id=state.run_id,
+        status=state.status,
+        changes=state.file_changes,
+        triggered_at=state.last_triggered_at,
+        updated_at=state.updated_at,
+        completed_at=state.completed_at,
+    )
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")

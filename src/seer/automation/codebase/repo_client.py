@@ -438,3 +438,16 @@ class RepoClient:
                 file_set.add(file.path)
 
         return file_set
+
+    def get_pr_diff_content(self, pr_url: str) -> str:
+        requester = self.repo._requester
+        headers = {
+            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
+            "Accept": "application/vnd.github.diff",
+        }
+
+        data = requests.get(pr_url, headers=headers)
+
+        data.raise_for_status()  # Raise an exception for HTTP errors
+
+        return data.text
