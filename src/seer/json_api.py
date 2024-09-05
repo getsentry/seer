@@ -50,10 +50,8 @@ class PublicKeyBytes(BaseModel):
 def provide_public_key(config: AppConfig = injected) -> PublicKeyBytes:
     return PublicKeyBytes(
         bytes=(
-            get_public_key_from_secret(
-                config.GOOGLE_CLOUD_PROJECT_ID, config.API_PUBLIC_KEY_SECRET_ID
-            )
-            if config.GOOGLE_CLOUD_PROJECT_ID and config.API_PUBLIC_KEY_SECRET_ID
+            get_public_key_from_secret(config.GOOGLE_CLOUD_PROJECT, config.API_PUBLIC_KEY_SECRET_ID)
+            if config.GOOGLE_CLOUD_PROJECT and config.API_PUBLIC_KEY_SECRET_ID
             else None
         )
     )
