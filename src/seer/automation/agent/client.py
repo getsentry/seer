@@ -1,7 +1,6 @@
 import dataclasses
 import json
 import logging
-import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar
 
@@ -13,6 +12,8 @@ from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import extract_json_from_text
 from seer.bootup import module, stub_module
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -139,10 +140,11 @@ class GptClient(LlmClient):
 
 
 class ClaudeClient(LlmClient):
-    def __init__(self):
+    @inject
+    def __init__(self, config: AppConfig = injected):
         self.anthropic_client = anthropic.AnthropicVertex(
-            project_id=os.environ["GOOGLE_CLOUD_PROJECT_ID"],
-            region="europe-west1" if os.environ["USE_EU_REGION"] == 1 else "us-east5",
+            project_id=config.GOOGLE_CLOUD_PROJECT,
+            region="europe-west1" if config.USE_EU_REGION else "us-east5",
         )
 
     @observe(as_type="generation", name="Claude-generation")
