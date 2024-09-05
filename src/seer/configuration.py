@@ -58,8 +58,6 @@ class AppConfig(BaseModel):
     JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
     IGNORE_API_AUTH: ParseBool = False  # Used for both API Tokens and RPC Secrets
 
-    GOOGLE_CLOUD_PROJECT_ID: str = ""
-
     TORCH_NUM_THREADS: ParseInt = 0
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
@@ -88,6 +86,10 @@ class AppConfig(BaseModel):
             ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY_SECRET_ID required if IGNORE_API_AUTH is false!"
 
         if self.is_production:
+            assert (
+                self.GOOGLE_CLOUD_PROJECT
+            ), "GOOGLE_CLOUD_PROJECT required for production! Why is this not set? Huh?"
+
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
 
