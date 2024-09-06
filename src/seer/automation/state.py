@@ -58,7 +58,9 @@ class DbState(State[_State]):
     @classmethod
     def new(cls, value: _State, *, group_id: int | None = None) -> "DbState[_State]":
         with Session() as session:
-            db_state = DbRunState(value=value.model_dump(mode="json"), group_id=group_id)
+            db_state = DbRunState(
+                value=value.model_dump(mode="json"), group_id=group_id, type="unittest"
+            )
             session.add(db_state)
             session.flush()
             value.run_id = db_state.id
