@@ -11,10 +11,10 @@ from seer.db import DbRunState, Session
 @dataclasses.dataclass
 class CodegenContinuationState(DbState[CodegenContinuation]):
     @classmethod
-    def from_id(cls, id: int, model: type[BaseModel]) -> "CodegenContinuationState":
-        return cast(
-            CodegenContinuationState, super().from_id(id, model, type=DbStateRunTypes.UNIT_TEST)
-        )
+    def from_id(
+        cls, id: int, model: type[BaseModel], type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST
+    ) -> "CodegenContinuationState":
+        return cast(CodegenContinuationState, super().from_id(id, model, type=type))
 
     def set(self, state: CodegenContinuation):
         state.mark_updated()
