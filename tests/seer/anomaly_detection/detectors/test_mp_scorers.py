@@ -14,7 +14,7 @@ class TestMPScorers(unittest.TestCase):
 
     def test_batch_score_synthetic_data(self):
 
-        def is_anomaly_detected(filename, threshold, expected_type, window_size, start, end):
+        def is_anomaly_detected(filename, threshold, window_size, start, end):
 
             if not os.path.isfile(filename):
                 raise Exception("Filename is not a valid file")
@@ -65,14 +65,53 @@ class TestMPScorers(unittest.TestCase):
                     int(file_params[3]),
                     int(file_params[4]),
                 )
-                actual_results.append(
-                    is_anomaly_detected(f, 0.1, expected_type, window_size, start, end)
-                )
+                actual_results.append(is_anomaly_detected(f, 0.1, window_size, start, end))
                 expected_results.append(expected_type)
 
         self.assertListEqual(actual_results, expected_results)
 
     def test_stream_score(self):
-        pass
 
-        # TODO: Similar to batch_scores but output is a single value for score and flag
+        test_ts_mp_mulipliers = [1000, -1000, 1]
+        expected_flags = ["anomaly_higher_confidence", "anomaly_higher_confidence", "none"]
+
+        # Check time series JSON files in test_data
+        dir = "tests/seer/anomaly_detection/detectors/test_data/synthetic_series"
+        for filename in os.listdir(dir):
+            f = os.path.join(dir, filename)
+
+            if os.path.isfile(f):
+                if not os.path.isfile(f):
+                    raise Exception("Filename is not a valid file")
+
+                file_params = filename.split(".")[0].split("_")
+                window_size = int(file_params[2])
+
+                # Load json and convert to ts and mp_dist
+                with open(f) as file:
+
+                    data = json.load(file)
+                    data = data["ts"]
+
+                    ts_baseline = np.array([point["value"] for point in data], dtype=np.float64)
+                    mp_dist_baseline = np.array(
+                        [point["mp_dist"] for point in data], dtype=np.float64
+                    )
+
+                    sensitivity, direction = "", ""  # TODO: Placeholders as values are not used
+
+                    for i, multiplier in enumerate(test_ts_mp_mulipliers):
+                        test_ts_val = ts_baseline[-1] * multiplier
+                        test_mp_dist = mp_dist_baseline[-1] * abs(multiplier)
+
+                        _, flag = self.scorer.stream_score(
+                            test_ts_val,
+                            test_mp_dist,
+                            sensitivity,
+                            direction,
+                            window_size,
+                            ts_baseline,
+                            mp_dist_baseline,
+                        )
+
+                        self.assertEqual(flag[0], expected_flags[i])
