@@ -25,7 +25,7 @@ from seer.automation.models import (
     StacktraceFrame,
     ThreadDetails,
 )
-from seer.automation.state import LocalMemoryState
+from seer.automation.state import DbStateRunTypes, LocalMemoryState
 from seer.automation.summarize.issue import IssueSummary
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, Session
 
@@ -170,7 +170,8 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     repos=[],
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
                 ),
-            )
+            ),
+            type=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
