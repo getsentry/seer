@@ -2,10 +2,12 @@ import functools
 import logging
 import os
 import re
+from typing import TypeVar
 from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
 import torch
+from openai.types.chat import ParsedChatCompletion
 from sentence_transformers import SentenceTransformer
 
 from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
@@ -226,3 +228,16 @@ def extract_xml_element_text(element: ET.Element, tag: str) -> str | None:
         return remove_cdata((el.text or "")).strip()
 
     return None
+
+
+T = TypeVar("T")
+
+
+def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
+    structured_message = completion.choices[0].message
+    if structured_message.refusal:
+        raise RuntimeError(structured_message.refusal)
+    if not structured_message.parsed:
+        raise RuntimeError("Failed to parse message")
+
+    return structured_message.parsed
