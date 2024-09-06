@@ -60,6 +60,7 @@ class DbState(State[_State]):
 
     id: int
     model: Type[BaseModel]
+    type: DbStateRunTypes
 
     @classmethod
     def new(
@@ -73,11 +74,11 @@ class DbState(State[_State]):
             db_state.value = value.model_dump(mode="json")
             session.merge(db_state)
             session.commit()
-            return cls(id=db_state.id, model=value.__class__)
+            return cls(id=db_state.id, model=value.__class__, type=type)
 
     @classmethod
-    def from_id(cls, id: int, model: Type[BaseModel]) -> "DbState[_State]":
-        return cls(id=id, model=model)
+    def from_id(cls, id: int, model: Type[BaseModel], type: DbStateRunTypes) -> "DbState[_State]":
+        return cls(id=id, model=model, type=type)
 
     def get(self) -> _State:
         with Session() as session:
@@ -85,6 +86,9 @@ class DbState(State[_State]):
 
             if db_state is None:
                 raise ValueError(f"No state found for id {self.id}")
+
+            if db_state.type != self.type:
+                raise ValueError(f"Invalid state type: '{db_state.type}', expected: '{self.type}'")
 
             return cast(_State, self.model.model_validate(db_state.value))
 
