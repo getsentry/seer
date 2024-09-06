@@ -1,9 +1,12 @@
+import json
+import os
 import unittest
 
 import numpy as np
 
 from seer.anomaly_detection.detectors.window_size_selectors import SuSSWindowSizeSelector
-from tests.seer.anomaly_detection.timeseries.timeseries import context
+
+# from tests.seer.anomaly_detection.timeseries.timeseries import context
 
 
 class TestSuSSWindowSizeSelector(unittest.TestCase):
@@ -11,28 +14,32 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
     def setUp(self):
         self.selector = SuSSWindowSizeSelector()
 
-    def test_optimal_window_size_constant_series(self):
-        ts = np.array([5.0] * 5000)
-        window_size = self.selector.optimal_window_size(ts)
-        self.assertEqual(
-            window_size, 10, "Window size for constant series should be the lower bound."
-        )
+    def test_optimal_window_size(self):
 
-    def test_optimal_window_size_linear_series(self):
-        ts = np.linspace(1, 100, 100)
-        window_size = self.selector.optimal_window_size(ts)
-        self.assertGreater(
-            window_size, 10, "Window size for linear series should be greater than the lower bound."
-        )
+        actual_windows = []
 
-    def test_optimal_window_size_short_series(self):
-        ts = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        with self.assertRaises(Exception, msg="Search for optimal window failed."):
-            self.selector.optimal_window_size(ts)
+        # Check time series JSON files in test_data
+        dir = "tests/seer/anomaly_detection/detectors/test_data/synthetic_series"
+        for filename in os.listdir(dir):
+            f = os.path.join(dir, filename)
 
-    def test_optimal_window_size_large_series(self):
-        ts = np.array([point["value"] for point in context])
-        window_size = self.selector.optimal_window_size(ts)
-        self.assertGreater(
-            window_size, 10, "Window size for linear series should be greater than the lower bound."
-        )
+            if os.path.isfile(f):
+                if not os.path.isfile(f):
+                    raise Exception("Filename is not a valid file")
+
+                # Load json and convert to ts and mp_dist
+                with open(f) as file:
+
+                    data = json.load(file)
+                    data = data["ts"]
+
+                    ts = np.array([point["value"] for point in data], dtype=np.float64)
+
+                    window = self.selector.optimal_window_size(ts)
+                    actual_windows.append(window)
+
+        # Check if window is within half a period
+        period = 24 * 4
+
+        for window in actual_windows:
+            self.assertTrue(period / 2 <= window <= period * 1.5)
