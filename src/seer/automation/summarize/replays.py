@@ -133,7 +133,7 @@ def run_single_replay_summary(replay: Replay, gpt_client: GptClient = injected) 
 
     completion = gpt_client.openai_client.beta.chat.completions.parse(
         model="gpt-4o-2024-08-06",
-        messages=replay_message_dicts,  # type: ignore
+        messages=replay_message_dicts,
         response_format=ReplaySummary,
         temperature=0.0,
     )
@@ -192,7 +192,7 @@ def run_cross_session_completion(all_steps: list[str], gpt_client: GptClient = i
 
     completion = gpt_client.openai_client.beta.chat.completions.parse(
         model="gpt-4o-2024-08-06",
-        messages=replay_message_dicts,  # type: ignore
+        messages=replay_message_dicts,
         response_format=CommonReplaySummary,
         temperature=0.0,
     )
