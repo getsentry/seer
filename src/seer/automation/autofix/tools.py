@@ -193,6 +193,9 @@ class BaseTools:
         found = [path for path in all_paths if os.path.basename(path) == filename]
         if len(found) == 0:
             return f"no file with name {filename} found in repository"
+
+        found = sorted(found)
+
         return ",".join(found)
 
     @observe(name="File Search Wildcard")
@@ -210,6 +213,9 @@ class BaseTools:
         found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
         if len(found) == 0:
             return f"No files matching pattern '{pattern}' found in repository"
+
+        found = sorted(found)
+
         return "\n".join(found)
 
     def get_tools(self):

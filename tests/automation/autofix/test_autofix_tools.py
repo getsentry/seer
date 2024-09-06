@@ -12,7 +12,7 @@ def autofix_tools():
 
 
 class TestFileSearch:
-    def test_file_search_found(self, autofix_tools):
+    def test_file_search_found(self, autofix_tools: BaseTools):
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {
             "src/file1.py",
@@ -22,9 +22,9 @@ class TestFileSearch:
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
 
         result = autofix_tools.file_search("file2.py")
-        assert result == "tests/file2.py,src/subfolder/file2.py"
+        assert result == "src/subfolder/file2.py,tests/file2.py"
 
-    def test_file_search_not_found(self, autofix_tools):
+    def test_file_search_not_found(self, autofix_tools: BaseTools):
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {
             "src/file1.py",
@@ -36,7 +36,7 @@ class TestFileSearch:
         result = autofix_tools.file_search("nonexistent.py")
         assert result == "no file with name nonexistent.py found in repository"
 
-    def test_file_search_with_repo_name(self, autofix_tools):
+    def test_file_search_with_repo_name(self, autofix_tools: BaseTools):
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {"src/file1.py"}
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
@@ -46,7 +46,7 @@ class TestFileSearch:
 
 
 class TestFileSearchWildcard:
-    def test_file_search_wildcard_found(self, autofix_tools):
+    def test_file_search_wildcard_found(self, autofix_tools: BaseTools):
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {
             "src/file1.py",
@@ -56,9 +56,9 @@ class TestFileSearchWildcard:
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
 
         result = autofix_tools.file_search_wildcard("*.py")
-        assert result == "src/file1.py\ntests/test_file1.py\nsrc/subfolder/file2.py"
+        assert result == "src/file1.py\nsrc/subfolder/file2.py\ntests/test_file1.py"
 
-    def test_file_search_wildcard_not_found(self, autofix_tools):
+    def test_file_search_wildcard_not_found(self, autofix_tools: BaseTools):
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {
             "src/file1.py",
@@ -70,7 +70,7 @@ class TestFileSearchWildcard:
         result = autofix_tools.file_search_wildcard("*.js")
         assert result == "No files matching pattern '*.js' found in repository"
 
-    def test_file_search_wildcard_with_repo_name(self, autofix_tools):
+    def test_file_search_wildcard_with_repo_name(self, autofix_tools: BaseTools):
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {"src/file1.py"}
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
