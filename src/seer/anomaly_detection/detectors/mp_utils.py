@@ -42,6 +42,8 @@ class MPUtils(BaseModel):
             mp_dist = normalizer.normalize(mp_dist)
 
         if pad_to_len is not None:
+            if pad_to_len - len(mp_dist) < 0:
+                raise Exception("Requested length should be greater than current mp_dist")
             nan_value_count = np.empty(pad_to_len - len(mp_dist))
             nan_value_count.fill(np.nan)
             mp_dist_updated = np.concatenate((nan_value_count, mp_dist))
