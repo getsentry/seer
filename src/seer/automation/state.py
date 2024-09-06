@@ -2,6 +2,7 @@ import abc
 import contextlib
 import dataclasses
 import functools
+from enum import Enum
 from typing import Any, Generic, Iterator, Type, TypeVar, cast
 
 from celery import Task
@@ -10,6 +11,11 @@ from pydantic import BaseModel
 from seer.db import DbRunState, Session
 
 _State = TypeVar("_State", bound=BaseModel)
+
+
+class DbStateRunTypes(str, Enum):
+    AUTOFIX = "autofix"
+    UNIT_TEST = "unit-test"
 
 
 class State(abc.ABC, Generic[_State]):
@@ -56,11 +62,11 @@ class DbState(State[_State]):
     model: Type[BaseModel]
 
     @classmethod
-    def new(cls, value: _State, *, group_id: int | None = None) -> "DbState[_State]":
+    def new(
+        cls, value: _State, *, group_id: int | None = None, type: DbStateRunTypes
+    ) -> "DbState[_State]":
         with Session() as session:
-            db_state = DbRunState(
-                value=value.model_dump(mode="json"), group_id=group_id, type="unittest"
-            )
+            db_state = DbRunState(value=value.model_dump(mode="json"), group_id=group_id, type=type)
             session.add(db_state)
             session.flush()
             value.run_id = db_state.id
