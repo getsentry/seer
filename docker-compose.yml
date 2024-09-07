@@ -51,6 +51,7 @@ services:
             - DEV=1
             - SEVERITY_ENABLED=1
             - GROUPING_ENABLED=1
+            - ANOMALY_DETECTION_ENABLED=1
             - CELERY_WORKER_ENABLE=true
             - PORT=9091
             - SMOKE_TEST=1
