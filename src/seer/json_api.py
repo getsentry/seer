@@ -176,5 +176,5 @@ def compare_signature(url: str, body: bytes, signature: str, config: AppConfig =
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
 
-    sentry_sdk.capture_message("No signature matches found")
+    sentry_sdk.capture_message(f"No signature matches found. URL: {url}")
     return False
