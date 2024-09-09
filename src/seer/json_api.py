@@ -88,7 +88,6 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
-                sentry_sdk.metrics.incr(key="rpc_signature_auth_attempt", value=1)
                 if len(parts) != 2 or not compare_signature(
                     request.url, request.args.get("nonce", ""), raw_data, parts[1]
                 ):
@@ -176,9 +175,9 @@ def compare_signature(
     for key in secrets:
         if nonce:
             if is_valid(b"%s:%s" % (nonce.encode(), body), key, signature_data):
-                sentry_sdk.metrics.incr(
-                    key="rpc_signature_auth_success", value=1, tags={"with_url": False}
-                )
+                span = sentry_sdk.Hub.current.scope.span
+                if span:
+                    span.set_data("rpc_auth_additional_payload", "nonce")
                 return True
         elif is_valid(
             b"%s:%s"
@@ -189,9 +188,9 @@ def compare_signature(
             key,
             signature_data,
         ):
-            sentry_sdk.metrics.incr(
-                key="rpc_signature_auth_success", value=1, tags={"with_url": True}
-            )
+            span = sentry_sdk.Hub.current.scope.span
+            if span:
+                span.set_data("rpc_auth_additional_payload", "url")
             return True
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
