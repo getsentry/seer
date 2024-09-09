@@ -65,26 +65,24 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             logger.warning("Root Cause Analysis formatter did not return a valid response")
             return None
 
-        extracted_text = extract_text_inside_tags(formatter_response, "potential_root_causes")
+        extracted_text = extract_text_inside_tags(formatter_response, "root_cause_analysis")
 
         xml_response = RootCauseAnalysisOutputPromptXml.from_xml(
-            f"<root><potential_root_causes>{escape_multi_xml(extracted_text, ['thoughts', 'title', 'description', 'code'])}</potential_root_causes></root>"
+            f"<root><root_cause_analysis>{escape_multi_xml(extracted_text, ['thoughts', 'title', 'description', 'code'])}</root_cause_analysis></root>"
         )
 
-        if not xml_response.potential_root_causes.causes:
+        if not xml_response.potential_root_causes.cause:
             logger.warning("Root Cause Analysis formatter did not return causes")
             return None
 
         # Assign the ids to be the numerical indices of the causes and relevant code context
-        causes = []
-        for i, cause in enumerate(xml_response.potential_root_causes.causes):
-            cause_model = cause.to_model()
-            cause_model.id = i
+        cause_model = xml_response.potential_root_causes.cause.to_model()
+        cause_model.id = 0
 
-            if cause_model.code_context:
-                for j, snippet in enumerate(cause_model.code_context):
-                    snippet.id = j
+        if cause_model.code_context:
+            for j, snippet in enumerate(cause_model.code_context):
+                snippet.id = j
 
-            causes.append(cause_model)
+        causes = [cause_model]
 
         return RootCauseAnalysisOutput(causes=causes)

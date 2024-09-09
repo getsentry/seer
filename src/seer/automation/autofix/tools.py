@@ -32,7 +32,7 @@ class BaseTools:
             client = self.context.get_repo_client(repo_name)
             repo_name = client.repo_name
 
-        self.context.event_manager.add_log(f"Looked at `{input}` in `{repo_name}`")
+        self.context.event_manager.add_log(f"Looking at `{input}` in `{repo_name}`...")
 
         if file_contents:
             return file_contents
@@ -173,7 +173,7 @@ class BaseTools:
                 result_str += f"{match_xml.to_prompt_str()}\n\n"
 
         self.context.event_manager.add_log(
-            f"Searched codebase for `{keyword}`, found {len(file_names)} result(s) in {', '.join(file_names)}"
+            f"Searched codebase for `{keyword}`, found {len(file_names)} result(s) in {', '.join(file_names)}."
         )
 
         return result_str

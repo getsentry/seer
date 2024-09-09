@@ -127,22 +127,13 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
         )
 
 
-class MultipleRootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="potential_root_causes"):
-    causes: list[RootCauseAnalysisItemPromptXml] = []
+class MultipleRootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="root_cause_analysis"):
+    cause: RootCauseAnalysisItemPromptXml | None = None
 
     @classmethod
     def get_example(cls):
         return cls(
-            causes=[
-                RootCauseAnalysisItemPromptXml.get_example(),
-                RootCauseAnalysisItemPromptXml(
-                    title="Summarize the root cause here in a few words.",
-                    likelihood=0.2,
-                    actionability=1.0,
-                    description="Explain the root cause in full detail here with the full chain of reasoning behind it.",
-                    relevant_code=RootCauseAnalysisRelevantContextPromptXml.get_example(),
-                ),
-            ]
+            cause=RootCauseAnalysisItemPromptXml.get_example(),
         )
 
 

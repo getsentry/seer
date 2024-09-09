@@ -25,7 +25,7 @@ class RootCauseAnalysisPrompts:
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer.
 
-            It is important that we find all the potential root causes of the issue, so provide as many possibilities as you can for the root cause, ordered from most likely to least likely."""
+            It is important that we find the potential root causes of the issue."""
         ).format(
             root_cause_output_example_str=MultipleRootCauseAnalysisOutputPromptXml.get_example().to_prompt_str(),
         )
@@ -44,13 +44,13 @@ class RootCauseAnalysisPrompts:
             {error_str}
 
             {instruction_str}
-            When ready with your final answer, detail all the potential root causes of the issue.
+            When ready with your final answer, detail the potential root cause of the issue.
 
             # Guidelines:
-            - Each root cause should be inside its own <root_cause> block.
-            - Include a title and description in each root cause. Your description may be as long as you need to help your team understand the issue, explaining the issue, the root cause, why this is happening, and how you came to your conclusion.
-            - Include float values from 0.0-1.0 of the likelihood and actionability of each root cause.
-            - In each root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want. Within your snippets, you may highlight specific lines with a comment beginning with ***.
+            - The root cause should be inside its own <root_cause> block.
+            - Include a title and description in the root cause. Your description may be as long as you need to help your team understand the issue, explaining the issue, the root cause, why this is happening, and how you came to your conclusion.
+            - Include float values from 0.0-1.0 of the likelihood and actionability of the root cause.
+            - In the root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want. Within your snippets, you may highlight specific lines with a comment beginning with ***.
             - You MUST include the EXACT file name and repository name in the code snippets you provide. If you cannot, do not provide a code snippet.
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
