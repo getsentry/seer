@@ -81,10 +81,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
         """
         ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
-        print("#####################################")
-        print(ts_values.shape)
-        print(ts_values)
-        print("#####################################")
         window_size = ws_selector.optimal_window_size(ts_values)
         logger.debug(f"window_size: {window_size}")
         if window_size <= 0:
@@ -162,7 +158,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 stream.update(cur_val)
 
                 # Get the matrix profile for the new data and score it
-                cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
+                cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], [-1]]
                 streamed_mp.append(cur_mp)
                 mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
                 cur_scores, cur_flags = scorer.stream_score(
