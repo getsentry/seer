@@ -43,7 +43,6 @@ class TestConverters(unittest.TestCase):
         self.assertEqual(algo_data, expected_data)
 
         front_pad_to_len = 1
-
         algo_data = self.anomalies.get_anomaly_algo_data(front_pad_to_len)
 
         self.assertEqual(algo_data, expected_data)
