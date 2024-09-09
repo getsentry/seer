@@ -8,7 +8,7 @@ default: help
 help:
 	@echo
 	@echo make
-	@grep -E '^[a-zA-Z0-9 -]+:.*#'  $(makefile) | sort | while read -r l; do printf "  \033[1;32m$$(echo $$l | cut -f 1 -d':')\033[00m:$$(echo $$l | cut -f 2- -d'#')\n"; done
+	@grep -E '^[a-zA-Z0-9 _ -]+:.*#'  $(makefile) | sort | while read -r l; do printf "  \033[1;32m$$(echo $$l | cut -f 1 -d':')\033[00m:$$(echo $$l | cut -f 2- -d'#')\n"; done
 
 .PHONY: pip
 pip: # Runs pip install with the requirements.txt file
@@ -24,12 +24,12 @@ update: .env # Updates the project's docker compose image.
 	docker compose run app flask db history
 	docker compose run app flask db upgrade
 
-.PHONY: db_downgrade
-db_downgrade: .env # Downgrades the db by one upgrade script each time it is run.
+.PHONY: db-downgrade
+db-downgrade: .env # Downgrades the db by one upgrade script each time it is run.
 	docker compose run app flask db downgrade
 
-.PHONY: db_reset
-db_reset: .env
+.PHONY: db-reset
+db-reset: .env  # Reinitializes the database. You need to run make update to apply all migrations after a reset.
 	docker compose down --volumes
 
 .PHONY: dev
