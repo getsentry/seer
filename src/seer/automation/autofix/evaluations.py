@@ -10,7 +10,6 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
-    RootCauseAnalysisItemPromptXml,
     RootCauseRelevantCodeSnippet,
     RootCauseRelevantContext,
 )

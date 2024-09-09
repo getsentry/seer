@@ -46,6 +46,7 @@ class CodeContextXml(PromptXmlModel, tag="code_context"):
 class RootCausePlanTaskPromptXml(PromptXmlModel, tag="root_cause", skip_empty=True):
     title: str = element()
     description: str = element()
+    reproduction: str = element()
     contexts: list[CodeContextXml]
 
     @classmethod
@@ -53,6 +54,7 @@ class RootCausePlanTaskPromptXml(PromptXmlModel, tag="root_cause", skip_empty=Tr
         return cls(
             title=root_cause.title,
             description=root_cause.description,
+            reproduction=root_cause.reproduction,
             contexts=(
                 [
                     CodeContextXml.from_root_cause_context(context)

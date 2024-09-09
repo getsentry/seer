@@ -1,9 +1,6 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.components.root_cause.models import (
-    MultipleRootCauseAnalysisOutputPromptXml,
-)
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
 from seer.automation.summarize.issue import IssueSummary
 
@@ -26,8 +23,6 @@ class RootCauseAnalysisPrompts:
             - You also MUST think step-by-step before giving the final answer.
 
             It is important that we find all the potential root causes of the issue, so provide as many possibilities as you can for the root cause, ordered from most likely to least likely."""
-        ).format(
-            root_cause_output_example_str=MultipleRootCauseAnalysisOutputPromptXml.get_example().to_prompt_str(),
         )
 
     @staticmethod
@@ -65,13 +60,9 @@ class RootCauseAnalysisPrompts:
     def root_cause_formatter_msg():
         return textwrap.dedent(
             """\
-            Please format the output properly to match the following example:
-
-            {root_cause_output_example_str}
+            Please format the output properly.
 
             Note: If the provided root cause analysis is not formatted properly, such as code snippets missing descriptions, you can derive them from the provided root cause analysis.
 
             Return only the formatted root cause analysis:"""
-        ).format(
-            root_cause_output_example_str=MultipleRootCauseAnalysisOutputPromptXml.get_example().to_prompt_str(),
         )

@@ -3,7 +3,7 @@ import logging
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, GptAgent
+from seer.automation.agent.agent import AgentConfig, ClaudeAgent, GptAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodingOutput,
@@ -38,7 +38,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         tools = BaseTools(self.context)
 
-        agent = GptAgent(
+        agent = ClaudeAgent(
             tools=tools.get_tools(),
             config=AgentConfig(system_prompt=CodingPrompts.format_system_msg()),
         )
