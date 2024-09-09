@@ -4,15 +4,17 @@ from typing import cast
 from pydantic import BaseModel
 
 from seer.automation.autofix.models import AutofixContinuation
-from seer.automation.state import DbState
+from seer.automation.state import DbState, DbStateRunTypes
 from seer.db import DbRunState, Session
 
 
 @dataclasses.dataclass
 class ContinuationState(DbState[AutofixContinuation]):
     @classmethod
-    def from_id(cls, id: int, model: type[BaseModel]) -> "ContinuationState":
-        return cast(ContinuationState, super().from_id(id, model))
+    def from_id(
+        cls, id: int, model: type[BaseModel], type: DbStateRunTypes = DbStateRunTypes.AUTOFIX
+    ) -> "ContinuationState":
+        return cast(ContinuationState, super().from_id(id, model, type))
 
     def set(self, state: AutofixContinuation):
         state.mark_updated()

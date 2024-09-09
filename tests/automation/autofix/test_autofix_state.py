@@ -4,6 +4,7 @@ import pytest
 
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.autofix.state import ContinuationState
+from seer.automation.state import DbStateRunTypes
 from seer.db import DbRunState
 
 
@@ -13,19 +14,11 @@ class TestContinuationState:
         with patch("seer.automation.autofix.state.Session") as mock:
             yield mock
 
-    def test_from_id(self):
-        with patch("seer.automation.state.DbState.from_id") as mock_from_id:
-            mock_from_id.return_value = MagicMock(spec=ContinuationState)
-            result = ContinuationState.from_id(1, AutofixContinuation)
-
-            mock_from_id.assert_called_once_with(1, AutofixContinuation)
-            assert isinstance(result, ContinuationState)
-
     def test_set(self, mock_session):
         mock_session_instance = MagicMock()
         mock_session.return_value.__enter__.return_value = mock_session_instance
 
-        state = ContinuationState(id=1, model=AutofixContinuation)
+        state = ContinuationState(id=1, model=AutofixContinuation, type=DbStateRunTypes.AUTOFIX)
         mock_autofix_continuation = MagicMock(spec=AutofixContinuation)
         mock_autofix_continuation.model_dump.return_value = {"key": "value"}
         mock_autofix_continuation.updated_at = "2023-01-01"
@@ -48,7 +41,7 @@ class TestContinuationState:
     def test_get(self):
         with patch("seer.automation.state.DbState.get") as mock_get:
             mock_get.return_value = MagicMock(spec=AutofixContinuation)
-            state = ContinuationState(id=1, model=AutofixContinuation)
+            state = ContinuationState(id=1, model=AutofixContinuation, type=DbStateRunTypes.AUTOFIX)
             result = state.get()
 
             mock_get.assert_called_once()
@@ -59,7 +52,7 @@ class TestContinuationState:
             mock_context = MagicMock()
             mock_update.return_value.__enter__.return_value = mock_context
 
-            state = ContinuationState(id=1, model=AutofixContinuation)
+            state = ContinuationState(id=1, model=AutofixContinuation, type=DbStateRunTypes.AUTOFIX)
             with state.update() as context:
                 assert context == mock_context
 
