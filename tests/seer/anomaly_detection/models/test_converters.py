@@ -1,11 +1,25 @@
 import unittest
 
+import numpy as np
+
+from seer.anomaly_detection.models import TimeSeries
+from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
+from seer.anomaly_detection.models.external import TimeSeriesPoint
+
 
 class TestConverters(unittest.TestCase):
 
-    def test_covnedrt_external_ts_to_internal(self):
-        # TODO: Import time series
-        # time_series = []
-        pass
+    def test_convert_external_ts_to_internal(self):
+        external_ts = []
 
-        # TODO: Test cases
+        external_ts.append(TimeSeriesPoint(timestamp=1, value=1))
+        external_ts.append(TimeSeriesPoint(timestamp=5, value=2))
+
+        converted_ts = convert_external_ts_to_internal(external_ts)
+
+        self.assertIsInstance(converted_ts, TimeSeries)
+        self.assertIsInstance(converted_ts.values, np.ndarray)
+        self.assertIsInstance(converted_ts.timestamps, np.ndarray)
+
+        self.assertEqual(len(converted_ts.values), 2)
+        self.assertEqual(len(converted_ts.timestamps), 2)
