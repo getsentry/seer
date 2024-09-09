@@ -88,6 +88,7 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
+                sentry_sdk.metrics.incr(key="rpc_signature_auth_attempt", value=1)
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
                     raise Unauthorized(
                         f"Rpcsignature did not match for given url {request.url} and data"
@@ -163,15 +164,26 @@ def compare_signature(url: str, body: bytes, signature: str, config: AppConfig =
         return False
 
     _, signature_data = signature.split(":", 2)
-    signature_input = b"%s:%s" % (
+    payload_with_url = b"%s:%s" % (
         url.encode(),
         body,
     )
+    payload_without_url = b"%s" % (body,)
+
+    def is_valid(payload):
+        computed = hmac.new(key.encode(), payload, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(computed.encode(), signature_data.encode())
 
     for key in secrets:
-        computed = hmac.new(key.encode(), signature_input, hashlib.sha256).hexdigest()
-        is_valid = hmac.compare_digest(computed.encode(), signature_data.encode())
-        if is_valid:
+        if is_valid(payload_with_url):
+            sentry_sdk.metrics.incr(
+                key="rpc_signature_auth_success", value=1, tags={"with_url": True}
+            )
+            return True
+        elif is_valid(payload_without_url):
+            sentry_sdk.metrics.incr(
+                key="rpc_signature_auth_success", value=1, tags={"with_url": False}
+            )
             return True
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
