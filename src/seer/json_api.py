@@ -89,7 +89,9 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
-                    raise Unauthorized("Rpcsignature did not match for given url and data")
+                    raise Unauthorized(
+                        f"Rpcsignature did not match for given url {request.url} and data"
+                    )
             elif auth_header.startswith("Bearer "):
                 token = auth_header.split()[1]
                 try:
@@ -174,5 +176,5 @@ def compare_signature(url: str, body: bytes, signature: str, config: AppConfig =
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
 
-    sentry_sdk.capture_message("No signature matches found")
+    sentry_sdk.capture_message(f"No signature matches found. URL: {url}")
     return False

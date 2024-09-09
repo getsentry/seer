@@ -1,4 +1,6 @@
+import fnmatch
 import logging
+import os
 import textwrap
 
 from langfuse.decorators import observe
@@ -177,6 +179,46 @@ class BaseTools:
 
         return result_str
 
+    @observe(name="File Search")
+    @ai_track(description="File Search")
+    def file_search(
+        self,
+        filename: str,
+        repo_name: str | None = None,
+    ):
+        """
+        Given a filename with extension returns the list of locations where a file with the name is found.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        all_paths = repo_client.get_index_file_set()
+        found = [path for path in all_paths if os.path.basename(path) == filename]
+        if len(found) == 0:
+            return f"no file with name {filename} found in repository"
+
+        found = sorted(found)
+
+        return ",".join(found)
+
+    @observe(name="File Search Wildcard")
+    @ai_track(description="File Search Wildcard")
+    def file_search_wildcard(
+        self,
+        pattern: str,
+        repo_name: str | None = None,
+    ):
+        """
+        Given a filename pattern with wildcards, returns the list of file paths that match the pattern.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        all_paths = repo_client.get_index_file_set()
+        found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
+        if len(found) == 0:
+            return f"No files matching pattern '{pattern}' found in repository"
+
+        found = sorted(found)
+
+        return "\n".join(found)
+
     def get_tools(self):
         tools = [
             FunctionTool(
@@ -243,6 +285,40 @@ class BaseTools:
                         "name": "in_proximity_to",
                         "type": "string",
                         "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
+                    },
+                ],
+            ),
+            FunctionTool(
+                name="file_search",
+                fn=self.file_search,
+                description="Searches for a file in the codebase.",
+                parameters=[
+                    {
+                        "name": "filename",
+                        "type": "string",
+                        "description": "The file to search for.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
+                ],
+            ),
+            FunctionTool(
+                name="file_search_wildcard",
+                fn=self.file_search_wildcard,
+                description="Searches for files in a folder using a wildcard pattern.",
+                parameters=[
+                    {
+                        "name": "pattern",
+                        "type": "string",
+                        "description": "The wildcard pattern to match files.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
             ),
