@@ -15,20 +15,20 @@ class TestMPScorers(unittest.TestCase):
         sensitivity = ""
         direction = ""
 
-        expected_types, timeseries, mp_dists, window_sizes, window_starts, window_ends = (
+        expected_types, timeseries, mp_dists, window_sizes, anomaly_starts, anomaly_ends = (
             convert_synthetic_ts(
                 "tests/seer/anomaly_detection/test_data/synthetic_series",
                 as_ts_datatype=False,
-                include_range=True,
+                include_anomaly_range=True,
             )
         )
 
+        # Check flags in each anomaly window to determine if it is an anomaly and assert that they match expected
         threshold = 0.1
 
         for expected_type, ts, mp_dist, window_size, start, end in zip(
-            expected_types, timeseries, mp_dists, window_sizes, window_starts, window_ends
+            expected_types, timeseries, mp_dists, window_sizes, anomaly_starts, anomaly_ends
         ):
-
             _, actual_flags = self.scorer.batch_score(
                 ts, mp_dist, sensitivity, direction, window_size
             )
@@ -49,6 +49,7 @@ class TestMPScorers(unittest.TestCase):
 
     def test_stream_score(self):
 
+        # Tests a new point which is a scaled version of the last observation in a timeseries
         test_ts_mp_mulipliers = [1000, -1000, 1]
         expected_flags = ["anomaly_higher_confidence", "anomaly_higher_confidence", "none"]
 
