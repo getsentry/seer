@@ -33,33 +33,45 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
 
         # Mock to return dummy values
         mock_stump.return_value = np.array([1, 2, 3, 4])
-        self.scorer.batch_score = MagicMock(return_value=([], []))
+        self.scorer.batch_score = MagicMock(
+            return_value=(
+                [0.1, 6.5, 4.8, 0.2],
+                ["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
+            )
+        )
 
         timeseries, mp_dists, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
 
-        for ts_values, mp_dist_baseline, window_size in zip(timeseries, mp_dists, window_sizes):
-            ts = TimeSeries(timestamps=np.array([]), values=ts_values)
+        ts_values, mp_dist_baseline, window_size = timeseries[0], mp_dists[0], window_sizes[0]
+        ts = TimeSeries(timestamps=np.array([]), values=ts_values)
 
-            self.ws_selector.optimal_window_size = MagicMock(return_value=window_size)
+        self.ws_selector.optimal_window_size = MagicMock(return_value=window_size)
+        self.mp_utils.get_mp_dist_from_mp = MagicMock(return_value=mp_dist_baseline)
 
-            self.mp_utils.get_mp_dist_from_mp = MagicMock(return_value=mp_dist_baseline)
+        result = self.detector._compute_matrix_profile(
+            ts,
+            self.config,
+            ws_selector=self.ws_selector,
+            mp_config=self.mp_config,
+            scorer=self.scorer,
+            mp_utils=self.mp_utils,
+        )
 
-            result = self.detector._compute_matrix_profile(
-                ts,
-                self.config,
-                ws_selector=self.ws_selector,
-                mp_config=self.mp_config,
-                scorer=self.scorer,
-                mp_utils=self.mp_utils,
-            )
-
-            self.assertIsInstance(result, MPTimeSeriesAnomalies)
-            self.assertIsInstance(result.flags, list)
-            self.assertIsInstance(result.scores, list)
-            self.assertIsInstance(result.matrix_profile, np.ndarray)
-            self.assertIsInstance(result.window_size, int)
+        self.assertIsInstance(result, MPTimeSeriesAnomalies)
+        self.assertIsInstance(result.flags, list)
+        self.assertEqual(result.scores, [0.1, 6.5, 4.8, 0.2])
+        self.assertIsInstance(result.scores, list)
+        self.assertEqual(
+            result.flags, ["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"]
+        )
+        self.assertIsInstance(result.matrix_profile, np.ndarray)
+        self.assertIsInstance(result.window_size, int)
+        mock_stump.assert_called_once()
+        self.scorer.batch_score.assert_called_once()
+        self.ws_selector.optimal_window_size.assert_called_once()
+        self.mp_utils.get_mp_dist_from_mp.assert_called_once()
 
 
 class TestMPStreamAnomalyDetector(unittest.TestCase):
@@ -107,4 +119,5 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         self.assertEqual(len(anomalies.scores), 3)
         self.assertEqual(len(anomalies.flags), 3)
         self.assertEqual(len(anomalies.matrix_profile), 3)
-        mock_scorer.stream_score.assert_called()
+        mock_scorer.stream_score.assert_called_once()
+        mock_stream.assert_called_once()
