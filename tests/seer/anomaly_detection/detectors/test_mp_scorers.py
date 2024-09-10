@@ -19,7 +19,7 @@ class TestMPScorers(unittest.TestCase):
             convert_synthetic_ts(
                 "tests/seer/anomaly_detection/test_data/synthetic_series",
                 as_ts_datatype=False,
-                include_range=True,
+                include_anomaly_range=True,
             )
         )
 
@@ -45,7 +45,7 @@ class TestMPScorers(unittest.TestCase):
                 else "noanomaly"
             )
 
-            self.assertEqual(result, expected_type)
+            assert result == expected_type
 
     def test_stream_score(self):
 
@@ -73,4 +73,4 @@ class TestMPScorers(unittest.TestCase):
                     mp_dist_baseline,
                 )
 
-                self.assertEqual(flag[0], expected_flags[i])
+                assert flag[0] == expected_flags[i]

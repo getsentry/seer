@@ -71,7 +71,7 @@ class TestMPUtils(unittest.TestCase):
                 mp, pad_to_len=None, mp_config=self.mock_mp_config, normalizer=None
             )
 
-        self.assertTrue("Need normalizer to normalize MP" in str(context.exception))
+        assert "Need normalizer to normalize MP" in str(context.exception)
 
     def test_incorrect_padding(self):
 
@@ -83,7 +83,6 @@ class TestMPUtils(unittest.TestCase):
                 mp, pad_to_len=1, mp_config=self.mock_mp_config, normalizer=None
             )
 
-        self.assertTrue(
-            "Requested length should be greater than or equal to current mp_dist"
-            in str(context.exception)
+        assert "Requested length should be greater than or equal to current mp_dist" in str(
+            context.exception
         )
