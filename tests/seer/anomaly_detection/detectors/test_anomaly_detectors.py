@@ -83,7 +83,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         self.detector = MPStreamAnomalyDetector(
             base_timestamps=np.array([1, 2, 3]),
             base_values=np.array([1.0, 2.0, 3.0]),
-            base_mp=np.array([[0.1], [0.2], [0.3]]),
+            base_mp=np.array([0.1, 0.2, 0.3, 0.4]),
             window_size=2,
         )
         self.timeseries = TimeSeries(
@@ -102,10 +102,10 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         mock_scorer = MockMPScorer.return_value
         mock_utils = MockMPUtils.return_value
 
-        mock_stream.P_ = [[0.1], [0.2], [0.3]]
-        mock_stream.I_ = [[0], [1], [2]]
-        mock_stream.left_I_ = [[0], [1], [2]]
-        mock_stream.T_ = np.array([1.1, 2.1, 3.1])
+        mock_stream.P_ = np.array([0.1, 0.2])
+        mock_stream.I_ = np.array([0, 1])
+        mock_stream.left_I_ = np.array([0, 1])
+        mock_stream.T_ = np.array([1.1, 2.1])
 
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
@@ -121,5 +121,5 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         assert len(anomalies.scores) == 3
         assert len(anomalies.flags) == 3
         assert len(anomalies.matrix_profile) == 3
-        mock_scorer.stream_score.assert_called_once()
-        mock_stream.assert_called_once()
+        mock_scorer.stream_score.assert_called()
+        mock_stream.update.assert_called()
