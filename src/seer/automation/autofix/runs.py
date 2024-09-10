@@ -1,12 +1,14 @@
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation, AutofixRequest
 from seer.automation.autofix.state import ContinuationState
+from seer.automation.state import DbStateRunTypes
 
 
 def create_initial_autofix_run(request: AutofixRequest):
     state = ContinuationState.new(
         AutofixContinuation(request=request),
         group_id=request.issue.id,
+        type=DbStateRunTypes.AUTOFIX,
     )
 
     with state.update() as cur:

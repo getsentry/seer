@@ -25,8 +25,9 @@ from seer.automation.models import (
     StacktraceFrame,
     ThreadDetails,
 )
-from seer.automation.state import LocalMemoryState
-from seer.db import DbPrIdToAutofixRunIdMapping, Session
+from seer.automation.state import DbStateRunTypes, LocalMemoryState
+from seer.automation.summarize.issue import IssueSummary
+from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, Session
 
 
 class TestAutofixContext(unittest.TestCase):
@@ -124,6 +125,39 @@ class TestAutofixContext(unittest.TestCase):
             mock_event.threads[0].stacktrace
         )
 
+    def test_get_issue_summary(self):
+        with Session() as session:
+            valid_summary_data = {
+                "summary_of_the_issue_based_on_your_step_by_step_reasoning": "summary",
+                "summary_of_the_functionality_affected": "impact",
+                "reason_step_by_step": [],
+                "five_to_ten_word_headline": "headline",
+            }
+            db_issue_summary = DbIssueSummary(group_id=0, summary=valid_summary_data)
+            session.add(db_issue_summary)
+            session.commit()
+
+        instance = self.autofix_context
+
+        result = instance.get_issue_summary()
+
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, IssueSummary)
+        self.assertEqual(
+            result.summary_of_the_issue_based_on_your_step_by_step_reasoning, "summary"
+        )
+        self.assertEqual(result.summary_of_the_functionality_affected, "impact")
+        self.assertEqual(result.five_to_ten_word_headline, "headline")
+
+        with Session() as session:
+            invalid_summary_data = {"bad data": "uh oh"}
+            db_issue_summary = DbIssueSummary(group_id=0, summary=invalid_summary_data)
+            session.merge(db_issue_summary)
+            session.commit()
+
+        result = instance.get_issue_summary()
+        self.assertIsNone(result)
+
 
 class TestAutofixContextPrCommit(unittest.TestCase):
     def setUp(self):
@@ -136,7 +170,8 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     repos=[],
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
                 ),
-            )
+            ),
+            type=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")

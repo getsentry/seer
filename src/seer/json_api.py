@@ -5,21 +5,68 @@ import inspect
 import logging
 from typing import Any, Callable, Type, TypeVar, get_type_hints
 
+import jwt
 import sentry_sdk
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from flask import Blueprint, request
+from google.cloud import secretmanager
 from pydantic import BaseModel, ValidationError
-from werkzeug.exceptions import BadRequest, Unauthorized
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
 
+from seer.bootup import module, stub_module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
+
 _F = TypeVar("_F", bound=Callable[..., Any])
 
 
+def access_secret(project_id: str, secret_id: str, version_id: str = "latest"):
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode("UTF-8")
+
+
+def get_public_key_from_secret(project_id: str, secret_id: str, version_id: str = "latest"):
+    pem_data = access_secret(project_id, secret_id, version_id)
+    public_key = serialization.load_pem_public_key(pem_data.encode(), backend=default_backend())
+    public_key_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    return public_key_bytes
+
+
+class PublicKeyBytes(BaseModel):
+    bytes: bytes | None
+
+
+@module.provider
+def provide_public_key(config: AppConfig = injected) -> PublicKeyBytes:
+    return PublicKeyBytes(
+        bytes=(
+            get_public_key_from_secret(config.GOOGLE_CLOUD_PROJECT, config.API_PUBLIC_KEY_SECRET_ID)
+            if config.GOOGLE_CLOUD_PROJECT and config.API_PUBLIC_KEY_SECRET_ID
+            else None
+        )
+    )
+
+
+@stub_module.provider
+def provide_public_key_stub() -> PublicKeyBytes:
+    return PublicKeyBytes(bytes=None)
+
+
 def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
-    def decorator(implementation: _F) -> _F:
+    @inject
+    def decorator(
+        implementation: _F, config: AppConfig = injected, public_key: PublicKeyBytes = injected
+    ) -> _F:
         spec = inspect.getfullargspec(implementation)
         annotations = get_type_hints(implementation)
         try:
@@ -41,12 +88,41 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
-                if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
-                    raise Unauthorized("Rpcsignature did not match for given url and data")
-            else:
-                if config.is_production:
-                    logger.warning(f"Found unexpected authorization header: {auth_header}")
-                    raise Unauthorized("Rpcsignature was not included in authorization header!")
+                if len(parts) != 2 or not compare_signature(
+                    request.url, request.args.get("nonce", ""), raw_data, parts[1]
+                ):
+                    raise Unauthorized(
+                        f"Rpcsignature did not match for given url {request.url} and data"
+                    )
+            elif auth_header.startswith("Bearer "):
+                token = auth_header.split()[1]
+                try:
+                    if public_key.bytes is None:
+                        raise Unauthorized("Public key is not available")
+                    # Verify the JWT token using PyJWT
+                    jwt.decode(token, public_key.bytes, algorithms=["RS256"])
+
+                    # Optionally, you can add additional checks here
+                    # For example, checking the 'exp' claim for token expiration
+                    # or verifying specific claims in the token payload
+
+                    # If the token is successfully decoded and verified,
+                    # the function will continue execution
+                except jwt.ExpiredSignatureError:
+                    raise Unauthorized("Token has expired")
+                except jwt.InvalidSignatureError:
+                    raise Unauthorized("Invalid signature")
+                except jwt.InvalidTokenError:
+                    raise Unauthorized("Invalid token")
+                except Exception as e:
+                    sentry_sdk.capture_exception(e)
+                    print(e)
+                    raise InternalServerError("Something went wrong with the Bearer token auth")
+            elif not config.IGNORE_API_AUTH and config.is_production:
+                logger.warning(f"Found unexpected authorization header: {auth_header}")
+                raise Unauthorized(
+                    "Neither Rpcsignature nor a Bearer token was included in authorization header!"
+                )
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
@@ -71,8 +147,15 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     return decorator
 
 
+def is_valid(payload: bytes, key: str, signature_data: str):
+    computed = hmac.new(key.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(computed.encode(), signature_data.encode())
+
+
 @inject
-def compare_signature(url: str, body: bytes, signature: str, config: AppConfig = injected) -> bool:
+def compare_signature(
+    url: str, nonce: str, body: bytes, signature: str, config: AppConfig = injected
+) -> bool:
     """
     Compare request data + signature signed by one of the shared secrets.
     Once a key has been able to validate the signature other keys will
@@ -89,18 +172,28 @@ def compare_signature(url: str, body: bytes, signature: str, config: AppConfig =
         return False
 
     _, signature_data = signature.split(":", 2)
-    signature_input = b"%s:%s" % (
-        url.encode(),
-        body,
-    )
-
     for key in secrets:
-        computed = hmac.new(key.encode(), signature_input, hashlib.sha256).hexdigest()
-        is_valid = hmac.compare_digest(computed.encode(), signature_data.encode())
-        if is_valid:
+        if nonce:
+            if is_valid(b"%s:%s" % (nonce.encode(), body), key, signature_data):
+                span = sentry_sdk.Hub.current.scope.span
+                if span:
+                    span.set_data("rpc_auth_additional_payload", "nonce")
+                return True
+        elif is_valid(
+            b"%s:%s"
+            % (
+                url.encode(),
+                body,
+            ),
+            key,
+            signature_data,
+        ):
+            span = sentry_sdk.Hub.current.scope.span
+            if span:
+                span.set_data("rpc_auth_additional_payload", "url")
             return True
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
 
-    sentry_sdk.capture_message("No signature matches found")
+    sentry_sdk.capture_message("No signature matches found.")
     return False

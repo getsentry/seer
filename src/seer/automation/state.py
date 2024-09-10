@@ -2,6 +2,7 @@ import abc
 import contextlib
 import dataclasses
 import functools
+from enum import Enum
 from typing import Any, Generic, Iterator, Type, TypeVar, cast
 
 from celery import Task
@@ -10,6 +11,11 @@ from pydantic import BaseModel
 from seer.db import DbRunState, Session
 
 _State = TypeVar("_State", bound=BaseModel)
+
+
+class DbStateRunTypes(str, Enum):
+    AUTOFIX = "autofix"
+    UNIT_TEST = "unit-test"
 
 
 class State(abc.ABC, Generic[_State]):
@@ -54,22 +60,25 @@ class DbState(State[_State]):
 
     id: int
     model: Type[BaseModel]
+    type: DbStateRunTypes
 
     @classmethod
-    def new(cls, value: _State, *, group_id: int | None = None) -> "DbState[_State]":
+    def new(
+        cls, value: _State, *, group_id: int | None = None, type: DbStateRunTypes
+    ) -> "DbState[_State]":
         with Session() as session:
-            db_state = DbRunState(value=value.model_dump(mode="json"), group_id=group_id)
+            db_state = DbRunState(value=value.model_dump(mode="json"), group_id=group_id, type=type)
             session.add(db_state)
             session.flush()
             value.run_id = db_state.id
             db_state.value = value.model_dump(mode="json")
             session.merge(db_state)
             session.commit()
-            return cls(id=db_state.id, model=value.__class__)
+            return cls(id=db_state.id, model=value.__class__, type=type)
 
     @classmethod
-    def from_id(cls, id: int, model: Type[BaseModel]) -> "DbState[_State]":
-        return cls(id=id, model=model)
+    def from_id(cls, id: int, model: Type[BaseModel], type: DbStateRunTypes) -> "DbState[_State]":
+        return cls(id=id, model=model, type=type)
 
     def get(self) -> _State:
         with Session() as session:
@@ -77,6 +86,9 @@ class DbState(State[_State]):
 
             if db_state is None:
                 raise ValueError(f"No state found for id {self.id}")
+
+            if db_state.type != self.type:
+                raise ValueError(f"Invalid state type: '{db_state.type}', expected: '{self.type}'")
 
             return cast(_State, self.model.model_validate(db_state.value))
 

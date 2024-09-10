@@ -1,5 +1,5 @@
 import textwrap
-from typing import Annotated
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
@@ -10,12 +10,14 @@ from seer.automation.autofix.components.root_cause.models import (
 )
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
+from seer.automation.summarize.issue import IssueSummary
 
 
 class CodingRequest(BaseComponentRequest):
     event_details: EventDetails
     root_cause_and_fix: RootCauseAnalysisItem | str
     instruction: str | None = None
+    summary: Optional[IssueSummary] = None
 
 
 class SnippetXml(PromptXmlModel, tag="snippet"):

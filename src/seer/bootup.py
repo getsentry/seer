@@ -36,10 +36,11 @@ def bootup(
     *, start_model_loading: bool, integrations: list[Integration], config: AppConfig = injected
 ):
     initialize_sentry_sdk(integrations)
-    initialize_logs(["seer.", "celery_app."])
-    config.do_validation()
-    initialize_database()
-    initialize_models(start_model_loading)
+    with sentry_sdk.metrics.timing(key="seer_bootup_time"):
+        initialize_logs(["seer.", "celery_app."])
+        config.do_validation()
+        initialize_database()
+        initialize_models(start_model_loading)
 
 
 @inject

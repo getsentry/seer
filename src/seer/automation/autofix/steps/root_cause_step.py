@@ -54,10 +54,13 @@ class RootCauseStep(AutofixPipelineStep):
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
 
+        summary = state.request.issue_summary
+        if not summary:
+            summary = self.context.get_issue_summary()
+
         root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
             RootCauseAnalysisRequest(
-                event_details=event_details,
-                instruction=state.request.instruction,
+                event_details=event_details, instruction=state.request.instruction, summary=summary
             )
         )
 
