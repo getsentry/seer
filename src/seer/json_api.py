@@ -88,7 +88,9 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
-                if len(parts) != 2 or not compare_signature(request.url, raw_data, parts[1]):
+                if len(parts) != 2 or not compare_signature(
+                    request.url, request.args.get("nonce", ""), raw_data, parts[1]
+                ):
                     raise Unauthorized(
                         f"Rpcsignature did not match for given url {request.url} and data"
                     )
@@ -145,8 +147,15 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
     return decorator
 
 
+def is_valid(payload: bytes, key: str, signature_data: str):
+    computed = hmac.new(key.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(computed.encode(), signature_data.encode())
+
+
 @inject
-def compare_signature(url: str, body: bytes, signature: str, config: AppConfig = injected) -> bool:
+def compare_signature(
+    url: str, nonce: str, body: bytes, signature: str, config: AppConfig = injected
+) -> bool:
     """
     Compare request data + signature signed by one of the shared secrets.
     Once a key has been able to validate the signature other keys will
@@ -163,18 +172,28 @@ def compare_signature(url: str, body: bytes, signature: str, config: AppConfig =
         return False
 
     _, signature_data = signature.split(":", 2)
-    signature_input = b"%s:%s" % (
-        url.encode(),
-        body,
-    )
-
     for key in secrets:
-        computed = hmac.new(key.encode(), signature_input, hashlib.sha256).hexdigest()
-        is_valid = hmac.compare_digest(computed.encode(), signature_data.encode())
-        if is_valid:
+        if nonce:
+            if is_valid(b"%s:%s" % (nonce.encode(), body), key, signature_data):
+                span = sentry_sdk.Hub.current.scope.span
+                if span:
+                    span.set_data("rpc_auth_additional_payload", "nonce")
+                return True
+        elif is_valid(
+            b"%s:%s"
+            % (
+                url.encode(),
+                body,
+            ),
+            key,
+            signature_data,
+        ):
+            span = sentry_sdk.Hub.current.scope.span
+            if span:
+                span.set_data("rpc_auth_additional_payload", "url")
             return True
         else:
             sentry_sdk.capture_message("Signature did not match hmac")
 
-    sentry_sdk.capture_message(f"No signature matches found. URL: {url}")
+    sentry_sdk.capture_message("No signature matches found.")
     return False

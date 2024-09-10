@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 import jwt
-import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from flask import Blueprint, Flask
@@ -184,7 +183,6 @@ def test_json_api_auth_with_real_jwt():
         assert b"Token has expired" in response.data
 
 
-@pytest.mark.skip(reason="Waiting to validate configuration in production")
 def test_json_api_signature_strict_mode():
     app = Flask(__name__)
     blueprint = Blueprint("blueprint", __name__)
@@ -198,8 +196,9 @@ def test_json_api_signature_strict_mode():
 
     headers = {}
     payload = {"thing": "thing", "b": 12}
+    path = "/v0/some/url"
     status_code_watcher = change_watcher(
-        lambda: test_client.post("/v0/some/url", json=payload, headers=headers).status_code
+        lambda: test_client.post(path, json=payload, headers=headers).status_code
     )
 
     with Module() as injector:
@@ -215,5 +214,14 @@ def test_json_api_signature_strict_mode():
             headers["Authorization"] = (
                 "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
             )
+        assert changed.to_value(200)
 
+        with status_code_watcher as changed:
+            path += "?nonce=1234"
+        assert changed.to_value(401)
+
+        with status_code_watcher as changed:
+            headers["Authorization"] = (
+                "Rpcsignature rpc0:487fb810a4e87faf306dc9637cec9aaea2be37247410391b372178ffc15af6a8"
+            )
         assert changed.to_value(200)
