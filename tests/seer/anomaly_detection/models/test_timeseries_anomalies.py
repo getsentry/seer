@@ -28,7 +28,7 @@ class TestConverters(unittest.TestCase):
 
         algo_data = self.anomalies.get_anomaly_algo_data(front_pad_to_len)
 
-        self.assertEqual(algo_data, expected_data)
+        assert algo_data == expected_data
 
     def test_get_anomaly_algo_data_without_padding(self):
         # Test with front_pad_to_len equal to the length of matrix_profile
@@ -40,9 +40,9 @@ class TestConverters(unittest.TestCase):
 
         algo_data = self.anomalies.get_anomaly_algo_data(front_pad_to_len)
 
-        self.assertEqual(algo_data, expected_data)
+        assert algo_data == expected_data
 
         front_pad_to_len = 1
         algo_data = self.anomalies.get_anomaly_algo_data(front_pad_to_len)
 
-        self.assertEqual(algo_data, expected_data)
+        assert algo_data == expected_data

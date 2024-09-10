@@ -18,8 +18,9 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
     def test_optimal_window_size_linear_series(self):
         ts = np.linspace(1, 100, 100)
         window_size = self.selector.optimal_window_size(ts)
-        self.assertGreater(
-            window_size, 10, "Window size for linear series should be greater than the lower bound."
+
+        assert "Window size for linear series should be greater than the lower bound.", (
+            window_size > 10
         )
 
     def test_optimal_window_size_short_series(self):

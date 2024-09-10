@@ -45,7 +45,7 @@ class TestMPScorers(unittest.TestCase):
                 else "noanomaly"
             )
 
-            self.assertEqual(result, expected_type)
+            assert result == expected_type
 
     def test_stream_score(self):
 
@@ -74,4 +74,4 @@ class TestMPScorers(unittest.TestCase):
                     mp_dist_baseline,
                 )
 
-                self.assertEqual(flag[0], expected_flags[i])
+                assert flag[0] == expected_flags[i]
