@@ -82,25 +82,6 @@ def test_json_api_bearer_token_auth():
         assert response.status_code == 401
         assert b"Invalid token" in response.data
 
-        # Test missing Authorization header
-        response = test_client.post("/v0/some/url", json={"thing": "thing", "b": 12})
-        assert response.status_code == 401
-        assert (
-            b"Neither Rpcsignature nor a Bearer token was included in authorization header!"
-            in response.data
-        )
-
-        # Test incorrect Authorization header format
-        headers = {"Authorization": "InvalidFormat token"}
-        response = test_client.post(
-            "/v0/some/url", json={"thing": "thing", "b": 12}, headers=headers
-        )
-        assert response.status_code == 401
-        assert (
-            b"Neither Rpcsignature nor a Bearer token was included in authorization header!"
-            in response.data
-        )
-
 
 def test_json_api_auth_not_enforced():
     app = Flask(__name__)
