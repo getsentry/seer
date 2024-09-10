@@ -421,8 +421,8 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertIsNotNone(added_step2.id)
 
         # Check that the IDs are strings (UUIDs)
-        self.assertIsInstance(added_step1.id, str)
-        self.assertIsInstance(added_step2.id, str)
+        assert isinstance(added_step1.id, str)
+        assert isinstance(added_step2.id, str)
 
         # Check that the IDs are unique
         self.assertNotEqual(added_step1.id, added_step2.id)
