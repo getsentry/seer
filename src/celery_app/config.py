@@ -33,6 +33,7 @@ def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
             }
         },
         result_backend="rpc://",
+        worker_prefetch_multiplier=0,
     )
 
 

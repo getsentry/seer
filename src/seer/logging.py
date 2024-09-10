@@ -29,6 +29,7 @@ def initialize_logs(
     handlers: DefaultLoggingHandlers = injected,
     log_level: LogLevel = injected,
 ):
+    logging.basicConfig(level=log_level, handlers=handlers)
     for log_name in logging.root.manager.loggerDict:
         if any(log_name.startswith(prefix) for prefix in prefixes):
             logger = logging.getLogger(log_name)
