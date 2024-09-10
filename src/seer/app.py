@@ -2,6 +2,7 @@ import logging
 import time
 
 import flask
+import requests
 import sentry_sdk
 from flask import Blueprint, Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -67,6 +68,7 @@ from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointRes
 
 app = flask.current_app
 blueprint = Blueprint("app", __name__)
+logger = logging.getLogger(__name__)
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
@@ -265,6 +267,11 @@ def health_check():
 @blueprint.route("/health/ready", methods=["GET"])
 def ready_check():
     from seer.inference_models import models_loading_status
+
+    logger.warning("Checking github call...")
+    resp = requests.get("https://api.github.com/octocat")
+    resp.raise_for_status()
+    logger.warning("Health check succeeded in github call")
 
     status = models_loading_status()
     if status == "failed":
