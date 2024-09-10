@@ -3,12 +3,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openai.types.chat import ParsedChatCompletion, ParsedChatCompletionMessage, ParsedChoice
 
+from seer.automation.agent.client import GptClient
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
     RootCauseAnalysisItemPrompt,
 )
+from seer.dependency_injection import Module
 
 
 class TestRootCauseComponent:
@@ -24,17 +26,14 @@ class TestRootCauseComponent:
         with patch("seer.automation.autofix.components.root_cause.component.GptAgent") as mock:
             yield mock
 
-    @pytest.fixture
-    def mock_gpt_client(self):
-        with patch("seer.automation.autofix.components.root_cause.component.GptClient") as mock:
-            yield mock
-
-    def test_root_cause_simple_response_parsing(self, component, mock_gpt_agent, mock_gpt_client):
+    def test_root_cause_simple_response_parsing(self, component, mock_gpt_agent):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "Reproduction steps",
         ]
-        mock_gpt_client.return_value.openai_client.beta.chat.completions.parse.return_value = (
+
+        mock_gpt_client = MagicMock()
+        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
             ParsedChatCompletion(
                 id="1",
                 choices=[
@@ -70,16 +69,19 @@ class TestRootCauseComponent:
             )
         )
 
-        output = component.invoke(MagicMock())
+        module = Module()
+        module.constant(GptClient, mock_gpt_client)
+        with module:
+            output = component.invoke(MagicMock())
 
-        assert output is not None
-        assert len(output.causes) == 1
-        assert output.causes[0].title == "Missing Null Check"
-        assert output.causes[0].description == "The root cause of the issue is ..."
-        assert output.causes[0].likelihood == 0.9
-        assert output.causes[0].actionability == 1.0
-        assert output.causes[0].reproduction == "Steps to reproduce"
-        assert output.causes[0].code_context is None
+            assert output is not None
+            assert len(output.causes) == 1
+            assert output.causes[0].title == "Missing Null Check"
+            assert output.causes[0].description == "The root cause of the issue is ..."
+            assert output.causes[0].likelihood == 0.9
+            assert output.causes[0].actionability == 1.0
+            assert output.causes[0].reproduction == "Steps to reproduce"
+            assert output.causes[0].code_context is None
 
     def test_no_root_causes_response(self, component, mock_gpt_agent):
         mock_gpt_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"
