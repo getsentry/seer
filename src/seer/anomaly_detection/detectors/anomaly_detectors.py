@@ -158,7 +158,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 stream.update(cur_val)
 
                 # Get the matrix profile for the new data and score it
-                cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], [-1]]
+                cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
                 streamed_mp.append(cur_mp)
                 mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
                 cur_scores, cur_flags = scorer.stream_score(
