@@ -82,19 +82,21 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
 
         @inject
         def wrapper(config: AppConfig = injected) -> Any:
-            raw_data = request.get_data()
+            # raw_data = request.get_data()
             auth_header = request.headers.get("Authorization", "")
 
+            # if auth_header.startswith("Rpcsignature "):
             # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
-                parts = auth_header.split()
-                if len(parts) != 2 or not compare_signature(
-                    request.url, request.args.get("nonce", ""), raw_data, parts[1]
-                ):
-                    raise Unauthorized(
-                        f"Rpcsignature did not match for given url {request.url} and data"
-                    )
-            elif auth_header.startswith("Bearer "):
+                #     parts = auth_header.split()
+                #     if len(parts) != 2 or not compare_signature(
+                #         request.url, request.args.get("nonce", ""), raw_data, parts[1]
+                #     ):
+                #         raise Unauthorized(
+                #             f"Rpcsignature did not match for given url {request.url} and data"
+                #         )
+                pass
+            if auth_header.startswith("Bearer "):
                 token = auth_header.split()[1]
                 try:
                     if public_key.bytes is None:
