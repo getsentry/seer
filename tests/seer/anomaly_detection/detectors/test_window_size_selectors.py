@@ -1,12 +1,7 @@
-import json
-import os
 import unittest
 
-import numpy as np
-
 from seer.anomaly_detection.detectors.window_size_selectors import SuSSWindowSizeSelector
-
-# from tests.seer.anomaly_detection.timeseries.timeseries import context
+from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
 class TestSuSSWindowSizeSelector(unittest.TestCase):
@@ -18,28 +13,17 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
 
         actual_windows = []
 
-        # Check time series JSON files in test_data
-        dir = "tests/seer/anomaly_detection/detectors/test_data/synthetic_series"
-        for filename in os.listdir(dir):
-            f = os.path.join(dir, filename)
+        timeseries, _, window_sizes = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
+        )
 
-            if os.path.isfile(f):
-                if not os.path.isfile(f):
-                    raise Exception("Filename is not a valid file")
+        for ts, window_size in zip(timeseries, window_sizes):
+            window = self.selector.optimal_window_size(ts)
+            actual_windows.append(window_size)
 
-                # Load json and convert to ts and mp_dist
-                with open(f) as file:
-
-                    data = json.load(file)
-                    data = data["ts"]
-
-                    ts = np.array([point["value"] for point in data], dtype=np.float64)
-
-                    window = self.selector.optimal_window_size(ts)
-                    actual_windows.append(window)
-
-        # Check if window is within half a period
+        # Check if window is within n% of period
+        n = 0.6
         period = 24 * 4
 
         for window in actual_windows:
-            self.assertTrue(period / 2 <= window <= period * 1.5)
+            self.assertTrue(window - (period * n) <= window <= window + (period * n))

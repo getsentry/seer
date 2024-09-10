@@ -1,5 +1,3 @@
-import json
-import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +11,7 @@ from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
+from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
 class TestMPBatchAnomalyDetector(unittest.TestCase):
@@ -36,51 +35,31 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
         mock_stump.return_value = np.array([1, 2, 3, 4])
         self.scorer.batch_score = MagicMock(return_value=([], []))
 
-        # TODO: Convert this file reading routine into a helper in test_util file
+        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
+        )
 
-        # Load in time series JSON files in test_data
-        dir = "tests/seer/anomaly_detection/detectors/test_data/synthetic_series"
-        for filename in os.listdir(dir):
-            f = os.path.join(dir, filename)
+        for ts_values, mp_dist_baseline, window_size in zip(timeseries, mp_dists, window_sizes):
+            ts = TimeSeries(timestamps=np.array([]), values=ts_values)
 
-            if os.path.isfile(f):
-                if not os.path.isfile(f):
-                    raise Exception("Filename is not a valid file")
+            self.ws_selector.optimal_window_size = MagicMock(return_value=window_size)
 
-                file_params = filename.split(".")[0].split("_")
-                window_size = int(file_params[2])
+            self.mp_utils.get_mp_dist_from_mp = MagicMock(return_value=mp_dist_baseline)
 
-                # Load json and convert to ts and mp_dist
-                with open(f) as file:
+            result = self.detector._compute_matrix_profile(
+                ts,
+                self.config,
+                ws_selector=self.ws_selector,
+                mp_config=self.mp_config,
+                scorer=self.scorer,
+                mp_utils=self.mp_utils,
+            )
 
-                    data = json.load(file)
-                    data = data["ts"]
-
-                    ts_values = np.array([point["value"] for point in data], dtype=np.float64)
-                    ts = TimeSeries(timestamps=np.array([]), values=ts_values)
-
-                    mp_dist_baseline = np.array(
-                        [point["mp_dist"] for point in data], dtype=np.float64
-                    )
-
-                    self.ws_selector.optimal_window_size = MagicMock(return_value=window_size)
-
-                    self.mp_utils.get_mp_dist_from_mp = MagicMock(return_value=mp_dist_baseline)
-
-                    result = self.detector._compute_matrix_profile(
-                        ts,
-                        self.config,
-                        ws_selector=self.ws_selector,
-                        mp_config=self.mp_config,
-                        scorer=self.scorer,
-                        mp_utils=self.mp_utils,
-                    )
-
-                    self.assertIsInstance(result, MPTimeSeriesAnomalies)
-                    self.assertIsInstance(result.flags, list)
-                    self.assertIsInstance(result.scores, list)
-                    self.assertIsInstance(result.matrix_profile, np.ndarray)
-                    self.assertIsInstance(result.window_size, int)
+            self.assertIsInstance(result, MPTimeSeriesAnomalies)
+            self.assertIsInstance(result.flags, list)
+            self.assertIsInstance(result.scores, list)
+            self.assertIsInstance(result.matrix_profile, np.ndarray)
+            self.assertIsInstance(result.window_size, int)
 
 
 class TestMPStreamAnomalyDetector(unittest.TestCase):
