@@ -17,8 +17,9 @@ class TestConverters(unittest.TestCase):
 
         converted_ts = convert_external_ts_to_internal(external_ts)
 
-        assert isinstance(converted_ts, TimeSeries)
-        assert isinstance(converted_ts.values, np.ndarray)
-        assert isinstance(converted_ts.timestamps, np.ndarray)
-        assert len(converted_ts.values) == 2
-        assert len(converted_ts.timestamps) == 2
+        self.assertIsInstance(converted_ts, TimeSeries)
+        self.assertIsInstance(converted_ts.values, np.ndarray)
+        self.assertIsInstance(converted_ts.timestamps, np.ndarray)
+
+        self.assertEqual(len(converted_ts.values), 2)
+        self.assertEqual(len(converted_ts.timestamps), 2)

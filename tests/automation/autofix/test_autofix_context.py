@@ -142,7 +142,7 @@ class TestAutofixContext(unittest.TestCase):
         result = instance.get_issue_summary()
 
         self.assertIsNotNone(result)
-        assert isinstance(result, IssueSummary)
+        self.assertIsInstance(result, IssueSummary)
         self.assertEqual(
             result.summary_of_the_issue_based_on_your_step_by_step_reasoning, "summary"
         )

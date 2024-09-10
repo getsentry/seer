@@ -59,18 +59,15 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             mp_utils=self.mp_utils,
         )
 
-        assert isinstance(result, MPTimeSeriesAnomalies)
-        assert isinstance(result.flags, list)
-        assert result.scores == [0.1, 6.5, 4.8, 0.2]
-        assert isinstance(result.scores, list)
-        assert result.flags == [
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-        ]
-        assert isinstance(result.matrix_profile, np.ndarray)
-        assert isinstance(result.window_size, int)
+        self.assertIsInstance(result, MPTimeSeriesAnomalies)
+        self.assertIsInstance(result.flags, list)
+        self.assertEqual(result.scores, [0.1, 6.5, 4.8, 0.2])
+        self.assertIsInstance(result.scores, list)
+        self.assertEqual(
+            result.flags, ["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"]
+        )
+        self.assertIsInstance(result.matrix_profile, np.ndarray)
+        self.assertIsInstance(result.window_size, int)
         mock_stump.assert_called_once()
         self.scorer.batch_score.assert_called_once()
         self.ws_selector.optimal_window_size.assert_called_once()
@@ -113,13 +110,14 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
         anomalies = self.detector.detect(self.timeseries, self.config, mock_scorer, mock_utils)
 
-        assert isinstance(anomalies, MPTimeSeriesAnomalies)
-        assert isinstance(anomalies.flags, list)
-        assert isinstance(anomalies.scores, list)
-        assert isinstance(anomalies.matrix_profile, np.ndarray)
-        assert isinstance(anomalies.window_size, int)
-        assert len(anomalies.scores) == 3
-        assert len(anomalies.flags) == 3
-        assert len(anomalies.matrix_profile) == 3
+        self.assertIsInstance(anomalies, MPTimeSeriesAnomalies)
+        self.assertIsInstance(anomalies.flags, list)
+        self.assertIsInstance(anomalies.scores, list)
+        self.assertIsInstance(anomalies.matrix_profile, np.ndarray)
+        self.assertIsInstance(anomalies.window_size, int)
+
+        self.assertEqual(len(anomalies.scores), 3)
+        self.assertEqual(len(anomalies.flags), 3)
+        self.assertEqual(len(anomalies.matrix_profile), 3)
         mock_scorer.stream_score.assert_called_once()
         mock_stream.assert_called_once()
