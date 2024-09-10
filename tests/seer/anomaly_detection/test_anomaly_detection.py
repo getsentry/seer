@@ -10,81 +10,130 @@ from seer.anomaly_detection.models.external import (
     StoreDataRequest,
     StoreDataResponse,
     TimeSeriesPoint,
+    TimeSeriesWithHistory,
 )
-from tests.seer.anomaly_detection.timeseries.timeseries import context
-
-# from typing import List
+from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
 class TestAnomalyDetection(unittest.TestCase):
 
-    def test_detect_anomalies(self):
-
-        # Set up respective params for detection types (batch, online, combo)
-
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
-        )
-
-        # Batch Detection
-        contextBatchTimeseries = context
-
-        requestBatch = DetectAnomaliesRequest(
-            organization_id=1, project_id=1, config=config, context=contextBatchTimeseries
-        )
-
-        responseBatch = AnomalyDetection().detect_anomalies(request=requestBatch)
-
-        # response is a timeseries (DetectAnomaliesResponse)
-        self.assertIsInstance(responseBatch, DetectAnomaliesResponse)
-
-        # assert that specific values of response are expected?
-
-        # Online Detection
-        contextOnline = AlertInSeer(id=1000, cur_window=TimeSeriesPoint(timestamp=501, value=0.5))
-
-        requestOnline = DetectAnomaliesRequest(
-            organization_id=1, project_id=1, config=config, context=contextOnline
-        )
-
-        responseOnline = AnomalyDetection().detect_anomalies(request=requestOnline)
-
-        # assert that the response is a timeseries (DetectAnomaliesResponse)
-        self.assertIsInstance(responseOnline, DetectAnomaliesResponse)
-        # self.assertIsInstance(responseOnline.timeseries, List[TimeSeriesPoint])
-
-        # TODO: Combo detection
-
     def test_store_data(self):
 
-        # Set up request and accessor
-        organization_id = 1
-        project_id = 1
-        alert = AlertInSeer(id=1)
-        # TODO: Consider looping through config options? Would that be too expensive/brittle?
+        alert_data_accessor = DbAlertDataAccessor()
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        # Load in sample timeseries
-        ts = context
-
-        request = StoreDataRequest(
-            organization_id=organization_id,
-            project_id=project_id,
-            alert=alert,
-            config=config,
-            timeseries=ts,
-        )
-        alert_data_accessor = DbAlertDataAccessor()
-
-        response = AnomalyDetection().store_data(
-            request=request, alert_data_accessor=alert_data_accessor
+        timeseries, _, _ = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
 
-        # Successful
-        self.assertEqual(
-            response,
-            StoreDataResponse(success=True),
-            "Store Data Response should be successful",
+        for i, ts in enumerate(timeseries):
+
+            alert = AlertInSeer(id=i)
+
+            request = StoreDataRequest(
+                organization_id=i,
+                project_id=i,
+                alert=alert,
+                config=config,
+                timeseries=ts,
+            )
+
+            response = AnomalyDetection().store_data(
+                request=request, alert_data_accessor=alert_data_accessor
+            )
+
+            # Successful
+            self.assertEqual(
+                response,
+                StoreDataResponse(success=True),
+                "Store Data Response should be successful",
+            )
+
+            # TODO: Clean up DB(?)
+
+    def test_detect_anomalies_batch(self):
+
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
+
+        timeseries, _, _ = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+
+        for i, ts in enumerate(timeseries):
+
+            anomaly_request = DetectAnomaliesRequest(
+                organization_id=i, project_id=i, config=config, context=ts
+            )
+
+            response = AnomalyDetection().detect_anomalies(request=anomaly_request)
+
+            self.assertIsInstance(response, DetectAnomaliesResponse)
+            self.assertIsInstance(response.timeseries, list)
+            self.assertEqual(len(response.timeseries), len(ts))
+            self.assertIsInstance(response.timeseries[0], TimeSeriesPoint)
+
+    def test_detect_anomalies_online(self):
+
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
+        )
+
+        timeseries, _, _ = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+
+        for i, ts in enumerate(timeseries):
+
+            context = AlertInSeer(
+                id=i, cur_window=TimeSeriesPoint(timestamp=len(ts) + 1, value=0.5)
+            )
+
+            request = DetectAnomaliesRequest(
+                organization_id=i, project_id=i, config=config, context=context
+            )
+
+            response = AnomalyDetection().detect_anomalies(request=request)
+
+            self.assertIsInstance(response, DetectAnomaliesResponse)
+            self.assertIsInstance(response.timeseries, list)
+            self.assertEqual(
+                len(response.timeseries), len(ts) + 1
+            )  # Adding one more observation to timeseries
+            self.assertIsInstance(response.timeseries[0], TimeSeriesPoint)
+
+    def test_detect_anomalies_combo(self):
+
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
+        )
+
+        timeseries, _, _ = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+
+        n = 5
+        for i, ts_history in enumerate(timeseries):
+
+            # Generate new observation window of n points which are the same as the last point
+            ts_current = []
+            for j in range(1, n + 1):
+                ts_current.append(
+                    TimeSeriesPoint(timestamp=len(ts_history) + j, value=ts_history[-1].value)
+                )
+
+            context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
+
+            request = DetectAnomaliesRequest(
+                organization_id=i, project_id=i, config=config, context=context
+            )
+
+            response = AnomalyDetection().detect_anomalies(request=request)
+
+            self.assertIsInstance(response, DetectAnomaliesResponse)
+            self.assertIsInstance(response.timeseries, list)
+            self.assertEqual(len(response.timeseries), n)
+            self.assertIsInstance(response.timeseries[0], TimeSeriesPoint)
