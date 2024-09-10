@@ -7,7 +7,6 @@ from pydantic_xml import attr, element
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
-from seer.automation.summarize.issue import IssueSummary
 
 
 class SnippetPromptXml(PromptXmlModel, tag="code"):
@@ -153,8 +152,8 @@ class RootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="root"):
 
 class RootCauseAnalysisRequest(BaseComponentRequest):
     event_details: EventDetails
+
     instruction: Optional[str] = None
-    summary: Optional[IssueSummary] = None
 
 
 class RootCauseAnalysisOutput(BaseComponentOutput):

@@ -1,9 +1,7 @@
 import textwrap
-from typing import Optional
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
-from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
-from seer.automation.summarize.issue import IssueSummary
+from seer.automation.autofix.prompts import format_instruction, format_repo_names
 
 
 class CodingPrompts:
@@ -22,18 +20,14 @@ class CodingPrompts:
 
     @staticmethod
     def format_fix_discovery_msg(
-        event: str,
-        task_str: str,
-        repo_names: list[str],
-        instruction: str | None,
-        summary: Optional[IssueSummary] = None,
+        event: str, task_str: str, repo_names: list[str], instruction: str | None
     ):
         return textwrap.dedent(
             """\
             {repo_names_str}
-            Given the issue: {summary_str}
-            {event_str}
 
+            Given the issue:
+            {event_str}
             {instruction}
             The root cause of the issue has been identified and context about the issue has been provided:
             {task_str}
@@ -59,7 +53,6 @@ class CodingPrompts:
             task_str=task_str,
             repo_names_str=format_repo_names(repo_names),
             instruction=format_instruction(instruction),
-            summary_str=format_summary(summary),
         )
 
     @staticmethod

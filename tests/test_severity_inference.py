@@ -14,7 +14,7 @@ class TestSeverityInference(unittest.TestCase):
             SeverityRequest(message="TypeError: bad operand type for unary -: 'str'")
         ).severity
 
-        assert isinstance(score, float)
+        self.assertIsInstance(score, float)
         if not can_use_model_stubs():
             self.assertGreater(score, 0.5)
 
@@ -23,14 +23,14 @@ class TestSeverityInference(unittest.TestCase):
             SeverityRequest(message="log: user enjoyed their experience")
         ).severity
 
-        assert isinstance(score, float)
+        self.assertIsInstance(score, float)
         if not can_use_model_stubs():
             self.assertLess(score, 0.5)
 
     def test_empty_input(self):
         score = self.severity_inference.severity_score(SeverityRequest(message="")).severity
 
-        assert isinstance(score, float)
+        self.assertIsInstance(score, float)
 
     def test_output_range(self):
         test_messages = ["Test message 1", "Another test message", "Yet another test message"]
@@ -40,7 +40,7 @@ class TestSeverityInference(unittest.TestCase):
                 SeverityRequest(message=message)
             ).severity
 
-            assert isinstance(score, float)
+            self.assertIsInstance(score, float)
             self.assertGreaterEqual(score, 0.0)
             self.assertLessEqual(score, 1.0)
 

@@ -26,4 +26,4 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
         period = 24 * 4
 
         for window in actual_windows:
-            assert window - (period * n) <= window <= window + (period * n)
+            self.assertTrue(window - (period * n) <= window <= window + (period * n))

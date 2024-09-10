@@ -5,7 +5,10 @@ from celery.schedules import crontab
 import seer.app  # noqa: F401
 from celery_app.app import celery_app as celery  # noqa: F401
 from celery_app.config import CeleryQueues
-from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs, delete_data_for_ttl
+from seer.automation.autofix.tasks import (
+    check_and_mark_recent_autofix_runs,
+    delete_old_autofix_runs,
+)
 
 
 @celery.on_after_finalize.connect
@@ -18,6 +21,6 @@ def setup_periodic_tasks(sender, **kwargs):
 
     sender.add_periodic_task(
         crontab(minute="0", hour="0"),  # run once a day
-        delete_data_for_ttl.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
+        delete_old_autofix_runs.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
         name="Delete old Autofix runs for 90 day time-to-live",
     )

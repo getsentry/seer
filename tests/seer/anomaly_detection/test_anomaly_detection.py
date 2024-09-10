@@ -43,8 +43,12 @@ class TestAnomalyDetection(unittest.TestCase):
             response = AnomalyDetection().store_data(
                 request=request, alert_data_accessor=alert_data_accessor
             )
-            assert "Store Data Response should be successful", response == StoreDataResponse(
-                success=True
+
+            # Successful
+            self.assertEqual(
+                response,
+                StoreDataResponse(success=True),
+                "Store Data Response should be successful",
             )
 
             # TODO: Clean up DB(?)
@@ -67,10 +71,10 @@ class TestAnomalyDetection(unittest.TestCase):
 
             response = AnomalyDetection().detect_anomalies(request=anomaly_request)
 
-            assert isinstance(response, DetectAnomaliesResponse)
-            assert isinstance(response.timeseries, list)
-            assert len(response.timeseries) == len(ts)
-            assert isinstance(response.timeseries[0], TimeSeriesPoint)
+            self.assertIsInstance(response, DetectAnomaliesResponse)
+            self.assertIsInstance(response.timeseries, list)
+            self.assertEqual(len(response.timeseries), len(ts))
+            self.assertIsInstance(response.timeseries[0], TimeSeriesPoint)
 
     def test_detect_anomalies_online(self):
 
@@ -94,12 +98,12 @@ class TestAnomalyDetection(unittest.TestCase):
 
             response = AnomalyDetection().detect_anomalies(request=request)
 
-            assert isinstance(response, DetectAnomaliesResponse)
-            assert isinstance(response.timeseries, list)
-            assert (
-                len(response.timeseries) == len(ts) + 1
+            self.assertIsInstance(response, DetectAnomaliesResponse)
+            self.assertIsInstance(response.timeseries, list)
+            self.assertEqual(
+                len(response.timeseries), len(ts) + 1
             )  # Adding one more observation to timeseries
-            assert isinstance(response.timeseries[0], TimeSeriesPoint)
+            self.assertIsInstance(response.timeseries[0], TimeSeriesPoint)
 
     def test_detect_anomalies_combo(self):
 
@@ -129,7 +133,7 @@ class TestAnomalyDetection(unittest.TestCase):
 
             response = AnomalyDetection().detect_anomalies(request=request)
 
-            assert isinstance(response, DetectAnomaliesResponse)
-            assert isinstance(response.timeseries, list)
-            assert len(response.timeseries) == n
-            assert isinstance(response.timeseries[0], TimeSeriesPoint)
+            self.assertIsInstance(response, DetectAnomaliesResponse)
+            self.assertIsInstance(response.timeseries, list)
+            self.assertEqual(len(response.timeseries), n)
+            self.assertIsInstance(response.timeseries[0], TimeSeriesPoint)

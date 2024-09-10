@@ -25,9 +25,7 @@ class IssueSummary(BaseModel):
 
 @observe(name="Summarize Issue")
 @inject
-def summarize_issue(
-    request: SummarizeIssueRequest, gpt_client: GptClient = injected
-) -> tuple[SummarizeIssueResponse, IssueSummary]:
+def summarize_issue(request: SummarizeIssueRequest, gpt_client: GptClient = injected):
     event_details = EventDetails.from_event(request.issue.events[0])
     connected_event_details = (
         [
@@ -93,14 +91,11 @@ def summarize_issue(
     impact = res.summary_of_the_functionality_affected
     headline = res.five_to_ten_word_headline
 
-    return (
-        SummarizeIssueResponse(
-            group_id=request.group_id,
-            headline=headline,
-            summary=summary,
-            impact=impact,
-        ),
-        res,
+    return SummarizeIssueResponse(
+        group_id=request.group_id,
+        headline=headline,
+        summary=summary,
+        impact=impact,
     )
 
 
@@ -121,11 +116,11 @@ def run_summarize_issue(request: SummarizeIssueRequest):
         ),
     }
 
-    summary, raw_summary = summarize_issue(request, **extra_kwargs)
+    summary = summarize_issue(request, **extra_kwargs)
 
     with Session() as session:
         db_state = DbIssueSummary(
-            group_id=request.group_id, summary=raw_summary.model_dump(mode="json")
+            group_id=request.group_id, summary=summary.model_dump(mode="json")
         )
         session.merge(db_state)
         session.commit()

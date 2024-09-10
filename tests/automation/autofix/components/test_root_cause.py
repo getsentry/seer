@@ -3,6 +3,7 @@ from xml.etree.ElementTree import ParseError
 
 import pytest
 
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import (
@@ -26,10 +27,18 @@ class TestRootCauseComponent:
         with patch("seer.automation.autofix.components.root_cause.component.GptAgent") as mock:
             yield mock
 
-    def test_root_cause_simple_response_parsing(self, component, mock_gpt_agent):
+    @pytest.fixture
+    def mock_gpt_client(self):
+        with patch("seer.automation.autofix.components.root_cause.component.GptClient") as mock:
+            yield mock
+
+    def test_root_cause_simple_response_parsing(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description></potential_cause></potential_root_causes>",
+        ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
         ]
 
         output = component.invoke(MagicMock())
@@ -42,10 +51,15 @@ class TestRootCauseComponent:
         assert output.causes[0].actionability == 1.0
         assert output.causes[0].code_context is None
 
-    def test_root_cause_code_context_response_parsing(self, component, mock_gpt_agent):
+    def test_root_cause_code_context_response_parsing(
+        self, component, mock_gpt_agent, mock_gpt_client
+    ):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description><code_context><code_snippet><title>Add Null Check</title><description>This fix involves adding ...</description><code file_path='some/app/path.py' repo_name='owner/repo'>def foo():</code></code_snippet></code_context></potential_cause></potential_root_causes>",
+        ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
         ]
 
         output = component.invoke(MagicMock())
@@ -64,11 +78,17 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context[0].snippet.repo_name == "owner/repo"
         assert output.causes[0].code_context[0].snippet.snippet == "def foo():"
 
-    def test_root_cause_multiple_causes_response_parsing(self, component, mock_gpt_agent):
+    def test_root_cause_multiple_causes_response_parsing(
+        self, component, mock_gpt_agent, mock_gpt_client
+    ):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Missing Null Check</title><description>The root cause of the issue is ...</description></potential_cause><potential_cause likelihood='0.5' actionability='0.5'><title>Incorrect API Usage</title><description>Another potential cause is ...</description></potential_cause></potential_root_causes>",
         ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
+        ]
+
         output = component.invoke(MagicMock())
 
         assert output is not None
@@ -76,47 +96,64 @@ class TestRootCauseComponent:
         assert output.causes[0].title == "Missing Null Check"
         assert output.causes[1].title == "Incorrect API Usage"
 
-    def test_root_cause_empty_response_parsing(self, component, mock_gpt_agent):
+    def test_root_cause_empty_response_parsing(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "<potential_root_causes></potential_root_causes>",
+        ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
         ]
 
         output = component.invoke(MagicMock())
 
         assert output is None
 
-    def test_root_cause_invalid_xml_response(self, component, mock_gpt_agent):
+    def test_root_cause_invalid_xml_response(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "<potential_root_causes><invalid_xml></potential_root_causes>",
+        ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
         ]
 
         with pytest.raises(ParseError):
             component.invoke(MagicMock())
 
-    def test_root_cause_missing_required_fields(self, component, mock_gpt_agent):
+    def test_root_cause_missing_required_fields(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.side_effect = [
             "Anything really",
             "<potential_root_causes><potential_cause likelihood='0.9'><title>Missing Null Check</title></potential_cause></potential_root_causes>",
         ]
-
-        with pytest.raises(ValueError):
-            component.invoke(MagicMock())
-
-    def test_root_cause_invalid_likelihood_actionability(self, component, mock_gpt_agent):
-        mock_gpt_agent.return_value.run.side_effect = [
-            "Anything really",
-            "<potential_root_causes><potential_cause likelihood='2.0' actionability='-0.5'><title>Invalid Values</title><description>Test</description></potential_cause></potential_root_causes>",
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
         ]
 
         with pytest.raises(ValueError):
             component.invoke(MagicMock())
 
-    def test_root_cause_no_formatter_response(self, component, mock_gpt_agent):
+    def test_root_cause_invalid_likelihood_actionability(
+        self, component, mock_gpt_agent, mock_gpt_client
+    ):
+        mock_gpt_agent.return_value.run.side_effect = [
+            "Anything really",
+            "<potential_root_causes><potential_cause likelihood='2.0' actionability='-0.5'><title>Invalid Values</title><description>Test</description></potential_cause></potential_root_causes>",
+        ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
+        ]
+
+        with pytest.raises(ValueError):
+            component.invoke(MagicMock())
+
+    def test_root_cause_no_formatter_response(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.side_effect = [
             "<potential_root_causes><potential_cause likelihood='0.9' actionability='1.0'><title>Test</title><description>Test</description></potential_cause></potential_root_causes>",
             None,
+        ]
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
         ]
 
         output = component.invoke(MagicMock())
@@ -164,8 +201,11 @@ class TestRootCauseComponent:
                 assert output.causes[0].code_context[0].snippet.snippet == "def test():\n    pass"
                 assert output.causes[0].code_context[0].snippet.repo_name == "owner/repo"
 
-    def test_no_root_causes_response(self, component, mock_gpt_agent):
+    def test_no_root_causes_response(self, component, mock_gpt_agent, mock_gpt_client):
         mock_gpt_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"
+        mock_gpt_client.return_value.completion.side_effect = [
+            (Message(content="some response"), None)
+        ]
 
         output = component.invoke(MagicMock())
 

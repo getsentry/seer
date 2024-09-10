@@ -29,9 +29,9 @@ class TestTimeSeries(unittest.TestCase):
     def test_get_anomaly_algo_data_with_anomalies(self):
         expected_result = {"window_size": 2}
         result = self.ts_with_anomalies.get_anomaly_algo_data()
-        assert result == expected_result
+        self.assertEqual(result, expected_result)
 
     def test_get_anomaly_algo_data_without_anomalies(self):
         expected_result = None
         result = self.ts_without_anomalies.get_anomaly_algo_data()
-        assert result == expected_result
+        self.assertEqual(result, expected_result)

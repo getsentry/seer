@@ -54,16 +54,10 @@ class AppConfig(BaseModel):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""
 
-    API_PUBLIC_KEY_SECRET_ID: str = ""
     JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
-    IGNORE_API_AUTH: ParseBool = False  # Used for both API Tokens and RPC Secrets
-
     TORCH_NUM_THREADS: ParseInt = 0
     NO_SENTRY_INTEGRATION: ParseBool = False
     DEV: ParseBool = False
-
-    GOOGLE_CLOUD_PROJECT: str = ""
-    USE_EU_REGION: ParseBool = False
 
     SMOKE_CHECK: ParseBool = False
 
@@ -80,17 +74,7 @@ class AppConfig(BaseModel):
         return not self.NO_SENTRY_INTEGRATION
 
     def do_validation(self):
-        if not self.IGNORE_API_AUTH:
-            assert (
-                self.JSON_API_SHARED_SECRETS or self.API_PUBLIC_KEY_SECRET_ID
-            ), "JSON_API_SHARED_SECRETS or API_PUBLIC_KEY_SECRET_ID required if IGNORE_API_AUTH is false!"
-
         if self.is_production:
-            # TODO: Set and uncomment this
-            # assert (
-            #     self.GOOGLE_CLOUD_PROJECT
-            # ), "GOOGLE_CLOUD_PROJECT required for production! Why is this not set? Huh?"
-
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
 

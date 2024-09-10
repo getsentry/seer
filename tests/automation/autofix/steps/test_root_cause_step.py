@@ -7,7 +7,6 @@ from seer.automation.autofix.components.root_cause.models import RootCauseAnalys
 from seer.automation.autofix.models import AutofixContinuation, AutofixRequest
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep
 from seer.automation.models import IssueDetails, SentryEventData
-from seer.automation.summarize.issue import IssueSummary
 
 
 class TestRootCauseStep(unittest.TestCase):
@@ -26,12 +25,6 @@ class TestRootCauseStep(unittest.TestCase):
                 project_id=1,
                 repos=[],
                 issue=IssueDetails(id=0, title="", events=[error_event]),
-                issue_summary=IssueSummary(
-                    reason_step_by_step=[],
-                    summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-                    summary_of_the_functionality_affected="impact",
-                    five_to_ten_word_headline="headline",
-                ),
             )
         )
 

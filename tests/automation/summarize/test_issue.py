@@ -4,7 +4,7 @@ import pytest
 from johen import generate
 
 from seer.automation.models import IssueDetails
-from seer.automation.summarize.issue import IssueSummary, run_summarize_issue, summarize_issue
+from seer.automation.summarize.issue import run_summarize_issue, summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 
 
@@ -22,26 +22,24 @@ class TestSummarizeIssue:
 
     def test_summarize_issue_success(self, mock_gpt_client, sample_request):
         mock_structured_completion = MagicMock()
-        mock_raw_summary = MagicMock(
+        mock_structured_completion.choices[0].message.parsed = MagicMock(
             reason_step_by_step=[],
             summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
             summary_of_the_functionality_affected="Test functionality",
             five_to_ten_word_headline="Test headline",
         )
-        mock_structured_completion.choices[0].message.parsed = mock_raw_summary
         mock_structured_completion.choices[0].message.refusal = None
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
             mock_structured_completion
         )
 
-        result, raw_result = summarize_issue(sample_request, gpt_client=mock_gpt_client)
+        result = summarize_issue(sample_request, gpt_client=mock_gpt_client)
 
         assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 1
         assert result.summary == "Test summary"
         assert result.impact == "Test functionality"
         assert result.headline == "Test headline"
-        assert raw_result == mock_raw_summary
 
     def test_summarize_issue_refusal(self, mock_gpt_client, sample_request):
         mock_structured_completion = MagicMock()
@@ -114,11 +112,6 @@ class TestRunSummarizeIssue:
     def test_run_summarize_issue_langfuse_metadata(self, mock_summarize_issue):
         mock_summarize_issue.return_value = SummarizeIssueResponse(
             group_id=1, headline="headline", summary="summary", impact="impact"
-        ), IssueSummary(
-            reason_step_by_step=[],
-            summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-            summary_of_the_functionality_affected="impact",
-            five_to_ten_word_headline="headline",
         )
 
         # Create a sample request
@@ -145,11 +138,6 @@ class TestRunSummarizeIssue:
     def test_run_summarize_issue_langfuse_metadata_no_org_slug(self, mock_summarize_issue):
         mock_summarize_issue.return_value = SummarizeIssueResponse(
             group_id=1, headline="headline", summary="summary", impact="impact"
-        ), IssueSummary(
-            reason_step_by_step=[],
-            summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-            summary_of_the_functionality_affected="impact",
-            five_to_ten_word_headline="headline",
         )
 
         # Create a sample request without organization_slug
