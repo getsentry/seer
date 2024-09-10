@@ -37,84 +37,85 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
         state = self.context.state.get()
 
-        response = agent.run(
-            RootCauseAnalysisPrompts.format_default_msg(
-                event=request.event_details.format_event(),
-                summary=request.summary,
-                instruction=request.instruction,
-                repo_names=[repo.full_name for repo in state.request.repos],
-            ),
-            context=self.context,
-        )
-
-        original_usage = agent.usage
-        with self.context.state.update() as cur:
-            cur.usage += agent.usage
-
-        if not response:
-            logger.warning("Root Cause Analysis agent did not return a valid response")
-            return None
-
-        if "<NO_ROOT_CAUSES>" in response:
-            return None
-
-        # Ask for reproduction
-        agent.run(
-            textwrap.dedent(
-                """\
-                Given all the above potential root causes you just gave, please provide a 1-2 sentence concise instruction on how to reproduce the issue for each root cause.
-                - Assume the user is an experienced developer well-versed in the codebase, simply give the reproduction steps.
-                - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
-                - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
-                - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""
+        try:
+            response = agent.run(
+                RootCauseAnalysisPrompts.format_default_msg(
+                    event=request.event_details.format_event(),
+                    summary=request.summary,
+                    instruction=request.instruction,
+                    repo_names=[repo.full_name for repo in state.request.repos],
+                ),
+                context=self.context,
             )
-        )
 
-        def clean_tool_call_assistant_messages(messages: list[Message]):
-            new_messages = []
-            for message in messages:
-                if message.role == "assistant" and message.tool_calls:
-                    new_messages.append(
-                        Message(role="assistant", content=message.content, tool_calls=[])
-                    )
-                elif message.role == "tool":
-                    new_messages.append(
-                        Message(role="user", content=message.content, tool_calls=[])
-                    )
-                else:
-                    new_messages.append(message)
-            return new_messages
+            if not response:
+                logger.warning("Root Cause Analysis agent did not return a valid response")
+                return None
 
-        response = GptClient().openai_client.beta.chat.completions.parse(
-            messages=[
-                message.to_message() for message in clean_tool_call_assistant_messages(agent.memory)
-            ]
-            + [
-                Message(
-                    role="user",
-                    content=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                ).to_message(),  # type: ignore
-            ],
-            model="gpt-4o-2024-08-06",
-            response_format=MultipleRootCauseAnalysisOutputPrompt,
-        )
+            if "<NO_ROOT_CAUSES>" in response:
+                return None
 
-        message = response.choices[0].message
+            # Ask for reproduction
+            agent.run(
+                textwrap.dedent(
+                    """\
+                    Given all the above potential root causes you just gave, please provide a 1-2 sentence concise instruction on how to reproduce the issue for each root cause.
+                    - Assume the user is an experienced developer well-versed in the codebase, simply give the reproduction steps.
+                    - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
+                    - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
+                    - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""
+                )
+            )
 
-        if message.refusal or not message.parsed:
-            logger.warning("Root Cause Analysis agent did not return a valid response")
-            return None
+            def clean_tool_call_assistant_messages(messages: list[Message]):
+                new_messages = []
+                for message in messages:
+                    if message.role == "assistant" and message.tool_calls:
+                        new_messages.append(
+                            Message(role="assistant", content=message.content, tool_calls=[])
+                        )
+                    elif message.role == "tool":
+                        new_messages.append(
+                            Message(role="user", content=message.content, tool_calls=[])
+                        )
+                    else:
+                        new_messages.append(message)
+                return new_messages
 
-        # Assign the ids to be the numerical indices of the causes and relevant code context
-        causes = []
-        for i, cause in enumerate(message.parsed.causes):
-            cause_model = cause.to_model()
-            cause_model.id = i
+            response = GptClient().openai_client.beta.chat.completions.parse(
+                messages=[
+                    message.to_message()
+                    for message in clean_tool_call_assistant_messages(agent.memory)
+                ]
+                + [
+                    Message(
+                        role="user",
+                        content=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
+                    ).to_message(),  # type: ignore
+                ],
+                model="gpt-4o-2024-08-06",
+                response_format=MultipleRootCauseAnalysisOutputPrompt,
+            )
 
-            if cause_model.code_context:
-                for j, snippet in enumerate(cause_model.code_context):
-                    snippet.id = j
+            message = response.choices[0].message
 
-            causes.append(cause_model)
+            if message.refusal or not message.parsed:
+                logger.warning("Root Cause Analysis agent did not return a valid response")
+                return None
 
-        return RootCauseAnalysisOutput(causes=causes)
+            # Assign the ids to be the numerical indices of the causes and relevant code context
+            causes = []
+            for i, cause in enumerate(message.parsed.causes):
+                cause_model = cause.to_model()
+                cause_model.id = i
+
+                if cause_model.code_context:
+                    for j, snippet in enumerate(cause_model.code_context):
+                        snippet.id = j
+
+                causes.append(cause_model)
+
+            return RootCauseAnalysisOutput(causes=causes)
+        finally:
+            with self.context.state.update() as cur:
+                cur.usage += agent.usage

@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 from johen import gen
 from johen.examples import Examples
 from pydantic import BaseModel, Field, StringConstraints
-from pydantic_xml import attr, element
+from pydantic_xml import attr
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel

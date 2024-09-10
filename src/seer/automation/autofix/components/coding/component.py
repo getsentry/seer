@@ -3,7 +3,7 @@ import logging
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, ClaudeAgent, GptAgent
+from seer.automation.agent.agent import AgentConfig, ClaudeAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodingOutput,
