@@ -82,18 +82,20 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
 
         @inject
         def wrapper(config: AppConfig = injected) -> Any:
-            raw_data = request.get_data()
+            # raw_data = request.get_data()
             auth_header = request.headers.get("Authorization", "")
 
+            # if auth_header.startswith("Rpcsignature "):
             # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
-                parts = auth_header.split()
-                if len(parts) != 2 or not compare_signature(
-                    request.url, request.args.get("nonce", ""), raw_data, parts[1]
-                ):
-                    raise Unauthorized(
-                        f"Rpcsignature did not match for given url {request.url} and data"
-                    )
+                #     parts = auth_header.split()
+                #     if len(parts) != 2 or not compare_signature(
+                #         request.url, request.args.get("nonce", ""), raw_data, parts[1]
+                #     ):
+                #         raise Unauthorized(
+                #             f"Rpcsignature did not match for given url {request.url} and data"
+                #         )
+                pass
             elif auth_header.startswith("Bearer "):
                 token = auth_header.split()[1]
                 try:
@@ -118,11 +120,6 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                     sentry_sdk.capture_exception(e)
                     print(e)
                     raise InternalServerError("Something went wrong with the Bearer token auth")
-            elif not config.IGNORE_API_AUTH and config.is_production:
-                logger.warning(f"Found unexpected authorization header: {auth_header}")
-                raise Unauthorized(
-                    "Neither Rpcsignature nor a Bearer token was included in authorization header!"
-                )
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
