@@ -16,6 +16,7 @@ from seer.automation.autofix.components.root_cause.models import (
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
+from seer.automation.utils import extract_parsed_model
 
 logger = logging.getLogger(__name__)
 
@@ -97,15 +98,11 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 response_format=MultipleRootCauseAnalysisOutputPrompt,
             )
 
-            message = response.choices[0].message
-
-            if message.refusal or not message.parsed:
-                logger.warning("Root Cause Analysis agent did not return a valid response")
-                return None
+            parsed = extract_parsed_model(response)
 
             # Assign the ids to be the numerical indices of the causes and relevant code context
             causes = []
-            for i, cause in enumerate(message.parsed.causes):
+            for i, cause in enumerate(parsed.causes):
                 cause_model = cause.to_model()
                 cause_model.id = i
 
