@@ -138,6 +138,19 @@ class GptClient(LlmClient):
     ) -> tuple[dict[str, Any] | None, Message, Usage]:
         return super().json_completion(messages, model, system_prompt)
 
+    def clean_tool_call_assistant_messages(self, messages: list[Message]) -> list[Message]:
+        new_messages = []
+        for message in messages:
+            if message.role == "assistant" and message.tool_calls:
+                new_messages.append(
+                    Message(role="assistant", content=message.content, tool_calls=[])
+                )
+            elif message.role == "tool":
+                new_messages.append(Message(role="user", content=message.content, tool_calls=[]))
+            else:
+                new_messages.append(message)
+        return new_messages
+
 
 class ClaudeClient(LlmClient):
     @inject

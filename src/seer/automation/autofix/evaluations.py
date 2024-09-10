@@ -8,9 +8,9 @@ from pydantic_xml import attr, element
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message
+from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
-    RootCauseAnalysisItemPromptXml,
     RootCauseRelevantCodeSnippet,
     RootCauseRelevantContext,
 )
@@ -103,8 +103,10 @@ def sync_run_execution(item: DatasetItemClient):
                 description="",
                 likelihood=1.0,
                 actionability=1.0,
+                reproduction="",
                 code_context=[
                     RootCauseRelevantContext(
+                        id=-1,
                         title=expected_output.solution_summary,
                         description="",
                         snippet=RootCauseRelevantCodeSnippet(
@@ -278,7 +280,7 @@ def score_root_cause_single_it(
         raise ValueError("Expected output is missing from dataset item")
 
     expected_output = RootCauseExpectedOutput.model_validate(dataset_item.expected_output)
-    causes_xml = [RootCauseAnalysisItemPromptXml.from_model(cause) for cause in causes]
+    causes_xml = [RootCausePlanTaskPromptXml.from_root_cause(cause) for cause in causes]
 
     solution_strs: list[str] = []
     for i, cause in enumerate(causes_xml):
