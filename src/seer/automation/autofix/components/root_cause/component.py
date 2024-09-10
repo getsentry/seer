@@ -1,5 +1,4 @@
 import logging
-import textwrap
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -17,6 +16,7 @@ from seer.automation.autofix.components.root_cause.prompts import RootCauseAnaly
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.utils import extract_parsed_model
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
     @observe(name="Root Cause Analysis")
     @ai_track(description="Root Cause Analysis")
-    def invoke(self, request: RootCauseAnalysisRequest) -> RootCauseAnalysisOutput | None:
+    @inject
+    def invoke(
+        self, request: RootCauseAnalysisRequest, gpt_client: GptClient = injected
+    ) -> RootCauseAnalysisOutput | None:
         tools = BaseTools(self.context)
 
         agent = GptAgent(
@@ -58,35 +61,13 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
             # Ask for reproduction
             agent.run(
-                textwrap.dedent(
-                    """\
-                    Given all the above potential root causes you just gave, please provide a 1-2 sentence concise instruction on how to reproduce the issue for each root cause.
-                    - Assume the user is an experienced developer well-versed in the codebase, simply give the reproduction steps.
-                    - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
-                    - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
-                    - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""
-                )
+                RootCauseAnalysisPrompts.reproduction_prompt_msg(),
             )
 
-            def clean_tool_call_assistant_messages(messages: list[Message]):
-                new_messages = []
-                for message in messages:
-                    if message.role == "assistant" and message.tool_calls:
-                        new_messages.append(
-                            Message(role="assistant", content=message.content, tool_calls=[])
-                        )
-                    elif message.role == "tool":
-                        new_messages.append(
-                            Message(role="user", content=message.content, tool_calls=[])
-                        )
-                    else:
-                        new_messages.append(message)
-                return new_messages
-
-            response = GptClient().openai_client.beta.chat.completions.parse(
+            response = gpt_client.openai_client.beta.chat.completions.parse(
                 messages=[
                     message.to_message()
-                    for message in clean_tool_call_assistant_messages(agent.memory)
+                    for message in gpt_client.clean_tool_call_assistant_messages(agent.memory)
                 ]
                 + [
                     Message(

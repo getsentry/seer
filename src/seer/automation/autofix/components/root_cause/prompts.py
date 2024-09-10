@@ -66,3 +66,14 @@ class RootCauseAnalysisPrompts:
 
             Return only the formatted root cause analysis:"""
         )
+
+    @staticmethod
+    def reproduction_prompt_msg():
+        return textwrap.dedent(
+            """\
+            Given all the above potential root causes you just gave, please provide a 1-2 sentence concise instruction on how to reproduce the issue for each root cause.
+            - Assume the user is an experienced developer well-versed in the codebase, simply give the reproduction steps.
+            - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
+            - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
+            - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""
+        )
