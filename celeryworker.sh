@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # TODO: Remove debug log level once celery debugging is done
-WORKER_CMD="celery -A src.celery_app.tasks worker --loglevel=info -c $CELERY_WORKER_CONCURRENCY $CELERY_WORKER_OPTIONS"
+WORKER_CMD="celery -A src.celery_app.tasks worker --loglevel=debug -c 1 $CELERY_WORKER_OPTIONS"
 DEV=false
 
 if [ "$CELERY_WORKER_ENABLE" = "true" ]; then
