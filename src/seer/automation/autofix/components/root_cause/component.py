@@ -92,7 +92,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     Message(
                         role="user",
                         content=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                    ).to_message(),  # type: ignore
+                    ).to_message(),
                 ],
                 model="gpt-4o-2024-08-06",
                 response_format=MultipleRootCauseAnalysisOutputPrompt,
