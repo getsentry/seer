@@ -253,7 +253,9 @@ class AnomalyDetection(BaseModel):
                     "minimum_required": min_len,
                 },
             )
-            raise Exception(f"Insufficient time series data for alert {request.alert.id}")
+            return StoreDataResponse(
+                success=False, message=f"Insufficient time series data for alert {request.alert.id}"
+            )
 
         logger.info(
             "store_alert_request",
@@ -264,14 +266,27 @@ class AnomalyDetection(BaseModel):
                 "num_datapoints": len(request.timeseries),
             },
         )
-        ts, anomalies = self._batch_detect(request.timeseries, request.config)
-        alert_data_accessor.save_alert(
-            organization_id=request.organization_id,
-            project_id=request.project_id,
-            external_alert_id=request.alert.id,
-            config=request.config,
-            timeseries=ts,
-            anomalies=anomalies,
-            anomaly_algo_data={"window_size": anomalies.window_size},
-        )
-        return StoreDataResponse(success=True)
+        try:
+            ts, anomalies = self._batch_detect(request.timeseries, request.config)
+            alert_data_accessor.save_alert(
+                organization_id=request.organization_id,
+                project_id=request.project_id,
+                external_alert_id=request.alert.id,
+                config=request.config,
+                timeseries=ts,
+                anomalies=anomalies,
+                anomaly_algo_data={"window_size": anomalies.window_size},
+            )
+            return StoreDataResponse(success=True)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error(
+                "error_saving_alert",
+                extra={
+                    "organization_id": request.organization_id,
+                    "project_id": request.project_id,
+                    "external_alert_id": request.alert.id,
+                },
+                exc_info=e,
+            )
+            return StoreDataResponse(success=False, message=str(e))

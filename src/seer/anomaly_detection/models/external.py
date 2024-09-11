@@ -85,3 +85,4 @@ class StoreDataRequest(BaseModel):
 
 class StoreDataResponse(BaseModel):
     success: bool
+    message: Optional[str] = Field(None)
