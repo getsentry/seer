@@ -18,6 +18,7 @@ from seer.anomaly_detection.models import (
     TimeSeriesAnomalies,
 )
 from seer.dependency_injection import inject, injected
+from seer.exceptions import ServerError
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         logger.debug(f"window_size: {window_size}")
         if window_size <= 0:
             # TODO: Add sentry logging of this error
-            raise Exception("Invalid window size")
+            raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
         mp = stumpy.stump(
             ts_values,

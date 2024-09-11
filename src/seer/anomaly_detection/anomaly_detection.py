@@ -23,6 +23,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesWithHistory,
 )
 from seer.dependency_injection import inject, injected
+from seer.exceptions import ClientError, ServerError
 
 anomaly_detection_module.enable()
 logger = logging.getLogger(__name__)
@@ -107,10 +108,23 @@ class AnomalyDetection(BaseModel):
         # Retrieve historic data
         historic = alert_data_accessor.query(alert.id)
         if historic is None:
-            raise Exception(f"Invalid alert id {alert.id}")
+
+            logger.error(
+                "no_stored_history_data",
+                extra={
+                    "alert_id": alert.id,
+                },
+            )
+            raise ClientError("No timeseries data found for alert")
 
         if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
-            raise Exception("Invalid state")
+            logger.error(
+                "invalid_state",
+                extra={
+                    "note": f"Expecting object of type MPTimeSeriesAnomalies but found {type(historic.anomalies)}"
+                },
+            )
+            raise ServerError("Invalid state")
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
@@ -168,7 +182,7 @@ class AnomalyDetection(BaseModel):
                     "minimum_required": min_len,
                 },
             )
-            raise Exception("Insufficient history data")
+            raise ClientError("Insufficient history data")
 
         logger.info(
             f"Detecting anomalies for time series with {len(ts_with_history.current)} datapoints and history of {len(ts_with_history.history)} datapoints"
@@ -194,8 +208,6 @@ class AnomalyDetection(BaseModel):
         return ts_external, streamed_anomalies
 
     def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):
-        if anomalies is None:
-            raise Exception("No anomalies available for the timeseries.")
         for i, point in enumerate(ts_external):
             point.anomaly = Anomaly(
                 anomaly_score=anomalies.scores[i],
@@ -227,7 +239,7 @@ class AnomalyDetection(BaseModel):
         else:
             ts, anomalies = self._batch_detect(request.context, request.config)
         self._update_anomalies(ts, anomalies)
-        return DetectAnomaliesResponse(timeseries=ts)
+        return DetectAnomaliesResponse(success=True, timeseries=ts)
 
     @inject
     def store_data(
@@ -253,9 +265,7 @@ class AnomalyDetection(BaseModel):
                     "minimum_required": min_len,
                 },
             )
-            return StoreDataResponse(
-                success=False, message=f"Insufficient time series data for alert {request.alert.id}"
-            )
+            raise ClientError("Insufficient time series data for alert")
 
         logger.info(
             "store_alert_request",
@@ -266,27 +276,14 @@ class AnomalyDetection(BaseModel):
                 "num_datapoints": len(request.timeseries),
             },
         )
-        try:
-            ts, anomalies = self._batch_detect(request.timeseries, request.config)
-            alert_data_accessor.save_alert(
-                organization_id=request.organization_id,
-                project_id=request.project_id,
-                external_alert_id=request.alert.id,
-                config=request.config,
-                timeseries=ts,
-                anomalies=anomalies,
-                anomaly_algo_data={"window_size": anomalies.window_size},
-            )
-            return StoreDataResponse(success=True)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
-            logger.error(
-                "error_saving_alert",
-                extra={
-                    "organization_id": request.organization_id,
-                    "project_id": request.project_id,
-                    "external_alert_id": request.alert.id,
-                },
-                exc_info=e,
-            )
-            return StoreDataResponse(success=False, message=str(e))
+        ts, anomalies = self._batch_detect(request.timeseries, request.config)
+        alert_data_accessor.save_alert(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            external_alert_id=request.alert.id,
+            config=request.config,
+            timeseries=ts,
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": anomalies.window_size},
+        )
+        return StoreDataResponse(success=True)
