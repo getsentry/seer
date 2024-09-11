@@ -29,28 +29,28 @@ class AutofixEventManager:
     def root_cause_analysis_processing_step(self) -> DefaultStep:
         return DefaultStep(
             key="root_cause_analysis_processing",
-            title="Analyzing the Issue",
+            title="Analyzing the issue",
         )
 
     @property
     def root_cause_analysis_step(self) -> RootCauseStep:
         return RootCauseStep(
             key="root_cause_analysis",
-            title="Root Cause Analysis",
+            title="Root cause analysis",
         )
 
     @property
     def plan_step(self) -> DefaultStep:
         return DefaultStep(
             key="plan",
-            title="Create Fix",
+            title="Creating fix",
         )
 
     @property
     def changes_step(self) -> ChangesStep:
         return ChangesStep(
             key="changes",
-            title="Changes",
+            title="Code changes",
             changes=[],
         )
 
@@ -78,6 +78,7 @@ class AutofixEventManager:
             cur.make_step_latest(root_cause_step)
 
             cur.status = AutofixStatus.PROCESSING
+            self.add_log("I'll start analyzing the issue to figure out a root cause...")
 
     def send_root_cause_analysis_result(self, root_cause_output: RootCauseAnalysisOutput | None):
         with self.state.update() as cur:
@@ -89,6 +90,7 @@ class AutofixEventManager:
                 root_cause_step.causes = root_cause_output.causes
 
                 cur.status = AutofixStatus.NEED_MORE_INFORMATION
+                self.add_log("Here's what I think the root cause of the issue is. Feel free to edit it, or provide your own below if you disagree.")
             else:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
@@ -121,6 +123,7 @@ class AutofixEventManager:
             plan_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
+            self.add_log("Now that we've decided on a root cause, I'll start figuring out a fix...")
 
     def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
@@ -138,6 +141,7 @@ class AutofixEventManager:
             changes_step.changes = codebase_changes
 
             cur.status = AutofixStatus.COMPLETED
+            self.add_log("Here are the code changes that I think will fix the issue. Feel free to tweak them, or tell me below anything I should change.")
 
     def add_log(self, message: str):
         with self.state.update() as cur:

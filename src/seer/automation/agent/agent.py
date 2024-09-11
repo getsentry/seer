@@ -83,7 +83,6 @@ class LlmAgent(ABC):
             elif text_before_tag:
                 text = text_before_tag
             if text:
-                context.event_manager.add_log(text)
                 # TODO call LLM separately with the same memory to generate structured output insight cards 
                 insight_sharing = InsightSharingComponent(context)
                 insight_card = insight_sharing.invoke(
