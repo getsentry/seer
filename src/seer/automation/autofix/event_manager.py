@@ -29,28 +29,28 @@ class AutofixEventManager:
     def root_cause_analysis_processing_step(self) -> DefaultStep:
         return DefaultStep(
             key="root_cause_analysis_processing",
-            title="Analyzing the issue",
+            title="Analyzing the Issue",
         )
 
     @property
     def root_cause_analysis_step(self) -> RootCauseStep:
         return RootCauseStep(
             key="root_cause_analysis",
-            title="Root cause analysis",
+            title="Root Cause Analysis",
         )
 
     @property
     def plan_step(self) -> DefaultStep:
         return DefaultStep(
             key="plan",
-            title="Creating fix",
+            title="Creating Fix",
         )
 
     @property
     def changes_step(self) -> ChangesStep:
         return ChangesStep(
             key="changes",
-            title="Code changes",
+            title="Code Changes",
             changes=[],
         )
 
