@@ -22,8 +22,7 @@ class RootCauseAnalysisPrompts:
             - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search in external libraries.
             - If you are not able to find any potential root causes, return only <NO_ROOT_CAUSES>.
             - If multiple searches turn up no viable results, you should conclude the session.
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
-            - You also MUST think step-by-step before giving the final answer.
+            - At EVERY step of your investigation, you must think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK.
 
             It is important that we find the potential root causes of the issue."""
         ).format(
@@ -52,8 +51,7 @@ class RootCauseAnalysisPrompts:
             - Include float values from 0.0-1.0 of the likelihood and actionability of the root cause.
             - In the root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want. Within your snippets, you may highlight specific lines with a comment beginning with ***.
             - You MUST include the EXACT file name and repository name in the code snippets you provide. If you cannot, do not provide a code snippet.
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
-            - You also MUST think step-by-step before giving the final answer."""
+            - At EVERY step of your investigation, you must think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK."""
         ).format(
             error_str=event,
             repo_names_str=format_repo_names(repo_names),

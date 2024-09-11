@@ -9,6 +9,7 @@ from johen.generators import specialized
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from seer.automation.agent.models import Usage
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
@@ -158,7 +159,7 @@ class BaseStep(BaseModel):
 
 class DefaultStep(BaseStep):
     type: Literal[StepType.DEFAULT] = StepType.DEFAULT
-
+    insights: list[InsightSharingOutput] = []
 
 class RootCauseStep(BaseStep):
     type: Literal[StepType.ROOT_CAUSE_ANALYSIS] = StepType.ROOT_CAUSE_ANALYSIS
@@ -294,6 +295,21 @@ class AutofixUpdateRequest(BaseModel):
 
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
+
+    def get_step_description(self) -> str:
+        if not self.steps:
+            return ""
+        step = self.steps[-1]
+        if step.type == StepType.DEFAULT and step.key == "root_cause_analysis_processing":
+            return "finding the root cause of the issue"
+        elif step.type == StepType.DEFAULT and step.key == "plan":
+            return "coming up with a fix for the issue"
+        elif step.type == StepType.ROOT_CAUSE_ANALYSIS:
+            return "selecting the final root cause"
+        elif step.type == StepType.CHANGES:
+            return "writing the code changes to fix the issue"
+        else:
+            return ""
 
     def find_step(self, *, id: str | None = None, key: str | None = None) -> Step | None:
         for step in self.steps[::-1]:
