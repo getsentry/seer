@@ -94,7 +94,7 @@ push-staging:
 	# Ensure the google authentication helper is working.  If this fails, https://cloud.google.com/artifact-registry/docs/docker/authentication#gcloud-helper
 	gcloud auth configure-docker us-west1-docker.pkg.dev > /dev/null
 	# Setup your SBX_PROJECT in .env from the sandbox project name
-	docker build . -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer
-	docker build . -f Compose.Dockerfile --build-arg SBX_PROJECT=$(SBX_PROJECT) -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer.compose
+	docker build . --platform linux/amd64 -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer
+	docker build . --platform linux/amd64 -f Compose.Dockerfile --build-arg SBX_PROJECT=$(SBX_PROJECT) -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer.compose
 	docker push	us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer
 	docker push	us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer.compose
