@@ -1,5 +1,4 @@
 services:
-    build: null
     app:
         image: us-west1-docker.pkg.dev/${SBX_PROJECT}/staging/seer
         command: bash -c "

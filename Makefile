@@ -93,6 +93,8 @@ gocd: ## Build GoCD pipelines
 HEAD_SHA:=$(shell git rev-parse --short HEAD)
 TIME:=$(shell date +%F.%T)
 SEER_STAGING_VERSION_SHA:=$(HEAD_SHA).$(TIME)
+export SENTRY_ORG:=sentry
+export SENTRY_PROJECT:=seer
 push-staging:
 	# Ensure the google authentication helper is working.  If this fails, https://cloud.google.com/artifact-registry/docs/docker/authentication#gcloud-helper
 	gcloud auth configure-docker us-west1-docker.pkg.dev > /dev/null
