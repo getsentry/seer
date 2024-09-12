@@ -12,7 +12,7 @@ class CodeSnippetContext(BaseModel):
 class BreadcrumbContext(BaseModel):
     type: str
     category: str
-    message: str
+    body: str
     level: str
     data_as_json: str
 
@@ -36,6 +36,6 @@ class InsightSharingOutput(BaseComponentOutput):
     insight: str
     justification_using_context: str
     error_message_context: list[str]
-    code_snippet_context: list[CodeSnippetContext]
+    codebase_snippet_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     event_log_context: list[BreadcrumbContext]

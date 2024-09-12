@@ -8,7 +8,7 @@ from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput, InsightSharingRequest
-from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
+from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
 
 
@@ -28,9 +28,9 @@ class InsightSharingPrompts:
             {latest_thought}
             ---
 
-            First decide whether or not there is anything about this thought of yours that's important to share with your team and permanently document. If not, respond with no insight and no context items; should_share_insight is false.
+            First decide whether or not there is anything about this thought of yours that's important to share with your team and permanently document. If not, respond with should_share_insight is false.
             
-            If you think there is something new and critical to know from this thought regarding {task_description}, document it it. When documenting, you should give a clear, concise, and concrete insight (1 short line). Then you should provide a clear, concise justification (1 short line) for your insight using concrete pieces of context, whether it's a snippet from the codebase, a line from the stacktrace, an event log, an error message, or something else. Finally, return the specific context you needed for your justification so your team can connect the dots easily. Only include the minimum necessary; leave out anything not critical for understanding your insight."""
+            If you think there is something new and critical to know from this thought regarding {task_description}, document it it. When documenting, you should give a clear, concise, and concrete insight (1 short line). Then you should provide a clear, concise justification (1 short line) for your insight using concrete pieces of context, whether it's a snippet from the files in the codebase you're looking at, a line from the stacktrace, an event log, or an error message. Finally, return the specific context you needed for your justification so your team can connect the dots easily. Only include the minimum necessary; leave out anything not critical for understanding your insight. Make sure to put the context pieces in the field that corresponds to their original type, and do not make any data up."""
         ).format(
             task_description=task_description,
             latest_thought=latest_thought

@@ -50,6 +50,8 @@ class RootCauseStep(AutofixPipelineStep):
     def _invoke(self, **kwargs):
         self.context.event_manager.send_root_cause_analysis_start()
 
+        self.context.event_manager.add_log("Beginning root cause analysis...")
+
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
@@ -65,3 +67,4 @@ class RootCauseStep(AutofixPipelineStep):
         )
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
+        self.context.event_manager.add_log("Here's what I think the root cause is. If you disagree, feel free to edit it or provide your own from scratch.")
