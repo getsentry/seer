@@ -424,46 +424,50 @@ class GroupingLookup:
         )
         with Session() as session:
             for i, entry in enumerate(data.data):
-                embedding = embeddings[i].astype("float32")
-                nearest_neighbor = self.query_nearest_k_neighbors(
-                    session,
-                    embedding,
-                    entry.project_id,
-                    entry.hash,
-                    data.threshold,
-                    data.k,
-                    data.hnsw_candidates,
-                    data.hnsw_distance,
-                    data.use_reranking,
-                )
-
-                if nearest_neighbor:
-                    neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
-                    message_similarity_score = difflib.SequenceMatcher(
-                        None, entry.message, neighbor.message
-                    ).ratio()
-                    response = GroupingResponse(
-                        parent_hash=neighbor.hash,
-                        stacktrace_distance=distance,
-                        message_distance=1.0 - message_similarity_score,
-                        should_group=True,
-                    )
-                    groups_with_neighbor[str(entry.group_id)] = response
-                else:
-                    insert_stmt = insert(DbGroupingRecord).values(
-                        project_id=entry.project_id,
-                        message=entry.message,
-                        error_type=entry.exception_type,
-                        hash=entry.hash,
-                        stacktrace_embedding=embedding,
+                with sentry_sdk.start_span(
+                    op="seer.grouping", description="insert single grouping record"
+                ) as span:
+                    span.set_data("stacktrace_len", len(data.stacktrace_list[i]))
+                    embedding = embeddings[i].astype("float32")
+                    nearest_neighbor = self.query_nearest_k_neighbors(
+                        session,
+                        embedding,
+                        entry.project_id,
+                        entry.hash,
+                        data.threshold,
+                        data.k,
+                        data.hnsw_candidates,
+                        data.hnsw_distance,
+                        data.use_reranking,
                     )
 
-                    session.execute(
-                        insert_stmt.on_conflict_do_nothing(
-                            index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
+                    if nearest_neighbor:
+                        neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
+                        message_similarity_score = difflib.SequenceMatcher(
+                            None, entry.message, neighbor.message
+                        ).ratio()
+                        response = GroupingResponse(
+                            parent_hash=neighbor.hash,
+                            stacktrace_distance=distance,
+                            message_distance=1.0 - message_similarity_score,
+                            should_group=True,
                         )
-                    )
-                    session.commit()
+                        groups_with_neighbor[str(entry.group_id)] = response
+                    else:
+                        insert_stmt = insert(DbGroupingRecord).values(
+                            project_id=entry.project_id,
+                            message=entry.message,
+                            error_type=entry.exception_type,
+                            hash=entry.hash,
+                            stacktrace_embedding=embedding,
+                        )
+
+                        session.execute(
+                            insert_stmt.on_conflict_do_nothing(
+                                index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
+                            )
+                        )
+                        session.commit()
 
         return groups_with_neighbor
 
