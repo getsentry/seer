@@ -88,3 +88,14 @@ class StoreDataRequest(BaseModel):
 class StoreDataResponse(BaseModel):
     success: bool
     message: Optional[str] = Field(None)
+
+
+class DeleteAlertDataRequest(BaseModel):
+    organization_id: int
+    project_id: int
+    alert: AlertInSeer
+
+
+class DeleteAlertDataResponse(BaseModel):
+    success: bool
+    message: Optional[str] = Field(None)

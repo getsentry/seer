@@ -15,6 +15,8 @@ from seer.anomaly_detection.models.external import (
     AlertInSeer,
     Anomaly,
     AnomalyDetectionConfig,
+    DeleteAlertDataRequest,
+    DeleteAlertDataResponse,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
@@ -233,6 +235,7 @@ class AnomalyDetection(BaseModel):
         sentry_sdk.set_tag("ad_mode", mode)
 
         if isinstance(request.context, AlertInSeer):
+            sentry_sdk.set_tag("alert_id", request.context.id)
             ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
             ts, anomalies = self._combo_detect(request.context, request.config)
@@ -287,3 +290,17 @@ class AnomalyDetection(BaseModel):
             anomaly_algo_data={"window_size": anomalies.window_size},
         )
         return StoreDataResponse(success=True)
+
+    @inject
+    def delete_alert_data(
+        self, request: DeleteAlertDataRequest, alert_data_accessor: AlertDataAccessor = injected
+    ) -> DeleteAlertDataResponse:
+        """
+        Main entry point for deleting data related to an alert.
+
+        Parameters:
+        request: DeleteAlertDataRequest
+            Alert to clear
+        """
+        alert_data_accessor.delete_alert_data(external_alert_id=request.alert.id)
+        return DeleteAlertDataResponse(success=True)
