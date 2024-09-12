@@ -1,7 +1,6 @@
 import textwrap
 
 from langfuse.decorators import observe
-from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
