@@ -31,17 +31,16 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 &
 RUN ln -s /usr/bin/python /usr/local/bin/python && \
     ln -s /usr/bin/python3 /usr/local/bin/python3
 
-# Copy model files (assuming they are in the 'models' directory)
-COPY models/ models/
-
-# Copy setup files, requirements, and scripts
-COPY setup.py requirements.txt celeryworker.sh celerybeat.sh gunicorn.sh ./
-
-RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh
-
 # Install dependencies
+COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
 RUN pip install -r requirements.txt --no-cache-dir
+
+# Copy model files (assuming they are in the 'models' directory)
+COPY models/ models/
+# Copy scripts
+COPY celeryworker.sh celerybeat.sh gunicorn.sh ./
+RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh
 
 # Copy source code
 COPY src/ src/
