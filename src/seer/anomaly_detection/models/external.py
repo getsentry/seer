@@ -72,7 +72,9 @@ class DetectAnomaliesRequest(BaseModel):
 
 
 class DetectAnomaliesResponse(BaseModel):
-    timeseries: List[TimeSeriesPoint]
+    success: bool
+    message: Optional[str] = Field(None)
+    timeseries: Optional[List[TimeSeriesPoint]] = Field(None)
 
 
 class StoreDataRequest(BaseModel):
@@ -85,3 +87,4 @@ class StoreDataRequest(BaseModel):
 
 class StoreDataResponse(BaseModel):
     success: bool
+    message: Optional[str] = Field(None)

@@ -543,7 +543,12 @@ class TestAutofixContinuation(unittest.TestCase):
     def test_get_selected_root_cause_and_fix(self):
         root_cause_step = RootCauseStep(key="root_cause_analysis", title="test")
         cause = RootCauseAnalysisItem(
-            id=1, title="test", description="test", likelihood=0.5, actionability=0.5
+            id=1,
+            title="test",
+            description="test",
+            reproduction="test",
+            likelihood=0.5,
+            actionability=0.5,
         )
         root_cause_step.causes = [cause]
         root_cause_step.selection = CodeContextRootCauseSelection(cause_id=1)

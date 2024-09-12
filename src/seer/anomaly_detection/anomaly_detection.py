@@ -1,7 +1,9 @@
 import logging
 from typing import List, Tuple
 
+import numpy as np
 import sentry_sdk
+import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor
@@ -21,12 +23,32 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesWithHistory,
 )
 from seer.dependency_injection import inject, injected
+from seer.exceptions import ClientError, ServerError
 
 anomaly_detection_module.enable()
 logger = logging.getLogger(__name__)
 
 
 class AnomalyDetection(BaseModel):
+    @sentry_sdk.trace
+    def __init__(self):
+        """
+        Force Stumpy compilation by making a dummy call to the library.
+
+        Note: compilation triggered here is very specific to the exact values of parameters ignore_trivial, normalize etc. A
+            future call with different values for one or more parameter will still trigger a recompilation.
+        """
+        data = np.arange(10.0)
+        mp = stumpy.stump(data, m=3, ignore_trivial=True, normalize=False)
+        stream = stumpy.stumpi(
+            data,
+            m=3,
+            mp=mp,
+            normalize=False,
+            egress=False,
+        )
+        stream.update(6.0)
+
     @sentry_sdk.trace
     def _batch_detect(
         self, timeseries: List[TimeSeriesPoint], config: AnomalyDetectionConfig
@@ -86,10 +108,23 @@ class AnomalyDetection(BaseModel):
         # Retrieve historic data
         historic = alert_data_accessor.query(alert.id)
         if historic is None:
-            raise Exception(f"Invalid alert id {alert.id}")
+
+            logger.error(
+                "no_stored_history_data",
+                extra={
+                    "alert_id": alert.id,
+                },
+            )
+            raise ClientError("No timeseries data found for alert")
 
         if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
-            raise Exception("Invalid state")
+            logger.error(
+                "invalid_state",
+                extra={
+                    "note": f"Expecting object of type MPTimeSeriesAnomalies but found {type(historic.anomalies)}"
+                },
+            )
+            raise ServerError("Invalid state")
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
@@ -147,7 +182,7 @@ class AnomalyDetection(BaseModel):
                     "minimum_required": min_len,
                 },
             )
-            raise Exception("Insufficient history data")
+            raise ClientError("Insufficient history data")
 
         logger.info(
             f"Detecting anomalies for time series with {len(ts_with_history.current)} datapoints and history of {len(ts_with_history.history)} datapoints"
@@ -173,14 +208,13 @@ class AnomalyDetection(BaseModel):
         return ts_external, streamed_anomalies
 
     def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):
-        if anomalies is None:
-            raise Exception("No anomalies available for the timeseries.")
         for i, point in enumerate(ts_external):
             point.anomaly = Anomaly(
                 anomaly_score=anomalies.scores[i],
                 anomaly_type=anomalies.flags[i],
             )
 
+    @sentry_sdk.trace
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
         """
         Main entry point for anomaly detection.
@@ -190,21 +224,22 @@ class AnomalyDetection(BaseModel):
             Anomaly detection request that has either a complete time series or an alert reference.
         """
         if isinstance(request.context, AlertInSeer):
-            transaction_name = "Stream AD for alert"
+            mode = "streaming.alert"
         elif isinstance(request.context, TimeSeriesWithHistory):
-            transaction_name = "Stream AD for timeseries with history"
+            mode = "streaming.ts_with_history"
         else:
-            transaction_name = "Batch AD for timeseries"
+            mode = "batch.ts_full"
 
-        with sentry_sdk.start_transaction(op="task", name=transaction_name):
-            if isinstance(request.context, AlertInSeer):
-                ts, anomalies = self._online_detect(request.context, request.config)
-            elif isinstance(request.context, TimeSeriesWithHistory):
-                ts, anomalies = self._combo_detect(request.context, request.config)
-            else:
-                ts, anomalies = self._batch_detect(request.context, request.config)
-            self._update_anomalies(ts, anomalies)
-            return DetectAnomaliesResponse(timeseries=ts)
+        sentry_sdk.set_tag("ad_mode", mode)
+
+        if isinstance(request.context, AlertInSeer):
+            ts, anomalies = self._online_detect(request.context, request.config)
+        elif isinstance(request.context, TimeSeriesWithHistory):
+            ts, anomalies = self._combo_detect(request.context, request.config)
+        else:
+            ts, anomalies = self._batch_detect(request.context, request.config)
+        self._update_anomalies(ts, anomalies)
+        return DetectAnomaliesResponse(success=True, timeseries=ts)
 
     @inject
     def store_data(
@@ -230,7 +265,7 @@ class AnomalyDetection(BaseModel):
                     "minimum_required": min_len,
                 },
             )
-            raise Exception(f"Insufficient time series data for alert {request.alert.id}")
+            raise ClientError("Insufficient time series data for alert")
 
         logger.info(
             "store_alert_request",

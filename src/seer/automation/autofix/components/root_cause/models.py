@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 from johen import gen
 from johen.examples import Examples
 from pydantic import BaseModel, Field, StringConstraints
-from pydantic_xml import attr, element
+from pydantic_xml import attr
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
@@ -26,64 +26,38 @@ class SnippetPromptXml(PromptXmlModel, tag="code"):
 
 class RootCauseRelevantCodeSnippet(BaseModel):
     file_path: str
-    repo_name: Optional[str] = None
+    repo_name: Optional[str]
     snippet: str
 
 
 class RootCauseRelevantContext(BaseModel):
-    id: int = -1
+    id: int
     title: str
     description: str
-    snippet: Optional[RootCauseRelevantCodeSnippet] = None
-
-
-class RootCauseRelevantContextPromptXml(PromptXmlModel, tag="code_snippet", skip_empty=True):
-    title: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    snippet: Optional[SnippetPromptXml] = None
-
-    @classmethod
-    def get_example(cls):
-        return cls(
-            title="`foo()` returns the wrong value",
-            description="The issue happens because `foo()` always returns `bar`, as seen in this snippet, when it should return `baz`.",
-            snippet=SnippetPromptXml.get_example(),
-        )
+    snippet: Optional[RootCauseRelevantCodeSnippet]
 
 
 class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
+    reproduction: str
     likelihood: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
     actionability: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
 
-class RootCauseAnalysisRelevantContextPromptXml(PromptXmlModel, tag="code_context"):
-    snippets: list[RootCauseRelevantContextPromptXml]
-
-    @classmethod
-    def get_example(cls):
-        return cls(snippets=[RootCauseRelevantContextPromptXml.get_example()])
+class RootCauseAnalysisRelevantContext(BaseModel):
+    snippets: list[RootCauseRelevantContext]
 
 
-class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip_empty=True):
-    title: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    description: Annotated[str, StringConstraints(strip_whitespace=True)] = element()
-    likelihood: float = attr()
-    actionability: float = attr()
-    relevant_code: Optional[RootCauseAnalysisRelevantContextPromptXml] = None
-
-    @classmethod
-    def get_example(cls):
-        return cls(
-            title="Summarize the root cause here in a few words.",
-            likelihood=0.8,
-            actionability=1.0,
-            description="Explain the root cause in full detail here with the full chain of reasoning behind it.",
-            relevant_code=RootCauseAnalysisRelevantContextPromptXml.get_example(),
-        )
+class RootCauseAnalysisItemPrompt(BaseModel):
+    title: str
+    description: str
+    likelihood: float
+    actionability: float
+    reproduction: str
+    relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
@@ -92,21 +66,15 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
             likelihood=model.likelihood,
             actionability=model.actionability,
             description=model.description,
+            reproduction=model.reproduction,
             relevant_code=(
-                RootCauseAnalysisRelevantContextPromptXml(
+                RootCauseAnalysisRelevantContext(
                     snippets=[
-                        RootCauseRelevantContextPromptXml(
+                        RootCauseRelevantContext(
+                            id=snippet.id,
                             title=snippet.title,
                             description=snippet.description,
-                            snippet=(
-                                SnippetPromptXml(
-                                    file_path=snippet.snippet.file_path,
-                                    snippet=snippet.snippet.snippet,
-                                    repo_name=snippet.snippet.repo_name,
-                                )
-                                if snippet.snippet
-                                else None
-                            ),
+                            snippet=snippet.snippet,
                         )
                         for snippet in model.code_context
                     ]
@@ -126,20 +94,13 @@ class RootCauseAnalysisItemPromptXml(PromptXmlModel, tag="potential_cause", skip
             }
         )
 
-
-class MultipleRootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="root_cause_analysis"):
-    cause: RootCauseAnalysisItemPromptXml | None = None
-
-    @classmethod
-    def get_example(cls):
-        return cls(
-            cause=RootCauseAnalysisItemPromptXml.get_example(),
-        )
+class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
+    cause: RootCauseAnalysisItemPrompt
 
 
-class RootCauseAnalysisOutputPromptXml(PromptXmlModel, tag="root"):
-    thoughts: Optional[str] = element(default=None)
-    potential_root_causes: MultipleRootCauseAnalysisOutputPromptXml
+class RootCauseAnalysisOutputPrompt(BaseModel):
+    thoughts: Optional[str]
+    potential_root_causes: MultipleRootCauseAnalysisOutputPrompt
 
 
 class RootCauseAnalysisRequest(BaseComponentRequest):

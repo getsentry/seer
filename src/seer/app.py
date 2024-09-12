@@ -39,12 +39,20 @@ from seer.automation.codebase.models import (
     RepoAccessCheckResponse,
 )
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codegen.models import (
+    CodegenUnitTestsRequest,
+    CodegenUnitTestsResponse,
+    CodegenUnitTestsStateRequest,
+    CodegenUnitTestsStateResponse,
+)
+from seer.automation.codegen.tasks import codegen_unittest, get_unittest_state
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected, resolve
+from seer.exceptions import ClientError
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
@@ -214,6 +222,27 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
     return AutofixEndpointResponse(started=True, run_id=-1)
 
 
+@json_api(blueprint, "/v1/automation/codegen/unit-tests")
+def codegen_unit_tests_endpoint(data: CodegenUnitTestsRequest) -> CodegenUnitTestsResponse:
+    return codegen_unittest(data)
+
+
+@json_api(blueprint, "/v1/automation/codegen/unit-tests/state")
+def codegen_unit_tests_state_endpoint(
+    data: CodegenUnitTestsStateRequest,
+) -> CodegenUnitTestsStateResponse:
+    state = get_unittest_state(data)
+
+    return CodegenUnitTestsStateResponse(
+        run_id=state.run_id,
+        status=state.status,
+        changes=state.file_changes,
+        triggered_at=state.last_triggered_at,
+        updated_at=state.updated_at,
+        completed_at=state.completed_at,
+    )
+
+
 @json_api(blueprint, "/v1/automation/summarize/issue")
 def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueResponse:
     return run_summarize_issue(data)
@@ -224,7 +253,11 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
-    return anomaly_detection().detect_anomalies(data)
+    try:
+        response = anomaly_detection().detect_anomalies(data)
+    except ClientError as e:
+        response = DetectAnomaliesResponse(success=False, message=str(e))
+    return response
 
 
 @json_api(blueprint, "/v1/anomaly-detection/store")
@@ -232,7 +265,11 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
-    return anomaly_detection().store_data(data)
+    try:
+        response = anomaly_detection().store_data(data)
+    except ClientError as e:
+        response = StoreDataResponse(success=False, message=str(e))
+    return response
 
 
 @blueprint.route("/health/live", methods=["GET"])

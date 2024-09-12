@@ -1,9 +1,6 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.components.root_cause.models import (
-    MultipleRootCauseAnalysisOutputPromptXml,
-)
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
 from seer.automation.summarize.issue import IssueSummary
 
@@ -25,8 +22,6 @@ class RootCauseAnalysisPrompts:
             - At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK.
 
             It is important that we find the potential root causes of the issue."""
-        ).format(
-            root_cause_output_example_str=MultipleRootCauseAnalysisOutputPromptXml.get_example().to_prompt_str(),
         )
 
     @staticmethod
@@ -63,13 +58,20 @@ class RootCauseAnalysisPrompts:
     def root_cause_formatter_msg():
         return textwrap.dedent(
             """\
-            Please format the output properly to match the following example:
-
-            {root_cause_output_example_str}
+            Please format the output properly.
 
             Note: If the provided root cause analysis is not formatted properly, such as code snippets missing descriptions, you can derive them from the provided root cause analysis.
 
             Return only the formatted root cause analysis:"""
-        ).format(
-            root_cause_output_example_str=MultipleRootCauseAnalysisOutputPromptXml.get_example().to_prompt_str(),
+        )
+
+    @staticmethod
+    def reproduction_prompt_msg():
+        return textwrap.dedent(
+            """\
+            Given all the above potential root causes you just gave, please provide a 1-2 sentence concise instruction on how to reproduce the issue for each root cause.
+            - Assume the user is an experienced developer well-versed in the codebase, simply give the reproduction steps.
+            - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
+            - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
+            - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""
         )

@@ -177,14 +177,14 @@ class MPIRQScorer(MPScorer):
             Time series subsequence that is used for teak-trough detection
 
         """
-        if flag == "anomaly_higher_confidence" or flag == "anomaly_lower_confidence":
-            [Q1, Q3] = np.quantile(context, [0.25, 0.75])
-            IQR = Q3 - Q1
-            threshold_lower = Q1 - (0 * IQR)
-            threshold_upper = Q3 + (0 * IQR)
-            # if ts_value > Q1 and ts_value < Q3:
-            if ts_value >= threshold_lower and ts_value <= threshold_upper:
-                flag = "anomaly_lower_confidence"
-            else:
-                flag = "anomaly_higher_confidence"
+        # if flag == "anomaly_higher_confidence" or flag == "anomaly_lower_confidence":
+        #     [Q1, Q3] = np.quantile(context, [0.25, 0.75])
+        #     IQR = Q3 - Q1
+        #     threshold_lower = Q1 - (0 * IQR)
+        #     threshold_upper = Q3 + (0 * IQR)
+        #     # if ts_value > Q1 and ts_value < Q3:
+        #     if ts_value >= threshold_lower and ts_value <= threshold_upper:
+        #         flag = "anomaly_lower_confidence"
+        #     else:
+        #         flag = "anomaly_higher_confidence"
         return flag

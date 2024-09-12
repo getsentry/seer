@@ -11,15 +11,16 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.utils import cleanup_dir
+from seer.automation.codegen.codegen_context import CodegenContext
 
 logger = logging.getLogger(__name__)
 
 
 class BaseTools:
-    context: AutofixContext
+    context: AutofixContext | CodegenContext
     retrieval_top_k: int
 
-    def __init__(self, context: AutofixContext, retrieval_top_k: int = 8):
+    def __init__(self, context: AutofixContext | CodegenContext, retrieval_top_k: int = 8):
         self.context = context
         self.retrieval_top_k = retrieval_top_k
 
