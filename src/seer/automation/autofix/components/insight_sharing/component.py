@@ -48,16 +48,10 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
             latest_thought=request.latest_thought,
         )
 
-        memory = []
-        for msg in request.memory:
-            if msg.role == "system":
-                continue
-            if msg.role == "tool":
-                msg.role == "user"
-            msg.role = "user" if msg.role == "tool" else msg.role
-            msg.tool_calls = []
-            msg.tool_call_id = None
-            memory.append(msg.to_message())
+        memory = [
+            message.to_message()
+            for message in gpt_client.clean_tool_call_assistant_messages(request.memory) if message.role != "system"
+        ]
         memory.append(Message(role="user", content=prompt).to_message())
 
         completion = gpt_client.openai_client.beta.chat.completions.parse(

@@ -57,7 +57,7 @@ class AutofixCodingStep(AutofixPipelineStep):
         self.logger.info("Executing Autofix - Plan+Code Step")
 
         self.context.event_manager.send_coding_start()
-        self.context.event_manager.add_log("Beginning to figure out a fix for the root cause of this issue...")
+        self.context.event_manager.add_log("Figuring out a fix for the root cause of this issue...")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()
@@ -89,4 +89,3 @@ class AutofixCodingStep(AutofixPipelineStep):
             ),
             queue=CeleryQueues.DEFAULT,
         )
-        self.context.event_manager.add_log("Here are some code changes that I think fix the issue. If you disagree, feel free to edit them or tell me what I should change.")

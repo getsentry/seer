@@ -92,3 +92,4 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     codebase_changes.append(change)
 
         self.context.event_manager.send_coding_complete(codebase_changes)
+        self.context.event_manager.add_log("Here are some code changes that I think fix the issue. If you disagree, feel free to edit them or tell me what I should change.")
