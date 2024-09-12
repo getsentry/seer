@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.normalizers import Normalizer
 from seer.dependency_injection import inject, injected
+from seer.exceptions import ServerError
 
 
 class MPUtils(BaseModel):
@@ -38,12 +39,12 @@ class MPUtils(BaseModel):
         mp_dist = mp[:, 0]
         if mp_config is not None and mp_config.normalize_mp:
             if normalizer is None:
-                raise Exception("Need normalizer to normalize MP")
+                raise ServerError("Need normalizer to normalize MP")
             mp_dist = normalizer.normalize(mp_dist)
 
         if pad_to_len is not None:
             if pad_to_len < len(mp_dist):
-                raise Exception(
+                raise ServerError(
                     "Requested length should be greater than or equal to current mp_dist"
                 )
             nan_value_count = np.empty(pad_to_len - len(mp_dist))
