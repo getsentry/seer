@@ -90,11 +90,18 @@ gocd: ## Build GoCD pipelines
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd
 
+HEAD_SHA:=$(shell git rev-parse --short HEAD)
+TIME:=$(shell date +%F.%T)
+SEER_STAGING_VERSION_SHA:=$(HEAD_SHA).$(TIME)
 push-staging:
 	# Ensure the google authentication helper is working.  If this fails, https://cloud.google.com/artifact-registry/docs/docker/authentication#gcloud-helper
 	gcloud auth configure-docker us-west1-docker.pkg.dev > /dev/null
 	# Setup your SBX_PROJECT in .env from the sandbox project name
-	docker build . --platform linux/amd64 -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer
+	docker build . --platform linux/amd64 --build-arg SEER_VERSION_SHA=$(SEER_STAGING_VERSION_SHA) --build-arg SENTRY_ENVIRONMENT=staging -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer
 	docker build . --platform linux/amd64 -f Compose.Dockerfile --build-arg SBX_PROJECT=$(SBX_PROJECT) -t us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer.compose
 	docker push	us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer
 	docker push	us-west1-docker.pkg.dev/$(SBX_PROJECT)/staging/seer.compose
+	sentry-cli releases new "${SEER_STAGING_VERSION_SHA}"
+	sentry-cli releases deploys "${SEER_STAGING_VERSION_SHA}" new -e staging
+	sentry-cli releases finalize "${SEER_STAGING_VERSION_SHA}"
+	sentry-cli releases set-commits "${SEER_STAGING_VERSION_SHA}" --auto || true

@@ -54,8 +54,11 @@ COPY supervisord.conf /etc/supervisord.conf
 RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
 
 ENV FLASK_APP=src.seer.app:start_app()
-# Set in cloudbuild.yaml for production images
+
+# Supports sentry releases
 ARG SEER_VERSION_SHA
 ENV SEER_VERSION_SHA ${SEER_VERSION_SHA}
+ARG SENTRY_ENVIRONMENT=production
+ENV SENTRY_ENVIRONMENT ${SENTRY_ENVIRONMENT}
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
