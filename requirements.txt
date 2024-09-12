@@ -106,4 +106,4 @@ langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa
 watchdog
 stumpy==1.13.0
 pytest_alembic==0.11.1
-cryptography==43.0.0
+cryptography==43.0.1
