@@ -1,7 +1,10 @@
 services:
     app:
         image: us-west1-docker.pkg.dev/${SBX_PROJECT}/staging/seer
-        command: bash -c "
-            flask db upgrade
-            exec /usr/bin/supervisord -c /etc/supervisord.conf
-            "
+        volumes: !reset []
+        command:
+            - bash
+            - -c
+            - |
+              flask db upgrade
+              exec /usr/bin/supervisord -c /etc/supervisord.conf
