@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 AnomalyFlags = Literal["none", "anomaly_lower_confidence", "anomaly_higher_confidence", "no_data"]
 Sensitivities = Literal["low", "medium", "high"]
-TimePeriods = Literal[15, 30, 60]
+TimePeriods = Literal[5, 15, 30, 60]
 Directions = Literal["up", "down", "both"]
 Seasonalities = Literal["hourly", "daily", "weekly", "auto"]
 
