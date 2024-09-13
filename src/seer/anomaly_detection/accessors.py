@@ -17,6 +17,7 @@ from seer.anomaly_detection.models import (
 )
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session
+from seer.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,10 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         anomaly: TimeSeriesAnomalies,
         anomaly_algo_data: Optional[dict],
     ):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def delete_alert_data(self, external_alert_id: int):
         return NotImplemented
 
 
@@ -179,7 +184,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 .one_or_none()
             )
             if existing is None:
-                raise Exception(f"Alert with id {external_alert_id} not found")
+                raise ClientError(f"Alert with id {external_alert_id} not found")
 
             new_record = DbDynamicAlertTimeSeries(
                 dynamic_alert_id=existing.id,
@@ -190,4 +195,17 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 anomaly_algo_data=anomaly_algo_data,
             )
             session.add(new_record)
+            session.commit()
+
+    @sentry_sdk.trace
+    def delete_alert_data(self, external_alert_id: int):
+        with Session() as session:
+            existing = (
+                session.query(DbDynamicAlert)
+                .filter_by(external_alert_id=external_alert_id)
+                .one_or_none()
+            )
+            if existing is None:
+                raise ClientError(f"Alert with id {external_alert_id} not found")
+            session.delete(existing)
             session.commit()
