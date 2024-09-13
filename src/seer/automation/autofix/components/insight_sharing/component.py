@@ -1,5 +1,5 @@
 import textwrap
-
+import re
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
@@ -16,23 +16,24 @@ class InsightSharingPrompts:
     def format_default_msg(
         task_description: str,
         latest_thought: str,
+        past_insights: list[str],
     ):
+        past_insights = [f"{i + 1}. {insight}" for i, insight in enumerate(past_insights)]
         return textwrap.dedent(
             """\
-            You're an engineer leading the process of {task_description}.
-            To help your team, whenever you find an important insight needed for the process of {task_description}, you should document it. The only things we want to document are key conclusions in {task_description} that would belong in a final report, not random thoughts, tasks, or work-in-progress plans.
-
-            You can look back on the conversation so far for context, but we're focused on the latest thought you had, which was:
-            ---
-            {latest_thought}
-            ---
-
-            First decide whether or not there is anything about this thought of yours that's important to share with your team and permanently document. If not, respond with should_share_insight is false.
+            Consider the last thing you said in the conversation. Is there any key takeaway insight in there that we should use to continue the WIP line of reasoning below?
+            {insights}
+              
+            Make your answer 1 line that will be added onto the current line of reasoning. Separately, give a justification that should use context from the codebase and the issue details to quickly explain your insight. Also answer with snippets of only the most relevant context that helps explain.
             
-            If you think there is something new and critical to know from this thought regarding {task_description}, document it it. When documenting, you should give a clear, concise, and concrete insight (1 short line). Then you should provide a clear, concise justification (1 short line) for your insight using concrete pieces of context, whether it's a snippet from the files in the codebase you're looking at, a line from the stacktrace, an event log, or an error message. Finally, return the specific context you needed for your justification so your team can connect the dots easily. Only include the minimum necessary; leave out anything not critical for understanding your insight. Make sure to put the context pieces in the field that corresponds to their original type, and do not make any data up."""
+            Finally, check:
+            - if your insight turns out to be unimportant for {task_description}.
+            - if your insight just repeats an already covered idea.
+            - if your insight is an incomplete idea that isn't ready to be added to the list."""
         ).format(
             task_description=task_description,
-            latest_thought=latest_thought
+            latest_thought=latest_thought,
+            insights="\n".join(past_insights) if past_insights else "None",
         )
 
 
@@ -46,6 +47,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
         prompt = InsightSharingPrompts.format_default_msg(
             task_description=request.task_description,
             latest_thought=request.latest_thought,
+            past_insights=request.past_insights,
         )
 
         memory = [
@@ -55,7 +57,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
         memory.append(Message(role="user", content=prompt).to_message())
 
         completion = gpt_client.openai_client.beta.chat.completions.parse(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini-2024-07-18",#"gpt-4o-2024-08-06",
             messages=memory,
             response_format=InsightSharingOutput,
             temperature=0.0,
@@ -73,4 +75,5 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
             raise RuntimeError("Failed to parse message")
 
         res = completion.choices[0].message.parsed
+        res.insight = re.sub(r'^\d+\.\s+', '', res.insight) # since the model often starts the insight with a number, e.g. "3. Insight..."
         return res

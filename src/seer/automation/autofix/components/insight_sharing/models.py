@@ -29,13 +29,15 @@ class InsightSharingRequest(BaseComponentRequest):
     latest_thought: str
     task_description: str
     memory: list[Message]
-
+    past_insights: list[str]
 
 class InsightSharingOutput(BaseComponentOutput):
-    should_share_insight: bool
     insight: str
     justification_using_context: str
     error_message_context: list[str]
-    codebase_snippet_context: list[CodeSnippetContext]
+    codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     event_log_context: list[BreadcrumbContext]
+    is_unimportant_insight: bool
+    repeats_existing_idea: bool
+    is_incomplete_idea: bool

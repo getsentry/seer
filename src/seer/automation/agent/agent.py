@@ -72,43 +72,33 @@ class LlmAgent(ABC):
         self.memory.append(message)
 
         # log thoughts to the user
-        print("BYE")
-        print(message) # TODO
         if message.content and context:
             text_before_tag = message.content.split("<")[0]
-            print("HELLO")
-            print(len(text_before_tag))
-            logs_inside_tags = extract_text_inside_tags(
-                message.content, "log", strip_newlines=False
-            )
-            text = ""
-            if logs_inside_tags:
-                text = logs_inside_tags
-            elif text_before_tag:
-                text = text_before_tag
+            text = text_before_tag
             print("Asking for insight" if text else "Not asking for insight")
             if text:
                 # call LLM separately with the same memory to generate structured output insight cards 
                 insight_sharing = InsightSharingComponent(context)
+                past_insights = context.state.get().get_all_insights()
                 insight_card = insight_sharing.invoke(
                     InsightSharingRequest(
                         latest_thought=text,
                         memory=self.memory,
-                        task_description=context.state.get().get_step_description()
+                        task_description=context.state.get().get_step_description(),
+                        past_insights=past_insights
                     )
                 )
                 print("insight step run")
                 if insight_card:
                     print("insight card generated")
-                    if not insight_card.should_share_insight:
-                        print("Shouldn't share")
+                    if insight_card.is_unimportant_insight or insight_card.repeats_existing_idea or insight_card.is_incomplete_idea:
+                        print(f"Shouldn't share: {insight_card.insight}")
                     elif context.state.get().steps and isinstance(context.state.get().steps[-1], DefaultStep):
                         print("updating step with new insight card")
                         step = cast(DefaultStep, context.state.get().steps[-1])
                         step.insights.append(insight_card)
                         with context.state.update() as cur:
                             cur.steps[-1] = step
-
 
         if message.tool_calls:
             for tool_call in message.tool_calls:
