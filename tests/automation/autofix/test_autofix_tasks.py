@@ -11,11 +11,14 @@ from seer.automation.autofix.models import (
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
+    AutofixUpdateType,
+    AutofixUserMessagePayload,
 )
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    receive_user_message,
     run_autofix_create_pr,
     run_autofix_execution,
     run_autofix_root_cause,
@@ -215,3 +218,42 @@ class TestCheckAndMarkRecentAutofixRuns:
         mock_logger.info.assert_any_call("Got 2 runs")
         mock_check_and_mark.assert_has_calls([call(mock_run1), call(mock_run2)])
         assert mock_check_and_mark.call_count == 2
+
+
+class TestHandleUserMessages:
+    @patch("seer.automation.autofix.tasks.ContinuationState")
+    def test_receive_user_message_success(self, mock_continuation_state):
+        # Create mock payload and request
+        mock_payload = AutofixUserMessagePayload(
+            type=AutofixUpdateType.USER_MESSAGE, text="testing"
+        )
+        mock_request = MagicMock()
+        mock_request.payload = mock_payload
+        mock_request.run_id = 123  # Example run_id
+
+        mock_continuation_state.from_id.return_value.update.return_value.__enter__.return_value = (
+            MagicMock(steps=[MagicMock()])
+        )
+        mock_continuation_state.from_id.return_value.update.return_value.__enter__.return_value.steps[
+            -1
+        ].receive_user_message = MagicMock()
+
+        # Call the function under test
+        receive_user_message(mock_request)
+
+        # Assertions
+        mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+        mock_continuation_state.from_id.return_value.update.return_value.__enter__.return_value.steps[
+            -1
+        ].receive_user_message.assert_called_once_with(
+            "testing"
+        )
+
+    def test_receive_user_message_invalid_payload_type(self):
+        mock_payload = MagicMock()  # incorrect payload type
+        mock_request = MagicMock()
+        mock_request.payload = mock_payload
+
+        # Test for ValueError
+        with pytest.raises(ValueError, match="Invalid payload type for user_message"):
+            receive_user_message(mock_request)
