@@ -67,4 +67,6 @@ class RootCauseStep(AutofixPipelineStep):
         )
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
-        self.context.event_manager.add_log("Above is what I think the root cause is. Feel free to edit it or propose your own root cause instead.")
+        self.context.event_manager.add_log(
+            "Above is what I think the root cause is. Feel free to propose your own root cause instead."
+        )  # TODO add 'edit it or propose your own' once that feature is in
