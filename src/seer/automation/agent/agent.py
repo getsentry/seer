@@ -63,11 +63,25 @@ class LlmAgent(ABC):
             system_prompt=self.config.system_prompt if self.config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
         )
+    
+    def use_user_messages(self, context: AutofixContext):
+        # adds any queued user messages to the memory
+        user_msgs = context.state.get().steps[-1].queued_user_messages
+        if user_msgs:
+            self.memory.append(Message(content="\n".join(user_msgs), role="user"))
+            with context.state.update() as cur:
+                cur.steps[-1].queued_user_messages = []
+            context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
 
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
-
+        
         message, usage = self.get_completion()
+
+        # interrupt if user message is queued and awaiting handling
+        if context and context.state.get().steps[-1].queued_user_messages:
+            self.use_user_messages(context)
+            return
 
         self.memory.append(message)
 
@@ -75,7 +89,6 @@ class LlmAgent(ABC):
         if message.content and context:
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
-            print("Asking for insight" if text else "Not asking for insight")
             if text:
                 # call LLM separately with the same memory to generate structured output insight cards 
                 insight_sharing = InsightSharingComponent(context)
@@ -88,13 +101,8 @@ class LlmAgent(ABC):
                         past_insights=past_insights
                     )
                 )
-                print("insight step run")
                 if insight_card:
-                    print("insight card generated")
-                    if insight_card.is_unimportant_insight or insight_card.repeats_existing_idea or insight_card.is_incomplete_idea:
-                        print(f"Shouldn't share: {insight_card.insight}")
-                    elif context.state.get().steps and isinstance(context.state.get().steps[-1], DefaultStep):
-                        print("updating step with new insight card")
+                    if context.state.get().steps and isinstance(context.state.get().steps[-1], DefaultStep):
                         step = cast(DefaultStep, context.state.get().steps[-1])
                         step.insights.append(insight_card)
                         with context.state.update() as cur:
@@ -139,6 +147,7 @@ class LlmAgent(ABC):
         self.reset_iterations()
 
         while self.should_continue():
+            if context: self.use_user_messages(context)
             self.run_iteration(context=context)
 
         if self.iterations == self.config.max_iterations:

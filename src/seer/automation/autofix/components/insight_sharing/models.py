@@ -25,6 +25,13 @@ class StacktraceContext(BaseModel):
     code_snippet: str
     vars_as_json: str
 
+class InsightContextOutput(BaseModel):
+    explanation: str
+    error_message_context: list[str]
+    codebase_context: list[CodeSnippetContext]
+    stacktrace_context: list[StacktraceContext]
+    event_log_context: list[BreadcrumbContext]
+
 class InsightSharingRequest(BaseComponentRequest):
     latest_thought: str
     task_description: str
@@ -33,11 +40,8 @@ class InsightSharingRequest(BaseComponentRequest):
 
 class InsightSharingOutput(BaseComponentOutput):
     insight: str
-    justification_using_context: str
     error_message_context: list[str]
     codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
-    event_log_context: list[BreadcrumbContext]
-    is_unimportant_insight: bool
-    repeats_existing_idea: bool
-    is_incomplete_idea: bool
+    breadcrumb_context: list[BreadcrumbContext]
+    justification: str

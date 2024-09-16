@@ -27,6 +27,7 @@ from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    receive_user_message,
     run_autofix_create_pr,
     run_autofix_evaluation,
     run_autofix_execution,
@@ -176,6 +177,8 @@ def autofix_update_endpoint(
         run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_create_pr(data)
+    elif data.payload.type == AutofixUpdateType.USER_MESSAGE:
+        receive_user_message(data)
     return AutofixEndpointResponse(started=True, run_id=data.run_id)
 
 

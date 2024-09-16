@@ -28,6 +28,7 @@ from seer.automation.autofix.models import (
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
+    AutofixUserMessagePayload,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
@@ -197,6 +198,13 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
         repo_external_id=request.payload.repo_external_id, repo_id=request.payload.repo_id
     )
 
+def receive_user_message(request: AutofixUpdateRequest):
+     if not isinstance(request.payload, AutofixUserMessagePayload):
+        raise ValueError("Invalid payload type for user_message")
+     
+     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+     with state.update() as cur:
+        cur.steps[-1].receive_user_message(request.payload.text)
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):
     langfuse = Langfuse()

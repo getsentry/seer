@@ -122,6 +122,13 @@ class BaseStep(BaseModel):
     progress: list["ProgressItem | Step"] = Field(default_factory=list)
     completedMessage: Optional[str] = None
 
+    queued_user_messages: list[str] = []
+
+    def receive_user_message(self, message: str):
+        self.queued_user_messages.append(message)
+        print("HELLO user message")
+        print(self.queued_user_messages)
+
     def find_child(self, *, id: str) -> "Step | None":
         for step in self.progress:
             if isinstance(step, (DefaultStep, RootCauseStep, ChangesStep)) and step.id == id:
@@ -199,7 +206,6 @@ class AutofixGroupState(BaseModel):
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
 
-
 class AutofixStateRequest(BaseModel):
     group_id: int | None = None
     run_id: int | None = None
@@ -272,6 +278,7 @@ class AutofixRequest(BaseModel):
 class AutofixUpdateType(str, enum.Enum):
     SELECT_ROOT_CAUSE = "select_root_cause"
     CREATE_PR = "create_pr"
+    USER_MESSAGE = "user_message"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -285,10 +292,14 @@ class AutofixCreatePrUpdatePayload(BaseModel):
     repo_external_id: str | None = None
     repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 
+class AutofixUserMessagePayload(BaseModel):
+    type: Literal[AutofixUpdateType.USER_MESSAGE]
+    text: str
+
 
 class AutofixUpdateRequest(BaseModel):
     run_id: int
-    payload: Union[AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload] = Field(
+    payload: Union[AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload, AutofixUserMessagePayload] = Field(
         discriminator="type"
     )
 
@@ -301,7 +312,7 @@ class AutofixContinuation(AutofixGroupState):
             return ""
         step = self.steps[-1]
         if step.type == StepType.DEFAULT and step.key == "root_cause_analysis_processing":
-            return "finding the root cause of the issue"
+            return "figuring out what is causing the issue (not thinking about solutions yet)"
         elif step.type == StepType.DEFAULT and step.key == "plan":
             return "coming up with a fix for the issue"
         elif step.type == StepType.ROOT_CAUSE_ANALYSIS:
