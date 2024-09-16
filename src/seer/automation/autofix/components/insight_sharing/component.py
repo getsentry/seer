@@ -1,14 +1,20 @@
-import textwrap
 import re
+import textwrap
+
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GptClient
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.models import InsightContextOutput, InsightSharingOutput, InsightSharingRequest
+from seer.automation.autofix.components.insight_sharing.models import (
+    InsightContextOutput,
+    InsightSharingOutput,
+    InsightSharingRequest,
+)
 from seer.automation.component import BaseComponent
-from seer.dependency_injection import inject, injected    
+from seer.dependency_injection import inject, injected
+
 
 class InsightSharingPrompts:
     @staticmethod
@@ -31,21 +37,18 @@ class InsightSharingPrompts:
             latest_thought=latest_thought,
             insights="\n".join(past_insights) if past_insights else "None",
         )
-    
+
     @staticmethod
-    def format_step_two(
-        insight: str,
-        latest_thought: str
-    ):
+    def format_step_two(insight: str, latest_thought: str):
         return textwrap.dedent(
             """\
             Return the pieces of context from the issue details or the files in the codebase that are directly relevant to the text below:
             {insight}
 
             That means choose the most relevant codebase snippets, event logs, stacktraces, or other information, that show specifically what the text mentions. Don't include any repeated information; just include what's needed.
-            
+
             Also provide a one-line explanation of how the pieces of context directly explain the text.
-            
+
             To know what's needed, reference these notes:
             {latest_thought}"""
         ).format(
@@ -60,7 +63,9 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
     @observe(name="Sharing Insights")
     @ai_track(description="Sharing Insights")
     @inject
-    def invoke(self, request: InsightSharingRequest, gpt_client: GptClient = injected) -> InsightSharingOutput | None:
+    def invoke(
+        self, request: InsightSharingRequest, gpt_client: GptClient = injected
+    ) -> InsightSharingOutput | None:
         prompt_one = InsightSharingPrompts.format_step_one(
             task_description=request.task_description,
             latest_thought=request.latest_thought,
@@ -72,13 +77,19 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
             temperature=0.0,
         )
         with self.context.state.update() as cur:
-            usage = Usage(completion_tokens=completion.usage.completion_tokens, prompt_tokens=completion.usage.prompt_tokens, total_tokens=completion.usage.total_tokens)
+            usage = Usage(
+                completion_tokens=completion.usage.completion_tokens,
+                prompt_tokens=completion.usage.prompt_tokens,
+                total_tokens=completion.usage.total_tokens,
+            )
             cur.usage += usage
         insight = completion.choices[0].message.content
         if insight == "<NO_INSIGHT/>":
             return None
-        
-        insight = re.sub(r'^\d+\.\s+', '', insight) # since the model often starts the insight with a number, e.g. "3. Insight..."
+
+        insight = re.sub(
+            r"^\d+\.\s+", "", insight
+        )  # since the model often starts the insight with a number, e.g. "3. Insight..."
 
         prompt_two = InsightSharingPrompts.format_step_two(
             insight=insight,
@@ -98,7 +109,11 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
             max_tokens=2048,
         )
         with self.context.state.update() as cur:
-            usage = Usage(completion_tokens=completion.usage.completion_tokens, prompt_tokens=completion.usage.prompt_tokens, total_tokens=completion.usage.total_tokens)
+            usage = Usage(
+                completion_tokens=completion.usage.completion_tokens,
+                prompt_tokens=completion.usage.prompt_tokens,
+                total_tokens=completion.usage.total_tokens,
+            )
             cur.usage += usage
         structured_message = completion.choices[0].message
         if structured_message.refusal:
@@ -114,6 +129,6 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
             error_message_context=res.error_message_context,
             codebase_context=res.codebase_context,
             stacktrace_context=res.stacktrace_context,
-            breadcrumb_context=res.event_log_context
+            breadcrumb_context=res.event_log_context,
         )
         return response

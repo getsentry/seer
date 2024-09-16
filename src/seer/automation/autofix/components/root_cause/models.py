@@ -1,8 +1,6 @@
 from typing import Annotated, Optional
 
-from johen import gen
-from johen.examples import Examples
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, StringConstraints
 from pydantic_xml import attr
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -87,6 +85,7 @@ class RootCauseAnalysisItemPrompt(BaseModel):
                 ),
             }
         )
+
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
     cause: RootCauseAnalysisItemPrompt

@@ -9,12 +9,14 @@ class CodeSnippetContext(BaseModel):
     file_path: str
     snippet: str
 
+
 class BreadcrumbContext(BaseModel):
     type: str
     category: str
     body: str
     level: str
     data_as_json: str
+
 
 class StacktraceContext(BaseModel):
     file_name: str
@@ -25,6 +27,7 @@ class StacktraceContext(BaseModel):
     code_snippet: str
     vars_as_json: str
 
+
 class InsightContextOutput(BaseModel):
     explanation: str
     error_message_context: list[str]
@@ -32,11 +35,13 @@ class InsightContextOutput(BaseModel):
     stacktrace_context: list[StacktraceContext]
     event_log_context: list[BreadcrumbContext]
 
+
 class InsightSharingRequest(BaseComponentRequest):
     latest_thought: str
     task_description: str
     memory: list[Message]
     past_insights: list[str]
+
 
 class InsightSharingOutput(BaseComponentOutput):
     insight: str

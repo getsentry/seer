@@ -18,7 +18,6 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
 from seer.automation.autofix.models import DefaultStep
-from seer.automation.utils import extract_text_inside_tags
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -63,7 +62,7 @@ class LlmAgent(ABC):
             system_prompt=self.config.system_prompt if self.config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
         )
-    
+
     def use_user_messages(self, context: AutofixContext):
         # adds any queued user messages to the memory
         user_msgs = context.state.get().steps[-1].queued_user_messages
@@ -75,7 +74,7 @@ class LlmAgent(ABC):
 
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
-        
+
         message, usage = self.get_completion()
 
         # interrupt if user message is queued and awaiting handling
@@ -90,7 +89,7 @@ class LlmAgent(ABC):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
-                # call LLM separately with the same memory to generate structured output insight cards 
+                # call LLM separately with the same memory to generate structured output insight cards
                 insight_sharing = InsightSharingComponent(context)
                 past_insights = context.state.get().get_all_insights()
                 insight_card = insight_sharing.invoke(
@@ -98,11 +97,13 @@ class LlmAgent(ABC):
                         latest_thought=text,
                         memory=self.memory,
                         task_description=context.state.get().get_step_description(),
-                        past_insights=past_insights
+                        past_insights=past_insights,
                     )
                 )
                 if insight_card:
-                    if context.state.get().steps and isinstance(context.state.get().steps[-1], DefaultStep):
+                    if context.state.get().steps and isinstance(
+                        context.state.get().steps[-1], DefaultStep
+                    ):
                         step = cast(DefaultStep, context.state.get().steps[-1])
                         step.insights.append(insight_card)
                         with context.state.update() as cur:
@@ -147,7 +148,8 @@ class LlmAgent(ABC):
         self.reset_iterations()
 
         while self.should_continue():
-            if context: self.use_user_messages(context)
+            if context:
+                self.use_user_messages(context)
             self.run_iteration(context=context)
 
         if self.iterations == self.config.max_iterations:

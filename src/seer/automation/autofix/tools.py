@@ -70,7 +70,7 @@ class BaseTools:
             # show potential corrected paths if nothing was found here
             other_paths = self._get_potential_abs_paths(path, repo_name)
             return f"<no entries found in directory '{path or '/'}'/>\n{other_paths}".strip()
-        
+
         self.context.event_manager.add_log(f"Looking at contents of `{path}` in `{repo_name}`...")
 
         joined = self._format_list_directory_output(dirs, files)
@@ -218,7 +218,9 @@ class BaseTools:
         all_paths = repo_client.get_index_file_set()
         found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
 
-        self.context.event_manager.add_log(f"Searching for files with pattern `{pattern}` in `{repo_name}`...")
+        self.context.event_manager.add_log(
+            f"Searching for files with pattern `{pattern}` in `{repo_name}`..."
+        )
 
         if len(found) == 0:
             return f"No files matching pattern '{pattern}' found in repository"

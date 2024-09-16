@@ -148,7 +148,9 @@ class GptClient(LlmClient):
             elif message.role == "tool":
                 new_messages.append(Message(role="user", content=message.content, tool_calls=[]))
             elif message.role == "tool_use":
-                new_messages.append(Message(role="assistant", content=message.content, tool_calls=[]))
+                new_messages.append(
+                    Message(role="assistant", content=message.content, tool_calls=[])
+                )
             else:
                 new_messages.append(message)
         return new_messages
