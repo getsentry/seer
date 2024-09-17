@@ -281,7 +281,8 @@ def delete_alert__data_endpoint(
     data: DeleteAlertDataRequest,
 ) -> DeleteAlertDataResponse:
     sentry_sdk.set_tag("organization_id", data.organization_id)
-    sentry_sdk.set_tag("project_id", data.project_id)
+    if data.project_id is not None:
+        sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
         response = anomaly_detection().delete_alert_data(data)
