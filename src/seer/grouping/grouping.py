@@ -1,4 +1,3 @@
-import difflib
 import gc
 import logging
 from functools import wraps
@@ -367,9 +366,6 @@ class GroupingLookup:
 
         similarity_response = SimilarityResponse(responses=[])
         for record, distance in results:
-            message_similarity_score = difflib.SequenceMatcher(
-                None, issue.message, record.message
-            ).ratio()
             should_group = distance <= issue.threshold
 
             if should_group:
@@ -387,7 +383,7 @@ class GroupingLookup:
                 GroupingResponse(
                     parent_hash=record.hash,
                     stacktrace_distance=distance,
-                    message_distance=1.0 - message_similarity_score,
+                    message_distance=0.0,
                     should_group=should_group,
                 )
             )
@@ -443,13 +439,10 @@ class GroupingLookup:
 
                     if nearest_neighbor:
                         neighbor, distance = nearest_neighbor[0][0], nearest_neighbor[0][1]
-                        message_similarity_score = difflib.SequenceMatcher(
-                            None, entry.message, neighbor.message
-                        ).ratio()
                         response = GroupingResponse(
                             parent_hash=neighbor.hash,
                             stacktrace_distance=distance,
-                            message_distance=1.0 - message_similarity_score,
+                            message_distance=0.0,
                             should_group=True,
                         )
                         groups_with_neighbor[str(entry.group_id)] = response
