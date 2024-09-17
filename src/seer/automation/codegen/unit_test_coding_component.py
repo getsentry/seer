@@ -17,6 +17,7 @@ from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from integrations.codecov.codecov_client import CodecovClient
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,18 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 system_prompt=CodingUnitTestPrompts.format_system_msg(), max_iterations=24
             ),
         )
+
+        code_coverage_data = None
+
+        if request.codecov_client_params:
+            code_coverage_data = CodecovClient.fetch_coverage(
+                repo_name=request.codecov_client_params.repo_name,
+                pullid=request.codecov_client_params.pullid,
+                owner_username=request.codecov_client_params.owner_username
+            )
+
+        print(code_coverage_data)
+        # Add codecov data to prompt
 
         existing_test_design_response = self._get_test_design_summary(
             agent=agent,

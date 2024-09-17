@@ -42,6 +42,18 @@ class CodingUnitTestPrompts:
         ).format(
             diff_str=diff_str,
         )
+    
+    @staticmethod
+    def format_additional_code_coverage_info(coverage_info: dict):
+        return textwrap.dedent(
+            """\
+            You are given the following code coverage information as a json object:
+            {coverage_info}
+            TODO: Using the info...create the best unit tests
+            """
+        ).format(
+            coverage_info=coverage_info,
+        )
 
     @staticmethod
     def format_find_unit_test_pattern_step_msg(diff_str: str):

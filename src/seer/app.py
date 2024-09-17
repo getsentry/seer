@@ -2,6 +2,7 @@ import logging
 import time
 
 import flask
+from integrations.codecov.codecov_client import CodecovClient
 import sentry_sdk
 from flask import Blueprint, Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -226,6 +227,9 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
 def codegen_unit_tests_endpoint(data: CodegenUnitTestsRequest) -> CodegenUnitTestsResponse:
     return codegen_unittest(data)
 
+@blueprint.route("/codecov-test", methods=["GET"])
+def test_codecov_client():
+    return CodecovClient.ping()
 
 @json_api(blueprint, "/v1/automation/codegen/unit-tests/state")
 def codegen_unit_tests_state_endpoint(

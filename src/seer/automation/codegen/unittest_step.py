@@ -18,6 +18,7 @@ from seer.automation.pipeline import PipelineStepTaskRequest
 class UnittestStepRequest(PipelineStepTaskRequest):
     pr_id: int
     repo_definition: RepoDefinition
+    with_coverage_context: bool
 
 
 @celery_app.task(
@@ -53,12 +54,21 @@ class UnittestStep(CodegenStep):
 
         repo_client = self.context.get_repo_client()
         pr = repo_client.repo.get_pull(self.request.pr_id)
+        should_fetch_coverage_context = self.request.with_coverage_context
+        codecov_client_params = None
+        if should_fetch_coverage_context:
+            codecov_client_params = {
+                "repo_name": self.request.repo_definition.name,
+                "pullid": self.request.pr_id,
+                "owner_username": self.request.repo_definition.owner
+            }
 
         diff_content = repo_client.get_pr_diff_content(pr.url)
 
         unittest_output = UnitTestCodingComponent(self.context).invoke(
             CodeUnitTestRequest(
                 diff=diff_content,
+                codecov_client_params=codecov_client_params,
             )
         )
 
