@@ -1,6 +1,5 @@
 import requests
 
-#TODO: Look into supertoken, fetch actual token
 class CodecovClient:
     @staticmethod
     def fetch_coverage(owner_username, repo_name, pullid, token=''):
