@@ -9,6 +9,8 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from seer.anomaly_detection.models.external import (
+    DeleteAlertDataRequest,
+    DeleteAlertDataResponse,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
@@ -269,10 +271,26 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
+    sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
         response = anomaly_detection().store_data(data)
     except ClientError as e:
         response = StoreDataResponse(success=False, message=str(e))
+    return response
+
+
+@json_api(blueprint, "/v1/anomaly-detection/delete-alert-data")
+@sentry_sdk.trace
+def delete_alert__data_endpoint(
+    data: DeleteAlertDataRequest,
+) -> DeleteAlertDataResponse:
+    sentry_sdk.set_tag("organization_id", data.organization_id)
+    sentry_sdk.set_tag("project_id", data.project_id)
+    sentry_sdk.set_tag("alert_id", data.alert.id)
+    try:
+        response = anomaly_detection().delete_alert_data(data)
+    except ClientError as e:
+        response = DeleteAlertDataResponse(success=False, message=str(e))
     return response
 
 
