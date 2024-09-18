@@ -35,7 +35,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         agent = GptAgent(
             tools=tools.get_tools(),
             config=AgentConfig(
-                system_prompt=RootCauseAnalysisPrompts.format_system_msg(), max_iterations=24
+                system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
+                max_iterations=24,
+                interactive=True,
             ),
         )
 

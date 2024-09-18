@@ -134,7 +134,7 @@ class TestGptAgent:
 
     @pytest.fixture
     def config(self):
-        return AgentConfig()
+        return AgentConfig(interactive=True)
 
     @pytest.fixture
     def agent(self, agent_and_client_classes, config):

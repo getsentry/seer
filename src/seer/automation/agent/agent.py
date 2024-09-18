@@ -32,6 +32,7 @@ class AgentConfig(BaseModel):
     stop_message: Optional[str] = Field(
         default=None, description="Message that signals the agent to stop"
     )
+    interactive: bool = False  # enables interactive user-facing features
 
     class Config:
         validate_assignment = True
@@ -85,7 +86,7 @@ class LlmAgent(ABC):
         self.memory.append(message)
 
         # log thoughts to the user
-        if message.content and context:
+        if message.content and context and self.config.interactive:
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
@@ -148,7 +149,7 @@ class LlmAgent(ABC):
         self.reset_iterations()
 
         while self.should_continue():
-            if context:
+            if context and self.config.interactive:
                 self.use_user_messages(context)
             self.run_iteration(context=context)
 

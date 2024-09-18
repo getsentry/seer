@@ -40,7 +40,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         agent = ClaudeAgent(
             tools=tools.get_tools(),
-            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg()),
+            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg(), interactive=True),
         )
 
         task_str = (
