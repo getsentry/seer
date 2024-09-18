@@ -13,6 +13,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingRequest,
 )
 from seer.automation.component import BaseComponent
+from seer.automation.utils import extract_parsed_model
 from seer.dependency_injection import inject, injected
 
 
@@ -115,14 +116,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 total_tokens=completion.usage.total_tokens,
             )
             cur.usage += usage
-        structured_message = completion.choices[0].message
-        if structured_message.refusal:
-            raise RuntimeError(structured_message.refusal)
-        if not structured_message.parsed:
-            raise RuntimeError("Failed to parse message")
-
-        res = completion.choices[0].message.parsed
-
+        res = extract_parsed_model(completion)
         response = InsightSharingOutput(
             insight=insight,
             justification=res.explanation,

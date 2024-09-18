@@ -126,8 +126,6 @@ class BaseStep(BaseModel):
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
-        print("HELLO user message")
-        print(self.queued_user_messages)
 
     def find_child(self, *, id: str) -> "Step | None":
         for step in self.progress:
