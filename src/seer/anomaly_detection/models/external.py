@@ -92,7 +92,7 @@ class StoreDataResponse(BaseModel):
 
 class DeleteAlertDataRequest(BaseModel):
     organization_id: int
-    project_id: int
+    project_id: Optional[int] = Field(None)
     alert: AlertInSeer
 
 
