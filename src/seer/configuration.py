@@ -69,6 +69,9 @@ class AppConfig(BaseModel):
 
     SMOKE_CHECK: ParseBool = False
 
+    # Super access token for developing against, won't be available in final production setup.
+    CODECOV_SUPER_TOKEN: str = ""
+
     @cached_property
     def smoke_test_id(self) -> str:
         return str(uuid.uuid4())
