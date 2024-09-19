@@ -34,7 +34,7 @@ class TestGrouping(unittest.TestCase):
                 message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
             session.commit()
 
         grouping_request = GroupingRequest(
@@ -122,11 +122,9 @@ class TestGrouping(unittest.TestCase):
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
-            session.commit()
+            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
             # Re-insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
-            session.commit()
+            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
             matching_record = (
                 session.query(DbGroupingRecord)
                 .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
@@ -150,10 +148,8 @@ class TestGrouping(unittest.TestCase):
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request1, embedding)
-            session.commit()
-            grouping_lookup().insert_new_grouping_record(session, grouping_request2, embedding)
-            session.commit()
+            grouping_lookup().insert_new_grouping_record(grouping_request1, embedding)
+            grouping_lookup().insert_new_grouping_record(grouping_request2, embedding)
             matching_record = (
                 session.query(DbGroupingRecord)
                 .filter_by(hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD")
@@ -293,8 +289,7 @@ class TestGrouping(unittest.TestCase):
                 message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
-            session.commit()
+            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
 
         # Create record data to attempt to be inserted, create 5 with the stacktrace "stacktrace"
         hashes = [str(i) * 32 for i in range(10)]
