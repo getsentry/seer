@@ -40,7 +40,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
     def _generate_tests(self, agent: LlmAgent, prompt: str) -> str:
         return agent.run(prompt=prompt)
 
-    def invoke(self, request: CodeUnitTestRequest) -> CodeUnitTestOutput | None:
+    def invoke(self, request: CodeUnitTestRequest, codecov_client_params: dict | None = None) -> CodeUnitTestOutput | None:
         langfuse_context.update_current_trace(user_id="ram")
         tools = BaseTools(self.context)
 
@@ -51,16 +51,28 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             ),
         )
 
-        code_coverage_data = None
+        code_coverage_data = CodecovClient.fetch_coverage(
+            repo_name=codecov_client_params["repo_name"],
+            pullid=codecov_client_params["pullid"],
+            owner_username=codecov_client_params["owner_username"]
+        )
 
-        if request.codecov_client_params:
-            code_coverage_data = CodecovClient.fetch_coverage(
-                repo_name=request.codecov_client_params.repo_name,
-                pullid=request.codecov_client_params.pullid,
-                owner_username=request.codecov_client_params.owner_username
-            )
+        # test_result_data = CodecovClient.fetch_test_results_for_commit(
+        #     repo_name=codecov_client_params["repo_name"],
+        #     pullid=codecov_client_params["pullid"],
+        #     owner_username=codecov_client_params["owner_username"]
+        # )
 
         print(code_coverage_data)
+
+
+        # if request.codecov_client_params:
+        #     code_coverage_data = CodecovClient.fetch_coverage(
+        #         repo_name=request.codecov_client_params.repo_name,
+        #         pullid=request.codecov_client_params.pullid,
+        #         owner_username=request.codecov_client_params.owner_username
+        #     )
+
         # Add codecov data to prompt
 
         existing_test_design_response = self._get_test_design_summary(

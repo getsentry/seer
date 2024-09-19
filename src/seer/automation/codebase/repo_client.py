@@ -49,7 +49,6 @@ def get_repo_app_permissions(
 @inject
 def get_github_token_auth(config: AppConfig = injected) -> Auth.Token | None:
     github_token = config.GITHUB_TOKEN
-
     if github_token is None:
         return None
 
@@ -449,5 +448,4 @@ class RepoClient:
         data = requests.get(pr_url, headers=headers)
 
         data.raise_for_status()  # Raise an exception for HTTP errors
-
         return data.text

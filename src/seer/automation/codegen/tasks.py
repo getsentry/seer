@@ -36,7 +36,6 @@ def codegen_unittest(request: CodegenUnitTestsRequest):
         run_id=cur_state.run_id,
         pr_id=request.pr_id,
         repo_definition=request.repo,
-        with_coverage_context=request.with_coverage_context,
     )
     UnittestStep.get_signature(unittest_request, queue=CeleryQueues.DEFAULT).apply_async()
 

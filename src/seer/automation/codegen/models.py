@@ -31,7 +31,6 @@ class CodeUnitTestOutput(BaseComponentOutput):
 class CodegenUnitTestsRequest(BaseModel):
     repo: RepoDefinition
     pr_id: int  # The PR number
-    codecov_client_params: dict | None = None
 
 
 class CodegenContinuation(CodegenState):
@@ -46,7 +45,6 @@ class CodegenContinuation(CodegenState):
 
 class CodeUnitTestRequest(BaseComponentRequest):
     diff: str
-    should_fetch_coverage_context: bool
 
 
 class CodegenUnitTestsResponse(BaseModel):

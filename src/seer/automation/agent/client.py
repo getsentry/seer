@@ -177,7 +177,6 @@ class ClaudeClient(LlmClient):
             )
 
         claude_messages = self._format_messages_for_claude_input(messages)
-
         # ask Claude for a response
         params: dict[str, Any] = {
             "model": model,
@@ -198,7 +197,6 @@ class ClaudeClient(LlmClient):
             prompt_tokens=completion.usage.input_tokens,
             total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
         )
-
         langfuse_context.update_current_observation(model=model, usage=usage)
 
         return message, usage
