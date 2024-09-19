@@ -13,6 +13,9 @@ from seer.automation.agent.agent import (
 from seer.automation.agent.client import ClaudeClient, GptClient, LlmClient, T
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
+from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
+from seer.automation.autofix.models import DefaultStep
 from seer.dependency_injection import resolve
 
 
@@ -131,7 +134,7 @@ class TestGptAgent:
 
     @pytest.fixture
     def config(self):
-        return AgentConfig()
+        return AgentConfig(interactive=True)
 
     @pytest.fixture
     def agent(self, agent_and_client_classes, config):
@@ -143,17 +146,80 @@ class TestGptAgent:
         _, client_class = agent_and_client_classes
         return resolve(client_class)
 
-    def test_run_iteration(self, agent, mock_client):
+    @pytest.fixture
+    def mock_context(self):
+        context = MagicMock(spec=AutofixContext)
+        state = MagicMock()
+        state.steps = [DefaultStep(title="Test step title")]
+        state.get_all_insights.return_value = []
+        state.get_step_description.return_value = "Test step"
+        context.state = MagicMock()
+        context.state.get.return_value = state
+        return context
+
+    @patch("seer.automation.agent.agent.InsightSharingComponent")
+    def test_run_iteration(self, mock_insight_sharing, agent, mock_context):
+        # Mock the message and usage
         mock_message = Message(role="assistant", content="Test response")
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
+        agent.get_completion = MagicMock(return_value=(mock_message, mock_usage))
 
-        agent.run_iteration()
+        # Mock the insight sharing component
+        mock_insight_card = MagicMock()
+        mock_insight_sharing_instance = MagicMock()
+        mock_insight_sharing_instance.invoke.return_value = mock_insight_card
+        mock_insight_sharing.return_value = mock_insight_sharing_instance
+        agent.call_tool = MagicMock(return_value=None)
 
+        # Run the method
+        agent.run_iteration(context=mock_context)
+
+        # Assertions
         assert agent.iterations == 1
         assert len(agent.memory) == 1
         assert agent.memory[0] == mock_message
         assert agent.usage == mock_usage
+
+        # Check if insight sharing was called
+        mock_insight_sharing.assert_called_once_with(mock_context)
+        mock_insight_sharing_instance.invoke.assert_called_once()
+        assert isinstance(
+            mock_insight_sharing_instance.invoke.call_args[0][0], InsightSharingRequest
+        )
+
+        # Check if the insight was added to the step
+        assert mock_context.state.get().steps[-1].insights[-1] == mock_insight_card
+
+        # Check if tool calls were not made
+        agent.call_tool.assert_not_called()
+
+    def test_run_iteration_with_queued_user_messages(self, agent, mock_client, mock_context):
+        # Create a mock step with queued_user_messages as a list of strings
+        mock_step = MagicMock(spec=DefaultStep)
+        mock_step.queued_user_messages = ["User message 1", "User message 2"]
+
+        # Set the mock step as the last step in the context
+        mock_context.state.get().steps = [mock_step]
+
+        agent.use_user_messages = MagicMock()
+
+        mock_message = Message(role="assistant", content="Test response")
+        mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
+        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
+
+        # Run the method
+        agent.run_iteration(context=mock_context)
+
+        # Assertions
+        agent.use_user_messages.assert_called_once_with(mock_context)
+        assert agent.iterations == 0  # Should not increment
+        assert len(agent.memory) == 0  # Should not add to memory
+
+        # Additional assertion to verify the queued_user_messages
+        assert mock_context.state.get().steps[-1].queued_user_messages == [
+            "User message 1",
+            "User message 2",
+        ]
 
     def test_get_completion(self, agent, mock_client):
         mock_message = Message(role="assistant", content="Test response")

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC
-from typing import Optional
+from typing import Optional, cast
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +15,9 @@ from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.utils import extract_text_inside_tags
+from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
+from seer.automation.autofix.models import DefaultStep
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -30,6 +32,7 @@ class AgentConfig(BaseModel):
     stop_message: Optional[str] = Field(
         default=None, description="Message that signals the agent to stop"
     )
+    interactive: bool = False  # enables interactive user-facing features
 
     class Config:
         validate_assignment = True
@@ -61,26 +64,51 @@ class LlmAgent(ABC):
             tools=(self.tools if len(self.tools) > 0 else None),
         )
 
+    def use_user_messages(self, context: AutofixContext):
+        # adds any queued user messages to the memory
+        user_msgs = context.state.get().steps[-1].queued_user_messages
+        if user_msgs:
+            self.memory.append(Message(content="\n".join(user_msgs), role="user"))
+            with context.state.update() as cur:
+                cur.steps[-1].queued_user_messages = []
+            context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
+
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
         message, usage = self.get_completion()
 
+        # interrupt if user message is queued and awaiting handling
+        if context and context.state.get().steps[-1].queued_user_messages:
+            self.use_user_messages(context)
+            return
+
         self.memory.append(message)
 
         # log thoughts to the user
-        if message.content and context:
+        if message.content and context and self.config.interactive:
             text_before_tag = message.content.split("<")[0]
-            logs_inside_tags = extract_text_inside_tags(
-                message.content, "log", strip_newlines=False
-            )
-            text = ""
-            if logs_inside_tags:
-                text = logs_inside_tags
-            elif text_before_tag:
-                text = text_before_tag
+            text = text_before_tag
             if text:
-                context.event_manager.add_log(text)
+                # call LLM separately with the same memory to generate structured output insight cards
+                insight_sharing = InsightSharingComponent(context)
+                past_insights = context.state.get().get_all_insights()
+                insight_card = insight_sharing.invoke(
+                    InsightSharingRequest(
+                        latest_thought=text,
+                        memory=self.memory,
+                        task_description=context.state.get().get_step_description(),
+                        past_insights=past_insights,
+                    )
+                )
+                if insight_card:
+                    if context.state.get().steps and isinstance(
+                        context.state.get().steps[-1], DefaultStep
+                    ):
+                        step = cast(DefaultStep, context.state.get().steps[-1])
+                        step.insights.append(insight_card)
+                        with context.state.update() as cur:
+                            cur.steps[-1] = step
 
         if message.tool_calls:
             for tool_call in message.tool_calls:
@@ -121,6 +149,8 @@ class LlmAgent(ABC):
         self.reset_iterations()
 
         while self.should_continue():
+            if context and self.config.interactive:
+                self.use_user_messages(context)
             self.run_iteration(context=context)
 
         if self.iterations == self.config.max_iterations:

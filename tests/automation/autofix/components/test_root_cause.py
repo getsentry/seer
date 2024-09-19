@@ -45,16 +45,12 @@ class TestRootCauseComponent:
                             function_call=None,
                             tool_calls=None,
                             parsed=MultipleRootCauseAnalysisOutputPrompt(
-                                causes=[
-                                    RootCauseAnalysisItemPrompt(
-                                        title="Missing Null Check",
-                                        description="The root cause of the issue is ...",
-                                        likelihood=0.9,
-                                        actionability=1.0,
-                                        reproduction="Steps to reproduce",
-                                        relevant_code=None,
-                                    )
-                                ]
+                                cause=RootCauseAnalysisItemPrompt(
+                                    title="Missing Null Check",
+                                    description="The root cause of the issue is ...",
+                                    reproduction="Steps to reproduce",
+                                    relevant_code=None,
+                                )
                             ),
                             refusal=None,
                         ),
@@ -78,8 +74,6 @@ class TestRootCauseComponent:
             assert len(output.causes) == 1
             assert output.causes[0].title == "Missing Null Check"
             assert output.causes[0].description == "The root cause of the issue is ..."
-            assert output.causes[0].likelihood == 0.9
-            assert output.causes[0].actionability == 1.0
             assert output.causes[0].reproduction == "Steps to reproduce"
             assert output.causes[0].code_context is None
 
