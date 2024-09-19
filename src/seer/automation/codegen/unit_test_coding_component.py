@@ -57,23 +57,15 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             owner_username=codecov_client_params["owner_username"]
         )
 
-        # test_result_data = CodecovClient.fetch_test_results_for_commit(
-        #     repo_name=codecov_client_params["repo_name"],
-        #     pullid=codecov_client_params["pullid"],
-        #     owner_username=codecov_client_params["owner_username"]
-        # )
+        test_result_data = CodecovClient.fetch_test_results_for_commit(
+            repo_name=codecov_client_params["repo_name"],
+            pullid=codecov_client_params["pullid"],
+            owner_username=codecov_client_params["owner_username"],
+            latest_commit_sha="SHA GOES HERE"
+        )
 
-        print(code_coverage_data)
-
-
-        # if request.codecov_client_params:
-        #     code_coverage_data = CodecovClient.fetch_coverage(
-        #         repo_name=request.codecov_client_params.repo_name,
-        #         pullid=request.codecov_client_params.pullid,
-        #         owner_username=request.codecov_client_params.owner_username
-        #     )
-
-        # Add codecov data to prompt
+        print(code_coverage_data, test_result_data)
+        # Pass this into format_plan_step_msg if they exist. Then combine the prompts
 
         existing_test_design_response = self._get_test_design_summary(
             agent=agent,
@@ -83,7 +75,9 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         )
 
         self._get_plan(
-            agent=agent, prompt=CodingUnitTestPrompts.format_plan_step_msg(diff_str=request.diff)
+            agent=agent, prompt=CodingUnitTestPrompts.format_plan_step_msg(
+                diff_str=request.diff
+            )
         )
 
         final_response = self._generate_tests(
