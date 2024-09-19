@@ -1,11 +1,10 @@
 import requests
 
-#TODO: Look into supertoken, fetch actual token
 
-SUPERTOKEN = 'A98FAA96-BFD2-486F-AD4C-217F91CF8A3D'
+CODECOV_TOKEN = 'FETCH FROM ENV'
 class CodecovClient:
     @staticmethod
-    def fetch_coverage(owner_username, repo_name, pullid, token=SUPERTOKEN):
+    def fetch_coverage(owner_username, repo_name, pullid, token=CODECOV_TOKEN):
         url = f"https://api.codecov.io/api/v2/github/{owner_username}/repos/{repo_name}/pulls/{pullid}"
         headers = {
             "Authorization": f"Bearer {token}",
@@ -18,7 +17,7 @@ class CodecovClient:
             response.raise_for_status()
 
     @staticmethod
-    def fetch_test_results_for_commit(owner_username, repo_name, latest_commit_sha, token=SUPERTOKEN):
+    def fetch_test_results_for_commit(owner_username, repo_name, latest_commit_sha, token=CODECOV_TOKEN):
         url = f"https://api.codecov.io/api/v2/github/{owner_username}/repos/{repo_name}/test-results"
         headers = {
             "Authorization": f"Bearer {token}",
