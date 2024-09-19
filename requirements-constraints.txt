@@ -1,20 +1,19 @@
-# Packages that are only effectively used by production models can be
-# added to model.requirements.txt (in addition to this file).
-# They will not be built in PR test runs (but they will be built in master)
+# Ideally, move to using open constraints, such as 1.* or >=2.3,<3
+# when specifying packages, so that we can update them on a regular basis.
 
-certifi==2023.7.22
-charset-normalizer==2.0.12
-click==8.1.7
-contourpy==1.1.0
+certifi
+charset-normalizer==2.*
+click==8.1.*
+contourpy==1.1.*
 convertdate==2.4.0
 cycler==0.11.0
 Cython==3.0.2
 ephem==4.1.4
 filelock==3.12.2
-Flask==2.2.5
+Flask==2.2.*
 fonttools==4.43.0
 fsspec==2023.6.0
-gunicorn==22.0.0
+gunicorn==22.*
 holidays==0.31
 idna
 importlib-resources==6.0.1
@@ -62,7 +61,7 @@ tree_sitter_languages==1.10.2
 urllib3==1.26.19
 Werkzeug==3.0.3
 pytest==7.4.3
-pydantic==2.6.2
+pydantic==2.6.*
 mypy==1.8.0
 mypy-extensions==1.0.0
 openapi-core==0.18.2
@@ -93,20 +92,20 @@ Flask-Migrate==4.0.5
 Flask-SQLAlchemy==3.1.1
 types-Flask-Migrate==4.0.0.20240205
 pytest-asyncio==0.23.5
-aiohttp==3.9.4
+aiohttp==3.*
 types-python-dateutil==2.8.19.20240106
-johen==0.1.5
+johen==0.1.*
 pydantic-xml==2.9.0
 chromadb==0.4.14
-google-cloud-storage==2.16.0
-google-cloud-aiplatform==1.67.0
-google-cloud-secret-manager==2.20.2
+google-cloud-storage==2.*
+google-cloud-aiplatform==1.*
+google-cloud-secret-manager==2.*
 anthropic[vertex]==0.31.2
 langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
 watchdog
 stumpy==1.13.0
 pytest_alembic==0.11.1
-cryptography==43.0.1
+cryptography==43.*
 pip-tools==7.4.1
 sentry-protos>=0.1.21
 protobuf>=5.27.3

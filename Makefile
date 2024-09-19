@@ -91,7 +91,7 @@ gocd: ## Build GoCD pipelines
 .PHONY: gocd
 
 upgrade-package-versions:
-	pip-compile requirements-constraints.txt -o requirements.txt
+	pip-compile --upgrade --strip-extras --quiet requirements-constraints.txt -o requirements.txt
 
 HEAD_SHA:=$(shell git rev-parse --short HEAD)
 TIME:=$(shell date +%F.%T)
