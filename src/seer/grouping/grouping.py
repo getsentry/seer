@@ -11,6 +11,7 @@ import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from torch.cuda import OutOfMemoryError
 
 from seer.db import DbGroupingRecord, Session
@@ -477,7 +478,6 @@ class GroupingLookup:
     ) -> None:
         """
         Inserts a new GroupingRecord into the database if the group_hash does not already exist.
-        If new grouping record was created, return the id.
 
         :param session: The database session.
         :param issue: The issue to insert as a new GroupingRecord.
@@ -489,6 +489,12 @@ class GroupingLookup:
             .first()
         )
 
+        extra = {
+            "project_id": issue.project_id,
+            "stacktrace_length": len(issue.stacktrace),
+            "input_hash": issue.hash,
+        }
+
         if existing_record is None:
             new_record = GroupingRecord(
                 project_id=issue.project_id,
@@ -498,15 +504,26 @@ class GroupingLookup:
                 error_type=issue.exception_type,
             ).to_db_model()
             session.add(new_record)
+
+            try:
+                session.flush()
+            except IntegrityError:
+                session.expunge(new_record)
+                existing_record = (
+                    session.query(DbGroupingRecord)
+                    .filter_by(hash=issue.hash, project_id=issue.project_id)
+                    .first()
+                )
+                extra["existing_hash"] = existing_record.hash
+                logger.info(
+                    "group_already_exists_in_seer_db",
+                    extra=extra,
+                )
         else:
+            extra["existing_hash"] = existing_record.hash
             logger.info(
                 "group_already_exists_in_seer_db",
-                extra={
-                    "existing_hash": existing_record.hash,
-                    "project_id": issue.project_id,
-                    "stacktrace_length": len(issue.stacktrace),
-                    "input_hash": issue.hash,
-                },
+                extra=extra,
             )
 
     @sentry_sdk.tracing.trace
