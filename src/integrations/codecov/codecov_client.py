@@ -1,37 +1,37 @@
 import requests
 
 
-CODECOV_TOKEN = 'FETCH FROM ENV'
+CODECOV_TOKEN = "FETCH FROM ENV"
+
+
 class CodecovClient:
     @staticmethod
     def fetch_coverage(owner_username, repo_name, pullid, token=CODECOV_TOKEN):
         url = f"https://api.codecov.io/api/v2/github/{owner_username}/repos/{repo_name}/pulls/{pullid}"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            return response.json()
+            return response.text
         else:
-            response.raise_for_status()
+            return None
 
     @staticmethod
-    def fetch_test_results_for_commit(owner_username, repo_name, latest_commit_sha, token=CODECOV_TOKEN):
-        url = f"https://api.codecov.io/api/v2/github/{owner_username}/repos/{repo_name}/test-results"
+    def fetch_test_results_for_commit(
+        owner_username, repo_name, latest_commit_sha, token=CODECOV_TOKEN
+    ):
+        url = f"https://api.codecov.io/api/v2/github/{owner_username}/repos/{repo_name}/test-results?commit_id={latest_commit_sha}&outcome=failure"
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
-            latest_commit_sha: latest_commit_sha,
         }
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            return response.json()
+            if response.json()["count"] == 0:
+                return None
+            return response.text
         else:
-            response.raise_for_status()
-
+            return None
 
     @staticmethod
     def ping():
         return "pong"
-

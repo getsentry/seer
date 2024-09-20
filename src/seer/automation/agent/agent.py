@@ -36,7 +36,6 @@ class AgentConfig(BaseModel):
 
 
 class LlmAgent(ABC):
-
     def __init__(
         self,
         config: AgentConfig,

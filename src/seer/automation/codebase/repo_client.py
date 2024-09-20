@@ -61,7 +61,6 @@ def get_write_app_credentials(config: AppConfig = injected) -> tuple[int | str |
     private_key = config.GITHUB_PRIVATE_KEY
 
     if not app_id or not private_key:
-
         return None, None
 
     return app_id, private_key
@@ -449,3 +448,14 @@ class RepoClient:
 
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.text
+
+    def get_pr_head_sha(self, pr_url: str) -> str:
+        requester = self.repo._requester
+        headers = {
+            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
+            "Accept": "application/vnd.github.raw+json",
+        }
+
+        data = requests.get(pr_url, headers=headers)
+        data.raise_for_status()  # Raise an exception for HTTP errors
+        return data.json()["head"]["sha"]
