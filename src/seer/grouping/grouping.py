@@ -11,7 +11,6 @@ import torch
 from pydantic import BaseModel, ValidationInfo, field_validator
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError
 from torch.cuda import OutOfMemoryError
 
 from seer.db import DbGroupingRecord, Session
@@ -481,48 +480,20 @@ class GroupingLookup:
         :param embedding: The embedding of the stacktrace.
         """
         with Session() as session:
-            existing_record = (
-                session.query(DbGroupingRecord)
-                .filter_by(hash=issue.hash, project_id=issue.project_id)
-                .first()
+            insert_stmt = insert(DbGroupingRecord).values(
+                project_id=issue.project_id,
+                message=issue.message,
+                stacktrace_embedding=embedding,
+                hash=issue.hash,
+                error_type=issue.exception_type,
             )
 
-            extra = {
-                "project_id": issue.project_id,
-                "stacktrace_length": len(issue.stacktrace),
-                "input_hash": issue.hash,
-            }
-
-            if existing_record is None:
-                new_record = GroupingRecord(
-                    project_id=issue.project_id,
-                    message=issue.message,
-                    stacktrace_embedding=embedding,
-                    hash=issue.hash,
-                    error_type=issue.exception_type,
-                ).to_db_model()
-                session.add(new_record)
-
-                try:
-                    session.commit()
-                except IntegrityError:
-                    session.rollback()
-                    existing_record = (
-                        session.query(DbGroupingRecord)
-                        .filter_by(hash=issue.hash, project_id=issue.project_id)
-                        .first()
-                    )
-                    extra["existing_hash"] = existing_record.hash
-                    logger.info(
-                        "group_already_exists_in_seer_db",
-                        extra=extra,
-                    )
-            else:
-                extra["existing_hash"] = existing_record.hash
-                logger.info(
-                    "group_already_exists_in_seer_db",
-                    extra=extra,
+            session.execute(
+                insert_stmt.on_conflict_do_nothing(
+                    index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
                 )
+            )
+            session.commit()
 
     @sentry_sdk.tracing.trace
     def delete_grouping_records_for_project(self, project_id: int) -> bool:
