@@ -36,6 +36,7 @@ class AgentConfig(BaseModel):
 
 
 class LlmAgent(ABC):
+
     def __init__(
         self,
         config: AgentConfig,
@@ -62,6 +63,7 @@ class LlmAgent(ABC):
 
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
+
         message, usage = self.get_completion()
 
         self.memory.append(message)
@@ -125,6 +127,7 @@ class LlmAgent(ABC):
             raise MaxIterationsReachedException(
                 f"Agent {self.name} reached maximum iterations without finishing."
             )
+
         return self.get_last_message_content()
 
     def reset_iterations(self):
