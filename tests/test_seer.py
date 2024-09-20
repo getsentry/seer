@@ -354,9 +354,11 @@ class TestSeer(unittest.TestCase):
             ]
         }
         with Session() as session:
-            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
         assert len(records) == 1
-        assert records.first().hash == hashes[0]
+        assert records[0].hash == hashes[0]
 
     def test_similarity_grouping_record_endpoint_valid(self):
         """Test the similarity grouping record endpoint"""
