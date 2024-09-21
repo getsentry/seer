@@ -1,8 +1,8 @@
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.detectors import (
     MinMaxNormalizer,
+    MPCascadingScorer,
     MPConfig,
-    MPIRQScorer,
     MPScorer,
     MPUtils,
     Normalizer,
@@ -22,7 +22,7 @@ def alert_data_accessor_provider() -> AlertDataAccessor:
 
 @anomaly_detection_module.provider
 def mp_scorer_provider() -> MPScorer:
-    return MPIRQScorer()
+    return MPCascadingScorer()
 
 
 @anomaly_detection_module.provider

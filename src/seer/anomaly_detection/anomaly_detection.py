@@ -26,6 +26,7 @@ from seer.anomaly_detection.models.external import (
 )
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError, ServerError
+from seer.tags import AnomalyDetectionModes, AnomalyDetectionTags
 
 anomaly_detection_module.enable()
 logger = logging.getLogger(__name__)
@@ -226,16 +227,16 @@ class AnomalyDetection(BaseModel):
             Anomaly detection request that has either a complete time series or an alert reference.
         """
         if isinstance(request.context, AlertInSeer):
-            mode = "streaming.alert"
+            mode = AnomalyDetectionModes.STREAMING_ALERT
         elif isinstance(request.context, TimeSeriesWithHistory):
-            mode = "streaming.ts_with_history"
+            mode = AnomalyDetectionModes.STREAMING_TS_WITH_HISTORY
         else:
-            mode = "batch.ts_full"
+            mode = AnomalyDetectionModes.BATCH_TS_FULL
 
-        sentry_sdk.set_tag("ad_mode", mode)
+        sentry_sdk.set_tag(AnomalyDetectionTags.MODE, mode)
 
         if isinstance(request.context, AlertInSeer):
-            sentry_sdk.set_tag("alert_id", request.context.id)
+            sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
             ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
             ts, anomalies = self._combo_detect(request.context, request.config)
@@ -255,6 +256,7 @@ class AnomalyDetection(BaseModel):
         request: StoreDataRequest
             Alert information along with underlying time series data
         """
+        sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
         # Ensure we have at least 7 days of data in the time series
         min_len = self._min_required_timesteps(request.config.time_period)
         if len(request.timeseries) < min_len:
@@ -302,5 +304,6 @@ class AnomalyDetection(BaseModel):
         request: DeleteAlertDataRequest
             Alert to clear
         """
+        sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
         alert_data_accessor.delete_alert_data(external_alert_id=request.alert.id)
         return DeleteAlertDataResponse(success=True)

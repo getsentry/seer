@@ -8,16 +8,16 @@ from seer.anomaly_detection.detectors import (
 )
 
 AnomalyDetector = anomaly_detectors.AnomalyDetector
-DummyAnomalyDetector = anomaly_detectors.DummyAnomalyDetector
 MPConfig = mp_config.MPConfig
 MPBatchAnomalyDetector = anomaly_detectors.MPBatchAnomalyDetector
 MPStreamAnomalyDetector = anomaly_detectors.MPStreamAnomalyDetector
 
 WindowSizeSelector = window_size_selectors.WindowSizeSelector
 SuSSWindowSizeSelector = window_size_selectors.SuSSWindowSizeSelector
-
+FlagsAndScores = mp_scorers.FlagsAndScores
 MPScorer = mp_scorers.MPScorer
 MPIRQScorer = mp_scorers.MPIRQScorer
+MPCascadingScorer = mp_scorers.MPCascadingScorer
 
 Normalizer = normalizers.Normalizer
 MinMaxNormalizer = normalizers.MinMaxNormalizer
