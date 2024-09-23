@@ -17,7 +17,7 @@ from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
-from integrations.codecov import CodecovClient
+from integrations.codecov.codecov_client import CodecovClient
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,6 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             owner_username=codecov_client_params["owner_username"],
             latest_commit_sha=codecov_client_params["head_sha"],
         )
-
-        # Pass this into format_plan_step_msg if they exist. Then combine the prompts
 
         existing_test_design_response = self._get_test_design_summary(
             agent=agent,
