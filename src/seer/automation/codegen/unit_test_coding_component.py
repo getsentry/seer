@@ -40,9 +40,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
     def _generate_tests(self, agent: LlmAgent, prompt: str) -> str:
         return agent.run(prompt=prompt)
 
-    def invoke(
-        self, request: CodeUnitTestRequest, codecov_client_params: dict | None = None
-    ) -> CodeUnitTestOutput | None:
+    def invoke(self, request: CodeUnitTestRequest) -> CodeUnitTestOutput | None:
         langfuse_context.update_current_trace(user_id="ram")
         tools = BaseTools(self.context)
 
@@ -52,6 +50,8 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 system_prompt=CodingUnitTestPrompts.format_system_msg(), max_iterations=24
             ),
         )
+
+        codecov_client_params = request.codecov_client_params
 
         code_coverage_data = CodecovClient.fetch_coverage(
             repo_name=codecov_client_params["repo_name"],

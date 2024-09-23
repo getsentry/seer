@@ -67,8 +67,8 @@ class UnittestStep(CodegenStep):
         unittest_output = UnitTestCodingComponent(self.context).invoke(
             CodeUnitTestRequest(
                 diff=diff_content,
+                codecov_client_params=codecov_client_params,
             ),
-            codecov_client_params=codecov_client_params,
         )
 
         if unittest_output:
