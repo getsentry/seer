@@ -16,7 +16,7 @@ WindowSizeSelector = window_size_selectors.WindowSizeSelector
 SuSSWindowSizeSelector = window_size_selectors.SuSSWindowSizeSelector
 FlagsAndScores = mp_scorers.FlagsAndScores
 MPScorer = mp_scorers.MPScorer
-MPIRQScorer = mp_scorers.MPIRQScorer
+MPIRQScorer = mp_scorers.MPIQRScorer
 MPCascadingScorer = mp_scorers.MPCascadingScorer
 
 Normalizer = normalizers.Normalizer

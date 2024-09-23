@@ -54,7 +54,7 @@ class LowVarianceScorer(MPScorer):
     """
 
     variance_threshold: float = Field(
-        0.0001, description="Minimum variance required in order to use IRQ based scoring"
+        0.0001, description="Minimum variance required in order to use IQR based scoring"
     )
 
     def _to_flag_and_score(
@@ -108,7 +108,7 @@ class LowVarianceScorer(MPScorer):
         return FlagsAndScores(flags=[flag], scores=[score])
 
 
-class MPIRQScorer(MPScorer):
+class MPIQRScorer(MPScorer):
 
     def batch_score(
         self,
@@ -266,11 +266,11 @@ class MPIRQScorer(MPScorer):
 
 class MPCascadingScorer(MPScorer):
     """
-    This class combines the results of the LowVarianceScorer and the MPIRQScorer.
+    This class combines the results of the LowVarianceScorer and the MPIQRScorer.
     """
 
     scorers: list[MPScorer] = Field(
-        [LowVarianceScorer(), MPIRQScorer()], description="The list of scorers to cascade"
+        [LowVarianceScorer(), MPIQRScorer()], description="The list of scorers to cascade"
     )
 
     def batch_score(
