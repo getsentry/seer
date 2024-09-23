@@ -66,6 +66,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 RootCauseAnalysisPrompts.reproduction_prompt_msg(),
             )
 
+            self.context.store_memory("root_cause_analysis", agent.memory)
+
             response = gpt_client.openai_client.beta.chat.completions.parse(
                 messages=[
                     message.to_message()

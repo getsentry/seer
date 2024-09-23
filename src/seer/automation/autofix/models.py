@@ -8,12 +8,13 @@ from johen.examples import Examples
 from johen.generators import specialized
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from seer.automation.agent.models import Usage
+from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
 from seer.automation.summarize.issue import IssueSummary
+from seer.db import DbRunMemory
 
 
 class FileChangeError(Exception):
@@ -432,3 +433,15 @@ class AutofixContinuation(AutofixGroupState):
                 < now
             )
         return False
+
+
+class AutofixRunMemory(BaseModel):
+    run_id: int
+    memory: dict[str, list[Message]] = Field(default_factory=dict)
+
+    def to_db_model(self) -> DbRunMemory:
+        return DbRunMemory(run_id=self.run_id, value=self.model_dump(mode="json"))
+
+    @classmethod
+    def from_db_model(cls, model: DbRunMemory) -> "AutofixRunMemory":
+        return cls.model_validate(model.value)
