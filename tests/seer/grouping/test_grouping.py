@@ -170,7 +170,7 @@ class TestGrouping(unittest.TestCase):
                 hash=hash,
             )
             # Insert the grouping record
-            grouping_lookup().insert_new_grouping_record(session, grouping_request, embedding)
+            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
             session.commit()
 
             created_record = (
