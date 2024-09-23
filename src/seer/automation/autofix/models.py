@@ -1,18 +1,20 @@
 import datetime
 import enum
 import uuid
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union, cast
 
 from johen import gen
 from johen.examples import Examples
 from johen.generators import specialized
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from seer.automation.agent.models import Usage
+from seer.automation.agent.models import Message, Usage
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
 from seer.automation.summarize.issue import IssueSummary
+from seer.db import DbRunMemory
 
 
 class FileChangeError(Exception):
@@ -121,6 +123,11 @@ class BaseStep(BaseModel):
     progress: list["ProgressItem | Step"] = Field(default_factory=list)
     completedMessage: Optional[str] = None
 
+    queued_user_messages: list[str] = []
+
+    def receive_user_message(self, message: str):
+        self.queued_user_messages.append(message)
+
     def find_child(self, *, id: str) -> "Step | None":
         for step in self.progress:
             if isinstance(step, (DefaultStep, RootCauseStep, ChangesStep)) and step.id == id:
@@ -158,6 +165,7 @@ class BaseStep(BaseModel):
 
 class DefaultStep(BaseStep):
     type: Literal[StepType.DEFAULT] = StepType.DEFAULT
+    insights: list[InsightSharingOutput] = []
 
 
 class RootCauseStep(BaseStep):
@@ -271,6 +279,7 @@ class AutofixRequest(BaseModel):
 class AutofixUpdateType(str, enum.Enum):
     SELECT_ROOT_CAUSE = "select_root_cause"
     CREATE_PR = "create_pr"
+    USER_MESSAGE = "user_message"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -285,15 +294,35 @@ class AutofixCreatePrUpdatePayload(BaseModel):
     repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 
 
+class AutofixUserMessagePayload(BaseModel):
+    type: Literal[AutofixUpdateType.USER_MESSAGE]
+    text: str
+
+
 class AutofixUpdateRequest(BaseModel):
     run_id: int
-    payload: Union[AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload] = Field(
-        discriminator="type"
-    )
+    payload: Union[
+        AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload, AutofixUserMessagePayload
+    ] = Field(discriminator="type")
 
 
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
+
+    def get_step_description(self) -> str:
+        if not self.steps:
+            return ""
+        step = self.steps[-1]
+        if step.type == StepType.DEFAULT and step.key == "root_cause_analysis_processing":
+            return "figuring out what is causing the issue (not thinking about solutions yet)"
+        elif step.type == StepType.DEFAULT and step.key == "plan":
+            return "coming up with a fix for the issue"
+        elif step.type == StepType.ROOT_CAUSE_ANALYSIS:
+            return "selecting the final root cause"
+        elif step.type == StepType.CHANGES:
+            return "writing the code changes to fix the issue"
+        else:
+            return ""
 
     def find_step(self, *, id: str | None = None, key: str | None = None) -> Step | None:
         for step in self.steps[::-1]:
@@ -374,6 +403,14 @@ class AutofixContinuation(AutofixGroupState):
             codebase.file_changes = []
             self.codebases[key] = codebase
 
+    def get_all_insights(self):
+        insights = []
+        step = self.steps[-1]
+        if step.status != AutofixStatus.ERROR and isinstance(step, DefaultStep):
+            for insight in cast(DefaultStep, step).insights:
+                insights.append(insight.insight)
+        return insights
+
     @property
     def is_running(self):
         return self.status == AutofixStatus.PROCESSING
@@ -396,3 +433,15 @@ class AutofixContinuation(AutofixGroupState):
                 < now
             )
         return False
+
+
+class AutofixRunMemory(BaseModel):
+    run_id: int
+    memory: dict[str, list[Message]] = Field(default_factory=dict)
+
+    def to_db_model(self) -> DbRunMemory:
+        return DbRunMemory(run_id=self.run_id, value=self.model_dump(mode="json"))
+
+    @classmethod
+    def from_db_model(cls, model: DbRunMemory) -> "AutofixRunMemory":
+        return cls.model_validate(model.value)

@@ -13,7 +13,7 @@ aiohttp==3.10.5
     #   fsspec
 aiosignal==1.3.1
     # via aiohttp
-alembic==1.13.2
+alembic==1.13.3
     # via
     #   flask-migrate
     #   pytest-alembic
@@ -23,7 +23,7 @@ annotated-types==0.7.0
     # via pydantic
 anthropic==0.31.2
     # via -r requirements-constraints.txt
-anyio==4.4.0
+anyio==4.6.0
     # via
     #   anthropic
     #   httpx
@@ -44,7 +44,7 @@ backoff==2.2.1
     #   posthog
 bcrypt==4.2.0
     # via chromadb
-billiard==4.2.0
+billiard==4.2.1
     # via celery
 blinker==1.8.2
     # via sentry-sdk
@@ -177,7 +177,7 @@ fsspec==2023.6.0
     #   datasets
     #   huggingface-hub
     #   torch
-google-api-core==2.19.2
+google-api-core==2.20.0
     # via
     #   google-cloud-aiplatform
     #   google-cloud-bigquery
@@ -185,7 +185,7 @@ google-api-core==2.19.2
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-auth==2.34.0
+google-auth==2.35.0
     # via
     #   anthropic
     #   google-api-core
@@ -258,7 +258,7 @@ httpx==0.27.2
     #   anthropic
     #   langfuse
     #   openai
-huggingface-hub==0.25.0
+huggingface-hub==0.25.1
     # via
     #   datasets
     #   optimum
@@ -320,7 +320,7 @@ kiwisolver==1.4.5
     # via
     #   -r requirements-constraints.txt
     #   matplotlib
-kombu==5.4.1
+kombu==5.4.2
     # via celery
 langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
     # via -r requirements-constraints.txt
@@ -405,7 +405,7 @@ onnx==1.16.0
     # via -r requirements-constraints.txt
 onnxruntime==1.19.2
     # via chromadb
-openai==1.40.1
+openai==1.47.1
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
@@ -642,7 +642,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.21
+sentry-protos==0.1.22
     # via -r requirements-constraints.txt
 sentry-sdk==2.11.0
     # via -r requirements-constraints.txt
@@ -672,7 +672,7 @@ sqlalchemy==2.0.25
     #   alembic
     #   flask-sqlalchemy
     #   pytest-alembic
-starlette==0.38.5
+starlette==0.38.6
     # via fastapi
 statsmodels==0.14.0
     # via -r requirements-constraints.txt
@@ -773,6 +773,7 @@ tzdata==2023.3
     # via
     #   -r requirements-constraints.txt
     #   celery
+    #   kombu
     #   pandas
 unidiff==0.7.5
     # via -r requirements-constraints.txt
@@ -797,7 +798,7 @@ watchfiles==0.24.0
     # via uvicorn
 wcwidth==0.2.13
     # via prompt-toolkit
-websockets==13.0.1
+websockets==13.1
     # via uvicorn
 werkzeug==3.0.3
     # via
@@ -812,7 +813,7 @@ wrapt==1.16.0
     #   langfuse
 xxhash==3.5.0
     # via datasets
-yarl==1.11.1
+yarl==1.12.0
     # via aiohttp
 
 # The following packages are considered to be unsafe in a requirements file:

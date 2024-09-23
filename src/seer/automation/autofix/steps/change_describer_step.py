@@ -92,3 +92,6 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     codebase_changes.append(change)
 
         self.context.event_manager.send_coding_complete(codebase_changes)
+        self.context.event_manager.add_log(
+            "Above are some code changes that I think fix the issue."
+        )  # TODO: add 'Feel free to edit them or tell me what I should change.' once those features are in

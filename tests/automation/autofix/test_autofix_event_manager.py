@@ -72,7 +72,7 @@ class TestAutofixEventManager:
 
         event_manager.add_log("Test log message")
 
-        assert len(state.get().steps[0].progress) == 0
+        assert len(state.get().steps[0].progress) == 1
 
     def test_add_log_empty_steps(self, event_manager, state):
         state.get().steps = []

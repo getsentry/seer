@@ -35,7 +35,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         agent = GptAgent(
             tools=tools.get_tools(),
             config=AgentConfig(
-                system_prompt=RootCauseAnalysisPrompts.format_system_msg(), max_iterations=24
+                system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
+                max_iterations=24,
+                interactive=True,
             ),
         )
 
@@ -64,6 +66,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 RootCauseAnalysisPrompts.reproduction_prompt_msg(),
             )
 
+            self.context.store_memory("root_cause_analysis", agent.memory)
+
             response = gpt_client.openai_client.beta.chat.completions.parse(
                 messages=[
                     message.to_message()
@@ -82,17 +86,13 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             parsed = extract_parsed_model(response)
 
             # Assign the ids to be the numerical indices of the causes and relevant code context
-            causes = []
-            for i, cause in enumerate(parsed.causes):
-                cause_model = cause.to_model()
-                cause_model.id = i
+            cause_model = parsed.cause.to_model()
+            cause_model.id = 0
+            if cause_model.code_context:
+                for j, snippet in enumerate(cause_model.code_context):
+                    snippet.id = j
 
-                if cause_model.code_context:
-                    for j, snippet in enumerate(cause_model.code_context):
-                        snippet.id = j
-
-                causes.append(cause_model)
-
+            causes = [cause_model]
             return RootCauseAnalysisOutput(causes=causes)
         finally:
             with self.context.state.update() as cur:

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from johen import generate
 
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -27,14 +28,14 @@ from seer.automation.models import (
 )
 from seer.automation.state import DbStateRunTypes, LocalMemoryState
 from seer.automation.summarize.issue import IssueSummary
-from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, Session
+from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 
 
 class TestAutofixContext(unittest.TestCase):
     def setUp(self):
         self.mock_repo_client = MagicMock()
         error_event = next(generate(SentryEventData))
-        self.state = LocalMemoryState(
+        self.state = ContinuationState.new(
             AutofixContinuation(
                 request=AutofixRequest(
                     organization_id=1,
@@ -42,7 +43,8 @@ class TestAutofixContext(unittest.TestCase):
                     repos=[],
                     issue=IssueDetails(id=0, title="", events=[error_event]),
                 )
-            )
+            ),
+            type=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(
             self.state,
@@ -157,6 +159,110 @@ class TestAutofixContext(unittest.TestCase):
 
         result = instance.get_issue_summary()
         self.assertIsNone(result)
+
+    def test_store_memory(self):
+        instance = self.autofix_context
+        key = "test_key"
+        memory = [Message(role="user", content="Test message")]
+
+        instance.store_memory(key, memory)
+
+        with Session() as session:
+            db_memory = (
+                session.query(DbRunMemory).where(DbRunMemory.run_id == self.state.id).first()
+            )
+            self.assertIsNotNone(db_memory)
+            if db_memory:
+                self.assertEqual(
+                    db_memory.value,
+                    {
+                        "run_id": instance.run_id,
+                        "memory": {
+                            "test_key": [
+                                {
+                                    "role": "user",
+                                    "content": "Test message",
+                                    "tool_call_id": None,
+                                    "tool_calls": None,
+                                }
+                            ]
+                        },
+                    },
+                )
+
+    def test_get_memory_existing(self):
+        instance = self.autofix_context
+        key = "test_key"
+        memory = [Message(role="user", content="Test message")]
+
+        instance.store_memory(key, memory)
+
+        result = instance.get_memory(key)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].role, "user")
+        self.assertEqual(result[0].content, "Test message")
+
+    def test_get_memory_non_existing(self):
+        instance = self.autofix_context
+        result = instance.get_memory("non_existing_key")
+
+        self.assertEqual(result, [])
+
+    def test_store_and_get_memory(self):
+        instance = self.autofix_context
+        key = "test_key"
+        memory = [Message(role="user", content="Test message")]
+
+        # Store memory
+        instance.store_memory(key, memory)
+
+        # Get memory
+        result = instance.get_memory(key)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].role, "user")
+        self.assertEqual(result[0].content, "Test message")
+
+    def test_store_memory_multiple_times(self):
+        instance = self.autofix_context
+        key = "test_key"
+        memory1 = [Message(role="user", content="Test message 1")]
+        memory2 = [Message(role="assistant", content="Test message 2")]
+
+        # Store memory twice
+        instance.store_memory(key, memory1)
+        instance.store_memory(key, memory2)
+
+        # Get memory
+        result = instance.get_memory(key)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].role, "assistant")
+        self.assertEqual(result[0].content, "Test message 2")
+
+    def test_store_multiple_keys(self):
+        instance = self.autofix_context
+        key1 = "test_key_1"
+        key2 = "test_key_2"
+        memory1 = [Message(role="user", content="Test message 1")]
+        memory2 = [Message(role="assistant", content="Test message 2")]
+
+        # Store memory for two different keys
+        instance.store_memory(key1, memory1)
+        instance.store_memory(key2, memory2)
+
+        # Get memory for both keys
+        result1 = instance.get_memory(key1)
+        result2 = instance.get_memory(key2)
+
+        self.assertEqual(len(result1), 1)
+        self.assertEqual(result1[0].role, "user")
+        self.assertEqual(result1[0].content, "Test message 1")
+
+        self.assertEqual(len(result2), 1)
+        self.assertEqual(result2[0].role, "assistant")
+        self.assertEqual(result2[0].content, "Test message 2")
 
 
 class TestAutofixContextPrCommit(unittest.TestCase):

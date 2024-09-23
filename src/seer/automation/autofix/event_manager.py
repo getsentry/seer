@@ -43,14 +43,14 @@ class AutofixEventManager:
     def plan_step(self) -> DefaultStep:
         return DefaultStep(
             key="plan",
-            title="Create Fix",
+            title="Creating Fix",
         )
 
     @property
     def changes_step(self) -> ChangesStep:
         return ChangesStep(
             key="changes",
-            title="Changes",
+            title="Code Changes",
             changes=[],
         )
 
@@ -143,8 +143,6 @@ class AutofixEventManager:
         with self.state.update() as cur:
             if cur.steps:
                 step = cur.steps[-1]
-                if step.status != AutofixStatus.PROCESSING:
-                    return
 
                 # If the current step is the planning step, and an execution step is running, we log it there instead.
                 if step.id == self.plan_step.id and step.progress:

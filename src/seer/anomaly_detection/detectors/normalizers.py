@@ -18,4 +18,9 @@ class Normalizer(BaseModel, abc.ABC):
 class MinMaxNormalizer(Normalizer):
     def normalize(self, array: npt.NDArray) -> npt.NDArray:
         """Applies min-max normalization to input array"""
+        if array.var() == 0:
+            if array[0] == 0:
+                return array
+            else:
+                return np.full_like(array, 1.0)
         return (array - np.min(array)) / (np.max(array) - np.min(array))

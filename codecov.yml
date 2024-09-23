@@ -16,6 +16,9 @@ coverage:
       trend_detection:
         paths:
           - 'src/seer/trend_detection/'
+      anomaly_detection:
+        paths:
+          - 'src/seer/anomaly_detection/'
       app:
         paths:
           - 'src/seer/app.py'

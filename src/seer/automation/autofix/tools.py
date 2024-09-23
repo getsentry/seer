@@ -33,7 +33,7 @@ class BaseTools:
             client = self.context.get_repo_client(repo_name)
             repo_name = client.repo_name
 
-        self.context.event_manager.add_log(f"Looked at `{input}` in `{repo_name}`")
+        self.context.event_manager.add_log(f"Looking at `{input}` in `{repo_name}`...")
 
         if file_contents:
             return file_contents
@@ -70,6 +70,8 @@ class BaseTools:
             # show potential corrected paths if nothing was found here
             other_paths = self._get_potential_abs_paths(path, repo_name)
             return f"<no entries found in directory '{path or '/'}'/>\n{other_paths}".strip()
+
+        self.context.event_manager.add_log(f"Looking at contents of `{path}` in `{repo_name}`...")
 
         joined = self._format_list_directory_output(dirs, files)
         return f"<entries>\n{joined}\n</entries>"
@@ -159,6 +161,10 @@ class BaseTools:
 
         cleanup_dir(tmp_dir)
 
+        self.context.event_manager.add_log(
+            f"Searched codebase for `{keyword}`, found {len(results)} result(s)."
+        )
+
         if not results:
             return "No results found."
 
@@ -172,10 +178,6 @@ class BaseTools:
                 )
                 file_names.append(f"`{result.relative_path}`")
                 result_str += f"{match_xml.to_prompt_str()}\n\n"
-
-        self.context.event_manager.add_log(
-            f"Searched codebase for `{keyword}`, found {len(file_names)} result(s) in {', '.join(file_names)}"
-        )
 
         return result_str
 
@@ -192,6 +194,9 @@ class BaseTools:
         repo_client = self.context.get_repo_client(repo_name=repo_name)
         all_paths = repo_client.get_index_file_set()
         found = [path for path in all_paths if os.path.basename(path) == filename]
+
+        self.context.event_manager.add_log(f"Searching for file `{filename}` in `{repo_name}`...")
+
         if len(found) == 0:
             return f"no file with name {filename} found in repository"
 
@@ -212,6 +217,11 @@ class BaseTools:
         repo_client = self.context.get_repo_client(repo_name=repo_name)
         all_paths = repo_client.get_index_file_set()
         found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
+
+        self.context.event_manager.add_log(
+            f"Searching for files with pattern `{pattern}` in `{repo_name}`..."
+        )
+
         if len(found) == 0:
             return f"No files matching pattern '{pattern}' found in repository"
 
