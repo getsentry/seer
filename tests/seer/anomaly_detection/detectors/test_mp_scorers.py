@@ -1,6 +1,8 @@
 import unittest
 
-from seer.anomaly_detection.detectors.mp_scorers import MPCascadingScorer
+import numpy as np
+
+from seer.anomaly_detection.detectors.mp_scorers import MPCascadingScorer, MPScorer
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
@@ -78,3 +80,33 @@ class TestMPScorers(unittest.TestCase):
                 actual_flags = flags_and_scores.flags
 
                 assert actual_flags[0] == expected_flags[i]
+
+    def test_cascading_scorer_failed_case(self):
+        class DummyScorer(MPScorer):
+            def batch_score(self, *args, **kwargs):
+                return None
+
+            def stream_score(self, *args, **kwargs):
+                return None
+
+        scorer = MPCascadingScorer(scorers=[DummyScorer(), DummyScorer()])
+
+        flags_and_scores = scorer.batch_score(
+            np.arange(1.0, 10),
+            np.arange(1.0, 10),
+            sensitivity="high",
+            direction="both",
+            window_size=3,
+        )
+        assert flags_and_scores is None
+
+        flags_and_scores = scorer.stream_score(
+            np.arange(1.0, 10),
+            np.arange(1.0, 10),
+            np.arange(1.0, 3),
+            np.arange(1.0, 3),
+            sensitivity="high",
+            direction="both",
+            window_size=3,
+        )
+        assert flags_and_scores is None
