@@ -361,8 +361,7 @@ class GroupingLookup:
                         "stacktrace_length": len(issue.stacktrace),
                     },
                 )
-                self.insert_new_grouping_record(session, issue, embedding)
-            session.commit()
+                self.insert_new_grouping_record(issue, embedding)
 
         similarity_response = SimilarityResponse(responses=[])
         for record, distance in results:
@@ -465,42 +464,29 @@ class GroupingLookup:
         return groups_with_neighbor
 
     @sentry_sdk.tracing.trace
-    def insert_new_grouping_record(
-        self, session, issue: GroupingRequest, embedding: np.ndarray
-    ) -> None:
+    def insert_new_grouping_record(self, issue: GroupingRequest, embedding: np.ndarray) -> None:
         """
         Inserts a new GroupingRecord into the database if the group_hash does not already exist.
-        If new grouping record was created, return the id.
 
         :param session: The database session.
         :param issue: The issue to insert as a new GroupingRecord.
         :param embedding: The embedding of the stacktrace.
         """
-        existing_record = (
-            session.query(DbGroupingRecord)
-            .filter_by(hash=issue.hash, project_id=issue.project_id)
-            .first()
-        )
-
-        if existing_record is None:
-            new_record = GroupingRecord(
+        with Session() as session:
+            insert_stmt = insert(DbGroupingRecord).values(
                 project_id=issue.project_id,
                 message=issue.message,
                 stacktrace_embedding=embedding,
                 hash=issue.hash,
                 error_type=issue.exception_type,
-            ).to_db_model()
-            session.add(new_record)
-        else:
-            logger.info(
-                "group_already_exists_in_seer_db",
-                extra={
-                    "existing_hash": existing_record.hash,
-                    "project_id": issue.project_id,
-                    "stacktrace_length": len(issue.stacktrace),
-                    "input_hash": issue.hash,
-                },
             )
+
+            session.execute(
+                insert_stmt.on_conflict_do_nothing(
+                    index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
+                )
+            )
+            session.commit()
 
     @sentry_sdk.tracing.trace
     def delete_grouping_records_for_project(self, project_id: int) -> bool:
