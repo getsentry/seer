@@ -1,5 +1,5 @@
 import textwrap
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
@@ -28,7 +28,7 @@ class SnippetXml(PromptXmlModel, tag="snippet"):
 class CodeContextXml(PromptXmlModel, tag="code_context"):
     title: str = element()
     description: str = element()
-    snippet: SnippetXml = element()
+    snippet: SnippetXml | None = element()
 
     @classmethod
     def from_root_cause_context(cls, context: RootCauseRelevantContext):
@@ -146,3 +146,29 @@ class FuzzyDiffChunk(BaseModel):
     header: str
     original_chunk: str
     new_chunk: str
+
+
+class FixStep(BaseModel):
+    repo_name: str
+    file_path: str
+    diff: str
+    original_text: str
+    change_type: Literal["create_file", "remove_file", "modify_file"]
+
+
+class FixSteps(BaseModel):
+    steps: list[FixStep]
+
+
+class ApplyResult(BaseModel):
+    success: bool
+    reason: str | None
+    file_path: str
+    repo_name: str
+    final_diff: str | None
+
+
+class FileContext(PromptXmlModel, tag="file_context"):
+    file_path: str = attr()
+    repo_name: str | None = attr()
+    content: str = element()

@@ -3,6 +3,7 @@ import textwrap
 from typing import Mapping, cast
 
 import sentry_sdk
+from langfuse.decorators import observe
 from pydantic import ValidationError
 
 from seer.automation.agent.models import Message

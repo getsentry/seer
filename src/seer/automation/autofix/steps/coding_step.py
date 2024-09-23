@@ -39,7 +39,7 @@ class AutofixCodingStep(AutofixPipelineStep):
     """
 
     name = "AutofixCodingStep"
-    max_retries = 2
+    max_retries = 0
 
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> AutofixCodingStepRequest:

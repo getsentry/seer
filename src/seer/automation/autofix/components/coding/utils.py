@@ -10,7 +10,6 @@ from seer.langfuse import append_langfuse_trace_tags
 logger = logging.getLogger(__name__)
 
 
-@observe(name="Extract diff original/replacement chunks")
 def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
     """
     Extract chunks from a diff using the hunk headers (@@ .. @@) as delimiters.

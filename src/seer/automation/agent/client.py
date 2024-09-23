@@ -2,9 +2,11 @@ import dataclasses
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Generator, Optional, TypeVar
 
 import anthropic
+from anthropic import MessageStream
+from anthropic.types import TextDelta
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 
@@ -285,6 +287,50 @@ class ClaudeClient(LlmClient):
                     0
                 ].id  # assumes we get only 1 tool call at a time, but we really don't use this field for tool_use blocks
         return message
+
+    @observe(as_type="generation", name="Claude-stream")
+    def stream(
+        self,
+        messages: list[Message],
+        model: str | None = DEFAULT_CLAUDE_MODEL,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+        stop_sequences: Optional[list[str]] = None,
+    ) -> Generator[TextDelta, None, Message]:
+        claude_messages = self._format_messages_for_claude_input(messages)
+
+        params: dict[str, Any] = {
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "messages": claude_messages,
+        }
+        if system_prompt:
+            params["system"] = system_prompt
+        if stop_sequences:
+            params["stop_sequences"] = stop_sequences
+
+        with self.anthropic_client.messages.stream(**params) as stream:
+            final_message = None
+            for chunk in stream:
+                if chunk.type == "content_block_delta":
+                    yield chunk.delta
+
+            final_message = stream.get_final_message()
+
+            if final_message:
+                usage = Usage(
+                    completion_tokens=final_message.usage.output_tokens,
+                    prompt_tokens=final_message.usage.input_tokens,
+                    total_tokens=final_message.usage.input_tokens
+                    + final_message.usage.output_tokens,
+                )
+                langfuse_context.update_current_observation(model=model, usage=usage)
+
+                return self._format_claude_response_to_message(final_message)
+
+        raise Exception("Stream ended without a final message")
 
 
 @module.provider

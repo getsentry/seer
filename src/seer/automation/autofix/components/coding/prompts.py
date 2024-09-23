@@ -1,7 +1,7 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
+from seer.automation.autofix.components.coding.models import FixStep, PlanStepsPromptXml
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
 from seer.automation.summarize.issue import IssueSummary
 
@@ -24,6 +24,7 @@ class CodingPrompts:
     def format_fix_discovery_msg(
         event: str,
         task_str: str,
+        file_context_str: str,
         repo_names: list[str],
         instruction: str | None,
         summary: Optional[IssueSummary] = None,
@@ -38,8 +39,11 @@ class CodingPrompts:
             The root cause of the issue has been identified and context about the issue has been provided:
             {task_str}
 
+            Relevant file context:
+            {file_context_str}
+
             # Your goal:
-            Provide the most actionable and effective steps to fix the issue.
+            Provide the most actionable and effective steps of code changes to fix the issue.
 
             Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue. Your list of steps to fix the problem should be detailed enough so that following it exactly will lead to a fully complete solution.
 
@@ -47,20 +51,34 @@ class CodingPrompts:
 
             # Guidelines:
             - No placeholders are allowed, the fix must be clear and detailed.
-            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix.
             - The fix must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
             - If the issue occurs in multiple places or files, make sure to provide a fix for each occurrence, no matter how many there are.
             - In your suggested fixes, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
             - You do not need to make changes in test files, someone else will do that.
+            - Make sure you include the file path and repo name in each step you provide.
+            - Every step MUST be a clear and detailed code change that can be made to a file you ensure exists in the codebase. You should be modifying the code to fix the issue and not removing or creating files.
+            - Each step MUST be a single file change, multiple changes to the same file should be a single step.
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
             event_str=event,
             task_str=task_str,
+            file_context_str=file_context_str,
             repo_names_str=format_repo_names(repo_names),
             instruction=format_instruction(instruction),
             summary_str=format_summary(summary),
         )
+
+    @staticmethod
+    def format_fix_retry_msg(failed_steps: list[FixStep]):
+        return textwrap.dedent(
+            """\
+            The below steps failed to apply:
+            {failed_steps}
+
+            Try again and fix the issues in the above failed steps. If they are no longer relevant, and have no more steps to perform, you can say only the string "<DONE>"
+            """
+        ).format(failed_steps="\n".join([step.original_text for step in failed_steps]))
 
     @staticmethod
     def format_fix_msg():
@@ -81,3 +99,82 @@ class CodingPrompts:
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str())
+
+    @staticmethod
+    def format_apply_prompt(file_path: str, diff: str, file_contents: str):
+        return textwrap.dedent(
+            """\
+            Given the below example instruction:
+            <example_instruction>
+            File path: `src/sentry/utils/query.py`:
+            ```
+            Just access the results directly, don't need to cast to list, and then use iterator.
+            class RangeQuerySetWrapper:
+                def __iter__(self):
+                    # ... (existing code)
+
+                    while has_results:
+                        if limit and num >= limit:
+                            break
+
+                        start = num
+
+                        if cur_value is None:
+                            results = queryset
+                        elif self.desc:
+                            results = queryset.filter(data)
+                        else:
+                            results = queryset.filter(data)
+
+            -           results = list(results[0 : self.step])
+            +           results = results[0 : self.step]
+
+                        for cb in self.callbacks:
+                            cb(results)
+
+            -           for result in results:
+            +           for result in results.iterator():
+                            # ... (existing code)
+            ```
+            </example_instruction>
+
+            Output a valid, unified diff, where every line either has a - or +, for example:
+            <example_diff>
+            --- a/src/sentry/utils/query.py
+            +++ b/src/sentry/utils/query.py
+            @@ -14,13 +14,13 @@ class RangeQuerySetWrapper:
+            -           else:
+            -               results = queryset.filter(data)
+            -
+            -           results = list(results[0 : self.step])
+            +           else:
+            +               results = queryset.filter(data)
+            +
+            +           results = results[0 : self.step]
+            -
+            -           for cb in self.callbacks:
+            -               cb(results)
+            -
+            -           for result in results:
+            +
+            +           for cb in self.callbacks:
+            +               cb(results)
+            +
+            +           for result in results.iterator():
+            </example_diff>
+
+            Given the below instruction:
+            <instruction>
+            File path: `{file_path}`:
+            ```
+            {diff}
+            ```
+            </instruction>
+
+            and the below file contents:
+            <file_contents>
+            {file_contents}
+            </file_contents>
+
+            Output your corrected unified diff, make sure to include as many neighboring context lines as possible:"""
+        ).format(file_path=file_path, diff=diff, file_contents=file_contents)

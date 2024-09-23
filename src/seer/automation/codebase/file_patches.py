@@ -2,6 +2,7 @@ import difflib
 
 import sentry_sdk
 import tree_sitter_languages
+from langfuse.decorators import observe
 from tree_sitter import Tree
 from unidiff import PatchSet
 
@@ -31,6 +32,7 @@ def copy_document_and_apply_changes(
     return BaseDocument(path=document.path, text=content)
 
 
+@observe(name="Make File Patches")
 def make_file_patches(
     file_changes: list[FileChange],
     document_paths: list[str],
