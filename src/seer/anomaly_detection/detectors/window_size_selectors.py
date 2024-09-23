@@ -3,9 +3,11 @@ import abc
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import sentry_sdk
 from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.detectors.normalizers import MinMaxNormalizer, Normalizer
+from seer.tags import AnomalyDetectionTags
 
 
 class WindowSizeSelector(BaseModel, abc.ABC):
@@ -84,9 +86,13 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
             The time series as a seaquence of float values.
 
         """
+        if time_series.var() == 0:
+            sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 1)
+            sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIANCE_TS, 1)
+            return 3
         time_series = self.normalizer.normalize(time_series)
-        ts_mean = np.mean(time_series)
-        ts_std = np.std(time_series)
+        ts_mean = time_series.mean()
+        ts_std = time_series.std()
         ts_min_max = np.max(time_series) - np.min(time_series)
 
         lbound = self.lbound
@@ -119,7 +125,9 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
             exp += 1
 
         if not found_window:
-            raise Exception("Search for optimal window failed.")
+            # raise Exception("Search for optimal window failed.")
+            sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 1)
+            return 3
 
         lbound = max(lbound, 2 ** (exp - 1))
 
@@ -136,5 +144,9 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
                 ubound = window_size - 1
             else:
                 break
-
-        return 2 * lbound
+        window_size = 2 * lbound
+        if window_size >= len(time_series):
+            sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 1)
+            return 3
+        sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 0)
+        return window_size

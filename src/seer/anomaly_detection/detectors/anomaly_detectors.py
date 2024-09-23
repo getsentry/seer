@@ -13,6 +13,7 @@ from seer.anomaly_detection.detectors.mp_utils import MPUtils
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
+    AnomalyFlags,
     MPTimeSeriesAnomalies,
     TimeSeries,
     TimeSeriesAnomalies,
@@ -83,7 +84,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         """
         ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
         window_size = ws_selector.optimal_window_size(ts_values)
-        logger.debug(f"window_size: {window_size}")
         if window_size <= 0:
             # TODO: Add sentry logging of this error
             raise ServerError("Invalid window size")
@@ -98,17 +98,19 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         # we do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
 
-        scores, flags = scorer.batch_score(
-            ts_values,
-            mp_dist,
+        flags_and_scores = scorer.batch_score(
+            ts=ts_values,
+            mp_dist=mp_dist,
             sensitivity=config.sensitivity,
             direction=config.direction,
             window_size=window_size,
         )
+        if flags_and_scores is None:
+            raise ServerError("Failed to score the matrix profile distance")
 
         return MPTimeSeriesAnomalies(
-            flags=flags,
-            scores=scores,
+            flags=flags_and_scores.flags,
+            scores=flags_and_scores.scores,
             matrix_profile=mp,
             window_size=window_size,
         )
@@ -151,9 +153,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             )
 
         with sentry_sdk.start_span(description="Stream compute MP"):
-            scores = []
-            flags = []
-            streamed_mp = []
+            scores: list[float] = []
+            flags: list[AnomalyFlags] = []
+            streamed_mp: list[list[float]] = []
             for cur_val in timeseries.values:
                 # Update the sumpi stream processor with new data
                 stream.update(cur_val)
@@ -162,17 +164,19 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
                 streamed_mp.append(cur_mp)
                 mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
-                cur_scores, cur_flags = scorer.stream_score(
-                    ts_value=cur_val,
-                    mp_dist=stream.P_[-1],
+                flags_and_scores = scorer.stream_score(
+                    ts_streamed=cur_val,
+                    mp_dist_streamed=stream.P_[-1],
+                    ts_history=self.base_values,
+                    mp_dist_history=mp_dist_baseline,
                     sensitivity=config.sensitivity,
                     direction=config.direction,
                     window_size=self.window_size,
-                    ts_baseline=self.base_values,
-                    mp_dist_baseline=mp_dist_baseline,
                 )
-                scores.extend(cur_scores)
-                flags.extend(cur_flags)
+                if flags_and_scores is None:
+                    raise ServerError("Failed to score the matrix profile distance")
+                scores.extend(flags_and_scores.scores)
+                flags.extend(flags_and_scores.flags)
 
                 # Add new data point as well as its matrix profile to baseline
                 self.base_values = stream.T_
@@ -189,18 +193,3 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 ),
                 window_size=self.window_size,
             )
-
-
-class DummyAnomalyDetector(AnomalyDetector):
-    """
-    Dummy anomaly detector used during dev work
-    """
-
-    def detect(self, timeseries: TimeSeries, config: AnomalyDetectionConfig) -> TimeSeriesAnomalies:
-        anomalies = MPTimeSeriesAnomalies(
-            flags=np.array(["none"] * len(timeseries.values)),
-            scores=np.array([np.float64(0.5)] * len(timeseries.values)),
-            matrix_profile=np.array([]),
-            window_size=0,
-        )
-        return anomalies

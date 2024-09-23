@@ -3,11 +3,14 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+from seer.anomaly_detection.accessors import AlertDataAccessor
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import DynamicAlert, MPTimeSeries
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     AnomalyDetectionConfig,
+    DeleteAlertDataRequest,
+    DeleteAlertDataResponse,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
@@ -16,6 +19,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesWithHistory,
 )
 from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomalies
+from seer.exceptions import ClientError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
@@ -156,3 +160,45 @@ class TestAnomalyDetection(unittest.TestCase):
             assert isinstance(response.timeseries, list)
             assert len(response.timeseries) == n
             assert isinstance(response.timeseries[0], TimeSeriesPoint)
+
+    def test_delete_alert_data_success(self):
+        class MockAlertDataAccessor(AlertDataAccessor):
+            def delete_alert_data(self, external_alert_id: int):
+                assert external_alert_id == 1
+                return DeleteAlertDataResponse(success=True)
+
+            def query(self, *args, **kwargs) -> DynamicAlert | None:
+                return NotImplemented
+
+            def save_alert(self, *args, **kwargs):
+                return NotImplemented
+
+            def save_timepoint(self, *args, **kwargs):
+                return NotImplemented
+
+        request = DeleteAlertDataRequest(organization_id=0, project_id=0, alert=AlertInSeer(id=1))
+        response = AnomalyDetection().delete_alert_data(
+            request=request, alert_data_accessor=MockAlertDataAccessor()
+        )
+        assert response == DeleteAlertDataResponse(success=True)
+
+    def test_delete_alert_data_failure(self):
+        class MockAlertDataAccessor(AlertDataAccessor):
+            def delete_alert_data(self, external_alert_id: int):
+                raise ClientError(f"Alert id {external_alert_id} not found")
+
+            def query(self, *args, **kwargs) -> DynamicAlert | None:
+                return NotImplemented
+
+            def save_alert(self, *args, **kwargs):
+                return NotImplemented
+
+            def save_timepoint(self, *args, **kwargs):
+                return NotImplemented
+
+        request = DeleteAlertDataRequest(organization_id=0, project_id=0, alert=AlertInSeer(id=1))
+        with self.assertRaises(ClientError) as e:
+            AnomalyDetection().delete_alert_data(
+                request=request, alert_data_accessor=MockAlertDataAccessor()
+            )
+            assert "Alert id 1 not found" in str(e.exception)
