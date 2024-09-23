@@ -18,8 +18,14 @@ class TestNormalizer(unittest.TestCase):
         np.testing.assert_equal(result, expected)
 
     def test_normalize_identical_values(self):
-        array = np.array([3, 3, 3, 3])
-        expected = np.array([np.nan, np.nan, np.nan, np.nan])
+        array = np.array([3] * 4)
+        expected = np.array([1.0] * 4)
+        result = self.normalizer.normalize(array)
+        np.testing.assert_equal(result, expected)
+
+    def test_normalize_zeroes(self):
+        array = np.array([0] * 4)
+        expected = np.array([0.0] * 4)
         result = self.normalizer.normalize(array)
         np.testing.assert_equal(result, expected)
 
@@ -29,6 +35,6 @@ class TestNormalizer(unittest.TestCase):
 
     def test_single_element_array(self):
         array = np.array([10])
-        expected = np.array([np.nan])
+        expected = np.array([1.0])
         result = self.normalizer.normalize(array)
         np.testing.assert_equal(result, expected)

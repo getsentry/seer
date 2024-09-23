@@ -13,8 +13,8 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
 
     def test_optimal_window_size_constant_series(self):
         ts = np.array([5.0] * 700)
-        with self.assertRaises(Exception, msg="Search for optimal window failed."):
-            self.selector.optimal_window_size(ts)
+        window_size = self.selector.optimal_window_size(ts)
+        assert window_size == 3
 
     def test_optimal_window_size_linear_series(self):
         ts = np.linspace(1, 100, 100)
@@ -25,8 +25,8 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
 
     def test_optimal_window_size_short_series(self):
         ts = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        with self.assertRaises(Exception, msg="Search for optimal window failed."):
-            self.selector.optimal_window_size(ts)
+        window_size = self.selector.optimal_window_size(ts)
+        assert window_size == 3
 
     def test_optimal_window_size(self):
 
