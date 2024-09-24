@@ -3,9 +3,11 @@ from celery import Celery
 import celery_app.tasks
 from celery_app.app import celery_app, setup_celery_entrypoint
 from celery_app.config import CeleryConfig
+from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
 
 
+# Validates the total sum of all celery jobs with the broadest configuration.
 def test_detected_celery_jobs():
     assert set(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == set(
         [
@@ -19,6 +21,40 @@ def test_detected_celery_jobs():
             "seer.automation.codegen.unittest_step.unittest_task",
             "seer.automation.tasks.delete_data_for_ttl",
             "seer.smoke_test.smoke_test",
+        ]
+    )
+
+    assert set(k for k in celery_app.conf.beat_schedule.keys()) == set(
+        [
+            "Check and mark recent autofix runs every hour",
+            "Delete old Automation runs for 90 day time-to-live",
+        ]
+    )
+
+
+def test_anomaly_beat_jobs():
+    app = Celery(__name__)
+    setup_celery_entrypoint(app)
+    app_config = resolve(AppConfig)
+    app_config.disable_all()
+    app_config.ANOMALY_DETECTION_ENABLED = True
+    app.finalize()
+
+    assert set(k for k in app.conf.beat_schedule.keys()) == set([])
+
+
+def test_autofix_beat_jobs():
+    app = Celery(__name__)
+    setup_celery_entrypoint(app)
+    app_config = resolve(AppConfig)
+    app_config.disable_all()
+    app_config.AUTOFIX_ENABLED = True
+    app.finalize()
+
+    assert set(k for k in app.conf.beat_schedule.keys()) == set(
+        [
+            "Check and mark recent autofix runs every hour",
+            "Delete old Automation runs for 90 day time-to-live",
         ]
     )
 
