@@ -202,6 +202,16 @@ class DbRunState(Base):
     )
 
 
+class DbRunMemory(Base):
+    __tablename__ = "run_memory"
+    run_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(DbRunState.id, ondelete="CASCADE"), primary_key=True
+    )
+    value: Mapped[str] = mapped_column(JSON, nullable=False)
+
+    __table_args__ = (Index("ix_run_memory_run_id", "run_id"),)
+
+
 class DbPrIdToAutofixRunIdMapping(Base):
     __tablename__ = "autofix_pr_id_to_run_id"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -256,7 +266,7 @@ class DbGroupingRecord(Base):
         server_default=text("nextval('grouping_records_id_seq')"),
     )
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
-    message: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     hash: Mapped[str] = mapped_column(String(32), nullable=False)

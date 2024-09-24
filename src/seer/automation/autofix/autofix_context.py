@@ -5,9 +5,11 @@ from typing import Mapping, cast
 import sentry_sdk
 from pydantic import ValidationError
 
+from seer.automation.agent.models import Message
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
+    AutofixRunMemory,
     ChangesStep,
     CodebaseState,
     CommittedPullRequestDetails,
@@ -23,7 +25,7 @@ from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import AgentError, get_sentry_client
-from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, Session
+from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
@@ -330,3 +332,31 @@ class AutofixContext(PipelineContext):
         ]
 
         return make_file_patches(file_changes, document_paths, original_documents)
+
+    def store_memory(self, key: str, memory: list[Message]):
+        with Session() as session:
+            memory_record = (
+                session.query(DbRunMemory).where(DbRunMemory.run_id == self.run_id).one_or_none()
+            )
+
+            if not memory_record:
+                memory_model = AutofixRunMemory(run_id=self.run_id)
+            else:
+                memory_model = AutofixRunMemory.from_db_model(memory_record)
+
+            memory_model.memory[key] = memory
+            memory_record = memory_model.to_db_model()
+
+            session.merge(memory_record)
+            session.commit()
+
+    def get_memory(self, key: str) -> list[Message]:
+        with Session() as session:
+            memory_record = (
+                session.query(DbRunMemory).where(DbRunMemory.run_id == self.run_id).one_or_none()
+            )
+
+            if not memory_record:
+                return []
+
+            return AutofixRunMemory.from_db_model(memory_record).memory.get(key, [])

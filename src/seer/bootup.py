@@ -62,7 +62,7 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
         traces_sample_rate=1.0,
         send_default_pii=True,
         release=config.SEER_VERSION_SHA,
-        environment="production",
+        environment=config.SENTRY_ENVIRONMENT,
         before_send=before_send,
     )
 

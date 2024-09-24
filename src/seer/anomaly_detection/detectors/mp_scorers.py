@@ -1,13 +1,21 @@
 import abc
 import logging
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
-from pydantic import BaseModel
+import sentry_sdk
+from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.models import AnomalyFlags, Directions, Sensitivities
+from seer.tags import AnomalyDetectionTags
 
 logger = logging.getLogger(__name__)
+
+
+class FlagsAndScores(BaseModel):
+    flags: list[AnomalyFlags]
+    scores: list[float]
 
 
 class MPScorer(BaseModel, abc.ABC):
@@ -23,24 +31,38 @@ class MPScorer(BaseModel, abc.ABC):
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
-    ) -> tuple:
+    ) -> Optional[FlagsAndScores]:
         return NotImplemented
 
     @abc.abstractmethod
     def stream_score(
         self,
-        ts_value: float,
-        mp_dist: float,
+        ts_streamed: np.float64,
+        mp_dist_streamed: np.float64,
+        ts_history: npt.NDArray[np.float64],
+        mp_dist_history: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
-        ts_baseline: npt.NDArray[np.float64],
-        mp_dist_baseline: npt.NDArray[np.float64],
-    ) -> tuple:
+    ) -> Optional[FlagsAndScores]:
         return NotImplemented
 
 
-class MPIRQScorer(MPScorer):
+class LowVarianceScorer(MPScorer):
+    """
+    This class scores anomalies using mean if the series has a low variance.
+    """
+
+    variance_threshold: float = Field(
+        0.0001, description="Minimum variance required in order to use IQR based scoring"
+    )
+
+    def _to_flag_and_score(
+        self, val: np.float64, ts_mean: np.float64
+    ) -> tuple[AnomalyFlags, float]:
+        if abs(val) >= 2 * abs(ts_mean):
+            return "anomaly_higher_confidence", 0.9
+        return "none", 0.0
 
     def batch_score(
         self,
@@ -49,7 +71,53 @@ class MPIRQScorer(MPScorer):
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
-    ) -> tuple:
+    ) -> Optional[FlagsAndScores]:
+        ts_variance = ts.var()
+        ts_mean = ts.mean()
+        scores = []
+        flags = []
+        if ts_variance > self.variance_threshold:
+            sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIANCE_TS, 0)
+            return None
+
+        sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIANCE_TS, 1)
+        for val in ts:
+            # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
+            flag, score = self._to_flag_and_score(val, ts_mean)
+            flags.append(flag)
+            scores.append(score)
+        return FlagsAndScores(flags=flags, scores=scores)
+
+    def stream_score(
+        self,
+        ts_streamed: np.float64,
+        mp_dist_streamed: np.float64,
+        ts_history: npt.NDArray[np.float64],
+        mp_dist_history: npt.NDArray[np.float64],
+        sensitivity: Sensitivities,
+        direction: Directions,
+        window_size: int,
+    ) -> Optional[FlagsAndScores]:
+        context = ts_history[-2 * window_size :]
+        context_var = context.var()
+        if context_var > self.variance_threshold:
+            return None
+        # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
+        flag, score = self._to_flag_and_score(ts_streamed, context.mean())
+
+        return FlagsAndScores(flags=[flag], scores=[score])
+
+
+class MPIQRScorer(MPScorer):
+
+    def batch_score(
+        self,
+        ts: npt.NDArray[np.float64],
+        mp_dist: npt.NDArray[np.float64],
+        sensitivity: Sensitivities,
+        direction: Directions,
+        window_size: int,
+    ) -> FlagsAndScores:
         """
         Scores anomalies by computing the distance of the relevant MP distance from quartiles. This approach is not swayed by
         extreme values in MP distances. It also converts the score to a flag with a more meaningful interpretation of score.
@@ -71,6 +139,9 @@ class MPIRQScorer(MPScorer):
             * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
             * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
+        scores: list[float] = []
+        flags: list[AnomalyFlags] = []
+
         # Stumpy returns inf for the first timeseries[0:window_size - 2] entries. We just need to ignore those before scoring.
         mp_dist_baseline_finite = mp_dist[np.isfinite(mp_dist)]
 
@@ -84,8 +155,6 @@ class MPIRQScorer(MPScorer):
         threshold_upper = Q3 + (1.5 * IQR_L)
 
         # Compute score and anomaly flags
-        scores = []
-        flags = []
         for i, val in enumerate(mp_dist):
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold_upper)
             flag = self._to_flag(val, threshold_lower, threshold_upper)
@@ -95,18 +164,18 @@ class MPIRQScorer(MPScorer):
                 )
             flags.append(flag)
 
-        return scores, flags
+        return FlagsAndScores(flags=flags, scores=scores)
 
     def stream_score(
         self,
-        ts_value: float,
-        mp_dist: float,
+        ts_streamed: np.float64,
+        mp_dist_streamed: np.float64,
+        ts_history: npt.NDArray[np.float64],
+        mp_dist_history: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
-        ts_baseline: npt.NDArray[np.float64],
-        mp_dist_baseline: npt.NDArray[np.float64],
-    ) -> tuple:
+    ) -> FlagsAndScores:
         """
         Scores anomalies by computing the distance of the relevant MP distance from quartiles. This approach is not swayed by
         extreme values in MP distances. It also converts the score to a flag with a more meaningful interpretation of score.
@@ -131,7 +200,7 @@ class MPIRQScorer(MPScorer):
             * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
         # Stumpy returns inf for the first timeseries[0:window_size - 2] entries. We just need to ignore those before scoring.
-        mp_dist_baseline_finite = mp_dist_baseline[np.isfinite(mp_dist_baseline)]
+        mp_dist_baseline_finite = mp_dist_history[np.isfinite(mp_dist_history)]
 
         # Compute the quantiles for two different threshold levels
         [Q1, Q3] = np.quantile(mp_dist_baseline_finite, [0.25, 0.75])
@@ -143,13 +212,18 @@ class MPIRQScorer(MPScorer):
         threshold_upper = Q3 + (1.5 * IQR_L)
 
         # Compute score and anomaly flags
-        score = 0.0 if np.isnan(mp_dist) or np.isinf(mp_dist) else mp_dist - threshold_upper
-        flag = self._to_flag(mp_dist, threshold_lower, threshold_upper)
+        score = (
+            0.0
+            if np.isnan(mp_dist_streamed) or np.isinf(mp_dist_streamed)
+            else mp_dist_streamed - threshold_upper
+        )
+        flag = self._to_flag(mp_dist_streamed, threshold_lower, threshold_upper)
         # anomaly identified. apply logic to check for peak and trough
-        flag = self._adjust_flag_for_vicinity(ts_value, flag, ts_baseline[-2 * window_size :])
-        return [score], [flag]
+        flag = self._adjust_flag_for_vicinity(ts_streamed, flag, ts_history[-2 * window_size :])
 
-    def _to_flag(self, mp_dist: float, threshold_lower: float, threshold_upper: float):
+        return FlagsAndScores(flags=[flag], scores=[score])
+
+    def _to_flag(self, mp_dist: np.float64, threshold_lower: float, threshold_upper: float):
         if np.isnan(mp_dist):
             return "none"
         if mp_dist < threshold_lower:
@@ -159,7 +233,7 @@ class MPIRQScorer(MPScorer):
         return "anomaly_higher_confidence"
 
     def _adjust_flag_for_vicinity(
-        self, ts_value: float, flag: AnomalyFlags, context: npt.NDArray[np.float64]
+        self, ts_value: np.float64, flag: AnomalyFlags, context: npt.NDArray[np.float64]
     ) -> AnomalyFlags:
         """
         This method adjusts the severity of a detected anomaly based on the underlying time step's proximity to peaks and troughs.
@@ -188,3 +262,51 @@ class MPIRQScorer(MPScorer):
         #     else:
         #         flag = "anomaly_higher_confidence"
         return flag
+
+
+class MPCascadingScorer(MPScorer):
+    """
+    This class combines the results of the LowVarianceScorer and the MPIQRScorer.
+    """
+
+    scorers: list[MPScorer] = Field(
+        [LowVarianceScorer(), MPIQRScorer()], description="The list of scorers to cascade"
+    )
+
+    def batch_score(
+        self,
+        ts: npt.NDArray[np.float64],
+        mp_dist: npt.NDArray[np.float64],
+        sensitivity: Sensitivities,
+        direction: Directions,
+        window_size: int,
+    ) -> Optional[FlagsAndScores]:
+        for scorer in self.scorers:
+            flags_and_scores = scorer.batch_score(ts, mp_dist, sensitivity, direction, window_size)
+            if flags_and_scores is not None:
+                return flags_and_scores
+        return None
+
+    def stream_score(
+        self,
+        ts_streamed: np.float64,
+        mp_dist_streamed: np.float64,
+        ts_history: npt.NDArray[np.float64],
+        mp_dist_history: npt.NDArray[np.float64],
+        sensitivity: Sensitivities,
+        direction: Directions,
+        window_size: int,
+    ) -> Optional[FlagsAndScores]:
+        for scorer in self.scorers:
+            flags_and_scores = scorer.stream_score(
+                ts_streamed,
+                mp_dist_streamed,
+                ts_history,
+                mp_dist_history,
+                sensitivity,
+                direction,
+                window_size,
+            )
+            if flags_and_scores is not None:
+                return flags_and_scores
+        return None

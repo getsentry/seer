@@ -10,8 +10,14 @@ from johen import generate
 from johen.pytest import parametrize
 from sqlalchemy import text
 
-from seer.app import app
-from seer.automation.autofix.models import AutofixContinuation, AutofixEvaluationRequest
+from seer.app import app, autofix_update_endpoint
+from seer.automation.autofix.models import (
+    AutofixContinuation,
+    AutofixEndpointResponse,
+    AutofixEvaluationRequest,
+    AutofixUpdateRequest,
+    AutofixUpdateType,
+)
 from seer.automation.codebase.models import CodebaseStatusCheckRequest, CodebaseStatusCheckResponse
 from seer.automation.models import RepoDefinition
 from seer.automation.state import LocalMemoryState
@@ -462,6 +468,28 @@ class TestSeer(unittest.TestCase):
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(test_data)
+
+    def test_autofix_update_endpoint(self):
+        test_cases = [
+            (AutofixUpdateType.SELECT_ROOT_CAUSE, "seer.app.run_autofix_execution"),
+            (AutofixUpdateType.CREATE_PR, "seer.app.run_autofix_create_pr"),
+            (AutofixUpdateType.USER_MESSAGE, "seer.app.receive_user_message"),
+        ]
+
+        for autofix_type, expected_func in test_cases:
+            mock_request = mock.MagicMock(spec=AutofixUpdateRequest)
+            mock_request.run_id = 123
+            mock_request.payload = mock.MagicMock()
+            mock_request.payload.type = autofix_type
+
+            with mock.patch(expected_func) as mock_func:
+                response = autofix_update_endpoint(mock_request)
+
+                mock_func.assert_called_once_with(mock_request)
+
+                self.assertIsInstance(response, AutofixEndpointResponse)
+                self.assertTrue(response.started)
+                self.assertEqual(response.run_id, mock_request.run_id)
 
 
 class TestGetCodebaseIndexStatusEndpoint(unittest.TestCase):

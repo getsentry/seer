@@ -29,6 +29,7 @@ from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    receive_user_message,
     run_autofix_create_pr,
     run_autofix_evaluation,
     run_autofix_execution,
@@ -178,6 +179,8 @@ def autofix_update_endpoint(
         run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_create_pr(data)
+    elif data.payload.type == AutofixUpdateType.USER_MESSAGE:
+        receive_user_message(data)
     return AutofixEndpointResponse(started=True, run_id=data.run_id)
 
 
@@ -281,7 +284,8 @@ def delete_alert__data_endpoint(
     data: DeleteAlertDataRequest,
 ) -> DeleteAlertDataResponse:
     sentry_sdk.set_tag("organization_id", data.organization_id)
-    sentry_sdk.set_tag("project_id", data.project_id)
+    if data.project_id is not None:
+        sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
         response = anomaly_detection().delete_alert_data(data)

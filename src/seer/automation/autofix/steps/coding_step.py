@@ -57,6 +57,7 @@ class AutofixCodingStep(AutofixPipelineStep):
         self.logger.info("Executing Autofix - Plan+Code Step")
 
         self.context.event_manager.send_coding_start()
+        self.context.event_manager.add_log("Figuring out a fix for the root cause of this issue...")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()

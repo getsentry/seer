@@ -1,13 +1,15 @@
 import unittest
 
-from seer.anomaly_detection.detectors.mp_scorers import MPIRQScorer
+import numpy as np
+
+from seer.anomaly_detection.detectors.mp_scorers import MPCascadingScorer, MPScorer
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
 class TestMPScorers(unittest.TestCase):
 
     def setUp(self):
-        self.scorer = MPIRQScorer()
+        self.scorer = MPCascadingScorer()
 
     def test_batch_score_synthetic_data(self):
 
@@ -29,9 +31,11 @@ class TestMPScorers(unittest.TestCase):
             expected_types, timeseries, mp_dists, window_sizes, window_starts, window_ends
         ):
 
-            _, actual_flags = self.scorer.batch_score(
+            flags_and_scores = self.scorer.batch_score(
                 ts, mp_dist, sensitivity, direction, window_size
             )
+            assert flags_and_scores is not None
+            actual_flags = flags_and_scores.flags
 
             # Calculate percentage of anomaly flags in given range
             num_anomalies_detected = 0
@@ -63,14 +67,46 @@ class TestMPScorers(unittest.TestCase):
                 test_ts_val = ts_baseline[-1] * multiplier
                 test_mp_dist = mp_dist_baseline[-1] * abs(multiplier)
 
-                _, flag = self.scorer.stream_score(
+                flags_and_scores = self.scorer.stream_score(
                     test_ts_val,
                     test_mp_dist,
+                    ts_baseline,
+                    mp_dist_baseline,
                     sensitivity,
                     direction,
                     window_size,
-                    ts_baseline,
-                    mp_dist_baseline,
                 )
+                assert flags_and_scores is not None
+                actual_flags = flags_and_scores.flags
 
-                assert flag[0] == expected_flags[i]
+                assert actual_flags[0] == expected_flags[i]
+
+    def test_cascading_scorer_failed_case(self):
+        class DummyScorer(MPScorer):
+            def batch_score(self, *args, **kwargs):
+                return None
+
+            def stream_score(self, *args, **kwargs):
+                return None
+
+        scorer = MPCascadingScorer(scorers=[DummyScorer(), DummyScorer()])
+
+        flags_and_scores = scorer.batch_score(
+            np.arange(1.0, 10),
+            np.arange(1.0, 10),
+            sensitivity="high",
+            direction="both",
+            window_size=3,
+        )
+        assert flags_and_scores is None
+
+        flags_and_scores = scorer.stream_score(
+            np.arange(1.0, 10),
+            np.arange(1.0, 10),
+            np.arange(1.0, 3),
+            np.arange(1.0, 3),
+            sensitivity="high",
+            direction="both",
+            window_size=3,
+        )
+        assert flags_and_scores is None

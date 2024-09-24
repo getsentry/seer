@@ -1,8 +1,6 @@
 from typing import Annotated, Optional
 
-from johen import gen
-from johen.examples import Examples
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, StringConstraints
 from pydantic_xml import attr
 
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -42,8 +40,6 @@ class RootCauseAnalysisItem(BaseModel):
     title: str
     description: str
     reproduction: str
-    likelihood: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
-    actionability: Annotated[float, Examples(r.uniform(0, 1) for r in gen)] = Field(..., ge=0, le=1)
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
 
@@ -54,8 +50,6 @@ class RootCauseAnalysisRelevantContext(BaseModel):
 class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
-    likelihood: float
-    actionability: float
     reproduction: str
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
@@ -63,8 +57,6 @@ class RootCauseAnalysisItemPrompt(BaseModel):
     def from_model(cls, model: RootCauseAnalysisItem):
         return cls(
             title=model.title,
-            likelihood=model.likelihood,
-            actionability=model.actionability,
             description=model.description,
             reproduction=model.reproduction,
             relevant_code=(
@@ -96,7 +88,7 @@ class RootCauseAnalysisItemPrompt(BaseModel):
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
-    causes: list[RootCauseAnalysisItemPrompt]
+    cause: RootCauseAnalysisItemPrompt
 
 
 class RootCauseAnalysisOutputPrompt(BaseModel):
