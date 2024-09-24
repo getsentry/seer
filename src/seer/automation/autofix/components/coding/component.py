@@ -144,6 +144,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         content="",
                     )
 
+        files_to_remove = set()
         for file_path, file_context in context_files.items():
             file_content = self.context.get_repo_client(file_context.repo_name).get_file_content(
                 file_context.file_path
@@ -152,7 +153,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 file_context.content = file_content
             else:
                 logger.warning(f"File not found: {file_path}")
-                context_files.pop(file_path)
+                files_to_remove.add(file_path)
+
+        for file_path in files_to_remove:
+            context_files.pop(file_path)
 
         return "\n".join([item.to_prompt_str() for item in context_files.values()])
 
@@ -164,7 +168,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         agent = ClaudeAgent(
             tools=tools.get_tools(),
-            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg(), interactive=True),
+            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg(), interactive=False),
         )
 
         task_str = (

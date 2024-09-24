@@ -369,7 +369,13 @@ def run_autofix_evaluation_on_item(
                 )
         else:
             try:
-                diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
+                diff = sync_run_evaluation_on_item(
+                    dataset_item,
+                    scoring_n_panel=scoring_n_panel,
+                    scoring_model=scoring_model,
+                    trace_id=trace_id,
+                    langfuse_session_id=trace_id,
+                )
             except Exception as e:
                 logger.error(f"Error running evaluation: {e}")
 

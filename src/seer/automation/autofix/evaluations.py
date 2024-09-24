@@ -2,6 +2,7 @@ import textwrap
 from typing import TypedDict, cast
 from xml.etree import ElementTree as ET
 
+from langfuse import Langfuse
 from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
 from pydantic_xml import attr, element
@@ -149,7 +150,9 @@ def sync_run_execution(item: DatasetItemClient):
 
 
 @observe(name="Sync run evaluation on item")
-def sync_run_evaluation_on_item(item: DatasetItemClient):
+def sync_run_evaluation_on_item(
+    item: DatasetItemClient, trace_id: str, scoring_n_panel: int, scoring_model: str
+):
     run_id = None
 
     request = AutofixRequest.model_validate(item.input.get("request"))
@@ -190,6 +193,36 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
             cause_id=cause_id,
         )
     )
+
+    # root_cause_score = score_root_causes(
+    #     item, root_cause_step.causes, scoring_n_panel, scoring_model
+    # )
+
+    # langfuse = Langfuse()
+    # langfuse.score(
+    #     trace_id=trace_id,
+    #     name=make_score_name(
+    #         model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
+    #     ),
+    #     value=root_cause_score.get("highest_score"),
+    # )
+    # langfuse.score(
+    #     trace_id=trace_id,
+    #     name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="highest_score"),
+    #     value=root_cause_score.get("highest_score"),
+    # )
+    # langfuse.score(
+    #     trace_id=trace_id,
+    #     name=make_score_name(
+    #         model=scoring_model, n_panel=scoring_n_panel, name="positioning_score"
+    #     ),
+    #     value=root_cause_score.get("position_score"),
+    # )
+    # langfuse.score(
+    #     trace_id=trace_id,
+    #     name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="mean_score"),
+    #     value=root_cause_score.get("mean_score"),
+    # )
 
     AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
 
