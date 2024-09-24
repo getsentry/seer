@@ -24,7 +24,11 @@ from seer.automation.state import LocalMemoryState
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
 from seer.dependency_injection import Module, resolve
-from seer.grouping.grouping import CreateGroupingRecordData, CreateGroupingRecordsRequest
+from seer.grouping.grouping import (
+    CreateGroupingRecordData,
+    CreateGroupingRecordsRequest,
+    GroupingRequest,
+)
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 from seer.smoke_test import smoke_test
 
@@ -320,6 +324,42 @@ class TestSeer(unittest.TestCase):
         output = json.loads(response.get_data(as_text=True))
         assert output == {"data": []}
 
+    def test_similarity_endpoint_no_message(self):
+        """Test the similarity endpoint with no message and the no message response"""
+        # Create a record
+        hashes = ["hash1", "hash2"]
+        request = GroupingRequest(project_id=1, stacktrace="stacktrace", hash=hashes[0])
+        response = app.test_client().post(
+            "/v0/issues/similar-issues",
+            data=request.json(),
+            content_type="application/json",
+        )
+
+        # Call endpoint with similar issue to the previous call
+        request = GroupingRequest(project_id=1, stacktrace="stacktrace", hash=hashes[1])
+        response = app.test_client().post(
+            "/v0/issues/similar-issues",
+            data=request.json(),
+            content_type="application/json",
+        )
+        output = json.loads(response.get_data(as_text=True))
+        assert output == {
+            "responses": [
+                {
+                    "message_distance": 0.0,
+                    "parent_hash": hashes[0],
+                    "should_group": True,
+                    "stacktrace_distance": 0.0,
+                }
+            ]
+        }
+        with Session() as session:
+            records = (
+                session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            )
+        assert len(records) == 1
+        assert records[0].hash == hashes[0]
+
     def test_similarity_grouping_record_endpoint_valid(self):
         """Test the similarity grouping record endpoint"""
         hashes = [str(i) * 32 for i in range(5)]
@@ -348,6 +388,35 @@ class TestSeer(unittest.TestCase):
             for i in range(5):
                 assert records[i] is not None
 
+    def test_similarity_grouping_record_endpoint_no_message(self):
+        """Test the similarity grouping record endpoint without providing message"""
+        hashes = [str(i) * 32 for i in range(5)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                )
+                for i in range(5)
+            ],
+            stacktrace_list=["stacktrace " + str(i) for i in range(5)],
+        )
+
+        response = app.test_client().post(
+            "/v0/issues/similar-issues/grouping-record",
+            data=record_requests.json(),
+            content_type="application/json",
+        )
+        output = json.loads(response.get_data(as_text=True))
+        assert output == {"success": True, "groups_with_neighbor": {}}
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes))
+            for i in range(5):
+                assert records[i] is not None
+                assert records[i].message is None
+
+    # test regular similarity endpoint with no message
     def test_similarity_grouping_record_endpoint_invalid(self):
         """
         Test the similarity grouping record endpoint is unsuccessful when input lists are of

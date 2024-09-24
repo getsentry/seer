@@ -157,6 +157,29 @@ class TestGrouping(unittest.TestCase):
             )
             assert len(matching_record) == 2
 
+    def test_insert_new_grouping_no_message(self):
+        """
+        Tests that insert_new_grouping_record can create records without messages.
+        """
+        with Session() as session:
+            embedding = grouping_lookup().encode_text("stacktrace")
+            project_id, hash = 1, "QYK7aNYNnp5FgSev9Np1soqb1SdtyahD"
+            grouping_request = GroupingRequest(
+                project_id=project_id,
+                stacktrace="stacktrace",
+                hash=hash,
+            )
+            # Insert the grouping record
+            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
+            session.commit()
+
+            created_record = (
+                session.query(DbGroupingRecord).filter_by(hash=hash, project_id=project_id).first()
+            )
+
+        assert created_record
+        assert created_record.message is None
+
     def test_bulk_create_and_insert_grouping_records_valid(self):
         """Test bulk creating and inserting grouping records"""
         hashes = [str(i) * 32 for i in range(10)]
@@ -342,7 +365,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message",
                 )
                 for i in range(10)
             ],
@@ -464,10 +486,11 @@ def test_GroupingLookup_insert_batch_grouping_records_duplicates(
 ):
     orig_record.project_id = project_1_id
     orig_record.hash = hash_1
+    orig_record.exception_type = "error"
     project_2_id = project_1_id + 1
     hash_2 = hash_1 + "_2"
 
-    updated_duplicate = orig_record.copy(update=dict(message=orig_record.message + " updated?"))
+    updated_duplicate = orig_record.copy(update=dict(exception_type="transaction"))
 
     grouping_request.data = [
         orig_record,
@@ -487,17 +510,17 @@ def test_GroupingLookup_insert_batch_grouping_records_duplicates(
             )
 
     @change_watcher
-    def updated_message_for_orig():
+    def updated_exception_type_for_orig():
         db_record = query_created(orig_record)
         if db_record:
-            return db_record.message
+            return db_record.error_type
         return None
 
-    with updated_message_for_orig as changed:
+    with updated_exception_type_for_orig as changed:
         grouping_lookup().insert_batch_grouping_records(grouping_request)
 
     assert changed
-    assert changed.to_value(orig_record.message)
+    assert changed.to_value(orig_record.exception_type)
 
     # ensure that atleast a record was made for each item
     for item in grouping_request.data:
@@ -506,7 +529,7 @@ def test_GroupingLookup_insert_batch_grouping_records_duplicates(
     # Again, ensuring that duplicates are ignored
     grouping_request.data = [updated_duplicate]
     grouping_request.stacktrace_list = ["does not matter" for _ in grouping_request.data]
-    with updated_message_for_orig as changed:
+    with updated_exception_type_for_orig as changed:
         grouping_lookup().insert_batch_grouping_records(grouping_request)
 
     assert not changed

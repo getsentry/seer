@@ -26,8 +26,8 @@ NN_SIMILARITY_DISTANCE = 0.05
 class GroupingRequest(BaseModel):
     project_id: int
     stacktrace: str
-    message: str
     hash: str
+    message: Optional[str] = None
     exception_type: Optional[str] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
@@ -36,7 +36,7 @@ class GroupingRequest(BaseModel):
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
     use_reranking: bool = False
 
-    @field_validator("stacktrace", "message")
+    @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
         if not v:
@@ -59,7 +59,7 @@ class CreateGroupingRecordData(BaseModel):
     group_id: int
     hash: str
     project_id: int
-    message: str
+    message: Optional[str] = None
     exception_type: Optional[str] = None
 
 
@@ -90,7 +90,7 @@ class DeleteGroupingRecordsByHashResponse(BaseModel):
 
 class GroupingRecord(BaseModel):
     project_id: int
-    message: str
+    message: Optional[str] = None
     stacktrace_embedding: np.ndarray
     hash: str
     error_type: Optional[str] = None
@@ -334,7 +334,7 @@ class GroupingLookup:
 
         :param issue: The issue containing the stacktrace, similarity threshold, and number of nearest neighbors to find (k).
         :return: A SimilarityResponse object containing a list of GroupingResponse objects with the nearest group IDs,
-                 stacktrace similarity scores, message similarity scores, and grouping flags.
+                 stacktrace similarity scores, and grouping flags.
         """
         with Session() as session:
             embedding = self.encode_text(issue.stacktrace).astype("float32")
