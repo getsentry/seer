@@ -67,6 +67,8 @@ class AppConfig(BaseModel):
 
     SMOKE_CHECK: ParseBool = False
 
+    CODECOV_API_TOKEN: str = ""
+
     @cached_property
     def smoke_test_id(self) -> str:
         return str(uuid.uuid4())
