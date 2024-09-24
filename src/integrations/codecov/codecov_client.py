@@ -34,7 +34,3 @@ class CodecovClient:
             return response.text
         else:
             return None
-
-    @staticmethod
-    def ping():
-        return "pong"
