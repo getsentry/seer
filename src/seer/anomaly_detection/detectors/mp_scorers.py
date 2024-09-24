@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -8,6 +8,7 @@ import sentry_sdk
 from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.models import AnomalyFlags, Directions, Sensitivities
+from seer.exceptions import ClientError
 from seer.tags import AnomalyDetectionTags
 
 logger = logging.getLogger(__name__)
@@ -53,14 +54,43 @@ class LowVarianceScorer(MPScorer):
     This class scores anomalies using mean if the series has a low variance.
     """
 
-    variance_threshold: float = Field(
-        0.0001, description="Minimum variance required in order to use IQR based scoring"
+    std_threshold: float = Field(
+        0.01,
+        description="Minimum standard deviation required in order to use IQR based scoring",
+    )
+    scaling_factors: Dict[Sensitivities, int] = Field(
+        {
+            # High sensitivity = more anomalies + higher false positives
+            # 2x the mean and above is considered an anomaly
+            "high": 1.5,
+            # Medium sensitivity = lesser anomalies + lesser false positives
+            # 3x the mean and above is considered an anomaly
+            "medium": 3,
+            # Low sensitivity = leaset anomalies + leaset false positives
+            # 5x the mean and above is considered an anomaly
+            "low": 5,
+        },
+        description="Lower and upper bounds for high sensitivity",
     )
 
     def _to_flag_and_score(
-        self, val: np.float64, ts_mean: np.float64
+        self,
+        val: np.float64,
+        ts_mean: np.float64,
+        sensitivity: Sensitivities,
+        direction: Directions,
     ) -> tuple[AnomalyFlags, float]:
-        if abs(val) >= 2 * abs(ts_mean):
+        # High sensitivity will mark more values as anomalies
+        if sensitivity not in self.scaling_factors:
+            raise ClientError(f"Invalid sensitivity: {sensitivity}")
+        scaling_factor = self.scaling_factors[sensitivity]
+        bound1 = ts_mean + ts_mean * scaling_factor
+        bound2 = ts_mean - ts_mean * scaling_factor
+        lower_bound = min(bound1, bound2)
+        upper_bound = max(bound1, bound2)
+
+        # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
+        if val < lower_bound or val > upper_bound:
             return "anomaly_higher_confidence", 0.9
         return "none", 0.0
 
@@ -72,18 +102,18 @@ class LowVarianceScorer(MPScorer):
         direction: Directions,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
-        ts_variance = ts.var()
         ts_mean = ts.mean()
         scores = []
         flags = []
-        if ts_variance > self.variance_threshold:
-            sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIANCE_TS, 0)
+        if ts.std() > self.std_threshold:
+            sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 0)
             return None
 
-        sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIANCE_TS, 1)
+        sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
         for val in ts:
-            # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
-            flag, score = self._to_flag_and_score(val, ts_mean)
+            flag, score = self._to_flag_and_score(
+                val, ts_mean, sensitivity=sensitivity, direction=direction
+            )
             flags.append(flag)
             scores.append(score)
         return FlagsAndScores(flags=flags, scores=scores)
@@ -99,16 +129,34 @@ class LowVarianceScorer(MPScorer):
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         context = ts_history[-2 * window_size :]
-        context_var = context.var()
-        if context_var > self.variance_threshold:
+        if context.std() > self.std_threshold:
             return None
-        # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
-        flag, score = self._to_flag_and_score(ts_streamed, context.mean())
+        flag, score = self._to_flag_and_score(
+            ts_streamed, context.mean(), sensitivity=sensitivity, direction=direction
+        )
 
         return FlagsAndScores(flags=[flag], scores=[score])
 
 
 class MPIQRScorer(MPScorer):
+    """
+    This class scores anomalies using the interquartile range of the matrix profile distances.
+    """
+
+    percentiles: Dict[Sensitivities, Tuple[float, float]] = Field(
+        {
+            # High sensitivity = more anomalies + higher false positives
+            # Data point outside of bottom 65% of the MP distances considered anomalous
+            "high": [0.25, 0.75],
+            # Medium sensitivity = lesser anomalies + lesser false positives
+            # Data point outside of bottom 70% of the MP distances considered anomalous
+            "medium": [0.15, 0.85],
+            # Low sensitivity = leaset anomalies + leaset false positives
+            # Data point outside of bottom 90% of the MP distances considered anomalous
+            "low": [0.05, 0.95],
+        },
+        description="Lower and upper bounds for high sensitivity",
+    )
 
     def batch_score(
         self,
@@ -141,23 +189,11 @@ class MPIQRScorer(MPScorer):
         """
         scores: list[float] = []
         flags: list[AnomalyFlags] = []
-
-        # Stumpy returns inf for the first timeseries[0:window_size - 2] entries. We just need to ignore those before scoring.
-        mp_dist_baseline_finite = mp_dist[np.isfinite(mp_dist)]
-
-        # Compute the quantiles for two different threshold levels
-        [Q1, Q3] = np.quantile(mp_dist_baseline_finite, [0.25, 0.75])
-        IQR_L = Q3 - Q1
-        threshold_lower = Q3 + (1.5 * IQR_L)
-
-        [Q1, Q3] = np.quantile(mp_dist_baseline_finite, [0.15, 0.85])
-        IQR_L = Q3 - Q1
-        threshold_upper = Q3 + (1.5 * IQR_L)
-
         # Compute score and anomaly flags
+        threshold = self._get_threshold(mp_dist, sensitivity)
         for i, val in enumerate(mp_dist):
-            scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold_upper)
-            flag = self._to_flag(val, threshold_lower, threshold_upper)
+            scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold)
+            flag = self._to_flag(val, threshold)
             if i > 2 * window_size:
                 flag = self._adjust_flag_for_vicinity(
                     flag=flag, ts_value=ts[i], context=ts[i - 2 * window_size : i - 1]
@@ -199,37 +235,34 @@ class MPIQRScorer(MPScorer):
             * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
             * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
-        # Stumpy returns inf for the first timeseries[0:window_size - 2] entries. We just need to ignore those before scoring.
-        mp_dist_baseline_finite = mp_dist_history[np.isfinite(mp_dist_history)]
-
-        # Compute the quantiles for two different threshold levels
-        [Q1, Q3] = np.quantile(mp_dist_baseline_finite, [0.25, 0.75])
-        IQR_L = Q3 - Q1
-        threshold_lower = Q3 + (1.5 * IQR_L)
-
-        [Q1, Q3] = np.quantile(mp_dist_baseline_finite, [0.15, 0.85])
-        IQR_L = Q3 - Q1
-        threshold_upper = Q3 + (1.5 * IQR_L)
+        threshold = self._get_threshold(mp_dist_history, sensitivity)
 
         # Compute score and anomaly flags
         score = (
             0.0
             if np.isnan(mp_dist_streamed) or np.isinf(mp_dist_streamed)
-            else mp_dist_streamed - threshold_upper
+            else mp_dist_streamed - threshold
         )
-        flag = self._to_flag(mp_dist_streamed, threshold_lower, threshold_upper)
+        flag = self._to_flag(mp_dist_streamed, threshold)
         # anomaly identified. apply logic to check for peak and trough
         flag = self._adjust_flag_for_vicinity(ts_streamed, flag, ts_history[-2 * window_size :])
 
         return FlagsAndScores(flags=[flag], scores=[score])
 
-    def _to_flag(self, mp_dist: np.float64, threshold_lower: float, threshold_upper: float):
-        if np.isnan(mp_dist):
+    def _get_threshold(self, mp_dist: npt.NDArray[np.float64], sensitivity: Sensitivities) -> float:
+        if sensitivity not in self.percentiles:
+            raise ClientError(f"Invalid sensitivity: {sensitivity}")
+
+        # Compute the quantiles for threshold level for the sensitivity
+        mp_dist_baseline_finite = mp_dist[np.isfinite(mp_dist)]
+        [Q1, Q3] = np.quantile(mp_dist_baseline_finite, self.percentiles[sensitivity])
+        IQR = Q3 - Q1
+        threshold = Q3 + (1.5 * IQR)
+        return threshold
+
+    def _to_flag(self, mp_dist: np.float64, threshold: float):
+        if np.isnan(mp_dist) or mp_dist <= threshold:
             return "none"
-        if mp_dist < threshold_lower:
-            return "none"
-        if mp_dist < threshold_upper:
-            return "anomaly_lower_confidence"
         return "anomaly_higher_confidence"
 
     def _adjust_flag_for_vicinity(
