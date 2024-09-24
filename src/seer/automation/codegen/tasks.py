@@ -28,7 +28,6 @@ def codegen_unittest(request: CodegenUnitTestsRequest):
     state = create_initial_unittest_run(request)
 
     cur_state = state.get()
-
     # Process has no further work.
     # if cur_state.status in CodegenStatus.terminal():
     #     logger.warning(f"Ignoring job, state {cur_state.status}")
