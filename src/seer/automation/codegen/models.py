@@ -46,7 +46,7 @@ class CodegenContinuation(CodegenState):
 
 class CodeUnitTestRequest(BaseComponentRequest):
     diff: str
-    codecov_client_params: Dict[Any, Any]
+    codecov_client_params: dict = Field(default_factory=dict)
 
 class CodegenUnitTestsResponse(BaseModel):
     run_id: int
