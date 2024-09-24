@@ -72,6 +72,8 @@ class AppConfig(BaseModel):
     # Super access token for developing against, won't be available in final production setup.
     CODECOV_SUPER_TOKEN: str = ""
 
+    GRPC_THREAD_POOL_SIZE: ParseInt = 1
+
     @cached_property
     def smoke_test_id(self) -> str:
         return str(uuid.uuid4())
