@@ -73,6 +73,8 @@ class AppConfig(BaseModel):
     CODECOV_SUPER_TOKEN: str = ""
 
     GRPC_THREAD_POOL_SIZE: ParseInt = 1
+    GRPC_SERVICE_PORT: ParseInt = 50051
+    GRPC_MAINTENANCE_PORT: ParseInt = 50052
 
     @cached_property
     def smoke_test_id(self) -> str:

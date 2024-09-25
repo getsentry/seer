@@ -62,6 +62,7 @@ services:
             - GOOGLE_CLOUD_PROJECT=ml-ai-420606
             - USE_EU_REGION=0
             - IGNORE_API_AUTH=1
+            - GRPC_SERVER_ENABLE=true
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:

@@ -1,23 +1,21 @@
 import dataclasses
+import logging
 from collections import defaultdict
 from concurrent import futures
-from typing import Annotated, Callable, Iterable
+from typing import Callable, Iterable
 
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from sentry_protos.seer.v1 import summarize_pb2, summarize_pb2_grpc
+from sentry_sdk.integrations.grpc import GRPCIntegration
 
-from seer.bootup import module
+import seer.app  # noqa: F401
+from seer.bootup import bootup, module
 from seer.configuration import AppConfig
-from seer.dependency_injection import Labeled, inject, injected
+from seer.dependency_injection import inject, injected
 
-
-@module.provider
-def grpc_thread_pool(
-    app_config: AppConfig,
-) -> Annotated[futures.ThreadPoolExecutor, Labeled("grpc_thread_pool")]:
-    return futures.ThreadPoolExecutor(max_workers=app_config.GRPC_THREAD_POOL_SIZE)
+logger = logging.getLogger(__name__)
 
 
 @module.provider
@@ -30,6 +28,16 @@ def grpc_health_service(app_config: AppConfig) -> health.HealthServicer:
         ),
     )
     return health_servicer
+
+
+class DummyIssueSummaryService(summarize_pb2_grpc.IssueSummaryServiceServicer):
+    def Summarize(self, request, context):
+        return summarize_pb2.SummarizeResponse(group_id=2)
+
+
+@module.provider
+def issue_summary_service() -> summarize_pb2_grpc.IssueSummaryServiceServicer:
+    return DummyIssueSummaryService()
 
 
 @dataclasses.dataclass
@@ -87,28 +95,55 @@ class HealthServicer(health.HealthServicer):
                 self.set(service_name, health_pb2.HealthCheckResponse.SERVING)
 
 
-@module.provider
-def grpc_server(
-    thread_pool: Annotated[futures.ThreadPoolExecutor, Labeled("grpc_thread_pool")] = injected,
+@inject
+def prepare_grpc_servers(
+    config: AppConfig = injected,
     issue_summary: summarize_pb2_grpc.IssueSummaryServiceServicer = injected,
     health_servicer: HealthServicer = injected,
-) -> grpc.Server:
-    server = ReflectableServer(grpc.server(thread_pool))
+) -> list[grpc.Server]:
+    server = ReflectableServer(
+        grpc.server(futures.ThreadPoolExecutor(config.GRPC_THREAD_POOL_SIZE))
+    )
 
+    server_fallback_creds = grpc.insecure_server_credentials()
+    server_creds = grpc.xds_server_credentials(server_fallback_creds)
+    server.add_secure_port(f"0.0.0.0:{config.GRPC_SERVICE_PORT}", server_creds)
+
+    maintenance_server = ReflectableServer(
+        grpc.server(futures.ThreadPoolExecutor(config.GRPC_THREAD_POOL_SIZE))
+    )
+    maintenance_server.add_insecure_port(f"0.0.0.0:{config.GRPC_MAINTENANCE_PORT}")
+
+    # Add new services right here.
     summarize_pb2_grpc.add_IssueSummaryServiceServicer_to_server(issue_summary, server)
-    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-    reflection.enable_server_reflection(list(server.service_handlers.keys()), server)
+
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, maintenance_server)
+    reflection.enable_server_reflection(
+        [*server.service_handlers.keys(), reflection.SERVICE_NAME, health.SERVICE_NAME],
+        maintenance_server,
+    )
+
     health_servicer.ensure_health_check_names(server)
     health_servicer.set_default_status(server)
+    health_servicer.set_default_status(maintenance_server)
 
-    return server
-
-
-class DummyIssueSummaryService(summarize_pb2_grpc.IssueSummaryServiceServicer):
-    def Summarize(self, request, context):
-        return summarize_pb2.SummarizeResponse(group_id=2)
+    return [server, maintenance_server]
 
 
 @inject
-def run_server(server: grpc.Server):
-    pass
+def run_server():
+    bootup(
+        start_model_loading=False,
+        integrations=[GRPCIntegration()],
+    )
+    servers = prepare_grpc_servers()
+    logger.info("Starting GRPC servers...")
+    for server in servers:
+        server.start()
+    logger.info("Running GRPC servers.")
+    for server in servers:
+        server.wait_for_termination()
+
+
+if __name__ == "__main__":
+    run_server()
