@@ -4,6 +4,7 @@ import uuid
 from functools import cached_property
 from typing import Annotated
 
+from celery.utils.nodenames import gethostname
 from pydantic import BaseModel, BeforeValidator, Field
 
 from seer.dependency_injection import Module
@@ -75,6 +76,37 @@ class AppConfig(BaseModel):
     GRPC_THREAD_POOL_SIZE: ParseInt = 1
     GRPC_SERVICE_PORT: ParseInt = 50051
     GRPC_MAINTENANCE_PORT: ParseInt = 50052
+
+    ANOMALY_DETECTION_ENABLED: ParseBool = False
+    GROUPING_ENABLED: ParseBool = False
+    SEVERITY_ENABLED: ParseBool = False
+    AUTOFIX_ENABLED: ParseBool = False
+    HOSTNAME: str = Field(default_factory=gethostname)
+
+    # Test utility that disables deployment conditional behavior.
+    # Update this to reflect new kinds of conditional behavior by adding
+    # more test coverage and locking them in.
+    def disable_all(self):
+        self.ANOMALY_DETECTION_ENABLED = False
+        self.GROUPING_ENABLED = False
+        self.SEVERITY_ENABLED = False
+        self.AUTOFIX_ENABLED = False
+
+    @property
+    def is_severity_enabled(self):
+        return self.SEVERITY_ENABLED or "severity" in self.HOSTNAME
+
+    @property
+    def is_grouping_enabled(self):
+        return self.GROUPING_ENABLED
+
+    @property
+    def is_autofix_enabled(self):
+        return self.AUTOFIX_ENABLED or "autofix" in self.HOSTNAME
+
+    @property
+    def is_anomaly_detection_enabled(self):
+        return self.ANOMALY_DETECTION_ENABLED or "breakpoint" in self.HOSTNAME
 
     @cached_property
     def smoke_test_id(self) -> str:

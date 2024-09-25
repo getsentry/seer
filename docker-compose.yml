@@ -49,6 +49,7 @@ services:
             - .env
         environment:
             - DEV=1
+            - AUTOFIX_ENABLED=1
             - SEVERITY_ENABLED=1
             - GROUPING_ENABLED=1
             - ANOMALY_DETECTION_ENABLED=1
