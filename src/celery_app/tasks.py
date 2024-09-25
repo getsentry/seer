@@ -11,7 +11,6 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 
-@celery.on_after_finalize.connect
 @inject
 def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
     if config.is_autofix_enabled:
