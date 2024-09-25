@@ -4,19 +4,21 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
+from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
 from seer.automation.autofix.config import (
     AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.autofix.models import AutofixStatus
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 
 
 class RootCauseStepRequest(PipelineStepTaskRequest):
-    pass
+    initial_memory: list[Message] = []
 
 
 @celery_app.task(
@@ -50,7 +52,10 @@ class RootCauseStep(AutofixPipelineStep):
     def _invoke(self, **kwargs):
         self.context.event_manager.send_root_cause_analysis_start()
 
-        self.context.event_manager.add_log("Beginning root cause analysis...")
+        if not self.request.initial_memory:
+            self.context.event_manager.add_log("Beginning root cause analysis...")
+        else:
+            self.context.event_manager.add_log("Thanks, continuing to analyze...")
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])
@@ -62,9 +67,16 @@ class RootCauseStep(AutofixPipelineStep):
 
         root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
             RootCauseAnalysisRequest(
-                event_details=event_details, instruction=state.request.instruction, summary=summary
+                event_details=event_details,
+                instruction=state.request.instruction,
+                summary=summary,
+                initial_memory=self.request.initial_memory,
             )
         )
+
+        state = self.context.state.get()
+        if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
+            return
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
         self.context.event_manager.add_log(

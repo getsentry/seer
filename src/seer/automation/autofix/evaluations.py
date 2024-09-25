@@ -52,7 +52,9 @@ def sync_run_root_cause(item: DatasetItemClient):
 
     request = AutofixRequest.model_validate(item.input.get("request"))
 
-    request.options = AutofixRequestOptions(disable_codebase_indexing=True)
+    request.options = AutofixRequestOptions(
+        disable_codebase_indexing=True, disable_interactivity=True
+    )
 
     state = create_initial_autofix_run(request)
     with state.update() as cur:
@@ -78,7 +80,9 @@ def sync_run_root_cause(item: DatasetItemClient):
 @observe(name="Sync run execution evaluation on item")
 def sync_run_execution(item: DatasetItemClient):
     request = AutofixRequest.model_validate(item.input.get("request"))
-    request.options = AutofixRequestOptions(disable_codebase_indexing=True)
+    request.options = AutofixRequestOptions(
+        disable_codebase_indexing=True, disable_interactivity=True
+    )
 
     expected_output = RootCauseExpectedOutput.model_validate(
         {
@@ -154,7 +158,9 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
 
     request = AutofixRequest.model_validate(item.input.get("request"))
 
-    request.options = AutofixRequestOptions(disable_codebase_indexing=True)
+    request.options = AutofixRequestOptions(
+        disable_codebase_indexing=True, disable_interactivity=True
+    )
 
     state = create_initial_autofix_run(request)
     with state.update() as cur:

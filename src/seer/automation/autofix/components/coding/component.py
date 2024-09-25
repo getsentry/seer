@@ -41,6 +41,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         agent = ClaudeAgent(
             tools=tools.get_tools(),
             config=AgentConfig(system_prompt=CodingPrompts.format_system_msg(), interactive=True),
+            memory=request.initial_memory,
         )
 
         task_str = (
@@ -52,12 +53,16 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         state = self.context.state.get()
 
         response = agent.run(
-            CodingPrompts.format_fix_discovery_msg(
-                event=request.event_details.format_event(),
-                task_str=task_str,
-                summary=request.summary,
-                repo_names=[repo.full_name for repo in state.request.repos],
-                instruction=request.instruction,
+            (
+                CodingPrompts.format_fix_discovery_msg(
+                    event=request.event_details.format_event(),
+                    task_str=task_str,
+                    summary=request.summary,
+                    repo_names=[repo.full_name for repo in state.request.repos],
+                    instruction=request.instruction,
+                )
+                if not request.initial_memory
+                else ""
             ),
             context=self.context,
         )
@@ -67,9 +72,12 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             cur.usage += agent.usage
 
         if not response:
+            self.context.store_memory("plan_and_code", agent.memory)
             return None
 
         final_response = agent.run(CodingPrompts.format_fix_msg())
+
+        self.context.store_memory("plan_and_code", agent.memory)
 
         with self.context.state.update() as cur:
             cur.usage += agent.usage - prev_usage

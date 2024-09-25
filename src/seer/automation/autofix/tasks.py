@@ -1,14 +1,17 @@
 import datetime
 import logging
 import random
-from typing import Literal, cast
+from typing import Literal, Type, cast
 
 import sentry_sdk
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
+from seer.automation.agent.models import Message
+from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.evaluations import (
     RootCauseScoreResult,
@@ -29,6 +32,8 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     AutofixUpdateRequest,
     AutofixUserMessagePayload,
+    DefaultStep,
+    Step,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
@@ -199,13 +204,114 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     )
 
 
+def restart_step_with_user_response(
+    state: ContinuationState,
+    memory: list[Message],
+    text: str,
+    event_manager: AutofixEventManager,
+    step_to_restart: Step,
+    step_class: Type[AutofixCodingStep | RootCauseStep],
+    step_request_class: Type[AutofixCodingStepRequest | RootCauseStepRequest],
+):
+    cur_state = state.get()
+    if memory:
+        tool_call_id = memory[-1].tool_call_id
+        if tool_call_id:
+            user_response = Message(role="tool", content=text, tool_call_id=tool_call_id)
+            if memory[-1].role == "tool":
+                memory[-1] = user_response
+            else:
+                memory.append(user_response)
+            event_manager.restart_step(step_to_restart)
+            step_class.get_signature(
+                step_request_class(
+                    run_id=cur_state.run_id,
+                    initial_memory=memory,
+                ),
+                queue=CeleryQueues.DEFAULT,
+            ).apply_async()
+
+
 def receive_user_message(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUserMessagePayload):
         raise ValueError("Invalid payload type for user_message")
 
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
-    with state.update() as cur:
-        cur.steps[-1].receive_user_message(request.payload.text)
+    cur_state = state.get()
+    step_to_restart = cur_state.find_last_step_waiting_for_response()
+
+    # check the state to see if we're responding to a question or interjecting
+    if step_to_restart:
+        # user response to question
+        with state.update() as cur:
+            cur.mark_triggered()
+        event_manager = AutofixEventManager(state)
+        context = AutofixContext(
+            state=state, sentry_client=get_sentry_client(), event_manager=event_manager
+        )
+
+        coding_memory = context.get_memory("plan_and_code")
+        root_cause_memory = context.get_memory("root_cause_analysis")
+
+        question = ""
+        if coding_memory and coding_memory[-2].tool_calls:
+            question = parse_json_with_keys(coding_memory[-2].tool_calls[0].args, ["question"])[
+                "question"
+            ]
+        elif root_cause_memory and root_cause_memory[-2].tool_calls:
+            question = parse_json_with_keys(root_cause_memory[-2].tool_calls[0].args, ["question"])[
+                "question"
+            ]
+
+        with state.update() as cur:
+            if isinstance(cur.steps[-1], DefaultStep):
+                cur.steps[-1].insights.append(
+                    InsightSharingOutput(
+                        insight=f"_{question}_  {request.payload.text}",
+                        justification="USER",
+                        codebase_context=[],
+                        error_message_context=[],
+                        stacktrace_context=[],
+                        breadcrumb_context=[],
+                    )
+                )
+
+        if coding_memory:
+            restart_step_with_user_response(
+                state,
+                coding_memory,
+                request.payload.text,
+                event_manager,
+                step_to_restart,
+                AutofixCodingStep,
+                AutofixCodingStepRequest,
+            )
+        elif root_cause_memory:
+            restart_step_with_user_response(
+                state,
+                root_cause_memory,
+                request.payload.text,
+                event_manager,
+                step_to_restart,
+                RootCauseStep,
+                RootCauseStepRequest,
+            )
+
+    else:
+        # user interjection
+        with state.update() as cur:
+            cur.steps[-1].receive_user_message(request.payload.text)
+            if isinstance(cur.steps[-1], DefaultStep):
+                cur.steps[-1].insights.append(
+                    InsightSharingOutput(
+                        insight=request.payload.text,
+                        justification="USER",
+                        codebase_context=[],
+                        error_message_context=[],
+                        stacktrace_context=[],
+                        breadcrumb_context=[],
+                    )
+                )
 
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):

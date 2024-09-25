@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
 
+from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseRelevantContext,
@@ -18,6 +19,7 @@ class CodingRequest(BaseComponentRequest):
     root_cause_and_fix: RootCauseAnalysisItem | str
     instruction: str | None = None
     summary: Optional[IssueSummary] = None
+    initial_memory: list[Message] = []
 
 
 class SnippetXml(PromptXmlModel, tag="snippet"):

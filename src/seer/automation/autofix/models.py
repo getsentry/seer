@@ -42,6 +42,7 @@ class AutofixStatus(enum.Enum):
     PROCESSING = "PROCESSING"
     NEED_MORE_INFORMATION = "NEED_MORE_INFORMATION"
     CANCELLED = "CANCELLED"
+    WAITING_FOR_USER_RESPONSE = "WAITING_FOR_USER_RESPONSE"
 
     @classmethod
     def terminal(cls) -> "frozenset[AutofixStatus]":
@@ -249,6 +250,7 @@ class AutofixStepUpdateArgs(BaseModel):
 
 class AutofixRequestOptions(BaseModel):
     disable_codebase_indexing: bool = False
+    disable_interactivity: bool = False
 
 
 class AutofixRequest(BaseModel):
@@ -339,6 +341,12 @@ class AutofixContinuation(AutofixGroupState):
 
         base_step = base_step.model_copy_with_new_id()
         return self.add_step(base_step)
+
+    def find_last_step_waiting_for_response(self) -> Step | None:
+        for step in self.steps[::-1]:
+            if step.status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
+                return step
+        return None
 
     def add_step(self, step: Step):
         step.index = len(self.steps)
