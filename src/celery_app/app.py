@@ -24,6 +24,9 @@ def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected,
     for k, v in config.items():
         setattr(sender.conf, k, v)
     bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+    from celery_app.tasks import setup_periodic_tasks
+
+    sender.on_after_finalize.connect(setup_periodic_tasks)
 
 
 setup_celery_entrypoint(celery_app)
