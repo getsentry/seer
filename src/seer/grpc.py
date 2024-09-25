@@ -10,16 +10,17 @@ from grpc_reflection.v1alpha import reflection
 from sentry_protos.seer.v1 import summarize_pb2, summarize_pb2_grpc
 from sentry_sdk.integrations.grpc import GRPCIntegration
 
-import seer.app  # noqa: F401
-from seer.bootup import bootup, module
+# Use seer's module so that we get a flask object correctly.
+from seer.app import app_module
+from seer.bootup import bootup
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
 
-@module.provider
-def grpc_health_service(app_config: AppConfig) -> health.HealthServicer:
+@app_module.provider
+def grpc_health_service(app_config: AppConfig = injected) -> health.HealthServicer:
     # Add health service
     health_servicer = health.HealthServicer(
         experimental_non_blocking=True,
@@ -35,7 +36,7 @@ class DummyIssueSummaryService(summarize_pb2_grpc.IssueSummaryServiceServicer):
         return summarize_pb2.SummarizeResponse(group_id=2)
 
 
-@module.provider
+@app_module.provider
 def issue_summary_service() -> summarize_pb2_grpc.IssueSummaryServiceServicer:
     return DummyIssueSummaryService()
 
@@ -46,7 +47,7 @@ def issue_summary_service() -> summarize_pb2_grpc.IssueSummaryServiceServicer:
 class ReflectableServer(grpc.Server):
     wrapped: grpc.Server
     service_handlers: dict[str, list[grpc.ServiceRpcHandler]] = dataclasses.field(
-        default_factory=defaultdict
+        default_factory=lambda: defaultdict(list)
     )
 
     def add_generic_rpc_handlers(
@@ -61,10 +62,26 @@ class ReflectableServer(grpc.Server):
     def __getattr__(self, item: str):
         return getattr(self.wrapped, item)
 
+    def add_insecure_port(self, *args, **kwds):
+        return self.wrapped.add_insecure_port(*args, **kwds)
 
+    def add_secure_port(self, *args, **kwds):
+        return self.wrapped.add_secure_port(*args, **kwds)
+
+    def start(self):
+        self.wrapped.start()
+
+    def stop(self, *args, **kwds):
+        self.wrapped.stop(*args, **kwds)
+
+    def wait_for_termination(self, *args, **kwds):
+        return self.wrapped.wait_for_termination(*args, **kwds)
+
+
+@app_module.provider
 @dataclasses.dataclass
 class HealthServicer(health.HealthServicer):
-    wrapped: health.HealthServicer
+    wrapped: health.HealthServicer = injected
     # Set of service names that will notify the health service when they are ready.
     checks: set[str] = dataclasses.field(default_factory=set)
 
@@ -74,7 +91,7 @@ class HealthServicer(health.HealthServicer):
         self.checks.add(service_name)
 
         def set_response(health_response: health_pb2.HealthCheckResponse.ServingStatus):
-            self.set(service_name, health_response)
+            self.wrapped.set(service_name, health_response)
 
         return set_response
 
@@ -92,7 +109,10 @@ class HealthServicer(health.HealthServicer):
         """
         for service_name in server.service_handlers.keys():
             if service_name not in self.checks:
-                self.set(service_name, health_pb2.HealthCheckResponse.SERVING)
+                self.wrapped.set(service_name, health_pb2.HealthCheckResponse.SERVING)
+
+    def __getattr__(self, item: str):
+        return getattr(self.wrapped, item)
 
 
 @inject
@@ -107,11 +127,13 @@ def prepare_grpc_servers(
 
     server_fallback_creds = grpc.insecure_server_credentials()
     server_creds = grpc.xds_server_credentials(server_fallback_creds)
+    logger.info(f"Adding listener for service port {config.GRPC_SERVICE_PORT}")
     server.add_secure_port(f"0.0.0.0:{config.GRPC_SERVICE_PORT}", server_creds)
 
     maintenance_server = ReflectableServer(
         grpc.server(futures.ThreadPoolExecutor(config.GRPC_THREAD_POOL_SIZE))
     )
+    logger.info(f"Adding listener for maintenance port {config.GRPC_MAINTENANCE_PORT}")
     maintenance_server.add_insecure_port(f"0.0.0.0:{config.GRPC_MAINTENANCE_PORT}")
 
     # Add new services right here.
@@ -140,7 +162,7 @@ def run_server():
     logger.info("Starting GRPC servers...")
     for server in servers:
         server.start()
-    logger.info("Running GRPC servers.")
+    logger.info("Listening on")
     for server in servers:
         server.wait_for_termination()
 

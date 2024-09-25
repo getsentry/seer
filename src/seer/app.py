@@ -75,6 +75,7 @@ logger = logging.getLogger(__name__)
 
 app = flask.current_app
 blueprint = Blueprint("app", __name__)
+app_module = module
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
