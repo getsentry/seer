@@ -96,5 +96,5 @@ class TestInsightSharingComponent:
         mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
-        with pytest.raises(RuntimeError, match="Test refusal"):
-            component.invoke(request, gpt_client=mock_gpt_client)
+        # make sure no error is raised
+        component.invoke(request, gpt_client=mock_gpt_client)

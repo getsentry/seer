@@ -153,6 +153,7 @@ class TestGptAgent:
         state.steps = [DefaultStep(title="Test step title")]
         state.get_all_insights.return_value = []
         state.get_step_description.return_value = "Test step"
+        state.request.options.disable_interactivity = False
         context.state = MagicMock()
         context.state.get.return_value = state
         return context

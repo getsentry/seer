@@ -75,7 +75,7 @@ class RootCauseStep(AutofixPipelineStep):
         )
 
         state = self.context.state.get()
-        if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
+        if state.steps and state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)

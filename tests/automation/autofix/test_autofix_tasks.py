@@ -227,16 +227,14 @@ class TestHandleUserMessages:
         mock_payload = AutofixUserMessagePayload(
             type=AutofixUpdateType.USER_MESSAGE, text="testing"
         )
-        mock_request = MagicMock()
-        mock_request.payload = mock_payload
-        mock_request.run_id = 123  # Example run_id
-
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+        mock_step = MagicMock()
         mock_continuation_state.from_id.return_value.update.return_value.__enter__.return_value = (
-            MagicMock(steps=[MagicMock()])
+            MagicMock(steps=[mock_step])
         )
-        mock_continuation_state.from_id.return_value.update.return_value.__enter__.return_value.steps[
-            -1
-        ].receive_user_message = MagicMock()
+        mock_continuation_state.from_id.return_value.get.return_value.find_last_step_waiting_for_response.return_value = (
+            None
+        )
 
         # Call the function under test
         receive_user_message(mock_request)

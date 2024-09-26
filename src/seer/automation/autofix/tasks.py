@@ -300,18 +300,19 @@ def receive_user_message(request: AutofixUpdateRequest):
     else:
         # user interjection
         with state.update() as cur:
-            cur.steps[-1].receive_user_message(request.payload.text)
-            if isinstance(cur.steps[-1], DefaultStep):
-                cur.steps[-1].insights.append(
-                    InsightSharingOutput(
-                        insight=request.payload.text,
-                        justification="USER",
-                        codebase_context=[],
-                        error_message_context=[],
-                        stacktrace_context=[],
-                        breadcrumb_context=[],
+            if cur.steps:
+                cur.steps[-1].receive_user_message(request.payload.text)
+                if isinstance(cur.steps[-1], DefaultStep):
+                    cur.steps[-1].insights.append(
+                        InsightSharingOutput(
+                            insight=request.payload.text,
+                            justification="USER",
+                            codebase_context=[],
+                            error_message_context=[],
+                            stacktrace_context=[],
+                            breadcrumb_context=[],
+                        )
                     )
-                )
 
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):
