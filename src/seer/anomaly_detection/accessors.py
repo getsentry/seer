@@ -8,7 +8,7 @@ import numpy as np
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
-from sqlalchemy import delete
+from sqlalchemy import delete, sql
 
 from seer.anomaly_detection.models import (
     DynamicAlert,
@@ -248,6 +248,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 .one_or_none()
             )
 
+            if not dynamic_alert:
+                raise ClientError(f"Alert with id {alert_id} not found")
+
             dynamic_alert.last_queued_at = datetime.now()
             dynamic_alert.data_purge_flag = TaskStatus.QUEUED
             session.commit()
@@ -269,7 +272,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
 
             return (
                 dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
-                or dynamic_alert.last_queued_at
+                or dynamic_alert.last_queued_at is not None
                 and dynamic_alert.last_queued_at < queued_at_threshold
             )
 
@@ -283,6 +286,6 @@ class DbAlertDataAccessor(AlertDataAccessor):
             )
 
             if dynamic_alert:
-                dynamic_alert.last_queued_at = None
+                dynamic_alert.last_queued_at = sql.null()
                 dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
                 session.commit()
