@@ -64,19 +64,19 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_invalid_alert_id(self):
         with self.assertRaises(ValueError, msg="Alert with id 100 not found"):
-            cleanup_timeseries(100, datetime.now().timestamp(), {})
+            cleanup_timeseries(100, datetime.now().timestamp())
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
         external_alert_id, config, _, _ = self._save_alert(0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold, config.serialize())
+        cleanup_timeseries(external_alert_id, date_threshold)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
         external_alert_id, config, points, anomalies = self._save_alert(1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold, config.serialize())
+        cleanup_timeseries(external_alert_id, date_threshold)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:
@@ -109,7 +109,7 @@ class TestCleanupTasks(unittest.TestCase):
             old_timeseries_points = session.query(DbDynamicAlertTimeSeries).all()
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold, config.serialize())
+        cleanup_timeseries(external_alert_id, date_threshold)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:

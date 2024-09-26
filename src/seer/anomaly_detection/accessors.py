@@ -245,7 +245,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             dynamic_alert = (
                 session.query(DbDynamicAlert)
                 .filter(DbDynamicAlert.external_alert_id == alert_id)
-                .first()
+                .one_or_none()
             )
 
             dynamic_alert.last_queued_at = datetime.now()
@@ -259,8 +259,11 @@ class DbAlertDataAccessor(AlertDataAccessor):
         """
         with Session() as session:
             dynamic_alert = (
-                session.query(DbDynamicAlert).filter_by(external_alert_id=alert_id).first()
+                session.query(DbDynamicAlert).filter_by(external_alert_id=alert_id).one_or_none()
             )
+
+            if not dynamic_alert:
+                raise ClientError(f"Alert with id {alert_id} not found")
 
             queued_at_threshold = datetime.now() - timedelta(hours=12)
 
@@ -276,9 +279,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
             dynamic_alert = (
                 session.query(DbDynamicAlert)
                 .filter(DbDynamicAlert.external_alert_id == alert_id)
-                .first()
+                .one_or_none()
             )
 
-            dynamic_alert.queued_at = None
-            dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
-            session.commit()
+            if dynamic_alert:
+                dynamic_alert.last_queued_at = None
+                dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
+                session.commit()

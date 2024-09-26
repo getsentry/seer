@@ -120,7 +120,6 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ClientError("No timeseries data found for alert")
-
         if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
             logger.error(
                 "invalid_state",
@@ -129,6 +128,14 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ServerError("Invalid state")
+
+        # Confirm that there is enough data (after purge)
+        min_data = self._min_required_timesteps(historic.config.time_period)
+        if len(historic.timeseries.timestamps) < min_data:
+            logger.error(f"Not enough timeseries data. At least {min_data} data points required")
+            raise ClientError(
+                f"Not enough timeseries data. At least {min_data} data points required"
+            )
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
