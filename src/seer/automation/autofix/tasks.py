@@ -5,6 +5,7 @@ from typing import Literal, cast
 
 import sentry_sdk
 from langfuse import Langfuse
+from sqlalchemy import desc, func
 
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
@@ -22,12 +23,14 @@ from seer.automation.autofix.evaluations import (
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
+    AutofixCopilotCreateFixPayload,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
+    AutofixUpdateType,
     AutofixUserMessagePayload,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
@@ -176,6 +179,36 @@ def run_autofix_execution(request: AutofixUpdateRequest):
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
+
+
+def run_autofix_execution_from_pr(request: AutofixUpdateRequest):
+    # FOR GITHUB COPILOT
+    if not isinstance(request.payload, AutofixCopilotCreateFixPayload):
+        raise ValueError("Invalid payload type for create fix from PR for GitHub Copilot")
+
+    # query seer db for run id based on pr url
+    run_id = None
+    with Session() as session:
+        row = (
+            session.query(DbRunState)
+            .filter(
+                func.json_extract(DbRunState.value, "$.request.options.comment_on_pr_with_url")
+                == request.payload.original_pr_url
+            )
+            .order_by(desc(DbRunState.id))
+            .first()
+        )
+        run_id = row.id if row else None
+
+    if run_id:
+        run_autofix_execution(
+            AutofixUpdateRequest(
+                run_id=run_id,
+                payload=AutofixRootCauseUpdatePayload(
+                    type=AutofixUpdateType.SELECT_ROOT_CAUSE, cause_id=0
+                ),
+            )
+        )
 
 
 def run_autofix_create_pr(request: AutofixUpdateRequest):

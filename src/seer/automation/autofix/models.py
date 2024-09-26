@@ -284,6 +284,12 @@ class AutofixUpdateType(str, enum.Enum):
     COPILOT_CREATE_FIX = "copilot_create_fix"
 
 
+class AutofixCopilotCreateFixPayload(BaseModel):
+    type: Literal[AutofixUpdateType.COPILOT_CREATE_FIX]
+    original_pr_url: str
+    cause_id: int = 0
+
+
 class AutofixRootCauseUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
     cause_id: int | None = None
@@ -307,6 +313,7 @@ class AutofixUpdateRequest(BaseModel):
         AutofixRootCauseUpdatePayload,
         AutofixCreatePrUpdatePayload,
         AutofixUserMessagePayload,
+        AutofixCopilotCreateFixPayload,
     ] = Field(discriminator="type")
 
 

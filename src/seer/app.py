@@ -33,6 +33,7 @@ from seer.automation.autofix.tasks import (
     run_autofix_create_pr,
     run_autofix_evaluation,
     run_autofix_execution,
+    run_autofix_execution_from_pr,
     run_autofix_root_cause,
 )
 from seer.automation.codebase.models import (
@@ -175,7 +176,9 @@ def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
 def autofix_update_endpoint(
     data: AutofixUpdateRequest,
 ) -> AutofixEndpointResponse:
-    if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
+    if data.payload.type == AutofixUpdateType.COPILOT_CREATE_FIX:
+        run_autofix_execution_from_pr(data)
+    elif data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
         run_autofix_execution(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_create_pr(data)
