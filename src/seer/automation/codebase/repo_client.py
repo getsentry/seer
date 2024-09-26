@@ -451,3 +451,8 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
 
         return data.text
+
+    def comment_on_pr(self, pr_url: str, comment: str):
+        pull_id = int(pr_url.split("/")[-1])
+        pull_request = self.repo.get_pull(pull_id)
+        pull_request.create_issue_comment(comment)

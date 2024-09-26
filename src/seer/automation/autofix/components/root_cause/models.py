@@ -42,6 +42,26 @@ class RootCauseAnalysisItem(BaseModel):
     reproduction: str
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
+    def to_markdown_string(self) -> str:
+        markdown = f"# {self.title}\n\n"
+        markdown += f"## Description\n{self.description}\n\n"
+        markdown += f"## Reproduction Steps\n{self.reproduction}\n\n"
+
+        if self.code_context:
+            markdown += "## Relevant Code Context\n\n"
+            for context in self.code_context:
+                markdown += f"### {context.title}\n"
+                markdown += f"{context.description}\n\n"
+                if context.snippet:
+                    markdown += f"**File:** {context.snippet.file_path}\n"
+                    if context.snippet.repo_name:
+                        markdown += f"**Repository:** {context.snippet.repo_name}\n"
+                    markdown += "```\n"
+                    markdown += f"{context.snippet.snippet}\n"
+                    markdown += "```\n\n"
+
+        return markdown.strip()
+
 
 class RootCauseAnalysisRelevantContext(BaseModel):
     snippets: list[RootCauseRelevantContext]

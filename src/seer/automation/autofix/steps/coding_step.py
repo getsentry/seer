@@ -83,9 +83,13 @@ class AutofixCodingStep(AutofixPipelineStep):
 
         self.context.event_manager.send_coding_result(coding_output)
 
+        should_make_pr_automatically = state.request.options.comment_on_pr_with_url is not None
         self.next(
             AutofixChangeDescriberStep.get_signature(
-                AutofixChangeDescriberRequest(**self.step_request_fields)
+                AutofixChangeDescriberRequest(
+                    **self.step_request_fields,
+                    should_make_pr_automatically=should_make_pr_automatically,
+                ),
             ),
             queue=CeleryQueues.DEFAULT,
         )
