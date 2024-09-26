@@ -1,6 +1,7 @@
 import abc
-import datetime
 import logging
+import random
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 import numpy as np
@@ -15,8 +16,9 @@ from seer.anomaly_detection.models import (
     MPTimeSeriesAnomalies,
     TimeSeriesAnomalies,
 )
+from seer.anomaly_detection.models.cleanup import CleanupConfig
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
-from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session
+from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
 from seer.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         timeseries: List[TimeSeriesPoint],
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
+        data_purge_flag: str,
     ):
         return NotImplemented
 
@@ -54,11 +57,26 @@ class AlertDataAccessor(BaseModel, abc.ABC):
     def delete_alert_data(self, external_alert_id: int):
         return NotImplemented
 
+    @abc.abstractmethod
+    def queue_data_purge_flag(self, external_alert_id: int):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def can_queue_cleanup_task(self, external_alert_id: int):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def reset_cleanup_task(self, external_alert_id: int):
+        return NotImplemented
+
 
 class DbAlertDataAccessor(AlertDataAccessor):
 
     @sentry_sdk.trace
     def _hydrate_alert(self, db_alert: DbDynamicAlert) -> DynamicAlert:
+        rand_offset = random.randint(0, 24)
+        timestamp_threshold = (datetime.now() - timedelta(days=28, hours=rand_offset)).timestamp()
+        num_old_points = 0
         window_size = db_alert.anomaly_algo_data.get("window_size")
         flags = []
         scores = []
@@ -75,6 +93,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     point.anomaly_algo_data
                 )
                 mp.append([dist, idx, l_idx, r_idx])
+            if point.timestamp.timestamp() < timestamp_threshold:
+                num_old_points += 1
 
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
@@ -98,6 +118,11 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 values=np.array(values),
             ),
             anomalies=anomalies,
+            cleanup_config=CleanupConfig(
+                num_old_points=num_old_points,
+                timestamp_threshold=timestamp_threshold,
+                num_acceptable_points=24 * 4 * 2,  # Num alerts for 2 days
+            ),
         )
 
     @sentry_sdk.trace
@@ -128,6 +153,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         timeseries: List[TimeSeriesPoint],
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
+        data_purge_flag: str,
     ):
         with Session() as session:
             existing_records = (
@@ -157,7 +183,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 config=config.model_dump(),
                 timeseries=[
                     DbDynamicAlertTimeSeries(
-                        timestamp=datetime.datetime.fromtimestamp(point.timestamp),
+                        timestamp=datetime.fromtimestamp(point.timestamp),
                         value=point.value,
                         anomaly_type=anomalies.flags[i],
                         anomaly_score=anomalies.scores[i],
@@ -166,6 +192,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     for i, point in enumerate(timeseries)
                 ],
                 anomaly_algo_data=anomaly_algo_data,
+                data_purge_flag=data_purge_flag,
             )
             session.add(new_record)
             session.commit()
@@ -189,7 +216,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
 
             new_record = DbDynamicAlertTimeSeries(
                 dynamic_alert_id=existing.id,
-                timestamp=datetime.datetime.fromtimestamp(timepoint.timestamp),
+                timestamp=datetime.fromtimestamp(timepoint.timestamp),
                 value=timepoint.value,
                 anomaly_type=anomaly.flags[0],
                 anomaly_score=anomaly.scores[0],
@@ -209,4 +236,49 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if existing is None:
                 raise ClientError(f"Alert with id {external_alert_id} not found")
             session.delete(existing)
+            session.commit()
+
+    @sentry_sdk.trace
+    def queue_data_purge_flag(self, alert_id: int):
+        # Set flag to queued and time when queued
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == alert_id)
+                .first()
+            )
+
+            dynamic_alert.last_queued_at = datetime.now()
+            dynamic_alert.data_purge_flag = TaskStatus.QUEUED
+            session.commit()
+
+    @sentry_sdk.trace
+    def can_queue_cleanup_task(self, alert_id: int) -> bool:
+        """
+        Checks if cleanup task can be queued based on current flag or previous time of queueing
+        """
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert).filter_by(external_alert_id=alert_id).first()
+            )
+
+            queued_at_threshold = datetime.now() - timedelta(hours=12)
+
+            return (
+                dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+                or dynamic_alert.last_queued_at
+                and dynamic_alert.last_queued_at < queued_at_threshold
+            )
+
+    @sentry_sdk.trace
+    def reset_cleanup_task(self, alert_id: int) -> None:
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == alert_id)
+                .first()
+            )
+
+            dynamic_alert.queued_at = None
+            dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
             session.commit()

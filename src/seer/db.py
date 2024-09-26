@@ -1,6 +1,7 @@
 import contextlib
 import datetime
 import json
+from enum import StrEnum
 from typing import Any, List, Optional
 
 import sqlalchemy
@@ -15,6 +16,7 @@ from sqlalchemy import (
     BigInteger,
     Connection,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Index,
@@ -64,6 +66,12 @@ class Base(DeclarativeBase):
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
 Session = sessionmaker(autoflush=False, expire_on_commit=False)
+
+
+class TaskStatus(StrEnum):
+    NOT_QUEUED = "not_queued"
+    PROCESSING = "processing"
+    QUEUED = "queued"
 
 
 class ProcessRequest(Base):
@@ -300,8 +308,16 @@ class DbDynamicAlert(Base):
     timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship(
         "DbDynamicAlertTimeSeries",
         back_populates="dynamic_alert",
-        cascade="all, delete",
+        cascade="all, delete, delete-orphan",
         passive_deletes=True,
+    )
+    data_purge_flag: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, native_enum=False),
+        nullable=False,
+        default=TaskStatus.NOT_QUEUED,
+    )
+    last_queued_at: Mapped[datetime.date] = mapped_column(
+        DateTime, nullable=True, default=datetime.datetime.utcnow
     )
 
 
