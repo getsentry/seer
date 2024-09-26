@@ -263,6 +263,9 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 and dynamic_alert.last_queued_at > datetime.now() - timedelta(minutes=1)
             )
 
+        with self.assertRaises(Exception):
+            alert_data_accessor.queue_data_purge_flag(999)
+
     def test_can_queue_cleanup_task(self):
 
         # Create and save alert
@@ -309,3 +312,92 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             dynamic_alert.last_queued_at = datetime.now()
             session.commit()
             assert not alert_data_accessor.can_queue_cleanup_task(external_alert_id)
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.can_queue_cleanup_task(999)
+
+    def test_delete_alert_data(self):
+        # Create and save alert
+        organization_id = 100
+        project_id = 101
+        external_alert_id = 10
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
+        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
+        anomalies = MPTimeSeriesAnomalies(
+            flags=["none", "none"],
+            scores=[1.0, 0.95],
+            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            window_size=1,
+        )
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=[point1, point2],
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 1},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        alert_data_accessor.delete_alert_data(external_alert_id)
+
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+
+            assert dynamic_alert is None
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.delete_alert_data(999)
+
+    def test_reset_cleanup_task(self):
+        # Create and save alert
+        organization_id = 100
+        project_id = 101
+        external_alert_id = 10
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
+        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
+        anomalies = MPTimeSeriesAnomalies(
+            flags=["none", "none"],
+            scores=[1.0, 0.95],
+            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            window_size=1,
+        )
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=[point1, point2],
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 1},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        alert_data_accessor.reset_cleanup_task(external_alert_id)
+
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+
+            assert dynamic_alert is not None
+            assert dynamic_alert.last_queued_at is None
+            assert dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.reset_cleanup_task(999)

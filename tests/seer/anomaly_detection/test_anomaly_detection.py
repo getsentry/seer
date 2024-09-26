@@ -81,7 +81,8 @@ class TestAnomalyDetection(unittest.TestCase):
 
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
-    def test_detect_anomalies_online(self, mock_save_timepoint, mock_query):
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
+    def test_detect_anomalies_online(self, mock_reset_cleanup, mock_save_timepoint, mock_query):
 
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
@@ -121,6 +122,7 @@ class TestAnomalyDetection(unittest.TestCase):
 
         # Dummy return so we don't hit db
         mock_save_timepoint.return_value = ""
+        mock_reset_cleanup.return_value = ""
 
         new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
         context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=new_timestamp, value=0.5))
@@ -137,6 +139,28 @@ class TestAnomalyDetection(unittest.TestCase):
         assert len(response.timeseries) == 1  # Checking just 1 streamed value
         assert isinstance(response.timeseries[0], TimeSeriesPoint)
         assert response.timeseries[0].timestamp == new_timestamp
+
+        # Alert has less data than min requirement
+        mock_query.return_value = DynamicAlert(
+            organization_id=0,
+            project_id=0,
+            external_alert_id=0,
+            config=config,
+            timeseries=MPTimeSeries(
+                timestamps=ts_timestamps[:100],
+                values=ts_values,
+            ),
+            anomalies=MPTimeSeriesAnomalies(
+                flags=np.array(["anomaly_high_confidence"]),
+                scores=np.array([0.4]),
+                matrix_profile=dummy_mp,
+                window_size=window_size,
+            ),
+            cleanup_config=cleanup_config,
+        )
+
+        with self.assertRaises(Exception):
+            AnomalyDetection().detect_anomalies(request=request)
 
     def test_detect_anomalies_combo(self):
 
