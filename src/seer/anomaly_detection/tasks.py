@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 
 import numpy as np
 import sentry_sdk
@@ -17,7 +16,6 @@ logger = logging.getLogger(__name__)
 @sentry_sdk.trace
 def cleanup_timeseries(alert_id: int, date_threshold: float):
     logger.info("Deleting timeseries points over 28 days old and updating matrix profiles")
-    date_threshold = datetime.fromtimestamp(date_threshold)
     toggle_data_purge_flag(alert_id)
 
     with Session() as session:
@@ -27,18 +25,17 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
             .one_or_none()
         )
 
-        config = AnomalyDetectionConfig(
-            time_period=alert.config["time_period"],
-            sensitivity=alert.config["sensitivity"],
-            direction=alert.config["direction"],
-            expected_seasonality=alert.config["expected_seasonality"],
-        )
-
         if alert is None:
             raise ValueError(f"Alert with id {alert_id} not found")
-        if alert.timeseries is None:
+        if len(alert.timeseries) == 0:
             logger.warn(f"Alert with id {alert_id} has no timeseries")
         else:
+            config = AnomalyDetectionConfig(
+                time_period=alert.config["time_period"],
+                sensitivity=alert.config["sensitivity"],
+                direction=alert.config["direction"],
+                expected_seasonality=alert.config["expected_seasonality"],
+            )
             deleted_timeseries_points = delete_old_timeseries_points(alert, date_threshold)
             updated_timeseries_points = update_matrix_profiles(alert, config)
             session.commit()
@@ -54,7 +51,7 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
     deleted_count = 0
     to_remove = []
     for ts in alert.timeseries:
-        if ts.timestamp < date_threshold:
+        if ts.timestamp.timestamp() < date_threshold:
             to_remove.append(ts)
     for ts in to_remove:
         alert.timeseries.remove(ts)
