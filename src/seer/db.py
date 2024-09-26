@@ -316,7 +316,7 @@ class DbDynamicAlert(Base):
         nullable=False,
         default=TaskStatus.NOT_QUEUED,
     )
-    last_queued_at: Mapped[datetime.date] = mapped_column(
+    last_queued_at: Mapped[Optional[datetime.date]] = mapped_column(
         DateTime, nullable=True, default=datetime.datetime.utcnow
     )
 
