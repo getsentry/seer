@@ -248,7 +248,7 @@ class AutofixStepUpdateArgs(BaseModel):
 
 
 class AutofixRequestOptions(BaseModel):
-    disable_codebase_indexing: bool = False
+    disable_interactive: bool = False
 
 
 class AutofixRequest(BaseModel):

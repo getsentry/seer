@@ -37,10 +37,14 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     @ai_track(description="Plan+Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         tools = BaseTools(self.context)
+        state = self.context.state.get()
 
         agent = ClaudeAgent(
             tools=tools.get_tools(),
-            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg(), interactive=True),
+            config=AgentConfig(
+                system_prompt=CodingPrompts.format_system_msg(),
+                interactive=not state.request.options.disable_interactive,
+            ),
         )
 
         task_str = (
@@ -48,8 +52,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
             else request.root_cause_and_fix
         )
-
-        state = self.context.state.get()
 
         response = agent.run(
             CodingPrompts.format_fix_discovery_msg(

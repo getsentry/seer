@@ -31,17 +31,16 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         self, request: RootCauseAnalysisRequest, gpt_client: GptClient = injected
     ) -> RootCauseAnalysisOutput | None:
         tools = BaseTools(self.context)
+        state = self.context.state.get()
 
         agent = GptAgent(
             tools=tools.get_tools(),
             config=AgentConfig(
                 system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
                 max_iterations=24,
-                interactive=True,
+                interactive=not state.request.options.disable_interactive,
             ),
         )
-
-        state = self.context.state.get()
 
         try:
             response = agent.run(
