@@ -78,6 +78,7 @@ class CodingPrompts:
             - No placeholders are allowed, the steps must be clear and detailed.
             - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps.
             - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
+            - Make sure any new files you create don't already exist, if they do, modify the existing file.
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str())
