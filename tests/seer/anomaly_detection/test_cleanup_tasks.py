@@ -135,3 +135,7 @@ class TestCleanupTasks(unittest.TestCase):
                 assert old.timestamp == new.timestamp
                 assert old.value == new.value
                 assert new.anomaly_algo_data == algo_data
+
+        # Fails due to invalid alert_id
+        with self.assertRaises(Exception):
+            cleanup_timeseries(999, date_threshold)
