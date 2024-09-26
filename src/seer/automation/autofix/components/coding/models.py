@@ -28,7 +28,7 @@ class SnippetXml(PromptXmlModel, tag="snippet"):
 class CodeContextXml(PromptXmlModel, tag="code_context"):
     title: str = element()
     description: str = element()
-    snippet: SnippetXml = element()
+    snippet: SnippetXml | None = element(default=None)
 
     @classmethod
     def from_root_cause_context(cls, context: RootCauseRelevantContext):
