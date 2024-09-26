@@ -65,6 +65,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             cur_step = cur.find_or_add(step)
             cur_step.status = AutofixStatus.PROCESSING
+            # TODO is this even updating the step properly?
             cur.status = AutofixStatus.PROCESSING
 
     def send_root_cause_analysis_will_start(self):

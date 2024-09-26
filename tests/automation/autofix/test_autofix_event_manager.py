@@ -80,3 +80,17 @@ class TestAutofixEventManager:
         event_manager.add_log("Test log message")
 
         assert state.get().steps == []
+
+    def test_restart_step(self, event_manager, state):
+        state.get().steps = [
+            RootCauseStep(id="1", title="Step 1", status=AutofixStatus.ERROR),
+            RootCauseStep(id="2", title="Step 2", status=AutofixStatus.COMPLETED),
+            RootCauseStep(id="3", title="Step 3", status=AutofixStatus.ERROR),
+        ]
+
+        event_manager.restart_step(state.get().steps[2])
+
+        assert state.get().steps[0].status == AutofixStatus.ERROR
+        assert state.get().steps[1].status == AutofixStatus.COMPLETED
+        assert state.get().steps[2].status == AutofixStatus.PROCESSING
+        assert state.get().status == AutofixStatus.PROCESSING
