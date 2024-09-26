@@ -83,6 +83,13 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
         """
         ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
+        if len(ts_values) == 0:
+            return MPTimeSeriesAnomalies(
+                flags=np.array([]),
+                scores=np.array([]),
+                matrix_profile=np.array([]),
+                window_size=0,
+            )
         window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
             # TODO: Add sentry logging of this error

@@ -2,6 +2,7 @@ import logging
 
 from pydantic import BaseModel
 
+from seer.anomaly_detection.models.cleanup import CleanupConfig
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.anomaly_detection.models.timeseries_anomalies import TimeSeriesAnomalies
@@ -16,3 +17,4 @@ class DynamicAlert(BaseModel):
     config: AnomalyDetectionConfig
     timeseries: TimeSeries
     anomalies: TimeSeriesAnomalies
+    cleanup_config: CleanupConfig
