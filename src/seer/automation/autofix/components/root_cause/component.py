@@ -36,7 +36,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             config=AgentConfig(
                 system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
                 max_iterations=24,
-                interactive=True,
+                interactive=False,
             ),
             memory=request.initial_memory,
         )

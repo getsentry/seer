@@ -4,10 +4,13 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, ClaudeAgent
+from seer.automation.agent.client import ClaudeClient
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodingOutput,
     CodingRequest,
+    FileMissingObj,
     PlanStepsPromptXml,
     RootCausePlanTaskPromptXml,
 )
@@ -22,6 +25,8 @@ from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from seer.dependency_injection import inject, injected
+from seer.langfuse import append_langfuse_observation_metadata, append_langfuse_trace_tags
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +38,57 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         with self.context.state.update() as cur:
             cur.codebases[repo_external_id].file_changes.append(file_change)
 
+    @observe(name="Incorrect diff fixer")
+    @ai_track(description="Incorrect diff fixer")
+    @inject
+    def _handle_missing_file_changes(
+        self,
+        missing_changes_by_file: dict[str, FileMissingObj],
+        claude_client: ClaudeClient = injected,
+    ):
+        for file_path, file_missing_obj in missing_changes_by_file.items():
+            new_response, usage = claude_client.completion(
+                model="claude-3-5-sonnet@20240620",
+                messages=[
+                    Message(
+                        role="user",
+                        content=CodingPrompts.format_incorrect_diff_fixer(
+                            file_path,
+                            file_missing_obj.diff_chunks,
+                            file_missing_obj.file_content,
+                        ),
+                    )
+                ],
+            )
+
+            with self.context.state.update() as cur:
+                cur.usage += usage
+
+            if not new_response.content:
+                continue
+
+            corrected_diffs = extract_text_inside_tags(new_response.content, "corrected_diffs")
+            new_task = file_missing_obj.task.model_copy(update={"diff": corrected_diffs})
+
+            changes, missing_changes = task_to_file_change(new_task, file_missing_obj.file_content)
+
+            # If there are any more missing changes, we just ignore at this point
+            missing_changes_count = len(missing_changes)
+            append_langfuse_observation_metadata(
+                {
+                    "missing_changes_count": missing_changes_count,
+                }
+            )
+            if missing_changes_count > 0:
+                append_langfuse_trace_tags([f"missing_changes_count:{missing_changes_count}"])
+
+            repo_client = self.context.get_repo_client(new_task.repo_name)
+            for change in changes:
+                self._append_file_change(repo_client.repo_external_id, change)
+
     @observe(name="Plan+Code")
     @ai_track(description="Plan+Code")
+    @inject
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         tools = BaseTools(self.context)
 
@@ -91,6 +145,31 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
         ).to_model()
 
+        # We only do this once, if it still errors, we just let it go
+        missing_files_errors = []
+        file_exist_errors = []
+        for task in coding_output.tasks:
+            repo_client = self.context.get_repo_client(task.repo_name)
+            file_content = repo_client.get_file_content(task.file_path)
+            if task.type == "file_change" and not file_content:
+                missing_files_errors.append(task.file_path)
+            elif task.type == "file_delete" and not file_content:
+                missing_files_errors.append(task.file_path)
+            elif task.type == "file_create" and file_content:
+                file_exist_errors.append(task.file_path)
+
+        if missing_files_errors or file_exist_errors:
+            new_response = agent.run(
+                CodingPrompts.format_missing_msg(missing_files_errors, file_exist_errors),
+            )
+
+            if new_response and "<plan_steps>" in new_response:
+                coding_output = PlanStepsPromptXml.from_xml(
+                    f"<plan_steps>{escape_multi_xml(extract_text_inside_tags(new_response, 'plan_steps'), ['diff', 'description', 'commit_message'])}</plan_steps>"
+                ).to_model()
+
+        missing_changes_by_file: dict[str, FileMissingObj] = dict()
+
         for task in coding_output.tasks:
             repo_client = self.context.get_repo_client(task.repo_name)
             if task.type == "file_change":
@@ -100,8 +179,18 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     logger.warning(f"Failed to get content for {task.file_path}")
                     continue
 
-                for change in task_to_file_change(task, file_content):
+                changes, missing_changes = task_to_file_change(task, file_content)
+
+                for change in changes:
                     self._append_file_change(repo_client.repo_external_id, change)
+
+                if missing_changes:
+                    missing_changes_by_file[task.file_path] = FileMissingObj(
+                        file_path=task.file_path,
+                        file_content=file_content,
+                        diff_chunks=missing_changes,
+                        task=task,
+                    )
             elif task.type == "file_delete":
                 self._append_file_change(
                     repo_client.repo_external_id,
@@ -114,5 +203,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 )
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
+
+        if missing_changes_by_file:
+            self._handle_missing_file_changes(missing_changes_by_file)
 
         return coding_output
