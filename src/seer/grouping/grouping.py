@@ -489,7 +489,7 @@ class GroupingLookup:
                     )
                 )
                 session.commit()
-            except IntegrityError as e:
+            except IntegrityError:
                 logger.info(
                     "group_already_exists_in_seer_db",
                     extra={
@@ -498,7 +498,6 @@ class GroupingLookup:
                         "input_hash": issue.hash,
                     },
                 )
-                raise e
 
     @sentry_sdk.tracing.trace
     def delete_grouping_records_for_project(self, project_id: int) -> bool:
