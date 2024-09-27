@@ -62,7 +62,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     instruction=request.instruction,
                 )
                 if not request.initial_memory
-                else ""
+                else None
             ),
             context=self.context,
         )

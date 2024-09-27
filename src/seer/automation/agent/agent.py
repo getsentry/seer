@@ -153,8 +153,9 @@ class LlmAgent(ABC):
         # Continue in all other cases
         return True
 
-    def run(self, prompt: str, context: Optional[AutofixContext] = None):
-        self.add_user_message(prompt)
+    def run(self, prompt: str | None, context: Optional[AutofixContext] = None):
+        if prompt:
+            self.add_user_message(prompt)
         logger.debug(f"----[{self.name}] Running Agent----")
 
         self.reset_iterations()
@@ -175,8 +176,7 @@ class LlmAgent(ABC):
         self.iterations = 0
 
     def add_user_message(self, content: str):
-        if content:
-            self.memory.append(Message(role="user", content=content))
+        self.memory.append(Message(role="user", content=content))
 
     def get_last_message_content(self) -> str | None:
         return self.memory[-1].content if self.memory else None

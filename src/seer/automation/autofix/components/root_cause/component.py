@@ -53,7 +53,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         repo_names=[repo.full_name for repo in state.request.repos],
                     )
                     if not request.initial_memory
-                    else ""
+                    else None
                 ),
                 context=self.context,
             )
