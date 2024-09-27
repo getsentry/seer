@@ -52,6 +52,7 @@ class CodingPrompts:
             - If the issue occurs in multiple places or files, make sure to provide a fix for each occurrence, no matter how many there are.
             - In your suggested fixes, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
             - You do not need to make changes in test files, someone else will do that.
+            - At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis.
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(

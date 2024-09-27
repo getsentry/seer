@@ -229,6 +229,15 @@ class BaseTools:
 
         return "\n".join(found)
 
+    @observe(name="Ask User Question")
+    @ai_track(description="Ask User Question")
+    def ask_user_question(self, question: str):
+        """
+        Sends a question to the user on the frontend and waits for a response before continuing.
+        """
+        if isinstance(self.context, AutofixContext):
+            self.context.event_manager.ask_user_question(question)
+
     def get_tools(self):
         tools = [
             FunctionTool(
@@ -333,5 +342,24 @@ class BaseTools:
                 ],
             ),
         ]
+
+        if (
+            isinstance(self.context, AutofixContext)
+            and not self.context.state.get().request.options.disable_interactivity
+        ):
+            tools.append(
+                FunctionTool(
+                    name="ask_a_question",
+                    fn=self.ask_user_question,
+                    description="Asks your team members a quick question.",
+                    parameters=[
+                        {
+                            "name": "question",
+                            "type": "string",
+                            "description": "The question you want to ask your team.",
+                        }
+                    ],
+                )
+            )
 
         return tools

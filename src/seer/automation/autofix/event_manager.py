@@ -15,6 +15,7 @@ from seer.automation.autofix.models import (
     ProgressItem,
     ProgressType,
     RootCauseStep,
+    Step,
 )
 from seer.automation.state import State
 
@@ -59,6 +60,12 @@ class AutofixEventManager:
         with self.state.update() as cur:
             for step in cur.steps:
                 step.ensure_uuid_id()
+
+    def restart_step(self, step: Step):
+        with self.state.update() as cur:
+            cur_step = cur.find_or_add(step)
+            cur_step.status = AutofixStatus.PROCESSING
+            cur.status = AutofixStatus.PROCESSING
 
     def send_root_cause_analysis_will_start(self):
         with self.state.update() as cur:
@@ -172,6 +179,17 @@ class AutofixEventManager:
                         type=ProgressType.INFO,
                     )
                 )
+
+    def ask_user_question(self, question: str):
+        with self.state.update() as cur:
+            step = cur.steps[-1]
+            step.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
+            step.progress.append(
+                ProgressItem(
+                    message=question,
+                    type=ProgressType.INFO,
+                )
+            )
 
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True

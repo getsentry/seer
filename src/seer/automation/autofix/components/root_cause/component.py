@@ -31,7 +31,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         self, request: RootCauseAnalysisRequest, gpt_client: GptClient = injected
     ) -> RootCauseAnalysisOutput | None:
         tools = BaseTools(self.context)
-
         agent = GptAgent(
             tools=tools.get_tools(),
             config=AgentConfig(
@@ -39,23 +38,28 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 max_iterations=24,
                 interactive=True,
             ),
+            memory=request.initial_memory,
         )
 
         state = self.context.state.get()
 
         try:
             response = agent.run(
-                RootCauseAnalysisPrompts.format_default_msg(
-                    event=request.event_details.format_event(),
-                    summary=request.summary,
-                    instruction=request.instruction,
-                    repo_names=[repo.full_name for repo in state.request.repos],
+                (
+                    RootCauseAnalysisPrompts.format_default_msg(
+                        event=request.event_details.format_event(),
+                        summary=request.summary,
+                        instruction=request.instruction,
+                        repo_names=[repo.full_name for repo in state.request.repos],
+                    )
+                    if not request.initial_memory
+                    else None
                 ),
                 context=self.context,
             )
 
             if not response:
-                logger.warning("Root Cause Analysis agent did not return a valid response")
+                self.context.store_memory("root_cause_analysis", agent.memory)
                 return None
 
             if "<NO_ROOT_CAUSES>" in response:

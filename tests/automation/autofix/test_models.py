@@ -501,6 +501,16 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertEqual(added_step.index, 1)
         self.assertEqual(len(self.continuation.steps), 2)
 
+    def test_find_last_step_waiting_for_response(self):
+        step1 = DefaultStep(key="step1", status=AutofixStatus.COMPLETED, title="test")
+        step2 = DefaultStep(
+            key="step2", status=AutofixStatus.WAITING_FOR_USER_RESPONSE, title="test"
+        )
+        step3 = DefaultStep(key="step3", status=AutofixStatus.PROCESSING, title="test")
+        self.continuation.steps = [step1, step2, step3]
+
+        self.assertEqual(self.continuation.find_last_step_waiting_for_response(), step2)
+
     def test_make_step_latest(self):
         step1 = DefaultStep(key="step1", title="test")
         step2 = DefaultStep(key="step2", title="test")

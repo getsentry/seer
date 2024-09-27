@@ -3,6 +3,7 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, StringConstraints
 from pydantic_xml import attr
 
+from seer.automation.agent.models import Message
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 from seer.automation.summarize.issue import IssueSummary
@@ -100,6 +101,7 @@ class RootCauseAnalysisRequest(BaseComponentRequest):
     event_details: EventDetails
     instruction: Optional[str] = None
     summary: Optional[IssueSummary] = None
+    initial_memory: list[Message] = []
 
 
 class RootCauseAnalysisOutput(BaseComponentOutput):

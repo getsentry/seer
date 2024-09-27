@@ -17,7 +17,7 @@ from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
-from seer.automation.autofix.models import DefaultStep
+from seer.automation.autofix.models import AutofixStatus, DefaultStep
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -86,7 +86,12 @@ class LlmAgent(ABC):
         self.memory.append(message)
 
         # log thoughts to the user
-        if message.content and context and self.config.interactive:
+        if (
+            message.content
+            and context
+            and self.config.interactive
+            and not context.state.get().request.options.disable_interactivity
+        ):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
@@ -120,7 +125,13 @@ class LlmAgent(ABC):
 
         return self.memory
 
-    def should_continue(self) -> bool:
+    def should_continue(self, context: Optional[AutofixContext] = None) -> bool:
+        if (
+            context
+            and context.state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE
+        ):
+            return False
+
         # If this is the first iteration or there are no messages, continue
         if self.iterations == 0 or not self.memory:
             return True
@@ -142,13 +153,14 @@ class LlmAgent(ABC):
         # Continue in all other cases
         return True
 
-    def run(self, prompt: str, context: Optional[AutofixContext] = None):
-        self.add_user_message(prompt)
+    def run(self, prompt: str | None, context: Optional[AutofixContext] = None):
+        if prompt:
+            self.add_user_message(prompt)
         logger.debug(f"----[{self.name}] Running Agent----")
 
         self.reset_iterations()
 
-        while self.should_continue():
+        while self.should_continue(context):
             if context and self.config.interactive:
                 self.use_user_messages(context)
             self.run_iteration(context=context)

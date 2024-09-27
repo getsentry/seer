@@ -5,12 +5,14 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
+from seer.automation.agent.models import Message
 from seer.automation.autofix.components.coding.component import CodingComponent
 from seer.automation.autofix.components.coding.models import CodingRequest
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.autofix.models import AutofixStatus
 from seer.automation.autofix.steps.change_describer_step import (
     AutofixChangeDescriberRequest,
     AutofixChangeDescriberStep,
@@ -21,7 +23,7 @@ from seer.automation.pipeline import PipelineStepTaskRequest
 
 
 class AutofixCodingStepRequest(PipelineStepTaskRequest):
-    pass
+    initial_memory: list[Message] = []
 
 
 @celery_app.task(
@@ -57,7 +59,12 @@ class AutofixCodingStep(AutofixPipelineStep):
         self.logger.info("Executing Autofix - Plan+Code Step")
 
         self.context.event_manager.send_coding_start()
-        self.context.event_manager.add_log("Figuring out a fix for the root cause of this issue...")
+        if not self.request.initial_memory:
+            self.context.event_manager.add_log(
+                "Figuring out a fix for the root cause of this issue..."
+            )
+        else:
+            self.context.event_manager.add_log("Thanks, continuing to analyze...")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()
@@ -78,11 +85,15 @@ class AutofixCodingStep(AutofixPipelineStep):
                 root_cause_and_fix=root_cause_and_fix,
                 instruction=state.request.instruction,
                 summary=summary,
+                initial_memory=self.request.initial_memory,
             )
         )
 
-        self.context.event_manager.send_coding_result(coding_output)
+        state = self.context.state.get()
+        if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
+            return
 
+        self.context.event_manager.send_coding_result(coding_output)
         self.next(
             AutofixChangeDescriberStep.get_signature(
                 AutofixChangeDescriberRequest(**self.step_request_fields)
