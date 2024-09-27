@@ -490,7 +490,7 @@ class GroupingLookup:
                 )
                 session.commit()
             except IntegrityError:
-                logger.info(
+                logger.exception(
                     "group_already_exists_in_seer_db",
                     extra={
                         "project_id": issue.project_id,
