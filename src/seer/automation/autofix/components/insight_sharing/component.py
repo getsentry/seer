@@ -110,7 +110,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 messages=memory,
                 response_format=InsightContextOutput,
                 temperature=0.0,
-                max_tokens=2048,
+                max_tokens=4096,
             )
             with self.context.state.update() as cur:
                 usage = Usage(
