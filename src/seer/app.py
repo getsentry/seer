@@ -116,7 +116,6 @@ def breakpoint_trends_endpoint(data: BreakpointRequest) -> BreakpointResponse:
 
 @json_api(blueprint, "/v0/issues/similar-issues")
 def similarity_endpoint(data: GroupingRequest) -> SimilarityResponse:
-    print("CALLED!", data)
     with sentry_sdk.start_span(op="seer.grouping", description="grouping lookup") as span:
         sentry_sdk.set_tag("read_only", data.read_only)
         sentry_sdk.set_tag("request_hash", data.hash)
