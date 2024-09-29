@@ -86,11 +86,14 @@ class LlmAgent(ABC):
             )
         )
         if insight_card:
-            with context.state.update() as cur:
-                if cur.steps and isinstance(cur.steps[-1], DefaultStep):
-                    step = cur.steps[-1]
-                    step.insights.append(insight_card)
-                    cur.steps[-1] = step
+            if len(context.state.get().get_all_insights()) == len(
+                past_insights
+            ):  # in case something else was added in parallel, don't add this insight
+                with context.state.update() as cur:
+                    if cur.steps and isinstance(cur.steps[-1], DefaultStep):
+                        step = cur.steps[-1]
+                        step.insights.append(insight_card)
+                        cur.steps[-1] = step
 
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
