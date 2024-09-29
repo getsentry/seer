@@ -1,6 +1,7 @@
 import logging
+import threading
 from abc import ABC
-from typing import Optional, cast
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -73,6 +74,24 @@ class LlmAgent(ABC):
                 cur.steps[-1].queued_user_messages = []
             context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
 
+    def share_insights(self, context: AutofixContext, text: str):
+        insight_sharing = InsightSharingComponent(context)
+        past_insights = context.state.get().get_all_insights()
+        insight_card = insight_sharing.invoke(
+            InsightSharingRequest(
+                latest_thought=text,
+                memory=self.memory,
+                task_description=context.state.get().get_step_description(),
+                past_insights=past_insights,
+            )
+        )
+        if insight_card:
+            with context.state.update() as cur:
+                if cur.steps and isinstance(cur.steps[-1], DefaultStep):
+                    step = cur.steps[-1]
+                    step.insights.append(insight_card)
+                    cur.steps[-1] = step
+
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
@@ -95,26 +114,9 @@ class LlmAgent(ABC):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
-                # call LLM separately with the same memory to generate structured output insight cards
-                insight_sharing = InsightSharingComponent(context)
-                past_insights = context.state.get().get_all_insights()
-                insight_card = insight_sharing.invoke(
-                    InsightSharingRequest(
-                        latest_thought=text,
-                        memory=self.memory,
-                        task_description=context.state.get().get_step_description(),
-                        past_insights=past_insights,
-                    )
-                )
-                if insight_card:
-                    if context.state.get().steps and isinstance(
-                        context.state.get().steps[-1], DefaultStep
-                    ):
-                        step = cast(DefaultStep, context.state.get().steps[-1])
-                        step.insights.append(insight_card)
-                        with context.state.update() as cur:
-                            cur.steps[-1] = step
+                threading.Thread(target=self.share_insights, args=(context, text)).start()
 
+        # call any tools the model wants to use
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 tool_response = self.call_tool(tool_call)

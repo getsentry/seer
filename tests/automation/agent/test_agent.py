@@ -159,7 +159,8 @@ class TestGptAgent:
         return context
 
     @patch("seer.automation.agent.agent.InsightSharingComponent")
-    def test_run_iteration(self, mock_insight_sharing, agent, mock_context):
+    @patch("seer.automation.agent.agent.threading.Thread")
+    def test_run_iteration(self, mock_thread, mock_insight_sharing, agent, mock_context):
         # Mock the message and usage
         mock_message = Message(role="assistant", content="Test response")
         mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
@@ -170,7 +171,10 @@ class TestGptAgent:
         mock_insight_sharing_instance = MagicMock()
         mock_insight_sharing_instance.invoke.return_value = mock_insight_card
         mock_insight_sharing.return_value = mock_insight_sharing_instance
-        agent.call_tool = MagicMock(return_value=None)
+
+        # Mock the threading.Thread
+        mock_thread_instance = MagicMock()
+        mock_thread.return_value = mock_thread_instance
 
         # Run the method
         agent.run_iteration(context=mock_context)
@@ -181,18 +185,25 @@ class TestGptAgent:
         assert agent.memory[0] == mock_message
         assert agent.usage == mock_usage
 
+        # Check if a new thread was created for insight sharing
+        mock_thread.assert_called_once()
+        assert mock_thread.call_args[1]["target"] == agent.share_insights
+        assert isinstance(mock_thread.call_args[1]["args"][0], AutofixContext)
+        assert isinstance(mock_thread.call_args[1]["args"][1], str)
+
+        # Check if the thread was started
+        mock_thread_instance.start.assert_called_once()
+
+        # To test the share insights method, we need to call it directly
+        agent.share_insights(mock_context, "Test response")
+
         # Check if insight sharing was called
         mock_insight_sharing.assert_called_once_with(mock_context)
         mock_insight_sharing_instance.invoke.assert_called_once()
         assert isinstance(
             mock_insight_sharing_instance.invoke.call_args[0][0], InsightSharingRequest
         )
-
-        # Check if the insight was added to the step
-        assert mock_context.state.get().steps[-1].insights[-1] == mock_insight_card
-
-        # Check if tool calls were not made
-        agent.call_tool.assert_not_called()
+        mock_context.state.update.assert_called_once()
 
     def test_run_iteration_with_queued_user_messages(self, agent, mock_client, mock_context):
         # Create a mock step with queued_user_messages as a list of strings

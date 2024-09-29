@@ -14,7 +14,6 @@ from seer.automation.autofix.components.insight_sharing.models import (
 )
 from seer.automation.component import BaseComponent
 from seer.automation.utils import extract_parsed_model
-from seer.dependency_injection import inject, injected
 
 
 class InsightSharingPrompts:
@@ -30,7 +29,7 @@ class InsightSharingPrompts:
             Given the chain of thought below for {task_description}:
             {insights}
 
-            Write the next under-25-words conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after analysis, it should not be a plan of what to analyze next, and it should be valuable for {task_description}. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets these criteria, return <NO_INSIGHT/>.
+            Write the next under-20-word conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets these criteria, return <NO_INSIGHT/>.
 
             {latest_thought}"""
         ).format(
@@ -63,10 +62,8 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
 
     @observe(name="Sharing Insights")
     @ai_track(description="Sharing Insights")
-    @inject
-    def invoke(
-        self, request: InsightSharingRequest, gpt_client: GptClient = injected
-    ) -> InsightSharingOutput | None:
+    def invoke(self, request: InsightSharingRequest) -> InsightSharingOutput | None:
+        gpt_client = GptClient()
         try:
             prompt_one = InsightSharingPrompts.format_step_one(
                 task_description=request.task_description,
@@ -98,7 +95,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 latest_thought=request.latest_thought,
             )
             memory = []
-            for i, message in enumerate(
+            for _, message in enumerate(
                 gpt_client.clean_tool_call_assistant_messages(request.memory)
             ):
                 if message.role != "system":
