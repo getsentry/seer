@@ -1,3 +1,4 @@
+import threading
 from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 
@@ -291,3 +292,25 @@ class TestGptAgent:
 
         with pytest.raises(MaxIterationsReachedException):
             agent.run("Test prompt")
+
+    @patch("seer.automation.agent.agent.module.enable")
+    @patch("seer.automation.agent.agent.configuration_module.enable")
+    def test_run_in_thread(self, mock_config_enable, mock_module_enable, agent):
+        mock_func = MagicMock()
+        mock_args = (1, "test")
+
+        event = threading.Event()
+
+        def mock_func_side_effect(*args):
+            event.set()
+
+        mock_func.side_effect = mock_func_side_effect
+
+        agent.run_in_thread(mock_func, mock_args)
+
+        assert event.wait(1), "Thread did not finish execution in time"
+
+        mock_module_enable.assert_called_once()
+        mock_config_enable.assert_called_once()
+
+        mock_func.assert_called_once_with(*mock_args)
