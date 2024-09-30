@@ -201,3 +201,89 @@ class TestCodingComponent:
         )
         mock_append_metadata.assert_called_once_with({"missing_changes_count": 1})
         mock_append_tags.assert_called_once_with(["missing_changes_count:1"])
+
+    @patch(
+        "seer.automation.autofix.components.coding.component.extract_text_inside_tags",
+        side_effect=["First plan steps", "Updated plan steps"],
+    )
+    @patch("seer.automation.autofix.components.coding.component.PlanStepsPromptXml")
+    def test_invoke_with_missing_and_existing_files(
+        self, mock_plan_steps_prompt_xml, mock_extract_text, component, mock_claude_client
+    ):
+        # Setup
+        mock_request = MagicMock()
+        mock_agent = MagicMock()
+        mock_agent.run.side_effect = [
+            "Initial response",
+            "<plan_steps>First plan steps</plan_steps>",
+            "<plan_steps>Updated plan steps</plan_steps>",
+        ]
+        mock_agent.usage = MagicMock()
+
+        mock_repo_client = MagicMock()
+        component.context.get_repo_client.return_value = mock_repo_client
+        component._handle_missing_file_changes = MagicMock()
+
+        # Simulate file content for different scenarios
+        def mock_get_file_content(file_path):
+            if file_path in ["missing_file1.py", "missing_file2.py"]:
+                return None
+            elif file_path == "existing_file.py":
+                return "Existing content"
+            return "def foo():\n    return 'Hello'"
+
+        mock_repo_client.get_file_content.side_effect = mock_get_file_content
+
+        mock_coding_output = MagicMock()
+        mock_coding_output.tasks = [
+            PlanTaskPromptXml(
+                type="file_change",
+                file_path="missing_file1.py",
+                repo_name="repo1",
+                diff="@@ -1,3 +1,3 @@\n def foo():\n-    return 'Hello'\n+    return 'Hello, World!'",
+                description="",
+                commit_message="",
+            ),
+            PlanTaskPromptXml(
+                type="file_delete",
+                file_path="missing_file2.py",
+                repo_name="repo1",
+                diff="@@ -1,3 +1,3 @@\n def foo():\n-    return 'Hello'",
+                description="",
+                commit_message="",
+            ),
+            PlanTaskPromptXml(
+                type="file_create",
+                file_path="existing_file.py",
+                repo_name="repo1",
+                diff="@@ -1,3 +1,3 @@\n+ def foo():\n+    return 'Hello, World!'",
+                description="",
+                commit_message="",
+            ),
+            PlanTaskPromptXml(
+                type="file_change",
+                file_path="valid_file.py",
+                repo_name="repo1",
+                diff="@@ -1,3 +1,3 @@\n def foo():\n-    return 'Hello'\n+    return 'Hello, World!'",
+                description="",
+                commit_message="",
+            ),
+        ]
+
+        mock_plan_steps_prompt_xml.from_xml.return_value.to_model.return_value = mock_coding_output
+
+        # Execute
+        with patch(
+            "seer.automation.autofix.components.coding.component.ClaudeAgent",
+            return_value=mock_agent,
+        ):
+            result = component.invoke(mock_request)
+
+        # Assert
+        assert mock_agent.run.call_count == 3
+        assert "missing_file1.py" in mock_agent.run.call_args_list[2][0][0]
+        assert "missing_file2.py" in mock_agent.run.call_args_list[2][0][0]
+        assert "existing_file.py" in mock_agent.run.call_args_list[2][0][0]
+
+        # Ensure the result is as expected
+        assert result == mock_coding_output

@@ -88,7 +88,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
     @observe(name="Plan+Code")
     @ai_track(description="Plan+Code")
-    @inject
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         tools = BaseTools(self.context)
 
