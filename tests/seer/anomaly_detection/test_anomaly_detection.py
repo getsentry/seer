@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -6,6 +7,7 @@ import numpy as np
 from seer.anomaly_detection.accessors import AlertDataAccessor
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import DynamicAlert, MPTimeSeries
+from seer.anomaly_detection.models.cleanup import CleanupConfig
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     AnomalyDetectionConfig,
@@ -79,19 +81,25 @@ class TestAnomalyDetection(unittest.TestCase):
 
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
-    def test_detect_anomalies_online(self, mock_save_timepoint, mock_query):
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
+    def test_detect_anomalies_online(self, mock_reset_cleanup, mock_save_timepoint, mock_query):
 
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
+        cleanup_config = CleanupConfig(
+            num_old_points=0, timestamp_threshold=0, num_acceptable_points=0
+        )
+
         timeseries, _, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
-        ts = timeseries[0]
+        ts_values = timeseries[0]
+        ts_timestamps = np.arange(1, len(ts_values), 1) + datetime.now().timestamp()
         window_size = window_sizes[0]
 
-        dummy_mp = np.ones((len(ts) - window_size + 1, 4))
+        dummy_mp = np.ones((len(ts_values) - window_size + 1, 4))
 
         mock_query.return_value = DynamicAlert(
             organization_id=0,
@@ -99,8 +107,8 @@ class TestAnomalyDetection(unittest.TestCase):
             external_alert_id=0,
             config=config,
             timeseries=MPTimeSeries(
-                timestamps=np.linspace(1, len(ts), 1),
-                values=ts,
+                timestamps=ts_timestamps,
+                values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
                 flags=np.array(["anomaly_high_confidence"]),
@@ -108,12 +116,15 @@ class TestAnomalyDetection(unittest.TestCase):
                 matrix_profile=dummy_mp,
                 window_size=window_size,
             ),
+            cleanup_config=cleanup_config,
         )
 
         # Dummy return so we don't hit db
         mock_save_timepoint.return_value = ""
+        mock_reset_cleanup.return_value = ""
 
-        context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=len(ts) + 1, value=0.5))
+        new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
+        context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=new_timestamp, value=0.5))
 
         request = DetectAnomaliesRequest(
             organization_id=0, project_id=0, config=config, context=context
@@ -126,7 +137,29 @@ class TestAnomalyDetection(unittest.TestCase):
         assert isinstance(response.timeseries, list)
         assert len(response.timeseries) == 1  # Checking just 1 streamed value
         assert isinstance(response.timeseries[0], TimeSeriesPoint)
-        assert response.timeseries[0].timestamp == len(ts) + 1
+        assert response.timeseries[0].timestamp == new_timestamp
+
+        # Alert has less data than min requirement
+        mock_query.return_value = DynamicAlert(
+            organization_id=0,
+            project_id=0,
+            external_alert_id=0,
+            config=config,
+            timeseries=MPTimeSeries(
+                timestamps=ts_timestamps[:100],
+                values=ts_values,
+            ),
+            anomalies=MPTimeSeriesAnomalies(
+                flags=np.array(["anomaly_high_confidence"]),
+                scores=np.array([0.4]),
+                matrix_profile=dummy_mp,
+                window_size=window_size,
+            ),
+            cleanup_config=cleanup_config,
+        )
+
+        with self.assertRaises(Exception):
+            AnomalyDetection().detect_anomalies(request=request)
 
     def test_detect_anomalies_combo(self):
 
@@ -176,6 +209,15 @@ class TestAnomalyDetection(unittest.TestCase):
             def save_timepoint(self, *args, **kwargs):
                 return NotImplemented
 
+            def queue_data_purge_flag(self, *args, **kwargs):
+                return NotImplemented
+
+            def can_queue_cleanup_task(self, *args, **kwargs):
+                return NotImplemented
+
+            def reset_cleanup_task(self, *args, **kwargs):
+                return NotImplemented
+
         request = DeleteAlertDataRequest(organization_id=0, project_id=0, alert=AlertInSeer(id=1))
         response = AnomalyDetection().delete_alert_data(
             request=request, alert_data_accessor=MockAlertDataAccessor()
@@ -194,6 +236,15 @@ class TestAnomalyDetection(unittest.TestCase):
                 return NotImplemented
 
             def save_timepoint(self, *args, **kwargs):
+                return NotImplemented
+
+            def queue_data_purge_flag(self, *args, **kwargs):
+                return NotImplemented
+
+            def can_queue_cleanup_task(self, *args, **kwargs):
+                return NotImplemented
+
+            def reset_cleanup_task(self, *args, **kwargs):
                 return NotImplemented
 
         request = DeleteAlertDataRequest(organization_id=0, project_id=0, alert=AlertInSeer(id=1))

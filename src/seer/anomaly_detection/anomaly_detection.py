@@ -24,6 +24,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesPoint,
     TimeSeriesWithHistory,
 )
+from seer.db import TaskStatus
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError, ServerError
 from seer.tags import AnomalyDetectionModes, AnomalyDetectionTags
@@ -119,7 +120,6 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ClientError("No timeseries data found for alert")
-
         if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
             logger.error(
                 "invalid_state",
@@ -128,6 +128,14 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ServerError("Invalid state")
+
+        # Confirm that there is enough data (after purge)
+        min_data = self._min_required_timesteps(historic.config.time_period)
+        if len(historic.timeseries.timestamps) < min_data:
+            logger.error(f"Not enough timeseries data. At least {min_data} data points required")
+            raise ClientError(
+                f"Not enough timeseries data. At least {min_data} data points required"
+            )
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
@@ -150,7 +158,27 @@ class AnomalyDetection(BaseModel):
             anomaly=streamed_anomalies,
             anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0],
         )
-        # TODO: Clean up old data
+
+        # Delayed import due to circular imports
+        from seer.anomaly_detection.tasks import cleanup_timeseries
+
+        try:
+            # Set flag and create new task for cleanup
+            cleanup_config = historic.cleanup_config
+            if (
+                alert_data_accessor.can_queue_cleanup_task(historic.external_alert_id)
+                and cleanup_config.num_old_points >= cleanup_config.num_acceptable_points
+            ):
+                alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
+                cleanup_timeseries.delay(
+                    historic.external_alert_id, cleanup_config.timestamp_threshold
+                )
+        except Exception as e:
+            # Reset task and capture exception
+            alert_data_accessor.reset_cleanup_task(historic.external_alert_id)
+            sentry_sdk.capture_exception(e)
+            logger.exception(e)
+
         return ts_external, streamed_anomalies
 
     def _min_required_timesteps(self, time_period, min_num_days=7):
@@ -290,6 +318,7 @@ class AnomalyDetection(BaseModel):
             timeseries=ts,
             anomalies=anomalies,
             anomaly_algo_data={"window_size": anomalies.window_size},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
         )
         return StoreDataResponse(success=True)
 
