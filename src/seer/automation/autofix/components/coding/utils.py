@@ -26,7 +26,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
     current_original: list[str] = []
     current_new: list[str] = []
     current_header = ""
-    current_diff_contents = []
+    current_diff_contents: list[str] = []
 
     lines = diff_text.split("\n")
 
