@@ -1,6 +1,7 @@
 import logging
+import threading
 from abc import ABC
-from typing import Optional, cast
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,8 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
 from seer.automation.autofix.models import AutofixStatus, DefaultStep
+from seer.bootup import module
+from seer.configuration import configuration_module
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -73,6 +76,39 @@ class LlmAgent(ABC):
                 cur.steps[-1].queued_user_messages = []
             context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
 
+    def run_in_thread(self, func, args):
+        def wrapper():
+            # ensures dependency injection works
+            module.enable()
+            configuration_module.enable()
+
+            func(*args)
+
+        threading.Thread(target=wrapper).start()
+
+    def share_insights(self, context: AutofixContext, text: str):
+        # generate insights
+        insight_sharing = InsightSharingComponent(context)
+        past_insights = context.state.get().get_all_insights()
+        insight_card = insight_sharing.invoke(
+            InsightSharingRequest(
+                latest_thought=text,
+                memory=self.memory,
+                task_description=context.state.get().get_step_description(),
+                past_insights=past_insights,
+            )
+        )
+        # add the insight card to the current step
+        if insight_card:
+            if len(context.state.get().get_all_insights()) == len(
+                past_insights
+            ):  # in case something else was added in parallel, don't add this insight
+                with context.state.update() as cur:
+                    if cur.steps and isinstance(cur.steps[-1], DefaultStep):
+                        step = cur.steps[-1]
+                        step.insights.append(insight_card)
+                        cur.steps[-1] = step
+
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
@@ -95,26 +131,9 @@ class LlmAgent(ABC):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
-                # call LLM separately with the same memory to generate structured output insight cards
-                insight_sharing = InsightSharingComponent(context)
-                past_insights = context.state.get().get_all_insights()
-                insight_card = insight_sharing.invoke(
-                    InsightSharingRequest(
-                        latest_thought=text,
-                        memory=self.memory,
-                        task_description=context.state.get().get_step_description(),
-                        past_insights=past_insights,
-                    )
-                )
-                if insight_card:
-                    if context.state.get().steps and isinstance(
-                        context.state.get().steps[-1], DefaultStep
-                    ):
-                        step = cast(DefaultStep, context.state.get().steps[-1])
-                        step.insights.append(insight_card)
-                        with context.state.update() as cur:
-                            cur.steps[-1] = step
+                self.run_in_thread(func=self.share_insights, args=(context, text))
 
+        # call any tools the model wants to use
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 tool_response = self.call_tool(tool_call)

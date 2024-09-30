@@ -51,8 +51,7 @@ class TestInsightSharingComponent:
         mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
-        result = component.invoke(request, gpt_client=mock_gpt_client)
-
+        result = component.invoke(request, mock_gpt_client)
         assert isinstance(result, InsightSharingOutput)
         assert result.insight == "New insight"
         assert result.justification == "Test explanation"
@@ -74,7 +73,7 @@ class TestInsightSharingComponent:
 
         mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
 
-        result = component.invoke(request, gpt_client=mock_gpt_client)
+        result = component.invoke(request, mock_gpt_client)
 
         assert result is None
 
@@ -97,4 +96,4 @@ class TestInsightSharingComponent:
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
         # make sure no error is raised
-        component.invoke(request, gpt_client=mock_gpt_client)
+        component.invoke(request, mock_gpt_client)
