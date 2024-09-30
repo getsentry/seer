@@ -14,6 +14,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
 )
 from seer.automation.component import BaseComponent
 from seer.automation.utils import extract_parsed_model
+from seer.dependency_injection import inject, injected
 
 
 class InsightSharingPrompts:
@@ -62,8 +63,10 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
 
     @observe(name="Sharing Insights")
     @ai_track(description="Sharing Insights")
-    def invoke(self, request: InsightSharingRequest) -> InsightSharingOutput | None:
-        gpt_client = GptClient()
+    @inject
+    def invoke(
+        self, request: InsightSharingRequest, gpt_client: GptClient = injected
+    ) -> InsightSharingOutput | None:
         try:
             prompt_one = InsightSharingPrompts.format_step_one(
                 task_description=request.task_description,
@@ -95,9 +98,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 latest_thought=request.latest_thought,
             )
             memory = []
-            for _, message in enumerate(
-                gpt_client.clean_tool_call_assistant_messages(request.memory)
-            ):
+            for message in gpt_client.clean_tool_call_assistant_messages(request.memory):
                 if message.role != "system":
                     memory.append(message.to_message())
             memory.append(Message(role="user", content=prompt_two).to_message())

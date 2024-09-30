@@ -19,6 +19,8 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
 from seer.automation.autofix.models import AutofixStatus, DefaultStep
+from seer.bootup import module
+from seer.configuration import configuration_module
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -74,7 +76,18 @@ class LlmAgent(ABC):
                 cur.steps[-1].queued_user_messages = []
             context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
 
+    def run_in_thread(self, func, args):
+        def wrapper():
+            # ensures dependency injection works
+            module.enable()
+            configuration_module.enable()
+
+            func(*args)
+
+        threading.Thread(target=wrapper).start()
+
     def share_insights(self, context: AutofixContext, text: str):
+        # generate insights
         insight_sharing = InsightSharingComponent(context)
         past_insights = context.state.get().get_all_insights()
         insight_card = insight_sharing.invoke(
@@ -85,6 +98,7 @@ class LlmAgent(ABC):
                 past_insights=past_insights,
             )
         )
+        # add the insight card to the current step
         if insight_card:
             if len(context.state.get().get_all_insights()) == len(
                 past_insights
@@ -117,7 +131,7 @@ class LlmAgent(ABC):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
-                threading.Thread(target=self.share_insights, args=(context, text)).start()
+                self.run_in_thread(func=self.share_insights, args=(context, text))
 
         # call any tools the model wants to use
         if message.tool_calls:

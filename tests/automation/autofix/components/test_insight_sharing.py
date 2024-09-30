@@ -48,14 +48,10 @@ class TestInsightSharingComponent:
         )
         mock_completion_2.choices[0].message.refusal = None
 
-        mock_gpt_client.return_value.openai_client.chat.completions.create.return_value = (
-            mock_completion_1
-        )
-        mock_gpt_client.return_value.openai_client.beta.chat.completions.parse.return_value = (
-            mock_completion_2
-        )
+        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
+        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
-        result = component.invoke(request)
+        result = component.invoke(request, mock_gpt_client)
         assert isinstance(result, InsightSharingOutput)
         assert result.insight == "New insight"
         assert result.justification == "Test explanation"
@@ -75,11 +71,9 @@ class TestInsightSharingComponent:
         mock_completion = MagicMock()
         mock_completion.choices[0].message.content = "<NO_INSIGHT/>"
 
-        mock_gpt_client.return_value.openai_client.chat.completions.create.return_value = (
-            mock_completion
-        )
+        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
 
-        result = component.invoke(request)
+        result = component.invoke(request, mock_gpt_client)
 
         assert result is None
 
@@ -98,12 +92,8 @@ class TestInsightSharingComponent:
         mock_completion_2 = MagicMock()
         mock_completion_2.choices[0].message.refusal = "Test refusal"
 
-        mock_gpt_client.return_value.openai_client.chat.completions.create.return_value = (
-            mock_completion_1
-        )
-        mock_gpt_client.return_value.openai_client.beta.chat.completions.parse.return_value = (
-            mock_completion_2
-        )
+        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
+        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
         # make sure no error is raised
-        component.invoke(request)
+        component.invoke(request, mock_gpt_client)
