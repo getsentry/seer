@@ -1,7 +1,7 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
+from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanStepsPromptXml
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
 from seer.automation.summarize.issue import IssueSummary
 
@@ -83,3 +83,36 @@ class CodingPrompts:
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
         ).format(steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str())
+
+    @staticmethod
+    def format_incorrect_diff_fixer(
+        file_path: str, diff_chunks: list[FuzzyDiffChunk], file_content: str
+    ):
+        return textwrap.dedent(
+            """\
+            Given the below file content:
+            <file path="{file_path}">
+            {file_content}
+            </file>
+
+            The following diffs were found to be incorrect:
+            {diff_chunks}
+
+            Provide the corrected unified diffs inside a <corrected_diffs></corrected_diffs> block:
+            """
+        ).format(
+            file_path=file_path,
+            file_content=file_content,
+            diff_chunks="\n".join([chunk.diff_content for chunk in diff_chunks]),
+        )
+
+    @staticmethod
+    def format_missing_msg(missing_files: list[str], existing_files: list[str]):
+        text = ""
+
+        if missing_files:
+            text += f"The following files don't exist: {', '.join(missing_files)}\n"
+        if existing_files:
+            text += f"The following files already exist: {', '.join(existing_files)}\n"
+
+        return text

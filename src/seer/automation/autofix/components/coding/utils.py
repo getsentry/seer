@@ -26,6 +26,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
     current_original: list[str] = []
     current_new: list[str] = []
     current_header = ""
+    current_diff_contents: list[str] = []
 
     lines = diff_text.split("\n")
 
@@ -41,6 +42,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
                         header=current_header,
                         original_chunk="\n".join(current_original),
                         new_chunk="\n".join(current_new),
+                        diff_content="\n".join(current_diff_contents),
                     )
                 )
                 current_original = []
@@ -53,6 +55,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
         else:
             current_original.append(line[1:])
             current_new.append(line[1:])
+        current_diff_contents.append(line)
 
     if current_original or current_new:
         chunks.append(
@@ -60,6 +63,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
                 header=current_header,
                 original_chunk="\n".join(current_original),
                 new_chunk="\n".join(current_new),
+                diff_content="\n".join(current_diff_contents),
             )
         )
 
@@ -118,7 +122,9 @@ def task_to_file_delete(task: PlanTaskPromptXml) -> FileChange:
 
 
 @observe(name="Convert task to file change")
-def task_to_file_change(task: PlanTaskPromptXml, file_content: str) -> list[FileChange]:
+def task_to_file_change(
+    task: PlanTaskPromptXml, file_content: str
+) -> tuple[list[FileChange], list[FuzzyDiffChunk]]:
     """
     Convert a PlanTaskPromptXml to a list of FileChange objects for file changes.
 
@@ -133,6 +139,7 @@ def task_to_file_change(task: PlanTaskPromptXml, file_content: str) -> list[File
         raise ValueError(f"Expected file_change task, got: {task.type}")
 
     changes = []
+    missing_changes: list[FuzzyDiffChunk] = []
     diff_chunks = extract_diff_chunks(task.diff)
 
     for chunk in diff_chunks:
@@ -163,5 +170,6 @@ def task_to_file_change(task: PlanTaskPromptXml, file_content: str) -> list[File
         else:
             logger.info(f"Original snippet not found in file {task.file_path}")
             append_langfuse_trace_tags(["skipped_file_change:snippet_not_found"])
+            missing_changes.append(chunk)
 
-    return changes
+    return changes, missing_changes

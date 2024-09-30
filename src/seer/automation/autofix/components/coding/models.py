@@ -148,3 +148,11 @@ class FuzzyDiffChunk(BaseModel):
     header: str
     original_chunk: str
     new_chunk: str
+    diff_content: str
+
+
+class FileMissingObj(BaseModel):
+    file_path: str
+    file_content: str
+    diff_chunks: list[FuzzyDiffChunk]
+    task: PlanTaskPromptXml
