@@ -211,7 +211,7 @@ class TestTaskToFileChange:
             commit_message="Modify existing_function in existing_file.py",
         )
         file_content = "def existing_function():\n    return 'Hello'\n"
-        result = task_to_file_change(task, file_content)
+        result = task_to_file_change(task, file_content)[0]
         assert len(result) == 1
         assert isinstance(result[0], FileChange)
         assert result[0].change_type == "edit"
@@ -238,7 +238,7 @@ class TestTaskToFileChange:
                     print("Hello")
             """
         )
-        result = task_to_file_change(task, file_content)
+        result = task_to_file_change(task, file_content)[0]
         assert len(result) == 1
         assert isinstance(result[0], FileChange)
         assert result[0].change_type == "edit"
@@ -269,7 +269,7 @@ class TestTaskToFileChange:
         )
         file_content = "def existing_function():\n    return 'Hello'\n"
         result = task_to_file_change(task, file_content)
-        assert len(result) == 0
+        assert len(result[0]) == 0
 
     def test_multiple_chunks(self):
         task = PlanTaskPromptXml(
@@ -282,6 +282,6 @@ class TestTaskToFileChange:
         )
         file_content = "def func1():\n    return 'Old1'\n\ndef func2():\n    return 'Old2'\n"
         result = task_to_file_change(task, file_content)
-        assert len(result) == 2
-        assert result[0].new_snippet == "def func1():\n    return 'New1'"
-        assert result[1].new_snippet == "def func2():\n    return 'New2'"
+        assert len(result[0]) == 2
+        assert result[0][0].new_snippet == "def func1():\n    return 'New1'"
+        assert result[0][1].new_snippet == "def func2():\n    return 'New2'"
