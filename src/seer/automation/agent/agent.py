@@ -86,7 +86,7 @@ class LlmAgent(ABC):
 
         threading.Thread(target=wrapper).start()
 
-    def share_insights(self, context: AutofixContext, text: str):
+    def share_insights(self, context: AutofixContext, text: str, generated_at_memory_index: int):
         # generate insights
         insight_sharing = InsightSharingComponent(context)
         past_insights = context.state.get().get_all_insights()
@@ -96,6 +96,7 @@ class LlmAgent(ABC):
                 memory=self.memory,
                 task_description=context.state.get().get_step_description(),
                 past_insights=past_insights,
+                generated_at_memory_index=generated_at_memory_index,
             )
         )
         # add the insight card to the current step
@@ -131,7 +132,9 @@ class LlmAgent(ABC):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
-                self.run_in_thread(func=self.share_insights, args=(context, text))
+                self.run_in_thread(
+                    func=self.share_insights, args=(context, text, len(self.memory) - 1)
+                )
 
         # call any tools the model wants to use
         if message.tool_calls:
@@ -172,7 +175,9 @@ class LlmAgent(ABC):
         # Continue in all other cases
         return True
 
-    def run(self, prompt: str | None, context: Optional[AutofixContext] = None):
+    def run(
+        self, prompt: str | None, context: Optional[AutofixContext] = None, name: str | None = None
+    ):
         if prompt:
             self.add_user_message(prompt)
         logger.debug(f"----[{self.name}] Running Agent----")
@@ -183,6 +188,8 @@ class LlmAgent(ABC):
             if context and self.config.interactive:
                 self.use_user_messages(context)
             self.run_iteration(context=context)
+            if context and name:
+                context.store_memory(name, self.memory)
 
         if self.iterations == self.config.max_iterations:
             raise MaxIterationsReachedException(

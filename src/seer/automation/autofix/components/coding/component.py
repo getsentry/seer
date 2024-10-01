@@ -118,6 +118,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 else None
             ),
             context=self.context,
+            name="plan_and_code",
         )
 
         prev_usage = agent.usage

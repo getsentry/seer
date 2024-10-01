@@ -125,6 +125,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 codebase_context=res.codebase_context,
                 stacktrace_context=res.stacktrace_context,
                 breadcrumb_context=res.event_log_context,
+                generated_at_memory_index=request.generated_at_memory_index,
             )
             return response
         except Exception:

@@ -56,6 +56,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     else None
                 ),
                 context=self.context,
+                name="root_cause_analysis",
             )
 
             if not response:

@@ -10,6 +10,7 @@ from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
     AutofixRequest,
+    AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
@@ -19,11 +20,13 @@ from seer.automation.autofix.models import (
     Step,
 )
 from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
+from seer.automation.autofix.steps.root_cause_step import RootCauseStep
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
+    restart_from_point_with_feedback,
     restart_step_with_user_response,
     run_autofix_create_pr,
     run_autofix_execution,
@@ -332,3 +335,93 @@ class TestHandleUserMessages:
             initial_memory=mock_memory,
         )
         mock_step_class.get_signature.return_value.apply_async.assert_called_once_with()
+
+    def test_restart_from_point_with_feedback_invalid_payload(self):
+        mock_payload = AutofixUserMessagePayload(
+            type=AutofixUpdateType.USER_MESSAGE, text="Invalid payload"
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        with pytest.raises(
+            ValueError, match="Invalid payload type for restart_from_point_with_feedback"
+        ):
+            restart_from_point_with_feedback(mock_request)
+
+    def test_restart_from_point_with_feedback_coding_step(
+        self, mock_continuation_state, mock_event_manager, mock_context
+    ):
+        with patch("seer.automation.autofix.tasks.AutofixCodingStep") as mock_coding_step:
+            mock_payload = AutofixRestartFromPointPayload(
+                type=AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+                step_index=1,
+                retain_insight_card_index=1,
+                message="User feedback",
+            )
+            mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+            mock_state = mock_continuation_state.from_id.return_value
+            mock_step = MagicMock(spec=DefaultStep)
+            mock_step.insights = [
+                MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+                MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+                MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+            ]
+            mock_steps = [MagicMock(spec=RootCauseStep), mock_step]
+            mock_state.get.return_value.steps = mock_steps
+            mock_state.get.return_value.run_id = 123
+            mock_state.update.return_value.__enter__.return_value.find_step.side_effect = (
+                lambda index: mock_steps[index]
+            )
+            mock_state.update.return_value.__enter__.return_value.steps = mock_steps
+
+            mock_context.return_value.get_memory.return_value = [
+                Message(content="Previous message", role="assistant"),
+                Message(content="User message", role="user"),
+            ]
+
+            restart_from_point_with_feedback(mock_request)
+
+            mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+            mock_state.update.assert_called()
+            mock_event_manager.return_value.restart_step.assert_called_once_with(mock_step)
+
+            assert len(mock_state.get().steps[-1].insights) == 3
+            assert isinstance(mock_step.insights[-1], InsightSharingOutput)
+            assert mock_step.insights[-1].insight == "User feedback"
+            assert mock_step.insights[-1].justification == "USER"
+
+            mock_coding_step.get_signature.assert_called_once()
+            mock_coding_step.get_signature.return_value.apply_async.assert_called_once()
+
+    def test_restart_from_point_with_feedback_root_cause_step(
+        self, mock_continuation_state, mock_event_manager, mock_context
+    ):
+        mock_payload = AutofixRestartFromPointPayload(
+            type=AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+            step_index=0,
+            retain_insight_card_index=None,
+            message="User feedback",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_step = MagicMock(spec=DefaultStep)
+        mock_step.insights = []
+        mock_state.get.return_value.steps = [mock_step]
+        mock_state.get.return_value.run_id = 123
+        mock_state.update.return_value.__enter__.return_value.steps = [mock_step]
+
+        mock_context.return_value.get_memory.return_value = [
+            Message(content="Initial message", role="system")
+        ]
+
+        restart_from_point_with_feedback(mock_request)
+
+        mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+        mock_state.update.assert_called()
+        mock_event_manager.return_value.restart_step.assert_called_once_with(mock_step)
+
+        assert len(mock_step.insights) == 1
+        assert isinstance(mock_step.insights[-1], InsightSharingOutput)
+        assert mock_step.insights[-1].insight == "User feedback"
+        assert mock_step.insights[-1].justification == "USER"

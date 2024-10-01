@@ -1,3 +1,6 @@
+import os
+import threading
+import time
 from typing import Any
 
 import sentry_sdk
@@ -17,7 +20,12 @@ from seer.automation.steps import (
     ParallelizedChainStep,
     ParallelizedChainStepRequest,
 )
-from seer.automation.utils import make_done_signal, make_retry_prefix, make_retry_signal
+from seer.automation.utils import (
+    make_done_signal,
+    make_kill_signal,
+    make_retry_prefix,
+    make_retry_signal,
+)
 
 
 class AutofixPipelineStep(PipelineChain, PipelineStep):
@@ -25,6 +33,9 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
 
     # Default to no retries, child classes will override this.
     max_retries: int = 0
+
+    thread: threading.Thread | None = None
+    thread_kill: bool = False
 
     def get_retry_count(self) -> int:
         return sum(
@@ -45,7 +56,11 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
 
     def _pre_invoke(self) -> bool:
         # Don't run the step instance if it's already been run
-        return make_done_signal(self.request.step_id) not in self.context.state.get().signals
+        if make_done_signal(self.request.step_id) not in self.context.state.get().signals:
+            self.thread = threading.Thread(target=self._check_for_kill)
+            self.thread.start()
+            return True
+        return False
 
     def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
         try:
@@ -91,10 +106,24 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             return {}
 
     def _post_invoke(self, result: Any):
+        if self.thread:
+            self.thread_kill = True
         with self.context.state.update() as cur:
             signal = make_done_signal(self.request.step_id)
             sentry_sdk.capture_message(f"Done for signal {repr(signal)}")
             cur.signals.append(signal)
+
+    def _check_for_kill(self):
+        while True:
+            if self.thread_kill:
+                return
+            kill_signal = make_kill_signal()
+            if kill_signal in self.context.state.get().signals:
+                with self.context.state.update() as cur:
+                    cur.signals.remove(kill_signal)
+                self.thread_kill = True
+                os._exit(1)
+            time.sleep(0.1)
 
     def _handle_exception(self, exception: Exception):
         retries = self.get_retry_count()

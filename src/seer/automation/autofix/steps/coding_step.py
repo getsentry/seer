@@ -20,6 +20,7 @@ from seer.automation.autofix.steps.change_describer_step import (
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
+from seer.automation.utils import make_kill_signal
 
 
 class AutofixCodingStepRequest(PipelineStepTaskRequest):
@@ -64,7 +65,7 @@ class AutofixCodingStep(AutofixPipelineStep):
                 "Figuring out a fix for the root cause of this issue..."
             )
         else:
-            self.context.event_manager.add_log("Thanks, continuing to analyze...")
+            self.context.event_manager.add_log("Continuing to analyze...")
 
         state = self.context.state.get()
         root_cause_and_fix = state.get_selected_root_cause_and_fix()
@@ -91,6 +92,8 @@ class AutofixCodingStep(AutofixPipelineStep):
 
         state = self.context.state.get()
         if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
+            return
+        if make_kill_signal() in state.signals:
             return
 
         self.context.event_manager.send_coding_result(coding_output)

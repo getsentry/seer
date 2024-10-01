@@ -189,7 +189,7 @@ class TestGptAgent:
         assert isinstance(mock_thread.call_args[1]["args"][1], str)
 
         # To test the share insights method, we need to call it directly
-        agent.share_insights(mock_context, "Test response")
+        agent.share_insights(mock_context, "Test response", -1)
 
         # Check if insight sharing was called
         mock_insight_sharing.assert_called_once_with(mock_context)

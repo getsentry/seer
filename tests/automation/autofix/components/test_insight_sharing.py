@@ -32,6 +32,7 @@ class TestInsightSharingComponent:
             latest_thought="Latest thought",
             past_insights=["Past insight 1", "Past insight 2"],
             memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
         )
 
         mock_completion_1 = MagicMock()
@@ -66,6 +67,7 @@ class TestInsightSharingComponent:
             latest_thought="Latest thought",
             past_insights=["Past insight 1", "Past insight 2"],
             memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
         )
 
         mock_completion = MagicMock()
@@ -83,6 +85,7 @@ class TestInsightSharingComponent:
             latest_thought="Latest thought",
             past_insights=["Past insight 1"],
             memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
         )
 
         mock_completion_1 = MagicMock()
