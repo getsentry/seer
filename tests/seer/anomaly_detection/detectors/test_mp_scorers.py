@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 from seer.anomaly_detection.detectors.mp_scorers import MPCascadingScorer, MPScorer
+from seer.exceptions import ClientError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
@@ -14,8 +15,8 @@ class TestMPScorers(unittest.TestCase):
     def test_batch_score_synthetic_data(self):
 
         # TODO: sensitivity and direction are placeholders as they are not actually used in scoring yet
-        sensitivity = ""
-        direction = ""
+        sensitivity = "high"
+        direction = "both"
 
         expected_types, timeseries, mp_dists, window_sizes, window_starts, window_ends = (
             convert_synthetic_ts(
@@ -51,6 +52,40 @@ class TestMPScorers(unittest.TestCase):
 
             assert result == expected_type
 
+    def test_batch_score_invalid_sensitivity(self):
+
+        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
+        )
+        ts_baseline, mp_dist_baseline, window_size = timeseries[0], mp_dists[0], window_sizes[0]
+        sensitivity, direction = "invalid", "both"
+
+        with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
+            self.scorer.batch_score(
+                ts_baseline,
+                mp_dist_baseline,
+                sensitivity,
+                direction,
+                window_size,
+            )
+
+    def test_batch_score_invalid_sensitivity_flat_ts(self):
+
+        ts_baseline = np.ones(200)
+        mp_dist_baseline = np.ones(200)
+        window_size = 3
+
+        sensitivity, direction = "invalid", "both"
+
+        with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
+            self.scorer.batch_score(
+                ts_baseline,
+                mp_dist_baseline,
+                sensitivity,
+                direction,
+                window_size,
+            )
+
     def test_stream_score(self):
 
         test_ts_mp_mulipliers = [1000, -1000, 1]
@@ -61,7 +96,7 @@ class TestMPScorers(unittest.TestCase):
         )
 
         for ts_baseline, mp_dist_baseline, window_size in zip(timeseries, mp_dists, window_sizes):
-            sensitivity, direction = "", ""  # TODO: Placeholders as values are not used
+            sensitivity, direction = "high", "both"
 
             for i, multiplier in enumerate(test_ts_mp_mulipliers):
                 test_ts_val = ts_baseline[-1] * multiplier
@@ -80,6 +115,44 @@ class TestMPScorers(unittest.TestCase):
                 actual_flags = flags_and_scores.flags
 
                 assert actual_flags[0] == expected_flags[i]
+
+    def test_stream_score_invalid_sensitivity(self):
+
+        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
+        )
+        ts_baseline, mp_dist_baseline, window_size = timeseries[0], mp_dists[0], window_sizes[0]
+        sensitivity, direction = "invalid", "both"
+
+        with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
+            self.scorer.stream_score(
+                timeseries[-1],
+                mp_dists[-1],
+                ts_baseline,
+                mp_dist_baseline,
+                sensitivity,
+                direction,
+                window_size,
+            )
+
+    def test_stream_score_invalid_sensitivity_flat_ts(self):
+
+        ts_baseline = np.ones(200)
+        mp_dist_baseline = np.ones(200)
+        window_size = 3
+
+        sensitivity, direction = "invalid", "both"
+
+        with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
+            self.scorer.stream_score(
+                ts_baseline[-1],
+                mp_dist_baseline[-1],
+                ts_baseline,
+                mp_dist_baseline,
+                sensitivity,
+                direction,
+                window_size,
+            )
 
     def test_cascading_scorer_failed_case(self):
         class DummyScorer(MPScorer):

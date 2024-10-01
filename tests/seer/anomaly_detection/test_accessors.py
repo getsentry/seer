@@ -23,6 +23,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             scores=[1.0, 0.95],
             matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
+            thresholds=[0.0, 0.0],
         )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
@@ -121,6 +122,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 scores=[0.8],
                 matrix_profile=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
+                thresholds=[0.0],
             ),
             anomaly_algo_data={"dummy": 10},
         )
@@ -151,6 +153,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 scores=[1.0],
                 matrix_profile=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
+                thresholds=[0.0],
             ),
             anomaly_algo_data={"window_size": 1},
         )

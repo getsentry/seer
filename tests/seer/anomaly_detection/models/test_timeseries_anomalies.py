@@ -13,6 +13,7 @@ class TestConverters(unittest.TestCase):
             scores=[0.8, 0.9],
             matrix_profile=np.array([[0.1, 0, 1, 2], [0.2, 1, 2, 3]]),
             window_size=2,
+            thresholds=[0.0, 0.0],
         )
 
     def test_get_anomaly_algo_data_with_padding(self):

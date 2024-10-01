@@ -88,7 +88,7 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
         """
         if time_series.var() == 0:
             sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 1)
-            sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIANCE_TS, 1)
+            sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
             return 3
         time_series = self.normalizer.normalize(time_series)
         ts_mean = time_series.mean()

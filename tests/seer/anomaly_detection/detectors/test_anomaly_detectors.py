@@ -44,6 +44,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             return_value=FlagsAndScores(
                 scores=[0.1, 6.5, 4.8, 0.2],
                 flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
+                thresholds=[0.0, 0.0, 0.0, 0.0],
             )
         )
 
@@ -118,7 +119,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])
         )
         self.config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="low", direction="up", expected_seasonality="auto"
+            time_period=15, sensitivity="medium", direction="up", expected_seasonality="auto"
         )  # TODO: Placeholder values as not used in detection yet
         self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
 
@@ -138,7 +139,9 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
-        mock_scorer.stream_score.return_value = FlagsAndScores(scores=[0.5], flags=["none"])
+        mock_scorer.stream_score.return_value = FlagsAndScores(
+            scores=[0.5], flags=["none"], thresholds=[0.0]
+        )
 
         anomalies = self.detector.detect(self.timeseries, self.config, mock_scorer, mock_utils)
 
@@ -205,17 +208,17 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
     def test_stream_detect_spiked_history_spiked_stream(self):
         history_ts = [0.5] * 20
         history_ts[-15] = 1.0  # Spiked history
-        stream_ts = [0.5, 0.5, 1.0, *[0.5] * 10]  # Spiked stream
+        stream_ts = [0.5, 0.5, 3.5, *[0.5] * 10]  # Spiked stream
         expected_stream_flags = [
             "none",
             "none",
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
+            "none",
+            "none",
+            "none",
+            "none",
             "none",
             "none",
             "none",
@@ -240,13 +243,13 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         expected_stream_flags = [
             "none",
             "none",
+            "none",
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
+            "none",
+            "none",
+            "none",
+            "none",
             "none",
             "none",
             "none",

@@ -4,7 +4,7 @@ from enum import StrEnum
 class AnomalyDetectionTags(StrEnum):
     ALERT_ID = "alert_id"
     MODE = "mode"
-    LOW_VARIANCE_TS = "low_variance_ts"
+    LOW_VARIATION_TS = "low_variation_ts"
     WINDOW_SEARCH_FAILED = "window_search_failed"
 
 
