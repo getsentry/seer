@@ -31,7 +31,6 @@ class TestGrouping(unittest.TestCase):
             grouping_request = GroupingRequest(
                 project_id=1,
                 stacktrace="stacktrace",
-                message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
@@ -40,7 +39,6 @@ class TestGrouping(unittest.TestCase):
         grouping_request = GroupingRequest(
             project_id=1,
             stacktrace="stacktrace",
-            message="message",
             hash="13501807435378261861369456856144",
             k=1,
             threshold=0.01,
@@ -66,7 +64,6 @@ class TestGrouping(unittest.TestCase):
             hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             project_id=1,
             stacktrace="stacktrace",
-            message="message",
             k=1,
             threshold=0.01,
         )
@@ -91,7 +88,6 @@ class TestGrouping(unittest.TestCase):
             hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             project_id=1,
             stacktrace="stacktrace",
-            message="message",
             k=1,
             threshold=0.01,
             read_only=True,
@@ -117,7 +113,6 @@ class TestGrouping(unittest.TestCase):
             grouping_request = GroupingRequest(
                 project_id=1,
                 stacktrace="stacktrace",
-                message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
@@ -137,13 +132,11 @@ class TestGrouping(unittest.TestCase):
             grouping_request1 = GroupingRequest(
                 project_id=1,
                 stacktrace="stacktrace",
-                message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             grouping_request2 = GroupingRequest(
                 project_id=2,
                 stacktrace="stacktrace",
-                message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             # Insert the grouping record
@@ -156,29 +149,6 @@ class TestGrouping(unittest.TestCase):
             )
             assert len(matching_record) == 2
 
-    def test_insert_new_grouping_no_message(self):
-        """
-        Tests that insert_new_grouping_record can create records without messages.
-        """
-        with Session() as session:
-            embedding = grouping_lookup().encode_text("stacktrace")
-            project_id, hash = 1, "QYK7aNYNnp5FgSev9Np1soqb1SdtyahD"
-            grouping_request = GroupingRequest(
-                project_id=project_id,
-                stacktrace="stacktrace",
-                hash=hash,
-            )
-            # Insert the grouping record
-            grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
-            session.commit()
-
-            created_record = (
-                session.query(DbGroupingRecord).filter_by(hash=hash, project_id=project_id).first()
-            )
-
-        assert created_record
-        assert created_record.message is None
-
     def test_bulk_create_and_insert_grouping_records_valid(self):
         """Test bulk creating and inserting grouping records"""
         hashes = [str(i) * 32 for i in range(10)]
@@ -188,7 +158,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message " + str(i),
                 )
                 for i in range(10)
             ],
@@ -211,7 +180,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message " + str(i),
                 )
                 for i in range(10)
             ],
@@ -222,7 +190,6 @@ class TestGrouping(unittest.TestCase):
         single_record = GroupingRecord(
             hash=hashes[0],
             project_id=1,
-            message="message " + str(0),
             stacktrace_embedding=grouping_lookup().encode_text("stacktrace " + str(0)),
         ).to_db_model()
         with Session() as session:
@@ -248,7 +215,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message " + str(i),
                 )
                 for i in range(10)
             ],
@@ -284,7 +250,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message " + str(i),
                 )
                 for i in range(10)
             ],
@@ -308,7 +273,6 @@ class TestGrouping(unittest.TestCase):
             grouping_request = GroupingRequest(
                 project_id=1,
                 stacktrace="stacktrace",
-                message="message",
                 hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
             )
             grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
@@ -321,7 +285,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message",
                 )
                 for i in range(10)
             ],
@@ -405,7 +368,6 @@ class TestGrouping(unittest.TestCase):
                     group_id=i,
                     hash=hashes[i],
                     project_id=1,
-                    message="message " + str(i),
                 )
                 for i in range(10)
             ],

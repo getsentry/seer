@@ -62,7 +62,6 @@ def generate_grouping_record_data(num_records):
                 "group_id": i + 1,
                 "hash": f"hash_{i}",
                 "project_id": 1,
-                "message": f"message_{i}",
             }
         )
     return {"data": records, "stacktrace_list": stacktraces}
