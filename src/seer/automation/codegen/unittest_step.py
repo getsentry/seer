@@ -75,7 +75,7 @@ class UnittestStep(CodegenStep):
         if unittest_output:
             for file_change in unittest_output.diffs:
                 self.context.event_manager.append_file_change(file_change)
+            generator = GeneratedTestsPullRequestCreator(unittest_output.diffs, pr, repo_client)
+            generator.create_github_pull_request()
 
-        generator = GeneratedTestsPullRequestCreator(unittest_output.diffs, pr, repo_client)
-        generator.create_github_pull_request()
         self.context.event_manager.mark_completed()
