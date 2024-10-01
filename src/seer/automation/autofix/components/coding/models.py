@@ -9,6 +9,7 @@ from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseRelevantContext,
 )
+from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 from seer.automation.summarize.issue import IssueSummary
@@ -85,12 +86,7 @@ class PlanTaskPromptXml(PromptXmlModel, tag="step"):
     @field_validator("diff")
     @classmethod
     def clean_diff(cls, v: str) -> str:
-        lines = v.split("\n")
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        return "\n".join(lines).strip()
+        return remove_code_backticks(v)
 
     @classmethod
     def get_example(
