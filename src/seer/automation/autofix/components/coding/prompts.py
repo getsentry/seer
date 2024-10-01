@@ -69,7 +69,7 @@ class CodingPrompts:
             """\
             Break down the task of fixing the issue into steps. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution.
 
-            When ready with your final answer, detail the precise plan to accomplish the task wrapped with a <plan_steps></plan_steps> block. Your output must follow the format properly according to the following guidelines:
+            Enclose this plan between <plan_steps> and </plan_steps> tags. Make sure to strictly follow this format and include all necessary details within the tags. Your output must follow the format properly according to the following guidelines:
 
             {steps_example_str}
 
