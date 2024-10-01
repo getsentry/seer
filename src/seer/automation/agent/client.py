@@ -186,7 +186,7 @@ class ClaudeClient(LlmClient):
         params: dict[str, Any] = {
             "model": model,
             "temperature": 0.0,
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "messages": claude_messages,
         }
         if system_prompt:

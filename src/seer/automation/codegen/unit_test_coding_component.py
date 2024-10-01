@@ -101,7 +101,6 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
 
         if not coding_output.tasks:
             raise ValueError("No tasks found in coding output")
-
         file_changes: list[FileChange] = []
         for task in coding_output.tasks:
             repo_client = self.context.get_repo_client(task.repo_name)
@@ -111,8 +110,9 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                     logger.warning(f"Failed to get content for {task.file_path}")
                     continue
 
-                for change in task_to_file_change(task, file_content):
-                    file_changes.append(change)
+                # TODO: Handle missing changes
+                changes, _ = task_to_file_change(task, file_content)
+                file_changes += changes
             elif task.type == "file_delete":
                 change = task_to_file_delete(task)
                 file_changes.append(change)
@@ -121,5 +121,4 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 file_changes.append(change)
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
-
         return CodeUnitTestOutput(diffs=file_changes)
