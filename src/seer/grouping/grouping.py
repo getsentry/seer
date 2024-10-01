@@ -260,7 +260,6 @@ class GroupingLookup:
         hnsw_distance: float,
     ) -> List[tuple[DbGroupingRecord, float]]:
         custom_options = {"postgresql_execute_before": "SET LOCAL hnsw.ef_search = 100"}
-        distance = 0.9
 
         candidates = (
             session.query(DbGroupingRecord)
