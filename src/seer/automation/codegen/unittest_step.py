@@ -53,13 +53,22 @@ class UnittestStep(CodegenStep):
 
         repo_client = self.context.get_repo_client()
         pr = repo_client.repo.get_pull(self.request.pr_id)
-
         diff_content = repo_client.get_pr_diff_content(pr.url)
+
+        latest_commit_sha = repo_client.get_pr_head_sha(pr.url)
+
+        codecov_client_params = {
+            "repo_name": self.request.repo_definition.name,
+            "pullid": self.request.pr_id,
+            "owner_username": self.request.repo_definition.owner,
+            "head_sha": latest_commit_sha,
+        }
 
         unittest_output = UnitTestCodingComponent(self.context).invoke(
             CodeUnitTestRequest(
                 diff=diff_content,
-            )
+                codecov_client_params=codecov_client_params,
+            ),
         )
 
         if unittest_output:

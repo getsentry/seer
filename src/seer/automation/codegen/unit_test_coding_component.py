@@ -17,6 +17,7 @@ from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from integrations.codecov.codecov_client import CodecovClient
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,20 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             ),
         )
 
+        codecov_client_params = request.codecov_client_params
+
+        code_coverage_data = CodecovClient.fetch_coverage(
+            repo_name=codecov_client_params["repo_name"],
+            pullid=codecov_client_params["pullid"],
+            owner_username=codecov_client_params["owner_username"],
+        )
+
+        test_result_data = CodecovClient.fetch_test_results_for_commit(
+            repo_name=codecov_client_params["repo_name"],
+            owner_username=codecov_client_params["owner_username"],
+            latest_commit_sha=codecov_client_params["head_sha"],
+        )
+
         existing_test_design_response = self._get_test_design_summary(
             agent=agent,
             prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
@@ -58,7 +73,12 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         )
 
         self._get_plan(
-            agent=agent, prompt=CodingUnitTestPrompts.format_plan_step_msg(diff_str=request.diff)
+            agent=agent,
+            prompt=CodingUnitTestPrompts.format_plan_step_msg(
+                diff_str=request.diff,
+                has_coverage_info=code_coverage_data,
+                has_test_result_info=test_result_data,
+            ),
         )
 
         final_response = self._generate_tests(
@@ -70,7 +90,6 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
 
         if not final_response:
             return None
-
         plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
 
         if len(plan_steps_content) == 0:
