@@ -48,7 +48,7 @@ class TestRootCauseComponent:
                                 cause=RootCauseAnalysisItemPrompt(
                                     title="Missing Null Check",
                                     description="The root cause of the issue is ...",
-                                    reproduction="Steps to reproduce",
+                                    reproduction_instructions="Steps to reproduce",
                                     relevant_code=None,
                                 )
                             ),
