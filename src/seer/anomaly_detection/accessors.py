@@ -86,6 +86,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
             ),
             window_size=window_size,
+            thresholds=[],  # Note: thresholds are not stored in the database. They are computed on the fly.
         )
         return DynamicAlert(
             organization_id=db_alert.organization_id,

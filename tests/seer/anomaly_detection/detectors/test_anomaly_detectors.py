@@ -44,6 +44,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             return_value=FlagsAndScores(
                 scores=[0.1, 6.5, 4.8, 0.2],
                 flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
+                thresholds=[0.0, 0.0, 0.0, 0.0],
             )
         )
 
@@ -138,7 +139,9 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
-        mock_scorer.stream_score.return_value = FlagsAndScores(scores=[0.5], flags=["none"])
+        mock_scorer.stream_score.return_value = FlagsAndScores(
+            scores=[0.5], flags=["none"], thresholds=[0.0]
+        )
 
         anomalies = self.detector.detect(self.timeseries, self.config, mock_scorer, mock_utils)
 

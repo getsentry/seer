@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class FlagsAndScores(BaseModel):
     flags: list[AnomalyFlags]
     scores: list[float]
+    thresholds: list[float]
 
 
 class MPScorer(BaseModel, abc.ABC):
@@ -79,20 +80,20 @@ class LowVarianceScorer(MPScorer):
         ts_mean: np.float64,
         sensitivity: Sensitivities,
         direction: Directions,
-    ) -> tuple[AnomalyFlags, float]:
+    ) -> tuple[AnomalyFlags, float, float]:
         # High sensitivity will mark more values as anomalies
         if sensitivity not in self.scaling_factors:
             raise ClientError(f"Invalid sensitivity: {sensitivity}")
         scaling_factor = self.scaling_factors[sensitivity]
         bound1 = ts_mean + ts_mean * scaling_factor
         bound2 = ts_mean - ts_mean * scaling_factor
-        lower_bound = min(bound1, bound2)
-        upper_bound = max(bound1, bound2)
+        lower_bound: float = float(min(bound1, bound2))
+        upper_bound: float = float(max(bound1, bound2))
 
         # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
         if val < lower_bound or val > upper_bound:
-            return "anomaly_higher_confidence", 0.9
-        return "none", 0.0
+            return "anomaly_higher_confidence", 0.9, upper_bound
+        return "none", 0.0, upper_bound
 
     def batch_score(
         self,
@@ -105,18 +106,20 @@ class LowVarianceScorer(MPScorer):
         ts_mean = ts.mean()
         scores = []
         flags = []
+        thresholds = []
         if ts.std() > self.std_threshold:
             sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 0)
             return None
 
         sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
         for val in ts:
-            flag, score = self._to_flag_and_score(
+            flag, score, threshold = self._to_flag_and_score(
                 val, ts_mean, sensitivity=sensitivity, direction=direction
             )
             flags.append(flag)
             scores.append(score)
-        return FlagsAndScores(flags=flags, scores=scores)
+            thresholds.append(threshold)
+        return FlagsAndScores(flags=flags, scores=scores, thresholds=thresholds)
 
     def stream_score(
         self,
@@ -131,11 +134,11 @@ class LowVarianceScorer(MPScorer):
         context = ts_history[-2 * window_size :]
         if context.std() > self.std_threshold:
             return None
-        flag, score = self._to_flag_and_score(
+        flag, score, threshold = self._to_flag_and_score(
             ts_streamed, context.mean(), sensitivity=sensitivity, direction=direction
         )
 
-        return FlagsAndScores(flags=[flag], scores=[score])
+        return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
 
 
 class MPIQRScorer(MPScorer):
@@ -147,12 +150,12 @@ class MPIQRScorer(MPScorer):
         {
             # High sensitivity = more anomalies + higher false positives
             # Data point outside of bottom 65% of the MP distances considered anomalous
-            "high": [0.25, 0.75],
+            "high": [0.35, 0.65],
             # Medium sensitivity = lesser anomalies + lesser false positives
-            # Data point outside of bottom 70% of the MP distances considered anomalous
-            "medium": [0.15, 0.85],
+            # Data point outside of bottom 75% of the MP distances considered anomalous
+            "medium": [0.25, 0.75],
             # Low sensitivity = leaset anomalies + leaset false positives
-            # Data point outside of bottom 90% of the MP distances considered anomalous
+            # Data point outside of bottom 95% of the MP distances considered anomalous
             "low": [0.05, 0.95],
         },
         description="Lower and upper bounds for high sensitivity",
@@ -200,7 +203,7 @@ class MPIQRScorer(MPScorer):
                 )
             flags.append(flag)
 
-        return FlagsAndScores(flags=flags, scores=scores)
+        return FlagsAndScores(flags=flags, scores=scores, thresholds=[threshold])
 
     def stream_score(
         self,
@@ -247,7 +250,7 @@ class MPIQRScorer(MPScorer):
         # anomaly identified. apply logic to check for peak and trough
         flag = self._adjust_flag_for_vicinity(ts_streamed, flag, ts_history[-2 * window_size :])
 
-        return FlagsAndScores(flags=[flag], scores=[score])
+        return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
 
     def _get_threshold(self, mp_dist: npt.NDArray[np.float64], sensitivity: Sensitivities) -> float:
         if sensitivity not in self.percentiles:

@@ -113,6 +113,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             scores=flags_and_scores.scores,
             matrix_profile=mp,
             window_size=window_size,
+            thresholds=flags_and_scores.thresholds,
         )
 
 
@@ -156,6 +157,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             scores: list[float] = []
             flags: list[AnomalyFlags] = []
             streamed_mp: list[list[float]] = []
+            thresholds: list[float] = []
             for cur_val in timeseries.values:
                 # Update the sumpi stream processor with new data
                 stream.update(cur_val)
@@ -177,6 +179,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
                 scores.extend(flags_and_scores.scores)
                 flags.extend(flags_and_scores.flags)
+                thresholds.extend(flags_and_scores.thresholds)
 
                 # Add new data point as well as its matrix profile to baseline
                 self.base_values = stream.T_
@@ -192,4 +195,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
                 ),
                 window_size=self.window_size,
+                thresholds=thresholds,
             )
