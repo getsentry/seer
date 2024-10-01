@@ -90,7 +90,10 @@ class TestUnittestStep(unittest.TestCase):
         )
         self.assertEqual(repo_client.base_commit_sha, pr.head.sha)
 
-    def test_create_github_pull_request_failure(self):
+
+class TestUnittestStep(unittest.TestCase):
+    @patch("seer.automation.codegen.unit_test_github_pr_creator.logging.getLogger")
+    def test_create_github_pull_request_failure(self, mock_get_logger):
         file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
         pr = MagicMock()
         pr.head.sha = "head_sha"
@@ -107,10 +110,9 @@ class TestUnittestStep(unittest.TestCase):
 
         repo_client.create_branch_from_changes.return_value = None
 
-        with self.assertLogs(
-            "seer.automation.codegen.unit_test_github_pr_creator", level="WARNING"
-        ) as cm:
-            creator.create_github_pull_request()
+        mock_logger = mock_get_logger.return_value
 
-        self.assertIn("Failed to create branch from changes", cm.output[0])
+        creator.create_github_pull_request()
+
+        mock_logger.warning.assert_called_once_with("Failed to create branch from changes")
         repo_client.create_pr_from_branch.assert_not_called()
