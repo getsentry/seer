@@ -29,6 +29,7 @@ class GeneratedTestsPullRequestCreator:
         branch_ref = self.repo_client.create_branch_from_changes(
             pr_title, self.file_changes_payload, branch_name
         )
+
         if not branch_ref:
             logger.warning("Failed to create branch from changes")
             return
@@ -36,6 +37,7 @@ class GeneratedTestsPullRequestCreator:
         description = f"This PR adds tests for #{self.pr.number}\n\n" "### Commits:\n" + "\n".join(
             commit_messages
         )
+
         self.repo_client.create_pr_from_branch(
             branch=branch_ref,
             title=pr_title,

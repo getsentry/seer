@@ -1,24 +1,23 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodeUnitTestRequest
+from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
-from seer.automation.models import RepoDefinition
+from seer.automation.models import FileChange, RepoDefinition
 
 import unittest
 from unittest.mock import MagicMock
 
 from seer.automation.models import RepoDefinition
 
+
 class TestUnittestStep(unittest.TestCase):
     @patch("seer.automation.codegen.unit_test_coding_component.UnitTestCodingComponent.invoke")
     @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
     @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
-    def test_invoke_happy_path(self, 
-                    mock_instantiate_context,
-                    _, 
-                    mock_invoke_unit_test_component):
-
+    def test_invoke_happy_path(self, mock_instantiate_context, _, mock_invoke_unit_test_component):
         mock_repo_client = MagicMock()
         mock_pr = MagicMock()
         mock_diff_content = "diff content"
@@ -32,7 +31,9 @@ class TestUnittestStep(unittest.TestCase):
         request_data = {
             "run_id": 1,
             "pr_id": 123,
-            "repo_definition": RepoDefinition(name="repo1", owner="owner1", provider="github", external_id="123123")
+            "repo_definition": RepoDefinition(
+                name="repo1", owner="owner1", provider="github", external_id="123123"
+            ),
         }
         request = UnittestStepRequest(**request_data)
         step = UnittestStep(request=request)
@@ -55,3 +56,61 @@ class TestUnittestStep(unittest.TestCase):
             "owner_username": request.repo_definition.owner,
             "head_sha": mock_latest_commit_sha,
         }
+
+    @patch("time.time", return_value=1234567890)
+    def test_create_github_pull_request_success(self, mock_time):
+        file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
+        pr = MagicMock()
+        pr.head.sha = "head_sha"
+        pr.number = 123
+        pr.base.ref = "main"
+        repo_client = MagicMock(spec=RepoClient)
+
+        creator = GeneratedTestsPullRequestCreator(
+            file_changes_payload=file_changes_payload, pr=pr, repo_client=repo_client
+        )
+
+        branch_name = "ai_tests_for_pr123_1234567890"
+        pr_title = "Add Tests for PR#123"
+        file_changes_payload[0].commit_message = "commit message 1"
+        file_changes_payload[1].commit_message = "commit message 2"
+
+        repo_client.create_branch_from_changes.return_value = "branch_ref"
+
+        creator.create_github_pull_request()
+
+        repo_client.create_branch_from_changes.assert_called_once_with(
+            pr_title, file_changes_payload, branch_name
+        )
+        repo_client.create_pr_from_branch.assert_called_once_with(
+            branch="branch_ref",
+            title=pr_title,
+            description="This PR adds tests for #123\n\n### Commits:\n- commit message 1\n- commit message 2",
+            provided_base="main",
+        )
+        self.assertEqual(repo_client.base_commit_sha, pr.head.sha)
+
+    def test_create_github_pull_request_failure(self):
+        file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
+        pr = MagicMock()
+        pr.head.sha = "head_sha"
+        pr.number = 123
+        pr.base.ref = "main"
+        repo_client = MagicMock(spec=RepoClient)
+
+        creator = GeneratedTestsPullRequestCreator(
+            file_changes_payload=file_changes_payload, pr=pr, repo_client=repo_client
+        )
+
+        file_changes_payload[0].commit_message = "commit message 1"
+        file_changes_payload[1].commit_message = "commit message 2"
+
+        repo_client.create_branch_from_changes.return_value = None
+
+        with self.assertLogs(
+            "seer.automation.codegen.unit_test_github_pr_creator", level="WARNING"
+        ) as cm:
+            creator.create_github_pull_request()
+
+        self.assertIn("Failed to create branch from changes", cm.output[0])
+        repo_client.create_pr_from_branch.assert_not_called()
