@@ -58,7 +58,7 @@ class TestUnittestStep(unittest.TestCase):
         }
 
     @patch("time.time", return_value=1234567890)
-    def test_create_github_pull_request_success(self, mock_time):
+    def test_create_github_pull_request_success(self, _):
         file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
         pr = MagicMock()
         pr.head.sha = "head_sha"
@@ -90,10 +90,8 @@ class TestUnittestStep(unittest.TestCase):
         )
         self.assertEqual(repo_client.base_commit_sha, pr.head.sha)
 
-
-class TestUnittestStep(unittest.TestCase):
-    @patch("seer.automation.codegen.unit_test_github_pr_creator.logging.getLogger")
-    def test_create_github_pull_request_failure(self, mock_get_logger):
+    @patch("seer.automation.codegen.unit_test_github_pr_creator.logger")
+    def test_create_github_pull_request_failure(self, mock_logger):
         file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
         pr = MagicMock()
         pr.head.sha = "head_sha"
@@ -109,8 +107,6 @@ class TestUnittestStep(unittest.TestCase):
         file_changes_payload[1].commit_message = "commit message 2"
 
         repo_client.create_branch_from_changes.return_value = None
-
-        mock_logger = mock_get_logger.return_value
 
         creator.create_github_pull_request()
 
