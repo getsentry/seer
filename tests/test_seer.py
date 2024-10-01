@@ -346,7 +346,6 @@ class TestSeer(unittest.TestCase):
         assert output == {
             "responses": [
                 {
-                    "message_distance": 0.0,
                     "parent_hash": hashes[0],
                     "should_group": True,
                     "stacktrace_distance": 0.0,
