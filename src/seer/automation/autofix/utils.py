@@ -122,3 +122,13 @@ def sanitize_branch_name(title: str) -> str:
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
     return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
+
+
+def remove_code_backticks(text: str) -> str:
+    """Remove code backticks from a string."""
+    lines = text.split("\n")
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
