@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class GeneratedTestsPullRequestCreator:
     def __init__(
-        self, file_changes_payload: List[FileChange], pr: PullRequest, repo_client: RepoClient
+        self, file_changes_payload: list[FileChange], pr: PullRequest, repo_client: RepoClient
     ):
         self.file_changes_payload = file_changes_payload
         self.pr = pr
