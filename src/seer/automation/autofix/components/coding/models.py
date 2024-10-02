@@ -49,7 +49,7 @@ class CodeContextXml(PromptXmlModel, tag="code_context"):
 class RootCausePlanTaskPromptXml(PromptXmlModel, tag="root_cause", skip_empty=True):
     title: str = element()
     description: str = element()
-    reproduction: str = element()
+    reproduction: str | None = element(default=None)
     contexts: list[CodeContextXml]
 
     @classmethod
