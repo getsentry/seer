@@ -39,8 +39,8 @@ RUN pip install -r requirements.txt --no-cache-dir
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
 # Copy scripts
-COPY celeryworker.sh celerybeat.sh gunicorn.sh ./
-RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh
+COPY celeryworker.sh celerybeat.sh gunicorn.sh grpcserver.sh ./
+RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh ./grpcserver.sh
 
 # Copy source code
 COPY src/ src/
