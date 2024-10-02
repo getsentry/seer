@@ -1,8 +1,11 @@
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
+from seer.automation.utils import make_kill_signal
 
 
 class ConcreteAutofixPipelineStep(AutofixPipelineStep):
@@ -35,6 +38,8 @@ class TestAutofixPipelineStep:
 
         step.context.state.get = MagicMock(return_value=MagicMock(signals=["done:1"]))
         assert step._pre_invoke() is False
+
+        step._cleanup()  # _pre_invoke shouldn't be called standalone because it spawns a thread, so here we manually clean it up
 
     @patch("seer.automation.autofix.steps.steps.make_done_signal", return_value="done:1")
     def test_post_invoke(self, mock_make_done_signal):
@@ -141,3 +146,64 @@ class TestAutofixPipelineStep:
 
         mock_step.context.event_manager.on_error.assert_called_once_with(str(exception))
         mock_step.next.assert_not_called()
+
+    @patch("os._exit")
+    @patch("time.sleep")
+    def test_check_for_kill_no_kill_signal(self, mock_sleep, mock_exit, mock_step):
+        mock_step.thread_kill = False
+        mock_step.context.state.get.return_value = MagicMock(signals=[])
+
+        def set_thread_kill():
+            time.sleep(0.3)
+            mock_step.thread_kill = True
+
+        threading.Thread(target=set_thread_kill).start()
+
+        mock_step._check_for_kill()
+
+        mock_exit.assert_not_called()
+        assert mock_sleep.call_count >= 1
+
+    @patch("os._exit")
+    @patch("time.sleep")
+    def test_check_for_kill_with_kill_signal(self, mock_sleep, mock_exit, mock_step):
+        mock_step.thread_kill = False
+        kill_signal = make_kill_signal()
+        mock_step.context.state.get.return_value = MagicMock(signals=[kill_signal])
+        mock_step.context.state.update.return_value.__enter__.return_value = MagicMock(
+            signals=[kill_signal]
+        )
+
+        mock_step._check_for_kill()
+
+        mock_exit.assert_called_once_with(1)
+        assert mock_step.thread_kill is True
+
+    @patch("os._exit")
+    @patch("time.sleep")
+    def test_check_for_kill_remove_kill_signal(self, mock_sleep, mock_exit, mock_step):
+        mock_step.thread_kill = False
+        kill_signal = make_kill_signal()
+        mock_step.context.state.get.return_value = MagicMock(signals=[kill_signal])
+        mock_state = MagicMock(signals=[kill_signal])
+        mock_step.context.state.update.return_value.__enter__.return_value = mock_state
+
+        mock_step._check_for_kill()
+
+        assert kill_signal not in mock_state.signals
+        mock_exit.assert_called_once_with(1)
+        assert mock_step.thread_kill is True
+
+    @patch("threading.Thread")
+    def test_pre_invoke_starts_check_for_kill_thread(self, mock_thread, mock_step):
+        mock_step._pre_invoke()
+
+        mock_thread.assert_called_once_with(target=mock_step._check_for_kill)
+        mock_thread.return_value.start.assert_called_once()
+
+    def test_cleanup_sets_thread_kill(self, mock_step):
+        mock_step.thread = MagicMock()
+        mock_step.thread_kill = False
+        mock_step._cleanup()
+
+        assert mock_step.thread_kill is True

@@ -62,6 +62,11 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             return True
         return False
 
+    def _cleanup(self):
+        if self.thread:
+            self.thread_kill = True
+        return super()._cleanup()
+
     def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
         try:
             cur = self.context.state.get()
@@ -106,8 +111,6 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             return {}
 
     def _post_invoke(self, result: Any):
-        if self.thread:
-            self.thread_kill = True
         with self.context.state.update() as cur:
             signal = make_done_signal(self.request.step_id)
             sentry_sdk.capture_message(f"Done for signal {repr(signal)}")
@@ -122,7 +125,7 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
                 with self.context.state.update() as cur:
                     cur.signals.remove(kill_signal)
                 self.thread_kill = True
-                os._exit(1)
+                os._exit(1)  # kills the thread and the whole step
             time.sleep(0.1)
 
     def _handle_exception(self, exception: Exception):

@@ -1,7 +1,6 @@
 import datetime
 import logging
 import random
-import time
 from typing import Literal, Type, cast
 
 import sentry_sdk
@@ -44,7 +43,6 @@ from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCau
 from seer.automation.models import InitializationError
 from seer.automation.utils import (
     get_sentry_client,
-    make_kill_signal,
     process_repo_provider,
     raise_if_no_genai_consent,
 )
@@ -253,9 +251,7 @@ def receive_user_message(request: AutofixUpdateRequest):
             state=state, sentry_client=get_sentry_client(), event_manager=event_manager
         )
 
-        is_coding_step = any(
-            isinstance(step, RootCauseStep) for step in cur_state.steps
-        )  # current step must be coding if preceded by root cause
+        is_coding_step = step_to_restart.key == "plan"
         memory = (
             context.get_memory("plan_and_code")
             if is_coding_step
@@ -320,49 +316,9 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def restart_from_point_with_feedback(request: AutofixUpdateRequest):
-    if not isinstance(request.payload, AutofixRestartFromPointPayload):
-        raise ValueError("Invalid payload type for restart_from_point_with_feedback")
-
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
-
-    step_index = request.payload.step_index
-    insight_card_index = request.payload.retain_insight_card_index
-
-    with state.update() as cur:
-        cur.kill_all_processing_steps()  # kill any processing steps
-        cur.delete_all_steps_after_index(step_index)  # delete all steps after specified step
-        step = cur.find_step(index=step_index)  # delete all insights after specified insight
-        if isinstance(step, DefaultStep):
-            step.insights = (
-                step.insights[: insight_card_index + 1] if insight_card_index is not None else []
-            )
-            cur.steps[-1] = step
-
-    count = 0
-    while make_kill_signal() in state.get().signals:
-        time.sleep(0.5)  # wait for all steps to be killed before restarting
-        count += 1
-        if count > 5:
-            break
-
-    event_manager = AutofixEventManager(state)
-    context = AutofixContext(
-        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
-    )
-    step_to_restart = cast(DefaultStep, state.get().steps[-1])
-
-    is_coding_step = any(
-        isinstance(step, RootCauseStep) for step in state.get().steps
-    )  # current step must be coding if preceded by root cause
-    memory = (
-        context.get_memory("plan_and_code")
-        if is_coding_step
-        else context.get_memory("root_cause_analysis")
-    )
-
-    # truncate the memory
-    for insight in step_to_restart.insights[::-1]:
+def truncate_memory_to_match_insights(memory: list[Message], step: DefaultStep):
+    truncated_memory = []
+    for insight in step.insights[::-1]:
         if insight.generated_at_memory_index >= 0:
             new_memory = memory[: insight.generated_at_memory_index + 1]
             # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
@@ -379,10 +335,37 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
                     )
                 else:
                     new_memory = new_memory[:-1]
-            memory = new_memory
+            truncated_memory = new_memory
             break
-    if not step_to_restart.insights:
-        memory = memory[:1]
+    if not step.insights:
+        truncated_memory = memory[:1]
+    return truncated_memory if truncated_memory else memory
+
+
+def restart_from_point_with_feedback(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixRestartFromPointPayload):
+        raise ValueError("Invalid payload type for restart_from_point_with_feedback")
+
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    event_manager = AutofixEventManager(state)
+
+    step_index = request.payload.step_index
+    insight_card_index = request.payload.retain_insight_card_index
+
+    event_manager.reset_steps_to_point(step_index, insight_card_index)
+
+    context = AutofixContext(
+        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
+    )
+    step_to_restart = cast(DefaultStep, state.get().steps[-1])
+
+    is_coding_step = step_to_restart.key == "plan"
+    memory = (
+        context.get_memory("plan_and_code")
+        if is_coding_step
+        else context.get_memory("root_cause_analysis")
+    )
+    memory = truncate_memory_to_match_insights(memory, step_to_restart)
 
     # add feedback to memory and to insights
     if request.payload.message:
