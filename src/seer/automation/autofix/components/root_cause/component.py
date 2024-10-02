@@ -67,12 +67,14 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 return None
 
             # Ask for reproduction
+            self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
             agent.run(
                 RootCauseAnalysisPrompts.reproduction_prompt_msg(),
             )
 
             self.context.store_memory("root_cause_analysis", agent.memory)
 
+            self.context.event_manager.add_log("Cleaning up my findings...")
             response = gpt_client.openai_client.beta.chat.completions.parse(
                 messages=[
                     message.to_message()

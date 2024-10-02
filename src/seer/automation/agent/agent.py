@@ -71,7 +71,16 @@ class LlmAgent(ABC):
         # adds any queued user messages to the memory
         user_msgs = context.state.get().steps[-1].queued_user_messages
         if user_msgs:
-            self.memory.append(Message(content="\n".join(user_msgs), role="user"))
+            # enforce alternating user/assistant messages
+            msg = "\n".join(user_msgs)
+            for item in reversed(self.memory):
+                if item.role == "user":
+                    self.memory.append(Message(content=".", role="assistant"))
+                    break
+                elif item.role == "assistant":
+                    break
+            self.memory.append(Message(content=msg, role="user"))
+
             with context.state.update() as cur:
                 cur.steps[-1].queued_user_messages = []
             context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")

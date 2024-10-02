@@ -369,7 +369,15 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
 
     # add feedback to memory and to insights
     if request.payload.message:
+        # enforce alternating user/assistant messages
+        for item in reversed(memory):
+            if item.role == "user":
+                memory.append(Message(content=".", role="assistant"))
+                break
+            elif item.role == "assistant":
+                break
         memory.append(Message(content=request.payload.message, role="user"))
+
         with state.update() as cur:
             if isinstance(cur.steps[-1], DefaultStep):
                 cur.steps[-1].insights.append(
