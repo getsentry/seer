@@ -173,6 +173,9 @@ class BaseTools:
         else:
             append_langfuse_observation_metadata({"keyword_search_download": False})
 
+        if not self.tmp_repo_dir:
+            raise ValueError("tmp_repo_dir is not set")
+
         searcher = CodeSearcher(
             directory=self.tmp_repo_dir,
             supported_extensions=set(supported_extensions),
