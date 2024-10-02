@@ -157,7 +157,7 @@ def prepare_grpc_servers(
 
 
 @inject
-def run_server():
+def run_server(config: AppConfig = injected):
     bootup(
         start_model_loading=False,
         integrations=[GRPCIntegration()],
@@ -166,7 +166,9 @@ def run_server():
     logger.info("Starting GRPC servers...")
     for server in servers:
         server.start()
-    logger.info("Listening on")
+    logger.info(
+        f"Listening on maintenance {config.GRPC_MAINTENANCE_PORT} and service {config.GRPC_SERVICE_PORT}"
+    )
     for server in servers:
         server.wait_for_termination()
 
