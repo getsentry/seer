@@ -3,7 +3,7 @@ import os
 import shutil
 import tarfile
 import tempfile
-from typing import Literal
+from typing import Literal, Optional
 
 import requests
 import sentry_sdk
@@ -364,9 +364,11 @@ class RepoClient:
             )
 
     def create_branch_from_changes(
-        self, pr_title: str, file_changes: list[FileChange]
+        self, pr_title: str, file_changes: list[FileChange], branch_name: Optional[str]
     ) -> GitRef | None:
-        new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+        new_branch_name = (
+            branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+        )
         branch_ref = self._create_branch(new_branch_name)
 
         for change in file_changes:
@@ -398,11 +400,12 @@ class RepoClient:
         branch: GitRef,
         title: str,
         description: str,
+        provided_base: Optional[str],
     ):
         return self.repo.create_pull(
             title=title,
             body=description,
-            base=self.get_default_branch(),
+            base=provided_base or self.get_default_branch(),
             head=branch.ref,
             draft=True,
         )

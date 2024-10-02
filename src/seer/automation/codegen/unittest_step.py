@@ -1,6 +1,7 @@
 from typing import Any
 
 from langfuse.decorators import observe
+from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
@@ -74,5 +75,7 @@ class UnittestStep(CodegenStep):
         if unittest_output:
             for file_change in unittest_output.diffs:
                 self.context.event_manager.append_file_change(file_change)
+            generator = GeneratedTestsPullRequestCreator(unittest_output.diffs, pr, repo_client)
+            generator.create_github_pull_request()
 
         self.context.event_manager.mark_completed()
