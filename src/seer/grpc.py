@@ -5,10 +5,13 @@ from concurrent import futures
 from typing import Callable, Iterable
 
 import grpc
+import grpc.experimental
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 from sentry_protos.seer.v1 import summarize_pb2, summarize_pb2_grpc
 from sentry_sdk.integrations.grpc import GRPCIntegration
+
+from celery_app.app import celery_app
 
 # Use seer's module so that we get a flask object correctly.
 from seer.app import app_module
@@ -33,6 +36,7 @@ def grpc_health_service(app_config: AppConfig = injected) -> health.HealthServic
 
 class DummyIssueSummaryService(summarize_pb2_grpc.IssueSummaryServiceServicer):
     def Summarize(self, request, context):
+        logger.info("Got summarize request!")
         return summarize_pb2.SummarizeResponse(group_id=2)
 
 
@@ -165,6 +169,29 @@ def run_server():
     logger.info("Listening on")
     for server in servers:
         server.wait_for_termination()
+
+
+@inject
+def get_channel(config: AppConfig = injected):
+    fallback_creds = grpc.experimental.insecure_channel_credentials()
+    channel_creds = grpc.xds_channel_credentials(fallback_creds)
+    return grpc.secure_channel(config.GRPC_TEST_ADDRESS, channel_creds)
+
+
+@celery_app.task(time_limit=15)
+def try_grpc_client():
+    logger.info("Trying prepare channel")
+    c = get_channel()
+    with c:
+        try:
+            logger.info("Sending request")
+            summarize_pb2_grpc.IssueSummaryServiceStub(c).Summarize(
+                summarize_pb2.SummarizeRequest()
+            )
+        except Exception as e:
+            logger.info("Failed!")
+            raise e
+        logger.info("Worked!!!")
 
 
 if __name__ == "__main__":

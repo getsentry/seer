@@ -25,3 +25,11 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             delete_data_for_ttl.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
             name="Delete old Automation runs for 90 day time-to-live",
         )
+    if config.GRPC_SERVER_ENABLE:
+        from seer.grpc import try_grpc_client
+
+        sender.add_periodic_task(
+            crontab(minute="*", hour="*"),  # run every minute
+            try_grpc_client.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
+            name="Try executing grpc request every minute.",
+        )
