@@ -22,7 +22,6 @@ def test_detected_celery_jobs():
                 "seer.automation.codegen.unittest_step.unittest_task",
                 "seer.automation.tasks.delete_data_for_ttl",
                 "seer.smoke_test.smoke_test",
-                "seer.grpc.try_grpc_client",
             ]
         )
 
