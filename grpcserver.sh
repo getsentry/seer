@@ -9,6 +9,6 @@ if [ "$GRPC_SERVER_ENABLE" = "true" ]; then
         exec $CMD
     fi
 else
-    echo "GRPC Server is disabled via GRPC_SERVER_ENABLED variable"
+    echo "GRPC Server is disabled via GRPC_SERVER_ENABLE variable"
     exit 0
 fi
