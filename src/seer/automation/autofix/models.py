@@ -14,6 +14,7 @@ from seer.automation.autofix.components.root_cause.models import RootCauseAnalys
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
 from seer.automation.summarize.issue import IssueSummary
+from seer.automation.utils import make_kill_signal
 from seer.db import DbRunMemory
 
 
@@ -282,6 +283,7 @@ class AutofixUpdateType(str, enum.Enum):
     SELECT_ROOT_CAUSE = "select_root_cause"
     CREATE_PR = "create_pr"
     USER_MESSAGE = "user_message"
+    RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -301,10 +303,20 @@ class AutofixUserMessagePayload(BaseModel):
     text: str
 
 
+class AutofixRestartFromPointPayload(BaseModel):
+    type: Literal[AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK]
+    message: str
+    step_index: int
+    retain_insight_card_index: int | None = None
+
+
 class AutofixUpdateRequest(BaseModel):
     run_id: int
     payload: Union[
-        AutofixRootCauseUpdatePayload, AutofixCreatePrUpdatePayload, AutofixUserMessagePayload
+        AutofixRootCauseUpdatePayload,
+        AutofixCreatePrUpdatePayload,
+        AutofixUserMessagePayload,
+        AutofixRestartFromPointPayload,
     ] = Field(discriminator="type")
 
 
@@ -326,7 +338,16 @@ class AutofixContinuation(AutofixGroupState):
         else:
             return ""
 
-    def find_step(self, *, id: str | None = None, key: str | None = None) -> Step | None:
+    def kill_all_processing_steps(self):
+        for step in self.steps:
+            if step.status == AutofixStatus.PROCESSING:
+                self.signals.append(make_kill_signal())
+
+    def find_step(
+        self, *, id: str | None = None, key: str | None = None, index: int | None = None
+    ) -> Step | None:
+        if index is not None and 0 <= index < len(self.steps):
+            return self.steps[index]
         for step in self.steps[::-1]:
             if step.id == id:
                 return step
@@ -352,6 +373,10 @@ class AutofixContinuation(AutofixGroupState):
         step.index = len(self.steps)
         self.steps.append(step)
         return step
+
+    def delete_all_steps_after_index(self, index: int):
+        if 0 <= index < len(self.steps):
+            self.steps = self.steps[: index + 1]
 
     def make_step_latest(self, step: Step):
         if step in self.steps:

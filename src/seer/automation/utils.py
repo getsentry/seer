@@ -88,6 +88,10 @@ def make_done_signal(id: str | int) -> str:
     return f"done:{id}"
 
 
+def make_kill_signal() -> str:
+    return "kill-all-steps"
+
+
 def make_retry_prefix(step_id: int) -> str:
     return f"retry:{step_id}:"
 

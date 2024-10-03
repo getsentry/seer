@@ -15,6 +15,7 @@ from seer.automation.autofix.models import AutofixStatus
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
+from seer.automation.utils import make_kill_signal
 
 
 class RootCauseStepRequest(PipelineStepTaskRequest):
@@ -55,7 +56,7 @@ class RootCauseStep(AutofixPipelineStep):
         if not self.request.initial_memory:
             self.context.event_manager.add_log("Beginning root cause analysis...")
         else:
-            self.context.event_manager.add_log("Thanks, continuing to analyze...")
+            self.context.event_manager.add_log("Continuing to analyze...")
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])
@@ -77,8 +78,12 @@ class RootCauseStep(AutofixPipelineStep):
         state = self.context.state.get()
         if state.steps and state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return
+        if make_kill_signal() in state.signals:
+            return
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
         self.context.event_manager.add_log(
             "Above is what I think the root cause is. Feel free to propose your own root cause instead."
-        )  # TODO add 'edit it or propose your own' once that feature is in
+            if root_cause_output
+            else "Sorry, I couldn't find the root cause."
+        )

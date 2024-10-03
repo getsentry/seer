@@ -30,6 +30,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
+    restart_from_point_with_feedback,
     run_autofix_create_pr,
     run_autofix_evaluation,
     run_autofix_execution,
@@ -182,6 +183,8 @@ def autofix_update_endpoint(
         run_autofix_create_pr(data)
     elif data.payload.type == AutofixUpdateType.USER_MESSAGE:
         receive_user_message(data)
+    elif data.payload.type == AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK:
+        restart_from_point_with_feedback(data)
     return AutofixEndpointResponse(started=True, run_id=data.run_id)
 
 

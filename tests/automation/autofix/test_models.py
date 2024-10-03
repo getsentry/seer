@@ -29,6 +29,7 @@ from seer.automation.models import (
     Stacktrace,
     StacktraceFrame,
 )
+from seer.automation.utils import make_kill_signal
 from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry, SentryFrameDict
 
 
@@ -466,6 +467,15 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertEqual(self.continuation.find_step(id="step2"), step2)
         self.assertIsNone(self.continuation.find_step(id="step3"))
 
+    def test_find_step_by_index(self):
+        step1 = DefaultStep(key="step1", title="test")
+        step2 = DefaultStep(key="step2", title="test")
+        self.continuation.steps = [step1, step2]
+
+        self.assertEqual(self.continuation.find_step(index=0), step1)
+        self.assertEqual(self.continuation.find_step(index=1), step2)
+        self.assertIsNone(self.continuation.find_step(index=2))
+
     def test_add_step(self):
         step1 = DefaultStep(key="step1", title="test")
         step2 = DefaultStep(key="step2", title="test")
@@ -672,6 +682,14 @@ class TestAutofixContinuation(unittest.TestCase):
             minutes=AUTOFIX_HARD_TIME_OUT_MINS, seconds=-1
         )
         self.assertFalse(self.continuation.has_timed_out)
+
+    def test_kill_all_processing_steps(self):
+        step1 = DefaultStep(key="step1", status=AutofixStatus.PROCESSING, title="test")
+        step2 = DefaultStep(key="step2", status=AutofixStatus.PROCESSING, title="test")
+        self.continuation.steps = [step1, step2]
+
+        self.continuation.kill_all_processing_steps()
+        self.assertEqual(self.continuation.signals, [make_kill_signal(), make_kill_signal()])
 
 
 @parametrize
