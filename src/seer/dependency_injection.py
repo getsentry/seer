@@ -180,6 +180,8 @@ class _Injected:
     by an Injector object.  Invoking a method that uses an `injected` value directly
     will use the currently available injector instance to fill in the default value.
     """
+    def __init__(self):
+        self.__thing = None
 
     pass
 
