@@ -333,9 +333,10 @@ def base_app() -> Flask:
     return app
 
 
+
 @inject
 def start_app(app: Flask = injected) -> Flask:
-    bootup(
+    return bootup(
         start_model_loading=True,
         integrations=[
             FlaskIntegration(),
@@ -344,4 +345,3 @@ def start_app(app: Flask = injected) -> Flask:
             ),
         ],
     )
-    return app
