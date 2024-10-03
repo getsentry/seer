@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -77,3 +77,39 @@ class TestFileSearchWildcard:
 
         autofix_tools.file_search_wildcard("*.py", repo_name="test_repo")
         autofix_tools.context.get_repo_client.assert_called_once_with(repo_name="test_repo")
+
+
+class TestFileSystem:
+    @patch("seer.automation.autofix.tools.cleanup_dir")
+    def test_context_manager_cleanup(self, mock_cleanup_dir):
+        context = MagicMock()
+
+        with BaseTools(context) as tools:
+            tools.tmp_dir = "/tmp/test_dir"
+            tools.tmp_repo_dir = "/tmp/test_dir/repo"
+
+        mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
+        assert tools.tmp_dir is None
+        assert tools.tmp_repo_dir is None
+
+    def test_cleanup_method(self):
+        context = MagicMock()
+        tools = BaseTools(context)
+        tools.tmp_dir = "/tmp/test_dir"
+        tools.tmp_repo_dir = "/tmp/test_dir/repo"
+
+        with patch("seer.automation.autofix.tools.cleanup_dir") as mock_cleanup_dir:
+            tools.cleanup()
+
+        mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
+        assert tools.tmp_dir is None
+        assert tools.tmp_repo_dir is None
+
+    def test_cleanup_not_called_when_tmp_dir_is_none(self):
+        context = MagicMock()
+        tools = BaseTools(context)
+
+        with patch("seer.automation.autofix.tools.cleanup_dir") as mock_cleanup_dir:
+            tools.cleanup()
+
+        mock_cleanup_dir.assert_not_called()

@@ -89,84 +89,87 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     @observe(name="Plan+Code")
     @ai_track(description="Plan+Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
-        tools = BaseTools(self.context)
-
-        agent = ClaudeAgent(
-            tools=tools.get_tools(),
-            config=AgentConfig(system_prompt=CodingPrompts.format_system_msg(), interactive=True),
-            memory=request.initial_memory,
-        )
-
-        task_str = (
-            RootCausePlanTaskPromptXml.from_root_cause(request.root_cause_and_fix).to_prompt_str()
-            if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
-            else request.root_cause_and_fix
-        )
-
-        state = self.context.state.get()
-
-        response = agent.run(
-            (
-                CodingPrompts.format_fix_discovery_msg(
-                    event=request.event_details.format_event(),
-                    task_str=task_str,
-                    summary=request.summary,
-                    repo_names=[repo.full_name for repo in state.request.repos],
-                    instruction=request.instruction,
-                )
-                if not request.initial_memory
-                else None
-            ),
-            context=self.context,
-            name="plan_and_code",
-        )
-
-        prev_usage = agent.usage
-        with self.context.state.update() as cur:
-            cur.usage += agent.usage
-
-        if not response:
-            self.context.store_memory("plan_and_code", agent.memory)
-            return None
-
-        final_response = agent.run(CodingPrompts.format_fix_msg())
-
-        self.context.store_memory("plan_and_code", agent.memory)
-
-        with self.context.state.update() as cur:
-            cur.usage += agent.usage - prev_usage
-
-        if not final_response:
-            return None
-
-        plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
-
-        coding_output = PlanStepsPromptXml.from_xml(
-            f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
-        ).to_model()
-
-        # We only do this once, if it still errors, we just let it go
-        missing_files_errors = []
-        file_exist_errors = []
-        for task in coding_output.tasks:
-            repo_client = self.context.get_repo_client(task.repo_name)
-            file_content = repo_client.get_file_content(task.file_path)
-            if task.type == "file_change" and not file_content:
-                missing_files_errors.append(task.file_path)
-            elif task.type == "file_delete" and not file_content:
-                missing_files_errors.append(task.file_path)
-            elif task.type == "file_create" and file_content:
-                file_exist_errors.append(task.file_path)
-
-        if missing_files_errors or file_exist_errors:
-            new_response = agent.run(
-                CodingPrompts.format_missing_msg(missing_files_errors, file_exist_errors),
+        with BaseTools(self.context) as tools:
+            agent = ClaudeAgent(
+                tools=tools.get_tools(),
+                config=AgentConfig(
+                    system_prompt=CodingPrompts.format_system_msg(), interactive=True
+                ),
+                memory=request.initial_memory,
             )
 
-            if new_response and "<plan_steps>" in new_response:
-                coding_output = PlanStepsPromptXml.from_xml(
-                    f"<plan_steps>{escape_multi_xml(extract_text_inside_tags(new_response, 'plan_steps'), ['diff', 'description', 'commit_message'])}</plan_steps>"
-                ).to_model()
+            task_str = (
+                RootCausePlanTaskPromptXml.from_root_cause(
+                    request.root_cause_and_fix
+                ).to_prompt_str()
+                if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
+                else request.root_cause_and_fix
+            )
+
+            state = self.context.state.get()
+
+            response = agent.run(
+                (
+                    CodingPrompts.format_fix_discovery_msg(
+                        event=request.event_details.format_event(),
+                        task_str=task_str,
+                        summary=request.summary,
+                        repo_names=[repo.full_name for repo in state.request.repos],
+                        instruction=request.instruction,
+                    )
+                    if not request.initial_memory
+                    else None
+                ),
+                context=self.context,
+                name="plan_and_code",
+            )
+
+            prev_usage = agent.usage
+            with self.context.state.update() as cur:
+                cur.usage += agent.usage
+
+            if not response:
+                self.context.store_memory("plan_and_code", agent.memory)
+                return None
+
+            final_response = agent.run(CodingPrompts.format_fix_msg())
+
+            self.context.store_memory("plan_and_code", agent.memory)
+
+            with self.context.state.update() as cur:
+                cur.usage += agent.usage - prev_usage
+
+            if not final_response:
+                return None
+
+            plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
+
+            coding_output = PlanStepsPromptXml.from_xml(
+                f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
+            ).to_model()
+
+            # We only do this once, if it still errors, we just let it go
+            missing_files_errors = []
+            file_exist_errors = []
+            for task in coding_output.tasks:
+                repo_client = self.context.get_repo_client(task.repo_name)
+                file_content = repo_client.get_file_content(task.file_path)
+                if task.type == "file_change" and not file_content:
+                    missing_files_errors.append(task.file_path)
+                elif task.type == "file_delete" and not file_content:
+                    missing_files_errors.append(task.file_path)
+                elif task.type == "file_create" and file_content:
+                    file_exist_errors.append(task.file_path)
+
+            if missing_files_errors or file_exist_errors:
+                new_response = agent.run(
+                    CodingPrompts.format_missing_msg(missing_files_errors, file_exist_errors),
+                )
+
+                if new_response and "<plan_steps>" in new_response:
+                    coding_output = PlanStepsPromptXml.from_xml(
+                        f"<plan_steps>{escape_multi_xml(extract_text_inside_tags(new_response, 'plan_steps'), ['diff', 'description', 'commit_message'])}</plan_steps>"
+                    ).to_model()
 
         missing_changes_by_file: dict[str, FileMissingObj] = dict()
 

@@ -12,6 +12,7 @@ from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.langfuse import append_langfuse_observation_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,18 @@ logger = logging.getLogger(__name__)
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
+    tmp_dir: str | None = None
+    tmp_repo_dir: str | None = None
 
     def __init__(self, context: AutofixContext | CodegenContext, retrieval_top_k: int = 8):
         self.context = context
         self.retrieval_top_k = retrieval_top_k
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
@@ -135,6 +144,12 @@ class BaseTools:
                 files.append(child)
         return dirs, files
 
+    def cleanup(self):
+        if self.tmp_dir:
+            cleanup_dir(self.tmp_dir)
+            self.tmp_dir = None
+            self.tmp_repo_dir = None
+
     @observe(name="Keyword Search")
     @ai_track(description="Keyword Search")
     def keyword_search(
@@ -147,19 +162,27 @@ class BaseTools:
         """
         Searches for a keyword in the codebase.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name)
 
-        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+        if self.tmp_dir is None or self.tmp_repo_dir is None:
+            repo_client = self.context.get_repo_client(repo_name=repo_name)
+            tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+
+            self.tmp_dir = tmp_dir
+            self.tmp_repo_dir = tmp_repo_dir
+            append_langfuse_observation_metadata({"keyword_search_download": True})
+        else:
+            append_langfuse_observation_metadata({"keyword_search_download": False})
+
+        if not self.tmp_repo_dir:
+            raise ValueError("tmp_repo_dir is not set")
 
         searcher = CodeSearcher(
-            directory=tmp_repo_dir,
+            directory=self.tmp_repo_dir,
             supported_extensions=set(supported_extensions),
             start_path=in_proximity_to,
         )
 
         results = searcher.search(keyword)
-
-        cleanup_dir(tmp_dir)
 
         self.context.event_manager.add_log(
             f"Searched codebase for `{keyword}`, found {len(results)} result(s)."

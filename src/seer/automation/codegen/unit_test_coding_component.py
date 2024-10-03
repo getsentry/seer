@@ -3,6 +3,7 @@ import logging
 from langfuse.decorators import langfuse_context, observe
 from sentry_sdk.ai.monitoring import ai_track
 
+from integrations.codecov.codecov_client import CodecovClient
 from seer.automation.agent.agent import AgentConfig, ClaudeAgent, LlmAgent
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.components.coding.utils import (
@@ -17,7 +18,6 @@ from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
-from integrations.codecov.codecov_client import CodecovClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,62 +42,62 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
 
     def invoke(self, request: CodeUnitTestRequest) -> CodeUnitTestOutput | None:
         langfuse_context.update_current_trace(user_id="ram")
-        tools = BaseTools(self.context)
+        with BaseTools(self.context) as tools:
 
-        agent = ClaudeAgent(
-            tools=tools.get_tools(),
-            config=AgentConfig(
-                system_prompt=CodingUnitTestPrompts.format_system_msg(), max_iterations=24
-            ),
-        )
+            agent = ClaudeAgent(
+                tools=tools.get_tools(),
+                config=AgentConfig(
+                    system_prompt=CodingUnitTestPrompts.format_system_msg(), max_iterations=24
+                ),
+            )
 
-        codecov_client_params = request.codecov_client_params
+            codecov_client_params = request.codecov_client_params
 
-        code_coverage_data = CodecovClient.fetch_coverage(
-            repo_name=codecov_client_params["repo_name"],
-            pullid=codecov_client_params["pullid"],
-            owner_username=codecov_client_params["owner_username"],
-        )
+            code_coverage_data = CodecovClient.fetch_coverage(
+                repo_name=codecov_client_params["repo_name"],
+                pullid=codecov_client_params["pullid"],
+                owner_username=codecov_client_params["owner_username"],
+            )
 
-        test_result_data = CodecovClient.fetch_test_results_for_commit(
-            repo_name=codecov_client_params["repo_name"],
-            owner_username=codecov_client_params["owner_username"],
-            latest_commit_sha=codecov_client_params["head_sha"],
-        )
+            test_result_data = CodecovClient.fetch_test_results_for_commit(
+                repo_name=codecov_client_params["repo_name"],
+                owner_username=codecov_client_params["owner_username"],
+                latest_commit_sha=codecov_client_params["head_sha"],
+            )
 
-        existing_test_design_response = self._get_test_design_summary(
-            agent=agent,
-            prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
-                diff_str=request.diff
-            ),
-        )
+            existing_test_design_response = self._get_test_design_summary(
+                agent=agent,
+                prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
+                    diff_str=request.diff
+                ),
+            )
 
-        self._get_plan(
-            agent=agent,
-            prompt=CodingUnitTestPrompts.format_plan_step_msg(
-                diff_str=request.diff,
-                has_coverage_info=code_coverage_data,
-                has_test_result_info=test_result_data,
-            ),
-        )
+            self._get_plan(
+                agent=agent,
+                prompt=CodingUnitTestPrompts.format_plan_step_msg(
+                    diff_str=request.diff,
+                    has_coverage_info=code_coverage_data,
+                    has_test_result_info=test_result_data,
+                ),
+            )
 
-        final_response = self._generate_tests(
-            agent=agent,
-            prompt=CodingUnitTestPrompts.format_unit_test_msg(
-                diff_str=request.diff, test_design_hint=existing_test_design_response
-            ),
-        )
+            final_response = self._generate_tests(
+                agent=agent,
+                prompt=CodingUnitTestPrompts.format_unit_test_msg(
+                    diff_str=request.diff, test_design_hint=existing_test_design_response
+                ),
+            )
 
-        if not final_response:
-            return None
-        plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
+            if not final_response:
+                return None
+            plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
 
-        if len(plan_steps_content) == 0:
-            raise ValueError("Failed to extract plan_steps from the planning step of LLM")
+            if len(plan_steps_content) == 0:
+                raise ValueError("Failed to extract plan_steps from the planning step of LLM")
 
-        coding_output = PlanStepsPromptXml.from_xml(
-            f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
-        ).to_model()
+            coding_output = PlanStepsPromptXml.from_xml(
+                f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
+            ).to_model()
 
         if not coding_output.tasks:
             raise ValueError("No tasks found in coding output")
