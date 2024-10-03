@@ -39,7 +39,8 @@ def bootup(
     with sentry_sdk.metrics.timing(key="seer_bootup_time"):
         initialize_logs(["seer.", "celery_app."])
         config.do_validation()
-        initialize_database()
+        with db_module:
+            initialize_database()
         initialize_models(start_model_loading)
 
 
