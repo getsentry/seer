@@ -64,7 +64,7 @@ class LlmClient(ABC):
         )
 
 
-DEFAULT_GPT_MODEL = "gpt-4o-2024-05-13"
+DEFAULT_GPT_MODEL = "gpt-4o-2024-08-06"
 DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet@20240620"
 
 
