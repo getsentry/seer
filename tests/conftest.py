@@ -56,8 +56,7 @@ def alembic_runner(alembic_config: Config, setup_app):
 def setup_app(test_module: Module):
     with module, configuration_test_module, test_module:
         reset_loading_state()
-        bootup(start_model_loading=False, integrations=[])
-        app = resolve(Flask)
+        app = bootup(start_model_loading=False, integrations=[])
         app.testing = True
         app.config["PROPAGATE_EXCEPTIONS"] = True
 
