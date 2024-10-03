@@ -15,7 +15,7 @@ LoggingPrefixes = Annotated[list[str], Labeled("logging_prefixes")]
 logging_module = Module()
 
 logging_module.constant(LogLevel, logging.INFO)
-logging_module.constant(LoggingPrefixes, ["seer.", "celery_app."])
+logging_module.constant(LoggingPrefixes, ["seer.", "celery_app.", "src.seer.", "src.celery_app."])
 
 
 @logging_module.provider
