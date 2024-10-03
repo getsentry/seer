@@ -38,7 +38,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     max_iterations=24,
                     interactive=True,
                 ),
-                name="root_cause_analysis",
                 memory=request.initial_memory,
             )
 
@@ -57,6 +56,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         else None
                     ),
                     context=self.context,
+                    name="root_cause_analysis",
                 )
 
                 if not response:
