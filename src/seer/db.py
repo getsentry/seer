@@ -31,13 +31,26 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from seer.configuration import AppConfig
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import inject, injected, Module
 
+db: SQLAlchemy = None
+migrate = Migrate(directory="src/migrations")
+Session = sessionmaker(autoflush=False, expire_on_commit=False)
+
+db_module = Module()
+
+@db_module.provider
+def provide_db() -> SQLAlchemy:
+    global db
+    if db is None:
+        db = SQLAlchemy(model_class=Base)
+    return db
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
+    db: SQLAlchemy = injected,
 ):
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
