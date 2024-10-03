@@ -156,9 +156,10 @@ def prepare_grpc_servers(
     return [server, maintenance_server]
 
 
+
 @inject
 def run_server(config: AppConfig = injected):
-    bootup(
+    app = bootup(
         start_model_loading=False,
         integrations=[GRPCIntegration()],
     )
