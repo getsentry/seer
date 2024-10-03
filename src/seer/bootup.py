@@ -8,9 +8,10 @@ from sentry_sdk.types import Event
 from seer.automation.utils import AgentError
 from seer.configuration import AppConfig
 from seer.db import initialize_database
-from seer.dependency_injection import Module, inject, injected
+from seer.dependency_injection import Module, inject, injected, resolve
 from seer.inference_models import initialize_models
 from seer.logging import initialize_logs
+
 
 logger = logging.getLogger(__name__)
 
