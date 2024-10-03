@@ -23,7 +23,8 @@ def setup_celery_entrypoint(app: Celery):
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+    app = bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+    sender.flask_app = app
     from celery_app.tasks import setup_periodic_tasks
 
     sender.on_after_finalize.connect(setup_periodic_tasks)
