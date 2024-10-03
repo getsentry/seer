@@ -66,12 +66,6 @@ class Base(DeclarativeBase):
     pass
 
 
-# Initialized in src/app.run
-db: SQLAlchemy = SQLAlchemy(model_class=Base)
-migrate = Migrate(directory="src/migrations")
-Session = sessionmaker(autoflush=False, expire_on_commit=False)
-
-
 class ProcessRequest(Base):
     """
     Stores durable work that is processed by the async.py worker, in contrast to the best effort queue backed
