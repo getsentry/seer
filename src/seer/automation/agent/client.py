@@ -317,6 +317,7 @@ class DummyGptClient(GptClient):
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = [],
         response_format: Optional[dict] = None,
+        temperature: float = 0.0,
     ):
         for handler in self.handlers:
             result = handler(
