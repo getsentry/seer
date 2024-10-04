@@ -1,7 +1,6 @@
 from typing import Any
 
 from langfuse.decorators import observe
-from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
@@ -12,6 +11,7 @@ from seer.automation.autofix.config import (
 from seer.automation.codegen.models import CodeUnitTestRequest
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.codegen.unit_test_coding_component import UnitTestCodingComponent
+from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 

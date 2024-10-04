@@ -18,22 +18,34 @@ class TestMPScorers(unittest.TestCase):
         sensitivity = "high"
         direction = "both"
 
-        expected_types, timeseries, mp_dists, window_sizes, window_starts, window_ends = (
-            convert_synthetic_ts(
-                "tests/seer/anomaly_detection/test_data/synthetic_series",
-                as_ts_datatype=False,
-                include_anomaly_range=True,
-            )
+        (
+            expected_types,
+            timeseries,
+            timestamps,
+            mp_dists,
+            window_sizes,
+            window_starts,
+            window_ends,
+        ) = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series",
+            as_ts_datatype=False,
+            include_anomaly_range=True,
         )
 
         threshold = 0.1
 
-        for expected_type, ts, mp_dist, window_size, start, end in zip(
-            expected_types, timeseries, mp_dists, window_sizes, window_starts, window_ends
+        for expected_type, ts, ts_timestamps, mp_dist, window_size, start, end in zip(
+            expected_types,
+            timeseries,
+            timestamps,
+            mp_dists,
+            window_sizes,
+            window_starts,
+            window_ends,
         ):
 
             flags_and_scores = self.scorer.batch_score(
-                ts, mp_dist, sensitivity, direction, window_size
+                ts, ts_timestamps, mp_dist, sensitivity, direction, window_size
             )
             assert flags_and_scores is not None
             actual_flags = flags_and_scores.flags
@@ -54,15 +66,21 @@ class TestMPScorers(unittest.TestCase):
 
     def test_batch_score_invalid_sensitivity(self):
 
-        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+        timeseries, timestamps, mp_dists, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
-        ts_baseline, mp_dist_baseline, window_size = timeseries[0], mp_dists[0], window_sizes[0]
+        ts_values, ts_timestamps, mp_dist_baseline, window_size = (
+            timeseries[0],
+            timestamps[0],
+            mp_dists[0],
+            window_sizes[0],
+        )
         sensitivity, direction = "invalid", "both"
 
         with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
             self.scorer.batch_score(
-                ts_baseline,
+                ts_values,
+                ts_timestamps,
                 mp_dist_baseline,
                 sensitivity,
                 direction,
@@ -72,6 +90,7 @@ class TestMPScorers(unittest.TestCase):
     def test_batch_score_invalid_sensitivity_flat_ts(self):
 
         ts_baseline = np.ones(200)
+        ts_timestamps = np.arange(1.0, 201.0)
         mp_dist_baseline = np.ones(200)
         window_size = 3
 
@@ -80,6 +99,7 @@ class TestMPScorers(unittest.TestCase):
         with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
             self.scorer.batch_score(
                 ts_baseline,
+                ts_timestamps,
                 mp_dist_baseline,
                 sensitivity,
                 direction,
@@ -91,11 +111,13 @@ class TestMPScorers(unittest.TestCase):
         test_ts_mp_mulipliers = [1000, -1000, 1]
         expected_flags = ["anomaly_higher_confidence", "anomaly_higher_confidence", "none"]
 
-        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+        timeseries, timestamps, mp_dists, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
 
-        for ts_baseline, mp_dist_baseline, window_size in zip(timeseries, mp_dists, window_sizes):
+        for ts_baseline, ts_timestamps, mp_dist_baseline, window_size in zip(
+            timeseries, timestamps, mp_dists, window_sizes
+        ):
             sensitivity, direction = "high", "both"
 
             for i, multiplier in enumerate(test_ts_mp_mulipliers):
@@ -104,8 +126,10 @@ class TestMPScorers(unittest.TestCase):
 
                 flags_and_scores = self.scorer.stream_score(
                     test_ts_val,
+                    ts_timestamps[-1],
                     test_mp_dist,
                     ts_baseline,
+                    ts_timestamps,
                     mp_dist_baseline,
                     sensitivity,
                     direction,
@@ -118,17 +142,24 @@ class TestMPScorers(unittest.TestCase):
 
     def test_stream_score_invalid_sensitivity(self):
 
-        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+        timeseries, timestamps, mp_dists, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
-        ts_baseline, mp_dist_baseline, window_size = timeseries[0], mp_dists[0], window_sizes[0]
+        ts_baseline, ts_timestamps, mp_dist_baseline, window_size = (
+            timeseries[0],
+            timestamps[0],
+            mp_dists[0],
+            window_sizes[0],
+        )
         sensitivity, direction = "invalid", "both"
 
         with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
             self.scorer.stream_score(
                 timeseries[-1],
+                timestamps[-1],
                 mp_dists[-1],
                 ts_baseline,
+                ts_timestamps,
                 mp_dist_baseline,
                 sensitivity,
                 direction,
@@ -138,6 +169,7 @@ class TestMPScorers(unittest.TestCase):
     def test_stream_score_invalid_sensitivity_flat_ts(self):
 
         ts_baseline = np.ones(200)
+        ts_timestamps = np.arange(1.0, 201.0)
         mp_dist_baseline = np.ones(200)
         window_size = 3
 
@@ -146,8 +178,10 @@ class TestMPScorers(unittest.TestCase):
         with self.assertRaises(ClientError, msg="Invalid sensitivity: invalid"):
             self.scorer.stream_score(
                 ts_baseline[-1],
+                ts_timestamps[-1],
                 mp_dist_baseline[-1],
                 ts_baseline,
+                ts_timestamps,
                 mp_dist_baseline,
                 sensitivity,
                 direction,
@@ -167,6 +201,7 @@ class TestMPScorers(unittest.TestCase):
         flags_and_scores = scorer.batch_score(
             np.arange(1.0, 10),
             np.arange(1.0, 10),
+            np.arange(1.0, 10),
             sensitivity="high",
             direction="both",
             window_size=3,
@@ -174,6 +209,8 @@ class TestMPScorers(unittest.TestCase):
         assert flags_and_scores is None
 
         flags_and_scores = scorer.stream_score(
+            np.arange(1.0, 10),
+            np.arange(1.0, 10),
             np.arange(1.0, 10),
             np.arange(1.0, 10),
             np.arange(1.0, 3),

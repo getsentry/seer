@@ -28,6 +28,7 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
     """
 
     timeseries = []
+    timestamps = []
     mp_dists = []
     window_sizes = []
     anomaly_starts = []
@@ -59,18 +60,20 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
                 data = json.load(file)
                 data = data["ts"]
 
-                ts = None
+                values = None
                 if as_ts_datatype:
-                    ts = [
+                    values = [
                         TimeSeriesPoint(timestamp=point["timestamp"], value=point["value"])
                         for point in data
                     ]
                 else:
-                    ts = np.array([point["value"] for point in data], dtype=np.float64)
+                    values = np.array([point["value"] for point in data], dtype=np.float64)
 
+                ts_timestamps = np.array([point["timestamp"] for point in data], dtype=np.float64)
                 mp_dist = np.array([point["mp_dist"] for point in data], dtype=np.float64)
 
-                timeseries.append(ts)
+                timeseries.append(values)
+                timestamps.append(ts_timestamps)
                 mp_dists.append(mp_dist)
                 window_sizes.append(window_size)
                 anomaly_starts.append(start)
@@ -78,5 +81,13 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
                 expected_types.append(expected_type)
 
     if include_anomaly_range:
-        return expected_types, timeseries, mp_dists, window_sizes, anomaly_starts, anomaly_ends
-    return timeseries, mp_dists, window_sizes
+        return (
+            expected_types,
+            timeseries,
+            timestamps,
+            mp_dists,
+            window_sizes,
+            anomaly_starts,
+            anomaly_ends,
+        )
+    return timeseries, timestamps, mp_dists, window_sizes
