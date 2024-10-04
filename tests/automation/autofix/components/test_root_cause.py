@@ -16,7 +16,7 @@ from seer.dependency_injection import Module
 class TestRootCauseComponent:
     @pytest.fixture
     def component(self):
-        mock_context = MagicMock(spec=AutofixContext)
+        mock_context = MagicMock(spec=AutofixContext, event_manager=MagicMock(add_log=MagicMock()))
         mock_context.state = MagicMock()
         mock_context.skip_loading_codebase = True
         return RootCauseAnalysisComponent(mock_context)
@@ -48,7 +48,7 @@ class TestRootCauseComponent:
                                 cause=RootCauseAnalysisItemPrompt(
                                     title="Missing Null Check",
                                     description="The root cause of the issue is ...",
-                                    reproduction="Steps to reproduce",
+                                    reproduction_instructions="Steps to reproduce",
                                     relevant_code=None,
                                 )
                             ),

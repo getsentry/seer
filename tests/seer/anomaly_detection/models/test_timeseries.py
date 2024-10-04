@@ -17,6 +17,7 @@ class TestTimeSeries(unittest.TestCase):
                 scores=[0.8],
                 matrix_profile=np.array([[0.1, 0, 1, 2]]),
                 window_size=2,
+                thresholds=[0.0],
             ),
         )
 

@@ -38,4 +38,23 @@ def append_langfuse_trace_tags(new_tags: list[str], langfuse: Langfuse = injecte
         logger.exception(e)
 
 
+@inject
+def append_langfuse_observation_metadata(new_metadata: dict, langfuse: Langfuse = injected):
+    """
+    Appends metadata to the current observation in the context.
+    MUST BE RUN WITHIN A LANGFUSE OBSERVATION!
+    """
+    try:
+        observation_id = langfuse_context.get_current_observation_id()
+        langfuse_context.flush()
+        if observation_id:
+            observation = langfuse.get_observation(observation_id)
+
+            langfuse_context.update_current_observation(
+                metadata=(observation.metadata or {}) | new_metadata,
+            )
+    except Exception as e:
+        logger.exception(e)
+
+
 langfuse_module.enable()

@@ -1,6 +1,7 @@
 import logging
+import threading
 from abc import ABC
-from typing import Optional, cast
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,7 +18,9 @@ from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
-from seer.automation.autofix.models import DefaultStep
+from seer.automation.autofix.models import AutofixStatus, DefaultStep
+from seer.bootup import module
+from seer.configuration import configuration_module
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -68,10 +71,53 @@ class LlmAgent(ABC):
         # adds any queued user messages to the memory
         user_msgs = context.state.get().steps[-1].queued_user_messages
         if user_msgs:
-            self.memory.append(Message(content="\n".join(user_msgs), role="user"))
+            # enforce alternating user/assistant messages
+            msg = "\n".join(user_msgs)
+            for item in reversed(self.memory):
+                if item.role == "user":
+                    self.memory.append(Message(content=".", role="assistant"))
+                    break
+                elif item.role == "assistant":
+                    break
+            self.memory.append(Message(content=msg, role="user"))
+
             with context.state.update() as cur:
                 cur.steps[-1].queued_user_messages = []
             context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
+
+    def run_in_thread(self, func, args):
+        def wrapper():
+            # ensures dependency injection works
+            module.enable()
+            configuration_module.enable()
+
+            func(*args)
+
+        threading.Thread(target=wrapper).start()
+
+    def share_insights(self, context: AutofixContext, text: str, generated_at_memory_index: int):
+        # generate insights
+        insight_sharing = InsightSharingComponent(context)
+        past_insights = context.state.get().get_all_insights()
+        insight_card = insight_sharing.invoke(
+            InsightSharingRequest(
+                latest_thought=text,
+                memory=self.memory,
+                task_description=context.state.get().get_step_description(),
+                past_insights=past_insights,
+                generated_at_memory_index=generated_at_memory_index,
+            )
+        )
+        # add the insight card to the current step
+        if insight_card:
+            if len(context.state.get().get_all_insights()) == len(
+                past_insights
+            ):  # in case something else was added in parallel, don't add this insight
+                with context.state.update() as cur:
+                    if cur.steps and isinstance(cur.steps[-1], DefaultStep):
+                        step = cur.steps[-1]
+                        step.insights.append(insight_card)
+                        cur.steps[-1] = step
 
     def run_iteration(self, context: Optional[AutofixContext] = None):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
@@ -86,30 +132,20 @@ class LlmAgent(ABC):
         self.memory.append(message)
 
         # log thoughts to the user
-        if message.content and context and self.config.interactive:
+        if (
+            message.content
+            and context
+            and self.config.interactive
+            and not context.state.get().request.options.disable_interactivity
+        ):
             text_before_tag = message.content.split("<")[0]
             text = text_before_tag
             if text:
-                # call LLM separately with the same memory to generate structured output insight cards
-                insight_sharing = InsightSharingComponent(context)
-                past_insights = context.state.get().get_all_insights()
-                insight_card = insight_sharing.invoke(
-                    InsightSharingRequest(
-                        latest_thought=text,
-                        memory=self.memory,
-                        task_description=context.state.get().get_step_description(),
-                        past_insights=past_insights,
-                    )
+                self.run_in_thread(
+                    func=self.share_insights, args=(context, text, len(self.memory) - 1)
                 )
-                if insight_card:
-                    if context.state.get().steps and isinstance(
-                        context.state.get().steps[-1], DefaultStep
-                    ):
-                        step = cast(DefaultStep, context.state.get().steps[-1])
-                        step.insights.append(insight_card)
-                        with context.state.update() as cur:
-                            cur.steps[-1] = step
 
+        # call any tools the model wants to use
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 tool_response = self.call_tool(tool_call)
@@ -120,7 +156,13 @@ class LlmAgent(ABC):
 
         return self.memory
 
-    def should_continue(self) -> bool:
+    def should_continue(self, context: Optional[AutofixContext] = None) -> bool:
+        if (
+            context
+            and context.state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE
+        ):
+            return False
+
         # If this is the first iteration or there are no messages, continue
         if self.iterations == 0 or not self.memory:
             return True
@@ -142,16 +184,21 @@ class LlmAgent(ABC):
         # Continue in all other cases
         return True
 
-    def run(self, prompt: str, context: Optional[AutofixContext] = None):
-        self.add_user_message(prompt)
+    def run(
+        self, prompt: str | None, context: Optional[AutofixContext] = None, name: str | None = None
+    ):
+        if prompt:
+            self.add_user_message(prompt)
         logger.debug(f"----[{self.name}] Running Agent----")
 
         self.reset_iterations()
 
-        while self.should_continue():
+        while self.should_continue(context):
             if context and self.config.interactive:
                 self.use_user_messages(context)
             self.run_iteration(context=context)
+            if context and name:
+                context.store_memory(name, self.memory)
 
         if self.iterations == self.config.max_iterations:
             raise MaxIterationsReachedException(

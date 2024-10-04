@@ -32,6 +32,7 @@ class TestInsightSharingComponent:
             latest_thought="Latest thought",
             past_insights=["Past insight 1", "Past insight 2"],
             memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
         )
 
         mock_completion_1 = MagicMock()
@@ -51,8 +52,7 @@ class TestInsightSharingComponent:
         mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
-        result = component.invoke(request, gpt_client=mock_gpt_client)
-
+        result = component.invoke(request, mock_gpt_client)
         assert isinstance(result, InsightSharingOutput)
         assert result.insight == "New insight"
         assert result.justification == "Test explanation"
@@ -67,6 +67,7 @@ class TestInsightSharingComponent:
             latest_thought="Latest thought",
             past_insights=["Past insight 1", "Past insight 2"],
             memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
         )
 
         mock_completion = MagicMock()
@@ -74,7 +75,7 @@ class TestInsightSharingComponent:
 
         mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
 
-        result = component.invoke(request, gpt_client=mock_gpt_client)
+        result = component.invoke(request, mock_gpt_client)
 
         assert result is None
 
@@ -84,6 +85,7 @@ class TestInsightSharingComponent:
             latest_thought="Latest thought",
             past_insights=["Past insight 1"],
             memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
         )
 
         mock_completion_1 = MagicMock()
@@ -96,5 +98,5 @@ class TestInsightSharingComponent:
         mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
         mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
 
-        with pytest.raises(RuntimeError, match="Test refusal"):
-            component.invoke(request, gpt_client=mock_gpt_client)
+        # make sure no error is raised
+        component.invoke(request, mock_gpt_client)

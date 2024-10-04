@@ -1,14 +1,17 @@
 import datetime
 import logging
 import random
-from typing import Literal, cast
+from typing import Literal, Type, cast
 
 import sentry_sdk
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
 from celery_app.config import CeleryQueues
+from seer.automation.agent.models import Message
+from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.evaluations import (
     RootCauseScoreResult,
@@ -25,10 +28,13 @@ from seer.automation.autofix.models import (
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
+    AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
     AutofixUserMessagePayload,
+    DefaultStep,
+    Step,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
@@ -199,13 +205,211 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     )
 
 
+def restart_step_with_user_response(
+    state: ContinuationState,
+    memory: list[Message],
+    text: str,
+    event_manager: AutofixEventManager,
+    step_to_restart: Step,
+    step_class: Type[AutofixCodingStep | RootCauseStep],
+    step_request_class: Type[AutofixCodingStepRequest | RootCauseStepRequest],
+):
+    cur_state = state.get()
+    if memory:
+        tool_call_id = memory[-1].tool_call_id
+        if tool_call_id:
+            user_response = Message(role="tool", content=text, tool_call_id=tool_call_id)
+            if memory[-1].role == "tool":
+                memory[-1] = user_response
+            else:
+                memory.append(user_response)
+            event_manager.restart_step(step_to_restart)
+            step_class.get_signature(
+                step_request_class(
+                    run_id=cur_state.run_id,
+                    initial_memory=memory,
+                ),
+                queue=CeleryQueues.DEFAULT,
+            ).apply_async()
+
+
 def receive_user_message(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUserMessagePayload):
         raise ValueError("Invalid payload type for user_message")
 
     state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
-    with state.update() as cur:
-        cur.steps[-1].receive_user_message(request.payload.text)
+    cur_state = state.get()
+    step_to_restart = cur_state.find_last_step_waiting_for_response()
+
+    # check the state to see if we're responding to a question or interjecting
+    if step_to_restart:
+        # user response to question
+        with state.update() as cur:
+            cur.mark_triggered()
+        event_manager = AutofixEventManager(state)
+        context = AutofixContext(
+            state=state, sentry_client=get_sentry_client(), event_manager=event_manager
+        )
+
+        is_coding_step = step_to_restart.key == "plan"
+        memory = (
+            context.get_memory("plan_and_code")
+            if is_coding_step
+            else context.get_memory("root_cause_analysis")
+        )
+
+        question = ""
+        if memory and len(memory) >= 2 and memory[-2].tool_calls:
+            question = parse_json_with_keys(memory[-2].tool_calls[0].args, ["question"])["question"]
+
+        with state.update() as cur:
+            if isinstance(cur.steps[-1], DefaultStep):
+                cur.steps[-1].insights.append(
+                    InsightSharingOutput(
+                        insight=f"_{question}_  {request.payload.text}",
+                        justification="USER",
+                        codebase_context=[],
+                        error_message_context=[],
+                        stacktrace_context=[],
+                        breadcrumb_context=[],
+                        generated_at_memory_index=len(memory) - 1 if memory else -1,
+                    )
+                )
+
+        if is_coding_step:
+            restart_step_with_user_response(
+                state,
+                memory,
+                request.payload.text,
+                event_manager,
+                step_to_restart,
+                AutofixCodingStep,
+                AutofixCodingStepRequest,
+            )
+        else:
+            restart_step_with_user_response(
+                state,
+                memory,
+                request.payload.text,
+                event_manager,
+                step_to_restart,
+                RootCauseStep,
+                RootCauseStepRequest,
+            )
+
+    else:
+        # user interjection
+        with state.update() as cur:
+            if cur.steps:
+                cur.steps[-1].receive_user_message(request.payload.text)
+                if isinstance(cur.steps[-1], DefaultStep):
+                    cur.steps[-1].insights.append(
+                        InsightSharingOutput(
+                            insight=request.payload.text,
+                            justification="USER",
+                            codebase_context=[],
+                            error_message_context=[],
+                            stacktrace_context=[],
+                            breadcrumb_context=[],
+                            generated_at_memory_index=-1,
+                        )
+                    )
+
+
+def truncate_memory_to_match_insights(memory: list[Message], step: DefaultStep):
+    truncated_memory = []
+    for insight in step.insights[::-1]:
+        if insight.generated_at_memory_index >= 0:
+            new_memory = memory[: insight.generated_at_memory_index + 1]
+            # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
+            if new_memory and new_memory[-1].tool_calls:
+                num_tool_calls = len(new_memory[-1].tool_calls)
+                if insight.generated_at_memory_index + num_tool_calls < len(memory):
+                    new_memory.extend(
+                        memory[
+                            insight.generated_at_memory_index
+                            + 1 : insight.generated_at_memory_index
+                            + num_tool_calls
+                            + 1
+                        ]
+                    )
+                else:
+                    new_memory = new_memory[:-1]
+            truncated_memory = new_memory
+            break
+    if not step.insights:
+        truncated_memory = memory[:1]
+    return truncated_memory if truncated_memory else memory
+
+
+def restart_from_point_with_feedback(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixRestartFromPointPayload):
+        raise ValueError("Invalid payload type for restart_from_point_with_feedback")
+
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    event_manager = AutofixEventManager(state)
+
+    step_index = request.payload.step_index
+    insight_card_index = request.payload.retain_insight_card_index
+
+    event_manager.reset_steps_to_point(step_index, insight_card_index)
+
+    context = AutofixContext(
+        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
+    )
+    step_to_restart = cast(DefaultStep, state.get().steps[-1])
+
+    is_coding_step = step_to_restart.key == "plan"
+    memory = (
+        context.get_memory("plan_and_code")
+        if is_coding_step
+        else context.get_memory("root_cause_analysis")
+    )
+    memory = truncate_memory_to_match_insights(memory, step_to_restart)
+
+    # add feedback to memory and to insights
+    if request.payload.message:
+        # enforce alternating user/assistant messages
+        for item in reversed(memory):
+            if item.role == "user":
+                memory.append(Message(content=".", role="assistant"))
+                break
+            elif item.role == "assistant":
+                break
+        memory.append(Message(content=request.payload.message, role="user"))
+
+        with state.update() as cur:
+            if isinstance(cur.steps[-1], DefaultStep):
+                cur.steps[-1].insights.append(
+                    InsightSharingOutput(
+                        insight=request.payload.message,
+                        justification="USER",
+                        codebase_context=[],
+                        error_message_context=[],
+                        stacktrace_context=[],
+                        breadcrumb_context=[],
+                        generated_at_memory_index=len(memory) - 1,
+                    )
+                )
+
+    # restart the step
+    event_manager.restart_step(step_to_restart)
+    if is_coding_step:
+        AutofixCodingStep.get_signature(
+            AutofixCodingStepRequest(
+                run_id=state.get().run_id,
+                initial_memory=memory,
+            ),
+            queue=CeleryQueues.DEFAULT,
+        ).apply_async()
+    else:
+        RootCauseStep.get_signature(
+            RootCauseStepRequest(
+                run_id=state.get().run_id,
+                initial_memory=memory,
+            ),
+            queue=CeleryQueues.DEFAULT,
+        ).apply_async()
 
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):
@@ -267,7 +471,7 @@ def run_autofix_evaluation_on_item(
     )
 
     scoring_n_panel = 5
-    scoring_model = "gpt-4o-2024-05-13"
+    scoring_model = "o1-mini-2024-09-12"
 
     diff: str | None = None
 

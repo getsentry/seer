@@ -17,6 +17,7 @@ class RootCauseAnalysisPrompts:
             # Guidelines:
             - Don't always assume data being passed is correct, it could be incorrect! Sometimes the API request is malformed, or there is a bug on the client/server side that is causing the issue.
             - You are not able to search in or make changes to external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search in external libraries.
+            - At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis.
             - If you are not able to find any potential root causes, return only <NO_ROOT_CAUSES>.
             - If multiple searches turn up no viable results, you should conclude the session.
             - At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK.
@@ -68,8 +69,11 @@ class RootCauseAnalysisPrompts:
     def reproduction_prompt_msg():
         return textwrap.dedent(
             """\
-            Given all the above potential root causes you just gave, please provide a 1-2 sentence concise instruction on how to reproduce the issue for each root cause.
-            - Assume the user is an experienced developer well-versed in the codebase, simply give the reproduction steps.
+            Given all the above potential root causes you just gave, please provide 1-2 sentence instructions on how to reproduce the issue, then turn it into a concise unit test that tests for the issue for each root cause.
+            - This test should intentionally fail if the issue is not fixed. It will pass if the issue is fixed.
+            - Look through the codebase to find the most relevant tests to the root cause. Make sure you follow any existing testing framework and patterns.
+            - For the reproduction instructions, assume the user is an experienced developer well-versed in the codebase, simply give a concise explanation of how to reproduce the issue.
+            - Do not mention the unit test in the reproduction instructions, they are separate.
             - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
             - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
             - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""

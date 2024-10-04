@@ -1,8 +1,10 @@
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr
 
+from seer.automation.agent.models import Message
+from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 from seer.automation.summarize.issue import IssueSummary
@@ -35,11 +37,33 @@ class RootCauseRelevantContext(BaseModel):
     snippet: Optional[RootCauseRelevantCodeSnippet]
 
 
+class RootCauseAnalysisRelevantContext(BaseModel):
+    snippets: list[RootCauseRelevantContext]
+
+
+class UnitTestSnippetPrompt(BaseModel):
+    file_path: str
+    code_snippet: str
+    description: str
+
+    @field_validator("code_snippet")
+    @classmethod
+    def clean_code_snippet(cls, v: str) -> str:
+        return remove_code_backticks(v)
+
+
+class UnitTestSnippet(BaseModel):
+    file_path: str
+    snippet: str
+    description: str
+
+
 class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    reproduction: str
+    unit_test: UnitTestSnippet | None = None
+    reproduction: str | None = None
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
     def to_markdown_string(self) -> str:
@@ -63,14 +87,11 @@ class RootCauseAnalysisItem(BaseModel):
         return markdown.strip()
 
 
-class RootCauseAnalysisRelevantContext(BaseModel):
-    snippets: list[RootCauseRelevantContext]
-
-
 class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
-    reproduction: str
+    reproduction_instructions: str | None = None
+    unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
     @classmethod
@@ -78,7 +99,16 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         return cls(
             title=model.title,
             description=model.description,
-            reproduction=model.reproduction,
+            reproduction_instructions=model.reproduction,
+            unit_test=(
+                UnitTestSnippetPrompt(
+                    file_path=model.unit_test.file_path,
+                    code_snippet=model.unit_test.snippet,
+                    description=model.unit_test.description,
+                )
+                if model.unit_test
+                else None
+            ),
             relevant_code=(
                 RootCauseAnalysisRelevantContext(
                     snippets=[
@@ -100,6 +130,16 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         return RootCauseAnalysisItem.model_validate(
             {
                 **self.model_dump(),
+                "reproduction": self.reproduction_instructions,
+                "unit_test": (
+                    {
+                        "file_path": self.unit_test.file_path,
+                        "snippet": self.unit_test.code_snippet,
+                        "description": self.unit_test.description,
+                    }
+                    if self.unit_test
+                    else None
+                ),
                 "code_context": (
                     self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
                 ),
@@ -120,6 +160,7 @@ class RootCauseAnalysisRequest(BaseComponentRequest):
     event_details: EventDetails
     instruction: Optional[str] = None
     summary: Optional[IssueSummary] = None
+    initial_memory: list[Message] = []
 
 
 class RootCauseAnalysisOutput(BaseComponentOutput):

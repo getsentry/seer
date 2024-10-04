@@ -18,8 +18,12 @@ class CodingUnitTestPrompts:
         )
 
     @staticmethod
-    def format_plan_step_msg(diff_str: str):
-        return textwrap.dedent(
+    def format_plan_step_msg(
+        diff_str: str,
+        has_coverage_info: str | None = None,
+        has_test_result_info: str | None = None,
+    ):
+        base_msg = textwrap.dedent(
             """\
             You are given the below code changes as a diff:
             {diff_str}
@@ -34,14 +38,37 @@ class CodingUnitTestPrompts:
             # Guidelines:
             - No placeholders are allowed, the unit test must be clear and detailed.
             - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix.
-            - The unit tests must be comprehensive. Do not provide temporary examples, placeholders or incomplete ones.
+            - The unit tests must be comprehensive. Do not provide temporary examples, placeholders, or incomplete ones.
             - In your suggested unit tests, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
             - All your changes should be in test files.
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
             - You also MUST think step-by-step before giving the final answer."""
-        ).format(
-            diff_str=diff_str,
-        )
+        ).format(diff_str=diff_str)
+
+        if has_coverage_info:
+            coverage_info_msg = textwrap.dedent(
+                """\
+                You are also given the following code coverage information for the current diff as a JSON object:
+                {coverage_info_str}
+
+                Remember, the goal is not just to improve coverage numbers but to verify the behavior of the code meaningfully, focusing on the recent changes.
+                Integrate this information with your diff analysis to provide a comprehensive and targeted testing strategy.
+                """
+            ).format(coverage_info_str=has_coverage_info)
+            base_msg += "\n\n" + coverage_info_msg
+
+        if has_test_result_info:
+            test_result_info_msg = textwrap.dedent(
+                """\
+                You are provided with the following test result data for existing tests related to the diff:
+                {test_result_data}
+
+                Use this information to enhance your test creation strategy, ensuring new tests reinforce areas of failure and improve overall test suite effectiveness in the context of the introduced changes.
+                """
+            ).format(test_result_data=has_test_result_info)
+            base_msg += "\n\n" + test_result_info_msg
+
+        return base_msg
 
     @staticmethod
     def format_find_unit_test_pattern_step_msg(diff_str: str):

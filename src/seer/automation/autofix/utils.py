@@ -1,11 +1,15 @@
 import difflib
 import random
 import re
+from functools import lru_cache
+
+from langfuse.decorators import observe
 
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
 
 
-def compute_similarity(text1: str, text2: str, ignore_whitespace=True) -> float:
+@lru_cache(maxsize=1024)
+def compute_similarity_cached(text1: str, text2: str, ignore_whitespace=True) -> float:
     """
     This function computes the similarity between two pieces of text using the difflib.SequenceMatcher class.
 
@@ -43,6 +47,7 @@ def get_last_non_empty_line(text: str) -> str:
     return ""
 
 
+@observe(name="Find original snippet")
 def find_original_snippet(
     snippet: str, file_contents: str, threshold=0.8, initial_line_threshold=0.9
 ) -> tuple[str, int, int] | None:
@@ -75,8 +80,8 @@ def find_original_snippet(
 
     # Search for a matching initial line in the file
     for start_index, file_line in enumerate(file_lines):
-        if compute_similarity(first_snippet_line, file_line) >= initial_line_threshold:
-            accumulated_snippet = ""
+        if compute_similarity_cached(first_snippet_line, file_line) >= initial_line_threshold:
+            accumulated_snippet = []
             snippet_index = 0
             file_index = start_index
 
@@ -87,9 +92,9 @@ def find_original_snippet(
                     file_index += 1
                     continue
 
-                accumulated_snippet += file_line + "\n"
-                similarity = compute_similarity(
-                    "\n".join(snippet_lines[: snippet_index + 1]), accumulated_snippet
+                accumulated_snippet.append(file_line)
+                similarity = compute_similarity_cached(
+                    "\n".join(snippet_lines[: snippet_index + 1]), "\n".join(accumulated_snippet)
                 )
 
                 if similarity >= threshold:
@@ -117,3 +122,13 @@ def sanitize_branch_name(title: str) -> str:
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
     return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
+
+
+def remove_code_backticks(text: str) -> str:
+    """Remove code backticks from a string."""
+    lines = text.split("\n")
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()

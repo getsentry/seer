@@ -94,9 +94,10 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         self.context.event_manager.send_coding_complete(codebase_changes)
         self.context.event_manager.add_log(
             "Above are some code changes that I think fix the issue."
-        )  # TODO: add 'Feel free to edit them or tell me what I should change.' once those features are in
+        )  
 
         # GitHub Copilot can automatically make a PR after the coding step
         if self.request.should_make_pr_automatically:
             for repo in cur_state.request.repos:
                 self.context.commit_changes(repo_external_id=repo.external_id, repo_id=None)
+

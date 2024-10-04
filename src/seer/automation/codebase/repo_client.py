@@ -49,7 +49,6 @@ def get_repo_app_permissions(
 @inject
 def get_github_token_auth(config: AppConfig = injected) -> Auth.Token | None:
     github_token = config.GITHUB_TOKEN
-
     if github_token is None:
         return None
 
@@ -62,7 +61,6 @@ def get_write_app_credentials(config: AppConfig = injected) -> tuple[int | str |
     private_key = config.GITHUB_PRIVATE_KEY
 
     if not app_id or not private_key:
-
         return None, None
 
     return app_id, private_key
@@ -366,9 +364,11 @@ class RepoClient:
             )
 
     def create_branch_from_changes(
-        self, pr_title: str, file_changes: list[FileChange]
+        self, pr_title: str, file_changes: list[FileChange], branch_name: str | None = None
     ) -> GitRef | None:
-        new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+        new_branch_name = (
+            branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+        )
         branch_ref = self._create_branch(new_branch_name)
 
         for change in file_changes:
@@ -396,15 +396,12 @@ class RepoClient:
         return branch_ref
 
     def create_pr_from_branch(
-        self,
-        branch: GitRef,
-        title: str,
-        description: str,
+        self, branch: GitRef, title: str, description: str, provided_base: str | None = None
     ):
         return self.repo.create_pull(
             title=title,
             body=description,
-            base=self.get_default_branch(),
+            base=provided_base or self.get_default_branch(),
             head=branch.ref,
             draft=True,
         )
@@ -449,7 +446,6 @@ class RepoClient:
         data = requests.get(pr_url, headers=headers)
 
         data.raise_for_status()  # Raise an exception for HTTP errors
-
         return data.text
 
     def comment_root_cause_on_pr_for_copilot(
@@ -478,3 +474,14 @@ class RepoClient:
         }
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
+
+    def get_pr_head_sha(self, pr_url: str) -> str:
+        requester = self.repo._requester
+        headers = {
+            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
+            "Accept": "application/vnd.github.raw+json",
+        }
+
+        data = requests.get(pr_url, headers=headers)
+        data.raise_for_status()  # Raise an exception for HTTP errors
+        return data.json()["head"]["sha"]
