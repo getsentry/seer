@@ -452,7 +452,29 @@ class RepoClient:
 
         return data.text
 
-    def comment_on_pr(self, pr_url: str, comment: str):
+    def comment_root_cause_on_pr_for_copilot(
+        self, pr_url: str, run_id: int, issue_id: int, comment: str
+    ):
         pull_id = int(pr_url.split("/")[-1])
-        pull_request = self.repo.get_pull(pull_id)
-        pull_request.create_issue_comment(comment)
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]  # should be "owner/repo"
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pull_id}/comments"
+        params = {
+            "body": comment,
+            "actions": [
+                {
+                    "name": "Fix with Sentry",
+                    "type": "copilot-chat",
+                    "prompt": f"@sentry-agent-internal find a fix for issue {issue_id} with run ID {run_id}",  # TODO switch to @sentry
+                }
+            ],
+        }
+        requester = self.repo._requester
+        if requester.auth is None:
+            raise Exception("No auth token found for GitHub API")
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {requester.auth.token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()

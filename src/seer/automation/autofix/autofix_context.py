@@ -338,8 +338,10 @@ class AutofixContext(PipelineContext):
         )
 
         # comment root cause analysis on PR
-        repo_client = RepoClient.from_repo_definition(repo_definition, "write")
-        repo_client.comment_on_pr(pr_url, markdown_comment)
+        repo_client = RepoClient.from_repo_definition(repo_definition, "read")
+        repo_client.comment_root_cause_on_pr_for_copilot(
+            pr_url, state.run_id, state.request.issue.id, markdown_comment
+        )
 
     def get_org_slug(self, organization_id: int) -> str | None:
         slug: str | None = None
