@@ -48,7 +48,6 @@ class GroupingRequest(BaseModel):
 class GroupingResponse(BaseModel):
     parent_hash: str
     stacktrace_distance: float
-    message_distance: float
     should_group: bool
 
 
@@ -383,7 +382,6 @@ class GroupingLookup:
                 GroupingResponse(
                     parent_hash=record.hash,
                     stacktrace_distance=distance,
-                    message_distance=0.0,
                     should_group=should_group,
                 )
             )
@@ -442,7 +440,6 @@ class GroupingLookup:
                         response = GroupingResponse(
                             parent_hash=neighbor.hash,
                             stacktrace_distance=distance,
-                            message_distance=0.0,
                             should_group=True,
                         )
                         groups_with_neighbor[str(entry.group_id)] = response
