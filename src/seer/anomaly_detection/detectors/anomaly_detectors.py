@@ -142,6 +142,18 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomalies:
+        """
+        This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
+
+        parameters:
+        timeseries: list[TimeSeriesPoint]
+            The timeseries
+        config: AnomalyDetectionConfig
+            Parameters for tweaking the algorithm
+
+        Returns:
+            A MPTimeSeriesAnomalies object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
+        """
         stream = None
         with sentry_sdk.start_span(description="Initializing MP stream"):
             # Initialize stumpi
