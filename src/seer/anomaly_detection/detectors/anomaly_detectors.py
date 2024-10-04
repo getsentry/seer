@@ -102,8 +102,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             values=ts_values,
             timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
-            sensitivity=config.sensitivity,
-            direction=config.direction,
+            ad_config=config,
             window_size=window_size,
         )
         if flags_and_scores is None:
@@ -174,8 +173,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     history_values=self.history_values,
                     history_timestamps=self.history_timestamps,
                     history_mp_dist=mp_dist_baseline,
-                    sensitivity=config.sensitivity,
-                    direction=config.direction,
+                    ad_config=config,
                     window_size=self.window_size,
                 )
                 if flags_and_scores is None:

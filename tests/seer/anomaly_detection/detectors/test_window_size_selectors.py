@@ -32,11 +32,13 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
 
         actual_windows = []
 
-        timeseries, _, _, window_sizes = convert_synthetic_ts(
+        loaded_synthetic_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
 
-        for ts, window_size in zip(timeseries, window_sizes):
+        for ts, window_size in zip(
+            loaded_synthetic_data.timeseries, loaded_synthetic_data.window_sizes
+        ):
             window = self.selector.optimal_window_size(ts)
             actual_windows.append(window_size)
 
