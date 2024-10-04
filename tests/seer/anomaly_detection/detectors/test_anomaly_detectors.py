@@ -48,9 +48,13 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             )
         )
 
-        timeseries, timestamps, mp_dists, window_sizes = convert_synthetic_ts(
+        syntheitc_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
+        timeseries = syntheitc_data.timeseries
+        timestamps = syntheitc_data.timestamps
+        mp_dists = syntheitc_data.mp_dists
+        window_sizes = syntheitc_data.window_sizes
 
         ts_values, ts_timestamps, mp_dist_baseline, window_size = (
             timeseries[0],
@@ -91,9 +95,12 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
 
     def test_invalid_window_size(self):
 
-        timeseries, timestamps, _, _ = convert_synthetic_ts(
+        loaded_synthetic_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
+
+        timeseries = loaded_synthetic_data.timeseries
+        timestamps = loaded_synthetic_data.timestamps
 
         ts = TimeSeries(timestamps=timestamps[0], values=timeseries[0])
 

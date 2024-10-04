@@ -7,7 +7,7 @@ import numpy.typing as npt
 import sentry_sdk
 from pydantic import BaseModel, Field
 
-from seer.anomaly_detection.models import AnomalyFlags, Directions, Sensitivities
+from seer.anomaly_detection.models import AnomalyDetectionConfig, AnomalyFlags, Sensitivities
 from seer.exceptions import ClientError
 from seer.tags import AnomalyDetectionTags
 
@@ -31,8 +31,7 @@ class MPScorer(BaseModel, abc.ABC):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
@@ -46,8 +45,7 @@ class MPScorer(BaseModel, abc.ABC):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
@@ -81,13 +79,12 @@ class LowVarianceScorer(MPScorer):
         self,
         val: np.float64,
         ts_mean: np.float64,
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
     ) -> tuple[AnomalyFlags, float, float]:
         # High sensitivity will mark more values as anomalies
-        if sensitivity not in self.scaling_factors:
-            raise ClientError(f"Invalid sensitivity: {sensitivity}")
-        scaling_factor = self.scaling_factors[sensitivity]
+        if ad_config.sensitivity not in self.scaling_factors:
+            raise ClientError(f"Invalid sensitivity: {ad_config.sensitivity}")
+        scaling_factor = self.scaling_factors[ad_config.sensitivity]
         bound1 = ts_mean + ts_mean * scaling_factor
         bound2 = ts_mean - ts_mean * scaling_factor
         lower_bound: float = float(min(bound1, bound2))
@@ -103,8 +100,7 @@ class LowVarianceScorer(MPScorer):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         ts_mean = values.mean()
@@ -117,9 +113,7 @@ class LowVarianceScorer(MPScorer):
 
         sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
         for val in values:
-            flag, score, threshold = self._to_flag_and_score(
-                val, ts_mean, sensitivity=sensitivity, direction=direction
-            )
+            flag, score, threshold = self._to_flag_and_score(val, ts_mean, ad_config)
             flags.append(flag)
             scores.append(score)
             thresholds.append(threshold)
@@ -133,16 +127,13 @@ class LowVarianceScorer(MPScorer):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         context = history_values[-2 * window_size :]
         if context.std() > self.std_threshold:
             return None
-        flag, score, threshold = self._to_flag_and_score(
-            streamed_value, context.mean(), sensitivity=sensitivity, direction=direction
-        )
+        flag, score, threshold = self._to_flag_and_score(streamed_value, context.mean(), ad_config)
 
         return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
 
@@ -172,8 +163,7 @@ class MPIQRScorer(MPScorer):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> FlagsAndScores:
         """
@@ -200,7 +190,7 @@ class MPIQRScorer(MPScorer):
         scores: list[float] = []
         flags: list[AnomalyFlags] = []
         # Compute score and anomaly flags
-        threshold = self._get_threshold(mp_dist, sensitivity)
+        threshold = self._get_threshold(mp_dist, ad_config.sensitivity)
         for i, val in enumerate(mp_dist):
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold)
             flag = self._to_flag(val, threshold)
@@ -217,8 +207,7 @@ class MPIQRScorer(MPScorer):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> FlagsAndScores:
         """
@@ -244,7 +233,7 @@ class MPIQRScorer(MPScorer):
             * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
             * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
-        threshold = self._get_threshold(history_mp_dist, sensitivity)
+        threshold = self._get_threshold(history_mp_dist, ad_config.sensitivity)
 
         # Compute score and anomaly flags
         score = (
@@ -287,13 +276,12 @@ class MPCascadingScorer(MPScorer):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.batch_score(
-                values, timestamps, mp_dist, sensitivity, direction, window_size
+                values, timestamps, mp_dist, ad_config, window_size
             )
             if flags_and_scores is not None:
                 return flags_and_scores
@@ -307,8 +295,7 @@ class MPCascadingScorer(MPScorer):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
@@ -319,8 +306,7 @@ class MPCascadingScorer(MPScorer):
                 history_values,
                 history_timestamps,
                 history_mp_dist,
-                sensitivity,
-                direction,
+                ad_config,
                 window_size,
             )
             if flags_and_scores is not None:
