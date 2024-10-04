@@ -97,7 +97,7 @@ class RootCauseStep(AutofixPipelineStep):
                 cause_string = causes[0].to_markdown_string()
             for repo in state.request.repos:
                 if (
-                    repo.name in pr_to_comment_on
+                    repo.name in pr_to_comment_on and repo.owner in pr_to_comment_on
                 ):  # crude check that the repo matches the PR we want to comment on
                     self.context.comment_root_cause_on_pr(
                         pr_url=pr_to_comment_on, repo_definition=repo, root_cause=cause_string
