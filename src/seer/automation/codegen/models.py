@@ -1,6 +1,5 @@
 import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -47,6 +46,7 @@ class CodegenContinuation(CodegenState):
 class CodeUnitTestRequest(BaseComponentRequest):
     diff: str
     codecov_client_params: dict = Field(default_factory=dict)
+
 
 class CodegenUnitTestsResponse(BaseModel):
     run_id: int
