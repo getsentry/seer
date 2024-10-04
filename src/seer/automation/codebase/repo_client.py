@@ -464,7 +464,7 @@ class RepoClient:
                 {
                     "name": "Fix with Sentry",
                     "type": "copilot-chat",
-                    "prompt": f"@sentry-agent-internal find a fix for issue {issue_id} with run ID {run_id}",  # TODO switch to @sentry
+                    "prompt": f"@sentry find a fix for issue {issue_id} with run ID {run_id}",
                 }
             ],
         }
