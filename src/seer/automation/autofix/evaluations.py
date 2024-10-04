@@ -256,7 +256,7 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, mo
         predicted_diff=predicted_diff,
     )
     response, usage = GptClient().completion(
-        messages=[Message(role="user", content=prompt)], model=model
+        messages=[Message(role="user", content=prompt)], model=model, temperature=1.0
     )
     if not response.content:
         return 0

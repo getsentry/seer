@@ -29,6 +29,7 @@ class LlmClient(ABC):
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = [],
         response_format: Optional[dict] = None,
+        temperature: float = 0.0,
     ) -> tuple[Message, Usage]:
         raise NotImplementedError
 
@@ -64,7 +65,7 @@ class LlmClient(ABC):
         )
 
 
-DEFAULT_GPT_MODEL = "gpt-4o-2024-05-13"
+DEFAULT_GPT_MODEL = "gpt-4o-2024-08-06"
 DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet@20240620"
 
 
@@ -79,6 +80,7 @@ class GptClient(LlmClient):
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = None,
         response_format: Optional[dict] = None,
+        temperature: float = 0.0,
     ):
         message_dicts = [message.to_message() for message in messages]
         if system_prompt:
@@ -93,7 +95,7 @@ class GptClient(LlmClient):
         completion = self.openai_client.chat.completions.create(
             model=model,
             messages=message_dicts,
-            temperature=0.0,
+            temperature=temperature,
             tools=tool_dicts,
             response_format=response_format if response_format else openai.NotGiven(),
         )
@@ -172,6 +174,7 @@ class ClaudeClient(LlmClient):
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = None,
         response_format: Optional[dict] = None,
+        temperature: float = 0.0,
     ) -> tuple[Message, Usage]:
         if response_format:
             # Claude claims to be reliable at providing structured outputs (like JSON) when prompted,
@@ -185,7 +188,7 @@ class ClaudeClient(LlmClient):
         # ask Claude for a response
         params: dict[str, Any] = {
             "model": model,
-            "temperature": 0.0,
+            "temperature": temperature,
             "max_tokens": 8192,
             "messages": claude_messages,
         }
@@ -314,6 +317,7 @@ class DummyGptClient(GptClient):
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = [],
         response_format: Optional[dict] = None,
+        temperature: float = 0.0,
     ):
         for handler in self.handlers:
             result = handler(
