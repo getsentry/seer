@@ -32,7 +32,7 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, _ = convert_synthetic_ts(
+        timeseries, _, _, _ = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
         ts = timeseries[0]
@@ -61,7 +61,7 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, _ = convert_synthetic_ts(
+        timeseries, _, _, _ = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
         ts = timeseries[0]
@@ -85,7 +85,7 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, window_sizes = convert_synthetic_ts(
+        timeseries, _, _, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
         ts = timeseries[0]
@@ -135,7 +135,7 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, _ = convert_synthetic_ts(
+        timeseries, _, _, _ = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
 

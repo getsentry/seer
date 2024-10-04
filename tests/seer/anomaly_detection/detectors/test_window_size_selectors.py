@@ -32,7 +32,7 @@ class TestSuSSWindowSizeSelector(unittest.TestCase):
 
         actual_windows = []
 
-        timeseries, _, window_sizes = convert_synthetic_ts(
+        timeseries, _, _, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
 

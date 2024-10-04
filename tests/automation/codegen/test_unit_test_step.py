@@ -1,16 +1,11 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodeUnitTestRequest
 from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.models import FileChange, RepoDefinition
-
-import unittest
-from unittest.mock import MagicMock
-
-from seer.automation.models import RepoDefinition
 
 
 class TestUnittestStep(unittest.TestCase):

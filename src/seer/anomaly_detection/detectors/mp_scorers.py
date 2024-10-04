@@ -28,7 +28,8 @@ class MPScorer(BaseModel, abc.ABC):
     @abc.abstractmethod
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
@@ -39,10 +40,12 @@ class MPScorer(BaseModel, abc.ABC):
     @abc.abstractmethod
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
@@ -97,22 +100,23 @@ class LowVarianceScorer(MPScorer):
 
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
-        ts_mean = ts.mean()
+        ts_mean = values.mean()
         scores = []
         flags = []
         thresholds = []
-        if ts.std() > self.std_threshold:
+        if values.std() > self.std_threshold:
             sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 0)
             return None
 
         sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
-        for val in ts:
+        for val in values:
             flag, score, threshold = self._to_flag_and_score(
                 val, ts_mean, sensitivity=sensitivity, direction=direction
             )
@@ -123,19 +127,21 @@ class LowVarianceScorer(MPScorer):
 
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
-        context = ts_history[-2 * window_size :]
+        context = history_values[-2 * window_size :]
         if context.std() > self.std_threshold:
             return None
         flag, score, threshold = self._to_flag_and_score(
-            ts_streamed, context.mean(), sensitivity=sensitivity, direction=direction
+            streamed_value, context.mean(), sensitivity=sensitivity, direction=direction
         )
 
         return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
@@ -163,7 +169,8 @@ class MPIQRScorer(MPScorer):
 
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
@@ -197,20 +204,19 @@ class MPIQRScorer(MPScorer):
         for i, val in enumerate(mp_dist):
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold)
             flag = self._to_flag(val, threshold)
-            if i > 2 * window_size:
-                flag = self._adjust_flag_for_vicinity(
-                    flag=flag, ts_value=ts[i], context=ts[i - 2 * window_size : i - 1]
-                )
+
             flags.append(flag)
 
         return FlagsAndScores(flags=flags, scores=scores, thresholds=[threshold])
 
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
@@ -238,17 +244,15 @@ class MPIQRScorer(MPScorer):
             * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
             * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
         """
-        threshold = self._get_threshold(mp_dist_history, sensitivity)
+        threshold = self._get_threshold(history_mp_dist, sensitivity)
 
         # Compute score and anomaly flags
         score = (
             0.0
-            if np.isnan(mp_dist_streamed) or np.isinf(mp_dist_streamed)
-            else mp_dist_streamed - threshold
+            if np.isnan(streamed_mp_dist) or np.isinf(streamed_mp_dist)
+            else streamed_mp_dist - threshold
         )
-        flag = self._to_flag(mp_dist_streamed, threshold)
-        # anomaly identified. apply logic to check for peak and trough
-        flag = self._adjust_flag_for_vicinity(ts_streamed, flag, ts_history[-2 * window_size :])
+        flag = self._to_flag(streamed_mp_dist, threshold)
 
         return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
 
@@ -268,37 +272,6 @@ class MPIQRScorer(MPScorer):
             return "none"
         return "anomaly_higher_confidence"
 
-    def _adjust_flag_for_vicinity(
-        self, ts_value: np.float64, flag: AnomalyFlags, context: npt.NDArray[np.float64]
-    ) -> AnomalyFlags:
-        """
-        This method adjusts the severity of a detected anomaly based on the underlying time step's proximity to peaks and troughs.
-        The intuition is that for our alerting and metrics use case, an anomaly near peak or trough is more critical than one that is not.
-        Current approach is to use the inter quartile range from a subsequence of the time series, identified by the context parameter.
-
-        Parameters:
-        ts_value: float
-            The time step being analyzied for anomaly
-
-        flag: AnomalyFlags
-            Anomaly identified before applying this peak-trough logic
-
-        context: npt.NDArray[np.float64]
-            Time series subsequence that is used for teak-trough detection
-
-        """
-        # if flag == "anomaly_higher_confidence" or flag == "anomaly_lower_confidence":
-        #     [Q1, Q3] = np.quantile(context, [0.25, 0.75])
-        #     IQR = Q3 - Q1
-        #     threshold_lower = Q1 - (0 * IQR)
-        #     threshold_upper = Q3 + (0 * IQR)
-        #     # if ts_value > Q1 and ts_value < Q3:
-        #     if ts_value >= threshold_lower and ts_value <= threshold_upper:
-        #         flag = "anomaly_lower_confidence"
-        #     else:
-        #         flag = "anomaly_higher_confidence"
-        return flag
-
 
 class MPCascadingScorer(MPScorer):
     """
@@ -311,34 +284,41 @@ class MPCascadingScorer(MPScorer):
 
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
-            flags_and_scores = scorer.batch_score(ts, mp_dist, sensitivity, direction, window_size)
+            flags_and_scores = scorer.batch_score(
+                values, timestamps, mp_dist, sensitivity, direction, window_size
+            )
             if flags_and_scores is not None:
                 return flags_and_scores
         return None
 
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
         sensitivity: Sensitivities,
         direction: Directions,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.stream_score(
-                ts_streamed,
-                mp_dist_streamed,
-                ts_history,
-                mp_dist_history,
+                streamed_value,
+                streamed_timestamp,
+                streamed_mp_dist,
+                history_values,
+                history_timestamps,
+                history_mp_dist,
                 sensitivity,
                 direction,
                 window_size,

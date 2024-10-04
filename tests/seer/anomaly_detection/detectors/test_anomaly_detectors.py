@@ -48,12 +48,17 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             )
         )
 
-        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+        timeseries, timestamps, mp_dists, window_sizes = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
 
-        ts_values, mp_dist_baseline, window_size = timeseries[0], mp_dists[0], window_sizes[0]
-        ts = TimeSeries(timestamps=np.array([]), values=ts_values)
+        ts_values, ts_timestamps, mp_dist_baseline, window_size = (
+            timeseries[0],
+            timestamps[0],
+            mp_dists[0],
+            window_sizes[0],
+        )
+        ts = TimeSeries(timestamps=ts_timestamps, values=ts_values)
 
         self.ws_selector.optimal_window_size = MagicMock(return_value=window_size)
         self.mp_utils.get_mp_dist_from_mp = MagicMock(return_value=mp_dist_baseline)
@@ -86,12 +91,11 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
 
     def test_invalid_window_size(self):
 
-        timeseries, mp_dists, window_sizes = convert_synthetic_ts(
+        timeseries, timestamps, _, _ = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
 
-        ts_values, _, _ = timeseries[0], mp_dists[0], window_sizes[0]
-        ts = TimeSeries(timestamps=np.array([]), values=ts_values)
+        ts = TimeSeries(timestamps=timestamps[0], values=timeseries[0])
 
         self.ws_selector.optimal_window_size = MagicMock(return_value=-1)
 
@@ -110,16 +114,16 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
     def setUp(self):
         self.detector = MPStreamAnomalyDetector(
-            base_timestamps=np.array([1, 2, 3]),
-            base_values=np.array([1.0, 2.0, 3.0]),
-            base_mp=np.array([0.1, 0.2, 0.3, 0.4]),
+            history_timestamps=np.array([1, 2, 3]),
+            history_values=np.array([1.0, 2.0, 3.0]),
+            history_mp=np.array([0.1, 0.2, 0.3, 0.4]),
             window_size=2,
         )
         self.timeseries = TimeSeries(
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])
         )
         self.config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="medium", direction="up", expected_seasonality="auto"
+            time_period=15, sensitivity="medium", direction="both", expected_seasonality="auto"
         )  # TODO: Placeholder values as not used in detection yet
         self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
 
@@ -159,7 +163,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
     def _detect_anomalies(self, history_ts, stream_ts):
         batch_detector = MPBatchAnomalyDetector()
         history_ts_timestamps = np.arange(1.0, len(history_ts) + 1)
-        stream_ts_timestamps = np.array(list(range(1, len(stream_ts) + 1))) + len(history_ts)
         batch_anomalies = batch_detector._compute_matrix_profile(
             timeseries=TimeSeries(timestamps=history_ts_timestamps, values=np.array(history_ts)),
             config=self.config,
@@ -168,18 +171,21 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             scorer=MPCascadingScorer(),
             mp_utils=MPUtils(),
         )
+
         stream_detector = MPStreamAnomalyDetector(
-            base_timestamps=np.array(history_ts_timestamps),
-            base_values=np.array(history_ts),
-            base_mp=batch_anomalies.matrix_profile,
+            history_timestamps=np.array(history_ts_timestamps),
+            history_values=np.array(history_ts),
+            history_mp=batch_anomalies.matrix_profile,
             window_size=batch_anomalies.window_size,
         )
+        stream_ts_timestamps = np.array(list(range(1, len(stream_ts) + 1))) + len(history_ts)
         stream_anomalies = stream_detector.detect(
             timeseries=TimeSeries(timestamps=stream_ts_timestamps, values=np.array(stream_ts)),
             config=self.config,
             scorer=MPCascadingScorer(),
             mp_utils=MPUtils(),
         )
+
         return batch_anomalies, stream_anomalies
 
     def test_stream_detect_spiked_history_spiked_stream_long_ts(self):
