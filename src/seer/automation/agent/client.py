@@ -1,203 +1,222 @@
-import dataclasses
 import json
 import logging
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, TypeVar
+import re
+from dataclasses import dataclass
+from typing import Generic, Iterable, Optional, Type, TypeVar, Union, cast
 
 import anthropic
-from langfuse.decorators import langfuse_context, observe
+from anthropic import NOT_GIVEN
+from anthropic.types import MessageParam, ToolParam
 from langfuse.openai import openai
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from pydantic import BaseModel
 
-from seer.automation.agent.models import Message, ToolCall, Usage
+from seer.automation.agent.models import LlmProviderType, Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
-from seer.automation.agent.utils import extract_json_from_text
-from seer.bootup import module, stub_module
+from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+
+class LlmResponseMetadata(BaseModel):
+    model: str
+    provider_name: LlmProviderType
+    usage: Usage
 
 
-class LlmClient(ABC):
-    @abstractmethod
-    def completion(
-        self,
-        messages: list[Message],
-        model: str | None,
-        system_prompt: Optional[str] = None,
-        tools: Optional[list[FunctionTool]] = [],
-        response_format: Optional[dict] = None,
-        temperature: float = 0.0,
-    ) -> tuple[Message, Usage]:
-        raise NotImplementedError
+class LlmGenerateTextResponse(BaseModel):
+    message: Message
+    metadata: LlmResponseMetadata
 
-    @abstractmethod
-    def completion_with_parser(
-        self,
-        messages: list[Message],
-        parser: Callable[[str | None], T],
-        model: str,
-        system_prompt: Optional[str] = None,
-        tools: Optional[list[FunctionTool]] = None,
-        response_format: Optional[dict] = None,
-    ) -> tuple[T, Message, Usage]:
-        message, usage = self.completion(
-            messages,
-            model=model,
-            system_prompt=system_prompt,
-            tools=tools,
-            response_format=response_format,
+
+StructuredOutputType = TypeVar("StructuredOutputType")
+
+
+class LlmGenerateStructuredResponse(BaseModel, Generic[StructuredOutputType]):
+    parsed: StructuredOutputType
+    metadata: LlmResponseMetadata
+
+
+class LlmProviderDefinition(BaseModel):
+    model_name: str
+    provider_name: LlmProviderType
+
+
+@dataclass
+class OpenAiProvider:
+    provider: LlmProviderDefinition
+
+    default_configs = [
+        {
+            "match": "^o1-mini.*",
+            "temperature": 1.0,
+        },
+        {
+            "match": "^o1-preview.*",
+            "temperature": 1.0,
+        },
+        {
+            "match": "^.*",
+            "temperature": 0.0,
+        },
+    ]
+
+    @classmethod
+    def model(cls, model_name: str) -> "OpenAiProvider":
+        return cls(
+            provider=LlmProviderDefinition(
+                model_name=model_name, provider_name=LlmProviderType.OPENAI
+            )
         )
-        return parser(message.content), message, usage
 
-    @abstractmethod
-    def json_completion(
-        self, messages: list[Message], model: str, system_prompt: Optional[str] = None
-    ) -> tuple[dict[str, Any] | None, Message, Usage]:
-        return self.completion_with_parser(
-            messages,
-            model=model,
-            system_prompt=system_prompt,
-            parser=lambda x: extract_json_from_text(x),
-            response_format={"type": "json_object"},
-        )
+    def get_config(self, model_name: str):
+        for config in self.default_configs:
+            if re.match(config["match"], model_name):
+                return config
+        return None
 
-
-DEFAULT_GPT_MODEL = "gpt-4o-2024-08-06"
-DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet@20240620"
-
-
-class GptClient(LlmClient):
-    def __init__(self):
-        self.openai_client = openai.Client()
-
-    def completion(
+    def generate_text(
         self,
-        messages: list[Message],
-        model: str | None = DEFAULT_GPT_MODEL,
-        system_prompt: Optional[str] = None,
-        tools: Optional[list[FunctionTool]] = None,
-        response_format: Optional[dict] = None,
-        temperature: float = 0.0,
+        *,
+        message_dicts: Iterable[ChatCompletionMessageParam],
+        tool_dicts: Iterable[ChatCompletionToolParam] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
-        message_dicts = [message.to_message() for message in messages]
-        if system_prompt:
-            message_dicts.insert(0, Message(role="system", content=system_prompt).to_message())
+        openai_client = openai.Client()
 
-        tool_dicts = (
-            [tool.to_dict(model="gpt") for tool in tools]
-            if tools and len(tools) > 0
-            else openai.NotGiven()
-        )
+        config = self.get_config(self.provider.model_name)
+        if config:
+            if temperature is None:
+                temperature = config["temperature"]
 
-        completion = self.openai_client.chat.completions.create(
-            model=model,
-            messages=message_dicts,
+        completion = openai_client.chat.completions.create(
+            model=self.provider.model_name,
+            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
             temperature=temperature,
-            tools=tool_dicts,
-            response_format=response_format if response_format else openai.NotGiven(),
+            tools=(
+                cast(Iterable[ChatCompletionToolParam], tool_dicts)
+                if tool_dicts
+                else openai.NotGiven()
+            ),
+            max_tokens=max_tokens or openai.NotGiven(),
         )
 
-        response = completion.choices[0].message
-        tool_calls = (
-            [
-                ToolCall(id=call.id, function=call.function.name, args=call.function.arguments)
-                for call in response.tool_calls
-            ]
-            if response.tool_calls
-            else None
+        openai_message = completion.choices[0].message
+        if openai_message.refusal:
+            raise Exception(completion.choices[0].message.refusal)
+
+        message = Message(
+            content=openai_message.content,
+            role=openai_message.role,
+            tool_calls=(
+                [
+                    ToolCall(id=call.id, function=call.function.name, args=call.function.arguments)
+                    for call in openai_message.tool_calls
+                ]
+                if openai_message.tool_calls
+                else None
+            ),
         )
-        message = Message(content=response.content, role=response.role, tool_calls=tool_calls)
 
         usage = Usage(
-            completion_tokens=completion.usage.completion_tokens,
-            prompt_tokens=completion.usage.prompt_tokens,
-            total_tokens=completion.usage.total_tokens,
+            completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
+            prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
+            total_tokens=completion.usage.total_tokens if completion.usage else 0,
         )
 
-        return message, usage
-
-    def completion_with_parser(
-        self,
-        messages: list[Message],
-        parser: Callable[[str | None], T],
-        model: str = DEFAULT_GPT_MODEL,
-        system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
-        response_format: dict | None = None,
-    ) -> tuple[T, Message, Usage]:
-        return super().completion_with_parser(
-            messages, parser, model, system_prompt, tools, response_format
+        return LlmGenerateTextResponse(
+            message=message,
+            metadata=LlmResponseMetadata(
+                model=self.provider.model_name,
+                provider_name=self.provider.provider_name,
+                usage=usage,
+            ),
         )
 
-    def json_completion(
+    def generate_structured(
         self,
-        messages: list[Message],
-        model: str = DEFAULT_GPT_MODEL,
-        system_prompt: str | None = None,
-    ) -> tuple[dict[str, Any] | None, Message, Usage]:
-        return super().json_completion(messages, model, system_prompt)
-
-    def clean_tool_call_assistant_messages(self, messages: list[Message]) -> list[Message]:
-        new_messages = []
-        for message in messages:
-            if message.role == "assistant" and message.tool_calls:
-                new_messages.append(
-                    Message(role="assistant", content=message.content, tool_calls=[])
-                )
-            elif message.role == "tool":
-                new_messages.append(Message(role="user", content=message.content, tool_calls=[]))
-            elif message.role == "tool_use":
-                new_messages.append(
-                    Message(role="assistant", content=message.content, tool_calls=[])
-                )
-            else:
-                new_messages.append(message)
-        return new_messages
-
-
-class ClaudeClient(LlmClient):
-    @inject
-    def __init__(self, config: AppConfig = injected):
-        self.anthropic_client = anthropic.AnthropicVertex(
-            project_id=config.GOOGLE_CLOUD_PROJECT,
-            region="europe-west1" if config.USE_EU_REGION else "us-east5",
-        )
-
-    @observe(as_type="generation", name="Claude-generation")
-    def completion(
-        self,
-        messages: list[Message],
-        model: str | None = DEFAULT_CLAUDE_MODEL,
-        system_prompt: Optional[str] = None,
-        tools: Optional[list[FunctionTool]] = None,
-        response_format: Optional[dict] = None,
+        *,
+        message_dicts: Iterable[ChatCompletionMessageParam],
+        tool_dicts: Iterable[ChatCompletionToolParam] | None = None,
         temperature: float = 0.0,
-    ) -> tuple[Message, Usage]:
-        if response_format:
-            # Claude claims to be reliable at providing structured outputs (like JSON) when prompted,
-            # but it does not guarantee it like ChatGPT with a special repsonse_format field
-            logger.warning(
-                "A response format was specified for this completion, but Claude doesn't guarantee a correctly-formatted output"
+        response_format: Type[StructuredOutputType],
+        max_tokens: int | None = None,
+    ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
+        openai_client = openai.Client()
+
+        completion = openai_client.beta.chat.completions.parse(
+            model=self.provider.model_name,
+            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+            temperature=temperature,
+            tools=(
+                cast(Iterable[ChatCompletionToolParam], tool_dicts)
+                if tool_dicts
+                else openai.NotGiven()
+            ),
+            response_format=response_format,  # type: ignore
+            max_tokens=max_tokens or openai.NotGiven(),
+        )
+
+        openai_message = completion.choices[0].message
+        if openai_message.refusal:
+            raise Exception(completion.choices[0].message.refusal)
+
+        parsed = cast(StructuredOutputType, completion.choices[0].message.content)
+
+        usage = Usage(
+            completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
+            prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
+            total_tokens=completion.usage.total_tokens if completion.usage else 0,
+        )
+
+        return LlmGenerateStructuredResponse(
+            parsed=parsed,
+            metadata=LlmResponseMetadata(
+                model=self.provider.model_name,
+                provider_name=self.provider.provider_name,
+                usage=usage,
+            ),
+        )
+
+
+@dataclass
+class AnthropicProvider:
+    provider: LlmProviderDefinition
+
+    @classmethod
+    def model(cls, model_name: str) -> "AnthropicProvider":
+        return cls(
+            provider=LlmProviderDefinition(
+                model_name=model_name, provider_name=LlmProviderType.ANTHROPIC
             )
+        )
 
-        claude_messages = self._format_messages_for_claude_input(messages)
+    @inject
+    def generate_text(
+        self,
+        *,
+        message_dicts: Iterable[MessageParam],
+        tool_dicts: Iterable[ToolParam] | None = None,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        app_config: AppConfig = injected,
+    ):
+        anthropic_client = anthropic.AnthropicVertex(
+            project_id=app_config.GOOGLE_CLOUD_PROJECT,
+            region="europe-west1" if app_config.USE_EU_REGION else "us-east5",
+        )
 
-        # ask Claude for a response
-        params: dict[str, Any] = {
-            "model": model,
-            "temperature": temperature,
-            "max_tokens": 8192,
-            "messages": claude_messages,
-        }
-        if system_prompt:
-            params["system"] = system_prompt
-        if tools and len(tools) > 0:
-            tool_dicts = [tool.to_dict(model="claude") for tool in tools]
-            params["tools"] = tool_dicts
-        completion = self.anthropic_client.messages.create(**params)
+        completion = anthropic_client.messages.create(
+            model=self.provider.model_name,
+            tools=tool_dicts if tool_dicts else NOT_GIVEN,
+            messages=message_dicts,
+            max_tokens=max_tokens or 8192,
+            temperature=temperature,
+        )
+
         message = self._format_claude_response_to_message(completion)
 
         usage = Usage(
@@ -206,71 +225,17 @@ class ClaudeClient(LlmClient):
             total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
         )
 
-        langfuse_context.update_current_observation(model=model, usage=usage)
-
-        return message, usage
-
-    def completion_with_parser(
-        self,
-        messages: list[Message],
-        parser: Callable[[str | None], T],
-        model: str = DEFAULT_CLAUDE_MODEL,
-        system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
-        response_format: dict | None = None,
-    ) -> tuple[T, Message, Usage]:
-        return super().completion_with_parser(
-            messages, parser, model, system_prompt, tools, response_format
+        return LlmGenerateTextResponse(
+            message=message,
+            metadata=LlmResponseMetadata(
+                model=self.provider.model_name,
+                provider_name=self.provider.provider_name,
+                usage=usage,
+            ),
         )
 
-    def json_completion(
-        self,
-        messages: list[Message],
-        model: str = DEFAULT_CLAUDE_MODEL,
-        system_prompt: str | None = None,
-    ) -> tuple[dict[str, Any] | None, Message, Usage]:
-        return super().json_completion(messages, model, system_prompt)
-
-    def _format_messages_for_claude_input(self, messages: list[Message]) -> list[dict]:
-        claude_messages = []
-        for message in messages:
-            if message.role == "tool":  # we're responding to Claude with a tool use result
-                claude_messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "content": message.content,
-                                "tool_use_id": message.tool_call_id,
-                            }
-                        ],
-                    }
-                )
-            elif message.role == "tool_use":
-                if not message.tool_calls:
-                    continue
-                for tool_call in message.tool_calls:
-                    claude_messages.append(
-                        {
-                            "role": "assistant",
-                            "content": [
-                                {
-                                    "type": "tool_use",
-                                    "id": tool_call.id,
-                                    "name": tool_call.function,
-                                    "input": json.loads(tool_call.args),
-                                }
-                            ],
-                        }
-                    )
-            else:  # normal text message
-                claude_messages.append(
-                    {"role": message.role, "content": [{"type": "text", "text": message.content}]}
-                )
-        return claude_messages
-
-    def _format_claude_response_to_message(self, completion: anthropic.types.Message) -> Message:
+    @staticmethod
+    def _format_claude_response_to_message(completion: anthropic.types.Message) -> Message:
         message = Message(role=completion.role)
         for block in completion.content:
             if block.type == "text":
@@ -290,59 +255,132 @@ class ClaudeClient(LlmClient):
         return message
 
 
-@module.provider
-def provide_gpt_client() -> GptClient:
-    return GptClient()
+LlmProvider = Union[OpenAiProvider, AnthropicProvider]
 
 
-@module.provider
-def provide_claude_client() -> ClaudeClient:
-    return ClaudeClient()
-
-
-LlmCompletionHandler = Callable[[list[Message], dict[str, Any]], Optional[tuple[Message, Usage]]]
-
-
-@dataclasses.dataclass
-class DummyGptClient(GptClient):
-    handlers: list[LlmCompletionHandler] = dataclasses.field(default_factory=list)
-    missed_calls: list[tuple[list[Message], dict[str, Any]]] = dataclasses.field(
-        default_factory=list
-    )
-
-    def completion(
-        self,
-        messages: list[Message],
-        model="test-gpt",
+class LlmClient:
+    @classmethod
+    def generate_text(
+        cls,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        model: LlmProvider,
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = [],
-        response_format: Optional[dict] = None,
         temperature: float = 0.0,
-    ):
-        for handler in self.handlers:
-            result = handler(
-                messages,
-                {
-                    "system_prompt": system_prompt,
-                    "tools": tools,
-                    "response_format": response_format,
-                },
-            )
-            if result:
-                return result
-        self.missed_calls.append(
-            (
-                messages,
-                {
-                    "system_prompt": system_prompt,
-                    "tools": tools,
-                    "response_format": response_format,
-                },
-            )
+        max_tokens: int | None = None,
+    ) -> LlmGenerateTextResponse:
+        message_dicts, tool_dicts = cls._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            provider_name=model.provider.provider_name,
+            system_prompt=system_prompt,
+            tools=tools,
         )
-        return Message(), Usage()
+
+        if model.provider.provider_name == LlmProviderType.OPENAI:
+            model = cast(OpenAiProvider, model)
+            return model.generate_text(
+                message_dicts=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+                tool_dicts=(
+                    cast(Iterable[ChatCompletionToolParam], tool_dicts) if tool_dicts else None
+                ),
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        elif model.provider.provider_name == LlmProviderType.ANTHROPIC:
+            model = cast(AnthropicProvider, model)
+            return model.generate_text(
+                message_dicts=cast(Iterable[MessageParam], message_dicts),
+                tool_dicts=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else None,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        else:
+            raise ValueError(f"Invalid provider: {model.provider.provider_name}")
+
+    @classmethod
+    def generate_structured(
+        cls,
+        *,
+        prompt: str,
+        messages: list[Message] | None = None,
+        model: LlmProvider,
+        system_prompt: Optional[str] = None,
+        response_format: Type[StructuredOutputType],
+        tools: Optional[list[FunctionTool]] = [],
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
+        message_dicts, tool_dicts = cls._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            provider_name=model.provider.provider_name,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        if model.provider.provider_name == LlmProviderType.OPENAI:
+            model = cast(OpenAiProvider, model)
+            return model.generate_structured(
+                message_dicts=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+                tool_dicts=(
+                    cast(Iterable[ChatCompletionToolParam], tool_dicts) if tool_dicts else None
+                ),
+                temperature=temperature,
+                response_format=response_format,
+                max_tokens=max_tokens,
+            )
+        elif model.provider.provider_name == LlmProviderType.ANTHROPIC:
+            raise NotImplementedError("Anthropic structured outputs are not yet supported")
+        else:
+            raise ValueError(f"Invalid provider: {model.provider.provider_name}")
+
+    @staticmethod
+    def _prep_message_and_tools(
+        *,
+        messages: list[Message] | None = None,
+        prompt: str | None = None,
+        provider_name: LlmProviderType,
+        system_prompt: Optional[str] = None,
+        tools: Optional[list[FunctionTool]] = [],
+    ):
+        message_dicts = (
+            [message.to_message(provider_name) for message in messages] if messages else []
+        )
+        if system_prompt:
+            message_dicts.insert(
+                0, Message(role="system", content=system_prompt).to_message(provider_name)
+            )
+        if prompt:
+            message_dicts.insert(0, Message(role="user", content=prompt).to_message(provider_name))
+
+        tool_dicts = (
+            [tool.to_dict(provider_name) for tool in tools] if tools and len(tools) > 0 else None
+        )
+
+        return message_dicts, tool_dicts
+
+    @staticmethod
+    def clean_tool_call_assistant_messages(messages: list[Message]) -> list[Message]:
+        new_messages = []
+        for message in messages:
+            if message.role == "assistant" and message.tool_calls:
+                new_messages.append(
+                    Message(role="assistant", content=message.content, tool_calls=[])
+                )
+            elif message.role == "tool":
+                new_messages.append(Message(role="user", content=message.content, tool_calls=[]))
+            elif message.role == "tool_use":
+                new_messages.append(
+                    Message(role="assistant", content=message.content, tool_calls=[])
+                )
+            else:
+                new_messages.append(message)
+        return new_messages
 
 
-@stub_module.provider
-def provide_stub_gpt_client() -> GptClient:
-    return DummyGptClient()
+@module.provider
+def provide_llm_client() -> type[LlmClient]:
+    return LlmClient

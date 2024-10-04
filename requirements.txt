@@ -4,9 +4,9 @@
 #
 #    pip-compile --output-file=requirements.txt --strip-extras requirements-constraints.txt
 #
-aiohappyeyeballs==2.4.0
+aiohappyeyeballs==2.4.3
     # via aiohttp
-aiohttp==3.10.6
+aiohttp==3.10.8
     # via
     #   -r requirements-constraints.txt
     #   datasets
@@ -21,7 +21,7 @@ amqp==5.2.0
     # via kombu
 annotated-types==0.7.0
     # via pydantic
-anthropic==0.31.2
+anthropic==0.34.2
     # via -r requirements-constraints.txt
 anyio==4.6.0
     # via
@@ -120,7 +120,7 @@ cycler==0.11.0
     #   matplotlib
 cython==3.0.2
     # via -r requirements-constraints.txt
-datasets==3.0.0
+datasets==3.0.1
     # via optimum
 deprecated==1.2.14
     # via pygithub
@@ -195,9 +195,9 @@ google-auth==2.35.0
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-cloud-aiplatform==1.67.1
+google-cloud-aiplatform==1.69.0
     # via -r requirements-constraints.txt
-google-cloud-bigquery==3.25.0
+google-cloud-bigquery==3.26.0
     # via google-cloud-aiplatform
 google-cloud-core==2.4.1
     # via
@@ -230,7 +230,7 @@ grpc-google-iam-v1==0.13.1
     #   google-cloud-secret-manager
 grpc-stubs==1.53.0.5
     # via sentry-protos
-grpcio==1.66.1
+grpcio==1.66.2
     # via
     #   chromadb
     #   google-api-core
@@ -241,11 +241,11 @@ grpcio==1.66.1
     #   grpcio-reflection
     #   grpcio-status
     #   sentry-protos
-grpcio-health-checking==1.66.1
+grpcio-health-checking==1.66.2
     # via -r requirements-constraints.txt
-grpcio-reflection==1.66.1
+grpcio-reflection==1.66.2
     # via -r requirements-constraints.txt
-grpcio-status==1.66.1
+grpcio-status==1.66.2
     # via google-api-core
 gunicorn==22.0.0
     # via -r requirements-constraints.txt
@@ -255,7 +255,7 @@ h11==0.14.0
     #   uvicorn
 holidays==0.31
     # via -r requirements-constraints.txt
-httpcore==1.0.5
+httpcore==1.0.6
     # via httpx
 httptools==0.6.1
     # via uvicorn
@@ -411,7 +411,7 @@ onnx==1.16.0
     # via -r requirements-constraints.txt
 onnxruntime==1.19.2
     # via chromadb
-openai==1.47.1
+openai==1.51.0
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
@@ -472,9 +472,9 @@ pip-tools==7.4.1
     # via -r requirements-constraints.txt
 pluggy==1.5.0
     # via pytest
-posthog==3.6.6
+posthog==3.7.0
     # via chromadb
-prompt-toolkit==3.0.47
+prompt-toolkit==3.0.48
     # via click-repl
 proto-plus==1.24.0
     # via
@@ -549,7 +549,7 @@ pyparsing==3.0.9
     #   matplotlib
 pypika==0.48.9
     # via chromadb
-pyproject-hooks==1.1.0
+pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
@@ -621,7 +621,7 @@ requests==2.32.2
     #   transformers
 rfc3339-validator==0.1.4
     # via openapi-schema-validator
-rich==13.8.1
+rich==13.9.1
     # via typer
 rpds-py==0.20.0
     # via
@@ -650,7 +650,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.22
+sentry-protos==0.1.23
     # via -r requirements-constraints.txt
 sentry-sdk==2.11.0
     # via -r requirements-constraints.txt
@@ -791,7 +791,7 @@ urllib3==1.26.19
     #   pygithub
     #   requests
     #   sentry-sdk
-uvicorn==0.30.6
+uvicorn==0.31.0
     # via chromadb
 uvloop==0.20.0
     # via uvicorn
@@ -800,7 +800,7 @@ vine==5.1.0
     #   amqp
     #   celery
     #   kombu
-watchdog==5.0.2
+watchdog==5.0.3
     # via -r requirements-constraints.txt
 watchfiles==0.24.0
     # via uvicorn
@@ -821,7 +821,7 @@ wrapt==1.16.0
     #   langfuse
 xxhash==3.5.0
     # via datasets
-yarl==1.12.1
+yarl==1.13.1
     # via aiohttp
 
 # The following packages are considered to be unsafe in a requirements file:

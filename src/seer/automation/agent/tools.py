@@ -1,7 +1,10 @@
 import logging
 from typing import Any, Callable, Dict, List, Literal, TypedDict
 
+from openai.types.chat import ChatCompletionToolParam
 from pydantic import BaseModel
+
+from seer.automation.agent.models import LlmProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +19,12 @@ def get_full_exception_string(exc):
     return result
 
 
-class GPTFunctionSchema(TypedDict):
+class OpenAiFunctionSchema(TypedDict):
     type: Literal["function"]
     function: Dict[str, Any]
 
 
-class ClaudeFunctionSchema(TypedDict):
+class AnthropicFunctionSchema(TypedDict):
     name: str
     description: str
     input_schema: Dict[str, Any]
@@ -42,8 +45,8 @@ class FunctionTool(BaseModel):
             return f"Error: {get_full_exception_string(e)}"
 
     def to_dict(
-        self, model: Literal["claude", "gpt"] = "gpt"
-    ) -> GPTFunctionSchema | ClaudeFunctionSchema:
+        self, provider: LlmProviderType
+    ) -> ChatCompletionToolParam | AnthropicFunctionSchema:
         base_schema = {
             "type": "object",
             "properties": {
@@ -61,8 +64,8 @@ class FunctionTool(BaseModel):
             "required": self.required,
         }
 
-        if model == "gpt":
-            return GPTFunctionSchema(
+        if provider == LlmProviderType.OPENAI:
+            return ChatCompletionToolParam(
                 type="function",
                 function={
                     "name": self.name,
@@ -70,8 +73,8 @@ class FunctionTool(BaseModel):
                     "parameters": base_schema,
                 },
             )
-        elif model == "claude":
-            return ClaudeFunctionSchema(
+        elif provider == LlmProviderType.ANTHROPIC:
+            return AnthropicFunctionSchema(
                 name=self.name,
                 description=self.description,
                 input_schema=base_schema,
