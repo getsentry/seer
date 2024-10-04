@@ -146,14 +146,14 @@ class MPIQRScorer(MPScorer):
     percentiles: Dict[Sensitivities, Tuple[float, float]] = Field(
         {
             # High sensitivity = more anomalies + higher false positives
-            # Data point outside of bottom 65% of the MP distances considered anomalous
-            "high": [0.35, 0.65],
+            # Data point outside of bottom 70% of the MP distances considered anomalous
+            "high": [0.3, 0.7],
             # Medium sensitivity = lesser anomalies + lesser false positives
-            # Data point outside of bottom 75% of the MP distances considered anomalous
-            "medium": [0.25, 0.75],
-            # Low sensitivity = leaset anomalies + leaset false positives
-            # Data point outside of bottom 95% of the MP distances considered anomalous
-            "low": [0.05, 0.95],
+            # Data point outside of bottom 80% of the MP distances considered anomalous
+            "medium": [0.2, 0.8],
+            # Low sensitivity = least anomalies + least false positives
+            # Data point outside of bottom 90% of the MP distances considered anomalous
+            "low": [0.1, 0.9],
         },
         description="Lower and upper bounds for high sensitivity",
     )
