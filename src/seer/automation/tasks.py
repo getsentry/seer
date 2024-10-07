@@ -10,6 +10,12 @@ from seer.db import DbIssueSummary, DbRunState, Session
 logger = logging.getLogger(__name__)
 
 
+# TODO remove this task, it's just for testing in prod; throws an error every minute
+@celery_app.task(time_limit=30)
+def throw_an_error():
+    raise Exception("This is a test error to create a Sentry issue")
+
+
 @celery_app.task(time_limit=30)
 def delete_data_for_ttl():
     logger.info("Deleting old automation runs and issue summaries for 90 day time-to-live")

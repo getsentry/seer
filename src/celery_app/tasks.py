@@ -6,7 +6,7 @@ import seer.app  # noqa: F401
 from celery_app.app import celery_app as celery  # noqa: F401
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
-from seer.automation.tasks import delete_data_for_ttl
+from seer.automation.tasks import delete_data_for_ttl, throw_an_error
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
@@ -33,3 +33,10 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             try_grpc_client.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
             name="Try executing grpc request every minute.",
         )
+
+    # TODO remove this task, it's just for testing in prod; throws an error every minute
+    sender.add_periodic_task(
+        crontab(minute="*", hour="*"),
+        throw_an_error.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
+        name="Intentionally raise an error",
+    )
