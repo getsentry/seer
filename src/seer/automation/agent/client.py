@@ -78,7 +78,7 @@ class OpenAiProvider:
 
     def _get_config(self, model_name: str):
         for config in self.default_configs:
-            if re.match(config["match"], model_name):
+            if re.match(config["match"], model_name):  # type: ignore
                 return config
         return None
 
@@ -99,13 +99,9 @@ class OpenAiProvider:
 
         completion = openai_client.chat.completions.create(
             model=self.provider.model_name,
-            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+            messages=message_dicts,
             temperature=temperature,
-            tools=(
-                cast(Iterable[ChatCompletionToolParam], tool_dicts)
-                if tool_dicts
-                else openai.NotGiven()
-            ),
+            tools=(tool_dicts if tool_dicts else openai.NotGiven()),
             max_tokens=max_tokens or openai.NotGiven(),
         )
 
@@ -170,7 +166,7 @@ class OpenAiProvider:
                 if tool_dicts
                 else openai.NotGiven()
             ),
-            response_format=response_format,  # type: ignore
+            response_format=response_format,
             max_tokens=max_tokens or openai.NotGiven(),
         )
 
@@ -253,7 +249,7 @@ class AnthropicProvider:
 
     def _get_config(self, model_name: str):
         for config in self.default_configs:
-            if re.match(config["match"], model_name):
+            if re.match(config["match"], model_name):  # type: ignore
                 return config
         return None
 

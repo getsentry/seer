@@ -70,7 +70,7 @@ class FunctionTool(BaseModel):
                 function={
                     "name": self.name,
                     "description": self.description,
-                    "parameters": base_schema,
+                    "parameters": base_schema,  # type: ignore
                 },
             )
         elif provider == LlmProviderType.ANTHROPIC:
