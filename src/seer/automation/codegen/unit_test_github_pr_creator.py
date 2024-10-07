@@ -42,5 +42,5 @@ class GeneratedTestsPullRequestCreator:
             branch=branch_ref,
             title=pr_title,
             description=description,
-            provided_base=self.pr.base.ref,
+            provided_base=self.pr.head.ref,
         )

@@ -10,6 +10,12 @@ from seer.db import DbIssueSummary, DbRunState, Session
 logger = logging.getLogger(__name__)
 
 
+# TODO remove this task, it's just for testing in prod; throws an error every minute
+@celery_app.task(time_limit=30)
+def throw_an_error():
+    raise Exception("This is a test error to create a Sentry issue")
+
+
 @celery_app.task(time_limit=30)
 def raise_an_exception():
     num = 1 / 0  # TODO remove this

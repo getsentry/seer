@@ -56,7 +56,7 @@ class TestUnittestStep(unittest.TestCase):
     def test_create_github_pull_request_success(self, _):
         file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
         pr = MagicMock()
-        pr.head.sha = "head_sha"
+        pr.head.ref = "head_sha"
         pr.number = 123
         pr.base.ref = "main"
         repo_client = MagicMock(spec=RepoClient)
@@ -81,7 +81,7 @@ class TestUnittestStep(unittest.TestCase):
             branch="branch_ref",
             title=pr_title,
             description="This PR adds tests for #123\n\n### Commits:\n- commit message 1\n- commit message 2",
-            provided_base="main",
+            provided_base="head_sha",
         )
         self.assertEqual(repo_client.base_commit_sha, pr.head.sha)
 
