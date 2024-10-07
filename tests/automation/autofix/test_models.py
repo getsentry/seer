@@ -738,3 +738,18 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str
+
+
+class TestExceptionDetails(unittest.TestCase):
+    def test_exception_details_value_field(self):
+        # Test with value provided
+        exception_with_value = ExceptionDetails(type="ValueError", value="Test error", stacktrace=Stacktrace(frames=[]))
+        self.assertEqual(exception_with_value.value, "Test error")
+
+        # Test without value provided (should use default empty string)
+        exception_without_value = ExceptionDetails(type="ValueError", stacktrace=Stacktrace(frames=[]))
+        self.assertEqual(exception_without_value.value, "")
+
+        # Test with explicit None value (should use default empty string)
+        exception_with_none_value = ExceptionDetails(type="ValueError", value=None, stacktrace=Stacktrace(frames=[]))
+        self.assertEqual(exception_with_none_value.value, "")
