@@ -25,6 +25,13 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             delete_data_for_ttl.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
             name="Delete old Automation runs for 90 day time-to-live",
         )
+        # TODO remove this task, it's just for testing in prod; throws an error every minute
+        sender.add_periodic_task(
+            crontab(minute="*", hour="*"),
+            throw_an_error.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
+            name="Intentionally raise an error",
+        )
+
     if config.GRPC_SERVER_ENABLE:
         from seer.grpc import try_grpc_client
 
@@ -33,10 +40,3 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             try_grpc_client.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
             name="Try executing grpc request every minute.",
         )
-
-    # TODO remove this task, it's just for testing in prod; throws an error every minute
-    sender.add_periodic_task(
-        crontab(minute="*", hour="*"),
-        throw_an_error.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
-        name="Intentionally raise an error",
-    )
