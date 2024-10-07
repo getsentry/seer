@@ -1,234 +1,296 @@
-from unittest.mock import Mock, patch
+import json
+from typing import Literal
+from unittest.mock import MagicMock, patch
 
-import anthropic
 import pytest
+from pydantic import BaseModel
 
-from seer.automation.agent.client import ClaudeClient, GptClient, LlmClient
-from seer.automation.agent.models import Message, ToolCall
+from seer.automation.agent.client import (
+    AnthropicProvider,
+    LlmClient,
+    LlmGenerateStructuredResponse,
+    LlmGenerateTextResponse,
+    LlmProviderType,
+    Message,
+    OpenAiProvider,
+    ToolCall,
+    Usage,
+)
+from seer.automation.agent.tools import FunctionTool
+
+
+class MockOpenAiFunction(BaseModel):
+    name: str
+    arguments: str
+
+
+class MockOpenAiToolCall(BaseModel):
+    id: str
+    function: MockOpenAiFunction
+
+
+class MockOpenAIResponse:
+    def __init__(
+        self,
+        *,
+        content: str,
+        parsed: BaseModel | None = None,
+        role: str,
+        tool_calls: list[MockOpenAiToolCall] | None = None,
+    ):
+        self.choices = [
+            MagicMock(
+                message=MagicMock(
+                    parsed=parsed,
+                    content=content,
+                    role=role,
+                    tool_calls=tool_calls,
+                    refusal=None,
+                )
+            )
+        ]
+        self.usage = MagicMock(
+            completion_tokens=10,
+            prompt_tokens=20,
+            total_tokens=30,
+        )
+
+
+class MockContentBlock(BaseModel):
+    type: Literal["text", "tool_use"]
+    text: str | None = None
+    id: str | None = None
+    name: str | None = None
+    input: dict | None = None
+
+
+class MockAnthropicResponse:
+    def __init__(self, content, role, tool_calls=None):
+        self.content = [MockContentBlock(type="text", text=content)]
+        if tool_calls:
+            self.content.extend(
+                [
+                    MockContentBlock(
+                        type="tool_use",
+                        id=tc.id,
+                        name=tc.function,
+                        input=json.loads(tc.args),
+                    )
+                    for tc in tool_calls
+                ]
+            )
+        self.role = role
+        self.usage = MagicMock(
+            input_tokens=20,
+            output_tokens=10,
+        )
 
 
 @pytest.fixture
 def mock_openai_client():
-    with patch("openai.Client") as mock:
-        yield mock
+    with patch.object(OpenAiProvider, "get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        yield mock_client
 
 
 @pytest.fixture
 def mock_anthropic_client():
-    with patch("anthropic.AnthropicVertex") as mock:
-        yield mock
+    with patch.object(AnthropicProvider, "get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        yield mock_client
 
 
-def test_gpt_client_completion(mock_openai_client):
-    client = GptClient()
-    mock_response = Mock(
-        choices=[Mock(message=Mock(content="Test response", role="assistant", tool_calls=None))],
-        usage=Mock(completion_tokens=10, prompt_tokens=20, total_tokens=30),
+def test_openai_generate_text(mock_openai_client):
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    mock_openai_client.chat.completions.create.return_value = MockOpenAIResponse(
+        content="Hello, world!", role="assistant"
     )
-    mock_openai_client.chat.completions.create.return_value = mock_response
-    client.openai_client = mock_openai_client
 
-    messages = [Message(role="user", content="Test message")]
-    message, usage = client.completion(messages)
-
-    assert mock_openai_client.chat.completions.create.call_count == 1
-    assert message.content == "Test response"
-    assert message.role == "assistant"
-    assert usage.completion_tokens == 10
-    assert usage.prompt_tokens == 20
-    assert usage.total_tokens == 30
-
-
-def test_gpt_client_json_completion(mock_openai_client):
-    client = GptClient()
-    mock_response = Mock(
-        choices=[Mock(message=Mock(content='{"key": "value"}', role="assistant", tool_calls=None))],
-        usage=Mock(completion_tokens=10, prompt_tokens=20, total_tokens=30),
+    response = llm_client.generate_text(
+        prompt="Say hello",
+        model=model,
     )
-    mock_openai_client.chat.completions.create.return_value = mock_response
-    client.openai_client = mock_openai_client
 
-    messages = [Message(role="user", content="Get me some JSON")]
-    result, message, usage = client.json_completion(messages, model="gpt-4")
+    assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content == "Hello, world!"
+    assert response.message.role == "assistant"
+    assert response.metadata.model == "gpt-3.5-turbo"
+    assert response.metadata.provider_name == LlmProviderType.OPENAI
+    assert response.metadata.usage == Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
 
-    assert mock_openai_client.chat.completions.create.call_count == 1
-    assert result == {"key": "value"}
-    assert message.content == '{"key": "value"}'
-    assert usage.total_tokens == 30
+    mock_openai_client.chat.completions.create.assert_called_once()
 
 
-def test_claude_client_completion(mock_anthropic_client):
-    client = ClaudeClient()
-    mock_response = anthropic.types.Message(
-        id="id",
-        type="message",
-        content=[anthropic.types.TextBlock(type="text", text="Claude response")],
-        role="assistant",
-        model="some-claude-model",
-        usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
+def test_anthropic_generate_text(mock_anthropic_client):
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-sonnet-20240229")
+
+    mock_anthropic_client.messages.create.return_value = MockAnthropicResponse(
+        content="Hello, world!", role="assistant"
     )
-    mock_anthropic_client.messages.create.return_value = mock_response
-    client.anthropic_client = mock_anthropic_client
 
-    messages = [Message(role="user", content="Hello Claude")]
-    message, usage = client.completion(messages)
-
-    assert mock_anthropic_client.messages.create.call_count == 1
-    assert message.content == "Claude response"
-    assert message.role == "assistant"
-    assert usage.completion_tokens == 10
-    assert usage.prompt_tokens == 20
-    assert usage.total_tokens == 30
-
-
-def test_claude_client_tool_use(mock_anthropic_client):
-    client = ClaudeClient()
-    mock_response = anthropic.types.Message(
-        id="id",
-        type="message",
-        content=[
-            anthropic.types.ToolUseBlock(
-                id="tool1",
-                name="search",
-                input={"query": "test"},
-                type="tool_use",
-            )
-        ],
-        model="some-claude-model",
-        role="assistant",
-        usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
+    response = llm_client.generate_text(
+        prompt="Say hello",
+        model=model,
     )
-    mock_anthropic_client.messages.create.return_value = mock_response
-    client.anthropic_client = mock_anthropic_client
 
-    messages = [Message(role="user", content="Use a tool")]
-    message, usage = client.completion(messages)
+    assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content == "Hello, world!"
+    assert response.message.role == "assistant"
+    assert response.metadata.model == "claude-3-sonnet-20240229"
+    assert response.metadata.provider_name == LlmProviderType.ANTHROPIC
+    assert response.metadata.usage == Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
 
-    assert mock_anthropic_client.messages.create.call_count == 1
-    assert message.role == "tool_use"
-    assert message.tool_calls[0].id == "tool1"
-    assert message.tool_calls[0].function == "search"
-    assert message.tool_calls[0].args == '{"query": "test"}'
+    mock_anthropic_client.messages.create.assert_called_once()
 
 
-def test_claude_client_json_completion(mock_anthropic_client):
-    client = ClaudeClient()
-    mock_response = anthropic.types.Message(
-        id="id",
-        type="message",
-        content=[anthropic.types.TextBlock(type="text", text='{"key": "value"}')],
-        role="assistant",
-        model="some-claude-model",
-        usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
+def test_openai_generate_text_with_tools(mock_openai_client):
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    tool_calls = [
+        MockOpenAiToolCall(
+            id="1",
+            function=MockOpenAiFunction(name="test_function", arguments='{"arg1": "value1"}'),
+        )
+    ]
+    mock_openai_client.chat.completions.create.return_value = MockOpenAIResponse(
+        content="Using a tool", role="assistant", tool_calls=tool_calls
     )
-    mock_anthropic_client.messages.create.return_value = mock_response
-    client.anthropic_client = mock_anthropic_client
 
-    messages = [Message(role="user", content="Get me some JSON")]
-    result, message, usage = client.json_completion(messages, model="claude-3")
-
-    assert mock_anthropic_client.messages.create.call_count == 1
-    assert result == {"key": "value"}
-    assert message.content == '{"key": "value"}'
-    assert usage.total_tokens == 30
-
-
-def test_format_messages_for_claude_input():
-    client = ClaudeClient()
-
-    input_messages = [
-        Message(role="user", content="Hello"),
-        Message(role="assistant", content="Hi there!"),
-        Message(role="tool", content="Tool result", tool_call_id="tool1"),
-        Message(
-            role="tool_use",
-            tool_calls=[ToolCall(id="tool2", function="search", args='{"query": "test"}')],
-        ),
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[
+                {
+                    "name": "x",
+                    "type": "string",
+                },
+            ],
+            fn=lambda x: x,
+        )
     ]
 
-    formatted_messages = client._format_messages_for_claude_input(input_messages)
-
-    assert len(formatted_messages) == 4
-    assert formatted_messages[0] == {"role": "user", "content": [{"type": "text", "text": "Hello"}]}
-    assert formatted_messages[1] == {
-        "role": "assistant",
-        "content": [{"type": "text", "text": "Hi there!"}],
-    }
-    assert formatted_messages[2] == {
-        "role": "user",
-        "content": [{"type": "tool_result", "content": "Tool result", "tool_use_id": "tool1"}],
-    }
-    assert formatted_messages[3] == {
-        "role": "assistant",
-        "content": [
-            {"type": "tool_use", "id": "tool2", "name": "search", "input": {"query": "test"}}
-        ],
-    }
-
-
-def test_format_claude_response_to_message():
-    client = ClaudeClient()
-
-    # Test text response
-    text_response = anthropic.types.Message(
-        id="id",
-        type="message",
-        content=[anthropic.types.TextBlock(type="text", text="Hello, how can I help you?")],
-        role="assistant",
-        model="some-claude-model",
-        usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
+    response = llm_client.generate_text(
+        prompt="Use a tool",
+        model=model,
+        tools=tools,
     )
-    text_message = client._format_claude_response_to_message(text_response)
-    assert text_message.role == "assistant"
-    assert text_message.content == "Hello, how can I help you?"
-    assert text_message.tool_calls is None
 
-    # Test tool use response
-    tool_use_response = anthropic.types.Message(
-        role="assistant",
-        type="message",
-        id="id",
-        model="some-claude-model",
-        content=[
-            anthropic.types.ToolUseBlock(
-                type="tool_use", id="tool1", name="search", input={"query": "Python programming"}
-            )
-        ],
-        usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
+    assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content == "Using a tool"
+    assert response.message.role == "assistant"
+    assert response.message.tool_calls == [
+        ToolCall(id="1", function="test_function", args='{"arg1": "value1"}')
+    ]
+
+    mock_openai_client.chat.completions.create.assert_called_once()
+
+
+def test_anthropic_generate_text_with_tools(mock_anthropic_client):
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-sonnet-20240229")
+
+    tool_calls = [ToolCall(id="1", function="test_function", args='{"arg1": "value1"}')]
+    mock_anthropic_client.messages.create.return_value = MockAnthropicResponse(
+        content="Using a tool", role="assistant", tool_calls=tool_calls
     )
-    tool_use_message = client._format_claude_response_to_message(tool_use_response)
-    assert tool_use_message.role == "tool_use"
-    assert tool_use_message.content is None
-    assert len(tool_use_message.tool_calls) == 1
-    assert tool_use_message.tool_calls[0].id == "tool1"
-    assert tool_use_message.tool_calls[0].function == "search"
-    assert tool_use_message.tool_calls[0].args == '{"query": "Python programming"}'
-    assert tool_use_message.tool_call_id == "tool1"
 
-    # Test mixed response
-    mixed_response = anthropic.types.Message(
-        role="assistant",
-        type="message",
-        id="id",
-        model="some-claude-model",
-        content=[
-            anthropic.types.TextBlock(type="text", text="Here's what I found:"),
-            anthropic.types.ToolUseBlock(
-                type="tool_use", id="tool2", name="search", input={"query": "AI developments"}
-            ),
-        ],
-        usage=anthropic.types.Usage(input_tokens=20, output_tokens=10),
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[
+                {
+                    "name": "x",
+                    "type": "string",
+                },
+            ],
+            fn=lambda x: x,
+        )
+    ]
+
+    response = llm_client.generate_text(
+        prompt="Use a tool",
+        model=model,
+        tools=tools,
     )
-    mixed_message = client._format_claude_response_to_message(mixed_response)
-    assert mixed_message.role == "tool_use"
-    assert mixed_message.content == "Here's what I found:"
-    assert len(mixed_message.tool_calls) == 1
-    assert mixed_message.tool_calls[0].id == "tool2"
-    assert mixed_message.tool_calls[0].function == "search"
-    assert mixed_message.tool_calls[0].args == '{"query": "AI developments"}'
-    assert mixed_message.tool_call_id == "tool2"
+
+    assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content == "Using a tool"
+    assert response.message.role == "tool_use"
+    assert response.message.tool_calls == tool_calls
+
+    mock_anthropic_client.messages.create.assert_called_once()
 
 
-def test_llm_client_abstract_methods():
-    with pytest.raises(TypeError):
-        LlmClient()
+def test_openai_generate_structured(mock_openai_client):
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    class TestStructure(BaseModel):
+        name: str
+        age: int
+
+    mock_openai_client.beta.chat.completions.parse.return_value = MockOpenAIResponse(
+        content='{"name": "John", "age": 30}',
+        parsed=TestStructure(name="John", age=30),
+        role="assistant",
+    )
+
+    response = llm_client.generate_structured(
+        prompt="Generate a person",
+        model=model,
+        response_format=TestStructure,
+    )
+
+    assert isinstance(response, LlmGenerateStructuredResponse)
+    assert response.parsed == TestStructure(name="John", age=30)
+    assert response.metadata.model == "gpt-3.5-turbo"
+    assert response.metadata.provider_name == LlmProviderType.OPENAI
+
+    mock_openai_client.beta.chat.completions.parse.assert_called_once()
+
+
+def test_anthropic_generate_structured():
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-sonnet-20240229")
+
+    class TestStructure(BaseModel):
+        name: str
+        age: int
+
+    with pytest.raises(NotImplementedError):
+        llm_client.generate_structured(
+            prompt="Generate a person",
+            model=model,
+            response_format=TestStructure,
+        )
+
+
+def test_clean_tool_call_assistant_messages():
+    messages = [
+        Message(role="user", content="Hello"),
+        Message(
+            role="assistant",
+            content="Using tool",
+            tool_calls=[ToolCall(id="1", function="test", args="{}")],
+        ),
+        Message(role="tool", content="Tool response"),
+        Message(role="tool_use", content="Tool use"),
+        Message(role="assistant", content="Final response"),
+    ]
+
+    cleaned_messages = LlmClient.clean_tool_call_assistant_messages(messages)
+
+    assert len(cleaned_messages) == 5
+    assert cleaned_messages[0].role == "user"
+    assert cleaned_messages[1].role == "assistant" and not cleaned_messages[1].tool_calls
+    assert cleaned_messages[2].role == "user"
+    assert cleaned_messages[3].role == "assistant"
+    assert cleaned_messages[4].role == "assistant"

@@ -64,6 +64,10 @@ class OpenAiProvider:
         },
     ]
 
+    @staticmethod
+    def get_client() -> openai.Client:
+        return openai.Client()
+
     @classmethod
     def model(cls, model_name: str) -> "OpenAiProvider":
         return cls(
@@ -72,7 +76,7 @@ class OpenAiProvider:
             )
         )
 
-    def get_config(self, model_name: str):
+    def _get_config(self, model_name: str):
         for config in self.default_configs:
             if re.match(config["match"], model_name):
                 return config
@@ -86,9 +90,9 @@ class OpenAiProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ):
-        openai_client = openai.Client()
+        openai_client = self.get_client()
 
-        config = self.get_config(self.provider.model_name)
+        config = self._get_config(self.provider.model_name)
         if config:
             if temperature is None:
                 temperature = config["temperature"]
@@ -155,7 +159,7 @@ class OpenAiProvider:
             tools=tools,
         )
 
-        openai_client = openai.Client()
+        openai_client = self.get_client()
 
         completion = openai_client.beta.chat.completions.parse(
             model=self.provider.model_name,
@@ -231,6 +235,14 @@ class AnthropicProvider:
         },
     ]
 
+    @staticmethod
+    @inject
+    def get_client(app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
+        return anthropic.AnthropicVertex(
+            project_id=app_config.GOOGLE_CLOUD_PROJECT,
+            region="europe-west1" if app_config.USE_EU_REGION else "us-east5",
+        )
+
     @classmethod
     def model(cls, model_name: str) -> "AnthropicProvider":
         return cls(
@@ -239,7 +251,7 @@ class AnthropicProvider:
             )
         )
 
-    def get_config(self, model_name: str):
+    def _get_config(self, model_name: str):
         for config in self.default_configs:
             if re.match(config["match"], model_name):
                 return config
@@ -255,14 +267,10 @@ class AnthropicProvider:
         tool_dicts: Iterable[ToolParam] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        app_config: AppConfig = injected,
     ):
-        anthropic_client = anthropic.AnthropicVertex(
-            project_id=app_config.GOOGLE_CLOUD_PROJECT,
-            region="europe-west1" if app_config.USE_EU_REGION else "us-east5",
-        )
+        anthropic_client = self.get_client()
 
-        config = self.get_config(self.provider.model_name)
+        config = self._get_config(self.provider.model_name)
         if config:
             if temperature is None:
                 temperature = config["temperature"]
