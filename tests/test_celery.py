@@ -22,7 +22,7 @@ def test_detected_celery_jobs():
                 "seer.automation.codegen.unittest_step.unittest_task",
                 "seer.automation.tasks.delete_data_for_ttl",
                 "seer.smoke_test.smoke_test",
-                "seer.automation.tasks.throw_an_error",  # TODO remove this once testing in prod is done
+                "seer.automation.tasks.raise_an_exception",  # TODO remove this once testing in prod is done
             ]
         )
 
