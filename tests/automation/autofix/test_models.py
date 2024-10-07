@@ -27,6 +27,7 @@ from seer.automation.models import (
     SentryEventEntryDataValue,
     SentryExceptionEntry,
     Stacktrace,
+    ExceptionDetails,
     StacktraceFrame,
 )
 from seer.automation.utils import make_kill_signal
