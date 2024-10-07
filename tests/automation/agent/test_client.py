@@ -37,6 +37,7 @@ class MockOpenAIResponse:
         parsed: BaseModel | None = None,
         role: str,
         tool_calls: list[MockOpenAiToolCall] | None = None,
+        refusal: str | None = None,
     ):
         self.choices = [
             MagicMock(
@@ -45,7 +46,7 @@ class MockOpenAIResponse:
                     content=content,
                     role=role,
                     tool_calls=tool_calls,
-                    refusal=None,
+                    refusal=refusal,
                 )
             )
         ]
@@ -294,3 +295,30 @@ def test_clean_tool_call_assistant_messages():
     assert cleaned_messages[2].role == "user"
     assert cleaned_messages[3].role == "assistant"
     assert cleaned_messages[4].role == "assistant"
+
+
+def test_openai_generate_structured_refusal(mock_openai_client):
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    class TestStructure(BaseModel):
+        name: str
+        age: int
+
+    mock_openai_client.beta.chat.completions.parse.return_value = MockOpenAIResponse(
+        content="I'm sorry, but I can't generate that information.",
+        parsed=None,
+        role="assistant",
+        refusal="I'm sorry, but I can't generate that information.",
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        llm_client.generate_structured(
+            prompt="Generate a person",
+            model=model,
+            response_format=TestStructure,
+        )
+
+    assert str(exc_info.value) == "I'm sorry, but I can't generate that information."
+
+    mock_openai_client.beta.chat.completions.parse.assert_called_once()

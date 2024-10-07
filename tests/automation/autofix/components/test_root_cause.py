@@ -2,12 +2,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from seer.automation.agent.client import (
-    LlmClient,
+from seer.automation.agent.client import LlmClient
+from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
+    LlmProviderType,
     LlmResponseMetadata,
+    Usage,
 )
-from seer.automation.agent.models import LlmProviderType, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import (

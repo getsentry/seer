@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import ClassVar, Generic, Iterable, Optional, Type, TypeVar, Union, cast
+from typing import ClassVar, Iterable, Optional, Type, Union, cast
 
 import anthropic
 from anthropic import NOT_GIVEN
@@ -10,49 +10,27 @@ from anthropic.types import MessageParam, ToolParam
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
-from pydantic import BaseModel
 
-from seer.automation.agent.models import LlmProviderType, Message, ToolCall, Usage
+from seer.automation.agent.models import (
+    LlmGenerateStructuredResponse,
+    LlmGenerateTextResponse,
+    LlmModelDefaultConfig,
+    LlmProviderDefaults,
+    LlmProviderDefinition,
+    LlmProviderType,
+    LlmRefusalError,
+    LlmResponseMetadata,
+    Message,
+    StructuredOutputType,
+    ToolCall,
+    Usage,
+)
 from seer.automation.agent.tools import FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
-
-
-class LlmResponseMetadata(BaseModel):
-    model: str
-    provider_name: LlmProviderType
-    usage: Usage
-
-
-class LlmGenerateTextResponse(BaseModel):
-    message: Message
-    metadata: LlmResponseMetadata
-
-
-StructuredOutputType = TypeVar("StructuredOutputType")
-
-
-class LlmGenerateStructuredResponse(BaseModel, Generic[StructuredOutputType]):
-    parsed: StructuredOutputType
-    metadata: LlmResponseMetadata
-
-
-class LlmProviderDefaults(BaseModel):
-    temperature: float | None = None
-
-
-class LlmProviderDefinition(BaseModel):
-    model_name: str
-    provider_name: LlmProviderType
-    defaults: LlmProviderDefaults | None = None
-
-
-class LlmModelDefaultConfig(BaseModel):
-    match: str
-    defaults: LlmProviderDefaults
 
 
 @dataclass
@@ -129,7 +107,7 @@ class OpenAiProvider:
 
         openai_message = completion.choices[0].message
         if openai_message.refusal:
-            raise Exception(completion.choices[0].message.refusal)
+            raise LlmRefusalError(completion.choices[0].message.refusal)
 
         message = Message(
             content=openai_message.content,
@@ -194,7 +172,7 @@ class OpenAiProvider:
 
         openai_message = completion.choices[0].message
         if openai_message.refusal:
-            raise Exception(completion.choices[0].message.refusal)
+            raise LlmRefusalError(completion.choices[0].message.refusal)
 
         parsed = cast(StructuredOutputType, completion.choices[0].message.parsed)
 

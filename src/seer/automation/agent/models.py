@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -103,3 +103,43 @@ class Message(BaseModel):
                 }
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
+
+
+class LlmResponseMetadata(BaseModel):
+    model: str
+    provider_name: LlmProviderType
+    usage: Usage
+
+
+class LlmGenerateTextResponse(BaseModel):
+    message: Message
+    metadata: LlmResponseMetadata
+
+
+StructuredOutputType = TypeVar("StructuredOutputType")
+
+
+class LlmGenerateStructuredResponse(BaseModel, Generic[StructuredOutputType]):
+    parsed: StructuredOutputType
+    metadata: LlmResponseMetadata
+
+
+class LlmProviderDefaults(BaseModel):
+    temperature: float | None = None
+
+
+class LlmProviderDefinition(BaseModel):
+    model_name: str
+    provider_name: LlmProviderType
+    defaults: LlmProviderDefaults | None = None
+
+
+class LlmModelDefaultConfig(BaseModel):
+    match: str
+    defaults: LlmProviderDefaults
+
+
+class LlmRefusalError(Exception):
+    """Raised when the LLM refuses to complete the request."""
+
+    pass

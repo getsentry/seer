@@ -2,8 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from seer.automation.agent.client import LlmClient, LlmGenerateTextResponse, LlmResponseMetadata
-from seer.automation.agent.models import LlmProviderType, Message, Usage
+from seer.automation.agent.client import LlmClient
+from seer.automation.agent.models import (
+    LlmGenerateTextResponse,
+    LlmProviderType,
+    LlmResponseMetadata,
+    Message,
+    Usage,
+)
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.component import CodingComponent
 from seer.automation.autofix.components.coding.models import (
