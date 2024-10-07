@@ -26,6 +26,7 @@ from seer.automation.models import (
     SentryEventData,
     SentryEventEntryDataValue,
     SentryExceptionEntry,
+    ExceptionDetails,
     Stacktrace,
     StacktraceFrame,
 )
