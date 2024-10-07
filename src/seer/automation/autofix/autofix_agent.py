@@ -2,12 +2,7 @@ import logging
 import threading
 from typing import Optional
 
-from seer.automation.agent.agent import (
-    AgentConfig,
-    LlmAgent,
-    MaxIterationsReachedException,
-    RunConfig,
-)
+from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import Message
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -38,29 +33,12 @@ class AutofixAgent(LlmAgent):
 
         return super().should_continue(run_config)
 
-    def run(self, run_config: RunConfig):
-        if run_config.prompt:
-            self.add_user_message(run_config.prompt)
-        logger.debug(f"----[{self.name}] Running Agent----")
-
-        self.reset_iterations()
-
-        while self.should_continue(run_config):
-            if self.config.interactive:
-                self.use_user_messages()
-            self.run_iteration(run_config=run_config)
-            if run_config.name:
-                self.context.store_memory(run_config.name, self.memory)
-
-        if self.iterations == run_config.max_iterations:
-            raise MaxIterationsReachedException(
-                f"Agent {self.name} reached maximum iterations without finishing."
-            )
-
-        return self.get_last_message_content()
-
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
+
+        # Use any queued user messages
+        if self.config.interactive:
+            self.use_user_messages()
 
         completion = self.get_completion(run_config)
 
@@ -92,6 +70,9 @@ class AutofixAgent(LlmAgent):
 
         self.iterations += 1
         self.usage += completion.metadata.usage
+
+        if run_config.memory_storage_key:
+            self.context.store_memory(run_config.memory_storage_key, self.memory)
 
         return self.memory
 

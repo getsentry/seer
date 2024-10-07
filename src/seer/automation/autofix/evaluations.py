@@ -252,10 +252,9 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, mo
         expected_diff=dataset_item.expected_output.get("diff"),
         predicted_diff=predicted_diff,
     )
-    response = LlmClient.generate_text(
+    response = LlmClient().generate_text(
         model=OpenAiProvider.model(model),
         prompt=prompt,
-        temperature=0.0,
     )
     if not response.message.content:
         return 0
@@ -321,17 +320,16 @@ def score_root_cause_single_it(
         expected_output=expected_output.to_prompt_str(),
         predicted_solutions=solutions_str,
     )
-    response = LlmClient.generate_text(
+    response = LlmClient().generate_text(
         model=OpenAiProvider.model(model),
         prompt=prompt,
-        temperature=0.0,
     )
     if not response.message.content:
         raise ValueError("No response content")
 
     scores: list[float] = []
     for i in range(len(causes_xml)):
-        score_str = extract_text_inside_tags(response.content, f"score_{i + 1}")
+        score_str = extract_text_inside_tags(response.message.content, f"score_{i + 1}")
         score = float(score_str) if score_str else 0
         scores.append(score)
 

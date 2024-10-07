@@ -15,6 +15,7 @@ from seer.automation.autofix.components.root_cause.models import (
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
     @observe(name="Root Cause Analysis")
     @ai_track(description="Root Cause Analysis")
-    def invoke(self, request: RootCauseAnalysisRequest) -> RootCauseAnalysisOutput | None:
+    @inject
+    def invoke(
+        self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
+    ) -> RootCauseAnalysisOutput | None:
         with BaseTools(self.context) as tools:
             agent = AutofixAgent(
                 tools=tools.get_tools(),
@@ -33,6 +37,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 ),
                 context=self.context,
                 memory=request.initial_memory,
+                name="Root Cause Analysis Agent",
             )
 
             state = self.context.state.get()
@@ -53,7 +58,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         ),
                         system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
                         max_iterations=24,
-                        name="root_cause_analysis",
+                        memory_storage_key="root_cause_analysis",
+                        run_name="Root Cause Discovery",
                     ),
                 )
 
@@ -70,16 +76,18 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     run_config=RunConfig(
                         model=OpenAiProvider.model("gpt-4o-2024-08-06"),
                         prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
+                        run_name="Root Cause Reproduction & Unit Test",
                     )
                 )
 
                 self.context.event_manager.add_log("Cleaning up my findings...")
 
-                formatted_response = LlmClient.generate_structured(
+                formatted_response = llm_client.generate_structured(
                     messages=LlmClient.clean_tool_call_assistant_messages(agent.memory),
                     prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
                     model=OpenAiProvider.model("gpt-4o-2024-08-06"),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
+                    run_name="Root Cause Extraction & Formatting",
                 )
 
                 # Assign the ids to be the numerical indices of the causes and relevant code context

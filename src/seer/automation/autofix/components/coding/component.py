@@ -60,6 +60,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         ),
                     )
                 ],
+                temperature=0.0,
+                run_name="Incorrect Diff Fixer",
             )
 
             with self.context.state.update() as cur:
@@ -98,6 +100,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 config=AgentConfig(interactive=True),
                 memory=request.initial_memory,
                 context=self.context,
+                name="Plan+Code",
             )
 
             task_str = (
@@ -126,7 +129,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     ),
                     system_prompt=CodingPrompts.format_system_msg(),
                     model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
-                    name="plan_and_code",
+                    memory_storage_key="plan_and_code",
+                    run_name="Plan",
                 ),
             )
 
@@ -142,7 +146,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 RunConfig(
                     prompt=CodingPrompts.format_fix_msg(),
                     model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
-                    name="plan_and_code",
+                    memory_storage_key="plan_and_code",
+                    run_name="Code",
                 ),
             )
 
@@ -180,7 +185,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                             missing_files_errors, file_exist_errors
                         ),
                         model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
-                        name="plan_and_code",
+                        memory_storage_key="plan_and_code",
+                        run_name="Missing File Fix",
                     ),
                 )
 

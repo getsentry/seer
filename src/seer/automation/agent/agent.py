@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.client import LlmClient, LlmProvider
@@ -22,14 +23,16 @@ class AgentConfig(BaseModel):
 class RunConfig(BaseModel):
     system_prompt: str | None = None
     prompt: str | None = None
-    stop_message: Optional[str] = Field(
+    stop_message: str | None = Field(
         default=None, description="Message that signals the agent to stop"
     )
     max_iterations: int = Field(
         default=16, description="Maximum number of iterations the agent can perform"
     )
     model: LlmProvider
-    name: str | None = None
+    memory_storage_key: str | None = None
+    temperature: float | None = 0.0
+    run_name: str | None = None
 
 
 class LlmAgent:
@@ -37,7 +40,7 @@ class LlmAgent:
     def __init__(
         self,
         config: AgentConfig,
-        client: type[LlmClient] = injected,
+        client: LlmClient = injected,
         tools: Optional[list[FunctionTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "Agent",
@@ -56,6 +59,7 @@ class LlmAgent:
             model=run_config.model,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
+            temperature=run_config.temperature or 0.0,
         )
 
     def run_iteration(self, run_config: RunConfig):
@@ -98,7 +102,15 @@ class LlmAgent:
         # Continue in all other cases
         return True
 
+    @observe(name="Agent Run")
     def run(self, run_config: RunConfig):
+        if run_config.run_name:
+            langfuse_context.update_current_observation(name=run_config.run_name + " - Agent Run")
+            langfuse_context.flush()
+        elif self.name:
+            langfuse_context.update_current_observation(name=self.name + " - Agent Run")
+            langfuse_context.flush()
+
         if run_config.prompt:
             self.add_user_message(run_config.prompt)
 
