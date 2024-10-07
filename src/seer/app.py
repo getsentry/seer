@@ -173,6 +173,11 @@ def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     return AutofixEndpointResponse(started=True, run_id=run_id)
 
 
+@json_api(blueprint, "/v1/automation/autofix/raise-error")  # TODO remove this endpoint
+def autofix_test_copilot_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    raise Exception("This is a test error to create a Sentry issue")
+
+
 @json_api(blueprint, "/v1/automation/autofix/update")
 def autofix_update_endpoint(
     data: AutofixUpdateRequest,
