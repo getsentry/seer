@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Generic, Iterable, Optional, Type, TypeVar, Union, cast
+from typing import ClassVar, Generic, Iterable, Optional, Type, TypeVar, Union, cast
 
 import anthropic
 from anthropic import NOT_GIVEN
@@ -40,28 +40,38 @@ class LlmGenerateStructuredResponse(BaseModel, Generic[StructuredOutputType]):
     metadata: LlmResponseMetadata
 
 
+class LlmProviderDefaults(BaseModel):
+    temperature: float | None = None
+
+
 class LlmProviderDefinition(BaseModel):
     model_name: str
     provider_name: LlmProviderType
+    defaults: LlmProviderDefaults | None = None
+
+
+class LlmModelDefaultConfig(BaseModel):
+    match: str
+    defaults: LlmProviderDefaults
 
 
 @dataclass
 class OpenAiProvider:
     provider: LlmProviderDefinition
 
-    default_configs = [
-        {
-            "match": r"^o1-mini.*",
-            "temperature": 1.0,
-        },
-        {
-            "match": r"^o1-preview.*",
-            "temperature": 1.0,
-        },
-        {
-            "match": r".*",
-            "temperature": 0.0,
-        },
+    default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
+        LlmModelDefaultConfig(
+            match=r"^o1-mini.*",
+            defaults=LlmProviderDefaults(temperature=1.0),
+        ),
+        LlmModelDefaultConfig(
+            match=r"^o1-preview.*",
+            defaults=LlmProviderDefaults(temperature=1.0),
+        ),
+        LlmModelDefaultConfig(
+            match=r".*",
+            defaults=LlmProviderDefaults(temperature=0.0),
+        ),
     ]
 
     @staticmethod
@@ -70,38 +80,50 @@ class OpenAiProvider:
 
     @classmethod
     def model(cls, model_name: str) -> "OpenAiProvider":
+        model_config = cls._get_config(model_name)
         return cls(
             provider=LlmProviderDefinition(
-                model_name=model_name, provider_name=LlmProviderType.OPENAI
+                model_name=model_name,
+                provider_name=LlmProviderType.OPENAI,
+                defaults=model_config.defaults if model_config else None,
             )
         )
 
-    def _get_config(self, model_name: str):
-        for config in self.default_configs:
-            if re.match(config["match"], model_name):  # type: ignore
+    @classmethod
+    def _get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
                 return config
         return None
 
     def generate_text(
         self,
         *,
-        message_dicts: Iterable[ChatCompletionMessageParam],
-        tool_dicts: Iterable[ChatCompletionToolParam] | None = None,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: Optional[str] = None,
+        tools: Optional[list[FunctionTool]] = [],
         temperature: float | None = None,
         max_tokens: int | None = None,
     ):
-        openai_client = self.get_client()
+        message_dicts, tool_dicts = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
 
-        config = self._get_config(self.provider.model_name)
-        if config:
-            if temperature is None:
-                temperature = config["temperature"]
+        openai_client = self.get_client()
 
         completion = openai_client.chat.completions.create(
             model=self.provider.model_name,
-            messages=message_dicts,
+            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
             temperature=temperature,
-            tools=(tool_dicts if tool_dicts else openai.NotGiven()),
+            tools=(
+                cast(Iterable[ChatCompletionToolParam], tool_dicts)
+                if tool_dicts
+                else openai.NotGiven()
+            ),
             max_tokens=max_tokens or openai.NotGiven(),
         )
 
@@ -140,7 +162,7 @@ class OpenAiProvider:
     def generate_structured(
         self,
         *,
-        prompt: str,
+        prompt: str | None = None,
         messages: list[Message] | None = None,
         system_prompt: Optional[str] = None,
         tools: Optional[list[FunctionTool]] = [],
@@ -224,11 +246,11 @@ class OpenAiProvider:
 class AnthropicProvider:
     provider: LlmProviderDefinition
 
-    default_configs = [
-        {
-            "match": r".*",
-            "temperature": 0.0,
-        },
+    default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
+        LlmModelDefaultConfig(
+            match=r".*",
+            defaults=LlmProviderDefaults(temperature=0.0),
+        ),
     ]
 
     @staticmethod
@@ -241,15 +263,19 @@ class AnthropicProvider:
 
     @classmethod
     def model(cls, model_name: str) -> "AnthropicProvider":
+        model_config = cls._get_config(model_name)
         return cls(
             provider=LlmProviderDefinition(
-                model_name=model_name, provider_name=LlmProviderType.ANTHROPIC
+                model_name=model_name,
+                provider_name=LlmProviderType.ANTHROPIC,
+                defaults=model_config.defaults if model_config else None,
             )
         )
 
-    def _get_config(self, model_name: str):
-        for config in self.default_configs:
-            if re.match(config["match"], model_name):  # type: ignore
+    @classmethod
+    def _get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
                 return config
         return None
 
@@ -258,24 +284,27 @@ class AnthropicProvider:
     def generate_text(
         self,
         *,
+        messages: list[Message] | None = None,
+        prompt: str | None = None,
         system_prompt: str | None = None,
-        message_dicts: Iterable[MessageParam],
-        tool_dicts: Iterable[ToolParam] | None = None,
+        tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
     ):
-        anthropic_client = self.get_client()
+        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
 
-        config = self._get_config(self.provider.model_name)
-        if config:
-            if temperature is None:
-                temperature = config["temperature"]
+        anthropic_client = self.get_client()
 
         completion = anthropic_client.messages.create(
             system=system_prompt or NOT_GIVEN,
             model=self.provider.model_name,
-            tools=tool_dicts or NOT_GIVEN,
-            messages=message_dicts,
+            tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
+            messages=cast(Iterable[MessageParam], message_dicts),
             max_tokens=max_tokens or 8192,
             temperature=temperature or NOT_GIVEN,
         )
@@ -367,36 +396,31 @@ class LlmClient:
             langfuse_context.update_current_observation(name=run_name + " - Generate Text")
             langfuse_context.flush()
 
+        defaults = model.provider.defaults
+        default_temperature = defaults.temperature if defaults else None
+        # More defaults to come
+
         if model.provider.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
-            message_dicts, tool_dicts = model._prep_message_and_tools(
+
+            return model.generate_text(
+                max_tokens=max_tokens,
                 messages=messages,
                 prompt=prompt,
                 system_prompt=system_prompt,
+                temperature=temperature or default_temperature,
                 tools=tools,
-            )
-            return model.generate_text(
-                message_dicts=cast(Iterable[ChatCompletionMessageParam], message_dicts),
-                tool_dicts=(
-                    cast(Iterable[ChatCompletionToolParam], tool_dicts) if tool_dicts else None
-                ),
-                temperature=temperature,
-                max_tokens=max_tokens,
             )
         elif model.provider.provider_name == LlmProviderType.ANTHROPIC:
             model = cast(AnthropicProvider, model)
-            message_dicts, tool_dicts, system_prompt = model._prep_message_and_tools(
+
+            return model.generate_text(
+                max_tokens=max_tokens,
                 messages=messages,
                 prompt=prompt,
                 system_prompt=system_prompt,
+                temperature=temperature or default_temperature,
                 tools=tools,
-            )
-            return model.generate_text(
-                system_prompt=system_prompt,
-                message_dicts=cast(Iterable[MessageParam], message_dicts),
-                tool_dicts=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else None,
-                temperature=temperature,
-                max_tokens=max_tokens,
             )
         else:
             raise ValueError(f"Invalid provider: {model.provider.provider_name}")
@@ -421,13 +445,13 @@ class LlmClient:
         if model.provider.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
             return model.generate_structured(
-                prompt=prompt,
-                messages=messages,
-                system_prompt=system_prompt,
-                tools=tools,
-                temperature=temperature,
-                response_format=response_format,
                 max_tokens=max_tokens,
+                messages=messages,
+                prompt=prompt,
+                response_format=response_format,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                tools=tools,
             )
         elif model.provider.provider_name == LlmProviderType.ANTHROPIC:
             raise NotImplementedError("Anthropic structured outputs are not yet supported")
