@@ -89,7 +89,6 @@ class TestSummarizeReplays:
         mock_llm_client.generate_structured.assert_called_once()
 
     def test_run_cross_session_completion(self, mock_llm_client):
-
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=CommonReplaySummary(
                 common_user_steps_taken=[],
