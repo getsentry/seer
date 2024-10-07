@@ -738,3 +738,35 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str
+
+
+class TestExceptionDetails(unittest.TestCase):
+    def test_exception_details_with_empty_value(self):
+        stacktrace = Stacktrace(frames=[])
+        exception = ExceptionDetails(type="TypeError", value="", stacktrace=stacktrace)
+        self.assertEqual(exception.type, "TypeError")
+        self.assertEqual(exception.value, "")
+        self.assertEqual(exception.stacktrace, stacktrace)
+
+    def test_exception_details_with_none_value(self):
+        stacktrace = Stacktrace(frames=[])
+        exception = ExceptionDetails(type="ValueError", value=None, stacktrace=stacktrace)
+        self.assertEqual(exception.type, "ValueError")
+        self.assertEqual(exception.value, "")
+        self.assertEqual(exception.stacktrace, stacktrace)
+
+    def test_exception_details_with_non_empty_value(self):
+        stacktrace = Stacktrace(frames=[])
+        exception = ExceptionDetails(type="RuntimeError", value="An error occurred", stacktrace=stacktrace)
+        self.assertEqual(exception.type, "RuntimeError")
+        self.assertEqual(exception.value, "An error occurred")
+        self.assertEqual(exception.stacktrace, stacktrace)
+
+    def test_exception_details_field_validator(self):
+        stacktrace_dict = {"frames": []}
+        exception = ExceptionDetails(type="TypeError", value="", stacktrace=stacktrace_dict)
+        self.assertIsInstance(exception.stacktrace, Stacktrace)
+        self.assertEqual(len(exception.stacktrace.frames), 0)
+
+        with self.assertRaises(ValueError):
+            ExceptionDetails(type="ValueError", value="", stacktrace="invalid_stacktrace")
