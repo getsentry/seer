@@ -2,7 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from seer.automation.agent.client import ClaudeClient
+from seer.automation.agent.client import LlmClient, LlmGenerateTextResponse, LlmResponseMetadata
+from seer.automation.agent.models import LlmProviderType, Message, Usage
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.component import CodingComponent
 from seer.automation.autofix.components.coding.models import (
@@ -25,10 +26,10 @@ class TestCodingComponent:
         return component
 
     @pytest.fixture
-    def mock_claude_client(self):
-        return MagicMock(spec=ClaudeClient)
+    def mock_llm_client(self):
+        return MagicMock(spec=LlmClient)
 
-    def test_handle_missing_file_changes_success(self, component, mock_claude_client):
+    def test_handle_missing_file_changes_success(self, component, mock_llm_client):
         missing_changes = {
             "file1.py": FileMissingObj(
                 file_path="file1.py",
@@ -52,9 +53,13 @@ class TestCodingComponent:
             )
         }
 
-        mock_claude_client.completion.return_value = (
-            MagicMock(content="<corrected_diffs>new diff</corrected_diffs>"),
-            MagicMock(),
+        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(content="new diff"),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.ANTHROPIC,
+                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
+            ),
         )
 
         mock_repo_client = MagicMock()
@@ -77,12 +82,12 @@ class TestCodingComponent:
             )
 
             module = Module()
-            module.constant(ClaudeClient, mock_claude_client)
+            module.constant(LlmClient, mock_llm_client)
             with module:
                 component._handle_missing_file_changes(missing_changes)
 
         component.context.state.update.assert_called()
-        mock_claude_client.completion.assert_called_once()
+        mock_llm_client.generate_text.assert_called_once()
         mock_task_to_file_change.assert_called_once()
         component._append_file_change.assert_called_once_with(
             "test_repo_id",
@@ -91,7 +96,7 @@ class TestCodingComponent:
             ),
         )
 
-    def test_handle_missing_file_changes_no_content(self, component, mock_claude_client):
+    def test_handle_missing_file_changes_no_content(self, component, mock_llm_client):
         missing_changes = {
             "file1.py": FileMissingObj(
                 file_path="file1.py",
@@ -115,19 +120,26 @@ class TestCodingComponent:
             )
         }
 
-        mock_claude_client.completion.return_value = (MagicMock(content=None), MagicMock())
+        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(content=None),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.ANTHROPIC,
+                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
+            ),
+        )
 
         module = Module()
-        module.constant(ClaudeClient, mock_claude_client)
+        module.constant(LlmClient, mock_llm_client)
         with module:
             component._handle_missing_file_changes(missing_changes)
 
         component.context.state.update.assert_called()
-        mock_claude_client.completion.assert_called_once()
+        mock_llm_client.generate_text.assert_called_once()
         component._append_file_change.assert_not_called()
 
     def test_handle_missing_file_changes_with_remaining_missing_changes(
-        self, component, mock_claude_client
+        self, component, mock_llm_client
     ):
         missing_changes = {
             "file1.py": FileMissingObj(
@@ -152,9 +164,13 @@ class TestCodingComponent:
             )
         }
 
-        mock_claude_client.completion.return_value = (
-            MagicMock(content="<corrected_diffs>new diff</corrected_diffs>"),
-            MagicMock(),
+        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(content="<corrected_diffs>new diff</corrected_diffs>"),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.ANTHROPIC,
+                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
+            ),
         )
 
         mock_repo_client = MagicMock()
@@ -186,12 +202,12 @@ class TestCodingComponent:
             )
 
             module = Module()
-            module.constant(ClaudeClient, mock_claude_client)
+            module.constant(LlmClient, mock_llm_client)
             with module:
                 component._handle_missing_file_changes(missing_changes)
 
         component.context.state.update.assert_called()
-        mock_claude_client.completion.assert_called_once()
+        mock_llm_client.generate_text.assert_called_once()
         mock_task_to_file_change.assert_called_once()
         component._append_file_change.assert_called_once_with(
             "test_repo_id",
@@ -208,7 +224,7 @@ class TestCodingComponent:
     )
     @patch("seer.automation.autofix.components.coding.component.PlanStepsPromptXml")
     def test_invoke_with_missing_and_existing_files(
-        self, mock_plan_steps_prompt_xml, mock_extract_text, component, mock_claude_client
+        self, mock_plan_steps_prompt_xml, mock_extract_text, component, mock_llm_client
     ):
         # Setup
         mock_request = MagicMock()
@@ -274,16 +290,16 @@ class TestCodingComponent:
 
         # Execute
         with patch(
-            "seer.automation.autofix.components.coding.component.ClaudeAgent",
+            "seer.automation.autofix.components.coding.component.AutofixAgent",
             return_value=mock_agent,
         ):
             result = component.invoke(mock_request)
 
         # Assert
         assert mock_agent.run.call_count == 3
-        assert "missing_file1.py" in mock_agent.run.call_args_list[2][0][0]
-        assert "missing_file2.py" in mock_agent.run.call_args_list[2][0][0]
-        assert "existing_file.py" in mock_agent.run.call_args_list[2][0][0]
+        assert "missing_file1.py" in mock_agent.run.call_args_list[2][0][0].prompt
+        assert "missing_file2.py" in mock_agent.run.call_args_list[2][0][0].prompt
+        assert "existing_file.py" in mock_agent.run.call_args_list[2][0][0].prompt
 
         # Ensure the result is as expected
         assert result == mock_coding_output
