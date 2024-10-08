@@ -91,8 +91,8 @@ class TestProphetLocationDetector(unittest.TestCase):
             {
                 "ds": [1.0, 2.0, 3.0],
                 "yhat": [1.0, 2.0, 3.0],
-                "trend_upper": [1.5, 2.5, 3.5],
-                "trend_lower": [0.5, 1.5, 2.5],
+                "yhat_upper": [1.5, 2.5, 3.5],
+                "yhat_lower": [0.5, 1.5, 2.5],
             }
         )
 
@@ -112,8 +112,8 @@ class TestProphetLocationDetector(unittest.TestCase):
             {
                 "ds": [1.0, 2.0, 3.0],
                 "yhat": [1.0, 2.0, 3.0],
-                "trend_upper": [1.5, 2.5, 3.5],
-                "trend_lower": [0.5, 1.5, 2.5],
+                "yhat_upper": [1.5, 2.5, 3.5],
+                "yhat_lower": [0.5, 1.5, 2.5],
             }
         )
 
@@ -133,8 +133,8 @@ class TestProphetLocationDetector(unittest.TestCase):
             {
                 "ds": [1.0, 2.0, 3.0],
                 "yhat": [1.0, 2.0, 3.0],
-                "trend_upper": [1.5, 2.5, 3.5],
-                "trend_lower": [0.5, 1.5, 2.5],
+                "yhat_upper": [1.5, 2.5, 3.5],
+                "yhat_lower": [0.5, 1.5, 2.5],
             }
         )
 
@@ -168,8 +168,8 @@ class TestProphetLocationDetector(unittest.TestCase):
             {
                 "ds": [1.0, 2.0, 3.0],
                 "yhat": [1.0, 2.0, 3.0],
-                "trend_upper": [1.5, 2.5, 3.5],
-                "trend_lower": [0.5, 1.5, 2.5],
+                "yhat_upper": [1.5, 2.5, 3.5],
+                "yhat_lower": [0.5, 1.5, 2.5],
             }
         )
 
@@ -190,8 +190,8 @@ class TestProphetLocationDetector(unittest.TestCase):
             {
                 "ds": [1.0, 2.0, 3.0],
                 "yhat": [1.0, 2.0, 3.0],
-                "trend_upper": [1.5, 2.5, 3.5],
-                "trend_lower": [0.5, 1.5, 2.5],
+                "yhat_upper": [1.5, 2.5, 3.5],
+                "yhat_lower": [0.5, 1.5, 2.5],
             }
         )
 

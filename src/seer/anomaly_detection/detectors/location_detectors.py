@@ -119,9 +119,9 @@ class ProphetLocationDetector(LocationDetector):
             history_timestamps (npt.NDArray[np.float64]): Historical time series timestamps
 
         Returns:
-            PointLocation: The detected relative location of the streamed value as compared to the trend or expected value (UP, DOWN, or NONE).
-            UP: The streamed value is above the trend or expected value.
-            DOWN: The streamed value is below the trend or expected value.
+            PointLocation: The detected relative location of the streamed value as compared to the predicted value (UP, DOWN, or NONE).
+            UP: The streamed value is above the predicted value.
+            DOWN: The streamed value is below the predicted value.
             NONE: The streamed value is within the expected range of recent data points.
         """
         # Create Prophet model and fit on historical data
@@ -136,11 +136,11 @@ class ProphetLocationDetector(LocationDetector):
         # Predict and compare with streamed value
         forecast = model.predict(future)
         if self.uncertainty_samples > 0:
-            prophet_trend_upper = forecast.loc[len(forecast) - 1]["trend_upper"]
-            prophet_trend_lower = forecast.loc[len(forecast) - 1]["trend_lower"]
-            if streamed_value > prophet_trend_upper:
+            prophet_yhat_upper = forecast.loc[len(forecast) - 1]["yhat_upper"]
+            prophet_yhat_lower = forecast.loc[len(forecast) - 1]["yhat_lower"]
+            if streamed_value > prophet_yhat_upper:
                 return PointLocation.UP
-            elif streamed_value < prophet_trend_lower:
+            elif streamed_value < prophet_yhat_lower:
                 return PointLocation.DOWN
             else:
                 return PointLocation.NONE
