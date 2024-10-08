@@ -1,4 +1,10 @@
-from seer.anomaly_detection.models import dynamic_alert, external, timeseries, timeseries_anomalies
+from seer.anomaly_detection.models import (
+    algo_config,
+    dynamic_alert,
+    external,
+    timeseries,
+    timeseries_anomalies,
+)
 
 DynamicAlert = dynamic_alert.DynamicAlert
 MPTimeSeries = timeseries.MPTimeSeries
@@ -12,3 +18,4 @@ AnomalyFlags = external.AnomalyFlags
 Anomaly = external.Anomaly
 AnomalyDetectionConfig = external.AnomalyDetectionConfig
 TimeSeriesPoint = external.TimeSeriesPoint
+AlgoConfig = algo_config.AlgoConfig

@@ -139,6 +139,10 @@ class ProphetLocationDetector(LocationDetector):
         if self.uncertainty_samples > 0:
             prophet_yhat_upper = forecast.loc[len(forecast) - 1]["yhat_upper"]
             prophet_yhat_lower = forecast.loc[len(forecast) - 1]["yhat_lower"]
+            # if not math.isclose(prophet_yhat_upper, prophet_yhat_lower):
+            # print(
+            #     f"streamed_value: {streamed_value}, yhat_upper: {prophet_yhat_upper}, yhat_lower: {prophet_yhat_lower}"
+            # )
             if streamed_value > prophet_yhat_upper:
                 return PointLocation.UP
             elif streamed_value < prophet_yhat_lower:

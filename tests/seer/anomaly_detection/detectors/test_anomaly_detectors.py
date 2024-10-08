@@ -14,9 +14,13 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPBatchAnomalyDetector,
     MPStreamAnomalyDetector,
 )
-from seer.anomaly_detection.models import MPTimeSeriesAnomaliesSingleWindow
-from seer.anomaly_detection.models.external import AnomalyDetectionConfig
-from seer.anomaly_detection.models.timeseries import TimeSeries
+from seer.anomaly_detection.models import (
+    AlgoConfig,
+    AnomalyDetectionConfig,
+    MPTimeSeriesAnomaliesSingleWindow,
+    MPTimeSeriesAnomalies,
+    TimeSeries,
+)
 from seer.exceptions import ServerError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
