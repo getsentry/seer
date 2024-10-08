@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(time_limit=30)
 def raise_an_exception():
-    # Raise a TypeError by attempting to concatenate a string with an integer
-    # TODO remove this
-    result = "This will cause an error: " + 42
-    print(result)
+    # Raise an IndexError by attempting to access an index that doesn't exist
+    my_list = [1, 2, 3]
+    out_of_bounds_element = my_list[10]
+    print(out_of_bounds_element)
 
 
 @celery_app.task(time_limit=30)
