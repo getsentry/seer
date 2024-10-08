@@ -116,6 +116,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         summary=request.summary,
                         repo_names=[repo.full_name for repo in state.request.repos],
                         instruction=request.instruction,
+                        fix_instruction=request.fix_instruction,
                     )
                     if not request.initial_memory
                     else None

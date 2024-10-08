@@ -574,7 +574,7 @@ class TestAutofixContinuation(unittest.TestCase):
         root_cause_step.selection = CodeContextRootCauseSelection(cause_id=1)
         self.continuation.steps = [root_cause_step]
 
-        result = self.continuation.get_selected_root_cause_and_fix()
+        result, _ = self.continuation.get_selected_root_cause_and_fix()
         self.assertEqual(result, cause)
 
     def test_mark_triggered(self):

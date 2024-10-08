@@ -83,6 +83,7 @@ class CustomRootCauseSelection(BaseModel):
 
 class CodeContextRootCauseSelection(BaseModel):
     cause_id: int
+    instruction: str | None = None
 
 
 RootCauseSelection = Union[CustomRootCauseSelection, CodeContextRootCauseSelection]
@@ -291,6 +292,7 @@ class AutofixRootCauseUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
     cause_id: int | None = None
     custom_root_cause: str | None = None
+    instruction: str | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
@@ -406,7 +408,9 @@ class AutofixContinuation(AutofixGroupState):
         if self.steps:
             self.steps[-1].completedMessage = message
 
-    def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
+    def get_selected_root_cause_and_fix(
+        self,
+    ) -> tuple[RootCauseAnalysisItem | str | None, str | None]:
         root_cause_step = self.find_step(key="root_cause_analysis")
         if root_cause_step and isinstance(root_cause_step, RootCauseStep):
             if root_cause_step.selection:
@@ -416,10 +420,10 @@ class AutofixContinuation(AutofixGroupState):
                         for cause in root_cause_step.causes
                         if cause.id == root_cause_step.selection.cause_id
                     )
-                    return cause
+                    return cause, root_cause_step.selection.instruction
                 elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
-                    return root_cause_step.selection.custom_root_cause
-        return None
+                    return root_cause_step.selection.custom_root_cause, None
+        return None, None
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()
