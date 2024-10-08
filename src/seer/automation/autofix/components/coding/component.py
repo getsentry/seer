@@ -5,7 +5,6 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, LlmClient
-from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
@@ -50,16 +49,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         for file_path, file_missing_obj in missing_changes_by_file.items():
             new_response = llm_client.generate_text(
                 model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
-                messages=[
-                    Message(
-                        role="user",
-                        content=CodingPrompts.format_incorrect_diff_fixer(
-                            file_path,
-                            file_missing_obj.diff_chunks,
-                            file_missing_obj.file_content,
-                        ),
-                    )
-                ],
+                prompt=CodingPrompts.format_incorrect_diff_fixer(
+                    file_path,
+                    file_missing_obj.diff_chunks,
+                    file_missing_obj.file_content,
+                ),
                 temperature=0.0,
                 run_name="Incorrect Diff Fixer",
             )
