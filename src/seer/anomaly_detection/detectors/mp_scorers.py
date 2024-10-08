@@ -7,16 +7,14 @@ import numpy.typing as npt
 import sentry_sdk
 from pydantic import BaseModel, Field
 
-from seer.anomaly_detection.detectors.location_detectors import (
-    PointLocation,
-    ProphetLocationDetector,
-)
+from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
     AnomalyFlags,
     Directions,
     Sensitivities,
 )
+from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 from seer.tags import AnomalyDetectionTags
 
@@ -305,6 +303,7 @@ class MPIQRScorer(MPScorer):
             return "none"
         return "anomaly_higher_confidence"
 
+    @inject
     def _adjust_flag_for_direction(
         self,
         flag: AnomalyFlags,
@@ -313,6 +312,7 @@ class MPIQRScorer(MPScorer):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
+        location_detector: LocationDetector = injected,
     ) -> AnomalyFlags:
         """
         Adjusts the anomaly flag based on the specified direction and time series context.
@@ -334,8 +334,7 @@ class MPIQRScorer(MPScorer):
         """
         if flag == "none" or direction == "both":
             return flag
-        # trend_detector = LinearRegressionLocationDetector()
-        location_detector = ProphetLocationDetector()
+
         location = location_detector.detect(
             streamed_value, streamed_timestamp, history_values, history_timestamps
         )

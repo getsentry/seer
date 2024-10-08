@@ -97,8 +97,8 @@ class ProphetLocationDetector(LocationDetector):
 
     """
 
-    uncertainty_samples: bool = Field(
-        default=True, description="Whether to use uncertainty samples for Prophet"
+    uncertainty_samples: int = Field(
+        default=25, description="Whether to use uncertainty samples for Prophet"
     )
 
     @sentry_sdk.trace
@@ -135,7 +135,7 @@ class ProphetLocationDetector(LocationDetector):
 
         # Predict and compare with streamed value
         forecast = model.predict(future)
-        if self.uncertainty_samples:
+        if self.uncertainty_samples > 0:
             prophet_trend_upper = forecast.loc[len(forecast) - 1]["trend_upper"]
             prophet_trend_lower = forecast.loc[len(forecast) - 1]["trend_lower"]
             if streamed_value > prophet_trend_upper:
