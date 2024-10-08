@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(time_limit=30)
 def raise_an_exception():
-    num = 1 / 0  # TODO remove this
-    print(num)
+    # Raise a TypeError by attempting to concatenate a string with an integer
+    # TODO remove this
+    result = "This will cause an error: " + 42
+    print(result)
 
 
 @celery_app.task(time_limit=30)
