@@ -27,6 +27,20 @@ class AutofixAgent(LlmAgent):
         super().__init__(config=config, tools=tools, memory=memory, name=name)
         self.context = context
 
+    @property
+    def queued_user_messages(self):
+        state = self.context.state.get()
+        if state.steps:
+            return state.steps[-1].queued_user_messages
+        return []
+
+    @queued_user_messages.setter
+    def queued_user_messages(self, value: list[str]):
+        with self.context.state.update() as cur:
+            if not cur.steps:
+                raise ValueError("No step to set queued user messages for")
+            cur.steps[-1].queued_user_messages = value
+
     def should_continue(self, run_config: RunConfig) -> bool:
         if self.context.state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return False
@@ -43,7 +57,7 @@ class AutofixAgent(LlmAgent):
         completion = self.get_completion(run_config)
 
         # interrupt if user message is queued and awaiting handling
-        if self.context.state.get().steps[-1].queued_user_messages:
+        if self.queued_user_messages:
             self.use_user_messages()
             return
 
@@ -78,7 +92,7 @@ class AutofixAgent(LlmAgent):
 
     def use_user_messages(self):
         # adds any queued user messages to the memory
-        user_msgs = self.context.state.get().steps[-1].queued_user_messages
+        user_msgs = self.queued_user_messages
         if user_msgs:
             # enforce alternating user/assistant messages
             msg = "\n".join(user_msgs)
@@ -90,8 +104,7 @@ class AutofixAgent(LlmAgent):
                     break
             self.memory.append(Message(content=msg, role="user"))
 
-            with self.context.state.update() as cur:
-                cur.steps[-1].queued_user_messages = []
+            self.queued_user_messages = []
             self.context.event_manager.add_log(
                 "Thanks for the input. I'm thinking through it now..."
             )

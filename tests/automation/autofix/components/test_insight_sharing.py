@@ -139,3 +139,18 @@ class TestInsightSharingComponent:
 
         # make sure no error is raised
         component.invoke(request, mock_llm_client)
+
+    def test_exception_is_caught(self, component, mock_llm_client):
+        request = InsightSharingRequest(
+            task_description="Test task",
+            latest_thought="Latest thought",
+            past_insights=["Past insight 1"],
+            memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
+        )
+
+        mock_llm_client.generate_text.side_effect = Exception("Test exception")
+
+        # make sure no error is raised
+        result = component.invoke(request, mock_llm_client)
+        assert result is None
