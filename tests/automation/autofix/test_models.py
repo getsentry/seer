@@ -579,7 +579,7 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertEqual(result, cause)
         self.assertEqual(instruction, "test")
 
-        root_cause_step.selection = CustomRootCauseSelection("root cause")
+        root_cause_step.selection = CustomRootCauseSelection(custom_root_cause="root cause")
         self.continuation.steps = [root_cause_step]
         result, instruction = self.continuation.get_selected_root_cause_and_fix()
         self.assertEqual(result, "root cause")
