@@ -396,7 +396,11 @@ class RepoClient:
         return branch_ref
 
     def create_pr_from_branch(
-        self, branch: GitRef, title: str, description: str, provided_base: str | None = None
+        self,
+        branch: GitRef,
+        title: str,
+        description: str,
+        provided_base: str | None = None,
     ):
         return self.repo.create_pull(
             title=title,

@@ -4,6 +4,13 @@ import pytest
 from johen import generate
 from langfuse.client import DatasetItemClient
 
+from seer.automation.agent.models import (
+    LlmGenerateTextResponse,
+    LlmProviderType,
+    LlmResponseMetadata,
+    Message,
+    Usage,
+)
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     RootCauseRelevantCodeSnippet,
@@ -44,7 +51,6 @@ class TestSyncRunEvaluationOnItem:
             ],
             issue=IssueDetails(id=1, title="Test Issue", short_id="1", events=[]),
             invoking_user=AutofixUserDetails(id=1, display_name="Test User"),
-            base_commit_sha="abcdef1234567890",
             instruction="Fix the bug",
             options=AutofixRequestOptions(),
         )
@@ -92,8 +98,6 @@ class TestSyncRunEvaluationOnItem:
                 id=1,
                 title="Test Cause",
                 description="Test Description",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce",
                 code_context=[
                     RootCauseRelevantContext(
@@ -201,8 +205,6 @@ class TestSyncRunEvaluationOnItem:
                     id=1,
                     title="Test Cause",
                     description="Test cause description",
-                    likelihood=0.8,
-                    actionability=0.7,
                     reproduction="Steps to reproduce",
                     code_context=[],
                 )
@@ -233,8 +235,6 @@ class TestSyncRunEvaluationOnItem:
                     id=1,
                     title="Test Cause",
                     description="Test cause description",
-                    likelihood=0.8,
-                    actionability=0.7,
                     reproduction="Steps to reproduce",
                     code_context=[
                         RootCauseRelevantContext(
@@ -289,7 +289,6 @@ class TestSyncRunRootCause:
             ],
             issue=IssueDetails(id=1, title="Test Issue", short_id="1", events=[]),
             invoking_user=AutofixUserDetails(id=1, display_name="Test User"),
-            base_commit_sha="abcdef1234567890",
             instruction="Fix the bug",
             options=AutofixRequestOptions(),
         )
@@ -323,8 +322,6 @@ class TestSyncRunRootCause:
                 id=1,
                 title="Test Cause",
                 description="Test Description",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce",
                 code_context=[
                     RootCauseRelevantContext(
@@ -393,20 +390,25 @@ class TestScoreRootCauseSingleIt:
                     id=1, title="Test Issue", short_id="1", events=[next(generate(SentryEventData))]
                 ),
                 invoking_user=AutofixUserDetails(id=1, display_name="Test User"),
-                base_commit_sha="abcdef1234567890",
                 instruction="Fix the bug",
                 options=AutofixRequestOptions(),
             ).model_dump()
         }
         return mock_item
 
-    @patch("seer.automation.autofix.evaluations.GptClient")
-    def test_score_root_cause_single_it(self, mock_gpt_client, mock_dataset_item):
-        mock_gpt_instance = Mock()
-        mock_gpt_client.return_value = mock_gpt_instance
-        mock_gpt_instance.completion.return_value = (
-            Mock(content="<score_1>0.8</score_1><score_2>0.6</score_2>"),
-            None,
+    @patch("seer.automation.autofix.evaluations.LlmClient")
+    def test_score_root_cause_single_it(self, mock_llm_client, mock_dataset_item):
+        mock_llm_instance = Mock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(
+                role="assistant", content="<score_1>0.8</score_1><score_2>0.6</score_2>"
+            ),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
         )
 
         causes = [
@@ -414,16 +416,12 @@ class TestScoreRootCauseSingleIt:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce 1",
             ),
             RootCauseAnalysisItem(
                 id=2,
                 title="Cause 2",
                 description="Description 2",
-                likelihood=0.6,
-                actionability=0.5,
                 reproduction="Steps to reproduce 2",
             ),
         ]
@@ -431,21 +429,26 @@ class TestScoreRootCauseSingleIt:
         result = score_root_cause_single_it(mock_dataset_item, causes, model="test_model")
 
         assert result == [0.8, 0.6]
-        mock_gpt_instance.completion.assert_called_once()
+        mock_llm_instance.generate_text.assert_called_once()
 
-    @patch("seer.automation.autofix.evaluations.GptClient")
-    def test_score_root_cause_single_it_no_score(self, mock_gpt_client, mock_dataset_item):
-        mock_gpt_instance = Mock()
-        mock_gpt_client.return_value = mock_gpt_instance
-        mock_gpt_instance.completion.return_value = (Mock(content="No score provided"), None)
+    @patch("seer.automation.autofix.evaluations.LlmClient")
+    def test_score_root_cause_single_it_no_score(self, mock_llm_client, mock_dataset_item):
+        mock_llm_instance = Mock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(role="assistant", content="No score provided"),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
         causes = [
             RootCauseAnalysisItem(
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce",
             )
         ]
@@ -462,8 +465,6 @@ class TestScoreRootCauseSingleIt:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce",
             )
         ]
@@ -486,16 +487,12 @@ class TestScoreRootCauses:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce 1",
             ),
             RootCauseAnalysisItem(
                 id=2,
                 title="Cause 2",
                 description="Description 2",
-                likelihood=0.6,
-                actionability=0.5,
                 reproduction="Steps to reproduce 2",
             ),
         ]
@@ -516,16 +513,12 @@ class TestScoreRootCauses:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                likelihood=0.8,
-                actionability=0.7,
                 reproduction="Steps to reproduce 1",
             ),
             RootCauseAnalysisItem(
                 id=2,
                 title="Cause 2",
                 description="Description 2",
-                likelihood=0.6,
-                actionability=0.5,
                 reproduction="Steps to reproduce 2",
             ),
         ]
@@ -554,29 +547,42 @@ class TestScoreFixSingleIt:
                     id=1, title="Test Issue", short_id="1", events=[next(generate(SentryEventData))]
                 ),
                 invoking_user=AutofixUserDetails(id=1, display_name="Test User"),
-                base_commit_sha="abcdef1234567890",
                 instruction="Fix the bug",
                 options=AutofixRequestOptions(),
             ).model_dump()
         }
         return mock_item
 
-    @patch("seer.automation.autofix.evaluations.GptClient")
-    def test_score_fix_single_it(self, mock_gpt_client, mock_dataset_item):
-        mock_gpt_instance = Mock()
-        mock_gpt_client.return_value = mock_gpt_instance
-        mock_gpt_instance.completion.return_value = (Mock(content="<score>0.8</score>"), None)
+    @patch("seer.automation.autofix.evaluations.LlmClient")
+    def test_score_fix_single_it(self, mock_llm_client, mock_dataset_item):
+        mock_llm_instance = Mock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(role="assistant", content="<score>0.8</score>"),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
         result = score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 
         assert result == 0.8
-        mock_gpt_instance.completion.assert_called_once()
+        mock_llm_instance.generate_text.assert_called_once()
 
-    @patch("seer.automation.autofix.evaluations.GptClient")
-    def test_score_fix_single_it_no_score(self, mock_gpt_client, mock_dataset_item):
-        mock_gpt_instance = Mock()
-        mock_gpt_client.return_value = mock_gpt_instance
-        mock_gpt_instance.completion.return_value = (Mock(content="No score provided"), None)
+    @patch("seer.automation.autofix.evaluations.LlmClient")
+    def test_score_fix_single_it_no_score(self, mock_llm_client, mock_dataset_item):
+        mock_llm_instance = Mock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(role="assistant", content="No score provided"),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
         result = score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 

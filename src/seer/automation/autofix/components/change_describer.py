@@ -3,10 +3,10 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GptClient
-from seer.automation.agent.models import Message
+from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
+from seer.dependency_injection import inject, injected
 
 
 class ChangeDescriptionRequest(BaseComponentRequest):
@@ -50,22 +50,24 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
 
     @observe(name="Change Describer")
     @ai_track(description="Change Describer")
-    def invoke(self, request: ChangeDescriptionRequest) -> ChangeDescriptionOutput | None:
-        prompt = ChangeDescriptionPrompts.format_default_msg(
-            change_dump=request.change_dump,
-            hint=request.hint,
+    @inject
+    def invoke(
+        self, request: ChangeDescriptionRequest, llm_client: LlmClient = injected
+    ) -> ChangeDescriptionOutput | None:
+        output = llm_client.generate_structured(
+            prompt=ChangeDescriptionPrompts.format_default_msg(
+                change_dump=request.change_dump,
+                hint=request.hint,
+            ),
+            model=OpenAiProvider.model("gpt-4o-mini"),
+            response_format=ChangeDescriptionOutput,
         )
-
-        data, message, usage = GptClient().json_completion(
-            [Message(role="user", content=prompt)],
-        )
+        data = output.parsed
 
         with self.context.state.update() as cur:
-            cur.usage += usage
+            cur.usage += output.metadata.usage
 
-        if data is None or "title" not in data or "description" not in data:
+        if data is None:
             return None
 
-        return ChangeDescriptionOutput(
-            title=data.get("title", ""), description=data.get("description", "")
-        )
+        return data

@@ -3,9 +3,9 @@ import logging
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, ClaudeAgent
-from seer.automation.agent.client import ClaudeClient
-from seer.automation.agent.models import Message
+from seer.automation.agent.agent import AgentConfig, RunConfig
+from seer.automation.agent.client import AnthropicProvider, LlmClient
+from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodingOutput,
@@ -44,30 +44,29 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     def _handle_missing_file_changes(
         self,
         missing_changes_by_file: dict[str, FileMissingObj],
-        claude_client: ClaudeClient = injected,
+        llm_client: LlmClient = injected,
     ):
         for file_path, file_missing_obj in missing_changes_by_file.items():
-            new_response, usage = claude_client.completion(
-                model="claude-3-5-sonnet@20240620",
-                messages=[
-                    Message(
-                        role="user",
-                        content=CodingPrompts.format_incorrect_diff_fixer(
-                            file_path,
-                            file_missing_obj.diff_chunks,
-                            file_missing_obj.file_content,
-                        ),
-                    )
-                ],
+            new_response = llm_client.generate_text(
+                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                prompt=CodingPrompts.format_incorrect_diff_fixer(
+                    file_path,
+                    file_missing_obj.diff_chunks,
+                    file_missing_obj.file_content,
+                ),
+                temperature=0.0,
+                run_name="Incorrect Diff Fixer",
             )
 
             with self.context.state.update() as cur:
-                cur.usage += usage
+                cur.usage += new_response.metadata.usage
 
-            if not new_response.content:
+            if not new_response.message.content:
                 continue
 
-            corrected_diffs = extract_text_inside_tags(new_response.content, "corrected_diffs")
+            corrected_diffs = extract_text_inside_tags(
+                new_response.message.content, "corrected_diffs"
+            )
             new_task = file_missing_obj.task.model_copy(update={"diff": corrected_diffs})
 
             changes, missing_changes = task_to_file_change(new_task, file_missing_obj.file_content)
@@ -90,12 +89,12 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     @ai_track(description="Plan+Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         with BaseTools(self.context) as tools:
-            agent = ClaudeAgent(
+            agent = AutofixAgent(
                 tools=tools.get_tools(),
-                config=AgentConfig(
-                    system_prompt=CodingPrompts.format_system_msg(), interactive=True
-                ),
+                config=AgentConfig(interactive=True),
                 memory=request.initial_memory,
+                context=self.context,
+                name="Plan+Code",
             )
 
             task_str = (
@@ -109,20 +108,24 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             state = self.context.state.get()
 
             response = agent.run(
-                (
-                    CodingPrompts.format_fix_discovery_msg(
-                        event=request.event_details.format_event(),
-                        task_str=task_str,
-                        summary=request.summary,
-                        repo_names=[repo.full_name for repo in state.request.repos],
-                        instruction=request.instruction,
-                        fix_instruction=request.fix_instruction,
-                    )
-                    if not request.initial_memory
-                    else None
+                run_config=RunConfig(
+                    prompt=(
+                        CodingPrompts.format_fix_discovery_msg(
+                            event=request.event_details.format_event(),
+                            task_str=task_str,
+                            summary=request.summary,
+                            repo_names=[repo.full_name for repo in state.request.repos],
+                            instruction=request.instruction,
+                            fix_instruction=request.fix_instruction,
+                        )
+                        if not request.initial_memory
+                        else None
+                    ),
+                    system_prompt=CodingPrompts.format_system_msg(),
+                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    memory_storage_key="plan_and_code",
+                    run_name="Plan",
                 ),
-                context=self.context,
-                name="plan_and_code",
             )
 
             prev_usage = agent.usage
@@ -133,7 +136,14 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 self.context.store_memory("plan_and_code", agent.memory)
                 return None
 
-            final_response = agent.run(CodingPrompts.format_fix_msg())
+            final_response = agent.run(
+                RunConfig(
+                    prompt=CodingPrompts.format_fix_msg(),
+                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    memory_storage_key="plan_and_code",
+                    run_name="Code",
+                ),
+            )
 
             self.context.store_memory("plan_and_code", agent.memory)
 
@@ -164,7 +174,14 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             if missing_files_errors or file_exist_errors:
                 new_response = agent.run(
-                    CodingPrompts.format_missing_msg(missing_files_errors, file_exist_errors),
+                    RunConfig(
+                        prompt=CodingPrompts.format_missing_msg(
+                            missing_files_errors, file_exist_errors
+                        ),
+                        model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                        memory_storage_key="plan_and_code",
+                        run_name="Missing File Fix",
+                    ),
                 )
 
                 if new_response and "<plan_steps>" in new_response:

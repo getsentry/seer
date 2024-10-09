@@ -3,6 +3,8 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from johen import generate
 
+from seer.automation.agent.client import LlmGenerateStructuredResponse, LlmResponseMetadata
+from seer.automation.agent.models import LlmProviderType, Usage
 from seer.automation.models import IssueDetails
 from seer.automation.summarize.issue import IssueSummary, run_summarize_issue, summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
@@ -10,7 +12,7 @@ from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIss
 
 class TestSummarizeIssue:
     @pytest.fixture
-    def mock_gpt_client(self):
+    def mock_llm_client(self):
         return Mock()
 
     @pytest.fixture
@@ -20,7 +22,7 @@ class TestSummarizeIssue:
             group_id=1, issue=next(iterator), connected_issues=[next(iterator), next(iterator)]
         )
 
-    def test_summarize_issue_success(self, mock_gpt_client, sample_request):
+    def test_summarize_issue_success(self, mock_llm_client, sample_request):
         mock_structured_completion = MagicMock()
         mock_raw_summary = MagicMock(
             reason_step_by_step=[],
@@ -30,11 +32,16 @@ class TestSummarizeIssue:
         )
         mock_structured_completion.choices[0].message.parsed = mock_raw_summary
         mock_structured_completion.choices[0].message.refusal = None
-        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
-            mock_structured_completion
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=mock_raw_summary,
+            metadata=LlmResponseMetadata(
+                model="gpt-4o-mini-2024-07-18",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+            ),
         )
 
-        result, raw_result = summarize_issue(sample_request, gpt_client=mock_gpt_client)
+        result, raw_result = summarize_issue(sample_request, llm_client=mock_llm_client)
 
         assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 1
@@ -43,70 +50,35 @@ class TestSummarizeIssue:
         assert result.headline == "Test headline"
         assert raw_result == mock_raw_summary
 
-    def test_summarize_issue_refusal(self, mock_gpt_client, sample_request):
-        mock_structured_completion = MagicMock()
-        mock_structured_completion.choices[0].message.refusal = "I refuse!"
-        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
-            mock_structured_completion
-        )
-
-        with pytest.raises(RuntimeError, match="I refuse!"):
-            summarize_issue(sample_request, gpt_client=mock_gpt_client)
-
-    def test_summarize_issue_parsing_failure(self, mock_gpt_client, sample_request):
-
-        mock_structured_completion = MagicMock()
-        mock_structured_completion.choices[0].message.parsed = None
-        mock_structured_completion.choices[0].message.refusal = None
-        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
-            mock_structured_completion
-        )
-
-        with pytest.raises(RuntimeError, match="Failed to parse message"):
-            summarize_issue(sample_request, gpt_client=mock_gpt_client)
-
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
-    def test_summarize_issue_event_details(self, mock_from_event, mock_gpt_client, sample_request):
+    def test_summarize_issue_event_details(self, mock_from_event, mock_llm_client, sample_request):
         mock_event_details = Mock()
         mock_event_details.format_event.side_effect = ["foo details", "bar details", "baz details"]
         mock_from_event.return_value = mock_event_details
 
-        mock_structured_completion = MagicMock()
-        mock_structured_completion.choices[0].message.parsed = MagicMock(
-            reason_step_by_step=[],
-            summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
-            summary_of_the_functionality_affected="Test functionality",
-            five_to_ten_word_headline="Test headline",
-        )
-        mock_structured_completion.choices[0].message.refusal = None
-        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = (
-            mock_structured_completion
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=MagicMock(
+                reason_step_by_step=[],
+                summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
+                summary_of_the_functionality_affected="Test functionality",
+                five_to_ten_word_headline="Test headline",
+            ),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+            ),
         )
 
-        summarize_issue(sample_request, gpt_client=mock_gpt_client)
+        summarize_issue(sample_request, llm_client=mock_llm_client)
 
         mock_from_event.assert_any_call(sample_request.issue.events[0])
         mock_from_event.assert_any_call(sample_request.connected_issues[0].events[0])
         mock_from_event.assert_any_call(sample_request.connected_issues[1].events[0])
         assert mock_event_details.format_event.call_count == 3
-        assert (
-            "foo details"
-            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
-                0
-            ]["content"]
-        )
-        assert (
-            "bar details"
-            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
-                0
-            ]["content"]
-        )
-        assert (
-            "baz details"
-            in mock_gpt_client.openai_client.beta.chat.completions.parse.call_args[1]["messages"][
-                0
-            ]["content"]
-        )
+        assert "foo details" in mock_llm_client.generate_structured.call_args[1]["prompt"]
+        assert "bar details" in mock_llm_client.generate_structured.call_args[1]["prompt"]
+        assert "baz details" in mock_llm_client.generate_structured.call_args[1]["prompt"]
 
 
 class TestRunSummarizeIssue:
