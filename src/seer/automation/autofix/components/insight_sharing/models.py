@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from seer.automation.agent.models import Message
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
