@@ -11,14 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(time_limit=30)
-def raise_an_exception():
-    # Raise a KeyError by attempting to access a non-existent key in a dictionary
-    my_dict = {"a": 1, "b": 2, "c": 3}
-    non_existent_value = my_dict["d"]
-    print(non_existent_value)
-
-
-@celery_app.task(time_limit=30)
 def delete_data_for_ttl():
     logger.info("Deleting old automation runs and issue summaries for 90 day time-to-live")
     before = datetime.datetime.now() - datetime.timedelta(days=90)  # over 90 days old
