@@ -166,9 +166,10 @@ class BaseStep(BaseModel):
             return False
 
 
+
 class DefaultStep(BaseStep):
     type: Literal[StepType.DEFAULT] = StepType.DEFAULT
-    insights: list[InsightSharingOutput] = []
+    insights: list[InsightSharingOutput] = Field(default_factory=list)
 
 
 class RootCauseStep(BaseStep):
