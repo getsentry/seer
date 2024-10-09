@@ -585,6 +585,12 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertEqual(result, "root cause")
         self.assertIsNone(instruction)
 
+        root_cause_step.selection = None
+        self.continuation.steps = [root_cause_step]
+        result, instruction = self.continuation.get_selected_root_cause_and_fix()
+        self.assertEqual(result, None)
+        self.assertIsNone(instruction)
+
     def test_mark_triggered(self):
         with patch("datetime.datetime") as mock_datetime:
             mock_now = datetime.datetime.now()
