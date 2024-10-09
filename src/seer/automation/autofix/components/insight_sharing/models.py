@@ -51,4 +51,4 @@ class InsightSharingOutput(BaseComponentOutput):
     stacktrace_context: list[StacktraceContext]
     breadcrumb_context: list[BreadcrumbContext]
     justification: str
-    generated_at_memory_index: int
+    generated_at_memory_index: int = Field(default=-1)
