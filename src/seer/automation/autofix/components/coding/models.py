@@ -19,6 +19,7 @@ class CodingRequest(BaseComponentRequest):
     event_details: EventDetails
     root_cause_and_fix: RootCauseAnalysisItem | str
     instruction: str | None = None
+    fix_instruction: str | None = None
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
 
