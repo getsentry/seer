@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(time_limit=30)
 def raise_an_exception():
-    # Raise an IndexError by attempting to access an index that doesn't exist
-    my_list = [1, 2, 3]
-    out_of_bounds_element = my_list[10]
-    print(out_of_bounds_element)
+    # Raise a KeyError by attempting to access a non-existent key in a dictionary
+    my_dict = {"a": 1, "b": 2, "c": 3}
+    non_existent_value = my_dict["d"]
+    print(non_existent_value)
 
 
 @celery_app.task(time_limit=30)
