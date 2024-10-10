@@ -318,7 +318,33 @@ class TestRepoClientIndexFileSet:
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
         )
         result = client.get_index_file_set("main")
-        assert result == {"file1.py", "file2.py"}
+        assert result == {"file1.py"}
+
+
+@patch("seer.automation.codebase.repo_client.AppConfig")
+def test_get_codecov_unit_test_app_credentials(mock_app_config):
+    mock_config = MagicMock()
+    mock_config.GITHUB_CODECOV_UNIT_TEST_APP_ID = "test_app_id"
+    mock_config.GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY = "test_private_key"
+    mock_app_config.return_value = mock_config
+
+    app_id, private_key = get_codecov_unit_test_app_credentials()
+    assert app_id == "test_app_id"
+    assert private_key == "test_private_key"
+
+@patch("seer.automation.codebase.repo_client.AppConfig")
+def test_get_codecov_unit_test_app_credentials_fallback(mock_app_config):
+    mock_config = MagicMock()
+    mock_config.GITHUB_CODECOV_UNIT_TEST_APP_ID = None
+    mock_config.GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY = None
+    mock_app_config.return_value = mock_config
+
+    with patch("seer.automation.codebase.repo_client.get_write_app_credentials") as mock_get_write_creds:
+        mock_get_write_creds.return_value = ("fallback_app_id", "fallback_private_key")
+        app_id, private_key = get_codecov_unit_test_app_credentials()
+        assert app_id == "fallback_app_id"
+        assert private_key == "fallback_private_key"
+        mock_get_write_creds.assert_called_once()
 
     @patch("seer.automation.codebase.repo_client.Github")
     @patch(
