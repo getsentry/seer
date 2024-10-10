@@ -1,5 +1,5 @@
 import datetime
-import logging
+import logging, random
 
 import sentry_sdk
 import sqlalchemy.sql as sql
@@ -10,18 +10,37 @@ from seer.db import DbIssueSummary, DbRunState, Session
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(time_limit=30)
-def raise_an_exception():
-    import random
 
+
+@celery_app.task(time_limit=30)
+def simulate_random_exception():
+    """
+    Simulates random exceptions for testing purposes.
+    
+    This function has a 1/3 chance of raising each of the following:
+    - ValueError
+    - TypeError
+    - ZeroDivisionError (to maintain compatibility with previous behavior)
+    
+    It logs the outcome of each attempt.
+    """
     for i in range(10):
         random_int = random.randint(0, 2)
+        
+        if random_int == 0:
+            logger.info("Simulating a ValueError")
+            raise ValueError("Simulated ValueError for testing")
+        elif random_int == 1:
+            logger.info("Simulating a TypeError")
+            raise TypeError("Simulated TypeError for testing")
+        else:
+            logger.info("Simulating a ZeroDivisionError")
+            raise ZeroDivisionError("Simulated ZeroDivisionError for testing")
+    
+    # This line should never be reached, but we'll add it as a fallback
+    raise RuntimeError("Unexpected: No exception raised in 10 iterations")
 
-        result = 5 / random_int
-        logger.info(f"Result of 5 divided by {random_int} is {result}")
-
-
-@celery_app.task(time_limit=30)
+# ... (rest of the file remains unchanged)
 def delete_data_for_ttl():
     logger.info("Deleting old automation runs and issue summaries for 90 day time-to-live")
     before = datetime.datetime.now() - datetime.timedelta(days=90)  # over 90 days old
