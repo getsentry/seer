@@ -173,6 +173,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     file_exist_errors.append(task.file_path)
 
             if missing_files_errors or file_exist_errors:
+                agent.config.interactive = False
                 new_response = agent.run(
                     RunConfig(
                         prompt=CodingPrompts.format_missing_msg(
