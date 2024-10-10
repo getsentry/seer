@@ -99,7 +99,7 @@ class AutofixCodingStep(AutofixPipelineStep):
 
         self.context.event_manager.send_coding_result(coding_output)
 
-        pr_to_comment_on = state.request.options.comment_on_pr_with_url is not None
+        pr_to_comment_on = state.request.options.comment_on_pr_with_url
         self.next(
             AutofixChangeDescriberStep.get_signature(
                 AutofixChangeDescriberRequest(
