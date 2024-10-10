@@ -11,14 +11,16 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(time_limit=30)
-def raise_an_exception():
-    import random
+def buggy_code():
+    user_data = [
+        {"name": "Alice", "age": 30},
+        {"name": "Bob", "age": "25"},
+        {"name": "Charlie", "age": None},
+        {"name": "David", "age": 40},
+    ]
 
-    for i in range(10):
-        random_int = random.randint(0, 2)
-
-        result = 5 / random_int
-        logger.info(f"Result of 5 divided by {random_int} is {result}")
+    for user in user_data:
+        print(user["age"] * 12)  # type: ignore[index]
 
 
 @celery_app.task(time_limit=30)

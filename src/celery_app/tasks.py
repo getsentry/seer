@@ -6,7 +6,7 @@ import seer.app  # noqa: F401
 from celery_app.app import celery_app as celery  # noqa: F401
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
-from seer.automation.tasks import delete_data_for_ttl, raise_an_exception
+from seer.automation.tasks import buggy_code, delete_data_for_ttl
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
@@ -28,7 +28,7 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
         # TODO remove this task, it's just for testing in prod; throws an error every minute
         sender.add_periodic_task(
             crontab(minute="*", hour="*"),
-            raise_an_exception.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
+            buggy_code.signature(kwargs={}, queue=CeleryQueues.DEFAULT),
             name="Intentionally raise an error",
         )
 
