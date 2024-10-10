@@ -7,21 +7,40 @@ import sqlalchemy.sql as sql
 from celery_app.app import celery_app
 from seer.db import DbIssueSummary, DbRunState, Session
 
+
 logger = logging.getLogger(__name__)
 
+def safe_int_conversion(value, default=0):
+    """
+    Safely convert a value to an integer.
+    Returns the default value if conversion is not possible.
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(f"Could not convert '{value}' to int. Using default: {default}")
+        return default
 
 @celery_app.task(time_limit=30)
 def buggy_code():
     user_data = [
         {"name": "Alice", "age": 30},
-        {"name": "Bob", "age": "25"},
+        {"name": "Bob", "age": 25},
         {"name": "Charlie", "age": None},
         {"name": "David", "age": 40},
     ]
 
     for user in user_data:
-        print(user["age"] * 12)  # type: ignore[index]
+        age = safe_int_conversion(user["age"])
+        monthly_age = age * 12
+        logger.info(f"User: {user['name']}, Age in months: {monthly_age}")
 
+    return [
+        {"name": user["name"], "age_in_months": safe_int_conversion(user["age"]) * 12}
+        for user in user_data
+    ]
 
 @celery_app.task(time_limit=30)
 def delete_data_for_ttl():
