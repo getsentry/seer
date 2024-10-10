@@ -20,7 +20,7 @@ def buggy_code():
     ]
 
     for user in user_data:
-        _ = user["age"] * 12
+        print(user["age"] * 12)
 
 
 @celery_app.task(time_limit=30)
