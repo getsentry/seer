@@ -148,11 +148,6 @@ def run_autofix_root_cause(
         queue=CeleryQueues.DEFAULT,
     ).apply_async()
 
-    try:  # TODO: revisit
-        logger.info(cur_state.run_identifier)
-    except AttributeError as e:
-        sentry_sdk.capture_exception(e)
-
     return cur_state.run_id
 
 
