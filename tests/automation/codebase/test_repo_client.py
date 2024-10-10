@@ -4,8 +4,10 @@ import pytest
 from github import UnknownObjectException
 from pydantic import ValidationError
 
-from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.models import RepoDefinition
+
+
 
 
 @pytest.fixture
