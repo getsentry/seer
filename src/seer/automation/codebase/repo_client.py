@@ -452,6 +452,17 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.text
 
+    def _get_auth_headers(self):
+        requester = self.repo._requester
+        if requester.auth is None:
+            raise Exception("No auth token found for GitHub API")
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {requester.auth.token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        return headers
+
     def comment_root_cause_on_pr_for_copilot(
         self, pr_url: str, run_id: int, issue_id: int, comment: str
     ):
@@ -468,14 +479,25 @@ class RepoClient:
                 }
             ],
         }
-        requester = self.repo._requester
-        if requester.auth is None:
-            raise Exception("No auth token found for GitHub API")
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {requester.auth.token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+
+    def comment_pr_generated_for_copilot(
+        self, pr_to_comment_on_url: str, new_pr_url: str, run_id: int
+    ):
+        pull_id = int(pr_to_comment_on_url.split("/")[-1])
+        repo_name = pr_to_comment_on_url.split("github.com/")[1].split("/pull")[
+            0
+        ]  # should be "owner/repo"
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pull_id}/comments"
+
+        comment = f"A fix has been generated and is available [here]({new_pr_url}) for your review. Autofix Run ID: {run_id}"
+
+        params = {"body": comment}
+
+        headers = self._get_auth_headers()
+
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
 
