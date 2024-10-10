@@ -12,10 +12,13 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(time_limit=30)
 def raise_an_exception():
-    # Raise a KeyError by attempting to access a non-existent key in a dictionary
-    my_dict = {"a": 1, "b": 2, "c": 3}
-    non_existent_value = my_dict["d"]
-    print(non_existent_value)
+    import random
+
+    for i in range(10):
+        random_int = random.randint(0, 2)
+
+        result = 5 / random_int
+        logger.info(f"Result of 5 divided by {random_int} is {result}")
 
 
 @celery_app.task(time_limit=30)
