@@ -201,7 +201,12 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
-    def commit_changes(self, repo_external_id: str | None = None, repo_id: int | None = None):
+    def commit_changes(
+        self,
+        repo_external_id: str | None = None,
+        repo_id: int | None = None,
+        pr_to_comment_on_url: str | None = None,
+    ):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
                 if (
@@ -252,7 +257,12 @@ class AutofixContext(PipelineContext):
                                 if state.request.issue.short_id
                                 else issue_url
                             )
-                            ref_note = f"Fixes {issue_link}\n"
+                            suspect_pr_link = (
+                                f", which was likely introduced in [this PR]({pr_to_comment_on_url})."
+                                if pr_to_comment_on_url
+                                else ""
+                            )
+                            ref_note = f"Fixes {issue_link}{suspect_pr_link}\n"
 
                         pr_description = textwrap.dedent(
                             """\
@@ -297,6 +307,15 @@ class AutofixContext(PipelineContext):
                             )
                             session.add(pr_id_mapping)
                             session.commit()
+
+                        if (
+                            pr_to_comment_on_url
+                        ):  # for GitHub Copilot, leave a comment that the PR is made
+                            repo_client.comment_pr_generated_for_copilot(
+                                pr_to_comment_on_url=pr_to_comment_on_url,
+                                new_pr_url=pr.html_url,
+                                run_id=state.run_id,
+                            )
 
     def comment_root_cause_on_pr(
         self, pr_url: str, repo_definition: RepoDefinition, root_cause: str

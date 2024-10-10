@@ -479,6 +479,32 @@ class RepoClient:
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
 
+    def comment_pr_generated_for_copilot(
+        self, pr_to_comment_on_url: str, new_pr_url: str, run_id: int
+    ):
+        pull_id = int(pr_to_comment_on_url.split("/")[-1])
+        repo_name = pr_to_comment_on_url.split("github.com/")[1].split("/pull")[
+            0
+        ]  # should be "owner/repo"
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pull_id}/comments"
+
+        comment = f"A fix has been generated and is available [here]({new_pr_url}) for your review. Autofix Run ID: {run_id}"
+
+        params = {"body": comment}
+
+        requester = self.repo._requester
+        if requester.auth is None:
+            raise Exception("No auth token found for GitHub API")
+
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {requester.auth.token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+
     def get_pr_head_sha(self, pr_url: str) -> str:
         requester = self.repo._requester
         headers = {

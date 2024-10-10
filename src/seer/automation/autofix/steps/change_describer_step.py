@@ -18,7 +18,7 @@ from seer.automation.pipeline import PipelineStepTaskRequest
 
 
 class AutofixChangeDescriberRequest(PipelineStepTaskRequest):
-    should_make_pr_automatically: bool = False
+    pr_to_comment_on: str | None = None
 
 
 @celery_app.task(
@@ -97,6 +97,10 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         )
 
         # GitHub Copilot can automatically make a PR after the coding step
-        if self.request.should_make_pr_automatically:
+        if self.request.pr_to_comment_on:  # TODO
             for repo in cur_state.request.repos:
-                self.context.commit_changes(repo_external_id=repo.external_id, repo_id=None)
+                self.context.commit_changes(
+                    repo_external_id=repo.external_id,
+                    repo_id=None,
+                    pr_to_comment_on_url=self.request.pr_to_comment_on,
+                )
