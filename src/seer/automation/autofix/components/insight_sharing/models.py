@@ -41,7 +41,7 @@ class InsightSharingRequest(BaseComponentRequest):
     task_description: str
     memory: list[Message]
     past_insights: list[str]
-    generated_at_memory_index: int
+    generated_at_memory_index: int = -1
 
 
 class InsightSharingOutput(BaseComponentOutput):
@@ -51,4 +51,4 @@ class InsightSharingOutput(BaseComponentOutput):
     stacktrace_context: list[StacktraceContext]
     breadcrumb_context: list[BreadcrumbContext]
     justification: str
-    generated_at_memory_index: int
+    generated_at_memory_index: int = -1
