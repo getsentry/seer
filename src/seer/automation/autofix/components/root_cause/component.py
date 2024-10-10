@@ -72,13 +72,16 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 # Ask for reproduction
                 self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
-                agent.run(
+                response = agent.run(
                     run_config=RunConfig(
                         model=OpenAiProvider.model("gpt-4o-2024-08-06"),
                         prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
                         run_name="Root Cause Reproduction & Unit Test",
                     )
                 )
+                if not response:
+                    self.context.store_memory("root_cause_analysis", agent.memory)
+                    return None
 
                 self.context.event_manager.add_log("Cleaning up my findings...")
 
