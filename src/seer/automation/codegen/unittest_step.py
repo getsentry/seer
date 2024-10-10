@@ -8,6 +8,7 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodeUnitTestRequest
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.codegen.unit_test_coding_component import UnitTestCodingComponent
@@ -52,7 +53,7 @@ class UnittestStep(CodegenStep):
         self.logger.info("Executing Codegen - Unittest Step")
         self.context.event_manager.mark_running()
 
-        repo_client = self.context.get_repo_client()
+        repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_UNIT_TEST)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
 

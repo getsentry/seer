@@ -3,7 +3,7 @@ import os
 import shutil
 import tarfile
 import tempfile
-from typing import Literal
+from enum import Enum
 
 import requests
 import sentry_sdk
@@ -75,6 +75,25 @@ def get_read_app_credentials(config: AppConfig = injected) -> tuple[int | str | 
         return get_write_app_credentials()
 
     return app_id, private_key
+
+
+@inject
+def get_codecov_unit_test_app_credentials(
+    config: AppConfig = injected,
+) -> tuple[int | str | None, str | None]:
+    app_id = config.GITHUB_CODECOV_UNIT_TEST_APP_ID
+    private_key = config.GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY
+
+    if not app_id or not private_key:
+        return get_write_app_credentials()
+
+    return app_id, private_key
+
+
+class RepoClientType(str, Enum):
+    READ = "read"
+    WRITE = "write"
+    CODECOV_UNIT_TEST = "codecov_unit_test"
 
 
 class RepoClient:
@@ -155,9 +174,11 @@ class RepoClient:
         return False
 
     @classmethod
-    def from_repo_definition(cls, repo_def: RepoDefinition, type: Literal["read", "write"]):
-        if type == "write":
+    def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
+        if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
+        elif type == RepoClientType.CODECOV_UNIT_TEST:
+            return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
 
