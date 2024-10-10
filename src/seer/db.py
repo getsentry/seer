@@ -39,14 +39,16 @@ def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+    if not hasattr(app, '_db_initialized'):
+        app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+        db.init_app(app)
+        migrate.init_app(app, db)
 
-    with app.app_context():
-        Session.configure(bind=db.engine)
+        with app.app_context():
+            Session.configure(bind=db.engine)
+        app._db_initialized = True
 
 
 class Base(DeclarativeBase):
