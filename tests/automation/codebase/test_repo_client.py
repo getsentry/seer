@@ -41,6 +41,39 @@ def repo_client(mock_github, mock_get_github_auth, repo_definition):
     return RepoClient.from_repo_definition(repo_definition, "read")
 
 
+@pytest.fixture
+def mock_get_codecov_unit_test_app_credentials():
+    with patch("seer.automation.codebase.repo_client.get_codecov_unit_test_app_credentials") as mock:
+        yield mock
+
+
+class TestRepoClientType:
+    def test_repo_client_type_values(self):
+        assert RepoClientType.READ == "read"
+        assert RepoClientType.WRITE == "write"
+        assert RepoClientType.CODECOV_UNIT_TEST == "codecov_unit_test"
+
+    def test_repo_client_from_repo_definition_read(self, mock_github, mock_get_github_auth, repo_definition):
+        with patch("seer.automation.codebase.repo_client.get_read_app_credentials") as mock_read_creds:
+            mock_read_creds.return_value = (1, "read_key")
+            client = RepoClient.from_repo_definition(repo_definition, RepoClientType.READ)
+            assert isinstance(client, RepoClient)
+            mock_read_creds.assert_called_once()
+
+    def test_repo_client_from_repo_definition_write(self, mock_github, mock_get_github_auth, repo_definition):
+        with patch("seer.automation.codebase.repo_client.get_write_app_credentials") as mock_write_creds:
+            mock_write_creds.return_value = (2, "write_key")
+            client = RepoClient.from_repo_definition(repo_definition, RepoClientType.WRITE)
+            assert isinstance(client, RepoClient)
+            mock_write_creds.assert_called_once()
+
+    def test_repo_client_from_repo_definition_codecov_unit_test(self, mock_github, mock_get_github_auth, repo_definition, mock_get_codecov_unit_test_app_credentials):
+        mock_get_codecov_unit_test_app_credentials.return_value = (3, "codecov_key")
+        client = RepoClient.from_repo_definition(repo_definition, RepoClientType.CODECOV_UNIT_TEST)
+        assert isinstance(client, RepoClient)
+        mock_get_codecov_unit_test_app_credentials.assert_called_once()
+
+
 class TestRepoClient:
 
     def test_repo_client_initialization(self, repo_client):
