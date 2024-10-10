@@ -14,6 +14,7 @@ from seer.automation.autofix.models import (
     CodebaseState,
     StepType,
 )
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.models import (
     EventDetails,
