@@ -1,6 +1,6 @@
 import logging
 
-from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
 from seer.automation.codegen.models import CodegenContinuation
 from seer.automation.codegen.state import CodegenContinuationState
@@ -53,12 +53,14 @@ class CodegenContext(PipelineContext):
         with self.state.update() as state:
             state.signals = value
 
-    def get_repo_client(self, repo_name: str | None = None):
+    def get_repo_client(
+        self, repo_name: str | None = None, type: RepoClientType = RepoClientType.READ
+    ):
         """
         Gets a repo client for the current single repo or for a given repo name.
         If there are more than 1 repos, a repo name must be provided.
         """
-        return RepoClient.from_repo_definition(self.repo, "read")
+        return RepoClient.from_repo_definition(self.repo, type)
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False

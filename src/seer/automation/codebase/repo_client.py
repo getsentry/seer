@@ -3,6 +3,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+from enum import Enum
 from typing import Literal
 
 import requests
@@ -75,6 +76,25 @@ def get_read_app_credentials(config: AppConfig = injected) -> tuple[int | str | 
         return get_write_app_credentials()
 
     return app_id, private_key
+
+
+@inject
+def get_codecov_unit_test_app_credentials(
+    config: AppConfig = injected,
+) -> tuple[int | str | None, str | None]:
+    app_id = config.GITHUB_CODECOV_UNIT_TEST_APP_ID
+    private_key = config.GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY
+
+    if not app_id or not private_key:
+        return get_write_app_credentials()
+
+    return app_id, private_key
+
+
+class RepoClientType(str, Enum):
+    READ = "read"
+    WRITE = "write"
+    CODECOV_UNIT_TEST = "codecov_unit_test"
 
 
 class RepoClient:
@@ -155,9 +175,11 @@ class RepoClient:
         return False
 
     @classmethod
-    def from_repo_definition(cls, repo_def: RepoDefinition, type: Literal["read", "write"]):
-        if type == "write":
+    def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
+        if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
+        elif type == RepoClientType.CODECOV_UNIT_TEST:
+            return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
 
@@ -256,17 +278,10 @@ class RepoClient:
         if is_behind:
             comparison = self.repo.compare(next_sha, prev_sha)
 
-        # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
-        # This has to be done because the files list inside the comparison object is limited to only 300 files.
-        # We get the entire diff from the diff object returned from the `diff_url`
-        requester = self.repo._requester
-        headers = {
-            "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
-            "User-Agent": requester._Requester__userAgent,  # type: ignore
-        }
-        data = requests.get(comparison.diff_url, headers=headers).content
+        data = requests.get(comparison.diff_url, headers=self._get_auth_headers(accept_type="diff"))
+        data.raise_for_status()  # Raise an exception for HTTP errors
 
-        patch_set = PatchSet(data.decode("utf-8"))
+        patch_set = PatchSet(data.content.decode("utf-8"))
 
         added_files = [patch.path for patch in patch_set.added_files]
         modified_files = [patch.path for patch in patch_set.modified_files]
@@ -441,23 +456,21 @@ class RepoClient:
         return file_set
 
     def get_pr_diff_content(self, pr_url: str) -> str:
-        requester = self.repo._requester
-        headers = {
-            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
-            "Accept": "application/vnd.github.diff",
-        }
-
-        data = requests.get(pr_url, headers=headers)
+        data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="diff"))
 
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.text
 
-    def _get_auth_headers(self):
+    def _get_auth_headers(self, accept_type: Literal["json", "diff"] = "json"):
         requester = self.repo._requester
         if requester.auth is None:
             raise Exception("No auth token found for GitHub API")
         headers = {
-            "Accept": "application/vnd.github+json",
+            "Accept": (
+                "application/vnd.github.diff"
+                if accept_type == "diff"
+                else "application/vnd.github+json"
+            ),
             "Authorization": f"Bearer {requester.auth.token}",
             "X-GitHub-Api-Version": "2022-11-28",
         }
@@ -502,12 +515,6 @@ class RepoClient:
         response.raise_for_status()
 
     def get_pr_head_sha(self, pr_url: str) -> str:
-        requester = self.repo._requester
-        headers = {
-            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
-            "Accept": "application/vnd.github.raw+json",
-        }
-
-        data = requests.get(pr_url, headers=headers)
+        data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="json"))
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]

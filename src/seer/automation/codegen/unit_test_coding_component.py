@@ -13,6 +13,7 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_delete,
 )
 from seer.automation.autofix.tools import BaseTools
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodeUnitTestOutput, CodeUnitTestRequest
 from seer.automation.codegen.prompts import CodingUnitTestPrompts
@@ -33,7 +34,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
     def invoke(
         self, request: CodeUnitTestRequest, llm_client: LlmClient = injected
     ) -> CodeUnitTestOutput | None:
-        with BaseTools(self.context) as tools:
+        with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_UNIT_TEST) as tools:
             agent = LlmAgent(
                 tools=tools.get_tools(),
                 config=AgentConfig(interactive=False),

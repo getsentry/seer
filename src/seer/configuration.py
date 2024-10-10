@@ -52,6 +52,8 @@ class AppConfig(BaseModel):
     GITHUB_PRIVATE_KEY: str = ""
     GITHUB_SENTRY_APP_ID: str | None = None
     GITHUB_SENTRY_PRIVATE_KEY: str | None = None
+    GITHUB_CODECOV_UNIT_TEST_APP_ID: str | None = None
+    GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY: str | None = None
 
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
