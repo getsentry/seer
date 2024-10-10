@@ -1,11 +1,13 @@
 import datetime
 import logging
+from typing import List, Dict, Union
 
 import sentry_sdk
 import sqlalchemy.sql as sql
 
 from celery_app.app import celery_app
 from seer.db import DbIssueSummary, DbRunState, Session
+
 
 logger = logging.getLogger(__name__)
 
