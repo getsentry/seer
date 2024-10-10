@@ -10,6 +10,7 @@ from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.langfuse import append_langfuse_observation_metadata
@@ -22,10 +23,17 @@ class BaseTools:
     retrieval_top_k: int
     tmp_dir: str | None = None
     tmp_repo_dir: str | None = None
+    repo_client_type: RepoClientType = RepoClientType.READ
 
-    def __init__(self, context: AutofixContext | CodegenContext, retrieval_top_k: int = 8):
+    def __init__(
+        self,
+        context: AutofixContext | CodegenContext,
+        retrieval_top_k: int = 8,
+        repo_client_type: RepoClientType = RepoClientType.READ,
+    ):
         self.context = context
         self.retrieval_top_k = retrieval_top_k
+        self.repo_client_type = repo_client_type
 
     def __enter__(self):
         return self
@@ -39,7 +47,7 @@ class BaseTools:
         file_contents = self.context.get_file_contents(input, repo_name=repo_name)
 
         if repo_name is None:
-            client = self.context.get_repo_client(repo_name)
+            client = self.context.get_repo_client(repo_name, self.repo_client_type)
             repo_name = client.repo_name
 
         self.context.event_manager.add_log(f"Looking at `{input}` in `{repo_name}`...")
@@ -57,7 +65,7 @@ class BaseTools:
         """
         Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_paths = repo_client.get_index_file_set()
         normalized_path = self._normalize_path(path)
 
@@ -91,7 +99,7 @@ class BaseTools:
         For example, example/path/ might actually be located at src/example/path/
         This is useful in the case that the model is using an incomplete path.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_paths = repo_client.get_index_file_set()
         normalized_path = self._normalize_path(path)
 
@@ -164,7 +172,9 @@ class BaseTools:
         """
 
         if self.tmp_dir is None or self.tmp_repo_dir is None:
-            repo_client = self.context.get_repo_client(repo_name=repo_name)
+            repo_client = self.context.get_repo_client(
+                repo_name=repo_name, type=self.repo_client_type
+            )
             tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
 
             self.tmp_dir = tmp_dir
