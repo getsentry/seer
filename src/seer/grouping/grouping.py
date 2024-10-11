@@ -41,9 +41,11 @@ class GroupingRequest(BaseModel):
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
-        if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
+        if v is not None and not v:
+            raise ValueError(f"{info.field_name} if provided, must not be empty.")
         return v
+
+
 
 
 class GroupingResponse(BaseModel):
