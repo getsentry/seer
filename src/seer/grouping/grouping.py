@@ -24,9 +24,10 @@ NN_GROUPING_HNSW_CANDIDATES = 100
 NN_SIMILARITY_DISTANCE = 0.05
 
 
+
 class GroupingRequest(BaseModel):
     project_id: int
-    stacktrace: str
+    stacktrace: Optional[str] = None
     hash: str
     message: Optional[str] = None
     exception_type: Optional[str] = None
