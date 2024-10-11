@@ -341,6 +341,9 @@ class GroupingLookup:
                  stacktrace similarity scores, and grouping flags.
         """
         with Session() as session:
+            if issue.stacktrace is None:
+                return SimilarityResponse(responses=[])
+            
             embedding = self.encode_text(issue.stacktrace).astype("float32")
 
             results = self.query_nearest_k_neighbors(
