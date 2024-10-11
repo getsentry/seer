@@ -7,20 +7,34 @@ import sqlalchemy.sql as sql
 from celery_app.app import celery_app
 from seer.db import DbIssueSummary, DbRunState, Session
 
+
 logger = logging.getLogger(__name__)
 
+def safe_convert_age(age) -> int | None:
+    if age is None:
+        return None
+    try:
+        return int(age)
+    except ValueError:
+        return None
 
 @celery_app.task(time_limit=30)
-def buggy_code():
+def calculate_yearly_ages():
     user_data = [
         {"name": "Alice", "age": 30},
         {"name": "Bob", "age": "25"},
         {"name": "Charlie", "age": None},
         {"name": "David", "age": 40},
     ]
-
+    
     for user in user_data:
-        print(user["age"] * 12)  # type: ignore[index]
+        name = user["name"]
+        age = safe_convert_age(user["age"])
+        if age is not None:
+            yearly_age = age * 12
+            logger.info(f"User {name}'s yearly age: {yearly_age}")
+        else:
+            logger.warning(f"Invalid age for user {name}. Skipping calculation.")
 
 
 @celery_app.task(time_limit=30)
