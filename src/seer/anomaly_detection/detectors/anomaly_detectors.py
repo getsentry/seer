@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
+from seer.anomaly_detection.detectors.smoothers import FlagSmoother
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
@@ -108,6 +109,17 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
 
+        # Apply smoothing to the flags
+        flag_smoother = FlagSmoother()
+        smoothed_flags = flag_smoother.smooth(
+            orig_ts=ts_values,
+            flags=flags_and_scores.flags,
+            ad_config=config,
+        )
+
+        # Update the flags in flags_and_scores with the smoothed flags
+        flags_and_scores.flags = smoothed_flags
+
         return MPTimeSeriesAnomalies(
             flags=flags_and_scores.flags,
             scores=flags_and_scores.scores,
@@ -177,6 +189,16 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 )
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
+
+                # Apply smoothing to the flags
+                flag_smoother = FlagSmoother()
+                smoothed_flags = flag_smoother.smooth(
+                    orig_ts=cur_val,
+                    flags=flags_and_scores.flags,
+                    ad_config=config,
+                )
+                flags_and_scores.flags = smoothed_flags
+
                 scores.extend(flags_and_scores.scores)
                 flags.extend(flags_and_scores.flags)
                 thresholds.extend(flags_and_scores.thresholds)
