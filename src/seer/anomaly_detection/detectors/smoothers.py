@@ -27,7 +27,7 @@ class Smoother(BaseModel, abc.ABC):
 class FlagSmoother(Smoother):
 
     period_to_smooth_size: dict[int, int] = Field(
-        default={5: 9, 15: 5, 30: 3, 60: 1},
+        default={5: 19, 15: 11, 30: 7, 60: 5},
         description="Flag smoothing window size based on the function smooth_size = floor(43 / sqrt(time_period))",
     )
 
