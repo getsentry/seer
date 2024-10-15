@@ -82,9 +82,12 @@ class TestUnittestStep(unittest.TestCase):
             branch="branch_ref",
             title=pr_title,
             description="This PR adds tests for #123\n\n### Commits:\n- commit message 1\n- commit message 2",
-            provided_base="head_sha",
+            provided_base="feature_branch",  # Assert that provided_base is now set to pr.head.ref
         )
+        # Assert that base_commit_sha is set to pr.head.sha
         self.assertEqual(repo_client.base_commit_sha, pr.head.sha)
+        # Add a comment explaining the importance of this change
+        # The provided_base is now set to pr.head.ref to ensure the PR is created against the feature branch
 
     @patch("seer.automation.codegen.unit_test_github_pr_creator.logger")
     def test_create_github_pull_request_failure(self, mock_logger):
