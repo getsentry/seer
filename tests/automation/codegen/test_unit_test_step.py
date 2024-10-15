@@ -56,9 +56,10 @@ class TestUnittestStep(unittest.TestCase):
     def test_create_github_pull_request_success(self, _):
         file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
         pr = MagicMock()
-        pr.head.ref = "head_sha"
+        pr.head.ref = "feature_branch"  # Set the head.ref to simulate the feature branch
+        pr.head.sha = "head_sha"
         pr.number = 123
-        pr.base.ref = "main"
+        pr.base.ref = "main"  # This is no longer used in the method, but kept for clarity
         repo_client = MagicMock(spec=RepoClient)
 
         creator = GeneratedTestsPullRequestCreator(
