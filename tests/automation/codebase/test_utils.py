@@ -1,5 +1,6 @@
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import StacktraceFrame
+from seer.automation.utils import encode_decode_base64
 
 
 class TestPotentialFrameMatch:
