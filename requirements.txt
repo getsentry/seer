@@ -697,7 +697,7 @@ sqlalchemy==2.0.25
     #   pytest-alembic
 stanio==0.5.1
     # via cmdstanpy
-starlette==0.38.6
+starlette==0.40.0
     # via fastapi
 statsmodels==0.14.0
     # via -r requirements-constraints.txt
