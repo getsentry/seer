@@ -100,7 +100,7 @@ chromadb==0.4.14
 google-cloud-storage==2.*
 google-cloud-aiplatform==1.*
 google-cloud-secret-manager==2.*
-anthropic[vertex]==0.31.2
+anthropic[vertex]==0.34.2
 langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
 watchdog
 stumpy==1.13.0
@@ -112,3 +112,4 @@ protobuf>=5.27.3
 proto-plus>=1.24.0
 grpcio-health-checking>=1.66
 grpcio-reflection>=1.66
+prophet==1.1.*

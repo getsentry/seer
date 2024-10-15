@@ -6,8 +6,7 @@ from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
 from pydantic_xml import attr, element
 
-from seer.automation.agent.client import GptClient
-from seer.automation.agent.models import Message
+from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
@@ -105,8 +104,6 @@ def sync_run_execution(item: DatasetItemClient):
             RootCauseAnalysisItem(
                 title=expected_output.root_cause,
                 description="",
-                likelihood=1.0,
-                actionability=1.0,
                 reproduction="",
                 code_context=[
                     RootCauseRelevantContext(
@@ -255,13 +252,14 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, mo
         expected_diff=dataset_item.expected_output.get("diff"),
         predicted_diff=predicted_diff,
     )
-    response, usage = GptClient().completion(
-        messages=[Message(role="user", content=prompt)], model=model, temperature=1.0
+    response = LlmClient().generate_text(
+        model=OpenAiProvider.model(model),
+        prompt=prompt,
     )
-    if not response.content:
+    if not response.message.content:
         return 0
 
-    tree = ET.fromstring(f"<root>{escape_multi_xml(response.content, ['score'])}</root>")
+    tree = ET.fromstring(f"<root>{escape_multi_xml(response.message.content, ['score'])}</root>")
     score_str = extract_xml_element_text(tree, "score")
     score = float(score_str) if score_str else 0
 
@@ -322,15 +320,16 @@ def score_root_cause_single_it(
         expected_output=expected_output.to_prompt_str(),
         predicted_solutions=solutions_str,
     )
-    response, usage = GptClient().completion(
-        model=model, messages=[Message(role="user", content=prompt)]
+    response = LlmClient().generate_text(
+        model=OpenAiProvider.model(model),
+        prompt=prompt,
     )
-    if not response.content:
+    if not response.message.content:
         raise ValueError("No response content")
 
     scores: list[float] = []
     for i in range(len(causes_xml)):
-        score_str = extract_text_inside_tags(response.content, f"score_{i + 1}")
+        score_str = extract_text_inside_tags(response.message.content, f"score_{i + 1}")
         score = float(score_str) if score_str else 0
         scores.append(score)
 

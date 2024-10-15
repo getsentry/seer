@@ -90,7 +90,7 @@ gocd: ## Build GoCD pipelines
 	cd ./gocd/generated-pipelines && find . -type f \( -name '*.yaml' \) -print0 | xargs -n 1 -0 yq -p json -o yaml -i
 .PHONY: gocd
 
-upgrade-package-versions:
+upgrade-package-versions: ## Upgrade package versions in requirements.txt from constraints in requirements-constraints.txt
 	pip-compile --upgrade --strip-extras --quiet requirements-constraints.txt -o requirements.txt
 
 HEAD_SHA:=$(shell git rev-parse --short HEAD)

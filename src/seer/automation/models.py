@@ -37,7 +37,7 @@ class StacktraceFrame(BaseModel):
     abs_path: Optional[Annotated[str, Examples(specialized.file_paths)]]
     line_no: Optional[int]
     col_no: Optional[int]
-    context: list[tuple[int, str]]
+    context: list[tuple[int, Optional[str]]] = []
     repo_name: Optional[str] = None
     in_app: bool = False
     vars: Optional[dict[str, Any]] = None
@@ -289,7 +289,7 @@ class ExceptionDetails(BaseModel):
 
 
 class ThreadDetails(BaseModel):
-    id: Optional[int] = None
+    id: Optional[int | str] = None
     name: Optional[str] = None
     crashed: Optional[bool] = False
     current: Optional[bool] = False

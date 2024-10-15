@@ -17,7 +17,7 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
-from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
@@ -126,28 +126,33 @@ class AutofixContext(PipelineContext):
 
         return repos_by_key
 
-    def get_repo_client(self, repo_name: str | None = None, repo_external_id: str | None = None):
+    def get_repo_client(
+        self,
+        repo_name: str | None = None,
+        repo_external_id: str | None = None,
+        type: RepoClientType = RepoClientType.READ,
+    ):
         """
         Gets a repo client for the current single repo or for a given repo name.
         If there are more than 1 repos, a repo name must be provided.
         """
         repo_client: RepoClient | None = None
         if len(self.repos) == 1:
-            repo_client = RepoClient.from_repo_definition(self.repos[0], "read")
+            repo_client = RepoClient.from_repo_definition(self.repos[0], type)
         elif repo_name:
             repo = next((r for r in self.repos if r.full_name == repo_name), None)
 
             if not repo:
                 raise AgentError() from ValueError(f"Repo {repo_name} not found.")
 
-            repo_client = RepoClient.from_repo_definition(repo, "read")
+            repo_client = RepoClient.from_repo_definition(repo, type)
         elif repo_external_id:
             repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
 
             if not repo:
                 raise AgentError() from ValueError(f"Repo {repo_external_id} not found.")
 
-            repo_client = RepoClient.from_repo_definition(repo, "read")
+            repo_client = RepoClient.from_repo_definition(repo, type)
         else:
             raise AgentError() from ValueError(
                 "Please provide a repo name because you have multiple repos."
@@ -176,7 +181,7 @@ class AutofixContext(PipelineContext):
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
         for repo in self.repos:
-            repo_client = RepoClient.from_repo_definition(repo, "read")
+            repo_client = RepoClient.from_repo_definition(repo, RepoClientType.READ)
 
             valid_file_paths = repo_client.get_valid_file_paths()
             for frame in stacktrace.frames:
@@ -201,7 +206,12 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
-    def commit_changes(self, repo_external_id: str | None = None, repo_id: int | None = None):
+    def commit_changes(
+        self,
+        repo_external_id: str | None = None,
+        repo_id: int | None = None,
+        pr_to_comment_on_url: str | None = None,
+    ):
         with self.state.update() as state:
             for codebase_state in state.codebases.values():
                 if (
@@ -230,7 +240,9 @@ class AutofixContext(PipelineContext):
                         if repo_definition is None:
                             raise ValueError(f"Repo definition not found for key {key}")
 
-                        repo_client = RepoClient.from_repo_definition(repo_definition, "write")
+                        repo_client = RepoClient.from_repo_definition(
+                            repo_definition, RepoClientType.WRITE
+                        )
 
                         branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,
@@ -252,7 +264,12 @@ class AutofixContext(PipelineContext):
                                 if state.request.issue.short_id
                                 else issue_url
                             )
-                            ref_note = f"Fixes {issue_link}\n"
+                            suspect_pr_link = (
+                                f", which was likely introduced in [this PR]({pr_to_comment_on_url})."
+                                if pr_to_comment_on_url
+                                else ""
+                            )
+                            ref_note = f"Fixes {issue_link}{suspect_pr_link}\n"
 
                         pr_description = textwrap.dedent(
                             """\
@@ -298,6 +315,15 @@ class AutofixContext(PipelineContext):
                             session.add(pr_id_mapping)
                             session.commit()
 
+                        if (
+                            pr_to_comment_on_url
+                        ):  # for GitHub Copilot, leave a comment that the PR is made
+                            repo_client.comment_pr_generated_for_copilot(
+                                pr_to_comment_on_url=pr_to_comment_on_url,
+                                new_pr_url=pr.html_url,
+                                run_id=state.run_id,
+                            )
+
     def comment_root_cause_on_pr(
         self, pr_url: str, repo_definition: RepoDefinition, root_cause: str
     ):
@@ -338,7 +364,7 @@ class AutofixContext(PipelineContext):
         )
 
         # comment root cause analysis on PR
-        repo_client = RepoClient.from_repo_definition(repo_definition, "read")
+        repo_client = RepoClient.from_repo_definition(repo_definition, RepoClientType.READ)
         repo_client.comment_root_cause_on_pr_for_copilot(
             pr_url, state.run_id, state.request.issue.id, markdown_comment
         )

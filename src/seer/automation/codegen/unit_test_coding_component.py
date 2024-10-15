@@ -1,10 +1,11 @@
 import logging
 
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from integrations.codecov.codecov_client import CodecovClient
-from seer.automation.agent.agent import AgentConfig, ClaudeAgent, LlmAgent
+from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
+from seer.automation.agent.client import AnthropicProvider, LlmClient
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
@@ -12,12 +13,14 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_delete,
 )
 from seer.automation.autofix.tools import BaseTools
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodeUnitTestOutput, CodeUnitTestRequest
 from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -25,30 +28,16 @@ logger = logging.getLogger(__name__)
 class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOutput]):
     context: CodegenContext
 
-    @observe(name="Analyze existing test design")
-    @ai_track(description="AnalyzeTestDesign")
-    def _get_test_design_summary(self, agent: LlmAgent, prompt: str):
-        return agent.run(prompt)
-
-    @observe(name="Create plan")
-    @ai_track(description="GetTestPlan")
-    def _get_plan(self, agent: LlmAgent, prompt: str) -> str:
-        return agent.run(prompt)
-
-    @observe(name="Generate test tasks")
-    @ai_track(description="GenerateTests")
-    def _generate_tests(self, agent: LlmAgent, prompt: str) -> str:
-        return agent.run(prompt=prompt)
-
-    def invoke(self, request: CodeUnitTestRequest) -> CodeUnitTestOutput | None:
-        langfuse_context.update_current_trace(user_id="ram")
-        with BaseTools(self.context) as tools:
-
-            agent = ClaudeAgent(
+    @observe(name="Generate unit tests")
+    @ai_track(description="Generate unit tests")
+    @inject
+    def invoke(
+        self, request: CodeUnitTestRequest, llm_client: LlmClient = injected
+    ) -> CodeUnitTestOutput | None:
+        with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_UNIT_TEST) as tools:
+            agent = LlmAgent(
                 tools=tools.get_tools(),
-                config=AgentConfig(
-                    system_prompt=CodingUnitTestPrompts.format_system_msg(), max_iterations=24
-                ),
+                config=AgentConfig(interactive=False),
             )
 
             codecov_client_params = request.codecov_client_params
@@ -65,15 +54,15 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 latest_commit_sha=codecov_client_params["head_sha"],
             )
 
-            existing_test_design_response = self._get_test_design_summary(
-                agent=agent,
+            existing_test_design_response = llm_client.generate_text(
+                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
                 prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
                     diff_str=request.diff
                 ),
             )
 
-            self._get_plan(
-                agent=agent,
+            llm_client.generate_text(
+                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
                 prompt=CodingUnitTestPrompts.format_plan_step_msg(
                     diff_str=request.diff,
                     has_coverage_info=code_coverage_data,
@@ -81,10 +70,14 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 ),
             )
 
-            final_response = self._generate_tests(
-                agent=agent,
-                prompt=CodingUnitTestPrompts.format_unit_test_msg(
-                    diff_str=request.diff, test_design_hint=existing_test_design_response
+            final_response = agent.run(
+                run_config=RunConfig(
+                    prompt=CodingUnitTestPrompts.format_unit_test_msg(
+                        diff_str=request.diff, test_design_hint=existing_test_design_response
+                    ),
+                    system_prompt=CodingUnitTestPrompts.format_system_msg(),
+                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    run_name="Generate Unit Tests",
                 ),
             )
 
@@ -110,7 +103,6 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                     logger.warning(f"Failed to get content for {task.file_path}")
                     continue
 
-                # TODO: Handle missing changes
                 changes, _ = task_to_file_change(task, file_content)
                 file_changes += changes
             elif task.type == "file_delete":
