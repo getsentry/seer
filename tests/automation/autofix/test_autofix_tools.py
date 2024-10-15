@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from seer.automation.autofix.tools import BaseTools
+from seer.automation.codebase.repo_client import RepoClientType
 
 
 @pytest.fixture
@@ -40,9 +41,12 @@ class TestFileSearch:
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {"src/file1.py"}
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.repo_client_type = RepoClientType.CODECOV_UNIT_TEST
 
         autofix_tools.file_search("file1.py", repo_name="test_repo")
-        autofix_tools.context.get_repo_client.assert_called_once_with(repo_name="test_repo")
+        autofix_tools.context.get_repo_client.assert_called_once_with(
+            repo_name="test_repo", type=RepoClientType.CODECOV_UNIT_TEST
+        )
 
 
 class TestFileSearchWildcard:
@@ -74,9 +78,12 @@ class TestFileSearchWildcard:
         mock_repo_client = MagicMock()
         mock_repo_client.get_index_file_set.return_value = {"src/file1.py"}
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.repo_client_type = RepoClientType.CODECOV_UNIT_TEST
 
         autofix_tools.file_search_wildcard("*.py", repo_name="test_repo")
-        autofix_tools.context.get_repo_client.assert_called_once_with(repo_name="test_repo")
+        autofix_tools.context.get_repo_client.assert_called_once_with(
+            repo_name="test_repo", type=RepoClientType.CODECOV_UNIT_TEST
+        )
 
 
 class TestFileSystem:
