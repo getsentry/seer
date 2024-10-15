@@ -224,7 +224,7 @@ class BaseTools:
         """
         Given a filename with extension returns the list of locations where a file with the name is found.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_paths = repo_client.get_index_file_set()
         found = [path for path in all_paths if os.path.basename(path) == filename]
 
@@ -247,7 +247,7 @@ class BaseTools:
         """
         Given a filename pattern with wildcards, returns the list of file paths that match the pattern.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_paths = repo_client.get_index_file_set()
         found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
 
