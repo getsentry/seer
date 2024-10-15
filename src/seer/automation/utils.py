@@ -4,6 +4,7 @@ import os
 import re
 from typing import TypeVar
 from xml.etree import ElementTree as ET
+import base64
 
 import billiard  # type: ignore[import-untyped]
 import torch
@@ -245,3 +246,12 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
         raise RuntimeError("Failed to parse message")
 
     return structured_message.parsed
+
+
+def encode_decode_base64(input_string, operation="encode"):
+    if operation == "encode":
+        return base64.b64encode(input_string.encode()).decode()
+    elif operation == "decode":
+        return base64.b64decode(input_string).decode()
+    else:
+        raise ValueError("Invalid operation. Choose 'encode' or 'decode'.")
