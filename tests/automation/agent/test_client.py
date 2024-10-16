@@ -322,3 +322,87 @@ def test_openai_generate_structured_refusal(mock_openai_client):
     assert str(exc_info.value) == "I'm sorry, but I can't generate that information."
 
     mock_openai_client.beta.chat.completions.parse.assert_called_once()
+
+
+def test_openai_prep_message_and_tools():
+    messages = [
+        Message(role="user", content="Hello"),
+        Message(role="assistant", content="Hi there!"),
+    ]
+    prompt = "How are you?"
+    system_prompt = "You are a helpful assistant."
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[{"name": "x", "type": "string"}],
+            fn=lambda x: x,
+        )
+    ]
+
+    message_dicts, tool_dicts = OpenAiProvider._prep_message_and_tools(
+        messages=messages,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        tools=tools,
+    )
+
+    assert len(message_dicts) == 4
+    assert message_dicts[0]["role"] == "system"
+    assert message_dicts[0]["content"] == system_prompt
+    assert message_dicts[1]["role"] == "user"
+    assert message_dicts[1]["content"] == "Hello"
+    assert message_dicts[2]["role"] == "assistant"
+    assert message_dicts[2]["content"] == "Hi there!"  # type: ignore
+    assert message_dicts[3]["role"] == "user"
+    assert message_dicts[3]["content"] == prompt
+
+    assert tool_dicts
+    if tool_dicts:
+        assert len(tool_dicts) == 1
+        assert tool_dicts[0]["type"] == "function"
+        assert tool_dicts[0]["function"]["name"] == "test_function"
+
+
+def test_anthropic_prep_message_and_tools():
+    messages = [
+        Message(role="user", content="Hello"),
+        Message(role="assistant", content="Hi there!"),
+    ]
+    prompt = "How are you?"
+    system_prompt = "You are a helpful assistant."
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[{"name": "x", "type": "string"}],
+            fn=lambda x: x,
+        )
+    ]
+
+    message_dicts, tool_dicts, returned_system_prompt = AnthropicProvider._prep_message_and_tools(
+        messages=messages,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        tools=tools,
+    )
+
+    assert len(message_dicts) == 3
+    assert message_dicts[0]["role"] == "user"
+    assert message_dicts[0]["content"][0]["type"] == "text"  # type: ignore
+    assert message_dicts[0]["content"][0]["text"] == "Hello"  # type: ignore
+    assert message_dicts[1]["role"] == "assistant"
+    assert message_dicts[1]["content"][0]["type"] == "text"  # type: ignore
+    assert message_dicts[1]["content"][0]["text"] == "Hi there!"  # type: ignore
+    assert message_dicts[2]["role"] == "user"
+    assert message_dicts[2]["content"][0]["type"] == "text"  # type: ignore
+    assert message_dicts[2]["content"][0]["text"] == prompt  # type: ignore
+
+    assert tool_dicts
+    if tool_dicts:
+        assert len(tool_dicts) == 1
+        assert tool_dicts[0]["name"] == "test_function"
+        assert "description" in tool_dicts[0]
+        assert "input_schema" in tool_dicts[0]
+
+    assert returned_system_prompt == system_prompt
