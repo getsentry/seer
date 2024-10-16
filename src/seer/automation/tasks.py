@@ -20,7 +20,12 @@ def buggy_code():
     ]
 
     for user in user_data:
-        print(user["age"] * 12)  # type: ignore[index]
+        age = safe_convert_to_int(user["age"])
+        if age is not None:
+            yearly_age = age * 12
+            logger.info(f"{user['name']}'s age in months: {yearly_age}")
+        else:
+            logger.warning(f"Invalid age for user {user['name']}: {user['age']}")
 
 
 @celery_app.task(time_limit=30)
