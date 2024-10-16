@@ -505,7 +505,7 @@ class RepoClient:
         ]  # should be "owner/repo"
         url = f"https://api.github.com/repos/{repo_name}/issues/{pull_id}/comments"
 
-        comment = f"A fix has been generated and is available [here]({new_pr_url}) for your review. Autofix Run ID: {run_id}"
+        comment = f"A fix has been generated and is available [here]({new_pr_url}) for review."
 
         params = {"body": comment}
 
