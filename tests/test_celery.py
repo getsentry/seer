@@ -30,9 +30,9 @@ def test_detected_celery_jobs():
             [
                 "Check and mark recent autofix runs every hour",
                 "Delete old Automation runs for 90 day time-to-live",
-                "Intentionally raise an error",  # TODO remove this once testing in prod is done
             ]
         )
+
 
 
 def test_anomaly_beat_jobs():
@@ -60,9 +60,9 @@ def test_autofix_beat_jobs():
             [
                 "Check and mark recent autofix runs every hour",
                 "Delete old Automation runs for 90 day time-to-live",
-                "Intentionally raise an error",  # TODO remove this once testing in prod is done
             ]
         )
+
 
 
 def test_celery_app_configuration():
