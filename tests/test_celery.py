@@ -22,9 +22,9 @@ def test_detected_celery_jobs():
                 "seer.automation.codegen.unittest_step.unittest_task",
                 "seer.automation.tasks.delete_data_for_ttl",
                 "seer.smoke_test.smoke_test",
-                "seer.automation.tasks.buggy_code",  # TODO remove this once testing in prod is done
             ]
         )
+
 
         assert set(k for k in celery_app.conf.beat_schedule.keys()) == set(
             [
