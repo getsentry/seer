@@ -1,5 +1,6 @@
 import datetime
 import logging
+from typing import List, Dict, Union
 
 import sentry_sdk
 import sqlalchemy.sql as sql
@@ -7,20 +8,37 @@ import sqlalchemy.sql as sql
 from celery_app.app import celery_app
 from seer.db import DbIssueSummary, DbRunState, Session
 
+
 logger = logging.getLogger(__name__)
 
 
+
+
 @celery_app.task(time_limit=30)
-def buggy_code():
-    user_data = [
+def process_user_ages():
+    user_data: List[Dict[str, Union[str, int, None]]] = [
         {"name": "Alice", "age": 30},
         {"name": "Bob", "age": "25"},
         {"name": "Charlie", "age": None},
         {"name": "David", "age": 40},
     ]
 
+    def calculate_age_in_months(age: Union[int, str, None]) -> Union[int, None]:
+        if age is None:
+            return None
+        try:
+            return int(age) * 12
+        except ValueError:
+            logger.warning(f"Invalid age value: {age}")
+            return None
+
     for user in user_data:
-        print(user["age"] * 12)  # type: ignore[index]
+        name = user["name"]
+        age_in_months = calculate_age_in_months(user["age"])
+        if age_in_months is not None:
+            logger.info(f"User {name} is {age_in_months} months old")
+        else:
+            logger.warning(f"Unable to calculate age in months for user {name}")
 
 
 @celery_app.task(time_limit=30)
