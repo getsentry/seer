@@ -6,7 +6,7 @@ import seer.app  # noqa: F401
 from celery_app.app import celery_app as celery  # noqa: F401
 from celery_app.config import CeleryQueues
 from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
-from seer.automation.tasks import buggy_code, delete_data_for_ttl
+from seer.automation.tasks import delete_data_for_ttl
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
