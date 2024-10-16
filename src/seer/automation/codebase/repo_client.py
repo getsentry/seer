@@ -518,3 +518,14 @@ class RepoClient:
         data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="json"))
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
+
+    def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
+        original_pr_id = int(original_pr_url.split("/")[-1])
+        repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
+        comment = f"Unit tests have been generated and are available [here]({unit_test_pr_url}) for your review."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
