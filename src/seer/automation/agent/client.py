@@ -258,7 +258,7 @@ class OpenAiProvider:
                 0, cls.to_message_dict(Message(role="system", content=system_prompt))
             )
         if prompt:
-            message_dicts.insert(0, cls.to_message_dict(Message(role="user", content=prompt)))
+            message_dicts.append(cls.to_message_dict(Message(role="user", content=prompt)))
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
@@ -440,7 +440,7 @@ class AnthropicProvider:
     ) -> tuple[list[MessageParam], list[ToolParam] | None, str | None]:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
-            message_dicts.insert(0, cls.to_message_param(Message(role="user", content=prompt)))
+            message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
