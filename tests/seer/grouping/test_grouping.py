@@ -473,6 +473,100 @@ class TestGrouping(unittest.TestCase):
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
 
+    def test_grouping_request_empty_stacktrace(self):
+        """Test that GroupingRequest accepts None or empty string for stacktrace"""
+        request_with_none = GroupingRequest(
+            project_id=1,
+            stacktrace=None,
+            hash="hash1",
+            message="message"
+        )
+        self.assertIsNone(request_with_none.stacktrace)
+
+        request_with_empty = GroupingRequest(
+            project_id=1,
+            stacktrace="",
+            hash="hash2",
+            message="message"
+        )
+        self.assertIsNone(request_with_empty.stacktrace)
+
+    def test_encode_text_with_none_stacktrace(self):
+        """Test that encode_text returns a zero vector for None stacktrace"""
+        embedding = grouping_lookup().encode_text(None)
+        self.assertTrue(np.all(embedding == 0))
+        self.assertEqual(embedding.shape, (768,))  # Assuming the model's output dimension is 768
+
+    def test_get_nearest_neighbors_with_empty_stacktrace(self):
+        """Test get_nearest_neighbors with an empty stacktrace"""
+        grouping_request = GroupingRequest(
+            project_id=1,
+            stacktrace=None,
+            hash="empty_stacktrace_hash",
+            message="Empty stacktrace test",
+            k=1,
+            threshold=0.01,
+        )
+
+        response = grouping_lookup().get_nearest_neighbors(grouping_request)
+        self.assertEqual(response, SimilarityResponse(responses=[]))
+
+        # Verify that no record was created for the empty stacktrace
+        with Session() as session:
+            record = session.query(DbGroupingRecord).filter_by(hash="empty_stacktrace_hash").first()
+            self.assertIsNone(record)
+
+    def test_insert_new_grouping_record_empty_stacktrace(self):
+        """Test that insert_new_grouping_record handles empty stacktrace correctly"""
+        grouping_request = GroupingRequest(
+            project_id=1,
+            stacktrace=None,
+            hash="empty_stacktrace_insert_hash",
+            message="Empty stacktrace insert test",
+        )
+        embedding = grouping_lookup().encode_text(None)
+
+        grouping_lookup().insert_new_grouping_record(grouping_request, embedding)
+
+        with Session() as session:
+            record = session.query(DbGroupingRecord).filter_by(hash="empty_stacktrace_insert_hash").first()
+            self.assertIsNone(record)
+
+    def test_bulk_create_and_insert_grouping_records_with_empty_stacktraces(self):
+        """Test bulk creating and inserting grouping records with some empty stacktraces"""
+        hashes = [f"hash_{i}" for i in range(5)]
+        record_requests = CreateGroupingRecordsRequest(
+            data=[
+                CreateGroupingRecordData(
+                    group_id=i,
+                    hash=hashes[i],
+                    project_id=1,
+                    message=f"message {i}",
+                )
+                for i in range(5)
+            ],
+            stacktrace_list=["stacktrace 0", None, "stacktrace 2", "", "stacktrace 4"],
+        )
+
+        response = grouping_lookup().bulk_create_and_insert_grouping_records(record_requests)
+        self.assertTrue(response.success)
+        self.assertEqual(len(response.groups_with_neighbor), 0)
+
+        with Session() as session:
+            records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_(hashes)).all()
+            self.assertEqual(len(records), 3)  # Only 3 records should be created (0, 2, and 4)
+
+            for record in records:
+                self.assertIn(record.hash, [hashes[0], hashes[2], hashes[4]])
+                if record.hash == hashes[0]:
+                    self.assertEqual(record.stacktrace_embedding.tolist(), grouping_lookup().encode_text("stacktrace 0").tolist())
+                elif record.hash == hashes[2]:
+                    self.assertEqual(record.stacktrace_embedding.tolist(), grouping_lookup().encode_text("stacktrace 2").tolist())
+                elif record.hash == hashes[4]:
+                    self.assertEqual(record.stacktrace_embedding.tolist(), grouping_lookup().encode_text("stacktrace 4").tolist())
+
+            empty_records = session.query(DbGroupingRecord).filter(DbGroupingRecord.hash.in_([hashes[1], hashes[3]])).all()
+            self.assertEqual(len(empty_records), 0)  # No records should be created for empty stacktraces
 
 @parametrize(count=1)
 def test_GroupingLookup_insert_batch_grouping_records_duplicates(
