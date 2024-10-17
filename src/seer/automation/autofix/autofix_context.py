@@ -239,7 +239,7 @@ class AutofixContext(PipelineContext):
 
                         branch_ref = repo_client.create_branch_from_changes(
                             pr_title=change_state.title,
-                            file_changes=codebase_state.file_changes,
+                            file_patches=change_state.diff,
                         )
 
                         if branch_ref is None:

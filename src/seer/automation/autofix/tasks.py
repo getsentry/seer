@@ -31,8 +31,10 @@ from seer.automation.autofix.models import (
     AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
+    AutofixUpdateCodeChangePayload,
     AutofixUpdateRequest,
     AutofixUserMessagePayload,
+    ChangesStep,
     DefaultStep,
     Step,
 )
@@ -391,6 +393,8 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
                         generated_at_memory_index=len(memory) - 1,
                     )
                 )
+    elif memory and memory[-1].role == "assistant":
+        memory.append(Message(content=".", role="user"))
 
     # restart the step
     event_manager.restart_step(step_to_restart)
@@ -410,6 +414,83 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
             ),
             queue=CeleryQueues.DEFAULT,
         ).apply_async()
+
+
+def update_code_change(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixUpdateCodeChangePayload):
+        raise ValueError("Invalid payload type for update_code_change")
+
+    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    cur_state = state.get()
+
+    repo_id = request.payload.repo_id
+    hunk_index = request.payload.hunk_index
+    lines = request.payload.lines
+    file_path = request.payload.file_path
+
+    # get the last step and make sure it's a changes step
+    last_step = cur_state.steps[-1]
+    if not isinstance(last_step, ChangesStep):
+        return
+    changes = last_step.changes
+
+    # find the change with the matching repo_external_id
+    matching_change = None
+    change_index = 0
+    for i, change in enumerate(changes):
+        if change.repo_external_id == repo_id:
+            matching_change = change
+            change_index = i
+            break
+    if not matching_change:
+        raise ValueError("No matching change found")
+
+    # check that we have a matching file patch in the codebase state using the file path
+    matching_file_patch = None
+    file_patch_index = 0
+    for i, file_patch in enumerate(matching_change.diff):
+        if file_patch.path == file_path:
+            file_patch_index = i
+            matching_file_patch = file_patch
+            break
+    if not matching_file_patch:
+        raise ValueError("No matching file patch found")
+
+    # check that we have a matching hunk in the file patch using the hunk index
+    if hunk_index < 0 or hunk_index >= len(matching_file_patch.hunks):
+        raise ValueError("Hunk index is out of range")
+    matching_hunk = matching_file_patch.hunks[hunk_index]
+
+    # calculate the change in hunk length
+    old_hunk_length = matching_hunk.target_length
+    new_hunk_length = len([line for line in lines if line.line_type in [" ", "+"]])
+    length_diff = new_hunk_length - old_hunk_length
+
+    # replace the hunk lines and update its length
+    with state.update() as cur:
+        # Update line numbers within the current hunk
+        current_target_line_no = matching_hunk.target_start
+        for line in lines:
+            if line.line_type in [" ", "+"]:
+                line.target_line_no = current_target_line_no
+                current_target_line_no += 1
+            elif line.line_type == "-":
+                line.target_line_no = None
+
+        matching_hunk.lines = lines
+        matching_hunk.target_length = new_hunk_length
+        matching_file_patch.hunks[hunk_index] = matching_hunk
+
+        # update line numbers in subsequent hunks and their lines
+        for subsequent_hunk in matching_file_patch.hunks[hunk_index + 1 :]:
+            subsequent_hunk.target_start += length_diff
+            for line in subsequent_hunk.lines:
+                if line.target_line_no is not None:
+                    line.target_line_no += length_diff
+
+        matching_change.diff[file_patch_index] = matching_file_patch
+        last_step.changes[change_index] = matching_change
+        cur.steps[-1] = last_step
 
 
 def run_autofix_evaluation(request: AutofixEvaluationRequest):

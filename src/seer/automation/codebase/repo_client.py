@@ -14,7 +14,7 @@ from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
-from seer.automation.models import FileChange, InitializationError, RepoDefinition
+from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.utils import class_method_lru_cache
@@ -322,60 +322,84 @@ class RepoClient:
 
         return ref
 
-    def _commit_file_change(self, change: FileChange, branch_ref: str):
-        contents = (
-            self.repo.get_contents(change.path, ref=branch_ref)
-            if change.change_type != "create"
-            else None
-        )
+    def _commit_file_change(
+        self, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
+    ):
+        if not patch and not change:
+            raise ValueError("Either patch or change must be provided")
+
+        path = patch.path if patch else change.path
+        patch_type = patch.type if patch else change.change_type
+        if patch_type == "create":
+            patch_type = "A"
+        elif patch_type == "delete":
+            patch_type = "D"
+        elif patch_type == "edit":
+            patch_type = "M"
+        commit_message = change.commit_message if change else None
+
+        contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
 
         if isinstance(contents, list):
-            raise RuntimeError(
-                f"Expected a single ContentFile but got a list for path {change.path}"
-            )
+            raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
 
-        new_contents = change.apply(contents.decoded_content.decode("utf-8") if contents else None)
+        to_apply = contents.decoded_content.decode("utf-8") if contents else None
+        new_contents = patch.apply(to_apply) if patch else change.apply(to_apply)
 
         # Remove leading slash if it exists, the github api will reject paths with leading slashes.
-        if change.path.startswith("/"):
-            change.path = change.path[1:]
+        if path.startswith("/"):
+            path = path[1:]
 
-        if change.change_type == "delete" and contents:
+        if patch_type == "D" and contents:
             self.repo.delete_file(
-                change.path,
-                change.description or "File deletion",
+                path,
+                commit_message or "File deletion",
                 contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
                 branch=branch_ref,
             )
-        elif change.change_type == "create" and new_contents:
+        elif patch_type == "A" and new_contents:
             self.repo.create_file(
-                change.path, change.description or "New file", new_contents, branch=branch_ref
+                path, commit_message or "New file", new_contents, branch=branch_ref
             )
         else:
             if contents is None:
-                raise FileNotFoundError(f"File {change.path} does not exist in the repository.")
+                raise FileNotFoundError(f"File {path} does not exist in the repository.")
 
             self.repo.update_file(
-                change.path,
-                change.commit_message or "File change",
+                path,
+                commit_message or "File change",
                 new_contents or "",
                 contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
                 branch=branch_ref,
             )
 
     def create_branch_from_changes(
-        self, pr_title: str, file_changes: list[FileChange], branch_name: str | None = None
+        self,
+        pr_title: str,
+        file_patches: list[FilePatch] | None = None,
+        file_changes: list[FileChange] | None = None,
+        branch_name: str | None = None,
     ) -> GitRef | None:
+        if not file_patches and not file_changes:
+            raise ValueError("Either file_patches or file_changes must be provided")
+
         new_branch_name = (
             branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
         )
         branch_ref = self._create_branch(new_branch_name)
 
-        for change in file_changes:
-            try:
-                self._commit_file_change(change, branch_ref.ref)
-            except Exception as e:
-                logger.error(f"Error committing file change: {e}")
+        if file_patches:
+            for patch in file_patches:
+                try:
+                    self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
+                except Exception as e:
+                    logger.error(f"Error committing file change: {e}")
+        elif file_changes:
+            for change in file_changes:
+                try:
+                    self._commit_file_change(change=change, branch_ref=branch_ref.ref)
+                except Exception as e:
+                    logger.error(f"Error committing file change: {e}")
 
         branch_ref.update()
 

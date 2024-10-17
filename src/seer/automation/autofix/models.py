@@ -12,7 +12,7 @@ from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
-from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
+from seer.automation.models import FileChange, FilePatch, IssueDetails, Line, RepoDefinition
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import make_kill_signal
 from seer.db import DbRunMemory
@@ -286,6 +286,7 @@ class AutofixUpdateType(str, enum.Enum):
     CREATE_PR = "create_pr"
     USER_MESSAGE = "user_message"
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
+    UPDATE_CODE_CHANGE = "update_code_change"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -313,6 +314,14 @@ class AutofixRestartFromPointPayload(BaseModel):
     retain_insight_card_index: int | None = None
 
 
+class AutofixUpdateCodeChangePayload(BaseModel):
+    type: Literal[AutofixUpdateType.UPDATE_CODE_CHANGE]
+    hunk_index: int
+    lines: list[Line]
+    file_path: str
+    repo_id: str | None = None
+
+
 class AutofixUpdateRequest(BaseModel):
     run_id: int
     payload: Union[
@@ -320,6 +329,7 @@ class AutofixUpdateRequest(BaseModel):
         AutofixCreatePrUpdatePayload,
         AutofixUserMessagePayload,
         AutofixRestartFromPointPayload,
+        AutofixUpdateCodeChangePayload,
     ] = Field(discriminator="type")
 
 

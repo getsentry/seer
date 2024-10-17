@@ -27,7 +27,7 @@ class GeneratedTestsPullRequestCreator:
         for change in self.file_changes_payload:
             commit_messages.append(f"- {change.commit_message}")
         branch_ref = self.repo_client.create_branch_from_changes(
-            pr_title, self.file_changes_payload, branch_name
+            pr_title=pr_title, file_changes=self.file_changes_payload, branch_name=branch_name
         )
 
         if not branch_ref:
