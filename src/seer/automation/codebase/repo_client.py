@@ -349,7 +349,9 @@ class RepoClient:
             raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
 
         to_apply = contents.decoded_content.decode("utf-8") if contents else None
-        new_contents = patch.apply(to_apply) if patch else change.apply(to_apply)
+        new_contents = (
+            patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
+        )
 
         # Remove leading slash if it exists, the github api will reject paths with leading slashes.
         if path.startswith("/"):
