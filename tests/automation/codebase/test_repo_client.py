@@ -382,11 +382,14 @@ class TestRepoClientIndexFileSet:
         assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.requests.post")
-    def test_post_unit_test_reference_to_original_pr(self, repo_client, mock_post):
+    def test_post_unit_test_reference_to_original_pr(self, mock_post, repo_client):
         original_pr_url = "https://github.com/sentry/sentry/pull/12345"
         unit_test_pr_url = "https://github.com/sentry/sentry/pull/67890"
         expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
-        expected_comment = f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        expected_comment = (
+            f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. "
+            f"View the new PR({unit_test_pr_url}) to review the changes."
+        )
         expected_params = {"body": expected_comment}
 
         mock_response = MagicMock()
