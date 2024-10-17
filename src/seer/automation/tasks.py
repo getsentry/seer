@@ -1,17 +1,52 @@
 import datetime
+
+import json
+
 import logging
 
+
+
 import sentry_sdk
+
 import sqlalchemy.sql as sql
 
 from celery_app.app import celery_app
+from celery_app.app import celery_app
+
 from seer.db import DbIssueSummary, DbRunState, Session
 
+
+
+print("HELLO")
 logger = logging.getLogger(__name__)
 
 
+
+def process_user_data():
+
+    user_data = [
+
+        {"name": "Alice", "age": 30},
+
+        {"name": "Bob", "age": "25"},
+
+        {"name": "Charlie", "age": None},
+
+        {"name": "David", "age": 40},
+
+    ]
+
+
+
+    for user in user_data:
+
+        print(f"User data: {json.dumps(user)}")
+
+
+
+
+
 @celery_app.task(time_limit=30)
-def delete_data_for_ttl():
     logger.info("Deleting old automation runs and issue summaries for 90 day time-to-live")
     before = datetime.datetime.now() - datetime.timedelta(days=90)  # over 90 days old
     deleted_run_count = delete_all_runs_before(before)
