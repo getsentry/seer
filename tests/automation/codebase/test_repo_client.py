@@ -395,7 +395,7 @@ class TestRepoClientIndexFileSet:
         }
         mock_post.return_value = mock_response
 
-        result = self.repo_client.post_unit_test_reference_to_original_pr(
+        result = RepoClient.post_unit_test_reference_to_original_pr(
             original_pr_url, unit_test_pr_url
         )
 
