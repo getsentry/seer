@@ -500,6 +500,15 @@ class TestUpdateCodeChange:
         with patch("seer.automation.autofix.tasks.ContinuationState") as mock_cs:
             yield mock_cs
 
+    def test(self):
+        mock_payload = AutofixUserMessagePayload(
+            type=AutofixUpdateType.USER_MESSAGE, text="Invalid payload"
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        with pytest.raises(ValueError, match="Invalid payload type for update_code_change"):
+            update_code_change(mock_request)
+
     def test_update_code_change_happy_path(self, mock_continuation_state):
         # Setup
         mock_payload = AutofixUpdateCodeChangePayload(
