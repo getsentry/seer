@@ -531,6 +531,44 @@ class FilePatch(BaseModel):
     target_file: str
     hunks: List[Hunk]
 
+    def apply(self, file_contents: str | None) -> str | None:
+        if self.type == "A":
+            if file_contents is not None and file_contents.strip():
+                raise FileChangeError("Cannot add a file that already exists.")
+            return self._apply_hunks([])
+
+        if file_contents is None:
+            raise FileChangeError("File contents must be provided for modify or delete operations.")
+
+        if self.type == "D":
+            return None
+
+        # For M type
+        return self._apply_hunks(file_contents.splitlines(keepends=True))
+
+    def _apply_hunks(self, lines: List[str]) -> str:
+        result = []
+        current_line = 0
+
+        for hunk in self.hunks:
+            # Add unchanged lines before the hunk
+            result.extend(lines[current_line : hunk.target_start - 1])
+            current_line = hunk.target_start - 1
+
+            for line in hunk.lines:
+                if line.line_type == "+":
+                    result.append(line.value + ("\n" if not line.value.endswith("\n") else ""))
+                elif line.line_type == " ":
+                    result.append(lines[current_line])
+                    current_line += 1
+                elif line.line_type == "-":
+                    current_line += 1
+
+        # Add any remaining unchanged lines after the last hunk
+        result.extend(lines[current_line:])
+
+        return "".join(result).rstrip("\n")
+
 
 class FileChangeError(Exception):
     pass

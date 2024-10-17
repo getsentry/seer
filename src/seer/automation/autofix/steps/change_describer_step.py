@@ -51,6 +51,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     @observe(name="Autofix – Change Describer Step")
     @ai_track(description="Autofix - Change Describer Step")
     def _invoke(self, **kwargs):
+        self.context.event_manager.add_log("Describing my changes...")
         # Get the diff and PR details for each codebase.
         change_describer = ChangeDescriptionComponent(self.context)
         codebase_changes: list[CodebaseChange] = []
@@ -97,7 +98,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         )
 
         # GitHub Copilot can automatically make a PR after the coding step
-        if self.request.pr_to_comment_on:  # TODO
+        if self.request.pr_to_comment_on:
             for repo in cur_state.request.repos:
                 self.context.commit_changes(
                     repo_external_id=repo.external_id,
