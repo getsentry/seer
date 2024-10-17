@@ -458,7 +458,7 @@ class RepoDefinition(BaseModel):
     provider: Annotated[str, Examples(("github", "integrations:github"))]
     owner: str
     name: str
-    external_id: Annotated[str, Examples(specialized.ascii_words)]
+    external_id: str = ""
     base_commit_sha: Optional[str] = None
 
     @property
