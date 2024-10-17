@@ -1,7 +1,7 @@
 import gc
 import logging
 from functools import wraps
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 import numpy as np
 import sentry_sdk
@@ -24,9 +24,10 @@ NN_GROUPING_HNSW_CANDIDATES = 100
 NN_SIMILARITY_DISTANCE = 0.05
 
 
+
 class GroupingRequest(BaseModel):
     project_id: int
-    stacktrace: str
+    stacktrace: str | None = None
     hash: str
     message: Optional[str] = None
     exception_type: Optional[str] = None
@@ -38,11 +39,12 @@ class GroupingRequest(BaseModel):
     use_reranking: bool = False
 
     @field_validator("stacktrace")
+
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
-        if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
-        return v
+    def convert_empty_to_none(cls, v: Optional[str]) -> Optional[str]:
+        if v == "":
+            return None
 
 
 class GroupingResponse(BaseModel):
@@ -156,16 +158,21 @@ class GroupingLookup:
 
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
+
     def encode_text(self, stacktrace: str) -> np.ndarray:
         """
-        Encodes the stacktrace using the sentence transformer model.
+    def encode_text(self, stacktrace: Optional[str]) -> np.ndarray:
 
         :param stacktrace: The stacktrace to encode.
         :return: The embedding of the stacktrace.
         """
         return self.model.encode(stacktrace)
 
+        if not stacktrace:
+            # Return a zero vector of the same size as the model's output
+            return np.zeros(self.model.get_sentence_embedding_dimension())
     @sentry_sdk.tracing.trace
+
     @handle_out_of_memory
     def encode_multiple_texts(self, stacktraces: List[str], batch_size: int = 1) -> np.ndarray:
         """
@@ -342,6 +349,16 @@ class GroupingLookup:
             results = self.query_nearest_k_neighbors(
                 session,
                 embedding,
+        """
+        if not issue.stacktrace:
+            logger.warning(
+                "Empty stacktrace provided",
+                extra={
+                    "input_hash": issue.hash,
+                    "project_id": issue.project_id,
+                },
+            )
+            return SimilarityResponse(responses=[])
                 issue.project_id,
                 issue.hash,
                 NN_SIMILARITY_DISTANCE if issue.read_only else issue.threshold,
@@ -487,6 +504,16 @@ class GroupingLookup:
                 )
                 session.commit()
             except IntegrityError:
+        if not issue.stacktrace:
+            logger.warning(
+                "Attempted to insert record with empty stacktrace",
+                extra={
+                    "input_hash": issue.hash,
+                    "project_id": issue.project_id,
+                },
+            )
+            return
+
                 logger.exception(
                     "group_already_exists_in_seer_db",
                     extra={
