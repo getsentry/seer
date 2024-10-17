@@ -1,7 +1,6 @@
 import gc
 import logging
-from functools import wraps
-from typing import Any, List, Optional
+from typing import Any, List, Union
 
 import numpy as np
 import sentry_sdk
@@ -24,8 +23,9 @@ NN_GROUPING_HNSW_CANDIDATES = 100
 NN_SIMILARITY_DISTANCE = 0.05
 
 
+
 class GroupingRequest(BaseModel):
-    project_id: int
+    stacktrace: str | None = None
     stacktrace: str
     hash: str
     message: Optional[str] = None
@@ -39,9 +39,9 @@ class GroupingRequest(BaseModel):
 
     @field_validator("stacktrace")
     @classmethod
-    def check_field_is_not_empty(cls, v, info: ValidationInfo):
-        if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
+    def convert_empty_to_none(cls, v: Optional[str]) -> Optional[str]:
+        if v == "":
+            return None
         return v
 
 
@@ -154,15 +154,20 @@ class GroupingLookup:
         self.model = _load_model(model_path)
         self.encode_text("IndexError: list index out of range")  # Ensure warm start
 
+
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
-    def encode_text(self, stacktrace: str) -> np.ndarray:
+    def encode_text(self, stacktrace: Optional[str]) -> np.ndarray:
         """
         Encodes the stacktrace using the sentence transformer model.
+
 
         :param stacktrace: The stacktrace to encode.
         :return: The embedding of the stacktrace.
         """
+        if not stacktrace:
+            # Return a zero vector of the same size as the model's output
+            return np.zeros(self.model.get_sentence_embedding_dimension())
         return self.model.encode(stacktrace)
 
     @sentry_sdk.tracing.trace
@@ -340,6 +345,16 @@ class GroupingLookup:
             embedding = self.encode_text(issue.stacktrace).astype("float32")
 
             results = self.query_nearest_k_neighbors(
+        """
+        if not issue.stacktrace:
+            logger.warning(
+                "Empty stacktrace provided",
+                extra={
+                    "input_hash": issue.hash,
+                    "project_id": issue.project_id,
+                },
+            )
+            return SimilarityResponse(responses=[])
                 session,
                 embedding,
                 issue.project_id,
@@ -485,6 +500,16 @@ class GroupingLookup:
                         index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
                     )
                 )
+        if not issue.stacktrace:
+            logger.warning(
+                "Attempted to insert record with empty stacktrace",
+                extra={
+                    "input_hash": issue.hash,
+                    "project_id": issue.project_id,
+                },
+            )
+            return
+
                 session.commit()
             except IntegrityError:
                 logger.exception(
