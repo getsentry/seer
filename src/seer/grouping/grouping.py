@@ -37,12 +37,19 @@ class GroupingRequest(BaseModel):
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
     use_reranking: bool = False
 
+
+
     @field_validator("stacktrace")
     @classmethod
-    def check_field_is_not_empty(cls, v, info: ValidationInfo):
+    def check_and_log_empty_stacktrace(cls, v: str, info: ValidationInfo) -> str:
+
         if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
+            logger.warning(f"Empty stacktrace received for {info.field_name}. This may affect grouping accuracy!!!")
         return v
+
+
+
+
 
 
 class GroupingResponse(BaseModel):
@@ -339,8 +346,18 @@ class GroupingLookup:
         with Session() as session:
             embedding = self.encode_text(issue.stacktrace).astype("float32")
 
+        if not issue.stacktrace:
+
+            logger.warning(f"Empty stacktrace received for issue with hash {issue.hash}. Skipping similarity search.")
+
+            return SimilarityResponse(responses=[])
+
+
+
             results = self.query_nearest_k_neighbors(
                 session,
+
+
                 embedding,
                 issue.project_id,
                 issue.hash,
@@ -421,15 +438,30 @@ class GroupingLookup:
                 with sentry_sdk.start_span(
                     op="seer.grouping", description="insert single grouping record"
                 ) as span:
+        valid_stacktraces = [st for st in data.stacktrace_list if st]
+
+        if len(valid_stacktraces) != len(data.stacktrace_list):
+
+            logger.warning(f"Skipped {len(data.stacktrace_list) - len(valid_stacktraces)} records with empty stacktraces.")
+
                     span.set_data("stacktrace_len", len(data.stacktrace_list[i]))
-                    embedding = embeddings[i].astype("float32")
+            valid_stacktraces, data.encode_stacktrace_batch_size
+
                     nearest_neighbor = self.query_nearest_k_neighbors(
                         session,
-                        embedding,
+            for i, (entry, stacktrace) in enumerate(zip(data.data, data.stacktrace_list)):
+
+                if not stacktrace:
+
+                    logger.warning(f"Skipping record with empty stacktrace. Hash: {entry.hash}")
+
+                    continue
+
                         entry.project_id,
                         entry.hash,
                         data.threshold,
-                        data.k,
+                    span.set_data("stacktrace_len", len(stacktrace))
+
                         data.hnsw_candidates,
                         data.hnsw_distance,
                         data.use_reranking,
@@ -484,6 +516,14 @@ class GroupingLookup:
                     insert_stmt.on_conflict_do_nothing(
                         index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash)
                     )
+        if not issue.stacktrace:
+
+            logger.warning(f"Attempted to insert a record with an empty stacktrace. Hash: {issue.hash}")
+
+            return
+
+
+
                 )
                 session.commit()
             except IntegrityError:
