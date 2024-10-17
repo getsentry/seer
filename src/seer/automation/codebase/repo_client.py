@@ -323,7 +323,7 @@ class RepoClient:
         return ref
 
     def _commit_file_change(
-        self, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
+        self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
     ):
         if not patch and not change:
             raise ValueError("Either patch or change must be provided")
@@ -382,6 +382,7 @@ class RepoClient:
 
     def create_branch_from_changes(
         self,
+        *,
         pr_title: str,
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
