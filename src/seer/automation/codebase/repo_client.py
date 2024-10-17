@@ -328,8 +328,13 @@ class RepoClient:
         if not patch and not change:
             raise ValueError("Either patch or change must be provided")
 
-        path = patch.path if patch else change.path
-        patch_type = patch.type if patch else change.change_type
+        path = patch.path if patch else (change.path if change else None)
+        patch_type = patch.type if patch else (change.change_type if change else None)
+        if not path:
+            raise ValueError("Path must be provided")
+        if not patch_type:
+            raise ValueError("Patch type must be provided")
+
         if patch_type == "create":
             patch_type = "A"
         elif patch_type == "delete":
