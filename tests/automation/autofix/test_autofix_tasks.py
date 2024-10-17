@@ -524,10 +524,15 @@ class TestUpdateCodeChange:
         mock_change.repo_external_id = "repo1"
         mock_file_patch = MagicMock(spec=FilePatch)
         mock_file_patch.path = "path/to/file.py"
-        mock_hunk = MagicMock(spec=Hunk)
-        mock_hunk.target_start = 10
-        mock_hunk.target_length = 1
-        mock_file_patch.hunks = [mock_hunk]
+        mock_hunk1 = MagicMock(spec=Hunk)
+        mock_hunk1.target_start = 10
+        mock_hunk1.target_length = 1
+        mock_hunk1.lines = [Line(line_type=" ", value="original line")]
+        mock_hunk2 = MagicMock(spec=Hunk)
+        mock_hunk2.target_start = 15
+        mock_hunk2.target_length = 2
+        mock_hunk2.lines = [Line(line_type=" ", value="another line")]
+        mock_file_patch.hunks = [mock_hunk1, mock_hunk2]
         mock_change.diff = [mock_file_patch]
         mock_cur_state.steps[-1].changes = [mock_change]
 
@@ -538,14 +543,17 @@ class TestUpdateCodeChange:
         mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
         mock_state.update.assert_called_once()
 
-        # Check if the hunk was updated correctly
-        updated_hunk = mock_file_patch.hunks[0]
-        assert updated_hunk.lines == mock_payload.lines
-        assert updated_hunk.target_length == 2  # 1 unchanged + 1 new line
+        # Check if the first hunk was updated correctly
+        updated_hunk1 = mock_file_patch.hunks[0]
+        assert updated_hunk1.lines == mock_payload.lines
+        assert updated_hunk1.target_length == 2  # 1 unchanged + 1 new line
 
-        # Check if subsequent hunks were updated (if any)
-        if len(mock_file_patch.hunks) > 1:
-            assert mock_file_patch.hunks[1].target_start == 12  # 10 + 2
+        # Check if the second hunk's start was updated correctly
+        updated_hunk2 = mock_file_patch.hunks[1]
+        assert updated_hunk2.target_start == 16  # 15 + (2 - 1)
+
+        # Verify that the second hunk's length wasn't changed
+        assert updated_hunk2.target_length == 2
 
     def test_update_code_change_no_matching_change(self, mock_continuation_state):
         mock_payload = AutofixUpdateCodeChangePayload(
