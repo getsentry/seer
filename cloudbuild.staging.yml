@@ -1,0 +1,38 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-t', 'us-west1-docker.pkg.dev/$_SBX_PROJECT/staging/seer',
+    '--build-arg',
+    'SEER_ENVIRONMENT=staging',
+    '--build-arg',
+    'SEER_VERSION_SHA=$COMMIT_SHA',
+    '--cache-from', 'us-west1-docker.pkg.dev/$_SBX_PROJECT/staging/seer',
+    '.',
+  ]
+  env: [DOCKER_BUILDKIT=1]
+
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-t', 'us-west1-docker.pkg.dev/$_SBX_PROJECT/staging/seer.compose',
+    '--build-arg',
+    'SBX_PROJECT=$_SBX_PROJECT',
+    '-f', 'Compose.Dockerfile',
+    '--cache-from', 'us-west1-docker.pkg.dev/$_SBX_PROJECT/staging/seer.compose',
+    '.',
+  ]
+  env: [DOCKER_BUILDKIT=1]
+
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      docker push us-west1-docker.pkg.dev/$_SBX_PROJECT/staging/seer:latest
+      docker push us-west1-docker.pkg.dev/$_SBX_PROJECT/staging/seer.compose:latest
+
+# This is needed for Freight to find matching builds
+images: [
+  #  'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
+]
