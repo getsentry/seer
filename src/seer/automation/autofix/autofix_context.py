@@ -279,13 +279,7 @@ class AutofixContext(PipelineContext):
                             {ref_note}
                             {description}
 
-                            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID (see below).
-
-                            ### 🤓 Stats for the nerds:
-                            Run ID: **{run_id}**
-                            Prompt tokens: **{prompt_tokens}**
-                            Completion tokens: **{completion_tokens}**
-                            Total tokens: **{total_tokens}**"""
+                            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: {run_id}."""
                         ).format(
                             run_id=state.run_id,
                             user_line=(
@@ -295,9 +289,6 @@ class AutofixContext(PipelineContext):
                             ),
                             description=change_state.description,
                             ref_note=ref_note,
-                            prompt_tokens=state.usage.prompt_tokens,
-                            completion_tokens=state.usage.completion_tokens,
-                            total_tokens=state.usage.total_tokens,
                         )
 
                         pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
@@ -338,13 +329,7 @@ class AutofixContext(PipelineContext):
 
             ## More Info
 
-            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID (see below).
-
-            ### 🤓 Stats for the nerds:
-            Run ID: **{run_id}**
-            Prompt tokens: **{prompt_tokens}**
-            Completion tokens: **{completion_tokens}**
-            Total tokens: **{total_tokens}**"""
+            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: {run_id}."""
         ).format(
             run_id=state.run_id,
             issue=(
@@ -358,9 +343,6 @@ class AutofixContext(PipelineContext):
                 else ""
             ),
             root_cause=root_cause,
-            prompt_tokens=state.usage.prompt_tokens,
-            completion_tokens=state.usage.completion_tokens,
-            total_tokens=state.usage.total_tokens,
         )
 
         # comment root cause analysis on PR
