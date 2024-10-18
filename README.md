@@ -114,3 +114,29 @@ Send a POST request to `/v1/automation/autofix/evaluations/start` with the follo
 ```
 
 Note: Currently, only internal datasets are available.
+
+## Staging Sandbox
+
+It is possible to run and deploy seer to a sandbox staging environment.
+An example of such a deployment is in [this PR](https://github.com/getsentry/terraform-sandboxes.private/pull/128/files).
+
+To get started, use the `#proj-tf-sandbox` channel and request direction or help on scaffolding a new sandbox in the
+[sandbox repo](https://github.com/getsentry/terraform-sandboxes.private).
+
+You then can use the [iap](https://github.com/getsentry/terraform-sandboxes.private/pull/128/files#diff-6c91d750c658a5427482946cfcdce9e1eb6347ebed778bffc4b1813311dc9a79),
+and [seer-staging](https://github.com/getsentry/terraform-sandboxes.private/pull/128/files#diff-716adf4cf1da8b035369fe6219f11fb09b86e1757b91f0c03187d58e5f0bc5bd)
+modules to scaffold a public load balancer pointing to a compute running the `docker-compose.staging.yml` file.
+
+
+After scaffolding your environment, you'll want to set your `SBX_PROJECT` environment variable in your `.env` file, and
+run `make push-staging` to submit a cloud build for your image.
+
+!!!!NOTE!!!!
+The staging cloud build uses your current local environment to build the image, not CI, which means it will use all your
+src files and your local `.env` file to configure the image that will be hosted in your sandbox.  Make sure you don't
+accidentally include any sensitive personal files in your source tree before using this.
+
+
+Each time you push with `make push-staging` there will be a period of time while the VM polls and unpacks the new image
+before it is loaded.  If you have a `SENTRY_DSN` and `SENTRY_ENVIRONMENT` set, a release will be created by the push,
+allowing you to track when the server has loaded that release version.
