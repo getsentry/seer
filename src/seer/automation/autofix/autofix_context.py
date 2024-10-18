@@ -289,9 +289,6 @@ class AutofixContext(PipelineContext):
                             ),
                             description=change_state.description,
                             ref_note=ref_note,
-                            prompt_tokens=state.usage.prompt_tokens,
-                            completion_tokens=state.usage.completion_tokens,
-                            total_tokens=state.usage.total_tokens,
                         )
 
                         pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
@@ -346,9 +343,6 @@ class AutofixContext(PipelineContext):
                 else ""
             ),
             root_cause=root_cause,
-            prompt_tokens=state.usage.prompt_tokens,
-            completion_tokens=state.usage.completion_tokens,
-            total_tokens=state.usage.total_tokens,
         )
 
         # comment root cause analysis on PR
