@@ -279,13 +279,7 @@ class AutofixContext(PipelineContext):
                             {ref_note}
                             {description}
 
-                            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID (see below).
-
-                            ### 🤓 Stats for the nerds:
-                            Run ID: **{run_id}**
-                            Prompt tokens: **{prompt_tokens}**
-                            Completion tokens: **{completion_tokens}**
-                            Total tokens: **{total_tokens}**"""
+                            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: {run_id}."""
                         ).format(
                             run_id=state.run_id,
                             user_line=(
@@ -338,13 +332,7 @@ class AutofixContext(PipelineContext):
 
             ## More Info
 
-            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID (see below).
-
-            ### 🤓 Stats for the nerds:
-            Run ID: **{run_id}**
-            Prompt tokens: **{prompt_tokens}**
-            Completion tokens: **{completion_tokens}**
-            Total tokens: **{total_tokens}**"""
+            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: {run_id}."""
         ).format(
             run_id=state.run_id,
             issue=(
