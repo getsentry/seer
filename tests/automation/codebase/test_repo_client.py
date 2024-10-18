@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from github import UnknownObjectException
@@ -460,3 +460,28 @@ class TestRepoClientIndexFileSet:
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py"}
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_post_unit_test_reference_to_original_pr(self, mock_post, repo_client):
+        original_pr_url = "https://github.com/sentry/sentry/pull/12345"
+        unit_test_pr_url = "https://github.com/sentry/sentry/pull/67890"
+        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
+        expected_comment = (
+            f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. "
+            f"View the new PR({unit_test_pr_url}) to review the changes."
+        )
+        expected_params = {"body": expected_comment}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_unit_test_reference_to_original_pr(
+            original_pr_url, unit_test_pr_url
+        )
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
