@@ -1,316 +1,212 @@
-import threading
-from typing import Any, Callable
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from seer.automation.agent.agent import (
     AgentConfig,
-    ClaudeAgent,
-    GptAgent,
     LlmAgent,
     MaxIterationsReachedException,
+    RunConfig,
 )
-from seer.automation.agent.client import ClaudeClient, GptClient, LlmClient, T
-from seer.automation.agent.models import Message, ToolCall, Usage
+from seer.automation.agent.client import OpenAiProvider
+from seer.automation.agent.models import (
+    LlmGenerateTextResponse,
+    LlmProviderType,
+    LlmResponseMetadata,
+    Message,
+    ToolCall,
+    Usage,
+)
 from seer.automation.agent.tools import FunctionTool
-from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
-from seer.automation.autofix.models import DefaultStep
-from seer.dependency_injection import resolve
 
 
-class TestLlmAgent:
-    @pytest.fixture
-    def config(self):
-        return AgentConfig()
-
-    @pytest.fixture
-    def client(self):
-        class TestClient(LlmClient):
-            def completion(
-                self,
-                messages: list[Message],
-                model: str,
-                system_prompt: str | None = None,
-                tools: list[FunctionTool] | None = ...,
-                response_format: dict | None = None,
-            ) -> tuple[Message, Usage]:
-                pass
-
-            def completion_with_parser(
-                self,
-                messages: list[Message],
-                parser: Callable[[str | None], T],
-                model: str,
-                system_prompt: str | None = None,
-                tools: list[FunctionTool] | None = None,
-                response_format: dict | None = None,
-            ) -> tuple[T, Message, Usage]:
-                pass
-
-            def json_completion(
-                self, messages: list[Message], model: str, system_prompt: str | None = None
-            ) -> tuple[dict[str, Any] | None, Message, Usage]:
-                pass
-
-        return TestClient()
-
-    @pytest.fixture
-    def agent(self, config, client):
-        class TestAgent(LlmAgent):
-            def run_iteration(self):
-                pass
-
-        return TestAgent(config=config, client=client)
-
-    def test_should_continue(self, agent: LlmAgent):
-        assert agent.should_continue()  # Initial state
-
-        agent.iterations = agent.config.max_iterations
-        agent.memory = [Message(role="assistant", content="STOP")]
-        assert not agent.should_continue()  # Max iterations reached
-
-        agent.iterations = 1
-        agent.config.stop_message = "STOP"
-        assert not agent.should_continue()  # Stop message found
-
-    def test_add_user_message(self, agent: LlmAgent):
-        agent.add_user_message("Test message")
-        assert len(agent.memory) == 1
-        assert agent.memory[0].role == "user"
-        assert agent.memory[0].content == "Test message"
-
-    def test_get_last_message_content(self, agent: LlmAgent):
-        assert agent.get_last_message_content() is None  # Empty memory
-        agent.memory = [Message(role="user", content="Test")]
-        assert agent.get_last_message_content() == "Test"
-
-    def test_call_tool(self, agent: LlmAgent):
-        mock_tool_fn = MagicMock(return_value="Tool result")
-        mock_tool = FunctionTool(
-            name="test_tool",
-            description="Test tool",
-            fn=mock_tool_fn,
-            parameters=[],
-        )
-        mock_tool.name = "test_tool"
-
-        agent.tools = [mock_tool]
-
-        tool_call = ToolCall(id="123", function="test_tool", args='{"arg": "value"}')
-        result = agent.call_tool(tool_call)
-
-        assert isinstance(result, Message)
-        assert result.role == "tool"
-        assert result.content == "Tool result"
-        assert result.tool_call_id == "123"
-
-    def test_get_tool_by_name(self, agent: LlmAgent):
-        tool = FunctionTool(
-            name="test_tool", description="Test tool", fn=lambda: None, parameters=[]
-        )
-        agent.tools = [tool]
-        assert agent.get_tool_by_name("test_tool") == tool
-
-        with pytest.raises(StopIteration):
-            agent.get_tool_by_name("non_existent_tool")
-
-    def test_parse_tool_arguments(self, agent: LlmAgent):
-        tool = FunctionTool(
-            name="test_tool",
-            description="Test tool",
-            fn=lambda: None,
-            parameters=[{"name": "arg1"}, {"name": "arg2"}],
-        )
-        args = '{"arg1": "value1", "arg2": "value2", "arg3": "value3"}'
-        parsed_args = agent.parse_tool_arguments(tool, args)
-        assert parsed_args == {"arg1": "value1", "arg2": "value2"}
+@pytest.fixture
+def mock_llm_client():
+    return Mock()
 
 
-class TestGptAgent:
-    @pytest.fixture(params=[(GptAgent, GptClient), (ClaudeAgent, ClaudeClient)])
-    def agent_and_client_classes(self, request):
-        return request.param
+@pytest.fixture
+def agent(mock_llm_client):
+    config = AgentConfig()
+    return LlmAgent(config=config, client=mock_llm_client, name="TestAgent")
 
-    @pytest.fixture
-    def config(self):
-        return AgentConfig(interactive=True)
 
-    @pytest.fixture
-    def agent(self, agent_and_client_classes, config):
-        agent_class, _ = agent_and_client_classes
-        return agent_class(config)
+@pytest.fixture
+def run_config():
+    return RunConfig(
+        system_prompt="You are a helpful assistant.",
+        prompt="Hello, how are you?",
+        model=MagicMock(spec=OpenAiProvider),
+        temperature=0.0,
+        run_name="Test Run",
+    )
 
-    @pytest.fixture
-    def mock_client(self, agent_and_client_classes):
-        _, client_class = agent_and_client_classes
-        return resolve(client_class)
 
-    @pytest.fixture
-    def mock_context(self):
-        context = MagicMock(spec=AutofixContext)
-        state = MagicMock()
-        state.steps = [DefaultStep(title="Test step title")]
-        state.get_all_insights.return_value = []
-        state.get_step_description.return_value = "Test step"
-        state.request.options.disable_interactivity = False
-        context.state = MagicMock()
-        context.state.get.return_value = state
-        return context
+def test_agent_initialization(agent):
+    assert not agent.config.interactive
+    assert agent.name == "TestAgent"
+    assert agent.iterations == 0
+    assert agent.memory == []
 
-    @patch("seer.automation.agent.agent.InsightSharingComponent")
-    @patch("seer.automation.agent.agent.LlmAgent.run_in_thread")
-    def test_run_iteration(self, mock_thread, mock_insight_sharing, agent, mock_context):
-        # Mock the message and usage
-        mock_message = Message(role="assistant", content="Test response")
-        mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        agent.get_completion = MagicMock(return_value=(mock_message, mock_usage))
 
-        # Mock the insight sharing component
-        mock_insight_card = MagicMock()
-        mock_insight_sharing_instance = MagicMock()
-        mock_insight_sharing_instance.invoke.return_value = mock_insight_card
-        mock_insight_sharing.return_value = mock_insight_sharing_instance
+def test_add_user_message(agent):
+    agent.add_user_message("Test message")
+    assert len(agent.memory) == 1
+    assert agent.memory[0].role == "user"
+    assert agent.memory[0].content == "Test message"
 
-        # Run the method
-        agent.run_iteration(context=mock_context)
 
-        # Assertions
-        assert agent.iterations == 1
-        assert len(agent.memory) == 1
-        assert agent.memory[0] == mock_message
-        assert agent.usage == mock_usage
+def test_get_last_message_content(agent):
+    assert agent.get_last_message_content() is None
+    agent.add_user_message("Test message")
+    assert agent.get_last_message_content() == "Test message"
 
-        # Check if a new thread was created for insight sharing
-        mock_thread.assert_called_once()
-        assert mock_thread.call_args[1]["func"] == agent.share_insights
-        assert isinstance(mock_thread.call_args[1]["args"][0], AutofixContext)
-        assert isinstance(mock_thread.call_args[1]["args"][1], str)
 
-        # To test the share insights method, we need to call it directly
-        agent.share_insights(mock_context, "Test response", -1)
+def test_reset_iterations(agent):
+    agent.iterations = 5
+    agent.reset_iterations()
+    assert agent.iterations == 0
 
-        # Check if insight sharing was called
-        mock_insight_sharing.assert_called_once_with(mock_context)
-        mock_insight_sharing_instance.invoke.assert_called_once()
-        assert isinstance(
-            mock_insight_sharing_instance.invoke.call_args[0][0], InsightSharingRequest
-        )
-        mock_context.state.update.assert_called_once()
 
-    def test_run_iteration_with_queued_user_messages(self, agent, mock_client, mock_context):
-        # Create a mock step with queued_user_messages as a list of strings
-        mock_step = MagicMock(spec=DefaultStep)
-        mock_step.queued_user_messages = ["User message 1", "User message 2"]
+def test_update_usage(agent):
+    usage = Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
+    agent.update_usage(usage)
+    assert agent.usage == usage
 
-        # Set the mock step as the last step in the context
-        mock_context.state.get().steps = [mock_step]
 
-        agent.use_user_messages = MagicMock()
+def test_process_message(agent):
+    message = Message(role="assistant", content="Hello!", tool_calls=[])
+    agent.process_message(message)
+    assert len(agent.memory) == 1
+    assert agent.iterations == 1
 
-        mock_message = Message(role="assistant", content="Test response")
-        mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
 
-        # Run the method
-        agent.run_iteration(context=mock_context)
+def test_process_message_with_tool_calls(agent):
+    tool_call = ToolCall(id="1", function="test_tool", args='{"arg": "value"}')
+    message = Message(role="assistant", content="Using a tool", tool_calls=[tool_call])
 
-        # Assertions
-        agent.use_user_messages.assert_called_once_with(mock_context)
-        assert agent.iterations == 0  # Should not increment
-        assert len(agent.memory) == 0  # Should not add to memory
-
-        # Additional assertion to verify the queued_user_messages
-        assert mock_context.state.get().steps[-1].queued_user_messages == [
-            "User message 1",
-            "User message 2",
-        ]
-
-    def test_get_completion(self, agent, mock_client):
-        mock_message = Message(role="assistant", content="Test response")
-        mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
-
-        message, usage = agent.get_completion()
-
-        assert message == mock_message
-        assert usage == mock_usage
-
-    def test_process_message(self, agent):
-        message = Message(role="assistant", content="Test message")
+    with patch.object(agent, "process_tool_calls") as mock_process_tool_calls:
         agent.process_message(message)
-        assert len(agent.memory) == 1
-        assert agent.memory[0] == message
-        assert agent.iterations == 1
+        mock_process_tool_calls.assert_called_once_with([tool_call])
 
-    def test_process_tool_calls(self, agent):
-        tool_calls = [ToolCall(id="1", function="test_tool", args='{"arg": "value"}')]
-        with patch.object(agent, "call_tool") as mock_call_tool:
-            mock_call_tool.return_value = Message(
-                role="tool", content="Tool result", tool_call_id="1"
-            )
-            agent.process_tool_calls(tool_calls)
-        assert len(agent.memory) == 1
-        assert agent.memory[0].role == "tool"
-        assert agent.memory[0].content == "Tool result"
 
-    def test_update_usage(self, agent):
-        initial_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        agent.usage = initial_usage
-        new_usage = Usage(completion_tokens=5, prompt_tokens=10, total_tokens=15)
-        agent.update_usage(new_usage)
-        expected_usage = Usage(completion_tokens=15, prompt_tokens=30, total_tokens=45)
-        assert agent.usage == expected_usage
+def test_should_continue(agent, run_config):
+    # First iteration
+    assert agent.should_continue(run_config)
 
-    def test_run(self, agent, mock_client):
-        mock_message = Message(role="assistant", content="Final response")
-        mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
+    # Max iterations reached
+    agent.iterations = run_config.max_iterations
+    agent.memory = [Message(role="assistant", content="Thinking...")]
+    assert not agent.should_continue(run_config)
 
-        result = agent.run("Test prompt")
+    # Stop message encountered
+    agent.iterations = 1
+    run_config.stop_message = "STOP"
+    agent.memory.append(Message(role="assistant", content="Let's STOP here"))
+    assert not agent.should_continue(run_config)
 
-        assert result == "Final response"
-        assert len(agent.memory) > 0
-        assert agent.memory[0].role == "user"
-        assert agent.memory[0].content == "Test prompt"
-
-    def test_run_max_iterations_exception(self, agent, mock_client):
-        agent.config.max_iterations = 1
-        tool = FunctionTool(
-            name="test_tool", description="Test tool", fn=lambda: None, parameters=[]
-        )
-        agent.tools = [tool]
-
-        mock_message = Message(
+    # Continue with tool calls
+    agent.memory.append(
+        Message(
             role="assistant",
-            content="Response",
-            tool_calls=[ToolCall(id="1", function="test_tool", args="{'arg': 'value'}")],
+            content="Using a tool",
+            tool_calls=[ToolCall(id="1", function="test", args="{}")],
         )
-        mock_usage = Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-        mock_client.completion = MagicMock(return_value=(mock_message, mock_usage))
+    )
+    assert agent.should_continue(run_config)
 
-        with pytest.raises(MaxIterationsReachedException):
-            agent.run("Test prompt")
 
-    @patch("seer.automation.agent.agent.module.enable")
-    @patch("seer.automation.agent.agent.configuration_module.enable")
-    def test_run_in_thread(self, mock_config_enable, mock_module_enable, agent):
-        mock_func = MagicMock()
-        mock_args = (1, "test")
+def test_run_iteration(agent, run_config, mock_llm_client):
+    mock_response = LlmGenerateTextResponse(
+        message=Message(role="assistant", content="Hello!"),
+        metadata=LlmResponseMetadata(
+            model="test-model",
+            provider_name=LlmProviderType.OPENAI,
+            usage=Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+        ),
+    )
+    mock_llm_client.generate_text.return_value = mock_response
 
-        event = threading.Event()
+    agent.run_iteration(run_config)
 
-        def mock_func_side_effect(*args):
-            event.set()
+    assert len(agent.memory) == 1
+    assert agent.memory[0].content == "Hello!"
+    assert agent.iterations == 1
+    assert agent.usage.total_tokens == 30
 
-        mock_func.side_effect = mock_func_side_effect
 
-        agent.run_in_thread(mock_func, mock_args)
+def test_run_with_tool_calls(agent, run_config, mock_llm_client):
+    tool = FunctionTool(
+        name="test_tool", description="A test tool", parameters=[], fn=lambda: "Tool result"
+    )
+    agent.tools = [tool]
 
-        assert event.wait(1), "Thread did not finish execution in time"
+    mock_response1 = LlmGenerateTextResponse(
+        message=Message(
+            role="assistant",
+            content="Using a tool",
+            tool_calls=[ToolCall(id="1", function="test_tool", args="{}")],
+        ),
+        metadata=LlmResponseMetadata(
+            model="test-model",
+            provider_name=LlmProviderType.OPENAI,
+            usage=Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+        ),
+    )
+    mock_response2 = LlmGenerateTextResponse(
+        message=Message(role="assistant", content="Done"),
+        metadata=LlmResponseMetadata(
+            model="test-model",
+            provider_name=LlmProviderType.OPENAI,
+            usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+        ),
+    )
+    mock_llm_client.generate_text.side_effect = [mock_response1, mock_response2]
 
-        mock_module_enable.assert_called_once()
-        mock_config_enable.assert_called_once()
+    result = agent.run(run_config)
 
-        mock_func.assert_called_once_with(*mock_args)
+    assert result == "Done"
+    assert (
+        len(agent.memory) == 4
+    )  # User message, initial assistant message, tool response, final message
+    assert agent.iterations == 2
+    assert agent.usage.total_tokens == 50
+
+
+def test_run_max_iterations_exception(agent, run_config, mock_llm_client):
+    mock_response = LlmGenerateTextResponse(
+        message=Message(role="assistant", content="Thinking..."),
+        metadata=LlmResponseMetadata(
+            model="test-model",
+            provider_name=LlmProviderType.OPENAI,
+            usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+        ),
+    )
+    mock_llm_client.generate_text.return_value = mock_response
+
+    run_config.max_iterations = 1
+
+    with pytest.raises(MaxIterationsReachedException):
+        agent.run(run_config)
+
+    assert agent.iterations == 1
+
+
+def test_run_with_initial_prompt(agent, run_config, mock_llm_client):
+    mock_response = LlmGenerateTextResponse(
+        message=Message(role="assistant", content="Hello!"),
+        metadata=LlmResponseMetadata(
+            model="test-model",
+            provider_name=LlmProviderType.OPENAI,
+            usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+        ),
+    )
+    mock_llm_client.generate_text.return_value = mock_response
+
+    run_config.prompt = "Initial prompt"
+    result = agent.run(run_config)
+
+    assert result == "Hello!"
+    assert len(agent.memory) == 2  # Initial user message and assistant response
+    assert agent.memory[0].content == "Initial prompt"
+    assert agent.memory[0].role == "user"

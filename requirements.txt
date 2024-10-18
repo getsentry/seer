@@ -21,7 +21,7 @@ amqp==5.2.0
     # via kombu
 annotated-types==0.7.0
     # via pydantic
-anthropic==0.31.2
+anthropic==0.34.2
     # via -r requirements-constraints.txt
 anyio==4.6.2.post1
     # via
@@ -94,6 +94,8 @@ click-plugins==1.1.1
     # via celery
 click-repl==0.3.0
     # via celery
+cmdstanpy==1.2.4
+    # via prophet
 coloredlogs==15.0.1
     # via
     #   onnxruntime
@@ -254,7 +256,9 @@ h11==0.14.0
     #   httpcore
     #   uvicorn
 holidays==0.31
-    # via -r requirements-constraints.txt
+    # via
+    #   -r requirements-constraints.txt
+    #   prophet
 httpcore==1.0.6
     # via httpx
 httptools==0.6.4
@@ -285,6 +289,7 @@ importlib-resources==6.0.1
     # via
     #   -r requirements-constraints.txt
     #   chromadb
+    #   prophet
 iniconfig==2.0.0
     # via pytest
 isodate==0.7.2
@@ -348,7 +353,9 @@ markupsafe==2.1.3
     #   sentry-sdk
     #   werkzeug
 matplotlib==3.9.2
-    # via seaborn
+    # via
+    #   prophet
+    #   seaborn
 mdurl==0.1.2
     # via markdown-it-py
 monotonic==1.6
@@ -386,6 +393,7 @@ numpy==1.26.1
     #   -r requirements-constraints.txt
     #   chroma-hnswlib
     #   chromadb
+    #   cmdstanpy
     #   contourpy
     #   datasets
     #   matplotlib
@@ -397,6 +405,7 @@ numpy==1.26.1
     #   pandas-stubs
     #   patsy
     #   pgvector
+    #   prophet
     #   pyarrow
     #   scikit-learn
     #   scipy
@@ -404,6 +413,7 @@ numpy==1.26.1
     #   sentence-transformers
     #   shapely
     #   simdkalman
+    #   stanio
     #   statsmodels
     #   stumpy
     #   transformers
@@ -444,7 +454,9 @@ packaging==23.2
 pandas==2.0.3
     # via
     #   -r requirements-constraints.txt
+    #   cmdstanpy
     #   datasets
+    #   prophet
     #   seaborn
     #   statsmodels
 pandas-stubs==2.1.4.231227
@@ -476,6 +488,8 @@ prompt-toolkit==3.0.48
     # via click-repl
 propcache==0.2.0
     # via yarl
+prophet==1.1.6
+    # via -r requirements-constraints.txt
 proto-plus==1.24.0
     # via
     #   -r requirements-constraints.txt
@@ -678,6 +692,8 @@ sqlalchemy==2.0.25
     #   alembic
     #   flask-sqlalchemy
     #   pytest-alembic
+stanio==0.5.1
+    # via cmdstanpy
 starlette==0.40.0
     # via fastapi
 statsmodels==0.14.0
@@ -710,10 +726,12 @@ tqdm==4.66.3
     # via
     #   -r requirements-constraints.txt
     #   chromadb
+    #   cmdstanpy
     #   datasets
     #   huggingface-hub
     #   nltk
     #   openai
+    #   prophet
     #   sentence-transformers
     #   transformers
 transformers==4.37.2

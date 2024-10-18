@@ -346,7 +346,6 @@ class TestSeer(unittest.TestCase):
         assert output == {
             "responses": [
                 {
-                    "message_distance": 0.0,
                     "parent_hash": hashes[0],
                     "should_group": True,
                     "stacktrace_distance": 0.0,
@@ -547,6 +546,7 @@ class TestSeer(unittest.TestCase):
                 AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
                 "seer.app.restart_from_point_with_feedback",
             ),
+            (AutofixUpdateType.UPDATE_CODE_CHANGE, "seer.app.update_code_change"),
         ]
 
         for autofix_type, expected_func in test_cases:

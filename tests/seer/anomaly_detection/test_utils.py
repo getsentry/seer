@@ -1,9 +1,25 @@
 import json
 import os
+from typing import List, Optional
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict, Field
 
 from seer.anomaly_detection.models import TimeSeriesPoint
+
+
+class LoadedSyntheticData(BaseModel):
+    timeseries: List[np.ndarray] | List[List[TimeSeriesPoint]]
+    timestamps: List[np.ndarray]
+    mp_dists: List[np.ndarray]
+    window_sizes: List[int]
+    expected_types: Optional[List[str]] = Field(None)
+    anomaly_starts: Optional[List[int]] = Field(None)
+    anomaly_ends: Optional[List[int]] = Field(None)
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
 
 # Returns timeseries and mp_distances as lists of numpy arrays from the synthetic data
@@ -28,6 +44,7 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
     """
 
     timeseries = []
+    timestamps = []
     mp_dists = []
     window_sizes = []
     anomaly_starts = []
@@ -59,18 +76,20 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
                 data = json.load(file)
                 data = data["ts"]
 
-                ts = None
+                values = None
                 if as_ts_datatype:
-                    ts = [
+                    values = [
                         TimeSeriesPoint(timestamp=point["timestamp"], value=point["value"])
                         for point in data
                     ]
                 else:
-                    ts = np.array([point["value"] for point in data], dtype=np.float64)
+                    values = np.array([point["value"] for point in data], dtype=np.float64)
 
+                ts_timestamps = np.array([point["timestamp"] for point in data], dtype=np.float64)
                 mp_dist = np.array([point["mp_dist"] for point in data], dtype=np.float64)
 
-                timeseries.append(ts)
+                timeseries.append(values)
+                timestamps.append(ts_timestamps)
                 mp_dists.append(mp_dist)
                 window_sizes.append(window_size)
                 anomaly_starts.append(start)
@@ -78,5 +97,15 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
                 expected_types.append(expected_type)
 
     if include_anomaly_range:
-        return expected_types, timeseries, mp_dists, window_sizes, anomaly_starts, anomaly_ends
-    return timeseries, mp_dists, window_sizes
+        return LoadedSyntheticData(
+            expected_types=expected_types,
+            timeseries=timeseries,
+            timestamps=timestamps,
+            mp_dists=mp_dists,
+            window_sizes=window_sizes,
+            anomaly_starts=anomaly_starts,
+            anomaly_ends=anomaly_ends,
+        )
+    return LoadedSyntheticData(
+        timeseries=timeseries, timestamps=timestamps, mp_dists=mp_dists, window_sizes=window_sizes
+    )

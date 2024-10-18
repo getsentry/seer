@@ -52,7 +52,6 @@ class TestGrouping(unittest.TestCase):
                 GroupingResponse(
                     parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                     stacktrace_distance=0.0,
-                    message_distance=0.0,
                     should_group=True,
                 )
             ],
@@ -335,7 +334,6 @@ class TestGrouping(unittest.TestCase):
             expected_groups_with_neighbor[str(i)] = GroupingResponse(
                 parent_hash="QYK7aNYNnp5FgSev9Np1soqb1SdtyahD",
                 stacktrace_distance=0.00,
-                message_distance=0.00,
                 should_group=True,
             )
 
@@ -379,7 +377,6 @@ class TestGrouping(unittest.TestCase):
             expected_groups_with_neighbor[str(i + 5)] = GroupingResponse(
                 parent_hash=str(i) * 32,
                 stacktrace_distance=0.00,
-                message_distance=0.00,
                 should_group=True,
             )
 

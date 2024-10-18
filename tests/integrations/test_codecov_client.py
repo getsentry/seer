@@ -1,7 +1,7 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from integrations.codecov.codecov_client import CodecovClient
-from seer.configuration import AppConfig
 
 
 class MockConfig:

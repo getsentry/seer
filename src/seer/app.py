@@ -35,6 +35,7 @@ from seer.automation.autofix.tasks import (
     run_autofix_evaluation,
     run_autofix_execution,
     run_autofix_root_cause,
+    update_code_change,
 )
 from seer.automation.codebase.models import (
     CodebaseStatusCheckRequest,
@@ -173,6 +174,11 @@ def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     return AutofixEndpointResponse(started=True, run_id=run_id)
 
 
+@json_api(blueprint, "/v1/automation/autofix/raise-error")  # TODO remove this endpoint
+def autofix_test_copilot_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
+    raise Exception("This is a test error to create a Sentry issue")
+
+
 @json_api(blueprint, "/v1/automation/autofix/update")
 def autofix_update_endpoint(
     data: AutofixUpdateRequest,
@@ -185,6 +191,8 @@ def autofix_update_endpoint(
         receive_user_message(data)
     elif data.payload.type == AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK:
         restart_from_point_with_feedback(data)
+    elif data.payload.type == AutofixUpdateType.UPDATE_CODE_CHANGE:
+        update_code_change(data)
     return AutofixEndpointResponse(started=True, run_id=data.run_id)
 
 

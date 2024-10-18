@@ -3,6 +3,7 @@ import requests
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+
 class CodecovClient:
     @staticmethod
     @inject

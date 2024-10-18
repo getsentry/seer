@@ -26,6 +26,7 @@ class CodingPrompts:
         task_str: str,
         repo_names: list[str],
         instruction: str | None,
+        fix_instruction: str | None,
         summary: Optional[IssueSummary] = None,
     ):
         return textwrap.dedent(
@@ -42,7 +43,7 @@ class CodingPrompts:
             Provide the most actionable and effective steps to fix the issue.
 
             Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue. Your list of steps to fix the problem should be detailed enough so that following it exactly will lead to a fully complete solution.
-
+            {fix_instruction}
             When ready with your final answer, detail the precise plan to fix the issue.
 
             # Guidelines:
@@ -60,6 +61,7 @@ class CodingPrompts:
             task_str=task_str,
             repo_names_str=format_repo_names(repo_names),
             instruction=format_instruction(instruction),
+            fix_instruction=format_instruction(fix_instruction),
             summary_str=format_summary(summary),
         )
 

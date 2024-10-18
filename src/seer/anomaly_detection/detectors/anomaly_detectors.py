@@ -82,7 +82,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             A tuple with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
 
         """
-        ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
+        ts_values = timeseries.values
         window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
             # TODO: Add sentry logging of this error
@@ -99,10 +99,10 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
 
         flags_and_scores = scorer.batch_score(
-            ts=ts_values,
+            values=ts_values,
+            timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
-            sensitivity=config.sensitivity,
-            direction=config.direction,
+            ad_config=config,
             window_size=window_size,
         )
         if flags_and_scores is None:
@@ -118,13 +118,13 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
 
 class MPStreamAnomalyDetector(AnomalyDetector):
-    base_timestamps: npt.NDArray[np.float64] = Field(
+    history_timestamps: npt.NDArray[np.float64] = Field(
         ..., description="Baseline timeseries to which streaming points will be added."
     )
-    base_values: npt.NDArray[np.float64] = Field(
+    history_values: npt.NDArray[np.float64] = Field(
         ..., description="Baseline timeseries to which streaming points will be added."
     )
-    base_mp: npt.NDArray[np.float64] = Field(
+    history_mp: npt.NDArray[np.float64] = Field(
         ..., description="Matrix profile of the baseline timeseries."
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
@@ -142,13 +142,25 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomalies:
+        """
+        This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
+
+        parameters:
+        timeseries: list[TimeSeriesPoint]
+            The timeseries
+        config: AnomalyDetectionConfig
+            Parameters for tweaking the algorithm
+
+        Returns:
+            A MPTimeSeriesAnomalies object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
+        """
         stream = None
         with sentry_sdk.start_span(description="Initializing MP stream"):
             # Initialize stumpi
             stream = stumpy.stumpi(
-                self.base_values,
+                self.history_values,
                 m=self.window_size,
-                mp=self.base_mp,
+                mp=self.history_mp,
                 normalize=False,
                 egress=False,
             )
@@ -158,21 +170,22 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             flags: list[AnomalyFlags] = []
             streamed_mp: list[list[float]] = []
             thresholds: list[float] = []
-            for cur_val in timeseries.values:
+            for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
                 # Update the sumpi stream processor with new data
                 stream.update(cur_val)
 
                 # Get the matrix profile for the new data and score it
                 cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
                 streamed_mp.append(cur_mp)
-                mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.base_mp, pad_to_len=None)
+                mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.history_mp, pad_to_len=None)
                 flags_and_scores = scorer.stream_score(
-                    ts_streamed=cur_val,
-                    mp_dist_streamed=stream.P_[-1],
-                    ts_history=self.base_values,
-                    mp_dist_history=mp_dist_baseline,
-                    sensitivity=config.sensitivity,
-                    direction=config.direction,
+                    streamed_value=cur_val,
+                    streamed_timestamp=cur_timestamp,
+                    streamed_mp_dist=stream.P_[-1],
+                    history_values=self.history_values,
+                    history_timestamps=self.history_timestamps,
+                    history_mp_dist=mp_dist_baseline,
+                    ad_config=config,
                     window_size=self.window_size,
                 )
                 if flags_and_scores is None:
@@ -182,8 +195,8 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 thresholds.extend(flags_and_scores.thresholds)
 
                 # Add new data point as well as its matrix profile to baseline
-                self.base_values = stream.T_
-                self.base_mp = np.vstack([self.base_mp, cur_mp])
+                self.history_values = stream.T_
+                self.history_mp = np.vstack([self.history_mp, cur_mp])
 
             return MPTimeSeriesAnomalies(
                 flags=flags,

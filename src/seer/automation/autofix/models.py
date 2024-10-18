@@ -12,7 +12,7 @@ from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
-from seer.automation.models import FileChange, FilePatch, IssueDetails, RepoDefinition
+from seer.automation.models import FileChange, FilePatch, IssueDetails, Line, RepoDefinition
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import make_kill_signal
 from seer.db import DbRunMemory
@@ -83,6 +83,7 @@ class CustomRootCauseSelection(BaseModel):
 
 class CodeContextRootCauseSelection(BaseModel):
     cause_id: int
+    instruction: str | None = None
 
 
 RootCauseSelection = Union[CustomRootCauseSelection, CodeContextRootCauseSelection]
@@ -251,6 +252,7 @@ class AutofixStepUpdateArgs(BaseModel):
 
 class AutofixRequestOptions(BaseModel):
     disable_codebase_indexing: bool = False
+    comment_on_pr_with_url: str | None = None
     disable_interactivity: bool = False
 
 
@@ -284,12 +286,14 @@ class AutofixUpdateType(str, enum.Enum):
     CREATE_PR = "create_pr"
     USER_MESSAGE = "user_message"
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
+    UPDATE_CODE_CHANGE = "update_code_change"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
     cause_id: int | None = None
     custom_root_cause: str | None = None
+    instruction: str | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
@@ -310,6 +314,14 @@ class AutofixRestartFromPointPayload(BaseModel):
     retain_insight_card_index: int | None = None
 
 
+class AutofixUpdateCodeChangePayload(BaseModel):
+    type: Literal[AutofixUpdateType.UPDATE_CODE_CHANGE]
+    hunk_index: int
+    lines: list[Line]
+    file_path: str
+    repo_id: str | None = None
+
+
 class AutofixUpdateRequest(BaseModel):
     run_id: int
     payload: Union[
@@ -317,6 +329,7 @@ class AutofixUpdateRequest(BaseModel):
         AutofixCreatePrUpdatePayload,
         AutofixUserMessagePayload,
         AutofixRestartFromPointPayload,
+        AutofixUpdateCodeChangePayload,
     ] = Field(discriminator="type")
 
 
@@ -405,7 +418,9 @@ class AutofixContinuation(AutofixGroupState):
         if self.steps:
             self.steps[-1].completedMessage = message
 
-    def get_selected_root_cause_and_fix(self) -> RootCauseAnalysisItem | str | None:
+    def get_selected_root_cause_and_fix(
+        self,
+    ) -> tuple[RootCauseAnalysisItem | str | None, str | None]:
         root_cause_step = self.find_step(key="root_cause_analysis")
         if root_cause_step and isinstance(root_cause_step, RootCauseStep):
             if root_cause_step.selection:
@@ -415,10 +430,10 @@ class AutofixContinuation(AutofixGroupState):
                         for cause in root_cause_step.causes
                         if cause.id == root_cause_step.selection.cause_id
                     )
-                    return cause
+                    return cause, root_cause_step.selection.instruction
                 elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
-                    return root_cause_step.selection.custom_root_cause
-        return None
+                    return root_cause_step.selection.custom_root_cause, None
+        return None, None
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()

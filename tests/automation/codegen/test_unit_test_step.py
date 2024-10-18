@@ -1,16 +1,11 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodeUnitTestRequest
 from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.models import FileChange, RepoDefinition
-
-import unittest
-from unittest.mock import MagicMock
-
-from seer.automation.models import RepoDefinition
 
 
 class TestUnittestStep(unittest.TestCase):
@@ -61,7 +56,7 @@ class TestUnittestStep(unittest.TestCase):
     def test_create_github_pull_request_success(self, _):
         file_changes_payload = [MagicMock(spec=FileChange), MagicMock(spec=FileChange)]
         pr = MagicMock()
-        pr.head.sha = "head_sha"
+        pr.head.ref = "head_sha"
         pr.number = 123
         pr.base.ref = "main"
         repo_client = MagicMock(spec=RepoClient)
@@ -80,13 +75,13 @@ class TestUnittestStep(unittest.TestCase):
         creator.create_github_pull_request()
 
         repo_client.create_branch_from_changes.assert_called_once_with(
-            pr_title, file_changes_payload, branch_name
+            pr_title=pr_title, file_changes=file_changes_payload, branch_name=branch_name
         )
         repo_client.create_pr_from_branch.assert_called_once_with(
             branch="branch_ref",
             title=pr_title,
             description="This PR adds tests for #123\n\n### Commits:\n- commit message 1\n- commit message 2",
-            provided_base="main",
+            provided_base="head_sha",
         )
         self.assertEqual(repo_client.base_commit_sha, pr.head.sha)
 

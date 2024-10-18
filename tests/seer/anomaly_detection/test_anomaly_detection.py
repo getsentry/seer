@@ -32,10 +32,10 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, _ = convert_synthetic_ts(
+        loaded_synthetic_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
-        ts = timeseries[0]
+        ts = loaded_synthetic_data.timeseries[0]
 
         alert = AlertInSeer(id=0)
         request = StoreDataRequest(
@@ -61,10 +61,10 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, _ = convert_synthetic_ts(
+        loaded_synthetic_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
-        ts = timeseries[0]
+        ts = loaded_synthetic_data.timeseries[0]
 
         anomaly_request = DetectAnomaliesRequest(
             organization_id=0, project_id=0, config=config, context=ts
@@ -85,11 +85,11 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, window_sizes = convert_synthetic_ts(
+        loaded_synthetic_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
-        ts = timeseries[0]
-        window_size = window_sizes[0]
+        ts = loaded_synthetic_data.timeseries[0]
+        window_size = loaded_synthetic_data.window_sizes[0]
 
         dummy_mp = np.ones((len(ts) - window_size + 1, 4))
 
@@ -135,12 +135,12 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        timeseries, _, _ = convert_synthetic_ts(
+        loaded_synthetic_data = convert_synthetic_ts(
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
 
         n = 5
-        for i, ts_history in enumerate(timeseries):
+        for i, ts_history in enumerate(loaded_synthetic_data.timeseries):
 
             # Generate new observation window of n points which are the same as the last point
             ts_current = []

@@ -1,9 +1,11 @@
 import logging
 
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.agent import AgentConfig, ClaudeAgent, LlmAgent
+from integrations.codecov.codecov_client import CodecovClient
+from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
+from seer.automation.agent.client import AnthropicProvider, LlmClient
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
 from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
@@ -11,13 +13,14 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_delete,
 )
 from seer.automation.autofix.tools import BaseTools
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodeUnitTestOutput, CodeUnitTestRequest
 from seer.automation.codegen.prompts import CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
-from integrations.codecov.codecov_client import CodecovClient
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -25,92 +28,83 @@ logger = logging.getLogger(__name__)
 class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOutput]):
     context: CodegenContext
 
-    @observe(name="Analyze existing test design")
-    @ai_track(description="AnalyzeTestDesign")
-    def _get_test_design_summary(self, agent: LlmAgent, prompt: str):
-        return agent.run(prompt)
+    @observe(name="Generate unit tests")
+    @ai_track(description="Generate unit tests")
+    @inject
+    def invoke(
+        self, request: CodeUnitTestRequest, llm_client: LlmClient = injected
+    ) -> CodeUnitTestOutput | None:
+        with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_UNIT_TEST) as tools:
+            agent = LlmAgent(
+                tools=tools.get_tools(),
+                config=AgentConfig(interactive=False),
+            )
 
-    @observe(name="Create plan")
-    @ai_track(description="GetTestPlan")
-    def _get_plan(self, agent: LlmAgent, prompt: str) -> str:
-        return agent.run(prompt)
+            codecov_client_params = request.codecov_client_params
 
-    @observe(name="Generate test tasks")
-    @ai_track(description="GenerateTests")
-    def _generate_tests(self, agent: LlmAgent, prompt: str) -> str:
-        return agent.run(prompt=prompt)
+            code_coverage_data = CodecovClient.fetch_coverage(
+                repo_name=codecov_client_params["repo_name"],
+                pullid=codecov_client_params["pullid"],
+                owner_username=codecov_client_params["owner_username"],
+            )
 
-    def invoke(self, request: CodeUnitTestRequest) -> CodeUnitTestOutput | None:
-        langfuse_context.update_current_trace(user_id="ram")
-        tools = BaseTools(self.context)
+            test_result_data = CodecovClient.fetch_test_results_for_commit(
+                repo_name=codecov_client_params["repo_name"],
+                owner_username=codecov_client_params["owner_username"],
+                latest_commit_sha=codecov_client_params["head_sha"],
+            )
 
-        agent = ClaudeAgent(
-            tools=tools.get_tools(),
-            config=AgentConfig(
-                system_prompt=CodingUnitTestPrompts.format_system_msg(), max_iterations=24
-            ),
-        )
+            existing_test_design_response = llm_client.generate_text(
+                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
+                    diff_str=request.diff
+                ),
+            )
 
-        codecov_client_params = request.codecov_client_params
+            llm_client.generate_text(
+                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                prompt=CodingUnitTestPrompts.format_plan_step_msg(
+                    diff_str=request.diff,
+                    has_coverage_info=code_coverage_data,
+                    has_test_result_info=test_result_data,
+                ),
+            )
 
-        code_coverage_data = CodecovClient.fetch_coverage(
-            repo_name=codecov_client_params["repo_name"],
-            pullid=codecov_client_params["pullid"],
-            owner_username=codecov_client_params["owner_username"],
-        )
+            final_response = agent.run(
+                run_config=RunConfig(
+                    prompt=CodingUnitTestPrompts.format_unit_test_msg(
+                        diff_str=request.diff, test_design_hint=existing_test_design_response
+                    ),
+                    system_prompt=CodingUnitTestPrompts.format_system_msg(),
+                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    run_name="Generate Unit Tests",
+                ),
+            )
 
-        test_result_data = CodecovClient.fetch_test_results_for_commit(
-            repo_name=codecov_client_params["repo_name"],
-            owner_username=codecov_client_params["owner_username"],
-            latest_commit_sha=codecov_client_params["head_sha"],
-        )
+            if not final_response:
+                return None
+            plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
 
-        existing_test_design_response = self._get_test_design_summary(
-            agent=agent,
-            prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
-                diff_str=request.diff
-            ),
-        )
+            if len(plan_steps_content) == 0:
+                raise ValueError("Failed to extract plan_steps from the planning step of LLM")
 
-        self._get_plan(
-            agent=agent,
-            prompt=CodingUnitTestPrompts.format_plan_step_msg(
-                diff_str=request.diff,
-                has_coverage_info=code_coverage_data,
-                has_test_result_info=test_result_data,
-            ),
-        )
-
-        final_response = self._generate_tests(
-            agent=agent,
-            prompt=CodingUnitTestPrompts.format_unit_test_msg(
-                diff_str=request.diff, test_design_hint=existing_test_design_response
-            ),
-        )
-
-        if not final_response:
-            return None
-        plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
-
-        if len(plan_steps_content) == 0:
-            raise ValueError("Failed to extract plan_steps from the planning step of LLM")
-
-        coding_output = PlanStepsPromptXml.from_xml(
-            f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
-        ).to_model()
+            coding_output = PlanStepsPromptXml.from_xml(
+                f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
+            ).to_model()
 
         if not coding_output.tasks:
             raise ValueError("No tasks found in coding output")
         file_changes: list[FileChange] = []
         for task in coding_output.tasks:
-            repo_client = self.context.get_repo_client(task.repo_name)
+            repo_client = self.context.get_repo_client(
+                task.repo_name, type=RepoClientType.CODECOV_UNIT_TEST
+            )
             if task.type == "file_change":
                 file_content = repo_client.get_file_content(task.file_path)
                 if not file_content:
                     logger.warning(f"Failed to get content for {task.file_path}")
                     continue
 
-                # TODO: Handle missing changes
                 changes, _ = task_to_file_change(task, file_content)
                 file_changes += changes
             elif task.type == "file_delete":

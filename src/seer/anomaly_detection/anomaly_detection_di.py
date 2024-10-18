@@ -9,6 +9,10 @@ from seer.anomaly_detection.detectors import (
     SuSSWindowSizeSelector,
     WindowSizeSelector,
 )
+from seer.anomaly_detection.detectors.location_detectors import (
+    LocationDetector,
+    ProphetLocationDetector,
+)
 from seer.dependency_injection import Module
 
 anomaly_detection_module = Module()
@@ -45,3 +49,8 @@ def normalizer_provider() -> Normalizer:
 @anomaly_detection_module.provider
 def mp_utils_provider() -> MPUtils:
     return MPUtils()
+
+
+@anomaly_detection_module.provider
+def location_detector_provider() -> LocationDetector:
+    return ProphetLocationDetector()

@@ -1,10 +1,10 @@
 import logging
 import time
-from typing import List
+
+from github.PullRequest import PullRequest
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FileChange
-from github.PullRequest import PullRequest
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class GeneratedTestsPullRequestCreator:
         for change in self.file_changes_payload:
             commit_messages.append(f"- {change.commit_message}")
         branch_ref = self.repo_client.create_branch_from_changes(
-            pr_title, self.file_changes_payload, branch_name
+            pr_title=pr_title, file_changes=self.file_changes_payload, branch_name=branch_name
         )
 
         if not branch_ref:
@@ -42,5 +42,5 @@ class GeneratedTestsPullRequestCreator:
             branch=branch_ref,
             title=pr_title,
             description=description,
-            provided_base=self.pr.base.ref,
+            provided_base=self.pr.head.ref,
         )
