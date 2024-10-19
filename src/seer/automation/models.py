@@ -454,8 +454,10 @@ class IssueDetails(BaseModel):
     events: list[SentryEventData]
 
 
+
+
 class RepoDefinition(BaseModel):
-    provider: Annotated[str, Examples(("github", "integrations:github"))]
+    provider: Annotated[str, Examples(("github", "integrations:github", "gitlab", "integrations:gitlab"))]
     owner: str
     name: str
     external_id: Annotated[str, Examples(specialized.ascii_words)]
@@ -471,8 +473,8 @@ class RepoDefinition(BaseModel):
         cleaned_provider = process_repo_provider(provider)
 
         if cleaned_provider != "github":
-            raise ValueError(f"Provider {cleaned_provider} is not supported.")
-
+        supported_providers = ["github", "gitlab"]
+        if cleaned_provider not in supported_providers:
         return cleaned_provider
 
     def __hash__(self):
