@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from enum import Enum
+from pydantic import BaseModel, field_validator
 from pydantic_xml import attr
 
 from seer.automation.models import PromptXmlModel, RepoDefinition
@@ -23,7 +24,24 @@ class Document(BaseDocument):
 
 
 class RepoAccessCheckRequest(BaseModel):
+class Provider(str, Enum):
+    GITHUB = 'github'
+    GITLAB = 'gitlab'
+    BITBUCKET = 'bitbucket'
+
+
     repo: RepoDefinition
+
+
+    @field_validator('repo.provider')
+    def validate_provider(cls, v):
+        # Strip 'integrations:' prefix if present
+        provider = v.replace('integrations:', '')
+        
+        try:
+            return Provider(provider.lower())
+        except ValueError:
+            raise ValueError(f"Provider {provider} is not supported. Supported providers are: {', '.join([p.value for p in Provider])}")
 
 
 # TODO: Remove this once sentry side is updated
