@@ -470,7 +470,7 @@ class RepoDefinition(BaseModel):
     def validate_provider(cls, provider: str):
         cleaned_provider = process_repo_provider(provider)
 
-        if cleaned_provider != "github":
+        if cleaned_provider not in ["github", "gitlab"]:
             raise ValueError(f"Provider {cleaned_provider} is not supported.")
 
         return cleaned_provider
