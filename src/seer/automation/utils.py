@@ -100,8 +100,10 @@ def make_retry_signal(step_id: int, retry_attempt_no: int) -> str:
     return f"{make_retry_prefix(step_id)}{retry_attempt_no}"
 
 
+# Existing imports and code...
+
 def process_repo_provider(provider: str) -> str:
-    if provider.startswith("integrations:"):
+    return provider.replace("integrations:", "").lower()
         return provider.split(":")[1]
     return provider
 
