@@ -28,13 +28,13 @@ class InsightSharingPrompts:
             Given the chain of thought below for {task_description}:
             {insights}
 
-            Write the next under-20-word conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets these criteria, return <NO_INSIGHT/>.
+            Write the next under-20-word conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets ALL of these criteria, return <NO_INSIGHT/>.
 
             {latest_thought}"""
         ).format(
             task_description=task_description,
             latest_thought=latest_thought,
-            insights="\n".join(past_insights) if past_insights else "None",
+            insights="\n".join(past_insights) if past_insights else "not started yet",
         )
 
     @staticmethod
@@ -44,7 +44,7 @@ class InsightSharingPrompts:
             Return the pieces of context from the issue details or the files in the codebase that are directly relevant to the text below:
             {insight}
 
-            That means choose the most relevant codebase snippets, event logs, stacktraces, or other information, that show specifically what the text mentions. Don't include any repeated information; just include what's needed.
+            That means choose the most relevant codebase snippets (codebase_context), event logs (breadcrumb_context), or stacktrace/variable data (stacktrace_context), that show specifically what the text mentions. Don't include any repeated information; just include what's needed.
 
             Also provide a one-line explanation of how the pieces of context directly explain the text.
 
@@ -110,7 +110,6 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
             response = InsightSharingOutput(
                 insight=insight,
                 justification=completion.parsed.explanation,
-                error_message_context=completion.parsed.error_message_context,
                 codebase_context=completion.parsed.codebase_context,
                 stacktrace_context=completion.parsed.stacktrace_context,
                 breadcrumb_context=completion.parsed.event_log_context,

@@ -83,9 +83,9 @@ class RootCauseStep(AutofixPipelineStep):
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
         self.context.event_manager.add_log(
-            "Above is what I think the root cause is. Feel free to propose your own root cause instead."
+            "Here is Autofix's proposed root cause."
             if root_cause_output
-            else "Sorry, I couldn't find the root cause."
+            else "Sorry, Autofix couldn't find the root cause."
         )
 
         # GitHub Copilot can comment on a provided PR with the root cause analysis
