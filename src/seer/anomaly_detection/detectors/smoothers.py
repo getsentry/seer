@@ -21,7 +21,7 @@ class Smoother(BaseModel, abc.ABC):
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
         vote_threshold: float = 0.5,
-    ) -> npt.NDArray:
+    ) -> list:
         return NotImplemented
 
 
@@ -74,7 +74,7 @@ class FlagSmoother(Smoother):
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
         vote_threshold: float = 0.5,
-    ) -> npt.NDArray:
+    ) -> list:
         """
         Use original flags to smooth by majority (or threshold) voting with a small window.
         """
@@ -107,7 +107,7 @@ class FlagSmoother(Smoother):
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
         vote_threshold: float = 0.5,
-    ) -> List:
+    ) -> list:
         """
         Smooth flags using voting threshold and dynamic window size
         """
