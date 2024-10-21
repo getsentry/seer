@@ -68,3 +68,17 @@ def closing_queue(*queues: Queue):
                 queue.get_nowait()
             except Empty:
                 pass
+
+def calculate_age_in_months(age):
+    """
+    Safely calculate age in months, handling None values and non-integer inputs.
+    
+    :param age: The age value, which could be an integer, string, or None
+    :return: Age in months if calculable, otherwise None
+    """
+    if age is None:
+        return None
+    try:
+        return int(age) * 12
+    except (ValueError, TypeError):
+        return None
