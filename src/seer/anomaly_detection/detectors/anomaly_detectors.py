@@ -193,7 +193,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 # Apply smoothing to the flags
                 flag_smoother = FlagSmoother()
                 smoothed_flags = flag_smoother.smooth(
-                    orig_ts=cur_val,
+                    orig_ts=np.array([cur_val]),
                     flags=flags_and_scores.flags,
                     ad_config=config,
                 )

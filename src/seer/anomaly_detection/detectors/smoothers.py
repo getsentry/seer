@@ -1,4 +1,5 @@
 import abc
+from typing import List, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -18,8 +19,8 @@ class Smoother(BaseModel, abc.ABC):
         orig_ts: npt.NDArray,
         flags: list,
         ad_config: AnomalyDetectionConfig,
-        smooth_size: int,
-        vote_threshold: float,
+        smooth_size: int = 0,
+        vote_threshold: float = 0.5,
     ) -> npt.NDArray:
         return NotImplemented
 
@@ -32,8 +33,8 @@ class FlagSmoother(Smoother):
     )
 
     def _get_anomalous_slices(
-        self, orig_ts: npt.NDArray, flags: npt.NDArray, time_period: int
-    ) -> npt.NDArray:
+        self, orig_ts: npt.NDArray, flags: list, time_period: int
+    ) -> List[Tuple[int, int]]:
         """
         Returns a list of slices where anomalies occur. A slice is a tuple of the start and end index of the anomalous region.
         """
@@ -69,7 +70,7 @@ class FlagSmoother(Smoother):
         start_idx: int,
         end_idx: int,
         ad_config: AnomalyDetectionConfig,
-        smooth_size: int = None,
+        smooth_size: int = 0,
         vote_threshold: float = 0.5,
     ) -> npt.NDArray:
         """
@@ -77,7 +78,7 @@ class FlagSmoother(Smoother):
         """
 
         # Use dynamic smooth size if not provided
-        if smooth_size is None:
+        if smooth_size == 0:
             smooth_size = self.period_to_smooth_size[ad_config.time_period]
 
         new_flags = np.array(orig_flags)
@@ -102,9 +103,9 @@ class FlagSmoother(Smoother):
         orig_ts: npt.NDArray,
         flags: list,
         ad_config: AnomalyDetectionConfig,
-        smooth_size: int = None,
+        smooth_size: int = 0,
         vote_threshold: float = 0.5,
-    ) -> npt.NDArray:
+    ) -> List:
         """
         Smooth flags using voting threshold and dynamic window size
         """
