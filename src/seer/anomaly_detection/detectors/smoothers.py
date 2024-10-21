@@ -45,14 +45,15 @@ class FlagSmoother(Smoother):
         )  # Number of non-consistent flags allowed between points based on the smoothing size
 
         # Sliding window O(n)
-        for i in range(len(orig_ts)):
-
+        i = 0
+        while i < (len(flags)):
             if flags[i] == "none":
                 i += 1
                 continue
+
             j = i
             gap_remaining = num_gap
-            while j < len(orig_ts) and gap_remaining > 0:
+            while j < len(flags) and gap_remaining > 0:
                 if flags[j] == "none":
                     gap_remaining -= 1
                 else:
@@ -61,6 +62,7 @@ class FlagSmoother(Smoother):
             if j != i:
                 slices.append((i, j - num_gap))
                 i = j
+            i += 1
 
         return slices
 
