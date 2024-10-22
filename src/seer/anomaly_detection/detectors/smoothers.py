@@ -17,8 +17,8 @@ class FlagSmoother(BaseModel, abc.ABC):
         self,
         flags: list,
         ad_config: AnomalyDetectionConfig,
-        smooth_size: int,
-        vote_threshold: float,
+        smooth_size: int = 0,
+        vote_threshold: float = 0.5,
     ) -> list:
         return NotImplemented
 
