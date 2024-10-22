@@ -83,7 +83,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     self.context.store_memory("root_cause_analysis", agent.memory)
                     return None
 
-                self.context.event_manager.add_log("Cleaning up my findings...")
+                self.context.event_manager.add_log("Cleaning up the findings...")
 
                 formatted_response = llm_client.generate_structured(
                     messages=LlmClient.clean_tool_call_assistant_messages(agent.memory),
