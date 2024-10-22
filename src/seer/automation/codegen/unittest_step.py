@@ -65,18 +65,24 @@ class UnittestStep(CodegenStep):
             "owner_username": self.request.repo_definition.owner,
             "head_sha": latest_commit_sha,
         }
+        try:
+            unittest_output = UnitTestCodingComponent(self.context).invoke(
+                CodeUnitTestRequest(
+                    diff=diff_content,
+                    codecov_client_params=codecov_client_params,
+                ),
+            )
 
-        unittest_output = UnitTestCodingComponent(self.context).invoke(
-            CodeUnitTestRequest(
-                diff=diff_content,
-                codecov_client_params=codecov_client_params,
-            ),
-        )
+            if unittest_output:
+                for file_change in unittest_output.diffs:
+                    self.context.event_manager.append_file_change(file_change)
+                generator = GeneratedTestsPullRequestCreator(unittest_output.diffs, pr, repo_client)
+                generator.create_github_pull_request()
+            else:
+                repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
+                return
 
-        if unittest_output:
-            for file_change in unittest_output.diffs:
-                self.context.event_manager.append_file_change(file_change)
-            generator = GeneratedTestsPullRequestCreator(unittest_output.diffs, pr, repo_client)
-            generator.create_github_pull_request()
+        except ValueError:
+            repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
 
         self.context.event_manager.mark_completed()
