@@ -4,8 +4,7 @@ import textwrap
 from langfuse.decorators import observe
 from pydantic import BaseModel, model_validator
 
-from seer.automation.agent.client import GptClient
-from seer.automation.utils import extract_parsed_model
+from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.dependency_injection import inject, injected
 
 
@@ -103,7 +102,7 @@ def find_steps_around_group_id(
 
 @observe(name="Single replay summary")
 @inject
-def run_single_replay_summary(replay: Replay, gpt_client: GptClient = injected) -> ReplaySummary:
+def run_single_replay_summary(replay: Replay, llm_client: LlmClient = injected) -> ReplaySummary:
     replay_prompt = textwrap.dedent(
         """\
         You are an exceptional developer that analyzes a replay of a user's interaction with an application and can summarize it in 1-2 sentences.
@@ -124,21 +123,14 @@ def run_single_replay_summary(replay: Replay, gpt_client: GptClient = injected) 
         - Don't try to analyze the user's behavior, just describe what they did."""
     ).format(replay_data=json.dumps(replay.model_dump(mode="json")))
 
-    replay_message_dicts = [
-        {
-            "content": replay_prompt,
-            "role": "user",
-        },
-    ]
-
-    completion = gpt_client.openai_client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
-        messages=replay_message_dicts,
+    completion = llm_client.generate_structured(
+        model=OpenAiProvider.model("gpt-4o-2024-08-06"),
+        prompt=replay_prompt,
         response_format=ReplaySummary,
         temperature=0.0,
     )
 
-    return extract_parsed_model(completion)
+    return completion.parsed
 
 
 def step_to_string(step: Step, target_group_id: int):
@@ -161,7 +153,7 @@ def targeted_steps_to_string(replay_summary: ReplaySummary, target_group_id: int
 
 @observe(name="Cross session replay summary")
 @inject
-def run_cross_session_completion(all_steps: list[str], gpt_client: GptClient = injected):
+def run_cross_session_completion(all_steps: list[str], llm_client: LlmClient = injected):
     replay_prompt = textwrap.dedent(
         """\
         You are an exceptional developer that analyzes the replay of multiple users' interactions with an application and can understand the impact and common issues that occur.
@@ -183,21 +175,14 @@ def run_cross_session_completion(all_steps: list[str], gpt_client: GptClient = i
         - Start with the actions to produce the issue, then explain the impact"""
     ).format(all_steps=json.dumps(all_steps))
 
-    replay_message_dicts = [
-        {
-            "content": replay_prompt,
-            "role": "user",
-        },
-    ]
-
-    completion = gpt_client.openai_client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
-        messages=replay_message_dicts,
+    completion = llm_client.generate_structured(
+        model=OpenAiProvider.model("gpt-4o-2024-08-06"),
+        prompt=replay_prompt,
         response_format=CommonReplaySummary,
         temperature=0.0,
     )
 
-    return extract_parsed_model(completion)
+    return completion.parsed
 
 
 @observe(name="Summarize Replay for Issue")

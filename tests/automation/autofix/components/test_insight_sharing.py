@@ -2,10 +2,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import (
+    LlmGenerateStructuredResponse,
+    LlmGenerateTextResponse,
+    LlmProviderType,
+    LlmResponseMetadata,
+    Message,
+    Usage,
+)
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
 from seer.automation.autofix.components.insight_sharing.models import (
+    InsightContextOutput,
     InsightSharingOutput,
     InsightSharingRequest,
 )
@@ -20,13 +28,13 @@ class TestInsightSharingComponent:
         return InsightSharingComponent(mock_context)
 
     @pytest.fixture
-    def mock_gpt_client(self):
+    def mock_llm_client(self):
         with patch(
-            "seer.automation.autofix.components.insight_sharing.component.GptClient"
+            "seer.automation.autofix.components.insight_sharing.component.LlmClient"
         ) as mock:
             yield mock
 
-    def test_invoke_with_insight(self, component, mock_gpt_client):
+    def test_invoke_with_insight(self, component, mock_llm_client):
         request = InsightSharingRequest(
             task_description="Test task",
             latest_thought="Latest thought",
@@ -35,33 +43,41 @@ class TestInsightSharingComponent:
             generated_at_memory_index=0,
         )
 
-        mock_completion_1 = MagicMock()
-        mock_completion_1.choices[0].message.content = "New insight"
-        mock_completion_1.usage = MagicMock(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-
-        mock_completion_2 = MagicMock()
-        mock_completion_2.choices[0].message.parsed = MagicMock(
-            explanation="Test explanation",
-            error_message_context=["Test error context"],
-            codebase_context=[],
-            stacktrace_context=[],
-            event_log_context=[],
+        mock_generate_text_response = LlmGenerateTextResponse(
+            message=Message(role="assistant", content="New insight"),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
         )
-        mock_completion_2.choices[0].message.refusal = None
 
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
-        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
+        mock_generate_structured_response = LlmGenerateStructuredResponse(
+            parsed=InsightContextOutput(
+                explanation="Test explanation",
+                codebase_context=[],
+                stacktrace_context=[],
+                event_log_context=[],
+            ),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
-        result = component.invoke(request, mock_gpt_client)
+        mock_llm_client.generate_text.return_value = mock_generate_text_response
+        mock_llm_client.generate_structured.return_value = mock_generate_structured_response
+
+        result = component.invoke(request, mock_llm_client)
         assert isinstance(result, InsightSharingOutput)
         assert result.insight == "New insight"
         assert result.justification == "Test explanation"
-        assert result.error_message_context == ["Test error context"]
         assert result.codebase_context == []
         assert result.stacktrace_context == []
         assert result.breadcrumb_context == []
 
-    def test_invoke_with_no_insight(self, component, mock_gpt_client):
+    def test_invoke_with_no_insight(self, component, mock_llm_client):
         request = InsightSharingRequest(
             task_description="Test task",
             latest_thought="Latest thought",
@@ -70,16 +86,20 @@ class TestInsightSharingComponent:
             generated_at_memory_index=0,
         )
 
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = "<NO_INSIGHT/>"
+        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
+            message=Message(role="assistant", content="<NO_INSIGHT/>"),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion
-
-        result = component.invoke(request, mock_gpt_client)
+        result = component.invoke(request, mock_llm_client)
 
         assert result is None
 
-    def test_invoke_with_error(self, component, mock_gpt_client):
+    def test_invoke_with_error(self, component, mock_llm_client):
         request = InsightSharingRequest(
             task_description="Test task",
             latest_thought="Latest thought",
@@ -88,15 +108,46 @@ class TestInsightSharingComponent:
             generated_at_memory_index=0,
         )
 
-        mock_completion_1 = MagicMock()
-        mock_completion_1.choices[0].message.content = "New insight"
-        mock_completion_1.usage = MagicMock(completion_tokens=10, prompt_tokens=20, total_tokens=30)
+        mock_completion_1 = LlmGenerateTextResponse(
+            message=Message(role="assistant", content="New insight"),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
-        mock_completion_2 = MagicMock()
-        mock_completion_2.choices[0].message.refusal = "Test refusal"
+        mock_completion_2 = LlmGenerateStructuredResponse(
+            parsed=InsightContextOutput(
+                explanation="Test explanation",
+                codebase_context=[],
+                stacktrace_context=[],
+                event_log_context=[],
+            ),
+            metadata=LlmResponseMetadata(
+                model="test_model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        )
 
-        mock_gpt_client.openai_client.chat.completions.create.return_value = mock_completion_1
-        mock_gpt_client.openai_client.beta.chat.completions.parse.return_value = mock_completion_2
+        mock_llm_client.generate_text.return_value = mock_completion_1
+        mock_llm_client.generate_structured.return_value = mock_completion_2
 
         # make sure no error is raised
-        component.invoke(request, mock_gpt_client)
+        component.invoke(request, mock_llm_client)
+
+    def test_exception_is_caught(self, component, mock_llm_client):
+        request = InsightSharingRequest(
+            task_description="Test task",
+            latest_thought="Latest thought",
+            past_insights=["Past insight 1"],
+            memory=[Message(role="user", content="Test memory")],
+            generated_at_memory_index=0,
+        )
+
+        mock_llm_client.generate_text.side_effect = Exception("Test exception")
+
+        # make sure no error is raised
+        result = component.invoke(request, mock_llm_client)
+        assert result is None

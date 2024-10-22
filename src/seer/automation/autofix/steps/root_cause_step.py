@@ -83,7 +83,22 @@ class RootCauseStep(AutofixPipelineStep):
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
         self.context.event_manager.add_log(
-            "Above is what I think the root cause is. Feel free to propose your own root cause instead."
+            "Here is Autofix's proposed root cause."
             if root_cause_output
-            else "Sorry, I couldn't find the root cause."
+            else "Sorry, Autofix couldn't find the root cause."
         )
+
+        # GitHub Copilot can comment on a provided PR with the root cause analysis
+        pr_to_comment_on = state.request.options.comment_on_pr_with_url
+        if pr_to_comment_on:
+            causes = root_cause_output.causes if root_cause_output else []
+            cause_string = "Autofix couldn't find a root cause for this issue."
+            if causes:
+                cause_string = causes[0].to_markdown_string()
+            for repo in state.request.repos:
+                if (
+                    repo.name in pr_to_comment_on and repo.owner in pr_to_comment_on
+                ):  # crude check that the repo matches the PR we want to comment on
+                    self.context.comment_root_cause_on_pr(
+                        pr_url=pr_to_comment_on, repo_definition=repo, root_cause=cause_string
+                    )

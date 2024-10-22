@@ -30,7 +30,6 @@ class StacktraceContext(BaseModel):
 
 class InsightContextOutput(BaseModel):
     explanation: str
-    error_message_context: list[str]
     codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     event_log_context: list[BreadcrumbContext]
@@ -41,14 +40,13 @@ class InsightSharingRequest(BaseComponentRequest):
     task_description: str
     memory: list[Message]
     past_insights: list[str]
-    generated_at_memory_index: int
+    generated_at_memory_index: int = -1
 
 
 class InsightSharingOutput(BaseComponentOutput):
     insight: str
-    error_message_context: list[str]
     codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     breadcrumb_context: list[BreadcrumbContext]
     justification: str
-    generated_at_memory_index: int
+    generated_at_memory_index: int = -1

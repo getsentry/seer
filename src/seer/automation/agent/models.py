@@ -1,4 +1,5 @@
-from typing import Any, Optional
+from enum import Enum
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -29,6 +30,11 @@ class Usage(BaseModel):
         )
 
 
+class LlmProviderType(str, Enum):
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+
+
 class Message(BaseModel):
     content: Optional[str] = None
     """The text of the message."""
@@ -41,20 +47,36 @@ class Message(BaseModel):
 
     tool_call_id: Optional[str] = None
 
-    def to_message(self) -> dict[str, Any]:
-        message: dict[str, Any] = dict(content=self.content if self.content else "", role=self.role)
 
-        if self.tool_calls:
-            tool_calls = [tool_call.model_dump(mode="json") for tool_call in self.tool_calls]
-            parsed_tool_calls = []
-            for item in tool_calls:
-                new_item = item.copy()
-                new_item["function"] = {"name": item["function"], "arguments": item["args"]}
-                new_item["type"] = "function"
-                parsed_tool_calls.append(new_item)
-            message["tool_calls"] = parsed_tool_calls
+class LlmResponseMetadata(BaseModel):
+    model: str
+    provider_name: LlmProviderType
+    usage: Usage
 
-        if self.tool_call_id:
-            message["tool_call_id"] = self.tool_call_id
 
-        return message
+class LlmGenerateTextResponse(BaseModel):
+    message: Message
+    metadata: LlmResponseMetadata
+
+
+StructuredOutputType = TypeVar("StructuredOutputType")
+
+
+class LlmGenerateStructuredResponse(BaseModel, Generic[StructuredOutputType]):
+    parsed: StructuredOutputType
+    metadata: LlmResponseMetadata
+
+
+class LlmProviderDefaults(BaseModel):
+    temperature: float | None = None
+
+
+class LlmModelDefaultConfig(BaseModel):
+    match: str
+    defaults: LlmProviderDefaults
+
+
+class LlmRefusalError(Exception):
+    """Raised when the LLM refuses to complete the request."""
+
+    pass

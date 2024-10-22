@@ -15,6 +15,7 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     BaseStep,
     CodeContextRootCauseSelection,
+    CustomRootCauseSelection,
     DefaultStep,
     IssueDetails,
     RepoDefinition,
@@ -571,11 +572,24 @@ class TestAutofixContinuation(unittest.TestCase):
             actionability=0.5,
         )
         root_cause_step.causes = [cause]
-        root_cause_step.selection = CodeContextRootCauseSelection(cause_id=1)
-        self.continuation.steps = [root_cause_step]
 
-        result = self.continuation.get_selected_root_cause_and_fix()
+        root_cause_step.selection = CodeContextRootCauseSelection(cause_id=1, instruction="test")
+        self.continuation.steps = [root_cause_step]
+        result, instruction = self.continuation.get_selected_root_cause_and_fix()
         self.assertEqual(result, cause)
+        self.assertEqual(instruction, "test")
+
+        root_cause_step.selection = CustomRootCauseSelection(custom_root_cause="root cause")
+        self.continuation.steps = [root_cause_step]
+        result, instruction = self.continuation.get_selected_root_cause_and_fix()
+        self.assertEqual(result, "root cause")
+        self.assertIsNone(instruction)
+
+        root_cause_step.selection = None
+        self.continuation.steps = [root_cause_step]
+        result, instruction = self.continuation.get_selected_root_cause_and_fix()
+        self.assertEqual(result, None)
+        self.assertIsNone(instruction)
 
     def test_mark_triggered(self):
         with patch("datetime.datetime") as mock_datetime:

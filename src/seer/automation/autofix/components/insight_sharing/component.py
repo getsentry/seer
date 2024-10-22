@@ -4,8 +4,7 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GptClient
-from seer.automation.agent.models import Message, Usage
+from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.models import (
     InsightContextOutput,
@@ -13,7 +12,6 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingRequest,
 )
 from seer.automation.component import BaseComponent
-from seer.automation.utils import extract_parsed_model
 from seer.dependency_injection import inject, injected
 
 
@@ -30,13 +28,13 @@ class InsightSharingPrompts:
             Given the chain of thought below for {task_description}:
             {insights}
 
-            Write the next under-20-word conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets these criteria, return <NO_INSIGHT/>.
+            Write the next under-20-word conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets ALL of these criteria, return <NO_INSIGHT/>.
 
             {latest_thought}"""
         ).format(
             task_description=task_description,
             latest_thought=latest_thought,
-            insights="\n".join(past_insights) if past_insights else "None",
+            insights="\n".join(past_insights) if past_insights else "not started yet",
         )
 
     @staticmethod
@@ -46,7 +44,7 @@ class InsightSharingPrompts:
             Return the pieces of context from the issue details or the files in the codebase that are directly relevant to the text below:
             {insight}
 
-            That means choose the most relevant codebase snippets, event logs, stacktraces, or other information, that show specifically what the text mentions. Don't include any repeated information; just include what's needed.
+            That means choose the most relevant codebase snippets (codebase_context), event logs (breadcrumb_context), or stacktrace/variable data (stacktrace_context), that show specifically what the text mentions. Don't include any repeated information; just include what's needed.
 
             Also provide a one-line explanation of how the pieces of context directly explain the text.
 
@@ -65,7 +63,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
     @ai_track(description="Sharing Insights")
     @inject
     def invoke(
-        self, request: InsightSharingRequest, gpt_client: GptClient = injected
+        self, request: InsightSharingRequest, llm_client: LlmClient = injected
     ) -> InsightSharingOutput | None:
         try:
             prompt_one = InsightSharingPrompts.format_step_one(
@@ -73,20 +71,15 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 latest_thought=request.latest_thought,
                 past_insights=request.past_insights,
             )
-            completion = gpt_client.openai_client.chat.completions.create(
-                model="gpt-4o-mini-2024-07-18",
-                messages=[Message(role="user", content=prompt_one).to_message()],
+            completion = llm_client.generate_text(
+                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+                prompt=prompt_one,
                 temperature=0.0,
             )
             with self.context.state.update() as cur:
-                usage = Usage(
-                    completion_tokens=completion.usage.completion_tokens,
-                    prompt_tokens=completion.usage.prompt_tokens,
-                    total_tokens=completion.usage.total_tokens,
-                )
-                cur.usage += usage
-            insight = completion.choices[0].message.content
-            if insight == "<NO_INSIGHT/>":
+                cur.usage += completion.metadata.usage
+            insight = completion.message.content
+            if not insight or insight == "<NO_INSIGHT/>":
                 return None
 
             insight = re.sub(
@@ -98,33 +91,28 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 latest_thought=request.latest_thought,
             )
             memory = []
-            for message in gpt_client.clean_tool_call_assistant_messages(request.memory):
+            for message in llm_client.clean_tool_call_assistant_messages(request.memory):
                 if message.role != "system":
-                    memory.append(message.to_message())
-            memory.append(Message(role="user", content=prompt_two).to_message())
+                    memory.append(message)
 
-            completion = gpt_client.openai_client.beta.chat.completions.parse(
-                model="gpt-4o-mini-2024-07-18",
+            completion = llm_client.generate_structured(
                 messages=memory,
+                prompt=prompt_two,
+                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
                 response_format=InsightContextOutput,
                 temperature=0.0,
                 max_tokens=4096,
             )
+
             with self.context.state.update() as cur:
-                usage = Usage(
-                    completion_tokens=completion.usage.completion_tokens,
-                    prompt_tokens=completion.usage.prompt_tokens,
-                    total_tokens=completion.usage.total_tokens,
-                )
-                cur.usage += usage
-            res = extract_parsed_model(completion)
+                cur.usage += completion.metadata.usage
+
             response = InsightSharingOutput(
                 insight=insight,
-                justification=res.explanation,
-                error_message_context=res.error_message_context,
-                codebase_context=res.codebase_context,
-                stacktrace_context=res.stacktrace_context,
-                breadcrumb_context=res.event_log_context,
+                justification=completion.parsed.explanation,
+                codebase_context=completion.parsed.codebase_context,
+                stacktrace_context=completion.parsed.stacktrace_context,
+                breadcrumb_context=completion.parsed.event_log_context,
                 generated_at_memory_index=request.generated_at_memory_index,
             )
             return response

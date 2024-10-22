@@ -113,6 +113,7 @@ class AutofixEventManager:
         elif payload.cause_id is not None:
             root_cause_selection = CodeContextRootCauseSelection(
                 cause_id=payload.cause_id,
+                instruction=payload.instruction,
             )
 
         if root_cause_selection is None:

@@ -7,7 +7,14 @@ import numpy.typing as npt
 import sentry_sdk
 from pydantic import BaseModel, Field
 
-from seer.anomaly_detection.models import AnomalyFlags, Directions, Sensitivities
+from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
+from seer.anomaly_detection.models import (
+    AnomalyDetectionConfig,
+    AnomalyFlags,
+    Directions,
+    Sensitivities,
+)
+from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 from seer.tags import AnomalyDetectionTags
 
@@ -22,16 +29,16 @@ class FlagsAndScores(BaseModel):
 
 class MPScorer(BaseModel, abc.ABC):
     """
-    Abstract base class for calculating an anomaly score
+    Abstract class for scoring and flagging anomalies using matrix profile distances.
     """
 
     @abc.abstractmethod
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
@@ -39,12 +46,13 @@ class MPScorer(BaseModel, abc.ABC):
     @abc.abstractmethod
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
@@ -52,7 +60,10 @@ class MPScorer(BaseModel, abc.ABC):
 
 class LowVarianceScorer(MPScorer):
     """
-    This class scores anomalies using mean if the series has a low variance.
+    This class implements a scoring method for detecting anomalies in time series data with low variance.
+    It uses a simple threshold-based approach, comparing each value to the mean of the time series,
+    scaled by a factor that depends on the desired sensitivity level. This method is particularly
+    useful when the matrix profile approach might not be effective due to low variability in the data.
     """
 
     std_threshold: float = Field(
@@ -62,7 +73,7 @@ class LowVarianceScorer(MPScorer):
     scaling_factors: Dict[Sensitivities, int] = Field(
         {
             # High sensitivity = more anomalies + higher false positives
-            # 2x the mean and above is considered an anomaly
+            # 1.5x the mean and above is considered an anomaly
             "high": 1.5,
             # Medium sensitivity = lesser anomalies + lesser false positives
             # 3x the mean and above is considered an anomaly
@@ -78,44 +89,44 @@ class LowVarianceScorer(MPScorer):
         self,
         val: np.float64,
         ts_mean: np.float64,
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
     ) -> tuple[AnomalyFlags, float, float]:
-        # High sensitivity will mark more values as anomalies
-        if sensitivity not in self.scaling_factors:
-            raise ClientError(f"Invalid sensitivity: {sensitivity}")
-        scaling_factor = self.scaling_factors[sensitivity]
+        if ad_config.sensitivity not in self.scaling_factors:
+            raise ClientError(f"Invalid sensitivity: {ad_config.sensitivity}")
+        scaling_factor = self.scaling_factors[ad_config.sensitivity]
         bound1 = ts_mean + ts_mean * scaling_factor
         bound2 = ts_mean - ts_mean * scaling_factor
         lower_bound: float = float(min(bound1, bound2))
         upper_bound: float = float(max(bound1, bound2))
 
         # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
-        if val < lower_bound or val > upper_bound:
+        if ad_config.direction == "both" and (val < lower_bound or val > upper_bound):
+            return "anomaly_higher_confidence", 0.9, upper_bound
+        elif ad_config.direction == "down" and val < lower_bound:
+            return "anomaly_higher_confidence", 0.9, upper_bound
+        elif ad_config.direction == "up" and val > upper_bound:
             return "anomaly_higher_confidence", 0.9, upper_bound
         return "none", 0.0, upper_bound
 
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
-        ts_mean = ts.mean()
+        ts_mean = values.mean()
         scores = []
         flags = []
         thresholds = []
-        if ts.std() > self.std_threshold:
+        if values.std() > self.std_threshold:
             sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 0)
             return None
 
         sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
-        for val in ts:
-            flag, score, threshold = self._to_flag_and_score(
-                val, ts_mean, sensitivity=sensitivity, direction=direction
-            )
+        for val in values:
+            flag, score, threshold = self._to_flag_and_score(val, ts_mean, ad_config)
             flags.append(flag)
             scores.append(score)
             thresholds.append(threshold)
@@ -123,50 +134,57 @@ class LowVarianceScorer(MPScorer):
 
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
-        context = ts_history[-2 * window_size :]
+        context = history_values[-2 * window_size :]
         if context.std() > self.std_threshold:
             return None
-        flag, score, threshold = self._to_flag_and_score(
-            ts_streamed, context.mean(), sensitivity=sensitivity, direction=direction
-        )
+        flag, score, threshold = self._to_flag_and_score(streamed_value, context.mean(), ad_config)
 
         return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
 
 
 class MPIQRScorer(MPScorer):
     """
-    This class scores anomalies using the interquartile range of the matrix profile distances.
+    This class implements a scoring method for detecting anomalies in time series data using the interquartile range (IQR) of the matrix profile distances.
+
+    The IQR method is used to identify outliers in the matrix profile distances. It works by:
+    1. Calculating the first quartile (Q1) and third quartile (Q3) of the matrix profile distances.
+    2. Computing the IQR as Q3 - Q1.
+    3. Defining a range of "normal" values based on the IQR and sensitivity settings.
+    4. Flagging data points with matrix profile distances outside this range as potential anomalies.
+
+    This approach is robust to extreme values and provides a flexible way to adjust the sensitivity of anomaly detection through configurable percentile thresholds.
     """
 
     percentiles: Dict[Sensitivities, Tuple[float, float]] = Field(
         {
             # High sensitivity = more anomalies + higher false positives
-            # Data point outside of bottom 65% of the MP distances considered anomalous
-            "high": [0.35, 0.65],
+            # Data point outside of bottom 70% of the MP distances considered anomalous
+            "high": [0.3, 0.7],
             # Medium sensitivity = lesser anomalies + lesser false positives
-            # Data point outside of bottom 75% of the MP distances considered anomalous
-            "medium": [0.25, 0.75],
-            # Low sensitivity = leaset anomalies + leaset false positives
-            # Data point outside of bottom 95% of the MP distances considered anomalous
-            "low": [0.05, 0.95],
+            # Data point outside of bottom 80% of the MP distances considered anomalous
+            "medium": [0.2, 0.8],
+            # Low sensitivity = least anomalies + least false positives
+            # Data point outside of bottom 90% of the MP distances considered anomalous
+            "low": [0.1, 0.9],
         },
         description="Lower and upper bounds for high sensitivity",
     )
 
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> FlagsAndScores:
         """
@@ -177,78 +195,95 @@ class MPIQRScorer(MPScorer):
         None then the interquartile ranges are computed from mp_dist_to_score
 
         Parameters:
-        mp_dist_to_score: Numpy array
-            The matrix profile distances that need scoring
-        sensitivity: Sensitivities
-            Low sensitivity will detect more anomalies with more false positives and high sensitiviy will detect less anomalies with more false negatives
-        direction: Directions
-            Up will detect anomaly only if the detected anomaly is in the upward direction while Down will detect it only if it is downward. Both will cover both up and down.
-
-        Returns:
-            tuple with list of scores and list of flags, where each flag is one of
-            * "none" - indicating not an anomaly
-            * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
-            * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
+        values: npt.NDArray[np.float64]
+            Array of historical values
+        timestamps: npt.NDArray[np.float64]
+            Array of timestamps corresponding to historical values
+        mp_dist: npt.NDArray[np.float64]
+            Array of matrix profile distances for historical values
+        ad_config: AnomalyDetectionConfig
+            Configuration for anomaly detection
+        window_size: int
+            Size of the window used for matrix profile computation
         """
         scores: list[float] = []
         flags: list[AnomalyFlags] = []
         # Compute score and anomaly flags
-        threshold = self._get_threshold(mp_dist, sensitivity)
+        threshold = self._get_threshold(mp_dist, ad_config.sensitivity)
         for i, val in enumerate(mp_dist):
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold)
             flag = self._to_flag(val, threshold)
-            if i > 2 * window_size:
-                flag = self._adjust_flag_for_vicinity(
-                    flag=flag, ts_value=ts[i], context=ts[i - 2 * window_size : i - 1]
-                )
+
+            flag = self._adjust_flag_for_direction(
+                flag,
+                ad_config.direction,
+                streamed_value=values[i],
+                streamed_timestamp=timestamps[i],
+                history_values=values[0 : i - 1],
+                history_timestamps=timestamps[0 : i - 1],
+            )
+
             flags.append(flag)
 
         return FlagsAndScores(flags=flags, scores=scores, thresholds=[threshold])
 
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> FlagsAndScores:
         """
-        Scores anomalies by computing the distance of the relevant MP distance from quartiles. This approach is not swayed by
-        extreme values in MP distances. It also converts the score to a flag with a more meaningful interpretation of score.
+        Scores anomalies by computing the distance of the relevant MP distance from quartiles. It also converts the score
+        to a flag with a more meaningful interpretation of score.
 
         The interquartile ranges for scoring are computed using the distances passed in as mp_dist_baseline. If mp_dist_baseline is
         None then the interquartile ranges are computed from mp_dist_to_score
 
         Parameters:
-        mp_dist_to_score: Numpy array
-            The matrix profile distances that need scoring
-        sensitivity: Sensitivities
-            Low sensitivity will detect more anomalies with more false positives and high sensitiviy will detect less anomalies with more false negatives
-        direction: Directions
-            Up will detect anomaly only if the detected anomaly is in the upward direction while Down will detect it only if it is downward. Both will cover both up and down.
-        mp_dist_baseline: Numpy array
-            Baseline distances used for calculating inter quartile range
+        streamed_value: np.float64
+            The current value being streamed
+        streamed_timestamp: np.float64
+            The timestamp of the current value being streamed
+        streamed_mp_dist: np.float64
+            The matrix profile distance for the streamed value
+        history_values: npt.NDArray[np.float64]
+            Array of historical values
+        history_timestamps: npt.NDArray[np.float64]
+            Array of timestamps corresponding to historical values
+        history_mp_dist: npt.NDArray[np.float64]
+            Array of matrix profile distances for historical values
+        ad_config: AnomalyDetectionConfig
+            Configuration for anomaly detection
+        window_size: int
+            Size of the window used for matrix profile computation
 
         Returns:
-            tuple with list of scores and list of flags, where each flag is one of
-            * "none" - indicating not an anomaly
-            * "anomaly_lower_confidence" - indicating anomaly but only with a lower threshold
-            * "anomaly_higher_confidence" - indicating anomaly with a higher threshold
+            FlagsAndScores: Object containing anomaly flags, scores, and thresholds
+
         """
-        threshold = self._get_threshold(mp_dist_history, sensitivity)
+        threshold = self._get_threshold(history_mp_dist, ad_config.sensitivity)
 
         # Compute score and anomaly flags
         score = (
             0.0
-            if np.isnan(mp_dist_streamed) or np.isinf(mp_dist_streamed)
-            else mp_dist_streamed - threshold
+            if np.isnan(streamed_mp_dist) or np.isinf(streamed_mp_dist)
+            else streamed_mp_dist - threshold
         )
-        flag = self._to_flag(mp_dist_streamed, threshold)
-        # anomaly identified. apply logic to check for peak and trough
-        flag = self._adjust_flag_for_vicinity(ts_streamed, flag, ts_history[-2 * window_size :])
+        flag = self._to_flag(streamed_mp_dist, threshold)
+        flag = self._adjust_flag_for_direction(
+            flag,
+            direction=ad_config.direction,
+            streamed_value=streamed_value,
+            streamed_timestamp=streamed_timestamp,
+            history_values=history_values,
+            history_timestamps=history_timestamps,
+        )
 
         return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
 
@@ -268,41 +303,55 @@ class MPIQRScorer(MPScorer):
             return "none"
         return "anomaly_higher_confidence"
 
-    def _adjust_flag_for_vicinity(
-        self, ts_value: np.float64, flag: AnomalyFlags, context: npt.NDArray[np.float64]
+    @inject
+    def _adjust_flag_for_direction(
+        self,
+        flag: AnomalyFlags,
+        direction: Directions,
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        location_detector: LocationDetector = injected,
     ) -> AnomalyFlags:
         """
-        This method adjusts the severity of a detected anomaly based on the underlying time step's proximity to peaks and troughs.
-        The intuition is that for our alerting and metrics use case, an anomaly near peak or trough is more critical than one that is not.
-        Current approach is to use the inter quartile range from a subsequence of the time series, identified by the context parameter.
+        Adjusts the anomaly flag based on the specified direction and time series context.
 
         Parameters:
-        ts_value: float
-            The time step being analyzied for anomaly
-
         flag: AnomalyFlags
-            Anomaly identified before applying this peak-trough logic
-
-        context: npt.NDArray[np.float64]
-            Time series subsequence that is used for teak-trough detection
-
+            The current anomaly flag
+        direction: Directions
+            The direction of the anomaly to detect
+        streamed_value: np.float64
+            The current value being streamed
+        streamed_timestamp: np.float64
+            The timestamp of the current value being streamed
+        history_values: npt.NDArray[np.float64]
+            Array of historical values
+        Returns:
+        AnomalyFlags
+            The adjusted anomaly flag
         """
-        # if flag == "anomaly_higher_confidence" or flag == "anomaly_lower_confidence":
-        #     [Q1, Q3] = np.quantile(context, [0.25, 0.75])
-        #     IQR = Q3 - Q1
-        #     threshold_lower = Q1 - (0 * IQR)
-        #     threshold_upper = Q3 + (0 * IQR)
-        #     # if ts_value > Q1 and ts_value < Q3:
-        #     if ts_value >= threshold_lower and ts_value <= threshold_upper:
-        #         flag = "anomaly_lower_confidence"
-        #     else:
-        #         flag = "anomaly_higher_confidence"
+        if flag == "none" or direction == "both":
+            return flag
+
+        location = location_detector.detect(
+            streamed_value, streamed_timestamp, history_values, history_timestamps
+        )
+        if (direction == "up" and location != PointLocation.UP) or (
+            direction == "down" and location != PointLocation.DOWN
+        ):
+            return "none"
         return flag
 
 
 class MPCascadingScorer(MPScorer):
     """
-    This class combines the results of the LowVarianceScorer and the MPIQRScorer.
+    This class implements a cascading scoring mechanism for Matrix Profile-based anomaly detection.
+    It applies multiple scorers in sequence, returning the result of the first scorer that produces a valid output.
+    This approach allows for fallback strategies and potentially more robust anomaly detection.
+
+    The default implementation uses the LowVarianceScorer and the MPIQRScorer.
     """
 
     scorers: list[MPScorer] = Field(
@@ -311,36 +360,40 @@ class MPCascadingScorer(MPScorer):
 
     def batch_score(
         self,
-        ts: npt.NDArray[np.float64],
+        values: npt.NDArray[np.float64],
+        timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
-            flags_and_scores = scorer.batch_score(ts, mp_dist, sensitivity, direction, window_size)
+            flags_and_scores = scorer.batch_score(
+                values, timestamps, mp_dist, ad_config, window_size
+            )
             if flags_and_scores is not None:
                 return flags_and_scores
         return None
 
     def stream_score(
         self,
-        ts_streamed: np.float64,
-        mp_dist_streamed: np.float64,
-        ts_history: npt.NDArray[np.float64],
-        mp_dist_history: npt.NDArray[np.float64],
-        sensitivity: Sensitivities,
-        direction: Directions,
+        streamed_value: np.float64,
+        streamed_timestamp: np.float64,
+        streamed_mp_dist: np.float64,
+        history_values: npt.NDArray[np.float64],
+        history_timestamps: npt.NDArray[np.float64],
+        history_mp_dist: npt.NDArray[np.float64],
+        ad_config: AnomalyDetectionConfig,
         window_size: int,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.stream_score(
-                ts_streamed,
-                mp_dist_streamed,
-                ts_history,
-                mp_dist_history,
-                sensitivity,
-                direction,
+                streamed_value,
+                streamed_timestamp,
+                streamed_mp_dist,
+                history_values,
+                history_timestamps,
+                history_mp_dist,
+                ad_config,
                 window_size,
             )
             if flags_and_scores is not None:
