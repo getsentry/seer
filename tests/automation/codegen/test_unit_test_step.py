@@ -114,7 +114,6 @@ class TestUnittestStep(unittest.TestCase):
     def test_post_unit_test_not_generated_on_exception(
         self, mock_instantiate_context, _, mock_invoke_unit_test_component
     ):
-        # Setup mocks
         mock_repo_client = MagicMock()
         mock_pr = MagicMock()
         mock_pr.url = "http://example.com/pr/123"
@@ -127,7 +126,6 @@ class TestUnittestStep(unittest.TestCase):
         mock_repo_client.get_pr_diff_content.return_value = mock_diff_content
         mock_repo_client.get_pr_head_sha.return_value = mock_latest_commit_sha
 
-        # Simulate ValueError exception during invoke
         mock_invoke_unit_test_component.side_effect = ValueError()
 
         request_data = {
@@ -141,16 +139,13 @@ class TestUnittestStep(unittest.TestCase):
         step = UnittestStep(request=request)
         step.context = mock_context
 
-        # Invoke the step
         step.invoke()
 
-        # Assertions
         mock_context.get_repo_client.assert_called_once()
         mock_repo_client.repo.get_pull.assert_called_once_with(request.pr_id)
         mock_repo_client.get_pr_diff_content.assert_called_once_with(mock_pr.url)
         mock_repo_client.get_pr_head_sha.assert_called_once_with(mock_pr.url)
 
-        # Verify that the method was called
         mock_repo_client.post_unit_test_not_generated_message_to_original_pr.assert_called_once_with(
             mock_pr.html_url
         )
@@ -174,7 +169,6 @@ class TestUnittestStep(unittest.TestCase):
         mock_repo_client.get_pr_diff_content.return_value = mock_diff_content
         mock_repo_client.get_pr_head_sha.return_value = mock_latest_commit_sha
 
-        # Simulate None return value
         mock_invoke_unit_test_component.return_value = None
 
         request_data = {
@@ -188,16 +182,13 @@ class TestUnittestStep(unittest.TestCase):
         step = UnittestStep(request=request)
         step.context = mock_context
 
-        # Invoke the step
         step.invoke()
 
-        # Assertions
         mock_context.get_repo_client.assert_called_once()
         mock_repo_client.repo.get_pull.assert_called_once_with(request.pr_id)
         mock_repo_client.get_pr_diff_content.assert_called_once_with(mock_pr.url)
         mock_repo_client.get_pr_head_sha.assert_called_once_with(mock_pr.url)
 
-        # Verify that the method was called
         mock_repo_client.post_unit_test_not_generated_message_to_original_pr.assert_called_once_with(
             mock_pr.html_url
         )
