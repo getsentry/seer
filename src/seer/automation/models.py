@@ -273,10 +273,16 @@ class SentryEventData(TypedDict):
     entries: list[dict]
 
 
+class ExceptionMechanism(TypedDict):
+    type: str
+    handled: bool
+
+
 class ExceptionDetails(BaseModel):
     type: Optional[str] = ""
     value: Optional[str] = ""
     stacktrace: Optional[Stacktrace] = None
+    mechanism: Optional[ExceptionMechanism] = None
 
     @field_validator("stacktrace", mode="before")
     @classmethod
@@ -380,7 +386,7 @@ class EventDetails(BaseModel):
         return "\n".join(
             textwrap.dedent(
                 """\
-                    <exception_{i}{exception_type}{exception_message}>
+                    <exception_{i}{handled}{exception_type}{exception_message}>
                     {stacktrace}
                     </exception{i}>"""
             ).format(
@@ -389,6 +395,11 @@ class EventDetails(BaseModel):
                 exception_message=f' message="{exception.value}"' if exception.value else "",
                 stacktrace=(
                     exception.stacktrace.to_str(in_app_only=True) if exception.stacktrace else ""
+                ),
+                handled=(
+                    f' is_exception_handled="{"yes" if exception.mechanism.get("handled") else "no"}"'
+                    if exception.mechanism and exception.mechanism.get("handled", None) is not None
+                    else ""
                 ),
             )
             for i, exception in enumerate(self.exceptions)
