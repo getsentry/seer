@@ -487,7 +487,7 @@ class TestRepoClientIndexFileSet:
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
 
     @patch("seer.automation.codebase.repo_client.requests.post")
-    def test_post_unit_test_reference_to_original_pr(self, mock_post, repo_client):
+    def test_post_unit_test_not_generated_message_to_original_pr(self, mock_post, repo_client):
         original_pr_url = "https://github.com/sentry/sentry/pull/12345"
         expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
         expected_comment = f"Sentry has determined that unit tests already exist on this PR or that they are not necessary."
@@ -499,7 +499,7 @@ class TestRepoClientIndexFileSet:
         }
         mock_post.return_value = mock_response
 
-        result = repo_client.post_unit_test_reference_to_original_pr(original_pr_url)
+        result = repo_client.post_unit_test_not_generated_message_to_original_pr(original_pr_url)
 
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
