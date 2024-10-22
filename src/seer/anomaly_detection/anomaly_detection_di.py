@@ -1,5 +1,7 @@
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.detectors import (
+    FlagSmoother,
+    MajorityVoteFlagSmoother,
     MinMaxNormalizer,
     MPCascadingScorer,
     MPConfig,
@@ -45,3 +47,8 @@ def normalizer_provider() -> Normalizer:
 @anomaly_detection_module.provider
 def mp_utils_provider() -> MPUtils:
     return MPUtils()
+
+
+@anomaly_detection_module.provider
+def flag_smoother_provider() -> FlagSmoother:
+    return MajorityVoteFlagSmoother()

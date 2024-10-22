@@ -2,13 +2,12 @@ import abc
 from typing import List, Tuple
 
 import numpy as np
-import numpy.typing as npt
 from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 
 
-class Smoother(BaseModel, abc.ABC):
+class FlagSmoother(BaseModel, abc.ABC):
     """
     Abstract base class for smoothing data (specifically flags)
     """
@@ -16,25 +15,25 @@ class Smoother(BaseModel, abc.ABC):
     @abc.abstractmethod
     def smooth(
         self,
-        orig_ts: npt.NDArray,
         flags: list,
         ad_config: AnomalyDetectionConfig,
-        smooth_size: int = 0,
-        vote_threshold: float = 0.5,
+        smooth_size: int,
+        vote_threshold: float,
     ) -> list:
         return NotImplemented
 
 
-class FlagSmoother(Smoother):
+class MajorityVoteFlagSmoother(FlagSmoother):
+    """
+    This class smooths flags using majority voting with a dynamic smoothing window size.
+    """
 
     period_to_smooth_size: dict[int, int] = Field(
         default={5: 19, 15: 11, 30: 7, 60: 5},
         description="Flag smoothing window size based on the function smooth_size = floor(43 / sqrt(time_period))",
     )
 
-    def _get_anomalous_slices(
-        self, orig_ts: npt.NDArray, flags: list, time_period: int
-    ) -> List[Tuple[int, int]]:
+    def _get_anomalous_slices(self, flags: list, time_period: int) -> List[Tuple[int, int]]:
         """
         Returns a list of slices where anomalies occur. A slice is a tuple of the start and end index of the anomalous region.
         """
@@ -102,7 +101,6 @@ class FlagSmoother(Smoother):
 
     def smooth(
         self,
-        orig_ts: npt.NDArray,
         flags: list,
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
@@ -112,7 +110,7 @@ class FlagSmoother(Smoother):
         Smooth flags using voting threshold and dynamic window size
         """
 
-        slices = self._get_anomalous_slices(orig_ts, flags, ad_config.time_period)
+        slices = self._get_anomalous_slices(flags, ad_config.time_period)
         for start_idx, end_idx in slices:
             flags[start_idx:end_idx] = self._smooth_flags(
                 flags, start_idx, end_idx, ad_config, smooth_size, vote_threshold

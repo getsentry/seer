@@ -69,6 +69,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
+        flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
@@ -83,7 +84,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             A tuple with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
 
         """
-        ts_values = timeseries.values  # np.array([np.float64(point.value) for point in timeseries])
+        ts_values = timeseries.values
         window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
             # TODO: Add sentry logging of this error
@@ -96,7 +97,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             normalize=False,
         )
 
-        # we do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
 
         flags_and_scores = scorer.batch_score(
@@ -110,9 +111,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             raise ServerError("Failed to score the matrix profile distance")
 
         # Apply smoothing to the flags
-        flag_smoother = FlagSmoother()
         smoothed_flags = flag_smoother.smooth(
-            orig_ts=ts_values,
             flags=flags_and_scores.flags,
             ad_config=config,
         )
@@ -153,6 +152,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
+        flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         stream = None
         with sentry_sdk.start_span(description="Initializing MP stream"):
@@ -171,7 +171,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             streamed_mp: list[list[float]] = []
             thresholds: list[float] = []
             for cur_val in timeseries.values:
-                # Update the sumpi stream processor with new data
+                # Update the stumpi stream processor with new data
                 stream.update(cur_val)
 
                 # Get the matrix profile for the new data and score it
@@ -191,9 +191,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 # Apply smoothing to the flags
-                flag_smoother = FlagSmoother()
                 smoothed_flags = flag_smoother.smooth(
-                    orig_ts=np.array([cur_val]),
                     flags=flags_and_scores.flags,
                     ad_config=config,
                 )
