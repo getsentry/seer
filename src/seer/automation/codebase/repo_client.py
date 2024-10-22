@@ -561,3 +561,14 @@ class RepoClient:
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
         return response.json()["html_url"]
+
+    def post_unit_test_not_generated_message_to_original_pr(self, original_pr_url: str):
+        original_pr_id = int(original_pr_url.split("/")[-1])
+        repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
+        comment = f"Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
