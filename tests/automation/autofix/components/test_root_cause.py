@@ -68,10 +68,11 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context is None
 
     def test_no_root_causes_response(self, component, mock_agent):
-        mock_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"
+        mock_agent.return_value.run.return_value = "<NO_ROOT_CAUSES> this is too hard, I give up"
 
         output = component.invoke(MagicMock())
 
-        assert output is None
+        assert output.causes == []
+        assert output.termination_reason == "this is too hard, I give up"
         # Ensure that the second run (reproduction) and the formatter are not called when <NO_ROOT_CAUSES> is returned
         assert mock_agent.return_value.run.call_count == 1

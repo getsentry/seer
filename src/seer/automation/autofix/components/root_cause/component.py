@@ -28,7 +28,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     @inject
     def invoke(
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
-    ) -> RootCauseAnalysisOutput | None:
+    ) -> RootCauseAnalysisOutput:
         with BaseTools(self.context) as tools:
             agent = AutofixAgent(
                 tools=tools.get_tools(),
@@ -65,10 +65,14 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 if not response:
                     self.context.store_memory("root_cause_analysis", agent.memory)
-                    return None
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
 
                 if "<NO_ROOT_CAUSES>" in response:
-                    return None
+                    reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
+                    return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
 
                 # Ask for reproduction
                 self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
@@ -81,7 +85,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 )
                 if not response:
                     self.context.store_memory("root_cause_analysis", agent.memory)
-                    return None
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was trying to figure out how to reproduce the issue.",
+                    )
 
                 self.context.event_manager.add_log("Cleaning up the findings...")
 
@@ -101,7 +108,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         snippet.id = j
 
                 causes = [cause_model]
-                return RootCauseAnalysisOutput(causes=causes)
+                return RootCauseAnalysisOutput(causes=causes, termination_reason=None)
             finally:
                 with self.context.state.update() as cur:
                     cur.usage += agent.usage

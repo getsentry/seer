@@ -176,6 +176,7 @@ class RootCauseStep(BaseStep):
 
     causes: list[RootCauseAnalysisItem] = []
     selection: RootCauseSelection | None = None
+    termination_reason: str | None = None
 
 
 class ChangesStep(BaseStep):
