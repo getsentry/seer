@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
+from seer.anomaly_detection.detectors.smoothers import FlagSmoother
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
@@ -68,6 +69,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
+        flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
@@ -95,7 +97,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             normalize=False,
         )
 
-        # we do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
 
         flags_and_scores = scorer.batch_score(
@@ -107,6 +109,15 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         )
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
+
+        # Apply smoothing to the flags
+        smoothed_flags = flag_smoother.smooth(
+            flags=flags_and_scores.flags,
+            ad_config=config,
+        )
+
+        # Update the flags in flags_and_scores with the smoothed flags
+        flags_and_scores.flags = smoothed_flags
 
         return MPTimeSeriesAnomalies(
             flags=flags_and_scores.flags,
@@ -141,6 +152,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
+        flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
@@ -190,6 +202,14 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 )
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
+
+                # Apply smoothing to the flags
+                smoothed_flags = flag_smoother.smooth(
+                    flags=flags_and_scores.flags,
+                    ad_config=config,
+                )
+                flags_and_scores.flags = smoothed_flags
+
                 scores.extend(flags_and_scores.scores)
                 flags.extend(flags_and_scores.flags)
                 thresholds.extend(flags_and_scores.thresholds)

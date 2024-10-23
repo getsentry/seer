@@ -4,6 +4,7 @@ from seer.anomaly_detection.detectors import (
     mp_scorers,
     mp_utils,
     normalizers,
+    smoothers,
     window_size_selectors,
 )
 
@@ -22,3 +23,5 @@ Normalizer = normalizers.Normalizer
 MinMaxNormalizer = normalizers.MinMaxNormalizer
 
 MPUtils = mp_utils.MPUtils
+FlagSmoother = smoothers.FlagSmoother
+MajorityVoteFlagSmoother = smoothers.MajorityVoteFlagSmoother
