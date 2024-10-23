@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from github import UnknownObjectException
@@ -259,6 +259,86 @@ class TestRepoClient:
         )
         assert result is False
 
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_pr_diff_content(self, mock_requests, repo_client):
+        mock_requests.return_value.text = "Mock diff content"
+        mock_requests.return_value.raise_for_status = MagicMock()
+
+        diff_content = repo_client.get_pr_diff_content(
+            "https://api.github.com/repos/owner/repo/pulls/1"
+        )
+
+        assert diff_content == "Mock diff content"
+        mock_requests.assert_called_once()
+        mock_requests.return_value.raise_for_status.assert_called_once()
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_comment_root_cause_on_pr_for_copilot(self, mock_requests, repo_client):
+        mock_requests.return_value.raise_for_status = MagicMock()
+
+        repo_client.comment_root_cause_on_pr_for_copilot(
+            "https://github.com/owner/repo/pull/1", run_id=123, issue_id=456, comment="Test comment"
+        )
+
+        mock_requests.assert_called_once()
+        mock_requests.return_value.raise_for_status.assert_called_once()
+
+        # Check if the correct URL and data were used in the request
+        args, kwargs = mock_requests.call_args
+        assert args[0] == "https://api.github.com/repos/owner/repo/issues/1/comments"
+        assert kwargs["json"]["body"] == "Test comment"
+        assert (
+            kwargs["json"]["actions"][0]["prompt"]
+            == "@sentry find a fix for issue 456 with run ID 123"
+        )
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_comment_pr_generated_for_copilot(self, mock_requests, repo_client):
+        mock_requests.return_value.raise_for_status = MagicMock()
+
+        repo_client.comment_pr_generated_for_copilot(
+            "https://github.com/owner/repo/pull/1",
+            "https://github.com/owner/repo/pull/2",
+            run_id=123,
+        )
+
+        mock_requests.assert_called_once()
+        mock_requests.return_value.raise_for_status.assert_called_once()
+
+        # Check if the correct URL and data were used in the request
+        args, kwargs = mock_requests.call_args
+        assert args[0] == "https://api.github.com/repos/owner/repo/issues/1/comments"
+        assert (
+            "A fix has been generated and is available [here](https://github.com/owner/repo/pull/2) for your review."
+            in kwargs["json"]["body"]
+        )
+        assert "Autofix Run ID: 123" in kwargs["json"]["body"]
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_pr_head_sha(self, mock_requests, repo_client):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"head": {"sha": "abcdef1234567890"}}
+        mock_response.raise_for_status = MagicMock()
+        mock_requests.return_value = mock_response
+
+        head_sha = repo_client.get_pr_head_sha("https://api.github.com/repos/owner/repo/pulls/1")
+
+        assert head_sha == "abcdef1234567890"
+        mock_requests.assert_called_once()
+        mock_response.raise_for_status.assert_called_once()
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_pr_head_sha_error(self, mock_requests, repo_client):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = Exception("API error")
+        mock_requests.return_value = mock_response
+
+        with pytest.raises(Exception, match="API error"):
+            repo_client.get_pr_head_sha("https://api.github.com/repos/owner/repo/pulls/1")
+
+        mock_requests.assert_called_once()
+        mock_response.raise_for_status.assert_called_once()
+
 
 class TestRepoClientIndexFileSet:
     @patch("seer.automation.codebase.repo_client.Github")
@@ -380,3 +460,47 @@ class TestRepoClientIndexFileSet:
         )
         result = client.get_index_file_set("main")
         assert result == {"file1.py"}
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_post_unit_test_reference_to_original_pr(self, mock_post, repo_client):
+        original_pr_url = "https://github.com/sentry/sentry/pull/12345"
+        unit_test_pr_url = "https://github.com/sentry/sentry/pull/67890"
+        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
+        expected_comment = (
+            f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. "
+            f"View the new PR({unit_test_pr_url}) to review the changes."
+        )
+        expected_params = {"body": expected_comment}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_unit_test_reference_to_original_pr(
+            original_pr_url, unit_test_pr_url
+        )
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_post_unit_test_not_generated_message_to_original_pr(self, mock_post, repo_client):
+        original_pr_url = "https://github.com/sentry/sentry/pull/12345"
+        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
+        expected_comment = f"Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        expected_params = {"body": expected_comment}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_unit_test_not_generated_message_to_original_pr(original_pr_url)
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"

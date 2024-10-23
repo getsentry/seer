@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from johen import generate
+from unidiff import Hunk
 
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
@@ -10,11 +11,14 @@ from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
     AutofixRequest,
+    AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
+    AutofixUpdateCodeChangePayload,
     AutofixUpdateRequest,
     AutofixUpdateType,
     AutofixUserMessagePayload,
+    ChangesStep,
     DefaultStep,
     Step,
 )
@@ -24,11 +28,15 @@ from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
+    restart_from_point_with_feedback,
     restart_step_with_user_response,
     run_autofix_create_pr,
     run_autofix_execution,
     run_autofix_root_cause,
+    truncate_memory_to_match_insights,
+    update_code_change,
 )
+from seer.automation.models import FilePatch, Line
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 
 
@@ -332,3 +340,316 @@ class TestHandleUserMessages:
             initial_memory=mock_memory,
         )
         mock_step_class.get_signature.return_value.apply_async.assert_called_once_with()
+
+    def test_restart_from_point_with_feedback_invalid_payload(self):
+        mock_payload = AutofixUserMessagePayload(
+            type=AutofixUpdateType.USER_MESSAGE, text="Invalid payload"
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        with pytest.raises(
+            ValueError, match="Invalid payload type for restart_from_point_with_feedback"
+        ):
+            restart_from_point_with_feedback(mock_request)
+
+    def test_restart_from_point_with_feedback_coding_step(
+        self, mock_continuation_state, mock_event_manager, mock_context
+    ):
+        with patch("seer.automation.autofix.tasks.AutofixCodingStep") as mock_coding_step:
+            mock_payload = AutofixRestartFromPointPayload(
+                type=AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+                step_index=1,
+                retain_insight_card_index=0,
+                message="User feedback",
+            )
+            mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+            mock_state = mock_continuation_state.from_id.return_value
+            mock_step = MagicMock(spec=DefaultStep)
+            mock_step.key = "plan"
+            mock_step.insights = [
+                MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+                MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+                MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+            ]
+            mock_steps = [mock_step]
+            mock_state.get.return_value.steps = mock_steps
+            mock_state.get.return_value.run_id = 123
+            mock_state.update.return_value.__enter__.return_value.find_step.side_effect = (
+                lambda index: mock_steps[index]
+            )
+            mock_state.update.return_value.__enter__.return_value.steps = mock_steps
+
+            mock_context.return_value.get_memory.return_value = [
+                Message(content="Previous message", role="assistant"),
+                Message(content="User message", role="user"),
+            ]
+
+            restart_from_point_with_feedback(mock_request)
+
+            mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+            mock_state.update.assert_called()
+            mock_event_manager.return_value.reset_steps_to_point.assert_called_once_with(1, 0)
+            mock_event_manager.return_value.restart_step.assert_called_once_with(mock_step)
+
+            mock_coding_step.get_signature.assert_called_once()
+            mock_coding_step.get_signature.return_value.apply_async.assert_called_once()
+
+    def test_restart_from_point_with_feedback_root_cause_step(
+        self, mock_continuation_state, mock_event_manager, mock_context
+    ):
+        mock_payload = AutofixRestartFromPointPayload(
+            type=AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+            step_index=0,
+            retain_insight_card_index=None,
+            message="User feedback",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_step = MagicMock(spec=DefaultStep)
+        mock_step.key = "root_cause_analysis_processing"
+        mock_step.insights = []
+        mock_state.get.return_value.steps = [mock_step]
+        mock_state.get.return_value.run_id = 123
+        mock_state.update.return_value.__enter__.return_value.steps = [mock_step]
+
+        mock_context.return_value.get_memory.return_value = [
+            Message(content="Initial message", role="system")
+        ]
+
+        restart_from_point_with_feedback(mock_request)
+
+        mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+        mock_state.update.assert_called()
+        mock_event_manager.return_value.restart_step.assert_called_once_with(mock_step)
+
+        assert len(mock_step.insights) == 1
+        assert isinstance(mock_step.insights[-1], InsightSharingOutput)
+        assert mock_step.insights[-1].insight == "User feedback"
+        assert mock_step.insights[-1].justification == "USER"
+
+    def test_truncate_memory_to_match_insights(self):
+        # Create a mock step with insights
+        mock_step = MagicMock(spec=DefaultStep)
+        mock_step.insights = [
+            MagicMock(spec=InsightSharingOutput, generated_at_memory_index=2),
+            MagicMock(spec=InsightSharingOutput, generated_at_memory_index=4),
+            MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+        ]
+
+        # Create a mock memory list
+        memory = [
+            Message(content="Initial message", role="system"),
+            Message(content="User message 1", role="user"),
+            Message(content="Assistant response 1", role="assistant"),
+            Message(content="User message 2", role="user"),
+            Message(
+                content="Assistant response 2",
+                role="assistant",
+                tool_calls=[
+                    ToolCall(function="func1", args="{}"),
+                    ToolCall(function="func2", args="{}"),
+                ],
+            ),
+            Message(content="Tool response 1", role="tool", tool_call_id="func1"),
+            Message(content="Tool response 2", role="tool", tool_call_id="func2"),
+            Message(content="Final message", role="assistant"),
+        ]
+
+        # Test case 1: Normal truncation
+        truncated_memory = truncate_memory_to_match_insights(memory, mock_step)
+        assert len(truncated_memory) == 7  # Up to and including the tool responses
+        assert truncated_memory[-1].role == "tool"
+        assert truncated_memory[-1].content == "Tool response 2"
+
+        # Test case 2: No insights
+        mock_step.insights = []
+        truncated_memory = truncate_memory_to_match_insights(memory, mock_step)
+        assert len(truncated_memory) == 1
+        assert truncated_memory[0].content == "Initial message"
+
+        # Test case 3: All insights have negative index
+        mock_step.insights = [
+            MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+            MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
+        ]
+        truncated_memory = truncate_memory_to_match_insights(memory, mock_step)
+        assert len(truncated_memory) == len(memory)
+        assert truncated_memory[0].content == "Initial message"
+
+        # Test case 4: Truncation without tool calls
+        mock_step.insights = [MagicMock(spec=InsightSharingOutput, generated_at_memory_index=2)]
+        truncated_memory = truncate_memory_to_match_insights(memory, mock_step)
+        assert len(truncated_memory) == 3
+        assert truncated_memory[-1].content == "Assistant response 1"
+
+        # Test case 5: Truncation with incomplete tool responses
+        mock_step.insights = [MagicMock(spec=InsightSharingOutput, generated_at_memory_index=4)]
+        memory_incomplete = memory[:6]  # Remove the last tool response
+        truncated_memory = truncate_memory_to_match_insights(memory_incomplete, mock_step)
+        assert (
+            len(truncated_memory) == 4
+        )  # Up to Assistant response 2, excluding incomplete tool calls
+        assert truncated_memory[-1].content == "User message 2"
+
+
+class TestUpdateCodeChange:
+    @pytest.fixture
+    def mock_continuation_state(self):
+        with patch("seer.automation.autofix.tasks.ContinuationState") as mock_cs:
+            yield mock_cs
+
+    def test(self):
+        mock_payload = AutofixUserMessagePayload(
+            type=AutofixUpdateType.USER_MESSAGE, text="Invalid payload"
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        with pytest.raises(ValueError, match="Invalid payload type for update_code_change"):
+            update_code_change(mock_request)
+
+    def test_update_code_change_happy_path(self, mock_continuation_state):
+        # Setup
+        mock_payload = AutofixUpdateCodeChangePayload(
+            type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+            repo_id="repo1",
+            hunk_index=0,
+            lines=[
+                Line(line_type=" ", value="unchanged line"),
+                Line(line_type="+", value="new line"),
+                Line(line_type="-", value="removed line"),
+            ],
+            file_path="path/to/file.py",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_cur_state = MagicMock()
+        mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
+        mock_state.get.return_value = mock_cur_state
+
+        mock_change = MagicMock()
+        mock_change.repo_external_id = "repo1"
+        mock_file_patch = MagicMock(spec=FilePatch)
+        mock_file_patch.path = "path/to/file.py"
+        mock_hunk1 = MagicMock(spec=Hunk)
+        mock_hunk1.target_start = 10
+        mock_hunk1.target_length = 1
+        mock_hunk1.lines = [Line(line_type=" ", value="original line")]
+        mock_hunk2 = MagicMock(spec=Hunk)
+        mock_hunk2.target_start = 15
+        mock_hunk2.target_length = 2
+        mock_hunk2.lines = [Line(line_type=" ", value="another line")]
+        mock_file_patch.hunks = [mock_hunk1, mock_hunk2]
+        mock_change.diff = [mock_file_patch]
+        mock_cur_state.steps[-1].changes = [mock_change]
+
+        # Execute
+        update_code_change(mock_request)
+
+        # Assert
+        mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+        mock_state.update.assert_called_once()
+
+        # Check if the first hunk was updated correctly
+        updated_hunk1 = mock_file_patch.hunks[0]
+        assert updated_hunk1.lines == mock_payload.lines
+        assert updated_hunk1.target_length == 2  # 1 unchanged + 1 new line
+
+        # Check if the second hunk's start was updated correctly
+        updated_hunk2 = mock_file_patch.hunks[1]
+        assert updated_hunk2.target_start == 16  # 15 + (2 - 1)
+
+        # Verify that the second hunk's length wasn't changed
+        assert updated_hunk2.target_length == 2
+
+    def test_update_code_change_no_matching_change(self, mock_continuation_state):
+        mock_payload = AutofixUpdateCodeChangePayload(
+            type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+            repo_id="non_existent_repo",
+            hunk_index=0,
+            lines=[],
+            file_path="path/to/file.py",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_cur_state = MagicMock()
+        mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
+        mock_state.get.return_value = mock_cur_state
+        mock_cur_state.steps[-1].changes = []
+
+        with pytest.raises(ValueError, match="No matching change found"):
+            update_code_change(mock_request)
+
+    def test_update_code_change_no_matching_file_patch(self, mock_continuation_state):
+        mock_payload = AutofixUpdateCodeChangePayload(
+            type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+            repo_id="repo1",
+            hunk_index=0,
+            lines=[],
+            file_path="non_existent_file.py",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_cur_state = MagicMock()
+        mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
+        mock_state.get.return_value = mock_cur_state
+
+        mock_change = MagicMock()
+        mock_change.repo_external_id = "repo1"
+        mock_change.diff = []
+        mock_cur_state.steps[-1].changes = [mock_change]
+
+        with pytest.raises(ValueError, match="No matching file patch found"):
+            update_code_change(mock_request)
+
+    def test_update_code_change_invalid_hunk_index(self, mock_continuation_state):
+        mock_payload = AutofixUpdateCodeChangePayload(
+            type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+            repo_id="repo1",
+            hunk_index=99,  # Invalid index
+            lines=[],
+            file_path="path/to/file.py",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_cur_state = MagicMock()
+        mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
+        mock_state.get.return_value = mock_cur_state
+
+        mock_change = MagicMock()
+        mock_change.repo_external_id = "repo1"
+        mock_file_patch = MagicMock(spec=FilePatch)
+        mock_file_patch.path = "path/to/file.py"
+        mock_file_patch.hunks = []
+        mock_change.diff = [mock_file_patch]
+        mock_cur_state.steps[-1].changes = [mock_change]
+
+        with pytest.raises(ValueError, match="Hunk index is out of range"):
+            update_code_change(mock_request)
+
+    def test_update_code_change_invalid_step_type(self, mock_continuation_state):
+        mock_payload = AutofixUpdateCodeChangePayload(
+            type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+            repo_id="repo1",
+            hunk_index=0,
+            lines=[],
+            file_path="path/to/file.py",
+        )
+        mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
+
+        mock_state = mock_continuation_state.from_id.return_value
+        mock_cur_state = MagicMock()
+        mock_cur_state.steps = [MagicMock(spec=DefaultStep)]  # Not a ChangesStep
+        mock_state.get.return_value = mock_cur_state
+
+        # Execute
+        update_code_change(mock_request)
+
+        # Assert
+        mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
+        mock_state.update.assert_not_called()  # The function should return early without updating

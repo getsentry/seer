@@ -1,52 +1,46 @@
 import logging
-import threading
-from abc import ABC
 from typing import Optional
 
+from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel, Field
 
-from seer.automation.agent.client import (
-    DEFAULT_CLAUDE_MODEL,
-    DEFAULT_GPT_MODEL,
-    ClaudeClient,
-    GptClient,
-    LlmClient,
-)
+from seer.automation.agent.client import LlmClient, LlmProvider
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
-from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
-from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
-from seer.automation.autofix.models import AutofixStatus, DefaultStep
-from seer.bootup import module
-from seer.configuration import configuration_module
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
 
 
 class AgentConfig(BaseModel):
-    max_iterations: int = Field(
-        default=16, description="Maximum number of iterations the agent can perform"
-    )
-    model: str | None = Field(default=None, description="The model to be used by the agent")
-    system_prompt: str | None = None
-    stop_message: Optional[str] = Field(
-        default=None, description="Message that signals the agent to stop"
-    )
     interactive: bool = False  # enables interactive user-facing features
 
     class Config:
         validate_assignment = True
 
 
-class LlmAgent(ABC):
+class RunConfig(BaseModel):
+    system_prompt: str | None = None
+    prompt: str | None = None
+    stop_message: str | None = Field(
+        default=None, description="Message that signals the agent to stop"
+    )
+    max_iterations: int = Field(
+        default=16, description="Maximum number of iterations the agent can perform"
+    )
+    model: LlmProvider
+    memory_storage_key: str | None = None
+    temperature: float | None = 0.0
+    run_name: str | None = None
 
+
+class LlmAgent:
+    @inject
     def __init__(
         self,
         config: AgentConfig,
-        client: LlmClient,
+        client: LlmClient = injected,
         tools: Optional[list[FunctionTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "Agent",
@@ -59,111 +53,47 @@ class LlmAgent(ABC):
         self.name = name
         self.iterations = 0
 
-    def get_completion(self):
-        return self.client.completion(
+    def get_completion(self, run_config: RunConfig):
+        return self.client.generate_text(
             messages=self.memory,
-            model=self.config.model,
-            system_prompt=self.config.system_prompt if self.config.system_prompt else None,
+            model=run_config.model,
+            system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
+            temperature=run_config.temperature or 0.0,
         )
 
-    def use_user_messages(self, context: AutofixContext):
-        # adds any queued user messages to the memory
-        user_msgs = context.state.get().steps[-1].queued_user_messages
-        if user_msgs:
-            self.memory.append(Message(content="\n".join(user_msgs), role="user"))
-            with context.state.update() as cur:
-                cur.steps[-1].queued_user_messages = []
-            context.event_manager.add_log("Thanks for the input. I'm thinking through it now...")
-
-    def run_in_thread(self, func, args):
-        def wrapper():
-            # ensures dependency injection works
-            module.enable()
-            configuration_module.enable()
-
-            func(*args)
-
-        threading.Thread(target=wrapper).start()
-
-    def share_insights(self, context: AutofixContext, text: str):
-        # generate insights
-        insight_sharing = InsightSharingComponent(context)
-        past_insights = context.state.get().get_all_insights()
-        insight_card = insight_sharing.invoke(
-            InsightSharingRequest(
-                latest_thought=text,
-                memory=self.memory,
-                task_description=context.state.get().get_step_description(),
-                past_insights=past_insights,
-            )
-        )
-        # add the insight card to the current step
-        if insight_card:
-            if len(context.state.get().get_all_insights()) == len(
-                past_insights
-            ):  # in case something else was added in parallel, don't add this insight
-                with context.state.update() as cur:
-                    if cur.steps and isinstance(cur.steps[-1], DefaultStep):
-                        step = cur.steps[-1]
-                        step.insights.append(insight_card)
-                        cur.steps[-1] = step
-
-    def run_iteration(self, context: Optional[AutofixContext] = None):
+    def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
-        message, usage = self.get_completion()
+        completion = self.get_completion(run_config)
 
-        # interrupt if user message is queued and awaiting handling
-        if context and context.state.get().steps[-1].queued_user_messages:
-            self.use_user_messages(context)
-            return
-
-        self.memory.append(message)
-
-        # log thoughts to the user
-        if (
-            message.content
-            and context
-            and self.config.interactive
-            and not context.state.get().request.options.disable_interactivity
-        ):
-            text_before_tag = message.content.split("<")[0]
-            text = text_before_tag
-            if text:
-                self.run_in_thread(func=self.share_insights, args=(context, text))
+        self.memory.append(completion.message)
 
         # call any tools the model wants to use
-        if message.tool_calls:
-            for tool_call in message.tool_calls:
+        if completion.message.tool_calls:
+            for tool_call in completion.message.tool_calls:
                 tool_response = self.call_tool(tool_call)
                 self.memory.append(tool_response)
 
         self.iterations += 1
-        self.usage += usage
+        self.usage += completion.metadata.usage
 
         return self.memory
 
-    def should_continue(self, context: Optional[AutofixContext] = None) -> bool:
-        if (
-            context
-            and context.state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE
-        ):
-            return False
-
+    def should_continue(self, run_config: RunConfig) -> bool:
         # If this is the first iteration or there are no messages, continue
         if self.iterations == 0 or not self.memory:
             return True
 
         # Stop if we've reached the maximum number of iterations
-        if self.iterations >= self.config.max_iterations:
+        if self.iterations >= run_config.max_iterations:
             return False
 
         last_message = self.memory[-1]
         if last_message and last_message.role in ["assistant", "model"]:
             if last_message.content:
                 # Stop if the stop message is found in the content
-                if self.config.stop_message and self.config.stop_message in last_message.content:
+                if run_config.stop_message and run_config.stop_message in last_message.content:
                     return False
                 # Stop if there are no tool calls
                 if not last_message.tool_calls:
@@ -172,19 +102,26 @@ class LlmAgent(ABC):
         # Continue in all other cases
         return True
 
-    def run(self, prompt: str | None, context: Optional[AutofixContext] = None):
-        if prompt:
-            self.add_user_message(prompt)
+    @observe(name="Agent Run")
+    def run(self, run_config: RunConfig):
+        if run_config.run_name:
+            langfuse_context.update_current_observation(name=run_config.run_name + " - Agent Run")
+            langfuse_context.flush()
+        elif self.name:
+            langfuse_context.update_current_observation(name=self.name + " - Agent Run")
+            langfuse_context.flush()
+
+        if run_config.prompt:
+            self.add_user_message(run_config.prompt)
+
         logger.debug(f"----[{self.name}] Running Agent----")
 
         self.reset_iterations()
 
-        while self.should_continue(context):
-            if context and self.config.interactive:
-                self.use_user_messages(context)
-            self.run_iteration(context=context)
+        while self.should_continue(run_config):
+            self.run_iteration(run_config=run_config)
 
-        if self.iterations == self.config.max_iterations:
+        if self.iterations == run_config.max_iterations:
             raise MaxIterationsReachedException(
                 f"Agent {self.name} reached maximum iterations without finishing."
             )
@@ -236,39 +173,3 @@ class LlmAgent(ABC):
 
 class MaxIterationsReachedException(Exception):
     pass
-
-
-class GptAgent(LlmAgent):
-    @inject
-    def __init__(
-        self,
-        config: AgentConfig = AgentConfig(),
-        client: GptClient = injected,
-        tools: Optional[list[FunctionTool]] = None,
-        memory: Optional[list[Message]] = None,
-        name: str = "GptAgent",
-    ):
-        super().__init__(config, client, tools, memory, name)
-        if not self.config.model:
-            self.config.model = DEFAULT_GPT_MODEL
-
-
-class ClaudeAgent(LlmAgent):
-    @inject
-    def __init__(
-        self,
-        config: AgentConfig = AgentConfig(),
-        client: ClaudeClient = injected,
-        tools: Optional[list[FunctionTool]] = None,
-        memory: Optional[list[Message]] = None,
-        name: str = "ClaudeAgent",
-    ):
-        super().__init__(
-            config,
-            client,
-            tools,
-            memory,
-            name,
-        )
-        if not self.config.model:
-            self.config.model = DEFAULT_CLAUDE_MODEL

@@ -3,6 +3,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+from enum import Enum
 from typing import Literal
 
 import requests
@@ -14,7 +15,7 @@ from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
-from seer.automation.models import FileChange, InitializationError, RepoDefinition
+from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.utils import class_method_lru_cache
@@ -75,6 +76,25 @@ def get_read_app_credentials(config: AppConfig = injected) -> tuple[int | str | 
         return get_write_app_credentials()
 
     return app_id, private_key
+
+
+@inject
+def get_codecov_unit_test_app_credentials(
+    config: AppConfig = injected,
+) -> tuple[int | str | None, str | None]:
+    app_id = config.GITHUB_CODECOV_UNIT_TEST_APP_ID
+    private_key = config.GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY
+
+    if not app_id or not private_key:
+        return get_write_app_credentials()
+
+    return app_id, private_key
+
+
+class RepoClientType(str, Enum):
+    READ = "read"
+    WRITE = "write"
+    CODECOV_UNIT_TEST = "codecov_unit_test"
 
 
 class RepoClient:
@@ -155,9 +175,11 @@ class RepoClient:
         return False
 
     @classmethod
-    def from_repo_definition(cls, repo_def: RepoDefinition, type: Literal["read", "write"]):
-        if type == "write":
+    def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
+        if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
+        elif type == RepoClientType.CODECOV_UNIT_TEST:
+            return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
 
@@ -256,17 +278,10 @@ class RepoClient:
         if is_behind:
             comparison = self.repo.compare(next_sha, prev_sha)
 
-        # Hack: We're extracting the authorization and user agent headers from the PyGithub library to get this diff
-        # This has to be done because the files list inside the comparison object is limited to only 300 files.
-        # We get the entire diff from the diff object returned from the `diff_url`
-        requester = self.repo._requester
-        headers = {
-            "Authorization": f"{requester._Requester__auth.token_type} {requester._Requester__auth.token}",  # type: ignore
-            "User-Agent": requester._Requester__userAgent,  # type: ignore
-        }
-        data = requests.get(comparison.diff_url, headers=headers).content
+        data = requests.get(comparison.diff_url, headers=self._get_auth_headers(accept_type="diff"))
+        data.raise_for_status()  # Raise an exception for HTTP errors
 
-        patch_set = PatchSet(data.decode("utf-8"))
+        patch_set = PatchSet(data.content.decode("utf-8"))
 
         added_files = [patch.path for patch in patch_set.added_files]
         modified_files = [patch.path for patch in patch_set.modified_files]
@@ -322,58 +337,92 @@ class RepoClient:
 
         return ref
 
-    def _commit_file_change(self, change: FileChange, branch_ref: str):
-        contents = (
-            self.repo.get_contents(change.path, ref=branch_ref)
-            if change.change_type != "create"
-            else None
-        )
+    def _commit_file_change(
+        self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
+    ):
+        if not patch and not change:
+            raise ValueError("Either patch or change must be provided")
+
+        path = patch.path if patch else (change.path if change else None)
+        patch_type = patch.type if patch else (change.change_type if change else None)
+        if not path:
+            raise ValueError("Path must be provided")
+        if not patch_type:
+            raise ValueError("Patch type must be provided")
+
+        if patch_type == "create":
+            patch_type = "A"
+        elif patch_type == "delete":
+            patch_type = "D"
+        elif patch_type == "edit":
+            patch_type = "M"
+        commit_message = change.commit_message if change else None
+
+        contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
 
         if isinstance(contents, list):
-            raise RuntimeError(
-                f"Expected a single ContentFile but got a list for path {change.path}"
-            )
+            raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
 
-        new_contents = change.apply(contents.decoded_content.decode("utf-8") if contents else None)
+        to_apply = contents.decoded_content.decode("utf-8") if contents else None
+        new_contents = (
+            patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
+        )
 
         # Remove leading slash if it exists, the github api will reject paths with leading slashes.
-        if change.path.startswith("/"):
-            change.path = change.path[1:]
+        if path.startswith("/"):
+            path = path[1:]
 
-        if change.change_type == "delete" and contents:
+        if patch_type == "D" and contents:
             self.repo.delete_file(
-                change.path,
-                change.description or "File deletion",
+                path,
+                commit_message or "File deletion",
                 contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
                 branch=branch_ref,
             )
-        elif change.change_type == "create" and new_contents:
+        elif patch_type == "A" and new_contents:
             self.repo.create_file(
-                change.path, change.description or "New file", new_contents, branch=branch_ref
+                path, commit_message or "New file", new_contents, branch=branch_ref
             )
         else:
             if contents is None:
-                raise FileNotFoundError(f"File {change.path} does not exist in the repository.")
+                raise FileNotFoundError(f"File {path} does not exist in the repository.")
 
             self.repo.update_file(
-                change.path,
-                change.commit_message or "File change",
+                path,
+                commit_message or "File change",
                 new_contents or "",
                 contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
                 branch=branch_ref,
             )
 
     def create_branch_from_changes(
-        self, pr_title: str, file_changes: list[FileChange]
+        self,
+        *,
+        pr_title: str,
+        file_patches: list[FilePatch] | None = None,
+        file_changes: list[FileChange] | None = None,
+        branch_name: str | None = None,
     ) -> GitRef | None:
-        new_branch_name = f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+        if not file_patches and not file_changes:
+            raise ValueError("Either file_patches or file_changes must be provided")
+
+        new_branch_name = (
+            branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
+        )
         branch_ref = self._create_branch(new_branch_name)
 
-        for change in file_changes:
-            try:
-                self._commit_file_change(change, branch_ref.ref)
-            except Exception as e:
-                logger.error(f"Error committing file change: {e}")
+        if file_patches:
+            for patch in file_patches:
+                try:
+                    self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
+                except Exception as e:
+                    logger.error(f"Error committing file change: {e}")
+        elif file_changes:
+            for change in file_changes:
+                try:
+                    self._commit_file_change(change=change, branch_ref=branch_ref.ref)
+                except Exception as e:
+                    logger.error(f"Error committing file change: {e}")
 
         branch_ref.update()
 
@@ -398,11 +447,12 @@ class RepoClient:
         branch: GitRef,
         title: str,
         description: str,
+        provided_base: str | None = None,
     ):
         return self.repo.create_pull(
             title=title,
             body=description,
-            base=self.get_default_branch(),
+            base=provided_base or self.get_default_branch(),
             head=branch.ref,
             draft=True,
         )
@@ -438,24 +488,87 @@ class RepoClient:
         return file_set
 
     def get_pr_diff_content(self, pr_url: str) -> str:
-        requester = self.repo._requester
-        headers = {
-            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
-            "Accept": "application/vnd.github.diff",
-        }
-
-        data = requests.get(pr_url, headers=headers)
+        data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="diff"))
 
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.text
 
-    def get_pr_head_sha(self, pr_url: str) -> str:
+    def _get_auth_headers(self, accept_type: Literal["json", "diff"] = "json"):
         requester = self.repo._requester
+        if requester.auth is None:
+            raise Exception("No auth token found for GitHub API")
         headers = {
-            "Authorization": f"{requester.auth.token_type} {requester.auth.token}",  # type: ignore
-            "Accept": "application/vnd.github.raw+json",
+            "Accept": (
+                "application/vnd.github.diff"
+                if accept_type == "diff"
+                else "application/vnd.github+json"
+            ),
+            "Authorization": f"Bearer {requester.auth.token}",
+            "X-GitHub-Api-Version": "2022-11-28",
         }
+        return headers
 
-        data = requests.get(pr_url, headers=headers)
+    def comment_root_cause_on_pr_for_copilot(
+        self, pr_url: str, run_id: int, issue_id: int, comment: str
+    ):
+        pull_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]  # should be "owner/repo"
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pull_id}/comments"
+        params = {
+            "body": comment,
+            "actions": [
+                {
+                    "name": "Fix with Sentry",
+                    "type": "copilot-chat",
+                    "prompt": f"@sentry find a fix for issue {issue_id} with run ID {run_id}",
+                }
+            ],
+        }
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+
+    def comment_pr_generated_for_copilot(
+        self, pr_to_comment_on_url: str, new_pr_url: str, run_id: int
+    ):
+        pull_id = int(pr_to_comment_on_url.split("/")[-1])
+        repo_name = pr_to_comment_on_url.split("github.com/")[1].split("/pull")[
+            0
+        ]  # should be "owner/repo"
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pull_id}/comments"
+
+        comment = f"A fix has been generated and is available [here]({new_pr_url}) for your review. Autofix Run ID: {run_id}"
+
+        params = {"body": comment}
+
+        headers = self._get_auth_headers()
+
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+
+    def get_pr_head_sha(self, pr_url: str) -> str:
+        data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="json"))
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
+
+    def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
+        original_pr_id = int(original_pr_url.split("/")[-1])
+        repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
+        comment = f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_unit_test_not_generated_message_to_original_pr(self, original_pr_url: str):
+        original_pr_id = int(original_pr_url.split("/")[-1])
+        repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
+        comment = f"Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]

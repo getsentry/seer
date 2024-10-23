@@ -73,6 +73,7 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
     def invoke(self) -> Any:
         try:
             if not self._pre_invoke():
+                self._cleanup()
                 return
             result = self._invoke(**self._get_extra_invoke_kwargs())
             self._post_invoke(result)
@@ -80,6 +81,8 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
         except Exception as e:
             self._handle_exception(e)
             raise e
+        finally:
+            self._cleanup()
 
     def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
         return {}
@@ -88,6 +91,9 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
         return True
 
     def _post_invoke(self, result: Any) -> Any:
+        pass
+
+    def _cleanup(self):
         pass
 
     @property

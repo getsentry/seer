@@ -37,7 +37,7 @@ class StacktraceFrame(BaseModel):
     abs_path: Optional[Annotated[str, Examples(specialized.file_paths)]]
     line_no: Optional[int]
     col_no: Optional[int]
-    context: list[tuple[int, str]]
+    context: list[tuple[int, Optional[str]]] = []
     repo_name: Optional[str] = None
     in_app: bool = False
     vars: Optional[dict[str, Any]] = None
@@ -273,10 +273,16 @@ class SentryEventData(TypedDict):
     entries: list[dict]
 
 
+class ExceptionMechanism(TypedDict):
+    type: str
+    handled: bool
+
+
 class ExceptionDetails(BaseModel):
     type: Optional[str] = ""
     value: Optional[str] = ""
     stacktrace: Optional[Stacktrace] = None
+    mechanism: Optional[ExceptionMechanism] = None
 
     @field_validator("stacktrace", mode="before")
     @classmethod
@@ -289,7 +295,7 @@ class ExceptionDetails(BaseModel):
 
 
 class ThreadDetails(BaseModel):
-    id: Optional[int] = None
+    id: Optional[int | str] = None
     name: Optional[str] = None
     crashed: Optional[bool] = False
     current: Optional[bool] = False
@@ -380,7 +386,7 @@ class EventDetails(BaseModel):
         return "\n".join(
             textwrap.dedent(
                 """\
-                    <exception_{i}{exception_type}{exception_message}>
+                    <exception_{i}{handled}{exception_type}{exception_message}>
                     {stacktrace}
                     </exception{i}>"""
             ).format(
@@ -389,6 +395,11 @@ class EventDetails(BaseModel):
                 exception_message=f' message="{exception.value}"' if exception.value else "",
                 stacktrace=(
                     exception.stacktrace.to_str(in_app_only=True) if exception.stacktrace else ""
+                ),
+                handled=(
+                    f' is_exception_handled="{"yes" if exception.mechanism.get("handled") else "no"}"'
+                    if exception.mechanism and exception.mechanism.get("handled", None) is not None
+                    else ""
                 ),
             )
             for i, exception in enumerate(self.exceptions)
@@ -530,6 +541,44 @@ class FilePatch(BaseModel):
     source_file: str
     target_file: str
     hunks: List[Hunk]
+
+    def apply(self, file_contents: str | None) -> str | None:
+        if self.type == "A":
+            if file_contents is not None and file_contents.strip():
+                raise FileChangeError("Cannot add a file that already exists.")
+            return self._apply_hunks([])
+
+        if file_contents is None:
+            raise FileChangeError("File contents must be provided for modify or delete operations.")
+
+        if self.type == "D":
+            return None
+
+        # For M type
+        return self._apply_hunks(file_contents.splitlines(keepends=True))
+
+    def _apply_hunks(self, lines: List[str]) -> str:
+        result = []
+        current_line = 0
+
+        for hunk in self.hunks:
+            # Add unchanged lines before the hunk
+            result.extend(lines[current_line : hunk.target_start - 1])
+            current_line = hunk.target_start - 1
+
+            for line in hunk.lines:
+                if line.line_type == "+":
+                    result.append(line.value + ("\n" if not line.value.endswith("\n") else ""))
+                elif line.line_type == " ":
+                    result.append(lines[current_line])
+                    current_line += 1
+                elif line.line_type == "-":
+                    current_line += 1
+
+        # Add any remaining unchanged lines after the last hunk
+        result.extend(lines[current_line:])
+
+        return "".join(result).rstrip("\n")
 
 
 class FileChangeError(Exception):

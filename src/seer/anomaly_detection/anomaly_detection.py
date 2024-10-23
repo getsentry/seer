@@ -134,9 +134,9 @@ class AnomalyDetection(BaseModel):
 
         # Run stream detection
         stream_detector = MPStreamAnomalyDetector(
-            base_timestamps=historic.timeseries.timestamps,
-            base_values=historic.timeseries.values,
-            base_mp=anomalies.matrix_profile,
+            history_timestamps=historic.timeseries.timestamps,
+            history_values=historic.timeseries.values,
+            history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
         )
         streamed_anomalies = stream_detector.detect(
@@ -200,9 +200,9 @@ class AnomalyDetection(BaseModel):
 
         # Run stream detection on current data
         stream_detector = MPStreamAnomalyDetector(
-            base_timestamps=historic.timestamps,
-            base_values=historic.values,
-            base_mp=anomalies.matrix_profile,
+            history_timestamps=historic.timestamps,
+            history_values=historic.values,
+            history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
         )
         streamed_anomalies = stream_detector.detect(

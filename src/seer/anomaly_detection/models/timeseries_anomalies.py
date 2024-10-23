@@ -39,6 +39,8 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
 
     scores: list[float] = Field(..., description="Anomaly scores")
 
+    thresholds: list[float] = Field(..., description="Score thresholds")
+
     matrix_profile: npt.NDArray = Field(
         ..., description="The matrix profile of the time series using which anomalies were detected"
     )

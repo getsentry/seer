@@ -20,6 +20,7 @@ from seer.automation.autofix.steps.change_describer_step import (
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
+from seer.automation.utils import make_kill_signal
 
 
 class AutofixCodingStepRequest(PipelineStepTaskRequest):
@@ -64,10 +65,10 @@ class AutofixCodingStep(AutofixPipelineStep):
                 "Figuring out a fix for the root cause of this issue..."
             )
         else:
-            self.context.event_manager.add_log("Thanks, continuing to analyze...")
+            self.context.event_manager.add_log("Continuing to analyze...")
 
         state = self.context.state.get()
-        root_cause_and_fix = state.get_selected_root_cause_and_fix()
+        root_cause_and_fix, fix_instruction = state.get_selected_root_cause_and_fix()
 
         if not root_cause_and_fix:
             raise ValueError("Root cause analysis must be performed before coding")
@@ -84,6 +85,7 @@ class AutofixCodingStep(AutofixPipelineStep):
                 event_details=event_details,
                 root_cause_and_fix=root_cause_and_fix,
                 instruction=state.request.instruction,
+                fix_instruction=fix_instruction,
                 summary=summary,
                 initial_memory=self.request.initial_memory,
             )
@@ -92,11 +94,18 @@ class AutofixCodingStep(AutofixPipelineStep):
         state = self.context.state.get()
         if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return
+        if make_kill_signal() in state.signals:
+            return
 
         self.context.event_manager.send_coding_result(coding_output)
+
+        pr_to_comment_on = state.request.options.comment_on_pr_with_url
         self.next(
             AutofixChangeDescriberStep.get_signature(
-                AutofixChangeDescriberRequest(**self.step_request_fields)
+                AutofixChangeDescriberRequest(
+                    **self.step_request_fields,
+                    pr_to_comment_on=pr_to_comment_on,
+                ),
             ),
             queue=CeleryQueues.DEFAULT,
         )

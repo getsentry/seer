@@ -46,6 +46,7 @@ def append_langfuse_observation_metadata(new_metadata: dict, langfuse: Langfuse 
     """
     try:
         observation_id = langfuse_context.get_current_observation_id()
+        langfuse_context.flush()
         if observation_id:
             observation = langfuse.get_observation(observation_id)
 

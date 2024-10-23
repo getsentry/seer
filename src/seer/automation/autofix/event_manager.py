@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import time
 
 from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
@@ -18,6 +19,7 @@ from seer.automation.autofix.models import (
     Step,
 )
 from seer.automation.state import State
+from seer.automation.utils import make_kill_signal
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,8 @@ class AutofixEventManager:
         with self.state.update() as cur:
             cur_step = cur.find_or_add(step)
             cur_step.status = AutofixStatus.PROCESSING
+            cur_step.progress = []
+            cur_step.completedMessage = None  # type: ignore[assignment]
             cur.status = AutofixStatus.PROCESSING
 
     def send_root_cause_analysis_will_start(self):
@@ -109,6 +113,7 @@ class AutofixEventManager:
         elif payload.cause_id is not None:
             root_cause_selection = CodeContextRootCauseSelection(
                 cause_id=payload.cause_id,
+                instruction=payload.instruction,
             )
 
         if root_cause_selection is None:
@@ -204,3 +209,30 @@ class AutofixEventManager:
     def clear_file_changes(self):
         with self.state.update() as cur:
             cur.clear_file_changes()
+
+    def reset_steps_to_point(
+        self, last_step_to_retain_index: int, last_insight_to_retain_index: int | None
+    ) -> bool:
+        with self.state.update() as cur:
+            cur.kill_all_processing_steps()  # mark any processing steps for killing
+            cur.delete_all_steps_after_index(
+                last_step_to_retain_index
+            )  # delete all steps after specified step
+            step = cur.find_step(
+                index=last_step_to_retain_index
+            )  # delete all insights after specified insight
+            if isinstance(step, DefaultStep):
+                step.insights = (
+                    step.insights[: last_insight_to_retain_index + 1]
+                    if last_insight_to_retain_index is not None
+                    else []
+                )
+                cur.steps[-1] = step
+
+        count = 0
+        while make_kill_signal() in self.state.get().signals:
+            time.sleep(0.5)  # wait for all steps to be killed
+            count += 1
+            if count > 5:
+                return False  # could not kill steps
+        return True  # successfully killed steps

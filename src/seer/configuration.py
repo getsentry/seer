@@ -52,6 +52,8 @@ class AppConfig(BaseModel):
     GITHUB_PRIVATE_KEY: str = ""
     GITHUB_SENTRY_APP_ID: str | None = None
     GITHUB_SENTRY_PRIVATE_KEY: str | None = None
+    GITHUB_CODECOV_UNIT_TEST_APP_ID: str | None = None
+    GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY: str | None = None
 
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
@@ -73,10 +75,16 @@ class AppConfig(BaseModel):
     # Super access token for developing against, won't be available in final production setup.
     CODECOV_SUPER_TOKEN: str = ""
 
+    GRPC_THREAD_POOL_SIZE: ParseInt = 1
+    GRPC_SERVICE_PORT: ParseInt = 50051
+    GRPC_MAINTENANCE_PORT: ParseInt = 50052
+    GRPC_TEST_ADDRESS: str = ""
+
     ANOMALY_DETECTION_ENABLED: ParseBool = False
     GROUPING_ENABLED: ParseBool = False
     SEVERITY_ENABLED: ParseBool = False
     AUTOFIX_ENABLED: ParseBool = False
+    GRPC_SERVER_ENABLE: ParseBool = False
     HOSTNAME: str = Field(default_factory=gethostname)
 
     # Test utility that disables deployment conditional behavior.
@@ -87,6 +95,7 @@ class AppConfig(BaseModel):
         self.GROUPING_ENABLED = False
         self.SEVERITY_ENABLED = False
         self.AUTOFIX_ENABLED = False
+        self.GRPC_SERVER_ENABLE = False
 
     @property
     def is_severity_enabled(self):

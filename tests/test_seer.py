@@ -472,6 +472,11 @@ class TestSeer(unittest.TestCase):
             (AutofixUpdateType.SELECT_ROOT_CAUSE, "seer.app.run_autofix_execution"),
             (AutofixUpdateType.CREATE_PR, "seer.app.run_autofix_create_pr"),
             (AutofixUpdateType.USER_MESSAGE, "seer.app.receive_user_message"),
+            (
+                AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+                "seer.app.restart_from_point_with_feedback",
+            ),
+            (AutofixUpdateType.UPDATE_CODE_CHANGE, "seer.app.update_code_change"),
         ]
 
         for autofix_type, expected_func in test_cases:

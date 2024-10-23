@@ -23,6 +23,11 @@ RUN apt-get update && \
     git && \
     rm -rf /var/lib/apt/lists/*
 
+# Install td-grpc-bootstrap
+RUN curl -L https://storage.googleapis.com/traffic-director/td-grpc-bootstrap-0.16.0.tar.gz | tar -xz && \
+    mv td-grpc-bootstrap-0.16.0/td-grpc-bootstrap /usr/local/td-grpc-bootstrap && \
+    rm -rf td-grpc-bootstrap-0.16.0
+
 # Make python3.11 the default python version if necessary
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
@@ -39,8 +44,8 @@ RUN pip install -r requirements.txt --no-cache-dir
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
 # Copy scripts
-COPY celeryworker.sh celerybeat.sh gunicorn.sh ./
-RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh
+COPY celeryworker.sh celerybeat.sh gunicorn.sh grpcserver.sh ./
+RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh ./grpcserver.sh
 
 # Copy source code
 COPY src/ src/
