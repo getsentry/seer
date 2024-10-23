@@ -275,7 +275,7 @@ class SentryEventData(TypedDict):
 
 class ExceptionMechanism(TypedDict):
     type: str
-    handled: bool | None = None
+    handled: NotRequired[bool]
 
 
 class ExceptionDetails(BaseModel):
