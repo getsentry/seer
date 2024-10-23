@@ -28,7 +28,14 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    deferred,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -266,7 +273,7 @@ class DbGroupingRecord(Base):
         server_default=text("nextval('grouping_records_id_seq')"),
     )
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
-    message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    message: Mapped[Optional[str]] = deferred(mapped_column(String, nullable=True))
     error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     hash: Mapped[str] = mapped_column(String(32), nullable=False)
