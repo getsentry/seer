@@ -2,6 +2,7 @@ import abc
 from typing import List, Tuple
 
 import numpy as np
+import sentry_sdk
 from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
@@ -99,6 +100,7 @@ class MajorityVoteFlagSmoother(FlagSmoother):
 
         return new_flags[start_idx:end_idx].tolist()
 
+    @sentry_sdk.trace
     def smooth(
         self,
         flags: list,
