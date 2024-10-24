@@ -234,6 +234,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             scores=[1.0, 0.95],
             matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
+            thresholds=[0.0, 0.0],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -282,6 +283,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             scores=[1.0, 0.95],
             matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
+            thresholds=[0.0, 0.0],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -331,6 +333,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             scores=[1.0, 0.95],
             matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
+            thresholds=[0.0, 0.0],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -373,6 +376,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             scores=[1.0, 0.95],
             matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
+            thresholds=[0.0, 0.0],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(

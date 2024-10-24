@@ -490,7 +490,7 @@ class TestRepoClientIndexFileSet:
     def test_post_unit_test_not_generated_message_to_original_pr(self, mock_post, repo_client):
         original_pr_url = "https://github.com/sentry/sentry/pull/12345"
         expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
-        expected_comment = f"Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        expected_comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
         expected_params = {"body": expected_comment}
 
         mock_response = MagicMock()

@@ -91,6 +91,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
                 scores=np.array([]),
                 matrix_profile=np.array([]),
                 window_size=0,
+                thresholds=np.array([]),
             )
         window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:

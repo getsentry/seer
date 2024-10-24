@@ -155,6 +155,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 scores=np.array([0.4]),
                 matrix_profile=dummy_mp,
                 window_size=window_size,
+                thresholds=np.array([0.0]),
             ),
             cleanup_config=cleanup_config,
         )

@@ -57,8 +57,7 @@ def mp_utils_provider() -> MPUtils:
 def location_detector_provider() -> LocationDetector:
     return ProphetLocationDetector()
 
-  
+
 @anomaly_detection_module.provider
 def flag_smoother_provider() -> FlagSmoother:
     return MajorityVoteFlagSmoother()
-  
