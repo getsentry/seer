@@ -10,9 +10,16 @@ from typing import Any, Callable
 import requests
 from requests import HTTPError
 
+from seer.configuration import AppConfig
+from seer.dependency_injection import Module, injected
 from seer.utils import json_dumps
 
 logger = logging.getLogger(__name__)
+
+module = Module()
+module.enable()
+
+rpc_stub_module = Module()
 
 
 class RpcClient(ABC):
@@ -37,7 +44,6 @@ RpcClientHandler = Callable[[str, dict[str, Any]], dict[str, Any] | tuple[int, s
 @dataclasses.dataclass
 class DummyRpcClient(RpcClient):
     handlers: dict[str, RpcClientHandler] = dataclasses.field(default_factory=dict)
-    missed_calls: list[tuple[str, dict[str, Any]]] = dataclasses.field(default_factory=list)
     should_log: bool = False
     dry_run: bool = False
 
@@ -57,7 +63,6 @@ class DummyRpcClient(RpcClient):
         if self.dry_run:
             return None
 
-        self.missed_calls.append((method, kwargs))
         body_dict = {"args": kwargs}
         json_dump = json_dumps(body_dict, separators=(",", ":"))
 
@@ -109,3 +114,18 @@ class SentryRpcClient(RpcClient):
             "Authorization": f"Rpcsignature {signature}",
         }
         return body_bytes, endpoint, headers
+
+
+@module.provider
+def get_sentry_client(config: AppConfig = injected) -> RpcClient:
+    if config.NO_SENTRY_INTEGRATION:
+        rpc_client: DummyRpcClient = DummyRpcClient()
+        rpc_client.dry_run = True
+        return rpc_client
+    else:
+        return SentryRpcClient()
+
+
+@rpc_stub_module.provider
+def get_sentry_stub_client() -> RpcClient:
+    return DummyRpcClient()

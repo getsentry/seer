@@ -49,7 +49,6 @@ class TestAutofixContext(unittest.TestCase):
         self.autofix_context = AutofixContext(
             self.state,
             MagicMock(),
-            MagicMock(),
         )
 
     @patch("seer.automation.autofix.autofix_context.AutofixEventManager")
@@ -69,7 +68,7 @@ class TestAutofixContext(unittest.TestCase):
             )
         )
 
-        AutofixContext(state, MagicMock(), mock_event_manager)
+        AutofixContext(state, mock_event_manager)
 
         mock_event_manager.migrate_step_keys.assert_called_once()
 
@@ -279,7 +278,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             ),
             type=DbStateRunTypes.AUTOFIX,
         )
-        self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
+        self.autofix_context = AutofixContext(self.state, MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch("seer.automation.autofix.autofix_context.RepoClient")

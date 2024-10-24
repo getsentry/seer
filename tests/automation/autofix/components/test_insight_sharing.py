@@ -1,6 +1,7 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from johen import generate
 
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
@@ -17,15 +18,18 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingOutput,
     InsightSharingRequest,
 )
+from seer.automation.autofix.event_manager import AutofixEventManager
+from seer.automation.autofix.models import AutofixContinuation
+from seer.automation.state import TestMemoryState
 
 
 class TestInsightSharingComponent:
     @pytest.fixture
     def component(self):
-        mock_context = MagicMock(spec=AutofixContext)
-        mock_context.state = MagicMock()
-        mock_context.skip_loading_codebase = True
-        return InsightSharingComponent(mock_context)
+        state = TestMemoryState(next(generate(AutofixContinuation)))
+        return InsightSharingComponent(
+            AutofixContext(state=state, event_manager=AutofixEventManager(state=state))
+        )
 
     @pytest.fixture
     def mock_llm_client(self):
