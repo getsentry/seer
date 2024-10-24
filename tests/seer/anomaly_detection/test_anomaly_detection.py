@@ -170,7 +170,11 @@ class TestAnomalyDetection(unittest.TestCase):
         assert "No timeseries data found for alert" in str(e.exception)
 
         # Alert is not of type MPTimeSeriesAnomalies
-        mock_query.return_value = {"anomalies": []}
+        mock_query.return_value = MPTimeSeries(
+            timestamps=np.array([]),
+            values=np.array([]),
+            anomalies=None,
+        )
 
         with self.assertRaises(ServerError) as e:
             AnomalyDetection().detect_anomalies(request=request)
