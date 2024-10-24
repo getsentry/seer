@@ -5,7 +5,7 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import Any, Callable
+from typing import Any
 
 import requests
 from requests import HTTPError
@@ -36,14 +36,6 @@ class FakeHttpResponse:
     @property
     def text(self) -> str:
         return self.content.decode("utf-8")
-
-
-RpcEndpoint = str
-RpcArguments = dict[str, Any]
-RpcResult = dict[str, Any]
-HttpResult = tuple[int, str]
-NoResponse = None
-RpcClientHandler = Callable[[RpcEndpoint, RpcArguments], RpcResult | HttpResult | NoResponse]
 
 
 @dataclasses.dataclass
