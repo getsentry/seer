@@ -24,8 +24,9 @@ from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefi
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.summarize.issue import IssueSummary
-from seer.automation.utils import AgentError, get_sentry_client
+from seer.automation.utils import AgentError
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
+from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
@@ -55,11 +56,12 @@ class AutofixContext(PipelineContext):
     event_manager: AutofixEventManager
     sentry_client: RpcClient
 
+    @inject
     def __init__(
         self,
         state: State[AutofixContinuation],
-        sentry_client: RpcClient,
         event_manager: AutofixEventManager,
+        sentry_client: RpcClient = injected,
     ):
         request = state.get().request
 
@@ -93,7 +95,7 @@ class AutofixContext(PipelineContext):
 
         event_manager = AutofixEventManager(state)
 
-        return cls(state, get_sentry_client(), event_manager)
+        return cls(state, event_manager)
 
     @property
     def run_id(self) -> int:
