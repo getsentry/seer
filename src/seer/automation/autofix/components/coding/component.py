@@ -48,7 +48,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     ):
         for file_path, file_missing_obj in missing_changes_by_file.items():
             new_response = llm_client.generate_text(
-                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                 prompt=CodingPrompts.format_incorrect_diff_fixer(
                     file_path,
                     file_missing_obj.diff_chunks,
@@ -122,7 +122,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         else None
                     ),
                     system_prompt=CodingPrompts.format_system_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="plan_and_code",
                     run_name="Plan",
                 ),
@@ -139,7 +139,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             final_response = agent.run(
                 RunConfig(
                     prompt=CodingPrompts.format_fix_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="plan_and_code",
                     run_name="Code",
                 ),
@@ -179,7 +179,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         prompt=CodingPrompts.format_missing_msg(
                             missing_files_errors, file_exist_errors
                         ),
-                        model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                         memory_storage_key="plan_and_code",
                         run_name="Missing File Fix",
                     ),
