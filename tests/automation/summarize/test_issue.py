@@ -26,9 +26,8 @@ class TestSummarizeIssue:
         mock_structured_completion = MagicMock()
         mock_raw_summary = MagicMock(
             reason_step_by_step=[],
-            summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
-            summary_of_the_functionality_affected="Test functionality",
-            five_to_ten_word_headline="Test headline",
+            bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
+            five_to_ten_word_headline="Test headline!",
         )
         mock_structured_completion.choices[0].message.parsed = mock_raw_summary
         mock_structured_completion.choices[0].message.refusal = None
@@ -46,8 +45,8 @@ class TestSummarizeIssue:
         assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 1
         assert result.summary == "Test summary"
-        assert result.impact == "Test functionality"
-        assert result.headline == "Test headline"
+        assert result.impact == ""
+        assert result.headline == "Test headline."
         assert raw_result == mock_raw_summary
 
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
@@ -59,8 +58,7 @@ class TestSummarizeIssue:
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=MagicMock(
                 reason_step_by_step=[],
-                summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
-                summary_of_the_functionality_affected="Test functionality",
+                bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
                 five_to_ten_word_headline="Test headline",
             ),
             metadata=LlmResponseMetadata(
@@ -88,8 +86,7 @@ class TestRunSummarizeIssue:
             group_id=1, headline="headline", summary="summary", impact="impact"
         ), IssueSummary(
             reason_step_by_step=[],
-            summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-            summary_of_the_functionality_affected="impact",
+            bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
             five_to_ten_word_headline="headline",
         )
 
@@ -119,8 +116,7 @@ class TestRunSummarizeIssue:
             group_id=1, headline="headline", summary="summary", impact="impact"
         ), IssueSummary(
             reason_step_by_step=[],
-            summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-            summary_of_the_functionality_affected="impact",
+            bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
             five_to_ten_word_headline="headline",
         )
 
