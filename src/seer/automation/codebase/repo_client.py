@@ -566,7 +566,7 @@ class RepoClient:
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        comment = f"Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
