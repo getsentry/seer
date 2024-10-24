@@ -37,7 +37,7 @@ def format_summary(summary: IssueSummary | None) -> str:
         {analysis}
         """
     ).format(
-        details=summary.summary_of_the_issue_based_on_your_step_by_step_reasoning,
+        details=summary.bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning,
         analysis="\n".join(
             [f"- {step.reasoning} {step.justification}" for step in summary.reason_step_by_step]
         ),
