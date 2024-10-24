@@ -20,7 +20,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesWithHistory,
 )
 from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomalies
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
@@ -162,11 +162,19 @@ class TestAnomalyDetection(unittest.TestCase):
         with self.assertRaises(Exception):
             AnomalyDetection().detect_anomalies(request=request)
 
+        # Alert is None
+        mock_query.return_value = None
+
+        with self.assertRaises(ClientError) as e:
+            AnomalyDetection().detect_anomalies(request=request)
+        assert "No timeseries data found for alert" in str(e.exception)
+
         # Alert is not of type MPTimeSeriesAnomalies
         mock_query.return_value = {"anomalies": []}
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(ServerError) as e:
             AnomalyDetection().detect_anomalies(request=request)
+        assert "Invalid state" in str(e.exception)
 
     def test_detect_anomalies_combo(self):
 
