@@ -71,8 +71,7 @@ class TestRootCauseStep(unittest.TestCase):
                 issue=IssueDetails(id=0, title="", events=[error_event]),
                 issue_summary=IssueSummary(
                     reason_step_by_step=[],
-                    summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-                    summary_of_the_functionality_affected="impact",
+                    bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
                     five_to_ten_word_headline="headline",
                 ),
                 options=AutofixRequestOptions(comment_on_pr_with_url=pr_url),
