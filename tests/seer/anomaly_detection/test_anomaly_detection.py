@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from seer.anomaly_detection.accessors import AlertDataAccessor
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import DynamicAlert, MPTimeSeries
 from seer.anomaly_detection.models.cleanup import CleanupConfig
@@ -163,6 +162,12 @@ class TestAnomalyDetection(unittest.TestCase):
         with self.assertRaises(Exception):
             AnomalyDetection().detect_anomalies(request=request)
 
+        # Alert is not of type MPTimeSeriesAnomalies
+        mock_query.return_value = {"anomalies": []}
+
+        with self.assertRaises(Exception):
+            AnomalyDetection().detect_anomalies(request=request)
+
     def test_detect_anomalies_combo(self):
 
         config = AnomalyDetectionConfig(
@@ -197,77 +202,21 @@ class TestAnomalyDetection(unittest.TestCase):
             assert isinstance(response.timeseries[0], TimeSeriesPoint)
 
     def test_delete_alert_data_success(self):
-        class MockAlertDataAccessor(AlertDataAccessor):
-            def delete_alert_data(self, external_alert_id: int):
-                assert external_alert_id == 1
-                return DeleteAlertDataResponse(success=True)
-
-            def query(self, *args, **kwargs) -> DynamicAlert | None:
-                return NotImplemented
-
-            def save_alert(self, *args, **kwargs):
-                return NotImplemented
-
-            def save_timepoint(self, *args, **kwargs):
-                return NotImplemented
-
-            def queue_data_purge_flag(self, *args, **kwargs):
-                return NotImplemented
-
-            def can_queue_cleanup_task(self, *args, **kwargs):
-                return NotImplemented
-
-            def reset_cleanup_task(self, *args, **kwargs):
-                return NotImplemented
+        mock_alert_data_accessor = MagicMock()
 
         request = DeleteAlertDataRequest(organization_id=0, project_id=0, alert=AlertInSeer(id=1))
         response = AnomalyDetection().delete_alert_data(
-            request=request, alert_data_accessor=MockAlertDataAccessor()
+            request=request, alert_data_accessor=mock_alert_data_accessor
         )
         assert response == DeleteAlertDataResponse(success=True)
 
-        mock_accessor = MockAlertDataAccessor()
-        assert mock_accessor.query is not NotImplemented
-        assert mock_accessor.save_alert is not NotImplemented
-        assert mock_accessor.save_timepoint is not NotImplemented
-        assert mock_accessor.queue_data_purge_flag is not NotImplemented
-        assert mock_accessor.can_queue_cleanup_task is not NotImplemented
-        assert mock_accessor.reset_cleanup_task is not NotImplemented
-
     def test_delete_alert_data_failure(self):
-        class MockAlertDataAccessor(AlertDataAccessor):
-            def delete_alert_data(self, external_alert_id: int):
-                raise ClientError(f"Alert id {external_alert_id} not found")
-
-            def query(self, *args, **kwargs) -> DynamicAlert | None:
-                return NotImplemented
-
-            def save_alert(self, *args, **kwargs):
-                return NotImplemented
-
-            def save_timepoint(self, *args, **kwargs):
-                return NotImplemented
-
-            def queue_data_purge_flag(self, *args, **kwargs):
-                return NotImplemented
-
-            def can_queue_cleanup_task(self, *args, **kwargs):
-                return NotImplemented
-
-            def reset_cleanup_task(self, *args, **kwargs):
-                return NotImplemented
+        mock_alert_data_accessor = MagicMock()
+        mock_alert_data_accessor.delete_alert_data.side_effect = ClientError("Alert id 1 not found")
 
         request = DeleteAlertDataRequest(organization_id=0, project_id=0, alert=AlertInSeer(id=1))
         with self.assertRaises(ClientError) as e:
             AnomalyDetection().delete_alert_data(
-                request=request, alert_data_accessor=MockAlertDataAccessor()
+                request=request, alert_data_accessor=mock_alert_data_accessor
             )
-            assert "Alert id 1 not found" in str(e.exception)
-
-        mock_accessor = MockAlertDataAccessor()
-        assert mock_accessor.query is not NotImplemented
-        assert mock_accessor.save_alert is not NotImplemented
-        assert mock_accessor.save_timepoint is not NotImplemented
-        assert mock_accessor.queue_data_purge_flag is not NotImplemented
-        assert mock_accessor.can_queue_cleanup_task is not NotImplemented
-        assert mock_accessor.reset_cleanup_task is not NotImplemented
+        assert "Alert id 1 not found" in str(e.exception)
