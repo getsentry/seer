@@ -43,11 +43,7 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.models import InitializationError
-from seer.automation.utils import (
-    get_sentry_client,
-    process_repo_provider,
-    raise_if_no_genai_consent,
-)
+from seer.automation.utils import process_repo_provider, raise_if_no_genai_consent
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 
 logger = logging.getLogger(__name__)
@@ -198,9 +194,7 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
-    context = AutofixContext(
-        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
-    )
+    context = AutofixContext(state=state, event_manager=event_manager)
 
     context.commit_changes(
         repo_external_id=request.payload.repo_external_id, repo_id=request.payload.repo_id
@@ -249,9 +243,7 @@ def receive_user_message(request: AutofixUpdateRequest):
         with state.update() as cur:
             cur.mark_triggered()
         event_manager = AutofixEventManager(state)
-        context = AutofixContext(
-            state=state, sentry_client=get_sentry_client(), event_manager=event_manager
-        )
+        context = AutofixContext(state=state, event_manager=event_manager)
 
         is_coding_step = step_to_restart.key == "plan"
         memory = (
@@ -356,9 +348,7 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
 
     event_manager.reset_steps_to_point(step_index, insight_card_index)
 
-    context = AutofixContext(
-        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
-    )
+    context = AutofixContext(state=state, event_manager=event_manager)
     step_to_restart = cast(DefaultStep, state.get().steps[-1])
 
     is_coding_step = step_to_restart.key == "plan"
