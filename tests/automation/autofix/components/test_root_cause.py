@@ -68,10 +68,56 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context is None
 
     def test_no_root_causes_response(self, component, mock_agent):
-        mock_agent.return_value.run.return_value = "<NO_ROOT_CAUSES>"
+        mock_agent.return_value.run.return_value = "<NO_ROOT_CAUSES> this is too hard, I give up"
 
         output = component.invoke(MagicMock())
 
-        assert output is None
+        assert output.causes == []
+        assert output.termination_reason == "this is too hard, I give up"
         # Ensure that the second run (reproduction) and the formatter are not called when <NO_ROOT_CAUSES> is returned
         assert mock_agent.return_value.run.call_count == 1
+
+    def test_agent_run_returns_none(self, component, mock_agent):
+        mock_agent.return_value.run.return_value = None
+
+        output = component.invoke(MagicMock())
+
+        assert output.causes == []
+        assert output.termination_reason == "Something went wrong when Autofix was running."
+        # Ensure that the second run (reproduction) and the formatter are not called
+        assert mock_agent.return_value.run.call_count == 1
+
+    def test_agent_run_returns_none_on_second_call(self, component, mock_agent):
+        # Mock the agent.run method to return a valid response first, then None
+        mock_agent.return_value.run.side_effect = ["Valid root cause analysis", None]
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=MultipleRootCauseAnalysisOutputPrompt(
+                cause=RootCauseAnalysisItemPrompt(
+                    title="Test Root Cause",
+                    description="This is a test root cause",
+                    reproduction_instructions="",
+                    relevant_code=None,
+                )
+            ),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        module = Module()
+        module.constant(LlmClient, mock_llm_client)
+
+        with module:
+            output = component.invoke(MagicMock())
+
+        assert output.causes == []
+        assert (
+            output.termination_reason
+            == "Something went wrong when Autofix was trying to figure out how to reproduce the issue."
+        )
+        # Ensure that the run method is called twice
+        assert mock_agent.return_value.run.call_count == 2

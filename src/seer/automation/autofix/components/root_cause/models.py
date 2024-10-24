@@ -165,3 +165,4 @@ class RootCauseAnalysisRequest(BaseComponentRequest):
 
 class RootCauseAnalysisOutput(BaseComponentOutput):
     causes: list[RootCauseAnalysisItem]
+    termination_reason: str | None = None
