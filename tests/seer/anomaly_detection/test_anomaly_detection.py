@@ -226,6 +226,14 @@ class TestAnomalyDetection(unittest.TestCase):
         )
         assert response == DeleteAlertDataResponse(success=True)
 
+        mock_accessor = MockAlertDataAccessor()
+        assert mock_accessor.query is not NotImplemented
+        assert mock_accessor.save_alert is not NotImplemented
+        assert mock_accessor.save_timepoint is not NotImplemented
+        assert mock_accessor.queue_data_purge_flag is not NotImplemented
+        assert mock_accessor.can_queue_cleanup_task is not NotImplemented
+        assert mock_accessor.reset_cleanup_task is not NotImplemented
+
     def test_delete_alert_data_failure(self):
         class MockAlertDataAccessor(AlertDataAccessor):
             def delete_alert_data(self, external_alert_id: int):
@@ -255,3 +263,11 @@ class TestAnomalyDetection(unittest.TestCase):
                 request=request, alert_data_accessor=MockAlertDataAccessor()
             )
             assert "Alert id 1 not found" in str(e.exception)
+
+        mock_accessor = MockAlertDataAccessor()
+        assert mock_accessor.query is not NotImplemented
+        assert mock_accessor.save_alert is not NotImplemented
+        assert mock_accessor.save_timepoint is not NotImplemented
+        assert mock_accessor.queue_data_purge_flag is not NotImplemented
+        assert mock_accessor.can_queue_cleanup_task is not NotImplemented
+        assert mock_accessor.reset_cleanup_task is not NotImplemented
