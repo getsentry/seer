@@ -50,7 +50,7 @@ class DummyRpcClient(RpcClient):
 
     should_log: bool = False
     dry_run: bool = False
-    invocations: list[tuple[str, dict[str, any]]] = dataclasses.field(default_factory=list)
+    invocations: list[tuple[str, dict[str, Any]]] = dataclasses.field(default_factory=list)
 
     # use to force a specific consent value for get_organization_autofix_consent
     should_consent: bool = False
