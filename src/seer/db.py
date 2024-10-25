@@ -310,6 +310,7 @@ class DbDynamicAlert(Base):
         back_populates="dynamic_alert",
         cascade="all, delete, delete-orphan",
         passive_deletes=True,
+        order_by="DbDynamicAlertTimeSeries.timestamp",
     )
     data_purge_flag: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus, native_enum=False),
