@@ -1,13 +1,401 @@
 # Dependency Injection in Seer
 
 [Dependency Injection](https://en.wikipedia.org/wiki/Dependency_injection) is a technique in which shared objects
-and configuration used in a program are "injected" into functions on a need to know basis, as opposed to, for instance,
-functions accessing those objects or configuration via global functions or state.
+and configuration used in a program are "injected" into functions on a need to know basis, separating the concerns
+of instantiation and construction of objects, from defining the dependent components.  This is opposed to functions
+or classes directly accessing those shared objects via global state.
 
 This concept is actually very similar to [useContext](https://react.dev/reference/react/useContext) in React: consumers
-of values are separated from providers rather than shared through global state.
+of values are separated from providers rather than shared through global state.  The difference comes down to how
+these abstraction relationships (consumers and providers) are eventually bound together.
 
-### Motivation
+# Onboarding
+
+This document explains dependency injection from multiple perspectives.  In the whole, all of them are useful
+perspectives but not all of them will make sense or be useful at the same time.  Instead, return to this doc from time
+to time to add more context as it fits your attention and needs convincingly.
+
+Understand that Dependency Injection exists as 3 related things:
+1.  The theoretical, conceptual idea of Dependency Injection.  Understanding the motivations and the conceptual shape
+is useful because you may run into similarly shaped patterns in other places, allowing you to share contextual
+understanding.
+2.  The seer implementation of dependency injection, contained in `dependency_injection.py`, which includes specific,
+opinionated details in the implementation and ideas about how it could be used in future situations.
+3.  The exact specific usage of `dependency_injection.py` currently in the seer codebase.  This may be a subset of all
+features of the library, and a subset of all the conceptual ideas, but contextualized into "real life" patterns that
+relate directly to the codebase as it is.
+
+Note that as you go up, you get broad, robust ideas that are more expensive to contextualize, whereas you go down you
+get narrow, brittle ideas that are cheaper to contextualize.  Don't let your understanding be tight around
+either side -- there is nothing privileged either about the theoretical or the practical, they are both axis in which
+to navigate, bend, and change.  [Remember, only YOU can prevent wildfires](https://en.wikipedia.org/wiki/Smokey_Bear).
+
+# A walk around `dependency_injection.py` and seer patterns
+
+## inject and injected
+
+These are patterns that exist today and are worth understanding, either to reproduce, extend, or simply to
+contextualize.  Note however that one day these patterns will become a problem -- when that day comes, don't be afraid
+to explore and change them!
+
+Let's start with the most common example in `configuration.py`:
+
+```python
+class AppConfig(BaseModel):
+    SEER_VERSION_SHA: str = ""
+
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = "production"
+```
+
+`AppConfig` is a very useful broad set of application settings that we load from `os.environ` on bootup.  It is shared
+and common to many different components.  How do we share access to the `AppConfig` instance?
+
+Here's an example from `seer/automation/utils.py`:
+
+```python
+@inject
+def check_genai_consent(
+    org_id: int, client: RpcClient = injected, config: AppConfig = injected
+) -> bool:
+```
+
+A method decorated with `inject` signifies that this method can received "injected" instance values.  Those are denoted
+by **any and all keyword arguments whose default value is `injected`**.  So what's going on?  Let's break it down by
+reading `dependency_injection.py` some:
+
+```python
+def inject(c: _A) -> _A:
+    ...
+    argspec = inspect.getfullargspec(c)
+
+    @functools.wraps(c)  # type: ignore
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        ...
+        new_kwds = {**kwargs}
+        if argspec.kwonlydefaults:
+            for k, v in argspec.kwonlydefaults.items():
+                if v is injected and k not in new_kwds:
+                    try:
+                        new_kwds[k] = resolve(argspec.annotations[k])
+                    except KeyError:
+                        raise AssertionError(f"Cannot inject argument {k} as it lacks annotations")
+        ...
+        return c(*args, **new_kwds)  # type: ignore
+
+    return wrapper  # type: ignore
+```
+
+Essentially `inject` "wraps" the given function or method such that it inspects **kwds** and replaces any
+`kwonlydefaults` (that is, keywords that have defaults), with this logic:
+
+```python
+if v is injected and k not in new_kwds:
+    try:
+        new_kwds[k] = resolve(argspec.annotations[k])
+```
+
+`resolve` in this case is the function that "determines" what value to select for an `injected` value.  Note
+that it is acting on the `annotation` of the keyword argument!  This is important: dependency injection depends
+entirely on the annotation to do the binding, not the name of the argument iself.
+
+But what is `injected`?  Well, it's rather simple:
+
+```python
+class _Injected:
+    ...
+    pass
+
+# Marked as Any so it can be a stand in value for any annotation.
+injected: Any = _Injected()
+```
+
+`injected` is literally a magical value that means nothing and will type match any annotation safely.  It's only
+purpose is to signal to the decorator that **you didn't put some other value into the keyword argument!**  For instance,
+consider these three cases:
+
+```python
+check_genai_consent(1)
+check_genai_consent(1, my_rpc_client)
+check_genai_consent(1, client=my_rpc_client)
+```
+
+In the first case, `client` will be `injected`, and thus have its value replaced with a call to `resolve`.  However,
+in the other two cases, client will merely be `my_rpc_client` because that's what you provided!
+
+In this way, our dependency injection has flexibility: it is only providing a default when no other is given.
+
+## resolve
+
+But how on earth does `resolve` come up with a "default value"?  Let's take a look in `dependency_injection.py` again:
+
+```python
+def resolve(source: type[_A]) -> _A:
+    key = FactoryAnnotation.from_annotation(source)
+    return resolve_annotation(key, source)
+```
+
+No much here, but the key insight is that we're doing a transformation on, again, the `annotation`, or type structure,
+of the input, in order to make a selection.  This transformed value is known as a `FactoryAnnotation` in this case
+(implementation detail, other implementations may use different names).  Let's take a peak at `resolve_annotation`.
+
+```python
+def resolve_annotation(key: FactoryAnnotation, source: Any) -> Any:
+    ...
+    return _cur.injector.get(source, key=key)
+```
+
+Alot is happening in this function related to sanity checking failure conditions, but the crucial line involves
+`_cur.injector`.  Again, it feels like we're just passing stuff around, so we need to understand the kernel here:
+
+**What is _cur and what is its injector**?
+
+## _cur and injector
+
+`_cur` is defined as such:
+
+```python
+class _Cur(threading.local):
+    injector: Injector | None = None
+    seen: list[FactoryAnnotation] | None = None
+
+_cur = _Cur()
+```
+
+Let's not worry too much about `seen` (it is related to sanity checking circular refences).  There are two things here
+worth focusing on:
+
+1.  The `injector` is an, well, `Injector`.  This is ultimately where values come from in dependency injection.  You can
+think of an injector as a "context" the sits intermediate to `inject` and `injected`.
+2.  The fact that `_cur: _Cur` is a subclass of `threading.local`.  What does that mean?  Well, essentially, each
+mutation of `_cur` **only affects the thread the mutation is running in**.  In practice, this means that using this
+library, you will need to initialize injectors independently between threads.  We'll discuss `Injector` objects here
+shortly.
+
+So all in all, `_cur` is some state that carries an `Injector`, cool.  Well, *what is an `Injector`????*
+
+```python
+@dataclasses.dataclass
+class Injector:
+    module: Module
+    parent: "Injector | None"
+    _cache: dict[FactoryAnnotation, Any] = dataclasses.field(default_factory=dict)
+    ...
+    def get(self, source: type[_A], key: FactoryAnnotation | None = None) -> _A:
+        ...
+        if key in self.cache:
+            return self.cache[key]
+
+        try:
+            f = self.module.registry[key]
+        except KeyError:
+            if self.parent is not None:
+                return self.parent.get(source, key=key)
+            raise FactoryNotFound(f"No registered factory for {source}")
+
+        rv = self.cache[key] = f()
+        return rv
+```
+
+Taking a look at the members, there's some things to identify.
+
+1.  `Injector`s have an optional `parent: Injector`, implying naturally that injectors *can be stacked*.
+2.  `Injector`s have a reference to a `Module`, which we will need to explore a bit more.  This also implies given #1
+that modules can be arranged via `Injectors` in a stacked fashion.
+3.  `_cache: dict[FactoryAnnotation, Any]` seems to map those `FactoryAnnotation` values (the type annotations from
+`resolve` invocations, as we saw earlier).
+
+As it turns out, we'll see exactly what the `_cache`, `parent`, and `module` values are, and what they're doing
+by breaking down the `get` method:
+
+```python
+if key in self.cache:
+    return self.cache[key]
+```
+
+For a given `injector` instance, if the annotation **already has a computed value**, just return that.  Let's ignore
+the fact that `_cache` is abstracted by another property `cache` for now and treat them the same.  The key insight
+is that the `cache` acts as a buffer so that once a value is constructed for a type annotation, **we re-use and share
+it** to all `injected` call sites.  That is, *so long as the injector instance remains*.  Since this state is tied
+to a currently active injector, the implication is that the cache is, in fact, *scope sensitive*.  We'll revisit this
+later.
+
+## registry and cache
+
+So how do values get into the `cache`?  Well,
+
+```python
+try:
+    f = self.module.registry[key]
+except KeyError:
+    if self.parent is not None:
+        return self.parent.get(source, key=key)
+    raise FactoryNotFound(f"No registered factory for {source}")
+
+rv = self.cache[key] = f()
+```
+
+Now we see `module` and `parent` come into play!  First, we ask if the `module` associated with this injector has a
+value `f` for the type annotation.  If it does not (`KeyError`), we... ask the parent to `get` the value instead!
+
+In essence, `parent: Injector | None`  helps us chain a stacked context, preferring the last in value that is available.
+This means in fact that there can be multiple `registry` entries for a given `key`, where we prefer the injector at the
+"top" of the stack.  It also means that if the "top" injector does not have a value for the annotation, a previous
+injector can be used.  This sort of nested contextual scope mimics the way that
+[symbolic values can be shadowed](https://en.wikipedia.org/wiki/Variable_shadowing), but in this case the scope is the
+injector and the symbol is not a variable name, but a type annotation.
+
+How does this relate to the `cache`, and what is an `f` value?  Well,
+
+```python
+rv = self.cache[key] = f()
+return rv
+```
+
+`f` is often known as a "factory", but it can also be known as a "thunk", or in our case as we'll show later, we can
+call it a `provider`.  Whatever you may call it, it is **deferred evaluation** since we care about caching not `f`
+directly, but **the result of invoking f at the time that it is requested**.  We store it in the cache and make the
+same instance value available everywhere this injector is used.
+
+This is, by the way, *very similar to how @cached_property works*!  In the case of `cached_property` the scope of the
+delayed evaluation is the instance, in our case, the scope is the `injector`.
+
+We're making progress here, but we still have to tie two loose ends up.  How does a `Module` work, specifically, how
+does its `registry` work?  And, how does `_cur.injector` and `injector.parent` get set?
+
+## Modules and registry
+
+Let's take a look at the top half of `Module`:
+
+```python
+@dataclasses.dataclass
+class Module:
+    registry: dict[FactoryAnnotation, Callable] = dataclasses.field(default_factory=dict)
+```
+
+First off, in essence, a `Module`, *is* a `registry` object, that's basically its entire state.  A registry,
+*is* a mapping between `FactoryAnnotation` (type annotations) to a `Callable` (an `f` value from above).
+
+Essentially... a registry tracks how you can produce a value for a type annotation by *calling* something!
+That's it!  But how do these Callables, these factories, get assigned into a module?
+
+```python
+    def provider(self, c: _C) -> _C:
+        ...
+
+    def constant(self, annotation: type[_A], val: _A) -> _A:
+        key = FactoryAnnotation.from_annotation(annotation)
+        self.registry[key] = lambda: val
+        return self
+```
+
+`provider` and `constant` are ways of providing an item to the `registry`, so that an injector can `resolve` a
+type annotation.  Let's check some real life examples of usage:
+
+In `gcs.py`:
+
+```python
+module = Module()
+module.enable()
+
+...
+
+@module.provider
+def gcs_client(config: EnvConfig = injected) -> GcsStorageClient:
+    return storage.Client(project=config.GCS_PROJECT_ID).bucket(config.GCS_BUCKET_NAME)
+```
+
+We instantiate a `Module` object into `module`, and we decorate `gcs_client` with `module.provider`.
+
+Checking out the definition of `provider` from above
+
+```python
+def provider(self, c: _C) -> _C:
+    c = inject(c)
+    key = FactoryAnnotation.from_factory(c)
+    ...
+    self.registry[key] = c
+    return c
+```
+
+we see a couple of important things.  One, a function decorated with `@module.provider` (the `c` here) *also* is
+decorated with `inject`.   That explains why even a `@module.provider` definition can also use `injected` to get other
+values.
+
+We also seem to pull the FactoryAnnotation from the function somehow... how? Long story short, `from_factory` pulls the annotation **from the return type** of the function definition.  Whatever
+your function says it is returning, is the type annotation that can be used to retrieve it later
+(with `injected` or `resolve`).
+
+Then lastly, this wrapped `inject` wrapped `c` is put into the registry by the annotation.  Taking a look at
+the `constant` method, we can see that `constant` is basically just a way to put a specific instance or value into
+the registry without a function definition along the way.
+
+So we've seen how to add definitions to a `Module`'s registry, and we've seen how the type annotation of a provider
+function's return type can correspond with the type annotation of an `injected` parameter to an `inject` method, but
+we're still unclear about this line in particular:
+
+```python
+module.enable()
+```
+
+So let's talk about how Injectors are created, what their relationship to `Module`s are, and how that defines "scope"
+for a dependency injection.
+
+## Module __enter__, enable, and _cur.injector
+
+A module merely stores a registry, but to an `injected` values from the intermediate injector stack attached to `_cur`.
+So at what point does the `Module` find itself inside of an `Injector` or the `_cur`?
+
+The answer to that is defined on the `Module` class:
+
+```python
+    def enable(self):
+        injector = Injector(self, _cur.injector)
+        _cur.injector = injector
+        return injector
+
+    def __enter__(self):
+        return self.enable()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        ...
+        _cur.injector = _cur.injector.parent
+```
+
+Firstly, it's worth remembering that `__enter__` and `__exit__` correspond with python
+[context managers](https://docs.python.org/3/library/contextlib.html#module-contextlib), which is to say, they
+correspond to entering and exiting `with` constructions.  So in essence, using a `Module` in a `with` statement
+invokes the `__enter__` followed by `__exit__`.
+
+Note, too, that `__enter__` *is* `enable()`.  In many ways, invoking `module.enable()` outside of a `with` is merely
+saying, "this module is always enabled" since it won't implicitly invoke `__exit__`.
+
+So that's actually happening in `enable`?
+
+Well... the obvious thing!  We create an `Injector` from the `Module` object being invoked, passing in `_cur.injector`
+as the second parameter (the `parent: Injector` attribute!), and we set the `_cur.injector` to this value.
+
+And for `__exit__`?
+
+Well.. it undoes that!  it pulls the `parent` of the `_cur.injector` and attaches that, to, `_cur.injector`.
+
+If this all seems familiar, it should be -- this is 100% a linked list stack implementation.  The stack is the scope
+context of `Injector` objects that join `Module` and `cache` values.  When you `__enter__` module, you get a fresh empty
+`cache` (which implies future `injected` values are going to be reconstructed rather than shared), and potentially you
+have new definitions from the `Module.registry`.
+
+The whole construction provides the core parts of dependency injection we care about:
+
+1.  The ability to override definitions by using `__enter__` or `enable` on a module.
+2.  The ability to reconstruct all shared objects by using `__enter__` or `enable` on a module.
+3.  The ability to share dependencies that are loosely coupled -- only the type annotations must be the same.
+
+Item 3 here is probably the most obviously useful, since it allows us to carry `AppConfig` values deep into the program
+(the most common use case), but why is 1 and 2 useful?
+
+The answer most commonly has to do with tests.
+
+## Motivation
 
 For example, consider this classic pattern
 
@@ -122,8 +510,8 @@ python module file and a dependency injection `module` is how a definition is bo
 
 For a typical python module, upon loading it, any variable, function, or class that module references, is immediately
 bound by its name.  A `module` in dependency injection has definitions, called `providers`, *but consumers do not hold
-references to any particular definition or instantiation*.  Instead, a parameter whose default value is `injected` resolves its final
-instantiation **via the type annotation itself**.
+references to any particular definition or instantiation*.  Instead, all parameters whose default value is `injected`
+resolves their final instantiation **via the type annotation itself**.
 
 As an example, let us setup a module with some providers.
 
@@ -169,10 +557,9 @@ What a module.enable does is "enter" the context of that module, which has two e
 type will be resolved with the "last" enabled module's providers.
 
 Note that it is perfectly ok to enable a module before definitions are added, say at the top of a file,
-but that enable and the provider definitions must occur **before invoking a method that depends upon them**.  Otherwise,
-the ordering is loose and lazy.
+but that enable and the provider definitions must occur **before invoking a method that depends upon them**.
 
-Also note that `module.enable()` **only applies to the current thread!**.  This means that if you run a multi-threaded
+Also note that `module.enable()` **only applies to the current thread!**  This means that if you run a multi-threaded
 application, you may need to "enable" modules again when you enter new threads.  This is meant to ensure no unintended
 cross thread state sharing.  If you must share state between threads, consider using Queues or other concurrency
 primitives.

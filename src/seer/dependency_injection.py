@@ -148,7 +148,7 @@ class Module:
     def constant(self, annotation: type[_A], val: _A) -> _A:
         key = FactoryAnnotation.from_annotation(annotation)
         self.registry[key] = lambda: val
-        return val
+        return self
 
     def enable(self):
         injector = Injector(self, _cur.injector)
