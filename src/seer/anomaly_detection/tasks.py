@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 @celery_app.task
 @sentry_sdk.trace
 def cleanup_timeseries(alert_id: int, date_threshold: float):
+    span = sentry_sdk.get_current_span()
+
+    if span is not None:
+        span.set_tag("alert_id", alert_id)
+
     logger.info("Deleting timeseries points over 28 days old and updating matrix profiles")
     toggle_data_purge_flag(alert_id)
 
