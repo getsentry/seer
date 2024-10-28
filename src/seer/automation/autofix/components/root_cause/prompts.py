@@ -15,7 +15,7 @@ class RootCauseAnalysisPrompts:
             {
                 "You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue."
                 if has_tools
-                else "You do not have tools to search a codebase to find the root cause of an issue."
+                else ""
             }
 
             # Guidelines:
