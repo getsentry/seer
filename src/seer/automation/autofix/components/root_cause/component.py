@@ -7,6 +7,7 @@ from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.is_obvious import IsObviousComponent, IsObviousRequest
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
     RootCauseAnalysisOutput,
@@ -29,9 +30,21 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     def invoke(
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
     ) -> RootCauseAnalysisOutput:
+        is_obvious = (
+            IsObviousComponent(self.context).invoke(
+                IsObviousRequest(event_details=request.event_details)
+            )
+            if not request.initial_memory
+            else None
+        )
+
         with BaseTools(self.context) as tools:
             agent = AutofixAgent(
-                tools=tools.get_tools(),
+                tools=(
+                    tools.get_tools()
+                    if not (is_obvious and is_obvious.is_root_cause_clear)
+                    else None
+                ),
                 config=AgentConfig(
                     interactive=True,
                 ),
@@ -56,7 +69,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                             if not request.initial_memory
                             else None
                         ),
-                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                            has_tools=not (is_obvious and is_obvious.is_root_cause_clear)
+                        ),
                         max_iterations=24,
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
@@ -74,21 +89,21 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
                     return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
 
-                # Ask for reproduction
-                self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
-                response = agent.run(
-                    run_config=RunConfig(
-                        model=OpenAiProvider.model("gpt-4o-2024-08-06"),
-                        prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
-                        run_name="Root Cause Reproduction & Unit Test",
-                    )
-                )
-                if not response:
-                    self.context.store_memory("root_cause_analysis", agent.memory)
-                    return RootCauseAnalysisOutput(
-                        causes=[],
-                        termination_reason="Something went wrong when Autofix was trying to figure out how to reproduce the issue.",
-                    )
+                # Ask for reproduction (NOTE: disabled due to speed; should be relocated to a different step in the future)
+                # self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
+                # response = agent.run(
+                #     run_config=RunConfig(
+                #         model=OpenAiProvider.model("gpt-4o-2024-08-06"),
+                #         prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
+                #         run_name="Root Cause Reproduction & Unit Test",
+                #     )
+                # )
+                # if not response:
+                #     self.context.store_memory("root_cause_analysis", agent.memory)
+                #     return RootCauseAnalysisOutput(
+                #         causes=[],
+                #         termination_reason="Something went wrong when Autofix was trying to figure out how to reproduce the issue.",
+                #     )
 
                 self.context.event_manager.add_log("Cleaning up the findings...")
 
