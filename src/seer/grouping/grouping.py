@@ -377,7 +377,7 @@ class GroupingLookup:
             similarity_response.responses.append(
                 GroupingResponse(
                     parent_hash=record.hash,
-                    stacktrace_distance=distance,
+                    stacktrace_distance=distance if distance >= 0.0 else 0.0,
                     should_group=should_group,
                 )
             )
