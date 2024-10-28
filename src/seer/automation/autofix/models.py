@@ -268,6 +268,16 @@ class AutofixRequest(BaseModel):
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 
+    @field_validator("issue_summary", mode="before")
+    @classmethod
+    def validate_issue_summary(cls, value):
+        if value is None:
+            return None
+        try:
+            return IssueSummary.model_validate(value)
+        except Exception:
+            return None
+
     @field_validator("repos", mode="after")
     @classmethod
     def validate_repo_duplicates(cls, repos):
