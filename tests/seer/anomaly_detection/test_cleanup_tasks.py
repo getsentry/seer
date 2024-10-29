@@ -127,12 +127,10 @@ class TestCleanupTasks(unittest.TestCase):
             assert old_timeseries_points != new_timeseries_points
 
             new_timeseries_points.sort(key=lambda x: x.timestamp)
-
-            sorted_old_timeseries_points = old_timeseries_points[1000:]
-            sorted_old_timeseries_points.sort(key=lambda x: x.timestamp)
+            old_timeseries_points.sort(key=lambda x: x.timestamp)
 
             for old, new, algo_data in zip(
-                sorted_old_timeseries_points,
+                old_timeseries_points[1000:],
                 new_timeseries_points,
                 anomalies_new.get_anomaly_algo_data(len(points_new)),
             ):
