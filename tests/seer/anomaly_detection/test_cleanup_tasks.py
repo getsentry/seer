@@ -9,7 +9,7 @@ from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDet
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.anomaly_detection.tasks import cleanup_timeseries
-from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
+from seer.db import DbDynamicAlert, Session, TaskStatus
 
 
 class TestCleanupTasks(unittest.TestCase):
@@ -104,9 +104,14 @@ class TestCleanupTasks(unittest.TestCase):
 
         old_timeseries_points = []
         with Session() as session:
-            assert session.query(DbDynamicAlert).count() == 1
-            assert session.query(DbDynamicAlertTimeSeries).count() == 2000
-            old_timeseries_points = session.query(DbDynamicAlertTimeSeries).all()
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+            assert alert is not None
+            assert len(alert.timeseries) == 2000
+            old_timeseries_points = alert.timeseries
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries(external_alert_id, date_threshold)
