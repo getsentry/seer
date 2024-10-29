@@ -121,7 +121,7 @@ class LlmAgent:
         while self.should_continue(run_config):
             self.run_iteration(run_config=run_config)
 
-        if self.iterations == run_config.max_iterations:
+        if self.iterations >= run_config.max_iterations:
             raise MaxIterationsReachedException(
                 f"Agent {self.name} reached maximum iterations without finishing."
             )

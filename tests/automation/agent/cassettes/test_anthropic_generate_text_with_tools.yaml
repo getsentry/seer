@@ -1,0 +1,153 @@
+interactions:
+- request:
+    body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com&client_secret=d-FL95Q19q7MQmFpd7hHD0Ty&refresh_token=1%2F%2F06sAd1vQZuwtaCgYIARAAGAYSNwF-L9IrOoBG7veh8G9fxt-Ci93G3_d39Z4-dV5nAIImSMK74ZroxK3EbaIefE_X6ywREKT8Sz0
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '268'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-requests/2.32.2
+      x-goog-api-client:
+      - gl-python/3.11.0rc1 auth/2.35.0 cred-type/u
+    method: POST
+    uri: https://oauth2.googleapis.com/token
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/72RN5OjWBSF8/kVXR0v3YBAEpMhvCSQQAiXUI+Ht68xwmztf1/oCSbZqsk2veY7
+        597z94+3t3cAYdR1ft8UUf3+8+19BiTzAXA24rnSO5knhhWTocC6y4EBSo0t6T7GkAAQeLUvcBPK
+        3LRtZqLrqzHxHcaF9HM4URhDz3yc0NSg+dZJBljBBRPHf7lAyfWCkv1FURkZIwjaQq9JW8WRgKlH
+        k7V4bFAo5sodlwviOnzHdBeK0SgCH09jpfisnAdVbxw8ZNdFV1Ui4BL3wrrdgzWEh6jLkkOqmZlq
+        D3+PGalpXsv8JfHtAwg6Thzo97+2m6MJZW3U+dl28Y5mmO9qBxsUbS9I+x51Pz8/x3H8SJomKSOA
+        su4DNtUnGPr0E5bNEGKoBH3ctNXbn8aHLmqzOm4+ogpk5dsqUmfhH7e6r3Lde2Uw+iibZHX67fE7
+        Jr+ffxk9RaCN2l+dLPydYTSf00CC2S07P56LQmiZ0ilVjzxO2SuVSt0knVL5stIkI7uZ+uJJLqGS
+        RqqRYu6SXqHxcKflRqHyVuaaKq3abnblznjksBvzYhF6FusfqwyCO3UrNaFsjHBpXtdvBEMEtbFc
+        q/AVkGHnPeg8IPENkUb1hlBWvD7eeHfUTIHSTLbXanHWZJb0diekVemw1kgo65RnIwKayWqxWDRe
+        bEJHGVznNMKZrgOSqQPJIiBpzavmEErWEHK/tUJb/7+0ltBWNq1J5YtRXYrpZj5plX/iN37V53VC
+        zYVtrvmOoNbK9T9z9KBRMG/RWL1rl52SN1lUiTmQxK23sqcO2PSiy/897+y8ElZlBWyrUHKEw9oq
+        v+8WmcZ1tGbjPYSuBzWiNRGdoSkQD8nKDYGeLIlu9MfGKtNw9aSacFF5ZVEXfbpxY+Y56bjuT9qi
+        jmqu7lReoNbI3XlP+UlcyJHbBg/Zl0RXpMZSWuLYk81o1MObxDzDUyYIVabIOlFTg23RQhM+m6SV
+        zm1jcOnkVg7mQrxncMbGwb2BIvIumQYXJw9YAsiQm4v8KxhoKpYr7nnqIjwCYlIdWk3cF/tbvr9Q
+        BCZd6IYTakeIHe/UnuPkvEAfE9MDm9z4ayadq32hHGP/yBgLqczYV3dcXgmT7iWj5cgsmOaj5xyO
+        kc0zoEHF8XKXjwmaSnS5a11gpcHhAp4mG2KJPYR3UZpinmFJqXOt2J9QiWUkZUKbQ+f7AViWxWsw
+        aJnWLWxxDphTBMv1IQvOO0dDsTTXz6Pd11m+56+vZ0JkZS/LgeH0xD5K9fcf//wLcJSsUYwFAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Tue, 29 Oct 2024 20:23:38 GMT
+      Expires:
+      - Mon, 01 Jan 1990 00:00:00 GMT
+      Pragma:
+      - no-cache
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
+      "text", "text": "Please invoke test_function"}]}], "tools": [{"name": "test_function",
+      "description": "A test function", "input_schema": {"type": "object", "properties":
+      {"x": {"type": "string", "description": ""}}, "required": []}}], "anthropic_version":
+      "vertex-2023-10-16"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      authorization:
+      - redacted
+      connection:
+      - keep-alive
+      content-length:
+      - '348'
+      content-type:
+      - application/json
+      host:
+      - us-east5-aiplatform.googleapis.com
+      user-agent:
+      - AnthropicVertex/Python 0.34.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.34.2
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.0rc1
+    method: POST
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet@20240620:rawPredict
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/1VRy1LjMBD8lVldcnFSwTzjG7C17OZEbTgBWy5hj2MRZWSkUR6V8r8zMkUWDpJK
+        rdZ0T89BmVoVah2W5cbzrpyeLM78r/s3xtfVSY7bm3zxc754vVKZ4n2HiYoh6CUK4J1NgA7BBNbE
+        Aq1djVawyupY4/h0fD4Ojgh5nE/zs+lFPhVS5YhR6MXT4bMo4y59H45C3aJnbcjuf8CfkbVgaONW
+        CNzKwsBlE6li4wga52Hv4gQeWhPgCLc6gCOETnu9RkYPJGcNz2r3rGDbmqoF4WsI7A0tM3iJDIZH
+        AcgxrLVfCVlqeHyLxmM9gYWhCpMU1KamEUPosDLNXmpstI04OOFk4qiZfXivtGzJ+dHd1nDrBsEJ
+        /EaPIvvtPf0oVJ/9D8c5W8aQIh+Gle7xc1y3d9eXc5rPru5cs4r3j393TXPdCjW1PCT7JbBUgboo
+        GR/6/l+mAruu9KhlRt91hocg7aP0rQqK1mYqDnMvDh81SpaZUFDF6fksU9LQV2x22ffvbD+eQlsC
+        AAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Cache-Control:
+      - private
+      Content-Encoding:
+      - gzip
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+      content-type:
+      - application/json
+      date:
+      - Tue, 29 Oct 2024 20:23:41 GMT
+      request-id:
+      - req_vrtx_01AMd7Xbe2Sv1Uu4PrqnepjU
+      x-vertex-ai-internal-prediction-backend:
+      - harpoon
+    status:
+      code: 200
+      message: OK
+version: 1

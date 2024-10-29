@@ -96,6 +96,13 @@ def reset_environ():
         os.environ = old_env
 
 
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [("authorization", "redacted")],
+    }
+
+
 johen.global_config["matchers"].extend(
     [
         pydantic.generate_pydantic_instances,
