@@ -1,0 +1,3 @@
+src/seer/grouping/grouping.py @getsentry/issues
+tests/seer/grouping/test_grouping.py @getsentry/issues
+* @getsentry/machine-learning-ai
