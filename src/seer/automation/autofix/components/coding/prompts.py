@@ -8,12 +8,12 @@ from seer.automation.summarize.issue import IssueSummary
 
 class CodingPrompts:
     @staticmethod
-    def format_system_msg():
+    def format_system_msg(has_tools: bool):
         return textwrap.dedent(
-            """\
+            f"""\
             You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
 
-            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
+            {"" if not has_tools else "You do not have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets."}
 
             # Guidelines:
             - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
@@ -28,6 +28,7 @@ class CodingPrompts:
         instruction: str | None,
         fix_instruction: str | None,
         summary: Optional[IssueSummary] = None,
+        has_tools: bool = True,
     ):
         return textwrap.dedent(
             """\
@@ -48,13 +49,13 @@ class CodingPrompts:
 
             # Guidelines:
             - No placeholders are allowed, the fix must be clear and detailed.
-            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix.
+            {use_tools_instructions}
             - The fix must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
             - If the issue occurs in multiple places or files, make sure to provide a fix for each occurrence, no matter how many there are.
             - In your suggested fixes, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
             - You do not need to make changes in test files, someone else will do that.
-            - At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis.
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            {ask_questions_instructions}
+            {think_tools_instructions}
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
             event_str=event,
@@ -63,10 +64,25 @@ class CodingPrompts:
             instruction=format_instruction(instruction),
             fix_instruction=format_instruction(fix_instruction),
             summary_str=format_summary(summary),
+            use_tools_instructions=(
+                "- Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix."
+                if has_tools
+                else ""
+            ),
+            think_tools_instructions=(
+                "- EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you."
+                if has_tools
+                else ""
+            ),
+            ask_questions_instructions=(
+                "- At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis."
+                if has_tools
+                else ""
+            ),
         )
 
     @staticmethod
-    def format_fix_msg():
+    def format_fix_msg(has_tools: bool = True):
         return textwrap.dedent(
             """\
             Break down the task of fixing the issue into steps. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution.
@@ -79,12 +95,24 @@ class CodingPrompts:
             - Each file change must be a separate step and be explicit and clear.
               - You MUST include exact file paths for each step you provide. If you cannot, find the correct path.
             - No placeholders are allowed, the steps must be clear and detailed.
-            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps.
+            {use_tools_instructions}
             - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
             - Make sure any new files you create don't already exist, if they do, modify the existing file.
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            {think_tools_instructions}
             - You also MUST think step-by-step before giving the final answer."""
-        ).format(steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str())
+        ).format(
+            steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str(),
+            use_tools_instructions=(
+                "- Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps."
+                if has_tools
+                else ""
+            ),
+            think_tools_instructions=(
+                "- EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you."
+                if has_tools
+                else ""
+            ),
+        )
 
     @staticmethod
     def format_incorrect_diff_fixer(

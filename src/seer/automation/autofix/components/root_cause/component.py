@@ -7,7 +7,10 @@ from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.is_obvious import IsObviousComponent, IsObviousRequest
+from seer.automation.autofix.components.is_root_cause_obvious import (
+    IsRootCauseObviousComponent,
+    IsRootCauseObviousRequest,
+)
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
     RootCauseAnalysisOutput,
@@ -31,8 +34,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
     ) -> RootCauseAnalysisOutput:
         is_obvious = (
-            IsObviousComponent(self.context).invoke(
-                IsObviousRequest(event_details=request.event_details)
+            IsRootCauseObviousComponent(self.context).invoke(
+                IsRootCauseObviousRequest(event_details=request.event_details)
             )
             if not request.initial_memory
             else None
