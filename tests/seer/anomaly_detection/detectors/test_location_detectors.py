@@ -48,9 +48,7 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         timestamps = np.array([1.0, 2.0])
         cur_val = 3.0
         cur_timestamp = 3.0
-        self.assertEqual(
-            self.detector.detect(cur_val, cur_timestamp, values, timestamps), PointLocation.NONE
-        )
+        self.assertEqual(self.detector.detect(cur_val, cur_timestamp, values, timestamps), None)
 
     def test_custom_window_size(self):
         detector = LinearRegressionLocationDetector(window_size=3, threshold=0.5)

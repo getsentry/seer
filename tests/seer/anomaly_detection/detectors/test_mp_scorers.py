@@ -273,7 +273,7 @@ class TestMPIQRScorer(unittest.TestCase):
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
         )
-        mock_location_detector.assert_not_called()
+        mock_location_detector.assert_called_once()
         self.assertEqual(flag, mp_based_flag)
 
         mp_based_flag = "anomaly_lower_confidence"
@@ -285,7 +285,7 @@ class TestMPIQRScorer(unittest.TestCase):
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
         )
-        mock_location_detector.assert_not_called()
+        self.assertEqual(mock_location_detector.call_count, 2)
         self.assertEqual(flag, mp_based_flag)
 
     @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
@@ -334,6 +334,13 @@ class TestMPIQRScorer(unittest.TestCase):
                 "expected_flag": "none",
                 "name": "up_none",
             },
+            {
+                "mp_based_flag": "anomaly_higher_confidence",
+                "direction": None,
+                "location": PointLocation.NONE,
+                "expected_flag": "anomaly_higher_confidence",
+                "name": "up_none_failed_direction_detection",
+            },
         ]
 
         for i, combo in enumerate(combos):
@@ -351,7 +358,7 @@ class TestMPIQRScorer(unittest.TestCase):
             self.assertEqual(flag, expected_flag, msg=combo["name"])
 
     @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_adjust_flag_for_anomalous_case_with_none_location(self, mock_location_detector):
+    def test_adjust_flag_for_anomalous_case_when_location_inbwetween(self, mock_location_detector):
         scorer = MPIQRScorer()
 
         mock_location_detector.return_value = PointLocation.NONE
@@ -362,3 +369,16 @@ class TestMPIQRScorer(unittest.TestCase):
         )
         mock_location_detector.assert_called_once()
         self.assertEqual(flag, "none")
+
+    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
+    def test_adjust_flag_for_anomalous_case_when_location_fails(self, mock_location_detector):
+        scorer = MPIQRScorer()
+
+        mock_location_detector.return_value = None
+
+        mp_based_flag = "anomaly_higher_confidence"
+        flag = scorer._adjust_flag_for_direction(
+            mp_based_flag, "up", 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
+        )
+        mock_location_detector.assert_called_once()
+        self.assertEqual(flag, "anomaly_higher_confidence")

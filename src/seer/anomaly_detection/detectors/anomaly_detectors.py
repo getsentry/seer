@@ -84,15 +84,12 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             A tuple with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
 
         """
+        if len(timeseries.values) == 0:
+            raise ServerError("No values to detect anomalies for")
+        if len(timeseries.timestamps) != len(timeseries.values):
+            raise ServerError("Timestamps and values are not of the same length")
+
         ts_values = timeseries.values
-        if len(ts_values) == 0:
-            return MPTimeSeriesAnomalies(
-                flags=np.array([]),
-                scores=np.array([]),
-                matrix_profile=np.array([]),
-                window_size=0,
-                thresholds=np.array([]),
-            )
         window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
             # TODO: Add sentry logging of this error
@@ -174,6 +171,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         Returns:
             A MPTimeSeriesAnomalies object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
         """
+        if len(timeseries.values) == 0:
+            raise ServerError("No values to detect anomalies for")
+        if len(self.history_values) != len(self.history_timestamps):
+            raise ServerError("History values and timestamps are not of the same length")
+
+        if len(self.history_values) - self.window_size + 1 != len(self.history_mp):
+            raise ServerError("Matrix profile is not of the right length.")
         stream = None
         with sentry_sdk.start_span(description="Initializing MP stream"):
             # Initialize stumpi
@@ -223,6 +227,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 thresholds.extend(flags_and_scores.thresholds)
 
                 # Add new data point as well as its matrix profile to baseline
+                self.history_timestamps = np.append(self.history_timestamps, cur_timestamp)
                 self.history_values = stream.T_
                 self.history_mp = np.vstack([self.history_mp, cur_mp])
 

@@ -42,7 +42,13 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
                 expected_seasonality=alert.config["expected_seasonality"],
             )
             deleted_timeseries_points = delete_old_timeseries_points(alert, date_threshold)
-            updated_timeseries_points = update_matrix_profiles(alert, config)
+            if len(alert.timeseries) > 0:
+                updated_timeseries_points = update_matrix_profiles(alert, config)
+            else:
+                # Reset the window size to 0 if there are no timeseries points left
+                alert.anomaly_algo_data = {"window_size": 0}
+                logger.warn(f"Alert with id {alert_id} has empty timeseries data after pruning")
+                updated_timeseries_points = 0
             session.commit()
             logger.info(f"Deleted {deleted_timeseries_points} timeseries points")
             logger.info(
@@ -67,7 +73,7 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
 def update_matrix_profiles(alert: DbDynamicAlert, anomaly_detection_config: AnomalyDetectionConfig):
 
     timeseries = TimeSeries(
-        timestamps=np.array([timestep.timestamp for timestep in alert.timeseries]),
+        timestamps=np.array([timestep.timestamp.timestamp() for timestep in alert.timeseries]),
         values=np.array([timestep.value for timestep in alert.timeseries]),
     )
 
@@ -79,7 +85,7 @@ def update_matrix_profiles(alert: DbDynamicAlert, anomaly_detection_config: Anom
     )
     updateed_timeseries_points = 0
     for timestep in alert.timeseries:
-        timestep.anomaly_algo_data = algo_data_map[timestep.timestamp]
+        timestep.anomaly_algo_data = algo_data_map[timestep.timestamp.timestamp()]
         updateed_timeseries_points += 1
     alert.anomaly_algo_data = {"window_size": anomalies.window_size}
     return updateed_timeseries_points

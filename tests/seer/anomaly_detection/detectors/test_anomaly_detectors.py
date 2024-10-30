@@ -116,15 +116,29 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
                 mp_utils=self.mp_utils,
             )
 
+    def test_no_values(self):
+        ts = TimeSeries(timestamps=np.array([]), values=np.array([]))
+        with self.assertRaises(ServerError, msg="No values to detect anomalies for"):
+            self.detector._compute_matrix_profile(
+                ts, self.config, self.ws_selector, self.mp_config, self.scorer, self.mp_utils
+            )
+
+    def test_timestamps_and_values_not_same_length(self):
+        ts = TimeSeries(timestamps=np.array([1, 2, 3]), values=np.array([1, 2]))
+        with self.assertRaises(ServerError, msg="Timestamps and values are not of the same length"):
+            self.detector._compute_matrix_profile(
+                ts, self.config, self.ws_selector, self.mp_config, self.scorer, self.mp_utils
+            )
+
 
 class TestMPStreamAnomalyDetector(unittest.TestCase):
 
     def setUp(self):
         self.detector = MPStreamAnomalyDetector(
-            history_timestamps=np.array([1, 2, 3]),
-            history_values=np.array([1.0, 2.0, 3.0]),
-            history_mp=np.array([0.1, 0.2, 0.3, 0.4]),
-            window_size=2,
+            history_timestamps=np.array([1, 2, 3, 4]),
+            history_values=np.array([1.0, 2.0, 3.0, 4.0]),
+            history_mp=np.array([[0.3, 0.3, 0.3, 0.3], [0.4, 0.5, 0.6, 0.7]]),
+            window_size=3,
         )
         self.timeseries = TimeSeries(
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])
@@ -167,23 +181,34 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         mock_scorer.stream_score.assert_called()
         mock_stream.update.assert_called()
 
-    def _detect_anomalies(self, history_ts, stream_ts):
+    def _detect_anomalies(
+        self, history_ts, stream_ts, history_ts_timestamps=None, history_mp=None, window_size=None
+    ):
         batch_detector = MPBatchAnomalyDetector()
-        history_ts_timestamps = np.arange(1.0, len(history_ts) + 1)
-        batch_anomalies = batch_detector._compute_matrix_profile(
-            timeseries=TimeSeries(timestamps=history_ts_timestamps, values=np.array(history_ts)),
-            config=self.config,
-            ws_selector=SuSSWindowSizeSelector(),
-            mp_config=self.mp_config,
-            scorer=MPCascadingScorer(),
-            mp_utils=MPUtils(),
+        history_ts_timestamps = (
+            np.arange(1.0, len(history_ts) + 1)
+            if history_ts_timestamps is None
+            else history_ts_timestamps
         )
 
+        if history_mp is None:
+            batch_anomalies = batch_detector._compute_matrix_profile(
+                timeseries=TimeSeries(
+                    timestamps=history_ts_timestamps, values=np.array(history_ts)
+                ),
+                config=self.config,
+                ws_selector=SuSSWindowSizeSelector(),
+                mp_config=self.mp_config,
+                scorer=MPCascadingScorer(),
+                mp_utils=MPUtils(),
+            )
+            history_mp = batch_anomalies.matrix_profile
+            window_size = batch_anomalies.window_size
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=np.array(history_ts_timestamps),
             history_values=np.array(history_ts),
-            history_mp=batch_anomalies.matrix_profile,
-            window_size=batch_anomalies.window_size,
+            history_mp=history_mp,
+            window_size=window_size,
         )
         stream_ts_timestamps = np.array(list(range(1, len(stream_ts) + 1))) + len(history_ts)
         stream_anomalies = stream_detector.detect(
@@ -199,47 +224,29 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         history_ts = [0.5] * 200
         history_ts[-115] = 1.0
         stream_ts = [0.5, 0.5, 1.2, *[0.5] * 10]
-        expected_stream_flags = [
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-        ]
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
         assert history_anomalies.window_size == 90
-        assert stream_anomalies.flags == expected_stream_flags
+        assert stream_anomalies.flags[0] == "none"
+        assert stream_anomalies.flags[1] == "none"
+        # Expect the third data point to be flagged as an anomaly for sure
+        assert stream_anomalies.flags[2] == "anomaly_higher_confidence"
+        # Fourth and fifth may or may not be flagged depending on prophet's prediction which has some randomness
+        for i in range(5, 13):
+            assert stream_anomalies.flags[i] == "none"
 
     def test_stream_detect_spiked_history_spiked_stream(self):
         history_ts = [0.5] * 20
         history_ts[-15] = 1.0  # Spiked history
-        stream_ts = [0.5, 0.5, 3.5, *[0.5] * 10]  # Spiked stream
-        expected_stream_flags = [
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-        ]
+        stream_ts = [0.5, 0.5, 5, *[0.5] * 10]  # Spiked stream
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
         assert history_anomalies.window_size == 3
-        assert stream_anomalies.flags == expected_stream_flags
+        assert stream_anomalies.flags[0] == "none"
+        assert stream_anomalies.flags[1] == "none"
+        # Expect the third data point to be flagged as an anomaly for sure
+        assert stream_anomalies.flags[2] == "anomaly_higher_confidence"
+        # Fourth and fifth may or may not be flagged depending on prophet's prediction which has some randomness
+        for i in range(5, 13):
+            assert stream_anomalies.flags[i] == "none"
 
     def test_stream_detect_flat_history_flat_stream(self):
         history_ts = [0.5] * 200  # Flat history
@@ -252,26 +259,17 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
     def test_stream_detect_flat_history_spiked_stream(self):
         history_ts = [0.5] * 200  # Flat history
-        stream_ts = [0.5, 0.5, 1.0, *[0.5] * 10]  # Spiked stream
-        expected_stream_flags = [
-            "none",
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-        ]
+        stream_ts = [0.5, 0.5, 3.0, 3.0, *[0.5] * 10]  # Spiked stream
 
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
         assert history_anomalies.window_size == 3
-        assert stream_anomalies.flags == expected_stream_flags
+        assert stream_anomalies.flags[0] == "none"
+        assert stream_anomalies.flags[1] == "none"
+        # Expect the third data point to be flagged as an anomaly for sure
+        assert stream_anomalies.flags[2] == "anomaly_higher_confidence"
+        # Fourth and fifth may or may not be flagged depending on prophet's prediction which has some randomness
+        for i in range(5, 14):
+            assert stream_anomalies.flags[i] == "none"
 
     def test_stream_detect_spliked_history_flat_stream(self):
         history_ts = [0.5] * 200
@@ -282,3 +280,38 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
         assert history_anomalies.window_size == 132
         assert stream_anomalies.flags == expected_stream_flags
+
+    def test_history_values_and_matrix_profile_not_same_length(self):
+        history_ts = [0.5] * 200
+        history_mp = np.array([0.1, 0.2, 0.3, 0.4])
+        stream_ts = [0.5] * 10
+        with self.assertRaises(ServerError, msg="Matrix profile is not of the correct length"):
+            self._detect_anomalies(history_ts, stream_ts, history_mp=history_mp, window_size=3)
+
+    def test_no_streamed_values(self):
+        history_ts = [0.5] * 200
+        stream_ts = []
+        with self.assertRaises(ServerError, msg="No values to detect anomalies for"):
+            self._detect_anomalies(history_ts, stream_ts)
+
+    def test_history_timestamps_and_values_not_same_length(self):
+        history_ts = [0.5] * 200
+        history_ts_timestamps = np.arange(1, len(history_ts))  # one off error
+        stream_ts = [0.5] * 10
+        with self.assertRaises(
+            ServerError, msg="History values and timestamps are not of the same length"
+        ):
+            stream_detector = MPStreamAnomalyDetector(
+                history_timestamps=np.array(history_ts_timestamps),
+                history_values=np.array(history_ts),
+                history_mp=np.array([0.1, 0.2, 0.3, 0.4]),
+                window_size=3,
+            )
+            stream_detector.detect(
+                timeseries=TimeSeries(
+                    timestamps=np.arange(1.0, len(stream_ts) + 1), values=np.array(stream_ts)
+                ),
+                config=self.config,
+                scorer=MPCascadingScorer(),
+                mp_utils=MPUtils(),
+            )

@@ -6,6 +6,7 @@ import numpy as np
 
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
+from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.anomaly_detection.tasks import cleanup_timeseries
@@ -38,7 +39,16 @@ class TestCleanupTasks(unittest.TestCase):
             timestamps=np.array([point.timestamp for point in points]),
             values=np.array([point.value for point in points]),
         )
-        anomalies = MPBatchAnomalyDetector().detect(ts, config)
+        if len(ts.values) == 0:
+            anomalies = MPTimeSeriesAnomalies(
+                flags=np.array([]),
+                scores=np.array([]),
+                matrix_profile=np.array([]),
+                window_size=0,
+                thresholds=np.array([]),
+            )
+        else:
+            anomalies = MPBatchAnomalyDetector().detect(ts, config)
 
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
