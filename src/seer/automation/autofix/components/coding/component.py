@@ -144,7 +144,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         expanded_files_messages.append(agent_message)
                         expanded_files_messages.append(user_message)
 
-                if expanded_files_messages:
+                if expanded_files_messages and not request.initial_memory:
                     is_obvious = IsFixObviousComponent(self.context).invoke(
                         IsFixObviousRequest(
                             event_details=request.event_details,
@@ -152,8 +152,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                             fix_instruction=request.fix_instruction,
                             memory=expanded_files_messages,
                         )
-                        if not request.initial_memory
-                        else None
                     )
                     if is_obvious and is_obvious.is_fix_clear:
                         agent.tools = []
