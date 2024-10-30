@@ -17,7 +17,9 @@ from seer.automation.autofix.components.coding.models import (
     FuzzyDiffChunk,
     PlanTaskPromptXml,
 )
-from seer.automation.models import FileChange
+from seer.automation.autofix.components.is_fix_obvious import IsFixObviousOutput
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.models import EventDetails, FileChange
 from seer.dependency_injection import Module
 
 
@@ -309,3 +311,127 @@ class TestCodingComponent:
 
         # Ensure the result is as expected
         assert result == mock_coding_output
+
+    @patch("seer.automation.autofix.components.coding.component.IsFixObviousComponent")
+    def test_invoke_with_root_cause_analysis_obvious_fix(
+        self, mock_is_fix_obvious_component, component
+    ):
+        # Setup
+        mock_request = MagicMock()
+        mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
+        mock_request.root_cause_and_fix.title = "Test Error"
+        mock_request.root_cause_and_fix.description = "Test Description"
+        mock_request.root_cause_and_fix.reproduction = "Test Reproduction"
+        mock_request.root_cause_and_fix.code_context = [
+            MagicMock(
+                title="Test Context",
+                description="Test Context Description",
+                snippet=MagicMock(
+                    file_path="test.py", repo_name="test-repo", snippet="test snippet"
+                ),
+            )
+        ]
+        mock_request.event_details = EventDetails(
+            title="Test Error",
+            description="Test Description",
+            error_message="Test Error Message",
+        )
+        mock_request.fix_instruction = "Fix the code"
+        mock_request.initial_memory = None
+
+        # Mock file content retrieval
+        mock_repo_client = MagicMock()
+        mock_repo_client.get_file_content.return_value = "test content"
+        component.context.get_file_contents.return_value = "test content"
+        component.context.get_repo_client.return_value = mock_repo_client
+
+        # Mock IsFixObviousComponent
+        mock_is_fix_obvious = MagicMock()
+        mock_is_fix_obvious.invoke.return_value = IsFixObviousOutput(is_fix_clear=True)
+        mock_is_fix_obvious_component.return_value = mock_is_fix_obvious
+
+        # Mock agent
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = "<plan_steps>test plan</plan_steps>"
+        mock_agent.usage = MagicMock()
+
+        # Execute
+        with (
+            patch(
+                "seer.automation.autofix.components.coding.component.AutofixAgent",
+                return_value=mock_agent,
+            ),
+            patch(
+                "seer.automation.autofix.components.coding.component.PlanStepsPromptXml"
+            ) as mock_plan_steps,
+        ):
+            mock_plan_steps.from_xml.return_value.to_model.return_value = MagicMock()
+            component.invoke(mock_request)
+
+        # Assert
+        mock_is_fix_obvious.invoke.assert_called_once()
+        # Verify agent was created with empty tools list when fix is obvious
+        assert mock_agent.tools == []
+
+    @patch("seer.automation.autofix.components.coding.component.IsFixObviousComponent")
+    def test_invoke_with_root_cause_analysis_non_obvious_fix(
+        self, mock_is_fix_obvious_component, component
+    ):
+        # Setup
+        mock_request = MagicMock()
+        mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
+        mock_request.root_cause_and_fix.title = "Test Error"
+        mock_request.root_cause_and_fix.description = "Test Description"
+        mock_request.root_cause_and_fix.reproduction = "Test Reproduction"
+        mock_request.root_cause_and_fix.code_context = [
+            MagicMock(
+                title="Test Context",
+                description="Test Context Description",
+                snippet=MagicMock(
+                    file_path="test.py", repo_name="test-repo", snippet="test snippet"
+                ),
+            )
+        ]
+        mock_request.event_details = EventDetails(
+            title="Test Error",
+            description="Test Description",
+            error_message="Test Error Message",
+        )
+        mock_request.fix_instruction = "Fix the code"
+        mock_request.initial_memory = None
+
+        # Mock file content retrieval
+        mock_repo_client = MagicMock()
+        mock_repo_client.get_file_content.return_value = "test content"
+        component.context.get_file_contents.return_value = "test content"
+        component.context.get_repo_client.return_value = mock_repo_client
+
+        # Mock IsFixObviousComponent
+        mock_is_fix_obvious = MagicMock()
+        mock_is_fix_obvious.invoke.return_value = IsFixObviousOutput(is_fix_clear=False)
+        mock_is_fix_obvious_component.return_value = mock_is_fix_obvious
+
+        # Mock agent
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = "<plan_steps>test plan</plan_steps>"
+        mock_agent.usage = MagicMock()
+        mock_tools = ["tool1", "tool2"]
+        mock_agent.tools = mock_tools
+
+        # Execute
+        with (
+            patch(
+                "seer.automation.autofix.components.coding.component.AutofixAgent",
+                return_value=mock_agent,
+            ),
+            patch(
+                "seer.automation.autofix.components.coding.component.PlanStepsPromptXml"
+            ) as mock_plan_steps,
+        ):
+            mock_plan_steps.from_xml.return_value.to_model.return_value = MagicMock()
+            component.invoke(mock_request)
+
+        # Assert
+        mock_is_fix_obvious.invoke.assert_called_once()
+        # Verify agent keeps its tools when fix is not obvious
+        assert mock_agent.tools == mock_tools

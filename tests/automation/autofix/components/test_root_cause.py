@@ -11,7 +11,7 @@ from seer.automation.agent.models import (
     Usage,
 )
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.is_obvious import IsObviousOutput
+from seer.automation.autofix.components.is_root_cause_obvious import IsRootCauseObviousOutput
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
@@ -38,7 +38,7 @@ class TestRootCauseComponent:
     @pytest.fixture
     def mock_is_obvious_component(self):
         with patch(
-            "seer.automation.autofix.components.root_cause.component.IsObviousComponent"
+            "seer.automation.autofix.components.root_cause.component.IsRootCauseObviousComponent"
         ) as mock:
             yield mock
 
@@ -99,9 +99,8 @@ class TestRootCauseComponent:
     def test_root_cause_with_obvious_root_cause(
         self, component, mock_agent, mock_is_obvious_component
     ):
-        # Mock IsObviousComponent to return True
         mock_is_obvious = MagicMock()
-        mock_is_obvious.invoke.return_value = IsObviousOutput(is_root_cause_clear=True)
+        mock_is_obvious.invoke.return_value = IsRootCauseObviousOutput(is_root_cause_clear=True)
         mock_is_obvious_component.return_value = mock_is_obvious
 
         mock_agent.return_value.run.side_effect = [
@@ -139,9 +138,8 @@ class TestRootCauseComponent:
     def test_root_cause_with_non_obvious_root_cause(
         self, component, mock_agent, mock_is_obvious_component
     ):
-        # Mock IsObviousComponent to return False
         mock_is_obvious = MagicMock()
-        mock_is_obvious.invoke.return_value = IsObviousOutput(is_root_cause_clear=False)
+        mock_is_obvious.invoke.return_value = IsRootCauseObviousOutput(is_root_cause_clear=False)
         mock_is_obvious_component.return_value = mock_is_obvious
 
         mock_agent.return_value.run.side_effect = [
@@ -214,7 +212,6 @@ class TestRootCauseComponent:
                 )
             )
 
-        # Verify IsObviousComponent was not called
         mock_is_obvious.invoke.assert_not_called()
 
         # Verify agent was created with tools (default behavior when skipping is_obvious)

@@ -10,15 +10,15 @@ from seer.automation.models import EventDetails
 from seer.dependency_injection import inject, injected
 
 
-class IsObviousRequest(BaseComponentRequest):
+class IsRootCauseObviousRequest(BaseComponentRequest):
     event_details: EventDetails
 
 
-class IsObviousOutput(BaseComponentOutput):
+class IsRootCauseObviousOutput(BaseComponentOutput):
     is_root_cause_clear: bool
 
 
-class IsObviousPrompts:
+class IsRootCauseObviousPrompts:
     @staticmethod
     def format_default_msg(
         event_details: EventDetails,
@@ -33,21 +33,23 @@ class IsObviousPrompts:
         )
 
 
-class IsObviousComponent(BaseComponent[IsObviousRequest, IsObviousOutput]):
+class IsRootCauseObviousComponent(
+    BaseComponent[IsRootCauseObviousRequest, IsRootCauseObviousOutput]
+):
     context: AutofixContext
 
     @observe(name="Check if Obvious")
     @ai_track(description="Check if Obvious")
     @inject
     def invoke(
-        self, request: IsObviousRequest, llm_client: LlmClient = injected
-    ) -> IsObviousOutput | None:
+        self, request: IsRootCauseObviousRequest, llm_client: LlmClient = injected
+    ) -> IsRootCauseObviousOutput | None:
         output = llm_client.generate_structured(
-            prompt=IsObviousPrompts.format_default_msg(
+            prompt=IsRootCauseObviousPrompts.format_default_msg(
                 event_details=request.event_details,
             ),
             model=OpenAiProvider.model("gpt-4o-mini"),
-            response_format=IsObviousOutput,
+            response_format=IsRootCauseObviousOutput,
         )
         data = output.parsed
 
@@ -55,5 +57,5 @@ class IsObviousComponent(BaseComponent[IsObviousRequest, IsObviousOutput]):
             cur.usage += output.metadata.usage
 
         if data is None:
-            return IsObviousOutput(is_root_cause_clear=False)
+            return IsRootCauseObviousOutput(is_root_cause_clear=False)
         return data
