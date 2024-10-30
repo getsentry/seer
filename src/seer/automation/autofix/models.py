@@ -1,7 +1,7 @@
 import datetime
 import enum
 import uuid
-from typing import Annotated, Any, Literal, Optional, Union, cast
+from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
 from johen.examples import Examples
@@ -185,7 +185,7 @@ class DefaultStep(BaseStep):
     def get_all_insights(self):
         insights = []
         if self.status != AutofixStatus.ERROR and isinstance(self, DefaultStep):
-            for insight in cast(DefaultStep, self).insights:
+            for insight in self.insights:
                 insights.append(insight.insight)
         return insights
 

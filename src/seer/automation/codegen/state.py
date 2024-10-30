@@ -1,30 +1,17 @@
 import dataclasses
-from typing import cast
-
-from pydantic import BaseModel
 
 from seer.automation.codegen.models import CodegenContinuation
 from seer.automation.state import DbState, DbStateRunTypes
-from seer.db import DbRunState, Session
+from seer.db import DbRunState
 
 
 @dataclasses.dataclass
 class CodegenContinuationState(DbState[CodegenContinuation]):
-    @classmethod
-    def from_id(
-        cls, id: int, model: type[BaseModel], type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST
-    ) -> "CodegenContinuationState":
-        return cast(CodegenContinuationState, super().from_id(id, model, type=type))
+    id: int
+    model: type[CodegenContinuation] = CodegenContinuation
+    type: DbStateRunTypes = dataclasses.field(default=DbStateRunTypes.UNIT_TEST)
 
-    def set(self, state: CodegenContinuation):
+    def apply_to_run_state(self, state: CodegenContinuation, run_state: DbRunState):
         state.mark_updated()
-
-        with Session() as session:
-            db_state = DbRunState(
-                id=self.id,
-                value=state.model_dump(mode="json"),
-                updated_at=state.updated_at,
-                last_triggered_at=state.last_triggered_at,
-            )
-            session.merge(db_state)
-            session.commit()
+        run_state.updated_at = state.updated_at
+        run_state.last_triggered_at = state.last_triggered_at

@@ -25,6 +25,9 @@
     warn_unused_configs = true
     warn_unused_ignores = true
     warn_redundant_casts = true
+    disallow_incomplete_defs = true
+    warn_no_return = true
+    warn_return_any = true
 
     [[tool.mypy.overrides]]
         module = [
@@ -46,26 +49,3 @@
             "urllib.*",
         ]
         ignore_missing_imports = true
-
-    [[tool.mypy.overrides]]
-        module = []
-        disable_error_code = [
-            "arg-type",
-            "assignment",
-            "attr-defined",
-            "call-arg",
-            "call-overload",
-            "dict-item",
-            "has-type",
-            "index",
-            "list-item",
-            "misc",
-            "operator",
-            "override",
-            "return-value",
-            "typeddict-item",
-            "typeddict-unknown-key",
-            "union-attr",
-            "unreachable",
-            "var-annotated",
-        ]

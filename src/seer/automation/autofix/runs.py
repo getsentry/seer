@@ -8,7 +8,7 @@ def create_initial_autofix_run(request: AutofixRequest):
     state = ContinuationState.new(
         AutofixContinuation(request=request),
         group_id=request.issue.id,
-        type=DbStateRunTypes.AUTOFIX,
+        t=DbStateRunTypes.AUTOFIX,
     )
 
     with state.update() as cur:

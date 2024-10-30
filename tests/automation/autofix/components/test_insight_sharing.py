@@ -20,13 +20,13 @@ from seer.automation.autofix.components.insight_sharing.models import (
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation
-from seer.automation.state import TestMemoryState
+from seer.automation.state import BufferedMemoryState
 
 
 class TestInsightSharingComponent:
     @pytest.fixture
     def component(self):
-        state = TestMemoryState(next(generate(AutofixContinuation)))
+        state = BufferedMemoryState(next(generate(AutofixContinuation)))
         return InsightSharingComponent(
             AutofixContext(state=state, event_manager=AutofixEventManager(state=state))
         )

@@ -1,6 +1,6 @@
 import contextlib
 import logging
-from typing import Any, ContextManager, Optional
+from typing import Optional
 
 from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel, Field
@@ -129,7 +129,7 @@ class LlmAgent:
         return self.get_last_message_content()
 
     @contextlib.contextmanager
-    def manage_run(self) -> ContextManager[Any]:
+    def manage_run(self):
         self.iterations = 0
         yield
 

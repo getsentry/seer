@@ -1,30 +1,17 @@
 import dataclasses
-from typing import cast
-
-from pydantic import BaseModel
 
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.state import DbState, DbStateRunTypes
-from seer.db import DbRunState, Session
+from seer.db import DbRunState
 
 
 @dataclasses.dataclass
 class ContinuationState(DbState[AutofixContinuation]):
-    @classmethod
-    def from_id(
-        cls, id: int, model: type[BaseModel], type: DbStateRunTypes = DbStateRunTypes.AUTOFIX
-    ) -> "ContinuationState":
-        return cast(ContinuationState, super().from_id(id, model, type))
+    id: int
+    model: type[AutofixContinuation] = AutofixContinuation
+    type: DbStateRunTypes = dataclasses.field(default=DbStateRunTypes.AUTOFIX)
 
-    def set(self, state: AutofixContinuation):
+    def apply_to_run_state(self, state: AutofixContinuation, run_state: DbRunState):
         state.mark_updated()
-
-        with Session() as session:
-            db_state = DbRunState(
-                id=self.id,
-                value=state.model_dump(mode="json"),
-                updated_at=state.updated_at,
-                last_triggered_at=state.last_triggered_at,
-            )
-            session.merge(db_state)
-            session.commit()
+        run_state.updated_at = state.updated_at
+        run_state.last_triggered_at = state.last_triggered_at

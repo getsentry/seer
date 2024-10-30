@@ -5,13 +5,11 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider
-from seer.automation.agent.models import Usage
+from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import (
     InsightContextOutput,
     InsightSharingOutput,
-    InsightSharingRequest,
 )
-from seer.automation.state import State
 from seer.dependency_injection import inject, injected
 
 
@@ -60,21 +58,27 @@ class InsightSharingPrompts:
 @ai_track(description="Sharing Insights")
 @inject
 def create_insight_output(
-    usage_state: State[Usage], request: InsightSharingRequest, llm_client: LlmClient = injected
-) -> InsightSharingOutput | None:
+    latest_thought: str,
+    task_description: str,
+    past_insights: list[str],
+    memory: list[Message],
+    generated_at_memory_index: int = -1,
+    llm_client: LlmClient = injected,
+) -> tuple[InsightSharingOutput, Usage] | None:
+    usage = Usage()
+
     try:
         prompt_one = InsightSharingPrompts.format_step_one(
-            task_description=request.task_description,
-            latest_thought=request.latest_thought,
-            past_insights=request.past_insights,
+            task_description=task_description,
+            latest_thought=latest_thought,
+            past_insights=past_insights,
         )
         completion = llm_client.generate_text(
             model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
             prompt=prompt_one,
             temperature=0.0,
         )
-        with usage_state.update() as cur:
-            cur += completion.metadata.usage
+        usage += completion.metadata.usage
         insight = completion.message.content
         if not insight or insight == "<NO_INSIGHT/>":
             return None
@@ -85,10 +89,10 @@ def create_insight_output(
 
         prompt_two = InsightSharingPrompts.format_step_two(
             insight=insight,
-            latest_thought=request.latest_thought,
+            latest_thought=latest_thought,
         )
         memory = []
-        for message in llm_client.clean_tool_call_assistant_messages(request.memory):
+        for message in llm_client.clean_tool_call_assistant_messages(memory):
             if message.role != "system":
                 memory.append(message)
 
@@ -101,8 +105,7 @@ def create_insight_output(
             max_tokens=4096,
         )
 
-        with usage_state.update() as cur:
-            cur += completion.metadata.usage
+        usage += completion.metadata.usage
 
         response = InsightSharingOutput(
             insight=insight,
@@ -111,8 +114,8 @@ def create_insight_output(
             codebase_context=completion.parsed.codebase_context,
             stacktrace_context=completion.parsed.stacktrace_context,
             breadcrumb_context=completion.parsed.event_log_context,
-            generated_at_memory_index=request.generated_at_memory_index,
+            generated_at_memory_index=generated_at_memory_index,
         )
-        return response
+        return response, usage
     except Exception:
         return None

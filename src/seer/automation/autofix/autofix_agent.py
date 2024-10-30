@@ -1,14 +1,13 @@
 import contextlib
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, ContextManager, Optional
+from typing import Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
-from seer.automation.agent.models import Message, Usage
+from seer.automation.agent.models import Message
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import create_insight_output
-from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.bootup import module
@@ -77,21 +76,13 @@ class AutofixAgent(LlmAgent):
             text = text_before_tag
             if text:
                 cur_step_idx = len(cur.steps) - 1
-                if cur_step_idx >= 0 and isinstance(cur.steps[-1], DefaultStep):
-
-                    def get_cur_step(state: AutofixContinuation):
-                        return state.steps[cur_step_idx]
-
-                    def get_usage(state: AutofixContinuation):
-                        return state.usage
-
-                    self.executor.submit(
-                        self.share_insights,
-                        text,
-                        self.context.state.lens(get_cur_step),
-                        self.context.state.lens(get_usage),
-                        len(self.memory) - 1,
-                    )
+                self.executor.submit(
+                    self.share_insights,
+                    text,
+                    cur_step_idx,
+                    self.context.state,
+                    len(self.memory) - 1,
+                )
 
         # call any tools the model wants to use
         if completion.message.tool_calls:
@@ -108,7 +99,7 @@ class AutofixAgent(LlmAgent):
         return self.memory
 
     @contextlib.contextmanager
-    def manage_run(self) -> ContextManager[Any]:
+    def manage_run(self):
         with super().manage_run(), self.executor:
             yield
 
@@ -138,23 +129,28 @@ class AutofixAgent(LlmAgent):
     def share_insights(
         self,
         text: str,
-        step_state: State[DefaultStep],
-        usage_state: State[Usage],
+        cur_step_idx: int,
+        state: State[AutofixContinuation],
         generated_at_memory_index: int,
     ):
-        step = step_state.get()
-        past_insights = step.get_all_insights()
-        insight_card = create_insight_output(
-            usage_state,
-            InsightSharingRequest(
-                latest_thought=text,
-                memory=self.memory,
-                task_description=step.description,
-                past_insights=past_insights,
-                generated_at_memory_index=generated_at_memory_index,
-            ),
+        steps = state.get().steps
+        if cur_step_idx >= len(steps):
+            return
+        step = steps[cur_step_idx]
+        if not isinstance(step, DefaultStep):
+            return
+
+        insight = create_insight_output(
+            latest_thought=text,
+            task_description=step.description,
+            past_insights=step.get_all_insights(),
+            generated_at_memory_index=generated_at_memory_index,
         )
 
-        if insight_card:
-            with step_state.update() as step:
-                step.insights.append(insight_card)
+        if insight:
+            insight_card, usage = insight
+            with state.update() as cur:
+                cur_step = cur.steps[cur_step_idx]
+                assert isinstance(cur_step, DefaultStep)
+                cur_step.insights.append(insight_card)
+                cur.usage += usage

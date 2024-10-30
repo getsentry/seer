@@ -89,7 +89,7 @@ class AutofixContext(PipelineContext):
 
     @classmethod
     def from_run_id(cls, run_id: int):
-        state = ContinuationState.from_id(run_id, model=AutofixContinuation)
+        state = ContinuationState(run_id)
         with state.update() as cur:
             cur.mark_triggered()
 

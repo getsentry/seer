@@ -145,7 +145,7 @@ class Module:
         self.registry[key] = c
         return c
 
-    def constant(self, annotation: type[_A], val: _A) -> _A:
+    def constant(self, annotation: type[_A], val: _A) -> "Module":
         key = FactoryAnnotation.from_annotation(annotation)
         self.registry[key] = lambda: val
         return self

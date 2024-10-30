@@ -4,7 +4,7 @@ import dataclasses
 import functools
 import threading
 from enum import Enum
-from typing import Any, Callable, ContextManager, Generic, Iterator, Type, TypeVar
+from typing import Any, ContextManager, Generic, Iterator, Type, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -43,28 +43,6 @@ class State(abc.ABC, Generic[_State]):
         """
         pass
 
-    def lens(self, lens: Callable[[_State], _StateB]) -> "StateLens[_State, _StateB]":
-        return StateLens(self, lens)
-
-
-@dataclasses.dataclass
-class StateLens(State[_StateB], Generic[_State, _StateB]):
-    """
-    Allows for a 'lens' that focuses on some referentially shared sub-state to be acted on
-    Note that this only works when `lens` returns a reference shared with its input.
-    """
-
-    inner: State[_State]
-    lens: Callable[[_State], _StateB]
-
-    def get(self) -> _StateB:
-        return self.lens(self.inner.get())
-
-    @contextlib.contextmanager
-    def update(self) -> ContextManager[_StateB]:
-        with self.inner.update() as cur:
-            yield self.lens(cur)
-
 
 @dataclasses.dataclass
 class LocalMemoryState(State[_State]):
@@ -75,7 +53,7 @@ class LocalMemoryState(State[_State]):
         return self.val
 
     @contextlib.contextmanager
-    def update(self) -> ContextManager[_State]:
+    def update(self):
         with self.lock:
             val = self.get()
             yield val
@@ -107,14 +85,11 @@ class DbState(State[_State]):
             session.commit()
             return cls(id=db_state.id, model=type(value), type=t)
 
-    @classmethod
-    def from_id(cls, id: int, model: Type[BaseModel], type: DbStateRunTypes) -> "DbState[_State]":
-        return cls(id=id, model=model, type=type)
-
     def get(self) -> _State:
         with Session() as session:
             db_state = session.get(DbRunState, self.id)
             self.validate(db_state)
+            assert db_state
             return self.model.model_validate(db_state.value)
 
     def validate(self, db_state: DbRunState | None):
@@ -123,7 +98,14 @@ class DbState(State[_State]):
         if db_state.type != self.type:
             raise ValueError(f"Invalid state type: '{db_state.type}', expected: '{self.type}'")
 
-    def update(self) -> ContextManager[_State]:
+    def apply_to_run_state(self, value: _State, run_state: DbRunState):
+        """
+        Can be used to pass down context from state into the db context
+        """
+        pass
+
+    @contextlib.contextmanager
+    def update(self):
         """
         Uses a 'with for update' clause on the db run id, ensuring it is safe against concurrent transactions.
         Note however, that if you have two competing updates in which neither can fully complete (say a circle
@@ -135,15 +117,17 @@ class DbState(State[_State]):
                 select(DbRunState).where(DbRunState.id == self.id).with_for_update()
             ).scalar_one_or_none()
             self.validate(r)
+            assert r
             value = self.model.model_validate(r.value)
             yield value
             db_state = DbRunState(id=self.id, value=value.model_dump(mode="json"))
+            self.apply_to_run_state(value, db_state)
             session.merge(db_state)
             session.commit()
 
 
 @functools.total_ordering
-class TestMemoryState(State[_State]):
+class BufferedMemoryState(State[_State]):
     values: list[_State] = dataclasses.field(default_factory=list)
     lock: threading.RLock = dataclasses.field(default_factory=threading.RLock)
 
@@ -169,7 +153,7 @@ class TestMemoryState(State[_State]):
         return iter(self.values)
 
     @contextlib.contextmanager
-    def update(self) -> ContextManager[_State]:
+    def update(self):
         with self.lock:
             value = self.get()
             yield value

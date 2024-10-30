@@ -24,7 +24,6 @@ from seer.automation.autofix.evaluations import (
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
-    AutofixContinuation,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
@@ -64,7 +63,7 @@ def get_autofix_state_from_pr_id(provider: str, pr_id: int) -> ContinuationState
         if run_state is None:
             return None
 
-        continuation = ContinuationState.from_id(run_state.id, AutofixContinuation)
+        continuation = ContinuationState(run_state.id)
 
         return continuation
 
@@ -91,7 +90,7 @@ def get_autofix_state(
         if run_state is None:
             return None
 
-        continuation = ContinuationState.from_id(run_state.id, AutofixContinuation)
+        continuation = ContinuationState(run_state.id)
 
         return continuation
 
@@ -103,7 +102,7 @@ def get_all_autofix_runs_after(after: datetime.datetime):
             .filter(DbRunState.last_triggered_at > after, DbRunState.type == "autofix")
             .all()
         )
-        return [ContinuationState.from_id(run.id, AutofixContinuation) for run in runs]
+        return [ContinuationState(run.id) for run in runs]
 
 
 @celery_app.task(time_limit=15)
@@ -150,7 +149,7 @@ def run_autofix_root_cause(
 
 
 def run_autofix_execution(request: AutofixUpdateRequest):
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    state = ContinuationState(request.run_id)
 
     raise_if_no_genai_consent(state.get().request.organization_id)
 
@@ -186,7 +185,7 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixCreatePrUpdatePayload):
         raise ValueError("Invalid payload type for create_pr")
 
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    state = ContinuationState(request.run_id)
 
     raise_if_no_genai_consent(state.get().request.organization_id)
 
@@ -233,7 +232,7 @@ def receive_user_message(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUserMessagePayload):
         raise ValueError("Invalid payload type for user_message")
 
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    state = ContinuationState(request.run_id)
     cur_state = state.get()
     step_to_restart = cur_state.find_last_step_waiting_for_response()
 
@@ -340,7 +339,7 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixRestartFromPointPayload):
         raise ValueError("Invalid payload type for restart_from_point_with_feedback")
 
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    state = ContinuationState(request.run_id)
     event_manager = AutofixEventManager(state)
 
     step_index = request.payload.step_index
@@ -410,7 +409,7 @@ def update_code_change(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUpdateCodeChangePayload):
         raise ValueError("Invalid payload type for update_code_change")
 
-    state = ContinuationState.from_id(request.run_id, model=AutofixContinuation)
+    state = ContinuationState(request.run_id)
     cur_state = state.get()
 
     repo_id = request.payload.repo_id

@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 
-from seer.automation.agent.models import Message
-from seer.automation.component import BaseComponentOutput, BaseComponentRequest
+from seer.automation.component import BaseComponentOutput
 
 
 class CodeSnippetContext(BaseModel):
@@ -34,14 +33,6 @@ class InsightContextOutput(BaseModel):
     codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     event_log_context: list[BreadcrumbContext]
-
-
-class InsightSharingRequest(BaseComponentRequest):
-    latest_thought: str
-    task_description: str
-    memory: list[Message]
-    past_insights: list[str]
-    generated_at_memory_index: int = -1
 
 
 class InsightSharingOutput(BaseComponentOutput):
