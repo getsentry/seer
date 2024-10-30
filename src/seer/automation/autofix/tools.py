@@ -163,13 +163,17 @@ class BaseTools:
     def keyword_search(
         self,
         keyword: str,
-        supported_extensions: list[str],
+        supported_extensions: list[str] | None = None,
         repo_name: str | None = None,
         in_proximity_to: str | None = None,
     ):
         """
         Searches for a keyword in the codebase.
         """
+
+        # Use default extensions if none provided
+        if supported_extensions is None:
+            supported_extensions = [".py", ".js", ".jsx", ".ts", ".tsx"]
 
         if self.tmp_dir is None or self.tmp_repo_dir is None:
             repo_client = self.context.get_repo_client(
@@ -331,6 +335,13 @@ class BaseTools:
                     {
                         "name": "repo_name",
                         "type": "string",
+                        "default": [
+                            ".py",
+                            ".js",
+                            ".jsx",
+                            ".ts",
+                            ".tsx"
+                        ]
                         "description": "Optional name of the repository to search in if you know it.",
                     },
                     {
@@ -350,6 +361,7 @@ class BaseTools:
                         "type": "string",
                         "description": "The file to search for.",
                     },
+                required=["keyword"],
                     {
                         "name": "repo_name",
                         "type": "string",
