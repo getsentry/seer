@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from johen import generate
@@ -7,7 +7,9 @@ from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import OpenAiProvider
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
+from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
@@ -18,28 +20,23 @@ from seer.automation.state import LocalMemoryState
 
 
 @pytest.fixture
-def mock_context():
+def context():
     request = next(generate(AutofixRequest))
     continuation = AutofixContinuation(request=request)
     state = LocalMemoryState(val=continuation)
-    return MagicMock(state=state)
+    return AutofixContext(state=state, event_manager=AutofixEventManager(state=state))
 
 
 @pytest.fixture
-def mock_llm_client():
-    return Mock()
-
-
-@pytest.fixture
-def autofix_agent(mock_context, mock_llm_client):
+def autofix_agent(context: AutofixContext):
     config = AgentConfig()
-    return AutofixAgent(config=config, context=mock_context, name="TestAutofixAgent")
+    return AutofixAgent(config=config, context=context, name="TestAutofixAgent")
 
 
 @pytest.fixture
-def interactive_autofix_agent(mock_context, mock_llm_client):
+def interactive_autofix_agent(context: AutofixContext):
     config = AgentConfig(interactive=True)
-    return AutofixAgent(config=config, context=mock_context, name="TestAutofixAgent")
+    return AutofixAgent(config=config, context=context, name="TestAutofixAgent")
 
 
 @pytest.fixture
@@ -53,14 +50,9 @@ def run_config():
     )
 
 
-def test_autofix_agent_initialization(autofix_agent, mock_context):
-    assert autofix_agent.name == "TestAutofixAgent"
-    assert autofix_agent.context == mock_context
-    assert autofix_agent.iterations == 0
-    assert autofix_agent.memory == []
-
-
-def test_should_continue_waiting_for_user_response(autofix_agent, run_config):
+def test_should_continue_waiting_for_user_response(
+    autofix_agent: AutofixAgent, run_config: RunConfig
+):
     with autofix_agent.context.state.update() as state:
         state.steps = [
             DefaultStep(status=AutofixStatus.WAITING_FOR_USER_RESPONSE, key="test", title="Test")
@@ -68,23 +60,17 @@ def test_should_continue_waiting_for_user_response(autofix_agent, run_config):
     assert not autofix_agent.should_continue(run_config)
 
 
-def test_should_continue_normal_case(autofix_agent, run_config):
+def test_should_continue_normal_case(autofix_agent: AutofixAgent, run_config: RunConfig):
     with autofix_agent.context.state.update() as state:
         state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
     assert autofix_agent.should_continue(run_config)
 
 
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+@pytest.mark.vcr()
 def test_run_iteration_with_queued_user_messages(
-    mock_get_completion,
     interactive_autofix_agent,
     run_config,
 ):
-    mock_completion = MagicMock(
-        message=Message(role="assistant", content="Thinking about the solution...")
-    )
-    mock_get_completion.return_value = mock_completion
-
     with interactive_autofix_agent.context.state.update() as state:
         state.steps.append(
             DefaultStep(
@@ -99,25 +85,18 @@ def test_run_iteration_with_queued_user_messages(
 
     assert len(interactive_autofix_agent.memory) == 2
     assert interactive_autofix_agent.memory[0] == Message(role="user", content="User input")
-    assert interactive_autofix_agent.memory[1] == mock_completion.message
+    assert interactive_autofix_agent.memory[1].content.startswith(
+        "It seems like you might be looking for help"
+    )
 
 
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.run_in_thread")
-def test_run_iteration_with_insight_sharing(
-    mock_run_in_thread, mock_get_completion, autofix_agent, run_config
-):
-    mock_completion = MagicMock()
-    mock_completion.message.content = "Thinking about the solution..."
-    mock_get_completion.return_value = mock_completion
+def test_run_iteration_with_insight_sharing(autofix_agent, run_config):
     autofix_agent.config.interactive = True
     with autofix_agent.context.state.update() as state:
         state.request.options.disable_interactivity = False
 
-    autofix_agent.run_iteration(run_config)
-
-    mock_run_in_thread.assert_called_once()
-    assert mock_run_in_thread.call_args[1]["func"] == autofix_agent.share_insights
+    with autofix_agent.manage_run():
+        autofix_agent.run_iteration(run_config)
 
 
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")

@@ -10,7 +10,7 @@ from seer.automation.agent.agent import (
     RunConfig,
 )
 from seer.automation.agent.client import OpenAiProvider
-from seer.automation.agent.models import Message, ToolCall, Usage
+from seer.automation.agent.models import LlmGenerateTextResponse, Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 
 
@@ -133,14 +133,22 @@ def test_run_with_tool_calls(agent: LlmAgent, run_config: RunConfig):
     assert agent.usage.total_tokens == 141
 
 
-@pytest.mark.vcr()
-def test_run_max_iterations_exception(agent: LlmAgent, run_config: RunConfig):
-    run_config.max_iterations = 1
+def test_run_max_iterations_exception(run_config: RunConfig):
+    class LoopingAgent(LlmAgent):
+        def should_continue(self, run_config: RunConfig) -> bool:
+            return True
+
+        def get_completion(self, run_config: RunConfig) -> LlmGenerateTextResponse:
+            return next(generate(LlmGenerateTextResponse))
+
+    agent = LoopingAgent(config=AgentConfig())
+
+    run_config.max_iterations = 100
 
     with pytest.raises(MaxIterationsReachedException):
         agent.run(run_config)
 
-    assert agent.iterations == 1
+    assert agent.iterations == 100
 
 
 @pytest.mark.vcr()

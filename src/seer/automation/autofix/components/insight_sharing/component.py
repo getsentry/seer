@@ -5,13 +5,13 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider
-from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.agent.models import Usage
 from seer.automation.autofix.components.insight_sharing.models import (
     InsightContextOutput,
     InsightSharingOutput,
     InsightSharingRequest,
 )
-from seer.automation.component import BaseComponent
+from seer.automation.state import State
 from seer.dependency_injection import inject, injected
 
 
@@ -56,66 +56,63 @@ class InsightSharingPrompts:
         )
 
 
-class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharingOutput]):
-    context: AutofixContext
-
-    @observe(name="Sharing Insights")
-    @ai_track(description="Sharing Insights")
-    @inject
-    def invoke(
-        self, request: InsightSharingRequest, llm_client: LlmClient = injected
-    ) -> InsightSharingOutput | None:
-        try:
-            prompt_one = InsightSharingPrompts.format_step_one(
-                task_description=request.task_description,
-                latest_thought=request.latest_thought,
-                past_insights=request.past_insights,
-            )
-            completion = llm_client.generate_text(
-                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
-                prompt=prompt_one,
-                temperature=0.0,
-            )
-            with self.context.state.update() as cur:
-                cur.usage += completion.metadata.usage
-            insight = completion.message.content
-            if not insight or insight == "<NO_INSIGHT/>":
-                return None
-
-            insight = re.sub(
-                r"^\d+\.\s+", "", insight
-            )  # since the model often starts the insight with a number, e.g. "3. Insight..."
-
-            prompt_two = InsightSharingPrompts.format_step_two(
-                insight=insight,
-                latest_thought=request.latest_thought,
-            )
-            memory = []
-            for message in llm_client.clean_tool_call_assistant_messages(request.memory):
-                if message.role != "system":
-                    memory.append(message)
-
-            completion = llm_client.generate_structured(
-                messages=memory,
-                prompt=prompt_two,
-                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
-                response_format=InsightContextOutput,
-                temperature=0.0,
-                max_tokens=4096,
-            )
-
-            with self.context.state.update() as cur:
-                cur.usage += completion.metadata.usage
-
-            response = InsightSharingOutput(
-                insight=insight,
-                justification=completion.parsed.explanation,
-                error_message_context=completion.parsed.error_message_context,
-                codebase_context=completion.parsed.codebase_context,
-                stacktrace_context=completion.parsed.stacktrace_context,
-                breadcrumb_context=completion.parsed.event_log_context,
-                generated_at_memory_index=request.generated_at_memory_index,
-            )
-            return response
-        except Exception:
+@observe(name="Sharing Insights")
+@ai_track(description="Sharing Insights")
+@inject
+def create_insight_output(
+    usage_state: State[Usage], request: InsightSharingRequest, llm_client: LlmClient = injected
+) -> InsightSharingOutput | None:
+    try:
+        prompt_one = InsightSharingPrompts.format_step_one(
+            task_description=request.task_description,
+            latest_thought=request.latest_thought,
+            past_insights=request.past_insights,
+        )
+        completion = llm_client.generate_text(
+            model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+            prompt=prompt_one,
+            temperature=0.0,
+        )
+        with usage_state.update() as cur:
+            cur += completion.metadata.usage
+        insight = completion.message.content
+        if not insight or insight == "<NO_INSIGHT/>":
             return None
+
+        insight = re.sub(
+            r"^\d+\.\s+", "", insight
+        )  # since the model often starts the insight with a number, e.g. "3. Insight..."
+
+        prompt_two = InsightSharingPrompts.format_step_two(
+            insight=insight,
+            latest_thought=request.latest_thought,
+        )
+        memory = []
+        for message in llm_client.clean_tool_call_assistant_messages(request.memory):
+            if message.role != "system":
+                memory.append(message)
+
+        completion = llm_client.generate_structured(
+            messages=memory,
+            prompt=prompt_two,
+            model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+            response_format=InsightContextOutput,
+            temperature=0.0,
+            max_tokens=4096,
+        )
+
+        with usage_state.update() as cur:
+            cur += completion.metadata.usage
+
+        response = InsightSharingOutput(
+            insight=insight,
+            justification=completion.parsed.explanation,
+            error_message_context=completion.parsed.error_message_context,
+            codebase_context=completion.parsed.codebase_context,
+            stacktrace_context=completion.parsed.stacktrace_context,
+            breadcrumb_context=completion.parsed.event_log_context,
+            generated_at_memory_index=request.generated_at_memory_index,
+        )
+        return response
+    except Exception:
+        return None

@@ -1,14 +1,16 @@
+import contextlib
 import logging
-import threading
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, ContextManager, Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import Message, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
+from seer.automation.autofix.components.insight_sharing.component import create_insight_output
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
-from seer.automation.autofix.models import AutofixStatus, DefaultStep
+from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
+from seer.automation.state import State
 from seer.bootup import module
 from seer.configuration import configuration_module
 
@@ -26,6 +28,7 @@ class AutofixAgent(LlmAgent):
     ):
         super().__init__(config=config, tools=tools, memory=memory, name=name)
         self.context = context
+        self.executor = ThreadPoolExecutor(max_workers=1, initializer=self.load_thread_context)
 
     @property
     def queued_user_messages(self):
@@ -64,17 +67,31 @@ class AutofixAgent(LlmAgent):
         self.memory.append(completion.message)
 
         # log thoughts to the user
+        cur = self.context.state.get()
         if (
             completion.message.content
             and self.config.interactive
-            and not self.context.state.get().request.options.disable_interactivity
+            and not cur.request.options.disable_interactivity
         ):
             text_before_tag = completion.message.content.split("<")[0]
             text = text_before_tag
             if text:
-                self.run_in_thread(
-                    func=self.share_insights, args=(self.context, text, len(self.memory) - 1)
-                )
+                cur_step_idx = len(cur.steps) - 1
+                if cur_step_idx >= 0 and isinstance(cur.steps[-1], DefaultStep):
+
+                    def get_cur_step(state: AutofixContinuation):
+                        return state.steps[cur_step_idx]
+
+                    def get_usage(state: AutofixContinuation):
+                        return state.usage
+
+                    self.executor.submit(
+                        self.share_insights,
+                        text,
+                        self.context.state.lens(get_cur_step),
+                        self.context.state.lens(get_usage),
+                        len(self.memory) - 1,
+                    )
 
         # call any tools the model wants to use
         if completion.message.tool_calls:
@@ -89,6 +106,11 @@ class AutofixAgent(LlmAgent):
             self.context.store_memory(run_config.memory_storage_key, self.memory)
 
         return self.memory
+
+    @contextlib.contextmanager
+    def manage_run(self) -> ContextManager[Any]:
+        with super().manage_run(), self.executor:
+            yield
 
     def use_user_messages(self):
         # adds any queued user messages to the memory
@@ -109,36 +131,30 @@ class AutofixAgent(LlmAgent):
                 "Thanks for the input. I'm thinking through it now..."
             )
 
-    def run_in_thread(self, func, args):
-        def wrapper():
-            # ensures dependency injection works
-            module.enable()
-            configuration_module.enable()
+    def load_thread_context(self):
+        module.enable()
+        configuration_module.enable()
 
-            func(*args)
-
-        threading.Thread(target=wrapper).start()
-
-    def share_insights(self, context: AutofixContext, text: str, generated_at_memory_index: int):
-        # generate insights
-        insight_sharing = InsightSharingComponent(context)
-        past_insights = context.state.get().get_all_insights()
-        insight_card = insight_sharing.invoke(
+    def share_insights(
+        self,
+        text: str,
+        step_state: State[DefaultStep],
+        usage_state: State[Usage],
+        generated_at_memory_index: int,
+    ):
+        step = step_state.get()
+        past_insights = step.get_all_insights()
+        insight_card = create_insight_output(
+            usage_state,
             InsightSharingRequest(
                 latest_thought=text,
                 memory=self.memory,
-                task_description=context.state.get().get_step_description(),
+                task_description=step.description,
                 past_insights=past_insights,
                 generated_at_memory_index=generated_at_memory_index,
-            )
+            ),
         )
-        # add the insight card to the current step
+
         if insight_card:
-            if len(context.state.get().get_all_insights()) == len(
-                past_insights
-            ):  # in case something else was added in parallel, don't add this insight
-                with context.state.update() as cur:
-                    if cur.steps and isinstance(cur.steps[-1], DefaultStep):
-                        step = cur.steps[-1]
-                        step.insights.append(insight_card)
-                        cur.steps[-1] = step
+            with step_state.update() as step:
+                step.insights.append(insight_card)
