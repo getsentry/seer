@@ -118,9 +118,7 @@ class AutofixAgent(LlmAgent):
             self.memory.append(Message(content=msg, role="user"))
 
             self.queued_user_messages = []
-            self.context.event_manager.add_log(
-                "Thanks for the input. I'm thinking through it now..."
-            )
+            self.context.event_manager.add_log("Thanks for the input. Thinking through it now...")
 
     def load_thread_context(self):
         module.enable()

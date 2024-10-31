@@ -7,6 +7,10 @@ from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.is_root_cause_obvious import (
+    IsRootCauseObviousComponent,
+    IsRootCauseObviousRequest,
+)
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
     RootCauseAnalysisOutput,
@@ -28,10 +32,22 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     @inject
     def invoke(
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
-    ) -> RootCauseAnalysisOutput | None:
+    ) -> RootCauseAnalysisOutput:
+        is_obvious = (
+            IsRootCauseObviousComponent(self.context).invoke(
+                IsRootCauseObviousRequest(event_details=request.event_details)
+            )
+            if not request.initial_memory
+            else None
+        )
+
         with BaseTools(self.context) as tools:
             agent = AutofixAgent(
-                tools=tools.get_tools(),
+                tools=(
+                    tools.get_tools()
+                    if not (is_obvious and is_obvious.is_root_cause_clear)
+                    else None
+                ),
                 config=AgentConfig(
                     interactive=True,
                 ),
@@ -56,7 +72,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                             if not request.initial_memory
                             else None
                         ),
-                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                            has_tools=not (is_obvious and is_obvious.is_root_cause_clear)
+                        ),
                         max_iterations=24,
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
@@ -65,25 +83,32 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 if not response:
                     self.context.store_memory("root_cause_analysis", agent.memory)
-                    return None
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
 
                 if "<NO_ROOT_CAUSES>" in response:
-                    return None
+                    reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
+                    return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
 
-                # Ask for reproduction
-                self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
-                response = agent.run(
-                    run_config=RunConfig(
-                        model=OpenAiProvider.model("gpt-4o-2024-08-06"),
-                        prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
-                        run_name="Root Cause Reproduction & Unit Test",
-                    )
-                )
-                if not response:
-                    self.context.store_memory("root_cause_analysis", agent.memory)
-                    return None
+                # Ask for reproduction (NOTE: disabled due to speed; should be relocated to a different step in the future)
+                # self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
+                # response = agent.run(
+                #     run_config=RunConfig(
+                #         model=OpenAiProvider.model("gpt-4o-2024-08-06"),
+                #         prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
+                #         run_name="Root Cause Reproduction & Unit Test",
+                #     )
+                # )
+                # if not response:
+                #     self.context.store_memory("root_cause_analysis", agent.memory)
+                #     return RootCauseAnalysisOutput(
+                #         causes=[],
+                #         termination_reason="Something went wrong when Autofix was trying to figure out how to reproduce the issue.",
+                #     )
 
-                self.context.event_manager.add_log("Cleaning up my findings...")
+                self.context.event_manager.add_log("Cleaning up the findings...")
 
                 formatted_response = llm_client.generate_structured(
                     messages=LlmClient.clean_tool_call_assistant_messages(agent.memory),
@@ -101,7 +126,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         snippet.id = j
 
                 causes = [cause_model]
-                return RootCauseAnalysisOutput(causes=causes)
+                return RootCauseAnalysisOutput(causes=causes, termination_reason=None)
             finally:
                 with self.context.state.update() as cur:
                     cur.usage += agent.usage

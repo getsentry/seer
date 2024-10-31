@@ -90,12 +90,12 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_root_cause_analysis_result(self, root_cause_output: RootCauseAnalysisOutput | None):
+    def send_root_cause_analysis_result(self, root_cause_output: RootCauseAnalysisOutput):
         with self.state.update() as cur:
             root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
             root_cause_processing_step.status = AutofixStatus.COMPLETED
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
-            if root_cause_output and root_cause_output.causes:
+            if root_cause_output.causes:
                 root_cause_step.status = AutofixStatus.COMPLETED
                 root_cause_step.causes = root_cause_output.causes
 
@@ -103,6 +103,7 @@ class AutofixEventManager:
             else:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
+                root_cause_step.termination_reason = root_cause_output.termination_reason
 
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
         root_cause_selection: CustomRootCauseSelection | CodeContextRootCauseSelection | None = None

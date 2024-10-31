@@ -59,7 +59,6 @@ class TestInsightSharingComponent:
         mock_generate_structured_response = LlmGenerateStructuredResponse(
             parsed=InsightContextOutput(
                 explanation="Test explanation",
-                error_message_context=["Test error context"],
                 codebase_context=[],
                 stacktrace_context=[],
                 event_log_context=[],
@@ -78,7 +77,6 @@ class TestInsightSharingComponent:
         assert isinstance(result, InsightSharingOutput)
         assert result.insight == "New insight"
         assert result.justification == "Test explanation"
-        assert result.error_message_context == ["Test error context"]
         assert result.codebase_context == []
         assert result.stacktrace_context == []
         assert result.breadcrumb_context == []
@@ -126,7 +124,6 @@ class TestInsightSharingComponent:
         mock_completion_2 = LlmGenerateStructuredResponse(
             parsed=InsightContextOutput(
                 explanation="Test explanation",
-                error_message_context=["Test error context"],
                 codebase_context=[],
                 stacktrace_context=[],
                 event_log_context=[],

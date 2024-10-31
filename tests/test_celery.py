@@ -12,6 +12,7 @@ def test_detected_celery_jobs():
     with Module():
         assert set(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == set(
             [
+                "seer.anomaly_detection.tasks.cleanup_timeseries",
                 "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
                 "seer.automation.autofix.steps.coding_step.autofix_coding_task",
                 "seer.automation.autofix.steps.root_cause_step.root_cause_task",

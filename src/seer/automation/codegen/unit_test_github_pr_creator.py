@@ -38,9 +38,13 @@ class GeneratedTestsPullRequestCreator:
             commit_messages
         )
 
-        self.repo_client.create_pr_from_branch(
+        new_pr = self.repo_client.create_pr_from_branch(
             branch=branch_ref,
             title=pr_title,
             description=description,
             provided_base=self.pr.head.ref,
         )
+
+        original_pr_url = self.pr.html_url
+        new_pr_url = new_pr.html_url
+        self.repo_client.post_unit_test_reference_to_original_pr(original_pr_url, new_pr_url)

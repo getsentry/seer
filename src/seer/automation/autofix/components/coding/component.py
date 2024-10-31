@@ -5,6 +5,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, LlmClient
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
@@ -19,6 +20,10 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
     task_to_file_create,
     task_to_file_delete,
+)
+from seer.automation.autofix.components.is_fix_obvious import (
+    IsFixObviousComponent,
+    IsFixObviousRequest,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
@@ -48,7 +53,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     ):
         for file_path, file_missing_obj in missing_changes_by_file.items():
             new_response = llm_client.generate_text(
-                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                 prompt=CodingPrompts.format_incorrect_diff_fixer(
                     file_path,
                     file_missing_obj.diff_chunks,
@@ -105,6 +110,55 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 else request.root_cause_and_fix
             )
 
+            has_tools = True
+            if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
+                expanded_files_messages = []
+                relevant_files = [
+                    {"file_path": context.snippet.file_path, "repo_name": context.snippet.repo_name}
+                    for context in (
+                        request.root_cause_and_fix.code_context
+                        if request.root_cause_and_fix.code_context
+                        else []
+                    )
+                    if context.snippet
+                ]
+                for file in relevant_files:
+                    file_content = (
+                        self.context.get_file_contents(
+                            path=file["file_path"], repo_name=file["repo_name"]
+                        )
+                        if file["file_path"]
+                        else None
+                    )
+                    if file_content:
+                        agent_message = Message(
+                            role="assistant",
+                            content=f"Expand document: {file['file_path']} in {file['repo_name']}",
+                        )
+                        user_message = Message(
+                            role="user",
+                            content=file_content,
+                        )
+                        agent.memory.append(agent_message)
+                        agent.memory.append(user_message)
+                        expanded_files_messages.append(agent_message)
+                        expanded_files_messages.append(user_message)
+
+                if expanded_files_messages:
+                    is_obvious = IsFixObviousComponent(self.context).invoke(
+                        IsFixObviousRequest(
+                            event_details=request.event_details,
+                            task_str=task_str,
+                            fix_instruction=request.fix_instruction,
+                            memory=expanded_files_messages,
+                        )
+                        if not request.initial_memory
+                        else None
+                    )
+                    if is_obvious and is_obvious.is_fix_clear:
+                        agent.tools = []
+                        has_tools = False
+
             state = self.context.state.get()
 
             response = agent.run(
@@ -117,12 +171,13 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                             repo_names=[repo.full_name for repo in state.request.repos],
                             instruction=request.instruction,
                             fix_instruction=request.fix_instruction,
+                            has_tools=has_tools,
                         )
                         if not request.initial_memory
                         else None
                     ),
-                    system_prompt=CodingPrompts.format_system_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    system_prompt=CodingPrompts.format_system_msg(has_tools=has_tools),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="plan_and_code",
                     run_name="Plan",
                 ),
@@ -139,9 +194,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             final_response = agent.run(
                 RunConfig(
                     prompt=CodingPrompts.format_fix_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="plan_and_code",
                     run_name="Code",
+                    has_tools=has_tools,
                 ),
             )
 
@@ -179,7 +235,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         prompt=CodingPrompts.format_missing_msg(
                             missing_files_errors, file_exist_errors
                         ),
-                        model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                         memory_storage_key="plan_and_code",
                         run_name="Missing File Fix",
                     ),

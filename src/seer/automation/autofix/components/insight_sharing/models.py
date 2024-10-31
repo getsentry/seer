@@ -29,7 +29,6 @@ class StacktraceContext(BaseModel):
 
 class InsightContextOutput(BaseModel):
     explanation: str
-    error_message_context: list[str]
     codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     event_log_context: list[BreadcrumbContext]
@@ -37,7 +36,6 @@ class InsightContextOutput(BaseModel):
 
 class InsightSharingOutput(BaseComponentOutput):
     insight: str
-    error_message_context: list[str]
     codebase_context: list[CodeSnippetContext]
     stacktrace_context: list[StacktraceContext]
     breadcrumb_context: list[BreadcrumbContext]

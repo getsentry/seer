@@ -156,7 +156,7 @@ flask==2.2.5
     #   flask-sqlalchemy
     #   sentry-sdk
     #   types-flask-migrate
-flask-migrate==4.0.5
+flask-migrate==4.0.7
     # via -r requirements-constraints.txt
 flask-sqlalchemy==3.1.1
     # via
@@ -424,8 +424,6 @@ openai==1.52.2
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
-openapi-pydantic==0.4.0
-    # via -r requirements-constraints.txt
 openapi-schema-validator==0.6.2
     # via
     #   openapi-core
@@ -538,13 +536,12 @@ pydantic==2.6.4
     #   google-cloud-aiplatform
     #   langfuse
     #   openai
-    #   openapi-pydantic
     #   pydantic-xml
 pydantic-core==2.16.3
     # via
     #   pydantic
     #   pydantic-xml
-pydantic-xml==2.9.0
+pydantic-xml==2.13.1
     # via -r requirements-constraints.txt
 pygithub==2.1.1
     # via -r requirements-constraints.txt
@@ -755,7 +752,7 @@ typer==0.12.5
     # via chromadb
 types-colorama==0.4.15.12
     # via -r requirements-constraints.txt
-types-flask-migrate==4.0.0.20240205
+types-flask-migrate==4.0.0.20240311
     # via -r requirements-constraints.txt
 types-jsonschema==4.20.0.20240105
     # via -r requirements-constraints.txt

@@ -1,6 +1,7 @@
 import contextlib
 import datetime
 import json
+from enum import StrEnum
 from typing import Any, List, Optional
 
 import sqlalchemy
@@ -15,6 +16,7 @@ from sqlalchemy import (
     BigInteger,
     Connection,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Index,
@@ -57,6 +59,12 @@ class Base(DeclarativeBase):
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
 Session = sessionmaker(autoflush=False, expire_on_commit=False)
+
+
+class TaskStatus(StrEnum):
+    NOT_QUEUED = "not_queued"
+    PROCESSING = "processing"
+    QUEUED = "queued"
 
 
 class ProcessRequest(Base):
@@ -266,7 +274,6 @@ class DbGroupingRecord(Base):
         server_default=text("nextval('grouping_records_id_seq')"),
     )
     project_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
-    message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     error_type: Mapped[str] = mapped_column(String, nullable=True)
     stacktrace_embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     hash: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -293,8 +300,17 @@ class DbDynamicAlert(Base):
     timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship(
         "DbDynamicAlertTimeSeries",
         back_populates="dynamic_alert",
-        cascade="all, delete",
+        cascade="all, delete, delete-orphan",
         passive_deletes=True,
+        order_by="DbDynamicAlertTimeSeries.timestamp",
+    )
+    data_purge_flag: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, native_enum=False),
+        nullable=False,
+        default=TaskStatus.NOT_QUEUED,
+    )
+    last_queued_at: Mapped[Optional[datetime.date]] = mapped_column(
+        DateTime, nullable=True, default=datetime.datetime.utcnow
     )
 
 

@@ -195,6 +195,7 @@ class RootCauseStep(BaseStep):
 
     causes: list[RootCauseAnalysisItem] = []
     selection: RootCauseSelection | None = None
+    termination_reason: str | None = None
 
 
 class ChangesStep(BaseStep):
@@ -285,6 +286,16 @@ class AutofixRequest(BaseModel):
     issue_summary: Optional[IssueSummary] = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
+
+    @field_validator("issue_summary", mode="before")
+    @classmethod
+    def validate_issue_summary(cls, value):
+        if value is None:
+            return None
+        try:
+            return IssueSummary.model_validate(value)
+        except Exception:
+            return None
 
     @field_validator("repos", mode="after")
     @classmethod

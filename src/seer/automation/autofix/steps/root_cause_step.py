@@ -83,15 +83,15 @@ class RootCauseStep(AutofixPipelineStep):
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
         self.context.event_manager.add_log(
-            "Above is what I think the root cause is. Feel free to propose your own root cause instead."
-            if root_cause_output
-            else "Sorry, I couldn't find the root cause."
+            "Here is Autofix's proposed root cause."
+            if root_cause_output.termination_reason is None and root_cause_output.causes
+            else "Autofix couldn't find the root cause. Maybe help Autofix rethink by editing a card above?"
         )
 
         # GitHub Copilot can comment on a provided PR with the root cause analysis
         pr_to_comment_on = state.request.options.comment_on_pr_with_url
         if pr_to_comment_on:
-            causes = root_cause_output.causes if root_cause_output else []
+            causes = root_cause_output.causes
             cause_string = "Autofix couldn't find a root cause for this issue."
             if causes:
                 cause_string = causes[0].to_markdown_string()

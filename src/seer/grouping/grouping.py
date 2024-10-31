@@ -21,14 +21,13 @@ logger = logging.getLogger(__name__)
 NN_GROUPING_DISTANCE = 0.01
 NN_GROUPING_HNSW_DISTANCE = 0.05
 NN_GROUPING_HNSW_CANDIDATES = 100
-NN_SIMILARITY_DISTANCE = 0.05
+NN_SIMILARITY_DISTANCE = 0.1
 
 
 class GroupingRequest(BaseModel):
     project_id: int
     stacktrace: str
     hash: str
-    message: Optional[str] = None
     exception_type: Optional[str] = None
     k: int = 1
     threshold: float = NN_GROUPING_DISTANCE
@@ -59,7 +58,6 @@ class CreateGroupingRecordData(BaseModel):
     group_id: int
     hash: str
     project_id: int
-    message: Optional[str] = None
     exception_type: Optional[str] = None
 
 
@@ -90,7 +88,6 @@ class DeleteGroupingRecordsByHashResponse(BaseModel):
 
 class GroupingRecord(BaseModel):
     project_id: int
-    message: Optional[str] = None
     stacktrace_embedding: np.ndarray
     hash: str
     error_type: Optional[str] = None
@@ -98,7 +95,6 @@ class GroupingRecord(BaseModel):
     def to_db_model(self) -> DbGroupingRecord:
         return DbGroupingRecord(
             project_id=self.project_id,
-            message=self.message,
             stacktrace_embedding=self.stacktrace_embedding,
             hash=self.hash,
             error_type=self.error_type,
@@ -446,7 +442,6 @@ class GroupingLookup:
                     else:
                         insert_stmt = insert(DbGroupingRecord).values(
                             project_id=entry.project_id,
-                            message=entry.message,
                             error_type=entry.exception_type,
                             hash=entry.hash,
                             stacktrace_embedding=embedding,
@@ -473,7 +468,6 @@ class GroupingLookup:
         with Session() as session:
             insert_stmt = insert(DbGroupingRecord).values(
                 project_id=issue.project_id,
-                message=issue.message,
                 stacktrace_embedding=embedding,
                 hash=issue.hash,
                 error_type=issue.exception_type,
