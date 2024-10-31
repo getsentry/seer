@@ -40,9 +40,9 @@ class MajorityVoteFlagSmoother(FlagSmoother):
         """
         slices = []
 
-        num_gap = (
-            self.period_to_smooth_size[time_period] // 2
-        )  # Number of non-consistent flags allowed between points based on the smoothing size
+        num_gap = self.period_to_smooth_size[
+            time_period
+        ]  # Number of non-consistent flags allowed between points based on the smoothing size
 
         # Sliding window O(n)
         i = 0

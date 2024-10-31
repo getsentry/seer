@@ -215,13 +215,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
 
-                # Apply smoothing to the flags
-                smoothed_flags = flag_smoother.smooth(
-                    flags=flags_and_scores.flags,
-                    ad_config=config,
-                )
-                flags_and_scores.flags = smoothed_flags
-
                 scores.extend(flags_and_scores.scores)
                 flags.extend(flags_and_scores.flags)
                 thresholds.extend(flags_and_scores.thresholds)

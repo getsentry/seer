@@ -149,4 +149,5 @@ class SuSSWindowSizeSelector(WindowSizeSelector):
             sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 1)
             return 3
         sentry_sdk.set_tag(AnomalyDetectionTags.WINDOW_SEARCH_FAILED, 0)
-        return window_size
+        # return window_size
+        return 10
