@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.request import Request
 
 import johen
 import pytest
@@ -96,11 +97,20 @@ def reset_environ():
         os.environ = old_env
 
 
+def filter_unrelated_requests(request: Request):
+    if request.host.startswith("192"):
+        return None
+    if "sentry.io" in request.host:
+        return None
+    return request
+
+
 @pytest.fixture(scope="module")
 def vcr_config():
     return {
         "filter_headers": [("authorization", "redacted")],
         "record_mode": "none" if os.environ.get("CI") else "once",
+        "before_record_request": filter_unrelated_requests,
     }
 
 
