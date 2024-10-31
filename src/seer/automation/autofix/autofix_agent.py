@@ -1,6 +1,6 @@
 import contextlib
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
@@ -10,13 +10,15 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import create_insight_output
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
-from seer.bootup import module
-from seer.configuration import configuration_module
+from seer.dependency_injection import copy_modules_initializer
 
 logger = logging.getLogger(__name__)
 
 
 class AutofixAgent(LlmAgent):
+    futures: list[Future]
+    executor: Executor
+
     def __init__(
         self,
         config: AgentConfig,
@@ -27,7 +29,6 @@ class AutofixAgent(LlmAgent):
     ):
         super().__init__(config=config, tools=tools, memory=memory, name=name)
         self.context = context
-        self.executor = ThreadPoolExecutor(max_workers=1, initializer=self.load_thread_context)
 
     @property
     def queued_user_messages(self):
@@ -76,12 +77,14 @@ class AutofixAgent(LlmAgent):
             text = text_before_tag
             if text:
                 cur_step_idx = len(cur.steps) - 1
-                self.executor.submit(
-                    self.share_insights,
-                    text,
-                    cur_step_idx,
-                    self.context.state,
-                    len(self.memory) - 1,
+                self.futures.append(
+                    self.executor.submit(
+                        self.share_insights,
+                        text,
+                        cur_step_idx,
+                        self.context.state,
+                        len(self.memory) - 1,
+                    )
                 )
 
         # call any tools the model wants to use
@@ -100,8 +103,13 @@ class AutofixAgent(LlmAgent):
 
     @contextlib.contextmanager
     def manage_run(self):
+        self.futures = []
+        self.executor = ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer())
         with super().manage_run(), self.executor:
             yield
+        for future in self.futures:
+            if future.exception():
+                raise future.exception()
 
     def use_user_messages(self):
         # adds any queued user messages to the memory
@@ -120,10 +128,6 @@ class AutofixAgent(LlmAgent):
             self.queued_user_messages = []
             self.context.event_manager.add_log("Thanks for the input. Thinking through it now...")
 
-    def load_thread_context(self):
-        module.enable()
-        configuration_module.enable()
-
     def share_insights(
         self,
         text: str,
@@ -132,23 +136,24 @@ class AutofixAgent(LlmAgent):
         generated_at_memory_index: int,
     ):
         steps = state.get().steps
-        if cur_step_idx >= len(steps):
+        if cur_step_idx >= len(steps) or not steps:
             return
+
         step = steps[cur_step_idx]
         if not isinstance(step, DefaultStep):
             return
 
-        insight = create_insight_output(
+        insight_card, usage = create_insight_output(
             latest_thought=text,
             task_description=step.description,
             past_insights=step.get_all_insights(),
+            memory=self.memory,
             generated_at_memory_index=generated_at_memory_index,
         )
 
-        if insight:
-            insight_card, usage = insight
-            with state.update() as cur:
+        with state.update() as cur:
+            if insight_card:
                 cur_step = cur.steps[cur_step_idx]
                 assert isinstance(cur_step, DefaultStep)
                 cur_step.insights.append(insight_card)
-                cur.usage += usage
+            cur.usage += usage

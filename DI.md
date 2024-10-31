@@ -9,34 +9,33 @@ This concept is actually very similar to [useContext](https://react.dev/referenc
 of values are separated from providers rather than shared through global state.  The difference comes down to how
 these abstraction relationships (consumers and providers) are eventually bound together.
 
-# Onboarding
+# Quick Start
 
-This document explains dependency injection from multiple perspectives.  In the whole, all of them are useful
-perspectives but not all of them will make sense or be useful at the same time.  Instead, return to this doc from time
-to time to add more context as it fits your attention and needs convincingly.
+For shared configuration, mutable caches, or mockable clients, create a provider:
 
-Understand that Dependency Injection exists as 3 related things:
-1.  The theoretical, conceptual idea of Dependency Injection.  Understanding the motivations and the conceptual shape
-is useful because you may run into similarly shaped patterns in other places, allowing you to share contextual
-understanding.
-2.  The seer implementation of dependency injection, contained in `dependency_injection.py`, which includes specific,
-opinionated details in the implementation and ideas about how it could be used in future situations.
-3.  The exact specific usage of `dependency_injection.py` currently in the seer codebase.  This may be a subset of all
-features of the library, and a subset of all the conceptual ideas, but contextualized into "real life" patterns that
-relate directly to the codebase as it is.
+```python
+module = Module()
+module.enable()
 
-Note that as you go up, you get broad, robust ideas that are more expensive to contextualize, whereas you go down you
-get narrow, brittle ideas that are cheaper to contextualize.  Don't let your understanding be tight around
-either side -- there is nothing privileged either about the theoretical or the practical, they are both axis in which
-to navigate, bend, and change.  [Remember, only YOU can prevent wildfires](https://en.wikipedia.org/wiki/Smokey_Bear).
+@module.provider
+def my_cache() -> Cache:
+    return Cache()
+```
 
-# A walk around `dependency_injection.py` and seer patterns
+Consume that provider downstream with `inject` and `injected`:
+
+```python
+@inject
+def my_func(a: Cache = injected):
+    a.set('key', 'value')
+```
+
+By using dependency injection, your shared objects will reset between tests, be available 'globally' in any method
+that wants it via `injected`, and is replaceable in tests with mock replacements.
+
+# Long walk explanation of `dependency_injection.py`
 
 ## inject and injected
-
-These are patterns that exist today and are worth understanding, either to reproduce, extend, or simply to
-contextualize.  Note however that one day these patterns will become a problem -- when that day comes, don't be afraid
-to explore and change them!
 
 Let's start with the most common example in `configuration.py`:
 
@@ -60,7 +59,7 @@ def check_genai_consent(
 ) -> bool:
 ```
 
-A method decorated with `inject` signifies that this method can received "injected" instance values.  Those are denoted
+A method decorated with `inject` signifies that this method can receive "injected" instance values.  Those are denoted
 by **any and all keyword arguments whose default value is `injected`**.  So what's going on?  Let's break it down by
 reading `dependency_injection.py` some:
 
@@ -135,7 +134,7 @@ def resolve(source: type[_A]) -> _A:
     return resolve_annotation(key, source)
 ```
 
-No much here, but the key insight is that we're doing a transformation on, again, the `annotation`, or type structure,
+Not much here, but the key insight is that we're doing a transformation on, again, the `annotation`, or type structure,
 of the input, in order to make a selection.  This transformed value is known as a `FactoryAnnotation` in this case
 (implementation detail, other implementations may use different names).  Let's take a peak at `resolve_annotation`.
 
@@ -758,8 +757,3 @@ as they are defined, but which itself may depend on dependency injection before 
 This circular dependency could be resolved if the `langfuse` decorator were designed lazily -- that is, delaying
 the resolution of configuration until the wrapped method is invoked, instead of when it is defined, but alas,
 we don't have control over the execution of a third party.
-
-In cases like this,
-
-**do not force the square into the circular hole**.  You may need some configuration to exist outside the dependency
-injection for it to work well.  That's conceding to (economic) reality.

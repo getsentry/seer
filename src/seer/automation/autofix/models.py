@@ -320,14 +320,14 @@ class AutofixUpdateType(str, enum.Enum):
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
-    type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
+    type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE] = AutofixUpdateType.SELECT_ROOT_CAUSE
     cause_id: int | None = None
     custom_root_cause: str | None = None
     instruction: str | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
-    type: Literal[AutofixUpdateType.CREATE_PR]
+    type: Literal[AutofixUpdateType.CREATE_PR] = AutofixUpdateType.CREATE_PR
     repo_external_id: str | None = None
     repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 

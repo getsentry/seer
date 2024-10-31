@@ -1,15 +1,11 @@
-import contextlib
-import dataclasses
 import datetime
-from typing import Annotated, Iterator
-from unittest import mock
+from typing import Annotated
 
 from johen import generate
 from johen.examples import Examples
 from johen.generators import specialized
 
 from seer.automation.models import SentryExceptionEntry, SentryFrame, StacktraceFrame
-from seer.rpc import DummyRpcClient, RpcClientHandler
 
 _now = datetime.datetime(2023, 1, 1)
 
@@ -61,21 +57,3 @@ NoStacktraceExceptionEntry = Annotated[
         ),
     ),
 ]
-
-
-@dataclasses.dataclass
-class RpcClientMock:
-    client: DummyRpcClient
-    mocked_path: str = "seer.automation.autofix.tasks.SentryRpcClient"
-
-    def _enabled(self, **handlers: RpcClientHandler) -> Iterator[DummyRpcClient]:
-        old_handlers = self.client.handlers
-        with mock.patch(self.mocked_path) as target:
-            target.return_value = self.client
-            self.client.handlers = {**old_handlers, **handlers}
-            try:
-                yield self.client
-            finally:
-                self.client.handlers = old_handlers
-
-    enabled = contextlib.contextmanager(_enabled)

@@ -9,7 +9,7 @@ VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ
 
 
 @lru_cache(maxsize=1024)
-def compute_similarity_cached(text1: str, text2: str, ignore_whitespace=True) -> float:
+def compute_similarity_cached(text1: str, text2: str, ignore_whitespace: bool = True) -> float:
     """
     This function computes the similarity between two pieces of text using the difflib.SequenceMatcher class.
 
@@ -49,7 +49,7 @@ def get_last_non_empty_line(text: str) -> str:
 
 @observe(name="Find original snippet")
 def find_original_snippet(
-    snippet: str, file_contents: str, threshold=0.8, initial_line_threshold=0.9
+    snippet: str, file_contents: str, threshold: float = 0.8, initial_line_threshold: float = 0.9
 ) -> tuple[str, int, int] | None:
     """
     This function finds the original snippet of code in a file given a snippet and the file contents.

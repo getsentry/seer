@@ -100,6 +100,7 @@ def reset_environ():
 def vcr_config():
     return {
         "filter_headers": [("authorization", "redacted")],
+        "record_mode": "none" if os.environ.get("CI") else "once",
     }
 
 

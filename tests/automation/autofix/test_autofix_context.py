@@ -44,7 +44,7 @@ class TestAutofixContext(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event]),
                 )
             ),
-            type=DbStateRunTypes.AUTOFIX,
+            t=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(
             self.state,
@@ -274,7 +274,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
                 ),
             ),
-            type=DbStateRunTypes.AUTOFIX,
+            t=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(self.state, MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")

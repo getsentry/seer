@@ -30,6 +30,7 @@ services:
             context: .
         working_dir: /app
         volumes:
+            - ./pyproject.toml:/app/pyproject.toml
             - ./src:/app/src
             - ./tests:/app/tests
             - ./models:/app/models

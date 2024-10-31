@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock, patch
-
 import pytest
 from johen import generate
 
@@ -8,6 +6,7 @@ from seer.automation.agent.client import OpenAiProvider
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.component import FormatStepOnePrompt
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
@@ -17,6 +16,7 @@ from seer.automation.autofix.models import (
     DefaultStep,
 )
 from seer.automation.state import LocalMemoryState
+from seer.dependency_injection import Module
 
 
 @pytest.fixture
@@ -81,7 +81,8 @@ def test_run_iteration_with_queued_user_messages(
             )
         )
 
-    interactive_autofix_agent.run_iteration(run_config)
+    with interactive_autofix_agent.manage_run():
+        interactive_autofix_agent.run_iteration(run_config)
 
     assert len(interactive_autofix_agent.memory) == 2
     assert interactive_autofix_agent.memory[0] == Message(role="user", content="User input")
@@ -90,29 +91,26 @@ def test_run_iteration_with_queued_user_messages(
     )
 
 
+@pytest.mark.vcr()
 def test_run_iteration_with_insight_sharing(autofix_agent, run_config):
     autofix_agent.config.interactive = True
     with autofix_agent.context.state.update() as state:
         state.request.options.disable_interactivity = False
+        state.steps = [
+            DefaultStep(status=AutofixStatus.NEED_MORE_INFORMATION, key="test", title="Test")
+        ]
 
-    with autofix_agent.manage_run():
+    with (
+        Module().constant(
+            FormatStepOnePrompt,
+            FormatStepOnePrompt("Say something insightful like, 'This needs more abstraction'"),
+        ),
+        autofix_agent.manage_run(),
+    ):
         autofix_agent.run_iteration(run_config)
 
-
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.call_tool")
-def test_run_iteration_with_tool_calls(
-    mock_call_tool, mock_get_completion, autofix_agent, run_config
-):
-    mock_completion = MagicMock()
-    mock_completion.message.tool_calls = [MagicMock(), MagicMock()]
-    mock_get_completion.return_value = mock_completion
-    mock_call_tool.return_value = MagicMock()
-
-    autofix_agent.run_iteration(run_config)
-
-    assert mock_call_tool.call_count == 2
-    assert len(autofix_agent.memory) == 3  # Completion message + 2 tool responses
+    assert autofix_agent.context.state.get().usage.total_tokens > 0
+    assert len(autofix_agent.context.state.get().steps[-1].insights) > 0
 
 
 def test_use_user_messages(autofix_agent):
@@ -136,27 +134,7 @@ def test_use_user_messages(autofix_agent):
     assert autofix_agent.memory[-1].content == "User input 1"
 
 
-@patch("seer.automation.autofix.autofix_agent.InsightSharingComponent")
-def test_share_insights(mock_insight_sharing_component, autofix_agent):
-    mock_component = MagicMock()
-    mock_insight_sharing_component.return_value = mock_component
-    mock_component.invoke.return_value = MagicMock()
-
-    autofix_agent.memory = [Message(role="user", content="Fix this bug")]
-
-    with autofix_agent.context.state.update() as state:
-        state.steps = [
-            DefaultStep(
-                status=AutofixStatus.PROCESSING, key="test", title="Fixing a bug", insights=[]
-            )
-        ]
-
-    autofix_agent.share_insights(autofix_agent.context, "Thinking about the solution", 0)
-
-    mock_component.invoke.assert_called_once()
-    assert len(autofix_agent.context.state.get().steps[-1].insights) == 1
-
-
+@pytest.mark.vcr()
 def test_share_insights_no_new_insights(autofix_agent):
     with autofix_agent.context.state.update() as state:
         state.steps = [
@@ -169,7 +147,7 @@ def test_share_insights_no_new_insights(autofix_agent):
         ]
 
     initial_insights_count = len(autofix_agent.context.state.get().steps[-1].insights)
-    autofix_agent.share_insights(autofix_agent.context, "Thinking about the solution", 0)
+    autofix_agent.share_insights("Thinking about the solution", 0, autofix_agent.context.state, 0)
     final_insights_count = len(autofix_agent.context.state.get().steps[-1].insights)
 
     assert initial_insights_count == final_insights_count

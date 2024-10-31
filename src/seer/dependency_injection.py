@@ -27,7 +27,7 @@ import dataclasses
 import functools
 import inspect
 import threading
-from typing import Annotated, Any, Callable, TypeVar
+from typing import Annotated, Any, Callable, TypeVar, cast
 
 from johen.generators.annotations import AnnotationProcessingContext
 from pydantic import BaseModel
@@ -234,7 +234,7 @@ def inject(c: _A) -> _A:
 
 def resolve(source: type[_A]) -> _A:
     key = FactoryAnnotation.from_annotation(source)
-    return resolve_annotation(key, source)
+    return cast(_A, resolve_annotation(key, source))
 
 
 def resolve_annotation(key: FactoryAnnotation, source: Any) -> Any:
@@ -270,7 +270,7 @@ class Injector:
             key = FactoryAnnotation.from_annotation(source)
 
         if key in self.cache:
-            return self.cache[key]
+            return cast(_A, self.cache[key])
 
         try:
             f = self.module.registry[key]
@@ -280,12 +280,31 @@ class Injector:
             raise FactoryNotFound(f"No registered factory for {source}")
 
         rv = self.cache[key] = f()
-        return rv
+        return cast(_A, rv)
 
 
 class _Cur(threading.local):
     injector: Injector | None = None
     seen: list[FactoryAnnotation] | None = None
+
+
+def copy_modules_initializer() -> Callable[[], None]:
+    """
+    Creates an 'initializer' for use with ThreadPoolExecutor that will enable
+    modules that are currently enabled at the time this method was originally
+    called.
+    """
+    modules: list[Module] = []
+    injector = _cur.injector
+    while injector:
+        modules.insert(0, injector.module)
+        injector = injector.parent
+
+    def initializer():
+        for module in modules:
+            module.enable()
+
+    return initializer
 
 
 _cur = _Cur()
