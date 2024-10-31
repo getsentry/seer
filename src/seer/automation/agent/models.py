@@ -1,7 +1,7 @@
+import dataclasses
 from enum import Enum
 from typing import Generic, Optional, TypeVar
 
-from Cython import dataclasses
 from pydantic import BaseModel
 
 

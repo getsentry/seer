@@ -23,7 +23,7 @@ class MinMaxNormalizer(Normalizer):
                 return array
             else:
                 return np.full_like(array, 1.0)
-        return (array - np.min(array)) / (np.max(array) - np.min(array))  # type: ignore
+        return (array - np.min(array)) / (np.max(array) - np.min(array))
 
 
 # class MinMaxStreamNormalizer:
