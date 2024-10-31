@@ -119,7 +119,7 @@ def test_anthropic_generate_text_with_tools():
     assert response.message.content is not None
     assert response.message.role == "tool_use"
     assert response.message.tool_calls == [
-        ToolCall(id="toolu_vrtx_01CGA7JnJ98GofkuPZRxffAh", function="test_function", args="{}"),
+        ToolCall(id="toolu_vrtx_01Y7rMxTGDBpGMDL1hwNY173", function="test_function", args="{}"),
     ]
 
 

@@ -111,6 +111,7 @@ def vcr_config():
         "filter_headers": [("authorization", "redacted")],
         "record_mode": "none" if os.environ.get("CI") else "once",
         "before_record_request": filter_unrelated_requests,
+        "filter_post_data_parameters": ["client_secret", "refresh_token"],
     }
 
 
