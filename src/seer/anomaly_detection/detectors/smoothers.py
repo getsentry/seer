@@ -20,6 +20,9 @@ class FlagSmoother(BaseModel, abc.ABC):
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
         vote_threshold: float = 0.5,
+        original_flags: list = [],
+        cur_flags: list = [],
+        stream_smoothing: bool = False,
     ) -> list:
         return NotImplemented
 
@@ -74,6 +77,7 @@ class MajorityVoteFlagSmoother(FlagSmoother):
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
         vote_threshold: float = 0.5,
+        stream_smoothing: bool = False,
     ) -> list:
         """
         Use original flags to smooth by majority (or threshold) voting with a small window.
@@ -85,8 +89,9 @@ class MajorityVoteFlagSmoother(FlagSmoother):
 
         new_flags = np.array(orig_flags)
 
-        # Base case is to set the flags after first detected anomaly within window size to be anomalous
-        new_flags[start_idx : start_idx + smooth_size] = "anomaly_higher_confidence"
+        if not stream_smoothing:
+            # Base case is to set the flags after first detected anomaly within window size to be anomalous
+            new_flags[start_idx : start_idx + smooth_size] = "anomaly_higher_confidence"
 
         for i in range(start_idx + smooth_size, end_idx):
             values, counts = np.unique(orig_flags[i - smooth_size : i], return_counts=True)
@@ -107,14 +112,42 @@ class MajorityVoteFlagSmoother(FlagSmoother):
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
         vote_threshold: float = 0.5,
+        cur_flags: list = [],
+        stream_smoothing: bool = False,
+        original_flags: list = [],
     ) -> list:
         """
         Smooth flags using voting threshold and dynamic window size
         """
-
-        slices = self._get_anomalous_slices(flags, ad_config.time_period)
-        for start_idx, end_idx in slices:
-            flags[start_idx:end_idx] = self._smooth_flags(
-                flags, start_idx, end_idx, ad_config, smooth_size, vote_threshold
+        if stream_smoothing:
+            # print(flags[-20:])
+            # slices = self._get_anomalous_slices(flags, ad_config.time_period)
+            # for start_idx, end_idx in slices:
+            #     print(start_idx, end_idx)
+            #     print("before", flags[start_idx:end_idx])
+            all_flags = [*original_flags, *cur_flags]
+            print("before", all_flags[-20:])
+            all_flags = self._smooth_flags(
+                original_flags,
+                0,
+                len(all_flags),
+                ad_config,
+                smooth_size,
+                vote_threshold,
+                stream_smoothing,
             )
-        return flags
+            print("after", all_flags[-20:])
+            print()
+            return [all_flags[-1]]
+
+        else:
+
+            slices = self._get_anomalous_slices(flags, ad_config.time_period)
+            for start_idx, end_idx in slices:
+                print(start_idx, end_idx)
+                print("before", flags[start_idx:end_idx])
+                flags[start_idx:end_idx] = self._smooth_flags(
+                    flags, start_idx, end_idx, ad_config, smooth_size, vote_threshold
+                )
+                print("after", flags[start_idx:end_idx])
+            return flags

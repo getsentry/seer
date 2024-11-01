@@ -146,6 +146,7 @@ class AnomalyDetection(BaseModel):
             history_values=historic.timeseries.values,
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
+            history_flags=anomalies.flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
@@ -182,7 +183,7 @@ class AnomalyDetection(BaseModel):
         else:
             # Standard case - just track original flag
             curr_algo_data["original_flag"] = streamed_anomalies.flags[-1]
-            # TODO: Should use MajorityVoteFlagSmoother here for standard smoothing
+            # The MajorityVoteFlagSmoother should be applied within stream detector
 
         # Save new data point
         alert_data_accessor.save_timepoint(

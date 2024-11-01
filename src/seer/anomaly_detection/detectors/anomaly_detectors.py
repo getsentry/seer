@@ -144,7 +144,10 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         ..., description="Matrix profile of the baseline timeseries."
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
-
+    history_flags: list[AnomalyFlags] = Field(..., description="Flags of the baseline timeseries.")
+    anomaly_algo_data: list[dict] = Field(
+        ..., description="Anomaly algo data of the baseline timeseries."
+    )
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
@@ -195,7 +198,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             streamed_mp: list[list[float]] = []
             thresholds: list[float] = []
             for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
-                # Update the sumpi stream processor with new data
+                # Update the stumpi stream processor with new data
                 stream.update(cur_val)
 
                 # Get the matrix profile for the new data and score it
@@ -214,6 +217,19 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 )
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
+
+                # original_flags = self.anomaly_algo_data
+
+                original_flags = [data["original_flag"] for data in self.anomaly_algo_data[-20:]]
+                # # Apply stream smoothing to the flags
+                smoothed_flags = flag_smoother.smooth(
+                    flags=self.history_flags[-20:],
+                    original_flags=original_flags,
+                    ad_config=config,
+                    cur_flags=flags_and_scores.flags,
+                    stream_smoothing=True,
+                )
+                flags_and_scores.flags = smoothed_flags
 
                 scores.extend(flags_and_scores.scores)
                 flags.extend(flags_and_scores.flags)
