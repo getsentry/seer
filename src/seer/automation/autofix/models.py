@@ -169,6 +169,7 @@ class BaseStep(BaseModel):
 class DefaultStep(BaseStep):
     type: Literal[StepType.DEFAULT] = StepType.DEFAULT
     insights: list[InsightSharingOutput] = []
+    initial_memory_length: int = 1
 
 
 class RootCauseStep(BaseStep):

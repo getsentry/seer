@@ -410,6 +410,7 @@ class TestHandleUserMessages:
         mock_step = MagicMock(spec=DefaultStep)
         mock_step.key = "root_cause_analysis_processing"
         mock_step.insights = []
+        mock_step.initial_memory_length = 1
         mock_state.get.return_value.steps = [mock_step]
         mock_state.get.return_value.run_id = 123
         mock_state.update.return_value.__enter__.return_value.steps = [mock_step]
@@ -437,6 +438,7 @@ class TestHandleUserMessages:
             MagicMock(spec=InsightSharingOutput, generated_at_memory_index=4),
             MagicMock(spec=InsightSharingOutput, generated_at_memory_index=-1),
         ]
+        mock_step.initial_memory_length = 1
 
         # Create a mock memory list
         memory = [

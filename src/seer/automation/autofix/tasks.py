@@ -338,7 +338,7 @@ def truncate_memory_to_match_insights(memory: list[Message], step: DefaultStep):
             truncated_memory = new_memory
             break
     if not step.insights:
-        truncated_memory = memory[:1]
+        truncated_memory = memory[: step.initial_memory_length]
     return truncated_memory if truncated_memory else memory
 
 
