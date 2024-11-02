@@ -95,7 +95,7 @@ class TestIsRootCauseObviousComponent:
     def test_invoke_formats_prompt_correctly(self, component):
         mock_llm_client = MagicMock(spec=LlmClient)
         mock_event_details = MagicMock(spec=EventDetails)
-        mock_event_details.__str__.return_value = "Test event details"
+        mock_event_details.format_event.return_value = "Test event details"
 
         module = Module()
         module.constant(LlmClient, mock_llm_client)
