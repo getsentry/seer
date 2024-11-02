@@ -74,6 +74,33 @@ def test_should_continue_normal_case(autofix_agent, run_config):
     assert autofix_agent.should_continue(run_config)
 
 
+def test_should_continue_returns_false_when_max_iterations_reached(autofix_agent, run_config):
+    autofix_agent.iterations = run_config.max_iterations
+    autofix_agent.memory = [Message(role="user", content="You're great when you work")]
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    assert not autofix_agent.should_continue(run_config)
+
+
+def test_should_continue_returns_false_with_stop_message(autofix_agent, run_config):
+    run_config.stop_message = "STOP"
+    autofix_agent.memory = [Message(role="assistant", content="Let's STOP here")]
+    autofix_agent.iterations = 1
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    assert not autofix_agent.should_continue(run_config)
+
+
+def test_should_continue_returns_false_when_assistant_message_has_no_tool_calls(
+    autofix_agent, run_config
+):
+    autofix_agent.memory = [Message(role="assistant", content="All done!")]
+    autofix_agent.iterations = 1
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    assert not autofix_agent.should_continue(run_config)
+
+
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
 def test_run_iteration_with_queued_user_messages(
     mock_get_completion,
