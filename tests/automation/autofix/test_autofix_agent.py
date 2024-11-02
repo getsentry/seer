@@ -194,3 +194,36 @@ def test_share_insights_no_new_insights(autofix_agent):
     final_insights_count = len(autofix_agent.context.state.get().steps[-1].insights)
 
     assert initial_insights_count == final_insights_count
+
+
+def test_should_continue_prompts_for_help(interactive_autofix_agent, run_config):
+    # Test when iterations is at max_iterations - 3
+    run_config.max_iterations = 10
+    interactive_autofix_agent.iterations = 7
+
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+        state.request.options.disable_interactivity = False
+
+    assert interactive_autofix_agent.should_continue(run_config)
+    assert len(interactive_autofix_agent.memory) == 1
+    assert interactive_autofix_agent.memory[-1].content == (
+        "You're taking a while. If you need help, ask me a concrete question using the tool provided."
+    )
+
+    # Test when iterations is divisible by 6
+    interactive_autofix_agent.memory = []
+    interactive_autofix_agent.iterations = 6
+
+    assert interactive_autofix_agent.should_continue(run_config)
+    assert len(interactive_autofix_agent.memory) == 1
+    assert interactive_autofix_agent.memory[-1].content == (
+        "You're taking a while. If you need help, ask me a concrete question using the tool provided."
+    )
+
+    # Test when iterations is not at a prompt point
+    interactive_autofix_agent.memory = []
+    interactive_autofix_agent.iterations = 4
+
+    assert interactive_autofix_agent.should_continue(run_config)
+    assert len(interactive_autofix_agent.memory) == 0

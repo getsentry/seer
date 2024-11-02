@@ -45,7 +45,22 @@ class AutofixAgent(LlmAgent):
         if self.context.state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return False
 
-        return super().should_continue(run_config)
+        if not super().should_continue(run_config):
+            return False
+
+        if (
+            self.config.interactive
+            and self.iterations > 0
+            and (
+                self.iterations == run_config.max_iterations - 3
+                or (self.iterations % 6 == 0 and self.iterations < run_config.max_iterations - 3)
+            )
+        ):
+            self.add_user_message(
+                "You're taking a while. If you need help, ask me a concrete question using the tool provided."
+            )
+
+        return True
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
