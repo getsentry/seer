@@ -29,8 +29,9 @@ class IsFixObviousPrompts:
         task_str: str,
         fix_instruction: str | None,
     ):
-        return textwrap.dedent(
-            """\
+        return (
+            textwrap.dedent(
+                """\
             You are an exceptional principal engineer that is amazing at fixing any issue. We have an issue in our codebase and its root cause is described below, and you've already looked at some code files. Are the code changes needed to fix the issue clear from the details below? Or does it require searching for more information around the codebase?
 
             {event_details}
@@ -39,10 +40,13 @@ class IsFixObviousPrompts:
             {task_str}
 
             {fix_instruction}"""
-        ).format(
-            event_details=event_details,
-            task_str=task_str,
-            fix_instruction=fix_instruction if fix_instruction else "",
+            )
+            .format(
+                event_details=event_details.format_event(),
+                task_str=task_str,
+                fix_instruction=fix_instruction if fix_instruction else "",
+            )
+            .strip()
         )
 
 
