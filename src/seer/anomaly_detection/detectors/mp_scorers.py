@@ -146,6 +146,7 @@ class LowVarianceScorer(MPScorer):
         context = history_values[-2 * window_size :]
         if context.std() > self.std_threshold:
             return None
+
         flag, score, threshold = self._to_flag_and_score(streamed_value, context.mean(), ad_config)
 
         return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
@@ -332,12 +333,16 @@ class MPIQRScorer(MPScorer):
         AnomalyFlags
             The adjusted anomaly flag
         """
-        if flag == "none" or direction == "both":
+        if flag == "none":
             return flag
 
         location = location_detector.detect(
             streamed_value, streamed_timestamp, history_values, history_timestamps
         )
+        if location is None:
+            return flag
+        if direction == "both" and location == PointLocation.NONE:
+            return "none"
         if (direction == "up" and location != PointLocation.UP) or (
             direction == "down" and location != PointLocation.DOWN
         ):

@@ -95,7 +95,7 @@ class TestAnomalyDetection(unittest.TestCase):
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
         )
         ts_values = loaded_synthetic_data.timeseries[0]
-        ts_timestamps = np.arange(1, len(ts_values), 1) + datetime.now().timestamp()
+        ts_timestamps = np.arange(1, len(ts_values) + 1) + datetime.now().timestamp()
         window_size = loaded_synthetic_data.window_sizes[0]
 
         dummy_mp = np.ones((len(ts_values) - window_size + 1, 4))

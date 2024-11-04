@@ -1,6 +1,7 @@
 import abc
 import logging
 from enum import Enum
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -30,7 +31,7 @@ class LocationDetector(BaseModel, abc.ABC):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-    ) -> PointLocation:
+    ) -> Optional[PointLocation]:
         return NotImplemented
 
 
@@ -53,7 +54,7 @@ class LinearRegressionLocationDetector(LocationDetector):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-    ) -> PointLocation:
+    ) -> Optional[PointLocation]:
         """
         Detect relative location of the streamed value in the context of recent data points using linear regression.
 
@@ -70,7 +71,7 @@ class LinearRegressionLocationDetector(LocationDetector):
         recent_data = np.concatenate([history_values[-self.window_size :], [streamed_value]])
 
         if len(recent_data) < self.window_size + 1:
-            return PointLocation.NONE  # Not enough data to determine trend
+            return None  # Not enough data to determine trend
 
         x = np.arange(len(recent_data))
         y = recent_data
@@ -108,7 +109,7 @@ class ProphetLocationDetector(LocationDetector):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-    ) -> PointLocation:
+    ) -> Optional[PointLocation]:
         """
         Detect relative location of the streamed value in the context of recent data points using Prophet.
 
