@@ -308,7 +308,7 @@ class RepoClient:
 
             return contents.decoded_content.decode()
         except Exception as e:
-            logger.error(f"Error getting file contents: {e}")
+            logger.exception(f"Error getting file contents: {e}")
 
             return None
 
@@ -416,13 +416,14 @@ class RepoClient:
                 try:
                     self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
                 except Exception as e:
-                    logger.error(f"Error committing file change: {e}")
+                    logger.exception(f"Error committing file patch: {e}")
+
         elif file_changes:
             for change in file_changes:
                 try:
                     self._commit_file_change(change=change, branch_ref=branch_ref.ref)
                 except Exception as e:
-                    logger.error(f"Error committing file change: {e}")
+                    logger.exception(f"Error committing file change: {e}")
 
         branch_ref.update()
 
