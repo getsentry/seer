@@ -223,34 +223,72 @@ def test_share_insights_no_new_insights(autofix_agent):
     assert initial_insights_count == final_insights_count
 
 
-def test_should_continue_prompts_for_help(interactive_autofix_agent, run_config):
-    # Test when iterations is at max_iterations - 3
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+def test_run_iteration_prompts_for_help_near_max_iterations(
+    mock_get_completion, interactive_autofix_agent, run_config
+):
+    mock_completion = MagicMock(
+        message=Message(role="assistant", content="Thinking about the solution...")
+    )
+    mock_get_completion.return_value = mock_completion
+
     run_config.max_iterations = 10
-    interactive_autofix_agent.iterations = 7
+    interactive_autofix_agent.iterations = 7  # max_iterations - 3
 
     with interactive_autofix_agent.context.state.update() as state:
         state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
         state.request.options.disable_interactivity = False
 
-    assert interactive_autofix_agent.should_continue(run_config)
-    assert len(interactive_autofix_agent.memory) == 1
-    assert interactive_autofix_agent.memory[-1].content == (
+    interactive_autofix_agent.run_iteration(run_config)
+
+    # First message should be the help prompt, second should be the completion
+    assert len(interactive_autofix_agent.memory) == 2
+    assert interactive_autofix_agent.memory[0].content == (
         "You're taking a while. If you need help, ask me a concrete question using the tool provided."
     )
+    assert interactive_autofix_agent.memory[1] == mock_completion.message
 
-    # Test when iterations is divisible by 6
-    interactive_autofix_agent.memory = []
-    interactive_autofix_agent.iterations = 6
 
-    assert interactive_autofix_agent.should_continue(run_config)
-    assert len(interactive_autofix_agent.memory) == 1
-    assert interactive_autofix_agent.memory[-1].content == (
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+def test_run_iteration_prompts_for_help_at_interval(
+    mock_get_completion, interactive_autofix_agent, run_config
+):
+    mock_completion = MagicMock(
+        message=Message(role="assistant", content="Thinking about the solution...")
+    )
+    mock_get_completion.return_value = mock_completion
+
+    interactive_autofix_agent.iterations = 6  # divisible by 6
+
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+        state.request.options.disable_interactivity = False
+
+    interactive_autofix_agent.run_iteration(run_config)
+
+    assert len(interactive_autofix_agent.memory) == 2
+    assert interactive_autofix_agent.memory[0].content == (
         "You're taking a while. If you need help, ask me a concrete question using the tool provided."
     )
+    assert interactive_autofix_agent.memory[1] == mock_completion.message
 
-    # Test when iterations is not at a prompt point
-    interactive_autofix_agent.memory = []
-    interactive_autofix_agent.iterations = 4
 
-    assert interactive_autofix_agent.should_continue(run_config)
-    assert len(interactive_autofix_agent.memory) == 0
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+def test_run_iteration_no_help_prompt_when_not_needed(
+    mock_get_completion, interactive_autofix_agent, run_config
+):
+    mock_completion = MagicMock(
+        message=Message(role="assistant", content="Thinking about the solution...")
+    )
+    mock_get_completion.return_value = mock_completion
+
+    interactive_autofix_agent.iterations = 4  # not divisible by 6 and not near max
+
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+        state.request.options.disable_interactivity = False
+
+    interactive_autofix_agent.run_iteration(run_config)
+
+    assert len(interactive_autofix_agent.memory) == 1
+    assert interactive_autofix_agent.memory[0] == mock_completion.message

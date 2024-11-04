@@ -45,9 +45,9 @@ class AutofixAgent(LlmAgent):
         if self.context.state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return False
 
-        if not super().should_continue(run_config):
-            return False
+        return super().should_continue(run_config)
 
+    def _check_prompt_for_help(self, run_config: RunConfig):
         if (
             self.config.interactive
             and self.iterations > 0
@@ -60,10 +60,10 @@ class AutofixAgent(LlmAgent):
                 "You're taking a while. If you need help, ask me a concrete question using the tool provided."
             )
 
-        return True
-
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
+
+        self._check_prompt_for_help(run_config)
 
         # Use any queued user messages
         if self.config.interactive:
