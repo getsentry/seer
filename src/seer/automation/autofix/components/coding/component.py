@@ -111,7 +111,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             )
 
             has_tools = True
-            if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
+
+            if (
+                isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
+                and not request.initial_memory
+            ):
                 expanded_files_messages = []
                 relevant_files = [
                     {"file_path": context.snippet.file_path, "repo_name": context.snippet.repo_name}
@@ -143,6 +147,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         agent.memory.append(user_message)
                         expanded_files_messages.append(agent_message)
                         expanded_files_messages.append(user_message)
+
+                with self.context.state.update() as cur:
+                    cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
 
                 if expanded_files_messages and not request.initial_memory:
                     is_obvious = IsFixObviousComponent(self.context).invoke(
