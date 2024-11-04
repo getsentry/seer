@@ -152,6 +152,11 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         arbitrary_types_allowed=True,
     )
 
+    stream_history_size: dict[int, int] = Field(
+        default={5: 19, 15: 11, 30: 7, 60: 5},
+        description="History size for stream smoothing based on the function smooth_size = floor(43 / sqrt(time_period))",
+    )
+
     @inject
     @sentry_sdk.trace
     def detect(
@@ -219,9 +224,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
 
+                anomaly_algo_data_to_use = self.anomaly_algo_data[
+                    self.stream_history_size[config.time_period]
+                ]
+
                 # The original flags are the flags of the previous points
                 past_original_flags = [
-                    algo_data["original_flag"] for algo_data in self.anomaly_algo_data
+                    algo_data["original_flag"] for algo_data in anomaly_algo_data_to_use
                 ]
 
                 self.anomaly_algo_data.append({"original_flag": flags_and_scores.flags[-1]})

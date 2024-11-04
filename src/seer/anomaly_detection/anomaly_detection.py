@@ -147,9 +147,7 @@ class AnomalyDetection(BaseModel):
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
             history_flags=anomalies.flags,
-            anomaly_algo_data=anomalies.get_anomaly_algo_data(len(historic.timeseries.timestamps))[
-                -5:  # TODO: This slice should be based on the time period
-            ],
+            anomaly_algo_data=anomalies.get_anomaly_algo_data(len(historic.timeseries.timestamps)),
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
@@ -157,7 +155,8 @@ class AnomalyDetection(BaseModel):
 
         # Get current point's anomaly data and track original flag
         curr_algo_data = streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0]
-        curr_algo_data["original_flag"] = streamed_anomalies.original_flags[-1]
+        if streamed_anomalies.original_flags and curr_algo_data is not None:
+            curr_algo_data["original_flag"] = streamed_anomalies.original_flags[-1]
 
         # Save new data point
         alert_data_accessor.save_timepoint(
@@ -240,6 +239,8 @@ class AnomalyDetection(BaseModel):
             history_values=historic.values,
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
+            history_flags=anomalies.flags,
+            anomaly_algo_data=anomalies.get_anomaly_algo_data(len(historic.timestamps)),
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
