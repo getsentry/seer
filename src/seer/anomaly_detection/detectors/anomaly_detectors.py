@@ -198,6 +198,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             streamed_mp: list[list[float]] = []
             thresholds: list[float] = []
             for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
+
                 # Update the stumpi stream processor with new data
                 stream.update(cur_val)
 
@@ -218,17 +219,23 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
 
-                # original_flags = self.anomaly_algo_data
+                # The original flags are the flags of the previous points
+                past_original_flags = [
+                    algo_data["original_flag"] for algo_data in self.anomaly_algo_data
+                ]
 
-                original_flags = [data["original_flag"] for data in self.anomaly_algo_data[-20:]]
-                # # Apply stream smoothing to the flags
+                self.anomaly_algo_data.append({"original_flag": flags_and_scores.flags[-1]})
+
+                # Apply stream smoothing to the newest flag based on the previous original flags
                 smoothed_flags = flag_smoother.smooth(
-                    flags=self.history_flags[-20:],
-                    original_flags=original_flags,
+                    flags=past_original_flags,
                     ad_config=config,
-                    cur_flags=flags_and_scores.flags,
+                    vote_threshold=0.3,
                     stream_smoothing=True,
+                    cur_flag=flags_and_scores.flags,
                 )
+
+                original_flags = flags_and_scores.flags
                 flags_and_scores.flags = smoothed_flags
 
                 scores.extend(flags_and_scores.scores)
@@ -251,4 +258,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 ),
                 window_size=self.window_size,
                 thresholds=thresholds,
+                original_flags=original_flags,
             )

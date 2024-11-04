@@ -147,50 +147,24 @@ class AnomalyDetection(BaseModel):
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
             history_flags=anomalies.flags,
+            anomaly_algo_data=anomalies.get_anomaly_algo_data(len(historic.timeseries.timestamps))[
+                -5:  # TODO: This slice should be based on the time period
+            ],
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
         )
 
-        # Check previous point's anomaly algo data for base case tracking
-        prev_algo_data = None
-        if len(historic.timeseries.timestamps) > 0:
-
-            prev_algo_data = historic.anomalies.get_anomaly_algo_data(
-                len(historic.timeseries.timestamps)
-            )[-1]
-
-        # Get current point's anomaly data
+        # Get current point's anomaly data and track original flag
         curr_algo_data = streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0]
-
-        # Base case: Start tracking if current point is anomalous and previous point doesn't have base case
-        if streamed_anomalies.flags[-1] == "anomaly_higher_confidence" and (
-            prev_algo_data is None or "base_case_remaining" not in prev_algo_data
-        ):
-            curr_algo_data["base_case_remaining"] = (
-                3  # TODO: Make this based on the time_period in anomaly config
-            )
-            curr_algo_data["original_flag"] = "anomaly_higher_confidence"
-            streamed_anomalies.flags[-1] = "anomaly_higher_confidence"  # TODO: Confirm if needed
-
-        # Check if previous point was tracking base case
-        elif prev_algo_data is not None and "base_case_remaining" in prev_algo_data:
-            if prev_algo_data["base_case_remaining"] > 0:
-                # Force anomaly and decrement counter
-                streamed_anomalies.flags[-1] = "anomaly_higher_confidence"
-                curr_algo_data["base_case_remaining"] -= 1
-                curr_algo_data["original_flag"] = "anomaly_higher_confidence"
-        else:
-            # Standard case - just track original flag
-            curr_algo_data["original_flag"] = streamed_anomalies.flags[-1]
-            # The MajorityVoteFlagSmoother should be applied within stream detector
+        curr_algo_data["original_flag"] = streamed_anomalies.original_flags[-1]
 
         # Save new data point
         alert_data_accessor.save_timepoint(
             external_alert_id=alert.id,
             timepoint=ts_external[0],
             anomaly=streamed_anomalies,
-            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0],
+            anomaly_algo_data=curr_algo_data,
         )
 
         # Delayed import due to circular imports
