@@ -14,7 +14,6 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.evaluations import (
-    RootCauseScoreResult,
     make_score_name,
     score_one,
     score_root_causes,
@@ -562,7 +561,7 @@ def run_autofix_evaluation_on_item(
                 logger.error(f"Error running root cause analysis: {e}")
 
             if causes:
-                root_cause_score: RootCauseScoreResult = score_root_causes(
+                root_cause_score = score_root_causes(
                     dataset_item,
                     causes,
                     n_panel=scoring_n_panel,
@@ -690,7 +689,7 @@ def run_autofix_evaluation_on_item(
                 )
 
             if causes:
-                root_cause_score: RootCauseScoreResult = score_root_causes(
+                root_cause_score = score_root_causes(
                     dataset_item,
                     causes,
                     n_panel=scoring_n_panel,
