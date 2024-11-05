@@ -23,8 +23,8 @@ class TestConverters(unittest.TestCase):
             None,
             None,
             None,
-            {"dist": 0.1, "idx": 0, "l_idx": 1, "r_idx": 2},
-            {"dist": 0.2, "idx": 1, "l_idx": 2, "r_idx": 3},
+            {"dist": 0.1, "idx": 0, "l_idx": 1, "r_idx": 2, "original_flag": "none"},
+            {"dist": 0.2, "idx": 1, "l_idx": 2, "r_idx": 3, "original_flag": "none"},
         ]
 
         algo_data = self.anomalies.get_anomaly_algo_data(front_pad_to_len)
@@ -35,8 +35,8 @@ class TestConverters(unittest.TestCase):
         # Test with front_pad_to_len equal to the length of matrix_profile
         front_pad_to_len = 2
         expected_data = [
-            {"dist": 0.1, "idx": 0, "l_idx": 1, "r_idx": 2},
-            {"dist": 0.2, "idx": 1, "l_idx": 2, "r_idx": 3},
+            {"dist": 0.1, "idx": 0, "l_idx": 1, "r_idx": 2, "original_flag": "none"},
+            {"dist": 0.2, "idx": 1, "l_idx": 2, "r_idx": 3, "original_flag": "none"},
         ]
 
         algo_data = self.anomalies.get_anomaly_algo_data(front_pad_to_len)
