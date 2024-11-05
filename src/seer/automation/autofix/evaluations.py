@@ -1,5 +1,5 @@
 import textwrap
-from typing import TypedDict, cast
+from typing import Literal, TypedDict, cast
 from xml.etree import ElementTree as ET
 
 from langfuse.client import DatasetItemClient
@@ -45,11 +45,39 @@ class RootCauseExpectedOutput(PromptXmlModel, tag="expected_solution"):
     diff: CodeDiff
 
 
+class AutofixRequestDict(TypedDict):
+    request: dict  # Contains AutofixRequest data
+    commit_sha: str
+
+
+class SolutionDiffDict(TypedDict):
+    description: str
+    unified_diff: str
+
+
+class ExpectedOutputDict(TypedDict):
+    original_diff: str
+    solution_diff: SolutionDiffDict
+    root_cause: str
+
+
+class DatasetItemMetadataDict(TypedDict):
+    difficulty_level: Literal["easy", "medium", "hard"]
+    solvable: bool
+
+
+class DatasetItemDict(TypedDict):
+    input: AutofixRequestDict
+    metadata: DatasetItemMetadataDict
+    expected_output: ExpectedOutputDict
+
+
 @observe(name="Sync run root cause evaluation on item")
 def sync_run_root_cause(item: DatasetItemClient):
     run_id = None
 
-    request = AutofixRequest.model_validate(item.input.get("request"))
+    input_data: AutofixRequestDict = item.input
+    request = AutofixRequest.model_validate(input_data["request"])
 
     request.options = AutofixRequestOptions(
         disable_codebase_indexing=True, disable_interactivity=True
@@ -153,7 +181,8 @@ def sync_run_execution(item: DatasetItemClient):
 def sync_run_evaluation_on_item(item: DatasetItemClient):
     run_id = None
 
-    request = AutofixRequest.model_validate(item.input.get("request"))
+    input_data: AutofixRequestDict = item.input
+    request = AutofixRequest.model_validate(input_data["request"])
 
     request.options = AutofixRequestOptions(
         disable_codebase_indexing=True, disable_interactivity=True
@@ -178,13 +207,13 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
         raise ValueError("Expected root cause step")
 
     if not root_cause_step.causes:
-        return None
+        return None, None
 
     cause = root_cause_step.causes[0]
     cause_id = cause.id
 
     if not cause.code_context:
-        return None
+        return None, None
 
     event_manager = AutofixEventManager(state)
     event_manager.set_selected_root_cause(
@@ -204,14 +233,19 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     changes = changes_step.changes
 
     if not changes:
-        return None
+        return None, None
 
     diffs: list[str] = []
     for change in changes:
         if change.diff_str:
             diffs.append(change.diff_str)
 
-    return "\n".join(diffs)
+    root_cause_step = state.get().find_step(key="root_cause_analysis")
+
+    if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
+        raise ValueError("Expected root cause step")
+
+    return "\n".join(diffs), root_cause_step.causes
 
 
 @observe(name="Score fix")
@@ -219,7 +253,9 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, mo
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
 
-    request = AutofixRequest.model_validate(dataset_item.input.get("request"))
+    input_data: AutofixRequestDict = dataset_item.input
+    expected_output: ExpectedOutputDict = dataset_item.expected_output
+    request = AutofixRequest.model_validate(input_data["request"])
 
     event_details = EventDetails.from_event(request.issue.events[0])
 
@@ -230,6 +266,9 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, mo
             Given the above issue, we know the correct fix is:
 
             <expected_solution>
+            <description>
+            {expected_description}
+            </description>
             <diff>
             {expected_diff}
             </diff>
@@ -249,7 +288,8 @@ def score_fix_single_it(dataset_item: DatasetItemClient, predicted_diff: str, mo
             Return the score inside a <score> tag."""
     ).format(
         event_details=event_details.format_event(),
-        expected_diff=dataset_item.expected_output.get("diff"),
+        expected_description=expected_output["solution_diff"]["description"],
+        expected_diff=expected_output["solution_diff"]["unified_diff"],
         predicted_diff=predicted_diff,
     )
     response = LlmClient().generate_text(
@@ -283,7 +323,9 @@ def score_root_cause_single_it(
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
 
-    expected_output = RootCauseExpectedOutput.model_validate(dataset_item.expected_output)
+    input_data: AutofixRequestDict = dataset_item.input
+    expected_output: ExpectedOutputDict = dataset_item.expected_output
+    root_cause_expected_str = expected_output.get("root_cause")
     causes_xml = [RootCausePlanTaskPromptXml.from_root_cause(cause) for cause in causes]
 
     solution_strs: list[str] = []
@@ -292,7 +334,7 @@ def score_root_cause_single_it(
         solution_strs.append(f"<solution_{num}>{cause.to_prompt_str()}</solution_{num}>")
     solutions_str = "\n".join(solution_strs)
 
-    request = AutofixRequest.model_validate(dataset_item.input.get("request"))
+    request = AutofixRequest.model_validate(input_data["request"])
 
     event_details = EventDetails.from_event(request.issue.events[0])
 
@@ -300,7 +342,7 @@ def score_root_cause_single_it(
         """\
             {event_details}
 
-            Given the above issue, we know the correct analysis of the issue is:
+            Given the above issue, we know the correct root cause of the issue is:
 
             {expected_output}
 
@@ -317,7 +359,7 @@ def score_root_cause_single_it(
             Score each solution inside a <score_{{n}}> tag, such as <score_1>0.5</score_1>, where n is the number of the solution."""
     ).format(
         event_details=event_details.format_event(),
-        expected_output=expected_output.to_prompt_str(),
+        expected_output=root_cause_expected_str,
         predicted_solutions=solutions_str,
     )
     response = LlmClient().generate_text(
