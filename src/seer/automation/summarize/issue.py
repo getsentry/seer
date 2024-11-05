@@ -16,9 +16,10 @@ class Step(BaseModel):
 
 
 class IssueSummary(BaseModel):
-    reason_step_by_step: list[Step]
-    bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning: str
-    five_to_ten_word_headline: str
+    title: str
+    whats_wrong: str
+    trace: str
+    possible_cause: str
 
 
 @observe(name="Summarize Issue")
@@ -49,21 +50,33 @@ def summarize_issue(
         Also, we know about some other issues that occurred in the same application trace, listed below. The issue above occurred somewhere alongside these:
         {connected_issues}
         """
+    else:
+        connected_issues_input = "Connected issues we've found: none"
 
     prompt = textwrap.dedent(
-        f"""Our code is broken! Please summarize the issue below in a few short bullet points so our engineers can immediately understand what's wrong and respond.
+        f"""Our code is broken! Please summarize the issue below in a few short bullet points so our engineers can immediately understand what's wrong.
 
         The issue: {event_details.format_event()}
 
         {connected_issues_input}
 
-        Your #1 goal is to help our engineers immediately understand the main issue and act!
+        Your #1 goal is to help our engineers immediately understand what's going on in the main issue.
 
-        Regarding the issue details summary, state clearly and concisely what's going wrong and why. Do not just restate the error message, as that wastes our time! Look deeper into the details provided to paint the full picture and find the key insight of what's going wrong.
+        Write a concise report that sets the scene for the issue. Know that our engineers can already see all the same details on the issue that were provided to you, so DO NOT repeat them. Instead extract the holistic insights that would take time to figure out otherwise.
+        Please write under 20 words per section, while cramming as much detail as possible, to make the report super easy to skim. Please bold important insights and unique terms by surrounding them with double asterisks (**like this**). The structure you should follow is:
 
-        Our engineers need to get into the nitty gritty mechanical details of what's going wrong. The insight may be in the stacktrace, error message, event logs, or connected issues. Highlight the most important details across all the context you have that are relevant to the main issue!
+        ###### What's wrong? [not optional]
+        summary of the stacktrace, breadcrumbs, and other context
 
-        Format all responses as multiple Markdown bullet points with shorthand language."""
+        ###### Trace [optional]
+        insights from the connected issues, if any [return empty string if none]
+
+        ###### Possible cause [optional]
+        guess as to the cause, maybe show if there's clear smoking bullet [return empty string if none]
+
+        Also provide a concise title for the report that summarizes everything you write above.
+
+        IMPORTANT: each section should be unique and not repeat the information in another section."""
     )
 
     completion = llm_client.generate_structured(
@@ -74,19 +87,13 @@ def summarize_issue(
         max_tokens=2048,
     )
 
-    summary = completion.parsed.bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning
-    impact = ""  # not generating impact for now. We'll revisit when we have a credible source to decide impact.
-    headline = completion.parsed.five_to_ten_word_headline
-    if headline.endswith(".") or headline.endswith("!"):
-        headline = headline[:-1]
-    headline = headline + "."
-
     return (
         SummarizeIssueResponse(
             group_id=request.group_id,
-            headline=headline,
-            summary=summary,
-            impact=impact,
+            headline=completion.parsed.title,
+            whats_wrong=completion.parsed.whats_wrong,
+            trace=completion.parsed.trace,
+            possible_cause=completion.parsed.possible_cause,
         ),
         completion.parsed,
     )

@@ -33,12 +33,12 @@ def format_summary(summary: IssueSummary | None) -> str:
 
     return textwrap.dedent(
         """\
-        {details}
-        {analysis}
+        {whats_wrong}
+        {trace}
+        {possible_cause}
         """
     ).format(
-        details=summary.bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning,
-        analysis="\n".join(
-            [f"- {step.reasoning} {step.justification}" for step in summary.reason_step_by_step]
-        ),
+        whats_wrong=summary.whats_wrong,
+        trace=summary.trace,
+        possible_cause=summary.possible_cause,
     )

@@ -25,9 +25,10 @@ class TestSummarizeIssue:
     def test_summarize_issue_success(self, mock_llm_client, sample_request):
         mock_structured_completion = MagicMock()
         mock_raw_summary = MagicMock(
-            reason_step_by_step=[],
-            bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
-            five_to_ten_word_headline="Test headline!",
+            title="Test headline",
+            whats_wrong="Test what's wrong",
+            trace="Test trace",
+            possible_cause="Test possible cause",
         )
         mock_structured_completion.choices[0].message.parsed = mock_raw_summary
         mock_structured_completion.choices[0].message.refusal = None
@@ -44,9 +45,10 @@ class TestSummarizeIssue:
 
         assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 1
-        assert result.summary == "Test summary"
-        assert result.impact == ""
-        assert result.headline == "Test headline."
+        assert result.headline == "Test headline"
+        assert result.whats_wrong == "Test what's wrong"
+        assert result.trace == "Test trace"
+        assert result.possible_cause == "Test possible cause"
         assert raw_result == mock_raw_summary
 
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
@@ -57,9 +59,10 @@ class TestSummarizeIssue:
 
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=MagicMock(
-                reason_step_by_step=[],
-                bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="Test summary",
-                five_to_ten_word_headline="Test headline",
+                title="Test headline",
+                whats_wrong="Test what's wrong",
+                trace="Test trace",
+                possible_cause="Test possible cause",
             ),
             metadata=LlmResponseMetadata(
                 model="test-model",
@@ -82,12 +85,20 @@ class TestSummarizeIssue:
 class TestRunSummarizeIssue:
     @patch("seer.automation.summarize.issue.summarize_issue")
     def test_run_summarize_issue_langfuse_metadata(self, mock_summarize_issue):
-        mock_summarize_issue.return_value = SummarizeIssueResponse(
-            group_id=1, headline="headline", summary="summary", impact="impact"
-        ), IssueSummary(
-            reason_step_by_step=[],
-            bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-            five_to_ten_word_headline="headline",
+        mock_summarize_issue.return_value = (
+            SummarizeIssueResponse(
+                group_id=1,
+                headline="Test headline",
+                whats_wrong="Test what's wrong",
+                trace="Test trace",
+                possible_cause="Test possible cause",
+            ),
+            IssueSummary(
+                title="Test headline",
+                whats_wrong="Test what's wrong",
+                trace="Test trace",
+                possible_cause="Test possible cause",
+            ),
         )
 
         # Create a sample request
@@ -112,17 +123,28 @@ class TestRunSummarizeIssue:
 
     @patch("seer.automation.summarize.issue.summarize_issue")
     def test_run_summarize_issue_langfuse_metadata_no_org_slug(self, mock_summarize_issue):
-        mock_summarize_issue.return_value = SummarizeIssueResponse(
-            group_id=1, headline="headline", summary="summary", impact="impact"
-        ), IssueSummary(
-            reason_step_by_step=[],
-            bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-            five_to_ten_word_headline="headline",
+        mock_summarize_issue.return_value = (
+            SummarizeIssueResponse(
+                group_id=1,
+                headline="Test headline",
+                whats_wrong="Test what's wrong",
+                trace="Test trace",
+                possible_cause="Test possible cause",
+            ),
+            IssueSummary(
+                title="Test headline",
+                whats_wrong="Test what's wrong",
+                trace="Test trace",
+                possible_cause="Test possible cause",
+            ),
         )
 
         # Create a sample request without organization_slug
         request = SummarizeIssueRequest(
-            group_id=123, issue=next(generate(IssueDetails)), organization_id=456, project_id=789
+            group_id=123,
+            issue=next(generate(IssueDetails)),
+            organization_id=456,
+            project_id=789,
         )
 
         # Call the function

@@ -130,9 +130,10 @@ class TestAutofixContext(unittest.TestCase):
     def test_get_issue_summary(self):
         with Session() as session:
             valid_summary_data = {
-                "bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning": "summary",
-                "reason_step_by_step": [],
-                "five_to_ten_word_headline": "headline",
+                "title": "title",
+                "whats_wrong": "whats wrong",
+                "trace": "trace",
+                "possible_cause": "possible cause",
             }
             db_issue_summary = DbIssueSummary(group_id=0, summary=valid_summary_data)
             session.add(db_issue_summary)
@@ -144,10 +145,10 @@ class TestAutofixContext(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertIsInstance(result, IssueSummary)
-        self.assertEqual(
-            result.bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning, "summary"
-        )
-        self.assertEqual(result.five_to_ten_word_headline, "headline")
+        self.assertEqual(result.title, "title")
+        self.assertEqual(result.whats_wrong, "whats wrong")
+        self.assertEqual(result.trace, "trace")
+        self.assertEqual(result.possible_cause, "possible cause")
 
         with Session() as session:
             invalid_summary_data = {"bad data": "uh oh"}
