@@ -552,10 +552,10 @@ def run_autofix_evaluation_on_item(
     scoring_model = "o1-mini-2024-09-12"
 
     diff: str | None = None
+    causes: list[RootCauseAnalysisItem] | None = None
 
     with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
         if run_type == "root_cause":
-            causes: list[RootCauseAnalysisItem] | None = None
             try:
                 causes = sync_run_root_cause(dataset_item, langfuse_session_id=trace_id)
             except Exception as e:
@@ -651,9 +651,14 @@ def run_autofix_evaluation_on_item(
                 )
         else:
             try:
-                diff = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)
+                diff, causes = sync_run_evaluation_on_item(
+                    dataset_item, langfuse_session_id=trace_id
+                )
             except Exception as e:
-                logger.error(f"Error running evaluation: {e}")
+                logger.exception(f"Error running evaluation: {e}")
+
+            print(f"diff: {diff}")
+            print(f"causes: {causes}")
 
             if diff:
                 score = score_one(
@@ -685,4 +690,48 @@ def run_autofix_evaluation_on_item(
                         model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
                     ),
                     value=0,
+                )
+
+            if causes:
+                root_cause_score: RootCauseScoreResult = score_root_causes(
+                    dataset_item,
+                    causes,
+                    n_panel=scoring_n_panel,
+                    model=scoring_model,
+                    langfuse_session_id=trace_id,
+                )
+
+                # Will output 4 scores for a run item:
+                # - `"highest_score"`: The score for the highest scored cause out of all the returned root causes.
+                # - `"positioning_score"`: Positioning of the highest scored cause, if the highest scored cause is first, this score is `1.0`. If it is last, it will be `0.0`. The score is calculated proportional to the number of causes provided.
+                # - `"mean_score"`: The mean score of all the root causes.
+                # - `"error_weighted_score"` This score is the same as the highest score but scored 0 if there is an error or no root cause returned. This is used to weight the score in the aggregated run result.
+
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
+                    ),
+                    value=root_cause_score.get("highest_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_highest_score"
+                    ),
+                    value=root_cause_score.get("highest_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_positioning_score"
+                    ),
+                    value=root_cause_score.get("position_score"),
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_mean_score"
+                    ),
+                    value=root_cause_score.get("mean_score"),
                 )
