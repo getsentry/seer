@@ -35,7 +35,7 @@ def test_smooth_single_anomaly(flag_smoother, ad_config):
         "none",
         "none",
     ]
-    result = flag_smoother.smooth(flags, ad_config)
+    result = flag_smoother.smooth(flags, ad_config, stream_smoothing=False)
     assert result == [
         "none",
         "anomaly_higher_confidence",

@@ -110,7 +110,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
-                flags=np.array(["anomaly_high_confidence"]),
+                flags=np.array(["anomaly_higher_confidence"]),
                 scores=np.array([0.4]),
                 matrix_profile=dummy_mp,
                 window_size=window_size,
@@ -150,7 +150,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
-                flags=np.array(["anomaly_high_confidence"]),
+                flags=np.array(["anomaly_higher_confidence"]),
                 scores=np.array([0.4]),
                 matrix_profile=dummy_mp,
                 window_size=window_size,

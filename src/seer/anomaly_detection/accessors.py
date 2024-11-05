@@ -89,7 +89,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             flags.append(point.anomaly_type)
             scores.append(point.anomaly_score)
             if point.anomaly_algo_data is not None:
-                dist, idx, l_idx, r_idx = MPTimeSeriesAnomalies.extract_algo_data(
+                dist, idx, l_idx, r_idx, original_flag = MPTimeSeriesAnomalies.extract_algo_data(
                     point.anomaly_algo_data
                 )
                 mp.append([dist, idx, l_idx, r_idx])

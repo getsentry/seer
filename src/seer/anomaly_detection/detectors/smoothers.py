@@ -42,9 +42,9 @@ class MajorityVoteFlagSmoother(FlagSmoother):
         """
         slices = []
 
-        num_gap = self.period_to_smooth_size[
-            time_period
-        ]  # Number of non-consistent flags allowed between points based on the smoothing size
+        num_gap = (
+            self.period_to_smooth_size[time_period] // 2
+        )  # Number of non-consistent flags allowed between points based on the smoothing size
 
         # Sliding window O(n)
         i = 0
@@ -139,7 +139,10 @@ class MajorityVoteFlagSmoother(FlagSmoother):
             smoothed_flag = self._stream_smooth_flags(flags, vote_threshold, cur_flag)
             return smoothed_flag
 
+        print("Smoothing flags with batch method")
         slices = self._get_anomalous_slices(flags, ad_config.time_period)
+        print(f"Found {len(slices)} slices")
+        print(f"Slices: {slices}")
         for start_idx, end_idx in slices:
             flags[start_idx:end_idx] = self._batch_smooth_flags(
                 flags, start_idx, end_idx, ad_config, smooth_size, vote_threshold

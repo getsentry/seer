@@ -144,8 +144,10 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         ..., description="Matrix profile of the baseline timeseries."
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
-    history_flags: list[AnomalyFlags] = Field(..., description="Flags of the baseline timeseries.")
-    anomaly_algo_data: list[dict] = Field(
+    history_flags: list[AnomalyFlags | None] = Field(
+        ..., description="Flags of the baseline timeseries."
+    )
+    anomaly_algo_data: list[dict | None] = Field(
         ..., description="Anomaly algo data of the baseline timeseries."
     )
     model_config = ConfigDict(
@@ -224,13 +226,15 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
 
+                # Use the history size to determine how many points to use for stream smoothing
                 anomaly_algo_data_to_use = self.anomaly_algo_data[
-                    self.stream_history_size[config.time_period]
+                    -self.stream_history_size[config.time_period] :
                 ]
 
                 # The original flags are the flags of the previous points
                 past_original_flags = [
-                    algo_data["original_flag"] for algo_data in anomaly_algo_data_to_use
+                    algo_data["original_flag"] if algo_data is not None else "none"
+                    for algo_data in anomaly_algo_data_to_use
                 ]
 
                 self.anomaly_algo_data.append({"original_flag": flags_and_scores.flags[-1]})
@@ -239,7 +243,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 smoothed_flags = flag_smoother.smooth(
                     flags=past_original_flags,
                     ad_config=config,
-                    vote_threshold=0.3,
+                    vote_threshold=0.4,
                     stream_smoothing=True,
                     cur_flag=flags_and_scores.flags,
                 )
