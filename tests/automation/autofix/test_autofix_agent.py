@@ -74,6 +74,33 @@ def test_should_continue_normal_case(autofix_agent, run_config):
     assert autofix_agent.should_continue(run_config)
 
 
+def test_should_continue_returns_false_when_max_iterations_reached(autofix_agent, run_config):
+    autofix_agent.iterations = run_config.max_iterations
+    autofix_agent.memory = [Message(role="user", content="You're great when you work")]
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    assert not autofix_agent.should_continue(run_config)
+
+
+def test_should_continue_returns_false_with_stop_message(autofix_agent, run_config):
+    run_config.stop_message = "STOP"
+    autofix_agent.memory = [Message(role="assistant", content="Let's STOP here")]
+    autofix_agent.iterations = 1
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    assert not autofix_agent.should_continue(run_config)
+
+
+def test_should_continue_returns_false_when_assistant_message_has_no_tool_calls(
+    autofix_agent, run_config
+):
+    autofix_agent.memory = [Message(role="assistant", content="All done!")]
+    autofix_agent.iterations = 1
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    assert not autofix_agent.should_continue(run_config)
+
+
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
 def test_run_iteration_with_queued_user_messages(
     mock_get_completion,
@@ -194,3 +221,74 @@ def test_share_insights_no_new_insights(autofix_agent):
     final_insights_count = len(autofix_agent.context.state.get().steps[-1].insights)
 
     assert initial_insights_count == final_insights_count
+
+
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+def test_run_iteration_prompts_for_help_near_max_iterations(
+    mock_get_completion, interactive_autofix_agent, run_config
+):
+    mock_completion = MagicMock(
+        message=Message(role="assistant", content="Thinking about the solution...")
+    )
+    mock_get_completion.return_value = mock_completion
+
+    run_config.max_iterations = 10
+    interactive_autofix_agent.iterations = 7  # max_iterations - 3
+
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+        state.request.options.disable_interactivity = False
+
+    interactive_autofix_agent.run_iteration(run_config)
+
+    # First message should be the help prompt, second should be the completion
+    assert len(interactive_autofix_agent.memory) == 2
+    assert interactive_autofix_agent.memory[0].content == (
+        "You're taking a while. If you need help, ask me a concrete question using the tool provided."
+    )
+    assert interactive_autofix_agent.memory[1] == mock_completion.message
+
+
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+def test_run_iteration_prompts_for_help_at_interval(
+    mock_get_completion, interactive_autofix_agent, run_config
+):
+    mock_completion = MagicMock(
+        message=Message(role="assistant", content="Thinking about the solution...")
+    )
+    mock_get_completion.return_value = mock_completion
+
+    interactive_autofix_agent.iterations = 6  # divisible by 6
+
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+        state.request.options.disable_interactivity = False
+
+    interactive_autofix_agent.run_iteration(run_config)
+
+    assert len(interactive_autofix_agent.memory) == 2
+    assert interactive_autofix_agent.memory[0].content == (
+        "You're taking a while. If you need help, ask me a concrete question using the tool provided."
+    )
+    assert interactive_autofix_agent.memory[1] == mock_completion.message
+
+
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+def test_run_iteration_no_help_prompt_when_not_needed(
+    mock_get_completion, interactive_autofix_agent, run_config
+):
+    mock_completion = MagicMock(
+        message=Message(role="assistant", content="Thinking about the solution...")
+    )
+    mock_get_completion.return_value = mock_completion
+
+    interactive_autofix_agent.iterations = 4  # not divisible by 6 and not near max
+
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+        state.request.options.disable_interactivity = False
+
+    interactive_autofix_agent.run_iteration(run_config)
+
+    assert len(interactive_autofix_agent.memory) == 1
+    assert interactive_autofix_agent.memory[0] == mock_completion.message

@@ -47,8 +47,23 @@ class AutofixAgent(LlmAgent):
 
         return super().should_continue(run_config)
 
+    def _check_prompt_for_help(self, run_config: RunConfig):
+        if (
+            self.config.interactive
+            and self.iterations > 0
+            and (
+                self.iterations == run_config.max_iterations - 3
+                or (self.iterations % 6 == 0 and self.iterations < run_config.max_iterations - 3)
+            )
+        ):
+            self.add_user_message(
+                "You're taking a while. If you need help, ask me a concrete question using the tool provided."
+            )
+
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
+
+        self._check_prompt_for_help(run_config)
 
         # Use any queued user messages
         if self.config.interactive:
