@@ -160,3 +160,32 @@ def test_smooth_with_different_time_periods(flag_smoother):
     )
     result_5 = flag_smoother.smooth(flags, ad_config_5)
     assert result_5 == expected
+
+
+def test_stream_smooth(flag_smoother):
+    flags = ["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none", "none"]
+    ad_config = AnomalyDetectionConfig(
+        time_period=5, sensitivity="medium", direction="both", expected_seasonality="auto"
+    )
+
+    # Test with empty current flag
+    result = flag_smoother.smooth(
+        flags=flags, ad_config=ad_config, vote_threshold=0.4, stream_smoothing=True, cur_flag=[]
+    )
+    assert result == ["anomaly_higher_confidence"]
+
+    # Test with threshold that's too high
+    result = flag_smoother.smooth(
+        flags=flags, ad_config=ad_config, vote_threshold=0.5, stream_smoothing=True, cur_flag=[]
+    )
+    assert result == []
+
+    # Test with existing current flag
+    result = flag_smoother.smooth(
+        flags=flags,
+        ad_config=ad_config,
+        vote_threshold=0.4,
+        stream_smoothing=True,
+        cur_flag=["none"],
+    )
+    assert result == ["anomaly_higher_confidence"]
