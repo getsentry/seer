@@ -233,7 +233,7 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     changes = changes_step.changes
 
     if not changes:
-        return None
+        return None, None
 
     diffs: list[str] = []
     for change in changes:

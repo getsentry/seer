@@ -93,6 +93,7 @@ class TestSyncRunEvaluationOnItem:
     def test_sync_run_evaluation_on_item_happy_path(self):
         # Setup state changes for root cause step
         root_cause_model = next(generate(RootCauseStepModel))
+        root_cause_model.key = "root_cause_analysis"
         root_cause_model.causes = [
             RootCauseAnalysisItem(
                 id=1,
@@ -149,7 +150,7 @@ class TestSyncRunEvaluationOnItem:
         self.mock_planning_step_instance.apply.side_effect = planning_apply_side_effect
 
         # Run the function
-        result = sync_run_evaluation_on_item(self.mock_dataset_item)
+        result_diff, result_root_causes = sync_run_evaluation_on_item(self.mock_dataset_item)
 
         # Assertions
         assert self.mock_create_initial_run.called
@@ -173,12 +174,16 @@ class TestSyncRunEvaluationOnItem:
         assert isinstance(final_state.steps[0], RootCauseStepModel)
         assert isinstance(final_state.steps[1], ChangesStep)
 
-        assert result == "diff str 1\ndiff str 2"
+        assert result_diff == "diff str 1\ndiff str 2"
+        assert result_root_causes == root_cause_model.causes
 
     def test_sync_run_evaluation_on_item_no_root_causes(self):
         # Setup state changes for root cause step with no causes
         root_cause_model = RootCauseStepModel(
-            id="root_cause_analysis", title="Root Cause Analysis", causes=[]
+            id="root_cause_analysis",
+            key="root_cause_analysis",
+            title="Root Cause Analysis",
+            causes=[],
         )
 
         def root_cause_apply_side_effect():
@@ -192,7 +197,7 @@ class TestSyncRunEvaluationOnItem:
         result = sync_run_evaluation_on_item(self.mock_dataset_item)
 
         # Assertions
-        assert result is None
+        assert result == (None, None)
         assert not self.mock_planning_step.get_signature.called
 
     def test_sync_run_evaluation_on_item_no_code_context(self):
@@ -222,13 +227,14 @@ class TestSyncRunEvaluationOnItem:
         result = sync_run_evaluation_on_item(self.mock_dataset_item)
 
         # Assertions
-        assert result is None
+        assert result == (None, None)
         assert not self.mock_planning_step.get_signature.called
 
     def test_sync_run_evaluation_on_item_no_changes(self):
         # Setup state changes for root cause step
         root_cause_model = RootCauseStepModel(
             id="root_cause_analysis",
+            key="root_cause_analysis",
             title="Root Cause Analysis",
             causes=[
                 RootCauseAnalysisItem(
@@ -273,7 +279,7 @@ class TestSyncRunEvaluationOnItem:
         result = sync_run_evaluation_on_item(self.mock_dataset_item)
 
         # Assertions
-        assert result is None
+        assert result == (None, None)
         assert self.mock_planning_step.get_signature.called
         assert self.mock_planning_step_instance.apply.called
 
@@ -533,7 +539,14 @@ class TestScoreFixSingleIt:
     @pytest.fixture
     def mock_dataset_item(self):
         mock_item = Mock(spec=DatasetItemClient)
-        mock_item.expected_output = {"diff": "expected diff"}
+        mock_item.expected_output = {
+            "original_diff": "expected diff",
+            "solution_diff": {
+                "description": "expected solution diff",
+                "unified_diff": "expected solution diff",
+            },
+            "root_cause": "expected root cause",
+        }
         mock_item.input = {
             "request": AutofixRequest(
                 organization_id=1,
