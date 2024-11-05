@@ -657,9 +657,6 @@ def run_autofix_evaluation_on_item(
             except Exception as e:
                 logger.exception(f"Error running evaluation: {e}")
 
-            print(f"diff: {diff}")
-            print(f"causes: {causes}")
-
             if diff:
                 score = score_one(
                     dataset_item,
