@@ -153,7 +153,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
-
     stream_history_size: dict[int, int] = Field(
         default={5: 19, 15: 11, 30: 7, 60: 5},
         description="History size for stream smoothing based on the function smooth_size = floor(43 / sqrt(time_period))",

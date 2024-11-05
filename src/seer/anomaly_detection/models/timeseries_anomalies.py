@@ -56,7 +56,8 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
         if len(self.matrix_profile) < front_pad_to_len:
             algo_data = [None] * (front_pad_to_len - len(self.matrix_profile))
 
-        for (dist, index, l_index, r_index), flag in zip(self.matrix_profile, self.flags):
+        for i, (dist, index, l_index, r_index) in enumerate(self.matrix_profile):
+            flag = self.original_flags[i] if self.original_flags else "none"
             algo_data.append(
                 {
                     "dist": dist,

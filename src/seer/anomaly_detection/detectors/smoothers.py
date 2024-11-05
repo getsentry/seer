@@ -139,10 +139,7 @@ class MajorityVoteFlagSmoother(FlagSmoother):
             smoothed_flag = self._stream_smooth_flags(flags, vote_threshold, cur_flag)
             return smoothed_flag
 
-        print("Smoothing flags with batch method")
         slices = self._get_anomalous_slices(flags, ad_config.time_period)
-        print(f"Found {len(slices)} slices")
-        print(f"Slices: {slices}")
         for start_idx, end_idx in slices:
             flags[start_idx:end_idx] = self._batch_smooth_flags(
                 flags, start_idx, end_idx, ad_config, smooth_size, vote_threshold
