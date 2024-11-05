@@ -34,9 +34,10 @@ class TestRootCauseStep(unittest.TestCase):
                 repos=[],
                 issue=IssueDetails(id=0, title="", events=[error_event]),
                 issue_summary=IssueSummary(
-                    reason_step_by_step=[],
-                    bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-                    five_to_ten_word_headline="headline",
+                    title="title",
+                    whats_wrong="whats wrong",
+                    trace="trace",
+                    possible_cause="possible cause",
                 ),
             )
         )
@@ -70,9 +71,10 @@ class TestRootCauseStep(unittest.TestCase):
                 repos=[repo],
                 issue=IssueDetails(id=0, title="", events=[error_event]),
                 issue_summary=IssueSummary(
-                    reason_step_by_step=[],
-                    bulleted_summary_of_the_issue_based_on_your_step_by_step_reasoning="summary",
-                    five_to_ten_word_headline="headline",
+                    title="title",
+                    whats_wrong="whats wrong",
+                    trace="trace",
+                    possible_cause="possible cause",
                 ),
                 options=AutofixRequestOptions(comment_on_pr_with_url=pr_url),
             )
