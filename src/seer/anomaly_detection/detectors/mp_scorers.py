@@ -333,7 +333,7 @@ class MPIQRScorer(MPScorer):
         AnomalyFlags
             The adjusted anomaly flag
         """
-        if flag == "none":
+        if flag == "none" or direction == "both":
             return flag
 
         location = location_detector.detect(
@@ -341,8 +341,8 @@ class MPIQRScorer(MPScorer):
         )
         if location is None:
             return flag
-        if direction == "both" and location == PointLocation.NONE:
-            return "none"
+        # if direction == "both" and location == PointLocation.NONE:
+        #     return "none"
         if (direction == "up" and location != PointLocation.UP) or (
             direction == "down" and location != PointLocation.DOWN
         ):
