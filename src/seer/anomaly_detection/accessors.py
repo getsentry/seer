@@ -94,9 +94,15 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     point.anomaly_algo_data
                 )
                 mp.append([dist, idx, l_idx, r_idx])
+                # Default to "none" if original flag is not present
+                if original_flag is None:
+                    original_flag = "none"
                 original_flags.append(original_flag)
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
+
+        if len(original_flags) < len(ts):
+            original_flags = ["none"] * (len(ts) - len(original_flags)) + original_flags
 
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
