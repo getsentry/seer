@@ -4,7 +4,7 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.is_root_cause_obvious import (
@@ -61,7 +61,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             try:
                 response = agent.run(
                     run_config=RunConfig(
-                        model=OpenAiProvider.model("gpt-4o-2024-08-06"),
+                        model=AnthropicProvider.model("claude-3-5-haiku@20241022"),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
