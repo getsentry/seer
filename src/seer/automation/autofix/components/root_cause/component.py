@@ -61,7 +61,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             try:
                 response = agent.run(
                     run_config=RunConfig(
-                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                        model=AnthropicProvider.model("claude-3-5-haiku@20241022"),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
