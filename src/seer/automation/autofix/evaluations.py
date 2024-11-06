@@ -1,3 +1,4 @@
+import logging
 import textwrap
 from typing import Literal, TypedDict, cast
 from xml.etree import ElementTree as ET
@@ -32,6 +33,8 @@ from seer.automation.utils import (
     extract_text_inside_tags,
     extract_xml_element_text,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CodeDiff(PromptXmlModel):
@@ -203,49 +206,43 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     state_after_root_cause = state.get()
     root_cause_step = state_after_root_cause.steps[-1]
 
-    if not isinstance(root_cause_step, RootCauseStepModel):
-        raise ValueError("Expected root cause step")
-
-    if not root_cause_step.causes:
-        return None, None
-
-    cause = root_cause_step.causes[0]
-    cause_id = cause.id
-
-    if not cause.code_context:
-        return None, None
-
-    event_manager = AutofixEventManager(state)
-    event_manager.set_selected_root_cause(
-        AutofixRootCauseUpdatePayload(
-            type=AutofixUpdateType.SELECT_ROOT_CAUSE,
-            cause_id=cause_id,
-        )
-    )
-
-    AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
-
-    state_after_execution = state.get()
-    changes_step = state_after_execution.steps[-1]
-    if not isinstance(changes_step, ChangesStep):
-        raise ValueError("Expected changes step")
-
-    changes = changes_step.changes
-
-    if not changes:
-        return None, None
-
-    diffs: list[str] = []
-    for change in changes:
-        if change.diff_str:
-            diffs.append(change.diff_str)
-
-    root_cause_step = state.get().find_step(key="root_cause_analysis")
-
     if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
-        raise ValueError("Expected root cause step")
+        return None, None
 
-    return "\n".join(diffs), root_cause_step.causes
+    try:
+        cause = root_cause_step.causes[0]
+        cause_id = cause.id
+
+        event_manager = AutofixEventManager(state)
+        event_manager.set_selected_root_cause(
+            AutofixRootCauseUpdatePayload(
+                type=AutofixUpdateType.SELECT_ROOT_CAUSE,
+                cause_id=cause_id,
+            )
+        )
+
+        AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
+
+        state_after_execution = state.get()
+        changes_step = state_after_execution.steps[-1]
+        if not isinstance(changes_step, ChangesStep):
+            return None, root_cause_step.causes
+
+        changes = changes_step.changes
+
+        if not changes:
+            return None, root_cause_step.causes
+
+        diffs: list[str] = []
+        for change in changes:
+            if change.diff_str:
+                diffs.append(change.diff_str)
+
+        return "\n".join(diffs), root_cause_step.causes
+    except Exception as e:
+        logger.exception(f"Error running evaluation: {e}")
+        # Return the root cause step causes anyway to score.
+        return None, root_cause_step.causes
 
 
 @observe(name="Score fix")
