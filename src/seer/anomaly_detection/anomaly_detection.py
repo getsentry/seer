@@ -140,12 +140,24 @@ class AnomalyDetection(BaseModel):
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
+        # Get the original flags from the historic data
+        original_flags = anomalies.original_flags
+        if original_flags is not None and len(original_flags) != len(
+            historic.timeseries.timestamps
+        ):
+            logger.error(
+                "invalid_state",
+                extra={"note": "Original flags and timeseries are not of the same length"},
+            )
+            raise ServerError("Invalid state")
+
         # Run stream detection
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
+            original_flags=original_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
@@ -232,6 +244,7 @@ class AnomalyDetection(BaseModel):
             history_values=historic.values,
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
+            original_flags=anomalies.original_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config

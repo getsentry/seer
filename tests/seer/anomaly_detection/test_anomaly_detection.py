@@ -110,11 +110,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
-                flags=np.array(["anomaly_high_confidence"]),
-                scores=np.array([0.4]),
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps)),
+                scores=np.array([0.4] * len(ts_timestamps)),
                 matrix_profile=dummy_mp,
                 window_size=window_size,
-                thresholds=np.array([0.0]),
+                thresholds=np.array([0.0] * len(ts_timestamps)),
+                original_flags=np.array(["none"] * len(ts_timestamps)),
             ),
             cleanup_config=cleanup_config,
         )
@@ -150,11 +151,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
-                flags=np.array(["anomaly_high_confidence"]),
-                scores=np.array([0.4]),
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps[:100])),
+                scores=np.array([0.4] * len(ts_timestamps[:100])),
                 matrix_profile=dummy_mp,
                 window_size=window_size,
-                thresholds=np.array([0.0]),
+                thresholds=np.array([0.0] * len(ts_timestamps[:100])),
+                original_flags=np.array(["none"] * len(ts_timestamps[:100])),
             ),
             cleanup_config=cleanup_config,
         )
@@ -174,6 +176,31 @@ class TestAnomalyDetection(unittest.TestCase):
             timestamps=np.array([]),
             values=np.array([]),
             anomalies=None,
+        )
+
+        with self.assertRaises(ServerError) as e:
+            AnomalyDetection().detect_anomalies(request=request)
+        assert "Invalid state" in str(e.exception)
+
+        # Test validation of original flags length matching timeseries length
+        mock_query.return_value = DynamicAlert(
+            organization_id=0,
+            project_id=0,
+            external_alert_id=0,
+            config=config,
+            timeseries=MPTimeSeries(
+                timestamps=ts_timestamps,
+                values=ts_values,
+            ),
+            anomalies=MPTimeSeriesAnomalies(
+                flags=["none"] * len(ts_timestamps),
+                scores=[0.0] * len(ts_timestamps),
+                matrix_profile=dummy_mp,
+                window_size=window_size,
+                thresholds=[0.0] * len(ts_timestamps),
+                original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
+            ),
+            cleanup_config=cleanup_config,
         )
 
         with self.assertRaises(ServerError) as e:

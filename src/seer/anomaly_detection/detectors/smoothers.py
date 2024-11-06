@@ -24,9 +24,9 @@ class FlagSmoother(BaseModel, abc.ABC):
         return NotImplemented
 
 
-class MajorityVoteFlagSmoother(FlagSmoother):
+class MajorityVoteBatchFlagSmoother(FlagSmoother):
     """
-    This class smooths flags using majority voting with a dynamic smoothing window size.
+    This class smooths flags using majority voting with a dynamic smoothing window size for batch data.
     """
 
     period_to_smooth_size: dict[int, int] = Field(
@@ -66,7 +66,7 @@ class MajorityVoteFlagSmoother(FlagSmoother):
 
         return slices
 
-    def _smooth_flags(
+    def _batch_smooth_flags(
         self,
         orig_flags: list,
         start_idx: int,
@@ -91,12 +91,11 @@ class MajorityVoteFlagSmoother(FlagSmoother):
         for i in range(start_idx + smooth_size, end_idx):
             values, counts = np.unique(orig_flags[i - smooth_size : i], return_counts=True)
             flag_counts = dict(zip(values, counts))
-            num_anomalous = 0
-            if "anomaly_higher_confidence" in flag_counts:
-                num_anomalous = flag_counts["anomaly_higher_confidence"]
-
-                if num_anomalous / smooth_size >= vote_threshold:
-                    new_flags[i] = "anomaly_higher_confidence"
+            if (
+                "anomaly_higher_confidence" in flag_counts
+                and flag_counts["anomaly_higher_confidence"] / smooth_size >= vote_threshold
+            ):
+                new_flags[i] = "anomaly_higher_confidence"
 
         return new_flags[start_idx:end_idx].tolist()
 
@@ -111,10 +110,61 @@ class MajorityVoteFlagSmoother(FlagSmoother):
         """
         Smooth flags using voting threshold and dynamic window size
         """
-
         slices = self._get_anomalous_slices(flags, ad_config.time_period)
         for start_idx, end_idx in slices:
-            flags[start_idx:end_idx] = self._smooth_flags(
+            flags[start_idx:end_idx] = self._batch_smooth_flags(
                 flags, start_idx, end_idx, ad_config, smooth_size, vote_threshold
             )
         return flags
+
+
+class MajorityVoteStreamFlagSmoother(FlagSmoother):
+    """
+    This class smooths flags using majority voting with a dynamic smoothing window size for stream data
+    """
+
+    stream_smooth_context_sizes: dict[int, int] = Field(
+        default={5: 17, 15: 11, 30: 7, 60: 5},
+        description="History size for stream smoothing based on the function smooth_size = floor(43 / sqrt(time_period))",
+    )
+
+    def _stream_smooth_flags(
+        self,
+        orig_flags: list,
+        ad_config: AnomalyDetectionConfig,
+        vote_threshold: float = 0.5,
+        cur_flag: list = [],
+    ) -> list:
+        """
+        Use original flags to smooth by majority (or threshold) voting with a small window.
+        """
+
+        orig_flags = orig_flags[-self.stream_smooth_context_sizes[ad_config.time_period] :]
+
+        new_flag = cur_flag
+        values, counts = np.unique(orig_flags, return_counts=True)
+        flag_counts = dict(zip(values, counts))
+        if (
+            "anomaly_higher_confidence" in flag_counts
+            and flag_counts["anomaly_higher_confidence"] / len(orig_flags) >= vote_threshold
+        ):
+            new_flag = ["anomaly_higher_confidence"]
+
+        return new_flag
+
+    @sentry_sdk.trace
+    def smooth(
+        self,
+        original_flags: list,
+        ad_config: AnomalyDetectionConfig,
+        smooth_size: int = 0,
+        vote_threshold: float = 0.25,
+        cur_flag: list = [],
+    ) -> list:
+        """
+        Smooth flags using voting threshold and dynamic window size
+        """
+        smoothed_flag = self._stream_smooth_flags(
+            original_flags, ad_config, vote_threshold, cur_flag
+        )
+        return smoothed_flag

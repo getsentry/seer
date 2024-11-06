@@ -139,6 +139,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_values=np.array([1.0, 2.0, 3.0, 4.0]),
             history_mp=np.array([[0.3, 0.3, 0.3, 0.3], [0.4, 0.5, 0.6, 0.7]]),
             window_size=3,
+            original_flags=["none", "none", "none"],
         )
         self.timeseries = TimeSeries(
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])
@@ -209,6 +210,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_values=np.array(history_ts),
             history_mp=history_mp,
             window_size=window_size,
+            original_flags=["none", "none", "none"],
         )
         stream_ts_timestamps = np.array(list(range(1, len(stream_ts) + 1))) + len(history_ts)
         stream_anomalies = stream_detector.detect(
@@ -298,6 +300,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         history_ts = [0.5] * 200
         history_ts_timestamps = np.arange(1, len(history_ts))  # one off error
         stream_ts = [0.5] * 10
+        original_flags = ["none"] * 200
         with self.assertRaises(
             ServerError, msg="History values and timestamps are not of the same length"
         ):
@@ -306,6 +309,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 history_values=np.array(history_ts),
                 history_mp=np.array([0.1, 0.2, 0.3, 0.4]),
                 window_size=3,
+                original_flags=original_flags,
             )
             stream_detector.detect(
                 timeseries=TimeSeries(
