@@ -64,6 +64,9 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
         release=config.SEER_VERSION_SHA,
         environment=config.SENTRY_ENVIRONMENT,
         before_send=before_send,
+        _experiments={
+            "continuous_profiling_auto_start": True,
+        },
     )
 
 
