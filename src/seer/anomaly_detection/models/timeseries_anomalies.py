@@ -47,8 +47,8 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
 
     window_size: int = Field(..., description="Window size used to build the matrix profile")
 
-    original_flags: Optional[list[str]] = Field(
-        None, description="The original flags of the time series"
+    original_flags: list[str | None] = Field(
+        default=[], description="The original flags of the time series"
     )
 
     def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
@@ -57,14 +57,14 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
             algo_data = [None] * (front_pad_to_len - len(self.matrix_profile))
 
         for i, (dist, index, l_index, r_index) in enumerate(self.matrix_profile):
-            flag = self.original_flags[i] if self.original_flags else "none"
+            original_flag = self.original_flags[i] if i < len(self.original_flags) else "none"
             algo_data.append(
                 {
                     "dist": dist,
                     "idx": index,
                     "l_idx": l_index,
                     "r_idx": r_index,
-                    "original_flag": flag,
+                    "original_flag": original_flag,
                 }
             )
 

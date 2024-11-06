@@ -10,7 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
-from seer.anomaly_detection.detectors.smoothers import FlagSmoother
+from seer.anomaly_detection.detectors.smoothers import (
+    MajorityVoteBatchFlagSmoother,
+    MajorityVoteStreamFlagSmoother,
+)
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
@@ -69,7 +72,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-        flag_smoother: FlagSmoother = injected,
+        # flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
@@ -116,7 +119,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             raise ServerError("Failed to score the matrix profile distance")
 
         # Apply smoothing to the flags
-        smoothed_flags = flag_smoother.smooth(
+        batch_flag_smoother = MajorityVoteBatchFlagSmoother()
+        smoothed_flags = batch_flag_smoother.smooth(
             flags=flags_and_scores.flags,
             ad_config=config,
         )
@@ -144,18 +148,14 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         ..., description="Matrix profile of the baseline timeseries."
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
-    history_flags: list[AnomalyFlags | None] = Field(
-        ..., description="Flags of the baseline timeseries."
-    )
-    anomaly_algo_data: list[dict | None] = Field(
-        ..., description="Anomaly algo data of the baseline timeseries."
+    # history_flags: list[AnomalyFlags | None] = Field(
+    #     ..., description="Flags of the baseline timeseries."
+    # )
+    original_flags: list[AnomalyFlags | None] = Field(
+        ..., description="Original flags of the baseline timeseries."
     )
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
-    )
-    stream_history_size: dict[int, int] = Field(
-        default={5: 19, 15: 11, 30: 7, 60: 5},
-        description="History size for stream smoothing based on the function smooth_size = floor(43 / sqrt(time_period))",
     )
 
     @inject
@@ -166,7 +166,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-        flag_smoother: FlagSmoother = injected,
+        # flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
@@ -226,24 +226,26 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 # Use the history size to determine how many points to use for stream smoothing
-                anomaly_algo_data_to_use = self.anomaly_algo_data[
-                    -self.stream_history_size[config.time_period] :
-                ]
+                # anomaly_algo_data_to_use = self.anomaly_algo_data[
+                #     -self.stream_smooth_context_sizes[config.time_period] :
+                # ]
 
                 # The original flags are the flags of the previous points
-                past_original_flags = [
-                    algo_data["original_flag"] if algo_data is not None else "none"
-                    for algo_data in anomaly_algo_data_to_use
-                ]
+                # past_original_flags = [
+                #     algo_data["original_flag"] if algo_data is not None else "none"
+                #     for algo_data in anomaly_algo_data_to_use
+                # ]
 
-                self.anomaly_algo_data.append({"original_flag": flags_and_scores.flags[-1]})
+                # self.anomaly_algo_data.append({"original_flag": flags_and_scores.flags[-1]})
+                self.original_flags.append(flags_and_scores.flags[-1])
+
+                stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
                 # Apply stream smoothing to the newest flag based on the previous original flags
-                smoothed_flags = flag_smoother.smooth(
-                    flags=past_original_flags,
+                smoothed_flags = stream_flag_smoother.smooth(
+                    original_flags=self.original_flags,
                     ad_config=config,
                     vote_threshold=0.4,
-                    stream_smoothing=True,
                     cur_flag=flags_and_scores.flags,
                 )
 

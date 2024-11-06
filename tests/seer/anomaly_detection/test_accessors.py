@@ -125,6 +125,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 matrix_profile=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
                 thresholds=[0.0],
+                original_flags=["none"],
             ),
             anomaly_algo_data={"dummy": 10},
         )

@@ -24,4 +24,5 @@ MinMaxNormalizer = normalizers.MinMaxNormalizer
 
 MPUtils = mp_utils.MPUtils
 FlagSmoother = smoothers.FlagSmoother
-MajorityVoteFlagSmoother = smoothers.MajorityVoteFlagSmoother
+MajorityVoteBatchFlagSmoother = smoothers.MajorityVoteBatchFlagSmoother
+MajorityVoteStreamFlagSmoother = smoothers.MajorityVoteStreamFlagSmoother

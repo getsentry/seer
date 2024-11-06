@@ -83,6 +83,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         mp = []
         ts = []
         values = []
+        original_flags = []
         for point in db_alert.timeseries:
             ts.append(point.timestamp.timestamp)
             values.append(point.value)
@@ -93,6 +94,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     point.anomaly_algo_data
                 )
                 mp.append([dist, idx, l_idx, r_idx])
+                original_flags.append(original_flag)
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
 
@@ -107,6 +109,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             ),
             window_size=window_size,
             thresholds=[],  # Note: thresholds are not stored in the database. They are computed on the fly.
+            original_flags=original_flags,
         )
         return DynamicAlert(
             organization_id=db_alert.organization_id,

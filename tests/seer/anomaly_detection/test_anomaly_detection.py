@@ -110,11 +110,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
-                flags=np.array(["anomaly_higher_confidence"]),
-                scores=np.array([0.4]),
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps)),
+                scores=np.array([0.4] * len(ts_timestamps)),
                 matrix_profile=dummy_mp,
                 window_size=window_size,
-                thresholds=np.array([0.0]),
+                thresholds=np.array([0.0] * len(ts_timestamps)),
+                original_flags=np.array(["none"] * len(ts_timestamps)),
             ),
             cleanup_config=cleanup_config,
         )
@@ -150,11 +151,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 values=ts_values,
             ),
             anomalies=MPTimeSeriesAnomalies(
-                flags=np.array(["anomaly_higher_confidence"]),
-                scores=np.array([0.4]),
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps[:100])),
+                scores=np.array([0.4] * len(ts_timestamps[:100])),
                 matrix_profile=dummy_mp,
                 window_size=window_size,
-                thresholds=np.array([0.0]),
+                thresholds=np.array([0.0] * len(ts_timestamps[:100])),
+                original_flags=np.array(["none"] * len(ts_timestamps[:100])),
             ),
             cleanup_config=cleanup_config,
         )

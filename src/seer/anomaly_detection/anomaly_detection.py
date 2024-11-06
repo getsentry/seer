@@ -140,30 +140,38 @@ class AnomalyDetection(BaseModel):
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
+        print("lens")
+        print(len(historic.timeseries.timestamps))
+        print(len(anomalies.original_flags))
+        # Get the original flags from the historic data
+        original_flags = anomalies.original_flags
+        if original_flags is not None and len(original_flags) != len(
+            historic.timeseries.timestamps
+        ):
+            logger.error(
+                "invalid_state",
+                extra={"note": "Original flags and timeseries are not of the same length"},
+            )
+            raise ServerError("Invalid state")
+
         # Run stream detection
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
-            history_flags=anomalies.flags,
-            anomaly_algo_data=anomalies.get_anomaly_algo_data(len(historic.timeseries.timestamps)),
+            original_flags=original_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
         )
-
-        # Get current point's anomaly data and track original flag
-        curr_algo_data = streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0]
-        if streamed_anomalies.original_flags and curr_algo_data is not None:
-            curr_algo_data["original_flag"] = streamed_anomalies.original_flags[-1]
 
         # Save new data point
         alert_data_accessor.save_timepoint(
             external_alert_id=alert.id,
             timepoint=ts_external[0],
             anomaly=streamed_anomalies,
-            anomaly_algo_data=curr_algo_data,
+            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0],
         )
 
         # Delayed import due to circular imports
@@ -233,14 +241,15 @@ class AnomalyDetection(BaseModel):
         batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(historic, config)
 
+        print("anomalies original flags")
+        print(anomalies.original_flags)
         # Run stream detection on current data
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
             history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
-            history_flags=anomalies.flags,
-            anomaly_algo_data=anomalies.get_anomaly_algo_data(len(historic.timestamps)),
+            original_flags=anomalies.original_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
