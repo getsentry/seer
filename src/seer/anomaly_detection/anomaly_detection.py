@@ -241,8 +241,6 @@ class AnomalyDetection(BaseModel):
         batch_detector = MPBatchAnomalyDetector()
         anomalies = batch_detector.detect(historic, config)
 
-        print("anomalies original flags")
-        print(anomalies.original_flags)
         # Run stream detection on current data
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,

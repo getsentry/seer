@@ -37,7 +37,7 @@ class TestMajorityVoteBatchFlagSmoother(unittest.TestCase):
             "none",
             "none",
         ]
-        result = self.smoother.smooth(flags, self.ad_config, stream_smoothing=False)
+        result = self.smoother.smooth(flags, self.ad_config)
         assert result == [
             "none",
             "anomaly_higher_confidence",

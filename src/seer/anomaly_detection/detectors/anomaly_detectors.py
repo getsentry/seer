@@ -72,7 +72,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-        # flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
@@ -225,18 +224,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
 
-                # Use the history size to determine how many points to use for stream smoothing
-                # anomaly_algo_data_to_use = self.anomaly_algo_data[
-                #     -self.stream_smooth_context_sizes[config.time_period] :
-                # ]
-
-                # The original flags are the flags of the previous points
-                # past_original_flags = [
-                #     algo_data["original_flag"] if algo_data is not None else "none"
-                #     for algo_data in anomaly_algo_data_to_use
-                # ]
-
-                # self.anomaly_algo_data.append({"original_flag": flags_and_scores.flags[-1]})
                 self.original_flags.append(flags_and_scores.flags[-1])
 
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()

@@ -124,7 +124,7 @@ class MajorityVoteStreamFlagSmoother(FlagSmoother):
     """
 
     stream_smooth_context_sizes: dict[int, int] = Field(
-        default={5: 19, 15: 11, 30: 7, 60: 5},
+        default={5: 17, 15: 11, 30: 7, 60: 5},
         description="History size for stream smoothing based on the function smooth_size = floor(43 / sqrt(time_period))",
     )
 
@@ -158,7 +158,7 @@ class MajorityVoteStreamFlagSmoother(FlagSmoother):
         original_flags: list,
         ad_config: AnomalyDetectionConfig,
         smooth_size: int = 0,
-        vote_threshold: float = 0.5,
+        vote_threshold: float = 0.25,
         cur_flag: list = [],
     ) -> list:
         """
