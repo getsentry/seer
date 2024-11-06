@@ -219,6 +219,55 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             self.assertEqual(db_dynamic_alert.timeseries[0].timestamp.timestamp(), point1.timestamp)
             self.assertAlmostEqual(db_dynamic_alert.timeseries[0].value, point1.value)
 
+    def test_original_flags_padding(self):
+        """Test that original_flags gets padded with 'none' even when there is missing original flag data"""
+        organization_id = 100
+        project_id = 101
+        external_alert_id = 10
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+
+        points = [TimeSeriesPoint(timestamp=100.0 * i, value=42.42) for i in range(5)]
+
+        # Create anomalies with only 2 original flags - shorter than timeseries
+        anomalies = MPTimeSeriesAnomalies(
+            flags=["none"] * 5,
+            scores=[1.0] * 5,
+            matrix_profile=np.array([[1.0, 10, -1, -1]] * 5),
+            window_size=1,
+            thresholds=[0.0] * 5,
+            original_flags=["none", "none"],
+        )
+
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=points,
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 3},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
+        self.assertIsNotNone(alert_from_db)
+
+        self.assertEqual(
+            len(alert_from_db.timeseries.timestamps),
+            len(alert_from_db.anomalies.original_flags),
+            "Timeseries and original_flags should be same length",
+        )
+
+        expected_flags = ["none"] * 3 + ["none", "none"]
+        self.assertEqual(
+            alert_from_db.anomalies.original_flags,
+            expected_flags,
+            "Original flags should be padded with 'none' at the start",
+        )
+
     def test_queue_data_purge_flag(self):
 
         # Create and save alert
