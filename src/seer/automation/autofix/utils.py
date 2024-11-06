@@ -1,33 +1,9 @@
-import difflib
 import random
-import re
-from functools import lru_cache
 
 from langfuse.decorators import observe
+from rapidfuzz import fuzz, process
 
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
-
-
-@lru_cache(maxsize=1024)
-def compute_similarity_cached(text1: str, text2: str, ignore_whitespace=True) -> float:
-    """
-    This function computes the similarity between two pieces of text using the difflib.SequenceMatcher class.
-
-    difflib.SequenceMatcher uses the Ratcliff/Obershelp algorithm: it computes the doubled number of matching characters divided by the total number of characters in the two strings.
-
-    Parameters:
-    text1 (str): The first piece of text.
-    text2 (str): The second piece of text.
-    ignore_whitespace (bool): If True, ignores whitespace when comparing the two pieces of text.
-
-    Returns:
-    float: The similarity ratio between the two pieces of text.
-    """
-    if ignore_whitespace:
-        text1 = re.sub(r"\s+", "", text1)
-        text2 = re.sub(r"\s+", "", text2)
-
-    return difflib.SequenceMatcher(None, text1, text2).ratio()
 
 
 def get_last_non_empty_line(text: str) -> str:
@@ -53,17 +29,13 @@ def find_original_snippet(
 ) -> tuple[str, int, int] | None:
     """
     This function finds the original snippet of code in a file given a snippet and the file contents.
+    Uses rapidfuzz for fast and accurate fuzzy string matching.
 
     Parameters:
     snippet (str): A string containing a snippet of code.
     file_contents (str): A string containing the contents of a file.
     threshold (float): The similarity threshold for the entire snippet.
     initial_line_threshold (float): The similarity threshold for the initial line to start searching.
-
-    The function first searches for a line in the file that matches the first non-empty line of the snippet
-    with a similarity above the initial_line_threshold. It then continues from that point to match the
-    rest of the snippet, handling ellipsis cases and using the compute_similarity function to compare
-    the accumulated snippet with the file contents.
 
     Returns:
     tuple[str, int, int] | None: A tuple containing the original snippet from the file, start index, and end index,
@@ -78,35 +50,46 @@ def find_original_snippet(
     # Find the first non-empty line in the snippet
     first_snippet_line = next((line for line in snippet_lines if line.strip()), "")
 
-    # Search for a matching initial line in the file
-    for start_index, file_line in enumerate(file_lines):
-        if compute_similarity_cached(first_snippet_line, file_line) >= initial_line_threshold:
-            accumulated_snippet = []
+    best_match = None
+    best_score = -1.0
+
+    # Find all potential matches
+    matches = process.extract(
+        first_snippet_line,
+        file_lines,
+        scorer=fuzz.ratio,  # Use exact ratio for first line
+        score_cutoff=initial_line_threshold * 100,
+        limit=None,
+    )
+
+    for file_line, score, start_index in matches:
+        # For each potential starting point, try to match the full snippet
+        candidate_end = min(start_index + len(snippet_lines) + 5, len(file_lines))
+        candidate_snippet = "\n".join(file_lines[start_index:candidate_end])
+
+        # Compare the full snippets using token_set_ratio for better matching
+        full_score = fuzz.token_set_ratio(snippet, candidate_snippet) / 100.0
+
+        if full_score > best_score and full_score >= threshold:
+            # Find the exact end index by matching the content
+            actual_end = start_index
             snippet_index = 0
-            file_index = start_index
 
-            while snippet_index < len(snippet_lines) and file_index < len(file_lines):
-                file_line = file_lines[file_index].strip()
-
-                if not file_line:
-                    file_index += 1
+            while actual_end < len(file_lines) and snippet_index < len(snippet_lines):
+                if not file_lines[actual_end].strip():
+                    actual_end += 1
                     continue
 
-                accumulated_snippet.append(file_line)
-                similarity = compute_similarity_cached(
-                    "\n".join(snippet_lines[: snippet_index + 1]), "\n".join(accumulated_snippet)
-                )
+                if snippet_index == len(snippet_lines):
+                    break
 
-                if similarity >= threshold:
-                    snippet_index += 1
+                actual_end += 1
+                snippet_index += 1
 
-                file_index += 1
+            best_score = full_score
+            best_match = ("\n".join(file_lines[start_index:actual_end]), start_index, actual_end)
 
-            if snippet_index == len(snippet_lines):
-                # All lines in the snippet have been matched
-                return "\n".join(file_lines[start_index:file_index]), start_index, file_index
-
-    return None
+    return best_match
 
 
 def sanitize_branch_name(title: str) -> str:
