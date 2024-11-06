@@ -171,7 +171,6 @@ class TestMajorityVoteStreamFlagSmoother(unittest.TestCase):
 
         self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
 
-    # TODO: Add tests for stream smoother
     def test_stream_smooth_no_anomalies(self):
         flags = ["none"] * 5
         result = self.smoother.smooth(flags, self.ad_config, vote_threshold=0.5)

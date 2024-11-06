@@ -140,9 +140,6 @@ class AnomalyDetection(BaseModel):
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
-        print("lens")
-        print(len(historic.timeseries.timestamps))
-        print(len(anomalies.original_flags))
         # Get the original flags from the historic data
         original_flags = anomalies.original_flags
         if original_flags is not None and len(original_flags) != len(

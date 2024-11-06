@@ -140,8 +140,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_mp=np.array([[0.3, 0.3, 0.3, 0.3], [0.4, 0.5, 0.6, 0.7]]),
             window_size=3,
             original_flags=["none", "none", "none"],
-            # history_flags=[None, None, None],
-            # anomaly_algo_data=[None, None, None],
         )
         self.timeseries = TimeSeries(
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])

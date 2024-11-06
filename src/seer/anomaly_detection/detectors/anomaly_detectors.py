@@ -147,9 +147,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         ..., description="Matrix profile of the baseline timeseries."
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
-    # history_flags: list[AnomalyFlags | None] = Field(
-    #     ..., description="Flags of the baseline timeseries."
-    # )
     original_flags: list[AnomalyFlags | None] = Field(
         ..., description="Original flags of the baseline timeseries."
     )
@@ -165,7 +162,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-        # flag_smoother: FlagSmoother = injected,
     ) -> MPTimeSeriesAnomalies:
         """
         This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
@@ -203,7 +199,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             streamed_mp: list[list[float]] = []
             thresholds: list[float] = []
             for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
-
                 # Update the stumpi stream processor with new data
                 stream.update(cur_val)
 
@@ -232,7 +227,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 smoothed_flags = stream_flag_smoother.smooth(
                     original_flags=self.original_flags,
                     ad_config=config,
-                    vote_threshold=0.4,
+                    vote_threshold=0.3,
                     cur_flag=flags_and_scores.flags,
                 )
 
