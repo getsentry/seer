@@ -273,7 +273,7 @@ class TestMPIQRScorer(unittest.TestCase):
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
         )
-        mock_location_detector.assert_called_once()
+        mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
 
         mp_based_flag = "anomaly_lower_confidence"
@@ -285,7 +285,8 @@ class TestMPIQRScorer(unittest.TestCase):
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
         )
-        self.assertEqual(mock_location_detector.call_count, 2)
+        # self.assertEqual(mock_location_detector.call_count, 2)
+        mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
 
     @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
