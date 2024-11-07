@@ -137,6 +137,28 @@ class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
         return CodingOutput.model_validate(self.model_dump())
 
 
+class SimpleChangeXml(PromptXmlModel, tag="file_change"):
+    file_path: str = attr()
+    repo_name: str = attr()
+    commit_message: str = element()
+    description: str = element()
+    unified_diff: str = element()
+
+    def to_plan_task_model(self):
+        return PlanTaskPromptXml(
+            file_path=self.file_path,
+            repo_name=self.repo_name,
+            type="file_change",
+            diff=self.unified_diff,
+            description=self.description,
+            commit_message=self.commit_message,
+        )
+
+
+class SimpleChangeOutputXml(PromptXmlModel, tag="output"):
+    file_changes: list[SimpleChangeXml]
+
+
 class CodingOutput(BaseComponentOutput):
     tasks: list[PlanTaskPromptXml]
 

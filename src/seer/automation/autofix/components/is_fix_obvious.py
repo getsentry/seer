@@ -19,7 +19,7 @@ class IsFixObviousRequest(BaseComponentRequest):
 
 
 class IsFixObviousOutput(BaseComponentOutput):
-    is_fix_clear: bool
+    is_single_simple_change: bool
 
 
 class IsFixObviousPrompts:
@@ -32,14 +32,16 @@ class IsFixObviousPrompts:
         return (
             textwrap.dedent(
                 """\
-            You are an exceptional principal engineer that is amazing at fixing any issue. We have an issue in our codebase and its root cause is described below, and you've already looked at some code files. Are the code changes needed to fix the issue clear from the details below? Or does it require searching for more information around the codebase?
+                Here is an issue in our codebase:
 
-            {event_details}
+                {event_details}
 
-            The root cause of the issue has been identified and context about the issue has been provided:
-            {task_str}
+                The root cause of the issue has been identified and context about the issue has been provided:
+                {task_str}
 
-            {fix_instruction}"""
+                {fix_instruction}
+
+                Is the code change simple and exists in only a single file?"""
             )
             .format(
                 event_details=event_details.format_event(),
@@ -60,12 +62,17 @@ class IsFixObviousComponent(BaseComponent[IsFixObviousRequest, IsFixObviousOutpu
         self, request: IsFixObviousRequest, llm_client: LlmClient = injected
     ) -> IsFixObviousOutput | None:
         output = llm_client.generate_structured(
-            prompt=IsFixObviousPrompts.format_default_msg(
-                event_details=request.event_details,
-                task_str=request.task_str,
-                fix_instruction=request.fix_instruction,
-            ),
-            messages=request.memory,
+            messages=[
+                Message(
+                    role="user",
+                    content=IsFixObviousPrompts.format_default_msg(
+                        event_details=request.event_details,
+                        task_str=request.task_str,
+                        fix_instruction=request.fix_instruction,
+                    ),
+                ),
+                *request.memory,
+            ],
             model=OpenAiProvider.model("gpt-4o-mini"),
             response_format=IsFixObviousOutput,
         )
@@ -75,5 +82,5 @@ class IsFixObviousComponent(BaseComponent[IsFixObviousRequest, IsFixObviousOutpu
             cur.usage += output.metadata.usage
 
         if data is None:
-            return IsFixObviousOutput(is_fix_clear=False)
+            return IsFixObviousOutput(is_single_simple_change=False)
         return data
