@@ -119,8 +119,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         if not response.message.content:
             return None, None
 
-        print("response.message.content", response.message.content)
-
         output = SimpleChangeOutputXml.from_xml(
             f"<output>{escape_multi_xml(response.message.content, ['unified_diff', 'description', 'commit_message'])}</output>"
         )
