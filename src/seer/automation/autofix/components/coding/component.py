@@ -1,11 +1,11 @@
 import logging
-from typing import TypedDict
 
 from langfuse.decorators import observe
+from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmClient
+from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -13,11 +13,9 @@ from seer.automation.autofix.components.coding.models import (
     CodingOutput,
     CodingRequest,
     FileMissingObj,
-    FuzzyDiffChunk,
     PlanStepsPromptXml,
     RootCausePlanTaskPromptXml,
     SimpleChangeOutputXml,
-    SimpleChangeXml,
 )
 from seer.automation.autofix.components.coding.prompts import CodingPrompts
 from seer.automation.autofix.components.coding.utils import (
@@ -25,16 +23,10 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_create,
     task_to_file_delete,
 )
-from seer.automation.autofix.components.is_fix_obvious import (
-    IsFixObviousComponent,
-    IsFixObviousOutput,
-    IsFixObviousRequest,
-)
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
-from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
 from seer.dependency_injection import inject, injected
 from seer.langfuse import append_langfuse_observation_metadata, append_langfuse_trace_tags
@@ -125,7 +117,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         )
 
         if not response.message.content:
-            return None
+            return None, None
+
+        print("response.message.content", response.message.content)
 
         output = SimpleChangeOutputXml.from_xml(
             f"<output>{escape_multi_xml(response.message.content, ['unified_diff', 'description', 'commit_message'])}</output>"
@@ -138,12 +132,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             response.message,
         )
 
-    @observe(name="Simple Check")
-    def _simple_check(self, request: CodingRequest, task_str: str) -> tuple[bool, list[Message]]:
-        is_simple = False
-        memory = [message for message in request.initial_memory]
+    def _prefill_initial_memory(self, request: CodingRequest) -> list[Message]:
+        memory: list[Message] = []
 
-        if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem) and not memory:
+        if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
             expanded_files_messages = []
             relevant_files = [
                 {"file_path": context.snippet.file_path, "repo_name": context.snippet.repo_name}
@@ -180,19 +172,60 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             with self.context.state.update() as cur:
                 cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
 
-            if expanded_files_messages and not request.initial_memory:
-                is_obvious: IsFixObviousOutput | None = IsFixObviousComponent(self.context).invoke(
-                    IsFixObviousRequest(
-                        event_details=request.event_details,
-                        task_str=task_str,
-                        fix_instruction=request.fix_instruction,
-                        memory=expanded_files_messages,
-                    )
-                )
-                if is_obvious and is_obvious.is_single_simple_change:
-                    is_simple = True
+        return memory
 
-        return is_simple, memory
+    @observe(name="Is Obvious")
+    @ai_track(description="Is Obvious")
+    @inject
+    def _is_obvious(
+        self,
+        request: CodingRequest,
+        memory: list[Message],
+        task_str: str,
+        llm_client: LlmClient = injected,
+    ) -> bool:
+        if memory:
+
+            class IsObviousOutput(BaseModel):
+                is_single_simple_change: bool
+
+            output = llm_client.generate_structured(
+                messages=memory,
+                prompt=CodingPrompts.format_is_obvious_msg(
+                    event_details=request.event_details,
+                    task_str=task_str,
+                    fix_instruction=request.fix_instruction,
+                ),
+                model=OpenAiProvider.model("gpt-4o-mini"),
+                response_format=IsObviousOutput,
+            )
+
+            return output.parsed.is_single_simple_change
+
+        return False
+
+    @observe(name="Feedback Check")
+    @ai_track(description="Feedback Check")
+    @inject
+    def _is_feedback_obvious(self, memory: list[Message], llm_client: LlmClient = injected) -> bool:
+        if memory:
+
+            class NeedToSearchCodebaseOutput(BaseModel):
+                need_to_search_codebase: bool
+
+            output = llm_client.generate_structured(
+                messages=memory,
+                prompt="Given the above instruction, do you need to search the codebase for more context or have an immediate answer?",
+                model=OpenAiProvider.model("gpt-4o-mini"),
+                response_format=NeedToSearchCodebaseOutput,
+            )
+
+            with self.context.state.update() as cur:
+                cur.usage += output.metadata.usage
+
+            return not output.parsed.need_to_search_codebase
+
+        return False
 
     @observe(name="Plan+Code")
     @ai_track(description="Plan+Code")
@@ -206,7 +239,15 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 else request.root_cause_and_fix
             )
 
-            is_simple, memory = self._simple_check(request, task_str)
+            memory = request.initial_memory
+
+            is_obvious = False
+
+            if not memory:
+                memory = self._prefill_initial_memory(request)
+                is_obvious = self._is_obvious(request, memory, task_str)
+            else:
+                is_obvious = self._is_feedback_obvious(memory)
 
             agent = AutofixAgent(
                 tools=tools.get_tools(),
@@ -216,29 +257,33 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 name="Plan+Code",
             )
 
-            if is_simple:
+            if is_obvious:
                 coding_output, message = self._handle_simple_fix(request, task_str, memory)
+                if not coding_output or not message:
+                    raise ValueError("Failed to handle simple fix")
+
                 agent.memory.append(message)
+
+                self.context.store_memory("plan_and_code", agent.memory)
             else:
                 state = self.context.state.get()
 
-                agent.memory.insert(
-                    0,
-                    Message(
-                        role="user",
-                        content=CodingPrompts.format_fix_discovery_msg(
-                            event=request.event_details.format_event(),
-                            task_str=task_str,
-                            summary=request.summary,
-                            repo_names=[repo.full_name for repo in state.request.repos],
-                            instruction=request.instruction,
-                            fix_instruction=request.fix_instruction,
-                            has_tools=True,
+                if not request.initial_memory:
+                    agent.memory.insert(
+                        0,
+                        Message(
+                            role="user",
+                            content=CodingPrompts.format_fix_discovery_msg(
+                                event=request.event_details.format_event(),
+                                task_str=task_str,
+                                summary=request.summary,
+                                repo_names=[repo.full_name for repo in state.request.repos],
+                                instruction=request.instruction,
+                                fix_instruction=request.fix_instruction,
+                                has_tools=True,
+                            ),
                         ),
-                    ),
-                    # if not request.initial_memory
-                    # else None
-                )
+                    )
 
                 response = agent.run(
                     run_config=RunConfig(
@@ -263,7 +308,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                         memory_storage_key="plan_and_code",
                         run_name="Code",
-                        has_tools=True,
                     ),
                 )
 

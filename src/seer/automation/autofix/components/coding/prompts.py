@@ -3,6 +3,7 @@ from typing import Optional
 
 from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanStepsPromptXml
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
+from seer.automation.models import EventDetails
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -11,7 +12,7 @@ class CodingPrompts:
     def format_system_msg(has_tools: bool):
         if has_tools:
             return textwrap.dedent(
-                f"""\
+                """\
                 You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
 
                 You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
@@ -22,7 +23,7 @@ class CodingPrompts:
             )
         else:
             return textwrap.dedent(
-                f"""\
+                """\
                 You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
 
                 # Guidelines:
@@ -219,3 +220,31 @@ class CodingPrompts:
             text += f"The following files already exist: {', '.join(existing_files)}\n"
 
         return text
+
+    @staticmethod
+    def format_is_obvious_msg(
+        event_details: EventDetails,
+        task_str: str,
+        fix_instruction: str | None,
+    ):
+        return (
+            textwrap.dedent(
+                """\
+                Here is an issue in our codebase:
+
+                {event_details}
+
+                The root cause of the issue has been identified and context about the issue has been provided:
+                {task_str}
+
+                {fix_instruction}
+
+                Is the code change simple and exists in only a single file?"""
+            )
+            .format(
+                event_details=event_details.format_event(),
+                task_str=task_str,
+                fix_instruction=fix_instruction if fix_instruction else "",
+            )
+            .strip()
+        )
