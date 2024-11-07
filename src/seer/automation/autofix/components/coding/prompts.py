@@ -3,22 +3,32 @@ from typing import Optional
 
 from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanStepsPromptXml
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
+from seer.automation.models import EventDetails
 from seer.automation.summarize.issue import IssueSummary
 
 
 class CodingPrompts:
     @staticmethod
     def format_system_msg(has_tools: bool):
-        return textwrap.dedent(
-            f"""\
-            You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
+        if has_tools:
+            return textwrap.dedent(
+                """\
+                You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
 
-            {"" if not has_tools else "You do not have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets."}
+                You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
 
-            # Guidelines:
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
-            - You also MUST think step-by-step before giving the final answer."""
-        )
+                # Guidelines:
+                - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+                - You also MUST think step-by-step before giving the final answer."""
+            )
+        else:
+            return textwrap.dedent(
+                """\
+                You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
+
+                # Guidelines:
+                - You also MUST think step-by-step before giving the final answer."""
+            )
 
     @staticmethod
     def format_fix_discovery_msg(
@@ -115,6 +125,70 @@ class CodingPrompts:
         )
 
     @staticmethod
+    def format_single_simple_change_msg(
+        *,
+        event: str,
+        task_str: str,
+        repo_names: list[str],
+        instruction: str | None,
+        fix_instruction: str | None,
+        summary: Optional[IssueSummary] = None,
+    ):
+        return textwrap.dedent(
+            """\
+            {repo_names_str}
+            Given the issue: {summary_str}
+            {event_str}
+
+            {instruction_str}
+            The root cause of the issue has been identified and context about the issue has been provided:
+            {task_str}
+
+            # Your goal: Write the exact code changes in a unified diff format to fix the issue.
+            Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue.
+            {fix_instruction_str}
+            Think step by step, when ready with your final answer, detail the precise changes to make to fix the issue.
+
+            Provide your file_changes, each inside a <file_change></file_change> tag. Follow the below format strictly:
+            <file_change file_path="path/to/file.py" repo_name="repo_name">
+            <commit_message>Provide a commit message that describes the change you are making</commit_message>
+            <description>Provide a detailed description of the changes you are making</description>
+            <unified_diff>
+            --- a/path/to/file.py
+            +++ b/path/to/file.py
+            @@ -1,3 +1,3 @@
+                return 'fab'
+                y = 2
+                x = 1
+            -def foo():
+            +def foo():
+                return 'foo'
+                def bar():
+                return 'bar'
+            </unified_diff>
+            </file_change>
+
+            <file_change>
+            ...
+            </file_change>
+
+            # Guidelines:
+            - Each file change must be a separate step and be explicit and clear.
+              - You MUST include exact file paths for each change you provide.
+            - No placeholders are allowed, the changes must be clear and detailed.
+            - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete changes.
+            - Think step-by-step before giving the final answer.
+            - Provide both the high-level plan and the exact code changes needed."""
+        ).format(
+            repo_names_str=", ".join(repo_names),
+            summary_str=f"Summary: {summary}" if summary else "",
+            event_str=event,
+            task_str=task_str,
+            instruction_str=f"Instruction: {instruction}" if instruction else "",
+            fix_instruction_str=f"Fix instruction: {fix_instruction}" if fix_instruction else "",
+        )
+
+    @staticmethod
     def format_incorrect_diff_fixer(
         file_path: str, diff_chunks: list[FuzzyDiffChunk], file_content: str
     ):
@@ -146,3 +220,31 @@ class CodingPrompts:
             text += f"The following files already exist: {', '.join(existing_files)}\n"
 
         return text
+
+    @staticmethod
+    def format_is_obvious_msg(
+        event_details: EventDetails,
+        task_str: str,
+        fix_instruction: str | None,
+    ):
+        return (
+            textwrap.dedent(
+                """\
+                Here is an issue in our codebase:
+
+                {event_details}
+
+                The root cause of the issue has been identified and context about the issue has been provided:
+                {task_str}
+
+                {fix_instruction}
+
+                Is the code change simple and exists in only a single file?"""
+            )
+            .format(
+                event_details=event_details.format_event(),
+                task_str=task_str,
+                fix_instruction=fix_instruction if fix_instruction else "",
+            )
+            .strip()
+        )

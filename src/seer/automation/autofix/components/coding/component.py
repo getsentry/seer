@@ -1,10 +1,11 @@
 import logging
 
 from langfuse.decorators import observe
+from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmClient
+from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -14,16 +15,13 @@ from seer.automation.autofix.components.coding.models import (
     FileMissingObj,
     PlanStepsPromptXml,
     RootCausePlanTaskPromptXml,
+    SimpleChangeOutputXml,
 )
 from seer.automation.autofix.components.coding.prompts import CodingPrompts
 from seer.automation.autofix.components.coding.utils import (
     task_to_file_change,
     task_to_file_create,
     task_to_file_delete,
-)
-from seer.automation.autofix.components.is_fix_obvious import (
-    IsFixObviousComponent,
-    IsFixObviousRequest,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
@@ -90,18 +88,147 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             for change in changes:
                 self._append_file_change(repo_client.repo_external_id, change)
 
+    @observe(name="Simple fixer")
+    @ai_track(description="Simple fixer")
+    @inject
+    def _handle_simple_fix(
+        self,
+        request: CodingRequest,
+        task_str: str,
+        memory: list[Message],
+        llm_client: LlmClient = injected,
+    ):
+        state = self.context.state.get()
+
+        response = llm_client.generate_text(
+            model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+            system_prompt=CodingPrompts.format_system_msg(has_tools=False),
+            messages=memory,
+            prompt=CodingPrompts.format_single_simple_change_msg(
+                event=request.event_details.format_event(),
+                task_str=task_str,
+                summary=request.summary,
+                repo_names=[repo.full_name for repo in state.request.repos],
+                instruction=request.instruction,
+                fix_instruction=request.fix_instruction,
+            ),
+            temperature=0.0,
+            run_name="Simple fixer",
+        )
+
+        if not response.message.content:
+            return None, None
+
+        output = SimpleChangeOutputXml.from_xml(
+            f"<output>{escape_multi_xml(response.message.content, ['unified_diff', 'description', 'commit_message'])}</output>"
+        )
+
+        return (
+            CodingOutput(
+                tasks=[file_change.to_plan_task_model() for file_change in output.file_changes]
+            ),
+            response.message,
+        )
+
+    def _prefill_initial_memory(self, request: CodingRequest) -> list[Message]:
+        memory: list[Message] = []
+
+        if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
+            expanded_files_messages = []
+            relevant_files = [
+                {"file_path": context.snippet.file_path, "repo_name": context.snippet.repo_name}
+                for context in (
+                    request.root_cause_and_fix.code_context
+                    if request.root_cause_and_fix.code_context
+                    else []
+                )
+                if context.snippet
+            ]
+
+            for file in relevant_files:
+                file_content = (
+                    self.context.get_file_contents(
+                        path=file["file_path"], repo_name=file["repo_name"]
+                    )
+                    if file["file_path"]
+                    else None
+                )
+                if file_content:
+                    agent_message = Message(
+                        role="assistant",
+                        content=f"Expand document: {file['file_path']} in {file['repo_name']}",
+                    )
+                    user_message = Message(
+                        role="user",
+                        content=file_content,
+                    )
+                    memory.append(agent_message)
+                    memory.append(user_message)
+                    expanded_files_messages.append(agent_message)
+                    expanded_files_messages.append(user_message)
+
+            with self.context.state.update() as cur:
+                cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
+
+        return memory
+
+    @observe(name="Is Obvious")
+    @ai_track(description="Is Obvious")
+    @inject
+    def _is_obvious(
+        self,
+        request: CodingRequest,
+        memory: list[Message],
+        task_str: str,
+        llm_client: LlmClient = injected,
+    ) -> bool:
+        if memory:
+
+            class IsObviousOutput(BaseModel):
+                is_single_simple_change: bool
+
+            output = llm_client.generate_structured(
+                messages=memory,
+                prompt=CodingPrompts.format_is_obvious_msg(
+                    event_details=request.event_details,
+                    task_str=task_str,
+                    fix_instruction=request.fix_instruction,
+                ),
+                model=OpenAiProvider.model("gpt-4o-mini"),
+                response_format=IsObviousOutput,
+            )
+
+            return output.parsed.is_single_simple_change
+
+        return False
+
+    @observe(name="Feedback Check")
+    @ai_track(description="Feedback Check")
+    @inject
+    def _is_feedback_obvious(self, memory: list[Message], llm_client: LlmClient = injected) -> bool:
+        if memory:
+
+            class NeedToSearchCodebaseOutput(BaseModel):
+                need_to_search_codebase: bool
+
+            output = llm_client.generate_structured(
+                messages=memory,
+                prompt="Given the above instruction, do you need to search the codebase for more context or have an immediate answer?",
+                model=OpenAiProvider.model("gpt-4o-mini"),
+                response_format=NeedToSearchCodebaseOutput,
+            )
+
+            with self.context.state.update() as cur:
+                cur.usage += output.metadata.usage
+
+            return not output.parsed.need_to_search_codebase
+
+        return False
+
     @observe(name="Plan+Code")
     @ai_track(description="Plan+Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         with BaseTools(self.context) as tools:
-            agent = AutofixAgent(
-                tools=tools.get_tools(),
-                config=AgentConfig(interactive=True),
-                memory=request.initial_memory,
-                context=self.context,
-                name="Plan+Code",
-            )
-
             task_str = (
                 RootCausePlanTaskPromptXml.from_root_cause(
                     request.root_cause_and_fix
@@ -110,115 +237,91 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 else request.root_cause_and_fix
             )
 
-            has_tools = True
+            memory = request.initial_memory
 
-            if (
-                isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
-                and not request.initial_memory
-            ):
-                expanded_files_messages = []
-                relevant_files = [
-                    {"file_path": context.snippet.file_path, "repo_name": context.snippet.repo_name}
-                    for context in (
-                        request.root_cause_and_fix.code_context
-                        if request.root_cause_and_fix.code_context
-                        else []
-                    )
-                    if context.snippet
-                ]
-                for file in relevant_files:
-                    file_content = (
-                        self.context.get_file_contents(
-                            path=file["file_path"], repo_name=file["repo_name"]
-                        )
-                        if file["file_path"]
-                        else None
-                    )
-                    if file_content:
-                        agent_message = Message(
-                            role="assistant",
-                            content=f"Expand document: {file['file_path']} in {file['repo_name']}",
-                        )
-                        user_message = Message(
+            is_obvious = False
+
+            if not memory:
+                memory = self._prefill_initial_memory(request)
+                is_obvious = self._is_obvious(request, memory, task_str)
+            else:
+                is_obvious = self._is_feedback_obvious(memory)
+
+            agent = AutofixAgent(
+                tools=tools.get_tools(),
+                config=AgentConfig(interactive=True),
+                memory=memory,
+                context=self.context,
+                name="Plan+Code",
+            )
+
+            if is_obvious:
+                coding_output, message = self._handle_simple_fix(request, task_str, memory)
+                if not coding_output or not message:
+                    raise ValueError("Failed to handle simple fix")
+
+                agent.memory.append(message)
+
+                self.context.store_memory("plan_and_code", agent.memory)
+            else:
+                state = self.context.state.get()
+
+                if not request.initial_memory:
+                    agent.memory.insert(
+                        0,
+                        Message(
                             role="user",
-                            content=file_content,
-                        )
-                        agent.memory.append(agent_message)
-                        agent.memory.append(user_message)
-                        expanded_files_messages.append(agent_message)
-                        expanded_files_messages.append(user_message)
+                            content=CodingPrompts.format_fix_discovery_msg(
+                                event=request.event_details.format_event(),
+                                task_str=task_str,
+                                summary=request.summary,
+                                repo_names=[repo.full_name for repo in state.request.repos],
+                                instruction=request.instruction,
+                                fix_instruction=request.fix_instruction,
+                                has_tools=True,
+                            ),
+                        ),
+                    )
+
+                response = agent.run(
+                    run_config=RunConfig(
+                        system_prompt=CodingPrompts.format_system_msg(has_tools=True),
+                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                        memory_storage_key="plan_and_code",
+                        run_name="Plan",
+                    ),
+                )
+
+                prev_usage = agent.usage
+                with self.context.state.update() as cur:
+                    cur.usage += agent.usage
+
+                if not response:
+                    self.context.store_memory("plan_and_code", agent.memory)
+                    return None
+
+                final_response = agent.run(
+                    RunConfig(
+                        prompt=CodingPrompts.format_fix_msg(),
+                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                        memory_storage_key="plan_and_code",
+                        run_name="Code",
+                    ),
+                )
+
+                self.context.store_memory("plan_and_code", agent.memory)
 
                 with self.context.state.update() as cur:
-                    cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
+                    cur.usage += agent.usage - prev_usage
 
-                if expanded_files_messages and not request.initial_memory:
-                    is_obvious = IsFixObviousComponent(self.context).invoke(
-                        IsFixObviousRequest(
-                            event_details=request.event_details,
-                            task_str=task_str,
-                            fix_instruction=request.fix_instruction,
-                            memory=expanded_files_messages,
-                        )
-                    )
-                    if is_obvious and is_obvious.is_fix_clear:
-                        agent.tools = []
-                        has_tools = False
+                if not final_response:
+                    return None
 
-            state = self.context.state.get()
+                plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
 
-            response = agent.run(
-                run_config=RunConfig(
-                    prompt=(
-                        CodingPrompts.format_fix_discovery_msg(
-                            event=request.event_details.format_event(),
-                            task_str=task_str,
-                            summary=request.summary,
-                            repo_names=[repo.full_name for repo in state.request.repos],
-                            instruction=request.instruction,
-                            fix_instruction=request.fix_instruction,
-                            has_tools=has_tools,
-                        )
-                        if not request.initial_memory
-                        else None
-                    ),
-                    system_prompt=CodingPrompts.format_system_msg(has_tools=has_tools),
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
-                    memory_storage_key="plan_and_code",
-                    run_name="Plan",
-                ),
-            )
-
-            prev_usage = agent.usage
-            with self.context.state.update() as cur:
-                cur.usage += agent.usage
-
-            if not response:
-                self.context.store_memory("plan_and_code", agent.memory)
-                return None
-
-            final_response = agent.run(
-                RunConfig(
-                    prompt=CodingPrompts.format_fix_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
-                    memory_storage_key="plan_and_code",
-                    run_name="Code",
-                    has_tools=has_tools,
-                ),
-            )
-
-            self.context.store_memory("plan_and_code", agent.memory)
-
-            with self.context.state.update() as cur:
-                cur.usage += agent.usage - prev_usage
-
-            if not final_response:
-                return None
-
-            plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
-
-            coding_output = PlanStepsPromptXml.from_xml(
-                f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
-            ).to_model()
+                coding_output = PlanStepsPromptXml.from_xml(
+                    f"<plan_steps>{escape_multi_xml(plan_steps_content, ['diff', 'description', 'commit_message'])}</plan_steps>"
+                ).to_model()
 
             # We only do this once, if it still errors, we just let it go
             missing_files_errors = []

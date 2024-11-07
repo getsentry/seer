@@ -503,7 +503,7 @@ class LlmClient:
     def generate_structured(
         self,
         *,
-        prompt: str,
+        prompt: str | None = None,
         messages: list[Message] | None = None,
         model: LlmProvider,
         system_prompt: str | None = None,

@@ -201,16 +201,22 @@ def extract_text_inside_tags(content: str, tag: str, strip_newlines: bool = True
     Returns:
         str: The text inside the specified XML tag.
     """
-    start_tag = f"<{tag}>"
+    # Find the start tag with optional attributes
+    start_tag_pattern = f"<{tag}(?:\\s+[^>]*)?>"
     end_tag = f"</{tag}>"
 
-    start_index = content.find(start_tag)
-    end_index = content.find(end_tag)
-
-    if start_index == -1 or end_index == -1:
+    # Use regex to find the start tag position
+    start_match = re.search(start_tag_pattern, content)
+    if not start_match:
         return ""
 
-    text = content[start_index + len(start_tag) : end_index]
+    start_index = start_match.end()  # Use end() to get position after the full tag
+    end_index = content.find(end_tag)
+
+    if end_index == -1:
+        return ""
+
+    text = content[start_index:end_index]
 
     return text.strip("\n") if strip_newlines else text
 
