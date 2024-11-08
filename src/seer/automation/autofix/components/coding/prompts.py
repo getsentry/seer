@@ -239,7 +239,7 @@ class CodingPrompts:
 
                 {fix_instruction}
 
-                Is the code change simple and exists in only a single file?"""
+                Is the code change simple and does it exist ONLY in files you can already see in your context here or do you need to look at other files?"""
             )
             .format(
                 event_details=event_details.format_event(),
