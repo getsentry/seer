@@ -96,38 +96,41 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         request: CodingRequest,
         task_str: str,
         memory: list[Message],
-        llm_client: LlmClient = injected,
     ):
         state = self.context.state.get()
 
-        response = llm_client.generate_text(
-            model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
-            system_prompt=CodingPrompts.format_system_msg(has_tools=False),
-            messages=memory,
-            prompt=CodingPrompts.format_single_simple_change_msg(
-                event=request.event_details.format_event(),
-                task_str=task_str,
-                summary=request.summary,
-                repo_names=[repo.full_name for repo in state.request.repos],
-                instruction=request.instruction,
-                fix_instruction=request.fix_instruction,
-            ),
-            temperature=0.0,
-            run_name="Simple fixer",
+        agent = AutofixAgent(
+            config=AgentConfig(interactive=True),
+            memory=memory,
+            context=self.context,
+            name="Plan+Code Simple fixer",
+        )
+        response = agent.run(
+            run_config=RunConfig(
+                model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                system_prompt=CodingPrompts.format_system_msg(has_tools=False),
+                prompt=CodingPrompts.format_single_simple_change_msg(
+                    event=request.event_details.format_event(),
+                    task_str=task_str,
+                    summary=request.summary,
+                    repo_names=[repo.full_name for repo in state.request.repos],
+                    instruction=request.instruction,
+                    fix_instruction=request.fix_instruction,
+                ),
+                temperature=0.0,
+                run_name="Simple fixer",
+            )
         )
 
-        if not response.message.content:
-            return None, None
+        if not response:
+            return None
 
         output = SimpleChangeOutputXml.from_xml(
-            f"<output>{escape_multi_xml(response.message.content, ['unified_diff', 'description', 'commit_message'])}</output>"
+            f"<output>{escape_multi_xml(response, ['unified_diff', 'description', 'commit_message'])}</output>"
         )
 
-        return (
-            CodingOutput(
-                tasks=[file_change.to_plan_task_model() for file_change in output.file_changes]
-            ),
-            response.message,
+        return CodingOutput(
+            tasks=[file_change.to_plan_task_model() for file_change in output.file_changes]
         )
 
     def _prefill_initial_memory(self, request: CodingRequest) -> list[Message]:
@@ -185,7 +188,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         if memory:
 
             class IsObviousOutput(BaseModel):
-                is_single_simple_change: bool
+                need_to_search_codebase: bool
 
             output = llm_client.generate_structured(
                 messages=memory,
@@ -198,7 +201,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 response_format=IsObviousOutput,
             )
 
-            return output.parsed.is_single_simple_change
+            return not output.parsed.need_to_search_codebase
 
         return False
 
@@ -256,11 +259,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             )
 
             if is_obvious:
-                coding_output, message = self._handle_simple_fix(request, task_str, memory)
-                if not coding_output or not message:
+                coding_output = self._handle_simple_fix(request, task_str, memory)
+                if not coding_output:
                     raise ValueError("Failed to handle simple fix")
-
-                agent.memory.append(message)
 
                 self.context.store_memory("plan_and_code", agent.memory)
             else:
