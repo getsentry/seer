@@ -349,9 +349,7 @@ class TestCodingComponent:
 
         # Mock is_obvious and handle_simple_fix
         component._is_obvious = MagicMock(return_value=True)
-        component._handle_simple_fix = MagicMock(
-            return_value=(MagicMock(), Message(content="test message"))
-        )
+        component._handle_simple_fix = MagicMock(return_value=MagicMock())
 
         # Mock agent
         mock_agent = MagicMock()
@@ -409,9 +407,7 @@ class TestCodingComponent:
 
         # Mock is_obvious and handle_simple_fix
         component._is_obvious = MagicMock(return_value=False)
-        component._handle_simple_fix = MagicMock(
-            return_value=(MagicMock(), Message(content="test message"))
-        )
+        component._handle_simple_fix = MagicMock(return_value=MagicMock())
 
         # Mock agent
         mock_agent = MagicMock()
@@ -447,9 +443,7 @@ class TestCodingComponent:
 
         # Mock is_obvious and handle_simple_fix
         component._is_feedback_obvious = MagicMock(return_value=True)
-        component._handle_simple_fix = MagicMock(
-            return_value=(MagicMock(), Message(content="test message"))
-        )
+        component._handle_simple_fix = MagicMock(return_value=MagicMock())
 
         # Mock agent
         mock_agent = MagicMock()
@@ -480,9 +474,7 @@ class TestCodingComponent:
 
         # Mock is_obvious and handle_simple_fix
         component._is_feedback_obvious = MagicMock(return_value=False)
-        component._handle_simple_fix = MagicMock(
-            return_value=(MagicMock(), Message(content="test message"))
-        )
+        component._handle_simple_fix = MagicMock(return_value=MagicMock())
 
         # Mock agent
         mock_agent = MagicMock()
@@ -515,39 +507,32 @@ class TestCodingComponent:
         request = next(generate(CodingRequest))
         request.initial_memory = []
 
-        mock_llm_client = MagicMock()
-        response_message = Message(
-            role="assistant",
-            content=textwrap.dedent(
-                """\
-                    Ok here is some code for you:
-                    <file_change file_path="test.py" repo_name="test-repo">
-                    <commit_message>Fix the code</commit_message>
-                    <description>FixING the code</description>
-                    <unified_diff>
-                    @@ -1,3 +1,3 @@
-                    def foo()
-                    -    return 'Hello'
-                    +    return 'Hello, World!'
-                    </unified_diff>
-                    </file_change>
-                    """
-            ),
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = textwrap.dedent(
+            """\
+            Ok here is some code for you:
+            <file_change file_path="test.py" repo_name="test-repo">
+            <commit_message>Fix the code</commit_message>
+            <description>FixING the code</description>
+            <unified_diff>
+            @@ -1,3 +1,3 @@
+            def foo()
+            -    return 'Hello'
+            +    return 'Hello, World!'
+            </unified_diff>
+            </file_change>
+            """
         )
-        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
-            message=response_message,
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.ANTHROPIC,
-                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
-            ),
-        )
+        mock_agent.usage = MagicMock()
+        mock_tools = ["tool1", "tool2"]
+        mock_agent.tools = mock_tools
 
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-        with module:
+        with patch(
+            "seer.automation.autofix.components.coding.component.AutofixAgent",
+            return_value=mock_agent,
+        ):
             # Execute
-            coding_output, message = component._handle_simple_fix(
+            coding_output = component._handle_simple_fix(
                 request, "test task", request.initial_memory
             )
 
@@ -561,4 +546,3 @@ class TestCodingComponent:
             description="FixING the code",
             commit_message="Fix the code",
         )
-        assert message == response_message

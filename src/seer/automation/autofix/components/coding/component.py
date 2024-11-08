@@ -188,7 +188,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         if memory:
 
             class IsObviousOutput(BaseModel):
-                is_single_simple_change: bool
                 need_to_search_codebase: bool
 
             output = llm_client.generate_structured(
@@ -202,9 +201,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 response_format=IsObviousOutput,
             )
 
-            return (
-                output.parsed.is_single_simple_change and not output.parsed.need_to_search_codebase
-            )
+            return not output.parsed.need_to_search_codebase
 
         return False
 
