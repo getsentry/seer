@@ -1,18 +1,21 @@
 import abc
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import sentry_sdk
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
+from seer.anomaly_detection.detectors.location_detectors import LocationDetector
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
     AnomalyFlags,
     Directions,
+    PointLocation,
     Sensitivities,
+    Threshold,
+    ThresholdType,
 )
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
@@ -22,9 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 class FlagsAndScores(BaseModel):
-    flags: list[AnomalyFlags]
-    scores: list[float]
-    thresholds: list[float]
+    flags: List[AnomalyFlags]
+    scores: List[float]
+    thresholds: List[List[Threshold]]
+    # prediction_bounds: Optional[List[Tuple[np.float64, np.float64]]]
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
 
 class MPScorer(BaseModel, abc.ABC):
@@ -90,7 +98,7 @@ class LowVarianceScorer(MPScorer):
         val: np.float64,
         ts_mean: np.float64,
         ad_config: AnomalyDetectionConfig,
-    ) -> tuple[AnomalyFlags, float, float]:
+    ) -> tuple[AnomalyFlags, float, float, float]:
         if ad_config.sensitivity not in self.scaling_factors:
             raise ClientError(f"Invalid sensitivity: {ad_config.sensitivity}")
         scaling_factor = self.scaling_factors[ad_config.sensitivity]
@@ -101,12 +109,12 @@ class LowVarianceScorer(MPScorer):
 
         # if current value is significantly higher or lower than the mean then mark it as high anomaly else mark it as no anomaly
         if ad_config.direction == "both" and (val < lower_bound or val > upper_bound):
-            return "anomaly_higher_confidence", 0.9, upper_bound
+            return "anomaly_higher_confidence", 0.9, upper_bound, lower_bound
         elif ad_config.direction == "down" and val < lower_bound:
-            return "anomaly_higher_confidence", 0.9, upper_bound
+            return "anomaly_higher_confidence", 0.9, upper_bound, lower_bound
         elif ad_config.direction == "up" and val > upper_bound:
-            return "anomaly_higher_confidence", 0.9, upper_bound
-        return "none", 0.0, upper_bound
+            return "anomaly_higher_confidence", 0.9, upper_bound, lower_bound
+        return "none", 0.0, upper_bound, lower_bound
 
     def batch_score(
         self,
@@ -126,11 +134,21 @@ class LowVarianceScorer(MPScorer):
 
         sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
         for val in values:
-            flag, score, threshold = self._to_flag_and_score(val, ts_mean, ad_config)
+            flag, score, pred_up, pred_down = self._to_flag_and_score(val, ts_mean, ad_config)
             flags.append(flag)
             scores.append(score)
-            thresholds.append(threshold)
-        return FlagsAndScores(flags=flags, scores=scores, thresholds=thresholds)
+            thresholds.append(
+                [
+                    Threshold(
+                        type=ThresholdType.LOW_VARIANCE_THRESHOLD, upper=pred_up, lower=pred_down
+                    )
+                ]
+            )
+        return FlagsAndScores(
+            flags=flags,
+            scores=scores,
+            thresholds=thresholds,
+        )
 
     def stream_score(
         self,
@@ -146,10 +164,18 @@ class LowVarianceScorer(MPScorer):
         context = history_values[-2 * window_size :]
         if context.std() > self.std_threshold:
             return None
+        flag, score, pred_up, pred_down = self._to_flag_and_score(
+            streamed_value, context.mean(), ad_config
+        )
+        threshold = Threshold(
+            type=ThresholdType.LOW_VARIANCE_THRESHOLD, upper=pred_up, lower=pred_up
+        )
 
-        flag, score, threshold = self._to_flag_and_score(streamed_value, context.mean(), ad_config)
-
-        return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
+        return FlagsAndScores(
+            flags=[flag],
+            scores=[score],
+            thresholds=[[threshold]],
+        )
 
 
 class MPIQRScorer(MPScorer):
@@ -207,15 +233,16 @@ class MPIQRScorer(MPScorer):
         window_size: int
             Size of the window used for matrix profile computation
         """
-        scores: list[float] = []
-        flags: list[AnomalyFlags] = []
+        scores: List[float] = []
+        flags: List[AnomalyFlags] = []
+        thresholds: List[List[Threshold]] = []
         # Compute score and anomaly flags
-        threshold = self._get_threshold(mp_dist, ad_config.sensitivity)
+        mp_dist_threshold = self._get_mp_dist_threshold(mp_dist, ad_config.sensitivity)
         for i, val in enumerate(mp_dist):
-            scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - threshold)
-            flag = self._to_flag(val, threshold)
+            scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - mp_dist_threshold)
+            flag = self._to_flag(val, mp_dist_threshold)
 
-            flag = self._adjust_flag_for_direction(
+            flag, cur_thresholds = self._adjust_flag_for_direction(
                 flag,
                 ad_config.direction,
                 streamed_value=values[i],
@@ -225,8 +252,18 @@ class MPIQRScorer(MPScorer):
             )
 
             flags.append(flag)
-
-        return FlagsAndScores(flags=flags, scores=scores, thresholds=[threshold])
+            cur_thresholds.append(
+                Threshold(
+                    type=ThresholdType.MP_DIST_IQR, upper=mp_dist_threshold, lower=mp_dist_threshold
+                )
+            )
+            if cur_thresholds is not None:
+                thresholds.append(cur_thresholds)
+        return FlagsAndScores(
+            flags=flags,
+            scores=scores,
+            thresholds=thresholds,
+        )
 
     def stream_score(
         self,
@@ -268,16 +305,16 @@ class MPIQRScorer(MPScorer):
             FlagsAndScores: Object containing anomaly flags, scores, and thresholds
 
         """
-        threshold = self._get_threshold(history_mp_dist, ad_config.sensitivity)
+        mp_dist_threshold = self._get_mp_dist_threshold(history_mp_dist, ad_config.sensitivity)
 
         # Compute score and anomaly flags
         score = (
             0.0
             if np.isnan(streamed_mp_dist) or np.isinf(streamed_mp_dist)
-            else streamed_mp_dist - threshold
+            else streamed_mp_dist - mp_dist_threshold
         )
-        flag = self._to_flag(streamed_mp_dist, threshold)
-        flag = self._adjust_flag_for_direction(
+        flag = self._to_flag(streamed_mp_dist, mp_dist_threshold)
+        flag, thresholds = self._adjust_flag_for_direction(
             flag,
             direction=ad_config.direction,
             streamed_value=streamed_value,
@@ -285,10 +322,20 @@ class MPIQRScorer(MPScorer):
             history_values=history_values,
             history_timestamps=history_timestamps,
         )
+        thresholds.append(
+            Threshold(
+                type=ThresholdType.MP_DIST_IQR, upper=mp_dist_threshold, lower=mp_dist_threshold
+            )
+        )
+        return FlagsAndScores(
+            flags=[flag],
+            scores=[score],
+            thresholds=[thresholds],
+        )
 
-        return FlagsAndScores(flags=[flag], scores=[score], thresholds=[threshold])
-
-    def _get_threshold(self, mp_dist: npt.NDArray[np.float64], sensitivity: Sensitivities) -> float:
+    def _get_mp_dist_threshold(
+        self, mp_dist: npt.NDArray[np.float64], sensitivity: Sensitivities
+    ) -> float:
         if sensitivity not in self.percentiles:
             raise ClientError(f"Invalid sensitivity: {sensitivity}")
 
@@ -296,8 +343,7 @@ class MPIQRScorer(MPScorer):
         mp_dist_baseline_finite = mp_dist[np.isfinite(mp_dist)]
         [Q1, Q3] = np.quantile(mp_dist_baseline_finite, self.percentiles[sensitivity])
         IQR = Q3 - Q1
-        threshold = Q3 + (1.5 * IQR)
-        return threshold
+        return Q3 + (1.5 * IQR)
 
     def _to_flag(self, mp_dist: np.float64, threshold: float):
         if np.isnan(mp_dist) or mp_dist <= threshold:
@@ -314,7 +360,7 @@ class MPIQRScorer(MPScorer):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         location_detector: LocationDetector = injected,
-    ) -> AnomalyFlags:
+    ) -> Tuple[AnomalyFlags, List[Threshold]]:
         """
         Adjusts the anomaly flag based on the specified direction and time series context.
 
@@ -332,22 +378,23 @@ class MPIQRScorer(MPScorer):
         Returns:
         AnomalyFlags
             The adjusted anomaly flag
+        List[Threshold]
+            The thresholds used for anomaly flag
         """
         if flag == "none" or direction == "both":
-            return flag
+            return flag, []
 
-        location = location_detector.detect(
+        relative_location = location_detector.detect(
             streamed_value, streamed_timestamp, history_values, history_timestamps
         )
-        if location is None:
-            return flag
-        # if direction == "both" and location == PointLocation.NONE:
-        #     return "none"
-        if (direction == "up" and location != PointLocation.UP) or (
-            direction == "down" and location != PointLocation.DOWN
+        if relative_location is None:
+            return flag, []
+
+        if (direction == "up" and relative_location.location != PointLocation.UP) or (
+            direction == "down" and relative_location.location != PointLocation.DOWN
         ):
-            return "none"
-        return flag
+            return "none", relative_location.thresholds
+        return flag, relative_location.thresholds
 
 
 class MPCascadingScorer(MPScorer):

@@ -7,7 +7,6 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
 from seer.anomaly_detection.detectors.smoothers import (
@@ -16,9 +15,11 @@ from seer.anomaly_detection.detectors.smoothers import (
 )
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
+    AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
     MPTimeSeriesAnomaliesSingleWindow,
+    Threshold,
     TimeSeries,
     TimeSeriesAnomalies,
 )
@@ -34,7 +35,13 @@ class AnomalyDetector(BaseModel, abc.ABC):
     """
 
     @abc.abstractmethod
-    def detect(self, timeseries: TimeSeries, config: AnomalyDetectionConfig) -> TimeSeriesAnomalies:
+    def detect(
+        self,
+        timeseries: TimeSeries,
+        config: AnomalyDetectionConfig,
+        algo_config: AlgoConfig,
+        window_size: int | None = None,
+    ) -> TimeSeriesAnomalies:
         return NotImplemented
 
 
@@ -45,7 +52,11 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
     @sentry_sdk.trace
     def detect(
-        self, timeseries: TimeSeries, config: AnomalyDetectionConfig, window_size: int | None = None
+        self,
+        timeseries: TimeSeries,
+        config: AnomalyDetectionConfig,
+        algo_config: AlgoConfig = injected,
+        window_size: int | None = None,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
@@ -60,7 +71,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        return self._compute_matrix_profile(timeseries, config, window_size)
+        return self._compute_matrix_profile(timeseries, config, window_size=window_size)
 
     @inject
     @sentry_sdk.trace
@@ -68,9 +79,9 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         self,
         timeseries: TimeSeries,
         config: AnomalyDetectionConfig,
+        algo_config: AlgoConfig = injected,
         window_size: int | None = None,
         ws_selector: WindowSizeSelector = injected,
-        mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
@@ -102,7 +113,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp = stumpy.stump(
             ts_values,
             m=max(3, window_size),
-            ignore_trivial=mp_config.ignore_trivial,
+            ignore_trivial=algo_config.mp_ignore_trivial,
             normalize=False,
         )
 
@@ -134,7 +145,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             scores=flags_and_scores.scores,
             matrix_profile=mp,
             window_size=window_size,
-            thresholds=flags_and_scores.thresholds,
+            thresholds=flags_and_scores.thresholds if algo_config.return_thresholds else None,
         )
 
 
@@ -162,6 +173,8 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         self,
         timeseries: TimeSeries,
         config: AnomalyDetectionConfig,
+        algo_config: AlgoConfig = injected,
+        window_size: int | None = None,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
@@ -199,7 +212,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             scores: list[float] = []
             flags: list[AnomalyFlags] = []
             streamed_mp: list[list[float]] = []
-            thresholds: list[float] = []
+            thresholds: list[list[Threshold]] = []
             for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
                 # Update the stumpi stream processor with new data
                 stream.update(cur_val)
@@ -218,6 +231,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     ad_config=config,
                     window_size=self.window_size,
                 )
+                # print(f"flags_and_scores: {flags_and_scores}")
                 if flags_and_scores is None:
                     raise ServerError("Failed to score the matrix profile distance")
 
@@ -238,7 +252,8 @@ class MPStreamAnomalyDetector(AnomalyDetector):
 
                 scores.extend(flags_and_scores.scores)
                 flags.extend(flags_and_scores.flags)
-                thresholds.extend(flags_and_scores.thresholds)
+                if flags_and_scores.thresholds is not None:
+                    thresholds.extend(flags_and_scores.thresholds)
 
                 # Add new data point as well as its matrix profile to baseline
                 self.history_timestamps = np.append(self.history_timestamps, cur_timestamp)
@@ -255,6 +270,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
                 ),
                 window_size=self.window_size,
-                thresholds=thresholds,
                 original_flags=original_flags,
+                thresholds=thresholds if algo_config.return_thresholds else None,
             )

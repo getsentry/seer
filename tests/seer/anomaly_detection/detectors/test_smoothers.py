@@ -1,11 +1,10 @@
 import unittest
 
-from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.smoothers import (
     MajorityVoteBatchFlagSmoother,
     MajorityVoteStreamFlagSmoother,
 )
-from seer.anomaly_detection.models.external import AnomalyDetectionConfig
+from seer.anomaly_detection.models import AlgoConfig, AnomalyDetectionConfig
 
 
 class TestMajorityVoteBatchFlagSmoother(unittest.TestCase):
@@ -17,7 +16,13 @@ class TestMajorityVoteBatchFlagSmoother(unittest.TestCase):
             time_period=60, sensitivity="low", direction="up", expected_seasonality="auto"
         )
 
-        self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
+        self.algo_config = AlgoConfig(
+            mp_ignore_trivial=True,
+            mp_normalize=False,  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+            prophet_uncertainty_samples=1,
+            prophet_mcmc_samples=0,
+            return_thresholds=False,
+        )
 
     def test_smooth_no_anomalies(self):
         flags = ["none"] * 5
@@ -169,7 +174,13 @@ class TestMajorityVoteStreamFlagSmoother(unittest.TestCase):
             time_period=60, sensitivity="low", direction="up", expected_seasonality="auto"
         )
 
-        self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
+        self.algo_config = AlgoConfig(
+            mp_ignore_trivial=True,
+            mp_normalize=False,  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+            prophet_uncertainty_samples=1,
+            prophet_mcmc_samples=0,
+            return_thresholds=False,
+        )
 
     def test_stream_smooth_no_anomalies(self):
         flags = ["none"] * 5

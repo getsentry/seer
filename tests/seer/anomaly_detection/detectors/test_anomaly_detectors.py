@@ -6,7 +6,6 @@ import numpy as np
 from seer.anomaly_detection.detectors import (
     FlagsAndScores,
     MPCascadingScorer,
-    MPConfig,
     MPUtils,
     SuSSWindowSizeSelector,
 )
@@ -18,7 +17,6 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     MPTimeSeriesAnomaliesSingleWindow,
-    MPTimeSeriesAnomalies,
     TimeSeries,
 )
 from seer.exceptions import ServerError
@@ -34,7 +32,13 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             time_period=15, sensitivity="low", direction="up", expected_seasonality="auto"
         )  # TODO: Placeholder values as not used in detection yet
 
-        self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
+        self.algo_config = AlgoConfig(
+            mp_ignore_trivial=True,
+            mp_normalize=False,  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+            prophet_uncertainty_samples=1,
+            prophet_mcmc_samples=0,
+            return_thresholds=False,
+        )
         self.ws_selector = MagicMock()
         self.scorer = MagicMock()
         self.mp_utils = MagicMock()
@@ -48,7 +52,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             return_value=FlagsAndScores(
                 scores=[0.1, 6.5, 4.8, 0.2],
                 flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
-                thresholds=[0.0, 0.0, 0.0, 0.0],
+                thresholds=[],
             )
         )
 
@@ -75,7 +79,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             ts,
             self.config,
             ws_selector=self.ws_selector,
-            mp_config=self.mp_config,
+            algo_config=self.algo_config,
             scorer=self.scorer,
             mp_utils=self.mp_utils,
         )
@@ -115,7 +119,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
                 ts,
                 self.config,
                 ws_selector=self.ws_selector,
-                mp_config=self.mp_config,
+                algo_config=self.algo_config,
                 scorer=self.scorer,
                 mp_utils=self.mp_utils,
             )
@@ -124,14 +128,14 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
         ts = TimeSeries(timestamps=np.array([]), values=np.array([]))
         with self.assertRaises(ServerError, msg="No values to detect anomalies for"):
             self.detector._compute_matrix_profile(
-                ts, self.config, self.ws_selector, self.mp_config, self.scorer, self.mp_utils
+                ts, self.config, self.ws_selector, self.algo_config, self.scorer, self.mp_utils
             )
 
     def test_timestamps_and_values_not_same_length(self):
         ts = TimeSeries(timestamps=np.array([1, 2, 3]), values=np.array([1, 2]))
         with self.assertRaises(ServerError, msg="Timestamps and values are not of the same length"):
             self.detector._compute_matrix_profile(
-                ts, self.config, self.ws_selector, self.mp_config, self.scorer, self.mp_utils
+                ts, self.config, self.ws_selector, self.algo_config, self.scorer, self.mp_utils
             )
 
 
@@ -151,15 +155,21 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         self.config = AnomalyDetectionConfig(
             time_period=15, sensitivity="medium", direction="both", expected_seasonality="auto"
         )  # TODO: Placeholder values as not used in detection yet
-        self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
+        self.algo_config = AlgoConfig(
+            mp_ignore_trivial=True,
+            mp_normalize=False,  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+            prophet_uncertainty_samples=1,
+            prophet_mcmc_samples=0,
+            return_thresholds=False,
+        )
 
     @patch("stumpy.stumpi")
     @patch("seer.anomaly_detection.detectors.MPScorer")
     @patch("seer.anomaly_detection.detectors.MPUtils")
-    def test_detect(self, MockMPUtils, MockMPScorer, MockStumpi):
+    def test_detect(self, MockMPUtils, mock_scorer, MockStumpi):
         mock_stream = MagicMock()
         MockStumpi.return_value = mock_stream
-        mock_scorer = MockMPScorer.return_value
+        # mock_scorer = MockMPScorer.return_value
         mock_utils = MockMPUtils.return_value
 
         mock_stream.P_ = np.array([0.1, 0.2])
@@ -170,10 +180,14 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
         mock_scorer.stream_score.return_value = FlagsAndScores(
-            scores=[0.5], flags=["none"], thresholds=[0.0]
+            scores=[0.5],
+            flags=["none"],
+            thresholds=[],
         )
 
-        anomalies = self.detector.detect(self.timeseries, self.config, mock_scorer, mock_utils)
+        anomalies = self.detector.detect(
+            self.timeseries, self.config, scorer=mock_scorer, mp_utils=mock_utils
+        )
 
         assert isinstance(anomalies, MPTimeSeriesAnomaliesSingleWindow)
         assert isinstance(anomalies.flags, list)
@@ -203,7 +217,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 ),
                 config=self.config,
                 ws_selector=SuSSWindowSizeSelector(),
-                mp_config=self.mp_config,
+                algo_config=self.algo_config,
                 scorer=MPCascadingScorer(),
                 mp_utils=MPUtils(),
             )
@@ -246,7 +260,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "anomaly_higher_confidence",
         ]
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
-        print(f"test_stream_detect_spiked_history_spiked_stream_long_ts: {stream_anomalies.flags}")
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[2] == "anomaly_higher_confidence"
         # # Fourth and fifth may or may not be flagged depending on prophet's prediction which has some randomness
@@ -273,7 +286,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "none",
             "none",
         ]
-        print(f"test_stream_detect_spiked_history_spiked_stream: {stream_anomalies.flags}")
         assert history_anomalies.window_size == 3
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[0] == "none"
@@ -316,7 +328,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         ]
 
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
-        print(f"test_stream_detect_flat_history_spiked_stream: {stream_anomalies.flags}")
         assert history_anomalies.window_size == 3
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[0] == "none"

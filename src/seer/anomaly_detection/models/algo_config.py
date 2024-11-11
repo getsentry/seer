@@ -20,12 +20,12 @@ class AlgoConfig(BaseModel):
         description="Number of montecarlo simulations to run to compute uncertainty intervals",
     )
 
+    prophet_mcmc_samples: int = Field(
+        ...,
+        description="Number of montecarlo simulations to run to compute uncertainty intervals",
+    )
+
     return_thresholds: bool = Field(
         False,
         description="Flag to control if the thresholds should be returned",
-    )
-
-    return_predicted_range: bool = Field(
-        False,
-        description="Flag to control if the predicted range should be returned",
     )

@@ -21,7 +21,8 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         cur_val = 6.0
         cur_timestamp = 6.0
         self.assertEqual(
-            self.detector.detect(cur_val, cur_timestamp, values, timestamps), PointLocation.UP
+            self.detector.detect(cur_val, cur_timestamp, values, timestamps).location,
+            PointLocation.UP,
         )
 
     def test_decreasing_trend(self):
@@ -30,7 +31,7 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         cur_val = 0.0
         cur_timestamp = 6.0
         self.assertEqual(
-            self.detector.detect(cur_val, cur_timestamp, values, timestamps),
+            self.detector.detect(cur_val, cur_timestamp, values, timestamps).location,
             PointLocation.DOWN,
         )
 
@@ -40,7 +41,8 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         cur_val = 2.1
         cur_timestamp = 6.0
         self.assertEqual(
-            self.detector.detect(cur_val, cur_timestamp, values, timestamps), PointLocation.NONE
+            self.detector.detect(cur_val, cur_timestamp, values, timestamps).location,
+            PointLocation.NONE,
         )
 
     def test_insufficient_data(self):
@@ -57,7 +59,7 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         cur_val = 4.0
         cur_timestamp = 4.0
         self.assertEqual(
-            detector.detect(cur_val, cur_timestamp, values, timestamps), PointLocation.UP
+            detector.detect(cur_val, cur_timestamp, values, timestamps).location, PointLocation.UP
         )
 
     def test_edge_case_all_same_values(self):
@@ -66,7 +68,8 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         cur_val = 1.0
         cur_timestamp = 6.0
         self.assertEqual(
-            self.detector.detect(cur_val, cur_timestamp, values, timestamps), PointLocation.NONE
+            self.detector.detect(cur_val, cur_timestamp, values, timestamps).location,
+            PointLocation.NONE,
         )
 
     def test_edge_case_single_spike(self):
@@ -75,7 +78,8 @@ class TestLinearRegressionLocationDetector(unittest.TestCase):
         cur_val = 1.0
         cur_timestamp = 6.0
         self.assertEqual(
-            self.detector.detect(cur_val, cur_timestamp, values, timestamps), PointLocation.NONE
+            self.detector.detect(cur_val, cur_timestamp, values, timestamps).location,
+            PointLocation.NONE,
         )
 
 
@@ -102,7 +106,7 @@ class TestProphetLocationDetector(unittest.TestCase):
         )
 
         mock_predict.assert_called_once()
-        self.assertEqual(result, PointLocation.UP)
+        self.assertEqual(result.location, PointLocation.UP)
 
     @patch("prophet.Prophet.predict")
     def test_detect_down(self, mock_predict):
@@ -123,7 +127,7 @@ class TestProphetLocationDetector(unittest.TestCase):
         )
 
         mock_predict.assert_called_once()
-        self.assertEqual(result, PointLocation.DOWN)
+        self.assertEqual(result.location, PointLocation.DOWN)
 
     @patch("prophet.Prophet.predict")
     def test_detect_none(self, mock_predict):
@@ -144,11 +148,18 @@ class TestProphetLocationDetector(unittest.TestCase):
         )
 
         mock_predict.assert_called_once()
-        self.assertEqual(result, PointLocation.NONE)
+        self.assertEqual(result.location, PointLocation.NONE)
 
     @patch("prophet.Prophet.predict")
     def test_detect_up_without_uncertainty_samples(self, mock_predict):
-        mock_predict.return_value = pd.DataFrame({"ds": [1.0, 2.0, 3.0], "yhat": [1.0, 2.0, 3.0]})
+        mock_predict.return_value = pd.DataFrame(
+            {
+                "ds": [1.0, 2.0, 3.0],
+                "yhat": [1.0, 2.0, 3.0],
+                "yhat_upper": [1.0, 2.0, 3.0],
+                "yhat_lower": [1.0, 2.0, 3.0],
+            }
+        )
 
         result = ProphetLocationDetector(uncertainty_samples=False).detect(
             streamed_value=4.0,
@@ -158,7 +169,7 @@ class TestProphetLocationDetector(unittest.TestCase):
         )
 
         mock_predict.assert_called_once()
-        self.assertEqual(result, PointLocation.UP)
+        self.assertEqual(result.location, PointLocation.UP)
 
     @patch("prophet.Prophet.predict")
     def test_detect_down_without_uncertainty_samples(self, mock_predict):
@@ -180,7 +191,7 @@ class TestProphetLocationDetector(unittest.TestCase):
         )
 
         mock_predict.assert_called_once()
-        self.assertEqual(result, PointLocation.DOWN)
+        self.assertEqual(result.location, PointLocation.DOWN)
 
     @patch("prophet.Prophet.predict")
     def test_detect_none_without_uncertainty_samples(self, mock_prophet):
@@ -201,4 +212,4 @@ class TestProphetLocationDetector(unittest.TestCase):
         )
 
         mock_prophet.assert_called_once()
-        self.assertEqual(result, PointLocation.NONE)
+        self.assertEqual(result.location, PointLocation.NONE)

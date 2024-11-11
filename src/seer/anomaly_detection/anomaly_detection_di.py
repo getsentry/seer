@@ -32,8 +32,12 @@ def mp_scorer_provider() -> MPScorer:
 @anomaly_detection_module.provider
 def algoconfig_provider() -> AlgoConfig:
     return AlgoConfig(
-        mp_ignore_trivial=True, mp_normalize=False, prophet_uncertainty_samples=1
-    )  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+        mp_ignore_trivial=True,
+        mp_normalize=False,  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+        prophet_uncertainty_samples=1,
+        prophet_mcmc_samples=0,
+        return_thresholds=False,
+    )
 
 
 @anomaly_detection_module.provider
