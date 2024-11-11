@@ -118,6 +118,35 @@ def test_file_patch_apply_complex_modify():
     assert result == "Line 1\nNew Line 2\nLine 2\nUpdated Line 3\nLine 4\nLine 5"
 
 
+def test_file_patch_apply_preserve_trailing_newlines():
+    patch = FilePatch(
+        type="M",
+        path="file.txt",
+        added=1,
+        removed=1,
+        source_file="file.txt",
+        target_file="file.txt",
+        hunks=[
+            Hunk(
+                source_start=1,
+                source_length=2,
+                target_start=1,
+                target_length=2,
+                section_header="@@ -1,2 +1,2 @@",
+                lines=[
+                    Line(source_line_no=1, target_line_no=1, value="First line\n", line_type=" "),
+                    Line(source_line_no=2, value="old line\n", line_type="-"),
+                    Line(target_line_no=2, value="new line\n", line_type="+"),
+                ],
+            )
+        ],
+    )
+
+    original_content = "First line\nold line\n\n\n"  # Content with trailing newlines
+    result = patch.apply(original_content)
+    assert result == "First line\nnew line\n\n\n"  # Trailing newlines preserved
+
+
 # New tests for FileChange
 
 
