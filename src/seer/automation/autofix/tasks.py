@@ -657,7 +657,7 @@ def run_autofix_evaluation_on_item(
                 logger.exception(f"Error running evaluation: {e}")
 
             if diff:
-                score = score_one(
+                score, verdict = score_one(
                     dataset_item,
                     diff,
                     n_panel=scoring_n_panel,
@@ -665,6 +665,13 @@ def run_autofix_evaluation_on_item(
                     langfuse_session_id=trace_id,
                 )
 
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="is_fixed"
+                    ),
+                    value=1 if verdict else 0,
+                )
                 langfuse.score(
                     trace_id=trace_id,
                     name=make_score_name(
@@ -689,7 +696,7 @@ def run_autofix_evaluation_on_item(
                 )
 
             if causes:
-                root_cause_score = score_root_causes(
+                root_cause_score, root_cause_verdict = score_root_causes(
                     dataset_item,
                     causes,
                     n_panel=scoring_n_panel,
@@ -704,16 +711,23 @@ def run_autofix_evaluation_on_item(
                 langfuse.score(
                     trace_id=trace_id,
                     name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
                     ),
-                    value=root_cause_score.get("highest_score"),
+                    value=1 if root_cause_verdict else 0,
                 )
                 langfuse.score(
                     trace_id=trace_id,
                     name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_highest_score"
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
                     ),
-                    value=root_cause_score.get("highest_score"),
+                    value=root_cause_score,
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_score"
+                    ),
+                    value=root_cause_score,
                 )
             else:
                 langfuse.score(
