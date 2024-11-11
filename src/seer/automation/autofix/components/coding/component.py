@@ -214,8 +214,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             class NeedToSearchCodebaseOutput(BaseModel):
                 need_to_search_codebase: bool
 
+            # Clean message roles to ensure compatibility with OpenAI's API
+            cleaned_memory = LlmClient.clean_tool_call_assistant_messages(memory)
+
             output = llm_client.generate_structured(
-                messages=memory,
+                messages=cleaned_memory,
                 prompt="Given the above instruction, do you need to search the codebase for more context or have an immediate answer?",
                 model=OpenAiProvider.model("gpt-4o-mini"),
                 response_format=NeedToSearchCodebaseOutput,
