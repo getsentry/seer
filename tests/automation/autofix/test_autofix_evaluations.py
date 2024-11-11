@@ -455,9 +455,7 @@ class TestScoreRootCauseSingleIt:
         mock_llm_instance = Mock()
         mock_llm_client.return_value = mock_llm_instance
         mock_llm_instance.generate_text.return_value = LlmGenerateTextResponse(
-            message=Message(
-                role="assistant", content="<score_1>0.8</score_1><score_2>0.6</score_2>"
-            ),
+            message=Message(role="assistant", content="<score>0.8</score><verdict>True</verdict>"),
             metadata=LlmResponseMetadata(
                 model="test_model",
                 provider_name=LlmProviderType.OPENAI,
@@ -471,18 +469,12 @@ class TestScoreRootCauseSingleIt:
                 title="Cause 1",
                 description="Description 1",
                 reproduction="Steps to reproduce 1",
-            ),
-            RootCauseAnalysisItem(
-                id=2,
-                title="Cause 2",
-                description="Description 2",
-                reproduction="Steps to reproduce 2",
-            ),
+            )
         ]
 
         result = score_root_cause_single_it(mock_dataset_item, causes, model="test_model")
 
-        assert result == [0.8, 0.6]
+        assert result == (0.8, True)
         mock_llm_instance.generate_text.assert_called_once()
 
     @patch("seer.automation.autofix.evaluations.LlmClient")
@@ -509,7 +501,7 @@ class TestScoreRootCauseSingleIt:
 
         result = score_root_cause_single_it(mock_dataset_item, causes, model="test_model")
 
-        assert result == [0]
+        assert result == (0, False)
 
     def test_score_root_cause_single_it_missing_expected_output(self, mock_dataset_item):
         mock_dataset_item.expected_output = None
@@ -534,7 +526,7 @@ class TestScoreRootCauses:
 
     @patch("seer.automation.autofix.evaluations.score_root_cause_single_it")
     def test_score_root_causes(self, mock_score_root_cause_single_it, mock_dataset_item):
-        mock_score_root_cause_single_it.side_effect = [[0.8, 0.6], [0.7, 0.5], [0.9, 0.7]]
+        mock_score_root_cause_single_it.side_effect = [(0.8, True), (0.7, True), (0.9, True)]
 
         causes = [
             RootCauseAnalysisItem(
@@ -542,25 +534,20 @@ class TestScoreRootCauses:
                 title="Cause 1",
                 description="Description 1",
                 reproduction="Steps to reproduce 1",
-            ),
-            RootCauseAnalysisItem(
-                id=2,
-                title="Cause 2",
-                description="Description 2",
-                reproduction="Steps to reproduce 2",
-            ),
+            )
         ]
 
         result = score_root_causes(mock_dataset_item, causes, n_panel=3, model="test_model")
 
-        assert result == {"highest_score": 0.8, "position_score": 1.0, "mean_score": 0.7}
+        assert result == (0.8, True)  # Average score and majority verdict
         assert mock_score_root_cause_single_it.call_count == 3
 
     @patch("seer.automation.autofix.evaluations.score_root_cause_single_it")
     def test_score_root_causes_custom_n_panel(
         self, mock_score_root_cause_single_it, mock_dataset_item
     ):
-        mock_score_root_cause_single_it.side_effect = [[0.8, 0.6], [0.7, 0.5]]
+        # Changed side effect to have majority True (2 True, 0 False)
+        mock_score_root_cause_single_it.side_effect = [(0.6, True), (0.8, True)]
 
         causes = [
             RootCauseAnalysisItem(
@@ -568,18 +555,12 @@ class TestScoreRootCauses:
                 title="Cause 1",
                 description="Description 1",
                 reproduction="Steps to reproduce 1",
-            ),
-            RootCauseAnalysisItem(
-                id=2,
-                title="Cause 2",
-                description="Description 2",
-                reproduction="Steps to reproduce 2",
-            ),
+            )
         ]
 
         result = score_root_causes(mock_dataset_item, causes, n_panel=2, model="test_model")
 
-        assert result == {"highest_score": 0.75, "position_score": 1.0, "mean_score": 0.65}
+        assert result == (0.7, True)  # Average score and majority verdict (2 True > 0 False)
         assert mock_score_root_cause_single_it.call_count == 2
 
 
@@ -619,7 +600,7 @@ class TestScoreFixSingleIt:
         mock_llm_instance = Mock()
         mock_llm_client.return_value = mock_llm_instance
         mock_llm_instance.generate_text.return_value = LlmGenerateTextResponse(
-            message=Message(role="assistant", content="<score>0.8</score>"),
+            message=Message(role="assistant", content="<score>0.8</score><verdict>True</verdict>"),
             metadata=LlmResponseMetadata(
                 model="test_model",
                 provider_name=LlmProviderType.OPENAI,
@@ -629,7 +610,7 @@ class TestScoreFixSingleIt:
 
         result = score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 
-        assert result == 0.8
+        assert result == (0.8, True)
         mock_llm_instance.generate_text.assert_called_once()
 
     @patch("seer.automation.autofix.evaluations.LlmClient")
@@ -647,7 +628,7 @@ class TestScoreFixSingleIt:
 
         result = score_fix_single_it(mock_dataset_item, "predicted diff", model="test_model")
 
-        assert result == 0
+        assert result == (0, False)
 
     def test_score_fix_single_it_missing_expected_output(self, mock_dataset_item):
         mock_dataset_item.expected_output = None
@@ -663,18 +644,19 @@ class TestScoreOne:
 
     @patch("seer.automation.autofix.evaluations.score_fix_single_it")
     def test_score_one(self, mock_score_fix_single_it, mock_dataset_item):
-        mock_score_fix_single_it.side_effect = [0.7, 0.8, 0.9]
+        mock_score_fix_single_it.side_effect = [(0.7, True), (0.8, True), (0.9, True)]
 
         result = score_one(mock_dataset_item, "predicted diff", n_panel=3, model="test_model")
 
-        assert result == 0.8
+        assert result == (0.8, True)  # Average score and majority verdict
         assert mock_score_fix_single_it.call_count == 3
 
     @patch("seer.automation.autofix.evaluations.score_fix_single_it")
     def test_score_one_custom_n_panel(self, mock_score_fix_single_it, mock_dataset_item):
-        mock_score_fix_single_it.side_effect = [0.6, 0.8]
+        # Changed side effect to have majority True (2 True, 0 False)
+        mock_score_fix_single_it.side_effect = [(0.6, True), (0.8, True)]
 
         result = score_one(mock_dataset_item, "predicted diff", n_panel=2, model="test_model")
 
-        assert result == 0.7
+        assert result == (0.7, True)  # Average score and majority verdict (2 True > 0 False)
         assert mock_score_fix_single_it.call_count == 2
