@@ -555,7 +555,14 @@ class FilePatch(BaseModel):
             return None
 
         # For M type
-        return self._apply_hunks(file_contents.splitlines(keepends=True))
+        new_contents = self._apply_hunks(file_contents.splitlines(keepends=True))
+
+        # Preserve any trailing characters from original
+        if file_contents:
+            trailing = file_contents[len(file_contents.rstrip()) :]
+            return new_contents + trailing
+
+        return new_contents
 
     def _apply_hunks(self, lines: List[str]) -> str:
         result = []
