@@ -18,10 +18,52 @@ from seer.bootup import module, stub_module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+
 logger = logging.getLogger(__name__)
 
+def clean_value(value: Any) -> Any:
+    """Clean a potentially double serialized value."""
+    if not isinstance(value, str):
+        return value
+        
+    # Remove surrounding quotes if present
+    if value.startswith("'") and value.endswith("'"):
+        value = value[1:-1]
+    
+    # Handle empty strings
+    if not value:
+        return None
+        
+    # Convert numeric strings
+    try:
+        if '.' in value:
+            return float(value)
+        return int(value)
+    except ValueError:
+        pass
+        
+    # Handle boolean values
+    if value.lower() == 'true':
+        return True
+    if value.lower() == 'false':
+        return False
+        
+    return value
+
+def sanitize_request_data(data: dict) -> dict:
+    """
+    Sanitize request data by cleaning double serialized values
+    and converting types appropriately.
+    """
+    if not isinstance(data, dict):
+        return data
+        
+    return {
+        key: clean_value(value) for key, value in data.items()
+    }
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+
 
 
 def access_secret(project_id: str, secret_id: str, version_id: str = "latest"):
@@ -171,7 +213,8 @@ def compare_signature(
     _, signature_data = signature.split(":", 2)
     for key in secrets:
         if nonce:
-            if is_valid(b"%s:%s" % (nonce.encode(), body), key, signature_data):
+                cleaned_data = sanitize_request_data(data)
+                result: BaseModel = implementation(request_annotation.model_validate(cleaned_data))
                 span = sentry_sdk.Hub.current.scope.span
                 if span:
                     span.set_data("rpc_auth_additional_payload", "nonce")
