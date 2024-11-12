@@ -130,7 +130,6 @@ def sync_run_execution(item: DatasetItemClient):
             RootCauseAnalysisItem(
                 title=expected_output.root_cause,
                 description="",
-                reproduction="",
                 code_context=[
                     RootCauseRelevantContext(
                         id=-1,
