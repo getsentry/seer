@@ -13,9 +13,6 @@ class TestPlannerModels:
                 id=1,
                 title="title",
                 description="description",
-                reproduction="reproduction",
-                likelihood=0.5,
-                actionability=0.75,
                 code_context=[
                     RootCauseRelevantContext(
                         id=2,
