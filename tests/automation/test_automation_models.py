@@ -224,6 +224,53 @@ def test_file_patch_apply_with_line_number_mismatch():
     assert result == "line1\nunchanged\nnew_line1\nnew_line2\nline4\n"
 
 
+def test_file_patch_apply_with_target_line_increments():
+    """Test that patch application handles multiple hunks where target line numbers increase due to previous changes"""
+    patch = FilePatch(
+        type="M",
+        path="file.txt",
+        added=3,
+        removed=1,
+        source_file="file.txt",
+        target_file="file.txt",
+        hunks=[
+            Hunk(
+                source_start=2,
+                source_length=2,
+                target_start=2,
+                target_length=3,
+                section_header="@@ -2,2 +2,3 @@",
+                lines=[
+                    Line(source_line_no=2, target_line_no=2, value="unchanged1\n", line_type=" "),
+                    Line(source_line_no=3, value="to_remove1\n", line_type="-"),
+                    Line(target_line_no=3, value="new_line1\n", line_type="+"),
+                    Line(target_line_no=4, value="new_line2\n", line_type="+"),
+                ],
+            ),
+            Hunk(
+                source_start=5,  # Original source line
+                source_length=2,
+                target_start=6,  # Target line increased by 1 due to previous hunk adding a line
+                target_length=3,
+                section_header="@@ -5,2 +6,3 @@",
+                lines=[
+                    Line(source_line_no=5, target_line_no=6, value="unchanged2\n", line_type=" "),
+                    Line(source_line_no=6, value="to_remove2\n", line_type="-"),
+                    Line(target_line_no=7, value="new_line3\n", line_type="+"),
+                    Line(target_line_no=8, value="new_line4\n", line_type="+"),
+                ],
+            ),
+        ],
+    )
+
+    original_content = "line1\nunchanged1\nto_remove1\nline4\nunchanged2\nto_remove2\nline7\n"
+    result = patch.apply(original_content)
+    assert (
+        result
+        == "line1\nunchanged1\nnew_line1\nnew_line2\nline4\nunchanged2\nnew_line3\nnew_line4\nline7\n"
+    )
+
+
 # def test_file_patch_apply_with_line_number_gaps():
 #     """Test applying a patch where line numbers have gaps between hunks"""
 #     patch = FilePatch(
