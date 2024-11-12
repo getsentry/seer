@@ -567,23 +567,32 @@ class FilePatch(BaseModel):
     def _apply_hunks(self, lines: List[str]) -> str:
         result = []
         current_line = 0
+        max_line = len(lines)
 
         for hunk in self.hunks:
-            # Add unchanged lines before the hunk
-            result.extend(lines[current_line : hunk.target_start - 1])
-            current_line = hunk.target_start - 1
+            # Validate target start is within bounds
+            target_start = min(hunk.target_start - 1, max_line)
+            
+            # Add unchanged lines before the hunk, with bounds checking
+            if current_line < target_start:
+                result.extend(lines[current_line:target_start])
+            current_line = target_start
 
             for line in hunk.lines:
                 if line.line_type == "+":
+                    # Added lines don't affect current_line since they're new
                     result.append(line.value + ("\n" if not line.value.endswith("\n") else ""))
                 elif line.line_type == " ":
+                    if current_line >= max_line:
+                        continue
                     result.append(lines[current_line])
                     current_line += 1
                 elif line.line_type == "-":
                     current_line += 1
 
-        # Add any remaining unchanged lines after the last hunk
-        result.extend(lines[current_line:])
+        # Safely add any remaining unchanged lines after the last hunk
+        if current_line < max_line:
+            result.extend(lines[current_line:])
 
         return "".join(result).rstrip("\n")
 
