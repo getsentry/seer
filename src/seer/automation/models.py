@@ -570,8 +570,8 @@ class FilePatch(BaseModel):
 
         for hunk in self.hunks:
             # Add unchanged lines before the hunk
-            result.extend(lines[current_line : hunk.target_start - 1])
-            current_line = hunk.target_start - 1
+            result.extend(lines[current_line : hunk.source_start - 1])
+            current_line = hunk.source_start - 1
 
             for line in hunk.lines:
                 if line.line_type == "+":

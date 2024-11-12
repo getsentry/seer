@@ -147,6 +147,197 @@ def test_file_patch_apply_preserve_trailing_newlines():
     assert result == "First line\nnew line\n\n\n"  # Trailing newlines preserved
 
 
+def test_file_patch_apply_multiple_hunks():
+    patch = FilePatch(
+        type="M",
+        path="file.txt",
+        added=2,
+        removed=2,
+        source_file="file.txt",
+        target_file="file.txt",
+        hunks=[
+            Hunk(
+                source_start=1,
+                source_length=3,
+                target_start=1,
+                target_length=3,
+                section_header="@@ -1,3 +1,3 @@",
+                lines=[
+                    Line(source_line_no=1, target_line_no=1, value="First line\n", line_type=" "),
+                    Line(source_line_no=2, value="old second line\n", line_type="-"),
+                    Line(target_line_no=2, value="new second line\n", line_type="+"),
+                    Line(source_line_no=3, target_line_no=3, value="Third line\n", line_type=" "),
+                ],
+            ),
+            Hunk(
+                source_start=5,
+                source_length=3,
+                target_start=5,
+                target_length=3,
+                section_header="@@ -5,3 +5,3 @@",
+                lines=[
+                    Line(source_line_no=5, target_line_no=5, value="Fifth line\n", line_type=" "),
+                    Line(source_line_no=6, value="old sixth line\n", line_type="-"),
+                    Line(target_line_no=6, value="new sixth line\n", line_type="+"),
+                    Line(source_line_no=7, target_line_no=7, value="Seventh line", line_type=" "),
+                ],
+            ),
+        ],
+    )
+
+    original_content = "First line\nold second line\nThird line\nFourth line\nFifth line\nold sixth line\nSeventh line"
+    result = patch.apply(original_content)
+    assert (
+        result
+        == "First line\nnew second line\nThird line\nFourth line\nFifth line\nnew sixth line\nSeventh line"
+    )
+
+
+def test_file_patch_apply_with_line_number_mismatch():
+    """Test that patch application correctly handles source vs target line numbers"""
+    patch = FilePatch(
+        type="M",
+        path="file.txt",
+        added=2,
+        removed=1,
+        source_file="file.txt",
+        target_file="file.txt",
+        hunks=[
+            Hunk(
+                source_start=2,  # Line numbers in original file
+                source_length=2,
+                target_start=4,  # Different line numbers in target file
+                target_length=3,
+                section_header="@@ -2,2 +4,3 @@",
+                lines=[
+                    Line(source_line_no=2, target_line_no=4, value="unchanged\n", line_type=" "),
+                    Line(source_line_no=3, value="to_remove\n", line_type="-"),
+                    Line(target_line_no=5, value="new_line1\n", line_type="+"),
+                    Line(target_line_no=6, value="new_line2\n", line_type="+"),
+                ],
+            )
+        ],
+    )
+
+    original_content = "line1\nunchanged\nto_remove\nline4\n"
+    result = patch.apply(original_content)
+    assert result == "line1\nunchanged\nnew_line1\nnew_line2\nline4\n"
+
+
+# def test_file_patch_apply_with_line_number_gaps():
+#     """Test applying a patch where line numbers have gaps between hunks"""
+#     patch = FilePatch(
+#         type="M",
+#         path="file.txt",
+#         added=1,
+#         removed=1,
+#         source_file="file.txt",
+#         target_file="file.txt",
+#         hunks=[
+#             Hunk(
+#                 source_start=78,  # High line number
+#                 source_length=3,
+#                 target_start=78,
+#                 target_length=3,
+#                 section_header="@@ -78,3 +78,3 @@",
+#                 lines=[
+#                     Line(source_line_no=78, target_line_no=78, value="unchanged\n", line_type=" "),
+#                     Line(source_line_no=79, value="removed\n", line_type="-"),
+#                     Line(target_line_no=79, value="added\n", line_type="+"),
+#                     Line(source_line_no=80, target_line_no=80, value="unchanged\n", line_type=" ")
+#                 ]
+#             )
+#         ]
+#     )
+
+#     # File has fewer lines than patch line numbers
+#     original_content = "unchanged\nremoved\nunchanged\n"
+#     result = patch.apply(original_content)
+#     assert result == "unchanged\nadded\nunchanged\n"
+
+
+# def test_file_patch_apply_with_source_bounds_checking():
+#     """Test that patch application properly handles source file bounds"""
+#     patch = FilePatch(
+#         type="M",
+#         path="file.txt",
+#         added=2,
+#         removed=1,
+#         source_file="file.txt",
+#         target_file="file.txt",
+#         hunks=[
+#             Hunk(
+#                 source_start=8,
+#                 source_length=4,
+#                 target_start=8,
+#                 target_length=5,
+#                 section_header="@@ -8,4 +8,5 @@",
+#                 lines=[
+#                     Line(source_line_no=8, target_line_no=8, value="line8\n", line_type=" "),
+#                     Line(source_line_no=9, value="removed9\n", line_type="-"),
+#                     Line(target_line_no=9, value="added9\n", line_type="+"),
+#                     Line(target_line_no=10, value="added10\n", line_type="+"),
+#                     Line(source_line_no=10, target_line_no=11, value="line10\n", line_type=" ")
+#                 ]
+#             )
+#         ]
+#     )
+
+#     # File has exactly enough lines
+#     original_content = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nremoved9\nline10\n"
+#     result = patch.apply(original_content)
+#     assert result == "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nadded9\nadded10\nline10\n"
+
+#     # File has fewer lines than needed
+#     short_content = "line1\nline2\nline3\n"
+#     result = patch.apply(short_content)
+#     assert result == "line1\nline2\nline3\n"
+
+
+# def test_file_patch_apply_with_multiple_hunks_and_bounds():
+#     """Test applying multiple hunks while respecting file bounds"""
+#     patch = FilePatch(
+#         type="M",
+#         path="file.txt",
+#         added=2,
+#         removed=2,
+#         source_file="file.txt",
+#         target_file="file.txt",
+#         hunks=[
+#             Hunk(
+#                 source_start=2,
+#                 source_length=3,
+#                 target_start=2,
+#                 target_length=3,
+#                 section_header="@@ -2,3 +2,3 @@",
+#                 lines=[
+#                     Line(source_line_no=2, target_line_no=2, value="line2\n", line_type=" "),
+#                     Line(source_line_no=3, value="old3\n", line_type="-"),
+#                     Line(target_line_no=3, value="new3\n", line_type="+"),
+#                     Line(source_line_no=4, target_line_no=4, value="line4\n", line_type=" ")
+#                 ]
+#             ),
+#             Hunk(
+#                 source_start=83,  # Far beyond file bounds
+#                 source_length=2,
+#                 target_start=83,
+#                 target_length=2,
+#                 section_header="@@ -83,2 +83,2 @@",
+#                 lines=[
+#                     Line(source_line_no=83, value="oldline\n", line_type="-"),
+#                     Line(target_line_no=83, value="newline\n", line_type="+"),
+#                     Line(source_line_no=84, target_line_no=84, value="unchanged\n", line_type=" ")
+#                 ]
+#             )
+#         ]
+#     )
+
+#     original_content = "line1\nline2\nold3\nline4\nline5\n"
+#     result = patch.apply(original_content)
+#     # Only first hunk should be applied since second is out of bounds
+#     assert result == "line1\nline2\nnew3\nline4\nline5\n"
+
+
 # New tests for FileChange
 
 
