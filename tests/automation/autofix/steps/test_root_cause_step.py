@@ -93,7 +93,7 @@ class TestRootCauseStep(unittest.TestCase):
         mock_context.comment_root_cause_on_pr.assert_called_once_with(
             pr_url=pr_url,
             repo_definition=repo,
-            root_cause="# Test title\n\n## Description\nTest root cause\n\n## Reproduction Steps\nNone",
+            root_cause="# Test title\n\n## Description\nTest root cause",
         )
 
         # Assert that other expected methods were called

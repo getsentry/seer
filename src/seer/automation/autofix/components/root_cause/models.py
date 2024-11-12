@@ -68,8 +68,8 @@ class RootCauseAnalysisItem(BaseModel):
 
     def to_markdown_string(self) -> str:
         markdown = f"# {self.title}\n\n"
-        markdown += f"## Description\n{self.description}\n\n"
-        markdown += f"## Reproduction Steps\n{self.reproduction}\n\n"
+        markdown += f"## Description\n{self.description}\n\n" if self.description else ""
+        markdown += f"## Reproduction Steps\n{self.reproduction}\n\n" if self.reproduction else ""
 
         if self.code_context:
             markdown += "## Relevant Code Context\n\n"
@@ -91,7 +91,7 @@ class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
     # reproduction_instructions: str | None = None
-    unit_test: UnitTestSnippetPrompt | None = None
+    # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
     @classmethod
