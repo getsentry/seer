@@ -271,6 +271,37 @@ def test_file_patch_apply_with_target_line_increments():
     )
 
 
+def test_file_patch_apply_raises_on_hunk_error():
+    """Test that patch.apply raises FileChangeError when _apply_hunks fails"""
+    patch = FilePatch(
+        type="M",
+        path="file.txt",
+        added=1,
+        removed=1,
+        source_file="file.txt",
+        target_file="file.txt",
+        hunks=[
+            Hunk(
+                source_start=8,  # Source line that doesn't exist
+                source_length=2,
+                target_start=2,
+                target_length=2,
+                section_header="@@ -2,2 +2,2 @@",
+                lines=[
+                    Line(source_line_no=2, target_line_no=2, value="unchanged\n", line_type=" "),
+                    Line(source_line_no=3, value="old\n", line_type="-"),
+                    Line(target_line_no=3, value="new\n", line_type="+"),
+                ],
+            ),
+        ],
+    )
+
+    original_content = "line1\ndifferent_content\nold\nline4\n"
+
+    with pytest.raises(FileChangeError, match="Error applying hunks"):
+        patch.apply(original_content)
+
+
 # New tests for FileChange
 
 
