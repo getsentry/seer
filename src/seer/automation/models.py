@@ -555,7 +555,10 @@ class FilePatch(BaseModel):
             return None
 
         # For M type
-        new_contents = self._apply_hunks(file_contents.splitlines(keepends=True))
+        try:
+            new_contents = self._apply_hunks(file_contents.splitlines(keepends=True))
+        except Exception as e:
+            raise FileChangeError(f"Error applying hunks: {e}")
 
         # Preserve any trailing characters from original
         if file_contents:
@@ -570,8 +573,8 @@ class FilePatch(BaseModel):
 
         for hunk in self.hunks:
             # Add unchanged lines before the hunk
-            result.extend(lines[current_line : hunk.target_start - 1])
-            current_line = hunk.target_start - 1
+            result.extend(lines[current_line : hunk.source_start - 1])
+            current_line = hunk.source_start - 1
 
             for line in hunk.lines:
                 if line.line_type == "+":
