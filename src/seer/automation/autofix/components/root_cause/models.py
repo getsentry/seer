@@ -62,14 +62,13 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    unit_test: UnitTestSnippet | None = None
-    reproduction: str | None = None
+    # unit_test: UnitTestSnippet | None = None
+    # reproduction: str | None = None
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
     def to_markdown_string(self) -> str:
         markdown = f"# {self.title}\n\n"
-        markdown += f"## Description\n{self.description}\n\n"
-        markdown += f"## Reproduction Steps\n{self.reproduction}\n\n"
+        markdown += f"## Description\n{self.description}\n\n" if self.description else ""
 
         if self.code_context:
             markdown += "## Relevant Code Context\n\n"
@@ -91,7 +90,7 @@ class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
     # reproduction_instructions: str | None = None
-    unit_test: UnitTestSnippetPrompt | None = None
+    # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
     @classmethod

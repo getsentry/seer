@@ -99,7 +99,6 @@ class TestSyncRunEvaluationOnItem:
                 id=1,
                 title="Test Cause",
                 description="Test Description",
-                reproduction="Steps to reproduce",
                 code_context=[
                     RootCauseRelevantContext(
                         id=2,
@@ -210,7 +209,6 @@ class TestSyncRunEvaluationOnItem:
                     id=1,
                     title="Test Cause",
                     description="Test cause description",
-                    reproduction="Steps to reproduce",
                     code_context=[],
                 )
             ],
@@ -289,7 +287,6 @@ class TestSyncRunEvaluationOnItem:
                     id=1,
                     title="Test Cause",
                     description="Test cause description",
-                    reproduction="Steps to reproduce",
                     code_context=[
                         RootCauseRelevantContext(
                             id=2,
@@ -376,7 +373,6 @@ class TestSyncRunRootCause:
                 id=1,
                 title="Test Cause",
                 description="Test Description",
-                reproduction="Steps to reproduce",
                 code_context=[
                     RootCauseRelevantContext(
                         id=2,
@@ -468,7 +464,6 @@ class TestScoreRootCauseSingleIt:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                reproduction="Steps to reproduce 1",
             )
         ]
 
@@ -495,7 +490,6 @@ class TestScoreRootCauseSingleIt:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                reproduction="Steps to reproduce",
             )
         ]
 
@@ -511,7 +505,6 @@ class TestScoreRootCauseSingleIt:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                reproduction="Steps to reproduce",
             )
         ]
 
@@ -533,7 +526,6 @@ class TestScoreRootCauses:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                reproduction="Steps to reproduce 1",
             )
         ]
 
@@ -554,7 +546,6 @@ class TestScoreRootCauses:
                 id=1,
                 title="Cause 1",
                 description="Description 1",
-                reproduction="Steps to reproduce 1",
             )
         ]
 

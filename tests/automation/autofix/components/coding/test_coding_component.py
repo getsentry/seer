@@ -323,7 +323,6 @@ class TestCodingComponent:
         mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
         mock_request.root_cause_and_fix.title = "Test Error"
         mock_request.root_cause_and_fix.description = "Test Description"
-        mock_request.root_cause_and_fix.reproduction = "Test Reproduction"
         mock_request.root_cause_and_fix.code_context = [
             MagicMock(
                 title="Test Context",
@@ -381,7 +380,6 @@ class TestCodingComponent:
         mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
         mock_request.root_cause_and_fix.title = "Test Error"
         mock_request.root_cause_and_fix.description = "Test Description"
-        mock_request.root_cause_and_fix.reproduction = "Test Reproduction"
         mock_request.root_cause_and_fix.code_context = [
             MagicMock(
                 title="Test Context",
