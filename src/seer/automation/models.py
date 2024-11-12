@@ -555,7 +555,10 @@ class FilePatch(BaseModel):
             return None
 
         # For M type
-        new_contents = self._apply_hunks(file_contents.splitlines(keepends=True))
+        try:
+            new_contents = self._apply_hunks(file_contents.splitlines(keepends=True))
+        except Exception as e:
+            raise FileChangeError(f"Error applying hunks: {e}")
 
         # Preserve any trailing characters from original
         if file_contents:
