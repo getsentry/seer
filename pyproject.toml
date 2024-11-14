@@ -17,55 +17,33 @@
     mypy_path = []
     plugins = ["pydantic.mypy"]
     files = ["src/"]
-
+    disable_error_code = ["no-untyped-def"]
     # minimal strictness settings
-    check_untyped_defs = true
     no_implicit_reexport = true
     warn_unreachable = true
     warn_unused_configs = true
     warn_unused_ignores = true
     warn_redundant_casts = true
+    disallow_incomplete_defs = true
+    warn_no_return = true
 
-    [[tool.mypy.overrides]]
-        module = [
-            "matplotlib.*",
-            "joblib.*",
-            "sentence_transformers.*",
-            "scipy.*",
-            "openai_multi_tool_use_parallel_patch",
-            "fsspec",
-            "unidiff",
-            "tree_sitter_languages",
-            "tree_sitter",
-            "google.cloud.*",
-            "langfuse.*",
-            "langfuse",
-            "sklearn.dummy",
-            "urllib3",
-            "urllib",
-            "urllib.*",
-        ]
-        ignore_missing_imports = true
-
-    [[tool.mypy.overrides]]
-        module = []
-        disable_error_code = [
-            "arg-type",
-            "assignment",
-            "attr-defined",
-            "call-arg",
-            "call-overload",
-            "dict-item",
-            "has-type",
-            "index",
-            "list-item",
-            "misc",
-            "operator",
-            "override",
-            "return-value",
-            "typeddict-item",
-            "typeddict-unknown-key",
-            "union-attr",
-            "unreachable",
-            "var-annotated",
-        ]
+[[tool.mypy.overrides]]
+    module = [
+        "matplotlib.*",
+        "joblib.*",
+        "sentence_transformers.*",
+        "scipy.*",
+        "openai_multi_tool_use_parallel_patch",
+        "fsspec",
+        "unidiff",
+        "tree_sitter_languages",
+        "tree_sitter",
+        "google.cloud.*",
+        "langfuse.*",
+        "langfuse",
+        "sklearn.dummy",
+        "urllib3",
+        "urllib",
+        "urllib.*",
+    ]
+    ignore_missing_imports = true
