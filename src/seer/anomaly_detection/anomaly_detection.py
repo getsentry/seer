@@ -338,20 +338,13 @@ class AnomalyDetection(BaseModel):
     def _update_anomalies(
         self,
         ts_external: List[TimeSeriesPoint],
-        anomalies_suss: MPTimeSeriesAnomalies,
-        anomalies_fixed: MPTimeSeriesAnomalies,
+        anomalies: MPTimeSeriesAnomalies,
     ):
         for i, point in enumerate(ts_external):
-            if anomalies_suss.use_suss[i]:
-                point.anomaly = Anomaly(
-                    anomaly_score=anomalies_suss.scores[i],
-                    anomaly_type=anomalies_suss.flags[i],
-                )
-            else:
-                point.anomaly = Anomaly(
-                    anomaly_score=anomalies_fixed.scores[i],
-                    anomaly_type=anomalies_fixed.flags[i],
-                )
+            point.anomaly = Anomaly(
+                anomaly_score=anomalies.scores[i],
+                anomaly_type=anomalies.flags[i],
+            )
 
     def _combine_anomalies(
         self, anomalies_suss: MPTimeSeriesAnomalies, anomalies_fixed: MPTimeSeriesAnomalies
