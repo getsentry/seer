@@ -203,7 +203,7 @@ class AnomalyDetection(BaseModel):
         if (
             not use_suss_window
             and streamed_anomalies_fixed.flags[-1] == "none"
-            and streamed_anomalies_fixed.flags[-1] == "none"
+            and streamed_anomalies_suss.flags[-1] == "none"
         ):
             use_suss_window = True
 
