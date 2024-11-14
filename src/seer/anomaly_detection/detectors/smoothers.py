@@ -1,5 +1,5 @@
 import abc
-from typing import List, Tuple
+from typing import List, Tuple, cast
 
 import numpy as np
 import sentry_sdk
@@ -97,7 +97,7 @@ class MajorityVoteBatchFlagSmoother(FlagSmoother):
             ):
                 new_flags[i] = "anomaly_higher_confidence"
 
-        return new_flags[start_idx:end_idx].tolist()
+        return cast(list, new_flags[start_idx:end_idx].tolist())
 
     @sentry_sdk.trace
     def smooth(

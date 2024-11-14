@@ -113,3 +113,5 @@ grpcio-health-checking>=1.66
 grpcio-reflection>=1.66
 prophet==1.1.*
 rapidfuzz==3.10.*
+pytest-vcr==1.*
+vcrpy==6.*
