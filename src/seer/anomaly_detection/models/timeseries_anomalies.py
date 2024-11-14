@@ -58,7 +58,7 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
     )
 
     use_suss: list[bool] = Field(
-        ..., description="Whether the SuSS window was used to detect anomalies"
+        default=[], description="Whether the SuSS window was used to detect anomalies"
     )
 
     def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:

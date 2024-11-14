@@ -132,7 +132,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         return MPTimeSeriesAnomalies(
             flags=flags_and_scores.flags,
             scores=flags_and_scores.scores,
-            matrix_profile=mp,
+            matrix_profile_suss=mp,
+            matrix_profile_fixed=mp,  # TODO: This kinda doesn't make sense
             window_size=window_size,
             thresholds=flags_and_scores.thresholds,
         )
@@ -248,7 +249,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             return MPTimeSeriesAnomalies(
                 flags=flags,
                 scores=scores,
-                matrix_profile=stumpy.mparray.mparray(
+                matrix_profile_suss=stumpy.mparray.mparray(
+                    streamed_mp,
+                    k=1,
+                    m=self.window_size,
+                    excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
+                ),
+                matrix_profile_fixed=stumpy.mparray.mparray(
                     streamed_mp,
                     k=1,
                     m=self.window_size,
