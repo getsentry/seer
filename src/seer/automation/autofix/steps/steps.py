@@ -150,7 +150,9 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             )
 
             # This time this will error the entire pipeline.
-            self.context.event_manager.on_error(str(exception))
+            self.context.event_manager.on_error(
+                "Oops, something went wrong inside. We use Sentry too, so we're already on it."
+            )
 
 
 @celery_app.task(
