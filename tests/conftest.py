@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.request import Request
 
 import johen
 import pytest
@@ -13,15 +14,11 @@ from seer.app import module
 from seer.bootup import bootup, stub_module
 from seer.configuration import configuration_test_module
 from seer.db import Session, db
-from seer.dependency_injection import Module, resolve
+from seer.dependency_injection import resolve
 from seer.inference_models import reset_loading_state
+from seer.rpc import rpc_stub_module
 
 logger = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def test_module() -> Module:
-    return stub_module
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -53,12 +50,13 @@ def alembic_runner(alembic_config: Config, setup_app):
 
 
 @pytest.fixture(autouse=True)
-def setup_app(test_module: Module):
-    with module, configuration_test_module, test_module:
+def setup_app():
+    with module, configuration_test_module, stub_module, rpc_stub_module:
         reset_loading_state()
         bootup(start_model_loading=False, integrations=[])
         app = resolve(Flask)
         app.testing = True
+        # Makes it easier to see stack traces that fail flask endpoint tests.
         app.config["PROPAGATE_EXCEPTIONS"] = True
 
         # Clean up and recreate the database using the `create_all` rather than invoking migrations over and over
@@ -97,6 +95,24 @@ def reset_environ():
         yield
     finally:
         os.environ = old_env
+
+
+def filter_unrelated_requests(request: Request):
+    if request.host.startswith("192"):
+        return None
+    if "sentry.io" in request.host:
+        return None
+    return request
+
+
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [("authorization", "redacted")],
+        "record_mode": "none" if os.environ.get("CI") else "once",
+        "before_record_request": filter_unrelated_requests,
+        "filter_post_data_parameters": ["client_secret", "refresh_token"],
+    }
 
 
 johen.global_config["matchers"].extend(

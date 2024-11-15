@@ -1,8 +1,6 @@
 from enum import StrEnum
 from typing import Any
 
-from celery import Celery
-
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import injected
@@ -34,11 +32,3 @@ def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
         },
         result_backend="rpc://",
     )
-
-
-@module.provider
-def create_celery_app(config: CeleryConfig = injected) -> Celery:
-    app = Celery("seer")
-    for k, v in config.items():
-        setattr(app.conf, k, v)
-    return app
