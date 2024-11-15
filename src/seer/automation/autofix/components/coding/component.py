@@ -99,9 +99,12 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     ):
         state = self.context.state.get()
 
+        # Clean memory of tool messages since we're running without tools
+        cleaned_memory = LlmClient.clean_tool_call_assistant_messages(memory)
+
         agent = AutofixAgent(
             config=AgentConfig(interactive=True),
-            memory=memory,
+            memory=cleaned_memory,
             context=self.context,
             name="Plan+Code Simple fixer",
         )
