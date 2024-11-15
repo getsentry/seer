@@ -126,7 +126,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         )
 
         if not response:
-            return None
+            raise RuntimeError("No response from simple fixer llm call")
+
+        self.context.store_memory("plan_and_code", agent.memory)
 
         output = SimpleChangeOutputXml.from_xml(
             f"<output>{escape_multi_xml(response, ['unified_diff', 'description', 'commit_message'])}</output>"
@@ -266,10 +268,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             if is_obvious:
                 coding_output = self._handle_simple_fix(request, task_str, memory)
-                if not coding_output:
-                    raise ValueError("Failed to handle simple fix")
-
-                self.context.store_memory("plan_and_code", agent.memory)
             else:
                 state = self.context.state.get()
 
