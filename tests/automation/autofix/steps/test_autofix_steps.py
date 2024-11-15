@@ -105,7 +105,9 @@ class TestAutofixPipelineStep:
         exception = Exception("Test error")
         mock_step._handle_exception(exception)
 
-        mock_step.context.event_manager.on_error.assert_called_once_with(str(exception))
+        mock_step.context.event_manager.on_error.assert_called_once_with(
+            "Oops, something went wrong inside. We use Sentry too, so we're already on it."
+        )
         mock_step.next.assert_not_called()
 
     @patch("seer.automation.autofix.steps.steps.make_retry_prefix")
@@ -144,7 +146,9 @@ class TestAutofixPipelineStep:
         exception = Exception("Test error")
         mock_step._handle_exception(exception)
 
-        mock_step.context.event_manager.on_error.assert_called_once_with(str(exception))
+        mock_step.context.event_manager.on_error.assert_called_once_with(
+            "Oops, something went wrong inside. We use Sentry too, so we're already on it."
+        )
         mock_step.next.assert_not_called()
 
     @patch("os._exit")
