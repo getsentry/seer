@@ -184,6 +184,11 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             raise ServerError("History values and timestamps are not of the same length")
 
         if len(self.history_values) - self.window_size + 1 != len(self.history_mp):
+            print("HISTORY MATRIX PROFILE##################################")
+            # print(self.history_values)
+            print(self.history_mp)
+            # print(len(self.history_values) - self.window_size + 1, len(self.history_mp))
+            # print(len(self.history_values), self.window_size, len(self.history_mp))
             raise ServerError("Matrix profile is not of the right length.")
         stream = None
         with sentry_sdk.start_span(description="Initializing MP stream"):

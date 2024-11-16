@@ -78,8 +78,14 @@ class AnomalyDetection(BaseModel):
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector = MPBatchAnomalyDetector()
         anomalies = None
-        anomalies = batch_detector.detect(
+        anomalies_suss = batch_detector.detect(
             convert_external_ts_to_internal(timeseries), config, window_size=window_size
+        )
+        anomalies_fixed = batch_detector.detect(
+            convert_external_ts_to_internal(timeseries), config, window_size=10
+        )
+        anomalies = self._combine_anomalies(
+            anomalies_suss, anomalies_fixed, [True] * len(timeseries)
         )
 
         return timeseries, anomalies
@@ -145,6 +151,9 @@ class AnomalyDetection(BaseModel):
                 f"Not enough timeseries data. At least {min_data} data points required"
             )
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
+        print("ANOMALIES##################################")
+        print(anomalies.matrix_profile_suss)
+        # print(anomalies.matrix_profile_fixed)
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
@@ -379,8 +388,8 @@ class AnomalyDetection(BaseModel):
                 for i in range(len(anomalies_suss.scores))
             ],
             thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
-            matrix_profile_suss=anomalies_suss.matrix_profile_suss,
-            matrix_profile_fixed=anomalies_fixed.matrix_profile_fixed,
+            matrix_profile_suss=anomalies_suss.matrix_profile,
+            matrix_profile_fixed=anomalies_fixed.matrix_profile,
             window_size=anomalies_suss.window_size,
             original_flags=anomalies_suss.original_flags,
             use_suss=use_suss,

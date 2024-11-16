@@ -172,6 +172,7 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
     @staticmethod
     def extract_algo_data(map: dict):
         # Matrix profile for SuSS and fixed windows could be None so much check for that
+        # TODO: FIX THIS THE VALUES ARE NOT BEING PROPERLY EXTRACTED
         mp_suss = (
             {
                 "dist": map.get("dist_suss"),
