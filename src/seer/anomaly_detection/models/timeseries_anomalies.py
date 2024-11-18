@@ -171,33 +171,26 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
 
     @staticmethod
     def extract_algo_data(map: dict):
-        # Matrix profile for SuSS and fixed windows could be None so much check for that
-        # TODO: FIX THIS THE VALUES ARE NOT BEING PROPERLY EXTRACTED
+        # Matrix profile for SuSS and fixed windows could be None so we check for that
         mp_suss = (
             {
-                "dist": map.get("dist_suss"),
-                "idx": map.get("idx_suss"),
-                "l_idx": map.get("l_idx_suss"),
-                "r_idx": map.get("r_idx_suss"),
+                "dist": map.get("mp_suss").get("dist"),
+                "idx": map.get("mp_suss").get("idx"),
+                "l_idx": map.get("mp_suss").get("l_idx"),
+                "r_idx": map.get("mp_suss").get("r_idx"),
             }
-            if any(
-                map.get(key) is not None
-                for key in ["dist_suss", "idx_suss", "l_idx_suss", "r_idx_suss"]
-            )
+            if map.get("mp_suss") is not None
             else None
         )
 
         mp_fixed = (
             {
-                "dist": map.get("dist_fixed"),
-                "idx": map.get("idx_fixed"),
-                "l_idx": map.get("l_idx_fixed"),
-                "r_idx": map.get("r_idx_fixed"),
+                "dist": map.get("mp_fixed").get("dist"),
+                "idx": map.get("mp_fixed").get("idx"),
+                "l_idx": map.get("mp_fixed").get("l_idx"),
+                "r_idx": map.get("mp_fixed").get("r_idx"),
             }
-            if any(
-                map.get(key) is not None
-                for key in ["dist_fixed", "idx_fixed", "l_idx_fixed", "r_idx_fixed"]
-            )
+            if map.get("mp_fixed") is not None
             else None
         )
 
