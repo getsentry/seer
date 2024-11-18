@@ -227,28 +227,47 @@ class AnomalyDetection(BaseModel):
             )
             raise ClientError("Insufficient history data")
 
+        orig_curr_len = len(ts_with_history.current)
         logger.info(
-            f"Detecting anomalies for time series with {len(ts_with_history.current)} datapoints and history of {len(ts_with_history.history)} datapoints"
+            f"Detecting anomalies for time series with {len(ts_with_history.history)} datapoints and history of {orig_curr_len} datapoints"
         )
+        trim_current_by = 0
+        MAX_STREAM_DETECTION_LEN = 400
+        if orig_curr_len > MAX_STREAM_DETECTION_LEN:
+            trim_current_by = orig_curr_len - MAX_STREAM_DETECTION_LEN
+            logger.info(
+                f"Limiting stream detection to last 400 datapoints of the original {orig_curr_len} datapoints."
+            )
+            ts_with_history.history.extend(ts_with_history.current[0:-MAX_STREAM_DETECTION_LEN])
+            ts_with_history.current = ts_with_history.current[-MAX_STREAM_DETECTION_LEN:]
         ts_external: List[TimeSeriesPoint] = ts_with_history.current
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
-        anomalies = batch_detector.detect(historic, config)
+        historic_anomalies = batch_detector.detect(historic, config)
 
         # Run stream detection on current data
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
-            history_mp=anomalies.matrix_profile,
-            window_size=anomalies.window_size,
-            original_flags=anomalies.original_flags,
+            history_mp=historic_anomalies.matrix_profile,
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external), config
         )
+
+        if trim_current_by > 0:
+            ts_external = ts_with_history.history[-trim_current_by:] + ts_external
+            streamed_anomalies.flags = (
+                historic_anomalies.flags[-trim_current_by:] + streamed_anomalies.flags
+            )
+            streamed_anomalies.scores = (
+                historic_anomalies.scores[-trim_current_by:] + streamed_anomalies.scores
+            )
         return ts_external, streamed_anomalies
 
     def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):

@@ -240,6 +240,38 @@ class TestAnomalyDetection(unittest.TestCase):
             assert len(response.timeseries) == n
             assert isinstance(response.timeseries[0], TimeSeriesPoint)
 
+    def test_detect_anomalies_combo_large_current(self):
+
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
+        )
+
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+        ts_history = loaded_synthetic_data.timeseries[0]
+        n = 600
+
+        # Generate new observation window of n points which are the same as the last point
+        ts_current = []
+        for j in range(1, n + 1):
+            ts_current.append(
+                TimeSeriesPoint(timestamp=len(ts_history) + j, value=ts_history[-1].value)
+            )
+
+        context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
+
+        request = DetectAnomaliesRequest(
+            organization_id=1, project_id=1, config=config, context=context
+        )
+
+        response = AnomalyDetection().detect_anomalies(request=request)
+
+        assert isinstance(response, DetectAnomaliesResponse)
+        assert isinstance(response.timeseries, list)
+        assert len(response.timeseries) == n
+        assert isinstance(response.timeseries[0], TimeSeriesPoint)
+
     def test_delete_alert_data_success(self):
         mock_alert_data_accessor = MagicMock()
 
