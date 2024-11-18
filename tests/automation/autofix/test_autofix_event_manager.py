@@ -191,3 +191,67 @@ class TestAutofixEventManager:
         assert result is True
         mock_time.assert_called_with(0.5)
         assert mock_time.call_count == 2  # Called twice before signals are cleared
+
+    def test_send_root_cause_analysis_start(self, event_manager, state):
+        # No existing root cause step
+        event_manager.send_root_cause_analysis_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 1
+        root_cause_step = state_obj.steps[0]
+        assert root_cause_step.key == event_manager.root_cause_analysis_processing_step.key
+        assert root_cause_step.status == AutofixStatus.PROCESSING
+        assert state_obj.status == AutofixStatus.PROCESSING
+
+        #  Existing root cause step with different status
+        with state.update() as cur:
+            cur.steps[0].status = AutofixStatus.COMPLETED
+
+        event_manager.send_root_cause_analysis_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 2  # Should add new step
+        root_cause_step = state_obj.steps[-1]
+        assert root_cause_step.key == event_manager.root_cause_analysis_processing_step.key
+        assert root_cause_step.status == AutofixStatus.PROCESSING
+
+        # Existing processing root cause step
+        event_manager.send_root_cause_analysis_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 2  # Should not add new step
+        root_cause_step = state_obj.steps[-1]
+        assert root_cause_step.key == event_manager.root_cause_analysis_processing_step.key
+        assert root_cause_step.status == AutofixStatus.PROCESSING
+
+    def test_send_coding_start(self, event_manager, state):
+        # No existing plan step
+        event_manager.send_coding_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 1
+        plan_step = state_obj.steps[0]
+        assert plan_step.key == event_manager.plan_step.key
+        assert plan_step.status == AutofixStatus.PROCESSING
+        assert state_obj.status == AutofixStatus.PROCESSING
+
+        # Existing plan step with different status
+        with state.update() as cur:
+            cur.steps[0].status = AutofixStatus.COMPLETED
+
+        event_manager.send_coding_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 2  # Should add new step
+        plan_step = state_obj.steps[-1]
+        assert plan_step.key == event_manager.plan_step.key
+        assert plan_step.status == AutofixStatus.PROCESSING
+
+        # Existing processing plan step
+        event_manager.send_coding_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 2  # Should not add new step
+        plan_step = state_obj.steps[-1]
+        assert plan_step.key == event_manager.plan_step.key
+        assert plan_step.status == AutofixStatus.PROCESSING
