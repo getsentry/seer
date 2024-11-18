@@ -130,7 +130,10 @@ class AutofixEventManager:
 
     def send_coding_start(self):
         with self.state.update() as cur:
-            plan_step = cur.add_step(self.plan_step)
+            plan_step = cur.find_or_add(self.plan_step)
+            if plan_step.status != AutofixStatus.PROCESSING:
+                plan_step = cur.add_step(self.plan_step)
+
             plan_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
