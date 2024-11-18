@@ -82,7 +82,7 @@ class AutofixEventManager:
         with self.state.update() as cur:
             root_cause_step = cur.find_step(key=self.root_cause_analysis_processing_step.key)
 
-            if root_cause_step is None or root_cause_step.status != AutofixStatus.PROCESSING:
+            if not root_cause_step or root_cause_step.status != AutofixStatus.PROCESSING:
                 root_cause_step = cur.add_step(self.root_cause_analysis_processing_step)
 
             root_cause_step.status = AutofixStatus.PROCESSING
@@ -131,7 +131,7 @@ class AutofixEventManager:
     def send_coding_start(self):
         with self.state.update() as cur:
             plan_step = cur.find_step(key=self.plan_step.key)
-            if plan_step is None or plan_step.status != AutofixStatus.PROCESSING:
+            if not plan_step or plan_step.status != AutofixStatus.PROCESSING:
                 plan_step = cur.add_step(self.plan_step)
 
             plan_step.status = AutofixStatus.PROCESSING
