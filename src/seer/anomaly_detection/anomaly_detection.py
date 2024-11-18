@@ -151,9 +151,6 @@ class AnomalyDetection(BaseModel):
                 f"Not enough timeseries data. At least {min_data} data points required"
             )
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
-        print("ANOMALIES##################################")
-        print(anomalies.matrix_profile_suss)
-        # print(anomalies.matrix_profile_fixed)
 
         # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
