@@ -18,7 +18,7 @@ from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSel
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
     AnomalyFlags,
-    MPTimeSeriesAnomalies,
+    MPTimeSeriesAnomaliesSingleWindow,
     TimeSeries,
     TimeSeriesAnomalies,
 )
@@ -46,7 +46,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
     @sentry_sdk.trace
     def detect(
         self, timeseries: TimeSeries, config: AnomalyDetectionConfig, window_size: int | None = None
-    ) -> MPTimeSeriesAnomalies:
+    ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
 
@@ -73,7 +73,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-    ) -> MPTimeSeriesAnomalies:
+    ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
 
@@ -129,17 +129,17 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         # Update the flags in flags_and_scores with the smoothed flags
         flags_and_scores.flags = smoothed_flags
 
-        return MPTimeSeriesAnomalies(
+        return MPTimeSeriesAnomaliesSingleWindow(
             flags=flags_and_scores.flags,
             scores=flags_and_scores.scores,
-            matrix_profile_suss=mp,
-            matrix_profile_fixed=mp,  # TODO: This kinda doesn't make sense
+            matrix_profile=mp,
             window_size=window_size,
             thresholds=flags_and_scores.thresholds,
         )
 
 
 class MPStreamAnomalyDetector(AnomalyDetector):
+    # TODO: Likely need to update fields for both suss and fixed windows???
     history_timestamps: npt.NDArray[np.float64] = Field(
         ..., description="Baseline timeseries to which streaming points will be added."
     )
@@ -165,7 +165,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-    ) -> MPTimeSeriesAnomalies:
+    ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
 
@@ -176,7 +176,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             Parameters for tweaking the algorithm
 
         Returns:
-            A MPTimeSeriesAnomalies object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
+            A MPTimeSeriesAnomaliesSingleWindow object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
         """
         if len(timeseries.values) == 0:
             raise ServerError("No values to detect anomalies for")
@@ -246,16 +246,10 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 self.history_values = stream.T_
                 self.history_mp = np.vstack([self.history_mp, cur_mp])
 
-            return MPTimeSeriesAnomalies(
+            return MPTimeSeriesAnomaliesSingleWindow(
                 flags=flags,
                 scores=scores,
-                matrix_profile_suss=stumpy.mparray.mparray(
-                    streamed_mp,
-                    k=1,
-                    m=self.window_size,
-                    excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
-                ),
-                matrix_profile_fixed=stumpy.mparray.mparray(
+                matrix_profile=stumpy.mparray.mparray(
                     streamed_mp,
                     k=1,
                     m=self.window_size,
