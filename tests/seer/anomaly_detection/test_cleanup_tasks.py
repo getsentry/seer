@@ -9,7 +9,7 @@ from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDet
 from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.anomaly_detection.models.timeseries import TimeSeries
-from seer.anomaly_detection.tasks import cleanup_timeseries
+from seer.anomaly_detection.tasks import cleanup_disabled_alerts, cleanup_timeseries
 from seer.db import DbDynamicAlert, Session, TaskStatus
 
 
@@ -154,3 +154,43 @@ class TestCleanupTasks(unittest.TestCase):
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
             cleanup_timeseries(999, date_threshold)
+
+    def test_cleanup_disabled_alerts(self):
+        # Create and save alerts with old points
+        external_alert_id1, _, _, _ = self._save_alert(1000, 0)
+        external_alert_id2, _, _, _ = self._save_alert(500, 0)
+        external_alert_id3, _, _, _ = self._save_alert(500, 0)
+
+        # Set last_queued_at to be over 28 days ago for alerts 1 and 2
+        with Session() as session:
+            for alert_id in [external_alert_id1, external_alert_id2]:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(DbDynamicAlert.external_alert_id == alert_id)
+                    .one_or_none()
+                )
+                assert alert is not None
+                alert.last_queued_at = datetime.now() - timedelta(days=29)
+            session.commit()
+
+        cleanup_disabled_alerts()
+
+        with Session() as session:
+            for alert_id in [external_alert_id1, external_alert_id2]:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(DbDynamicAlert.external_alert_id == alert_id)
+                    .one_or_none()
+                )
+                assert alert is not None
+                assert len(alert.timeseries) == 0
+
+        # Confirm that timestamps from alert 3 are not deleted
+        with Session() as session:
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id3)
+                .one_or_none()
+            )
+            assert alert is not None
+            assert len(alert.timeseries) == 500

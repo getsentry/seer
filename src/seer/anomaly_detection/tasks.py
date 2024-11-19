@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 
 import numpy as np
 import sentry_sdk
@@ -109,3 +110,26 @@ def toggle_data_purge_flag(alert_id: int):
         )
         alert.data_purge_flag = new_flag
         session.commit()
+
+
+@celery_app.task
+@sentry_sdk.trace
+def cleanup_disabled_alerts():
+
+    logger.info("Cleaning up timeseries data for alerts that have been inactive for over 28 days")
+
+    date_threshold = datetime.now() - timedelta(days=28)
+
+    with Session() as session:
+        # Get all alerts that haven't been queued in the last 28 days indicating that they are disabled and are safe to cleanup
+        alerts = (
+            session.query(DbDynamicAlert)
+            .filter(DbDynamicAlert.last_queued_at < date_threshold)
+            .all()
+        )
+
+        deleted_count = 0
+        for alert in alerts:
+            deleted_count += delete_old_timeseries_points(alert, date_threshold.timestamp())
+        session.commit()
+        logger.info(f"Deleted {deleted_count} timeseries points")
