@@ -10,13 +10,16 @@ import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
 
+from seer.anomaly_detection.detectors import MPBatchAnomalyDetector
 from seer.anomaly_detection.models import (
     DynamicAlert,
     MPTimeSeries,
     MPTimeSeriesAnomalies,
+    MPTimeSeriesAnomaliesSingleWindow,
     TimeSeriesAnomalies,
 )
 from seer.anomaly_detection.models.cleanup import CleanupConfig
+from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
 from seer.exceptions import ClientError
@@ -69,6 +72,15 @@ class AlertDataAccessor(BaseModel, abc.ABC):
     def reset_cleanup_task(self, external_alert_id: int):
         return NotImplemented
 
+    @abc.abstractmethod
+    def combine_anomalies(
+        self,
+        anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,
+        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow,
+        use_suss: list[bool],
+    ):
+        return NotImplemented
+
 
 class DbAlertDataAccessor(AlertDataAccessor):
 
@@ -86,6 +98,17 @@ class DbAlertDataAccessor(AlertDataAccessor):
         values = []
         original_flags = []
         use_suss = []
+
+        # If the timeseries does not have both matrix profiles, then we need to recalculate them using batch detection
+        last_point = db_alert.timeseries[-1]
+        if (
+            last_point.anomaly_algo_data is None
+            or "mp_suss" not in last_point.anomaly_algo_data
+            or "mp_fixed" not in last_point.anomaly_algo_data
+        ):
+            self._recalculate_batch_detection(db_alert)
+            db_alert = self.query(db_alert.external_alert_id)
+
         for point in db_alert.timeseries:
             ts.append(point.timestamp.timestamp)
             values.append(point.value)
@@ -117,7 +140,6 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 use_suss.append(algo_data["use_suss"])
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
-
         # Default value is "none" for original flags
         if len(original_flags) < len(ts):
             original_flags = ["none"] * (len(ts) - len(original_flags)) + original_flags
@@ -161,6 +183,45 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 timestamp_threshold=timestamp_threshold,
                 num_acceptable_points=24 * 4 * 2,  # Num alerts for 2 days
             ),
+        )
+
+    @sentry_sdk.trace
+    def _recalculate_batch_detection(self, db_alert: DbDynamicAlert):
+
+        batch_detector = MPBatchAnomalyDetector()
+        timeseries = [
+            TimeSeriesPoint(timestamp=point.timestamp.timestamp(), value=point.value)
+            for point in db_alert.timeseries
+        ]
+
+        ad_config = AnomalyDetectionConfig(
+            time_period=db_alert.config.get("time_period"),
+            sensitivity=db_alert.config.get("sensitivity"),
+            direction=db_alert.config.get("direction"),
+            expected_seasonality=db_alert.config.get("expected_seasonality"),
+        )
+
+        anomalies_suss = batch_detector.detect(
+            convert_external_ts_to_internal(timeseries),
+            ad_config,
+            window_size=db_alert.anomaly_algo_data.get("window_size"),
+        )
+        anomalies_fixed = batch_detector.detect(
+            convert_external_ts_to_internal(timeseries), ad_config, window_size=10
+        )
+        recalculated_anomalies = self.combine_anomalies(
+            anomalies_suss, anomalies_fixed, [True] * len(timeseries)
+        )
+
+        self.save_alert(
+            organization_id=db_alert.organization_id,
+            project_id=db_alert.project_id,
+            external_alert_id=db_alert.external_alert_id,
+            config=ad_config,
+            timeseries=timeseries,
+            anomalies=recalculated_anomalies,
+            anomaly_algo_data=db_alert.anomaly_algo_data,
+            data_purge_flag=db_alert.data_purge_flag,
         )
 
     @sentry_sdk.trace
@@ -329,3 +390,42 @@ class DbAlertDataAccessor(AlertDataAccessor):
             dynamic_alert.last_queued_at = None
             dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
             session.commit()
+
+    def combine_anomalies(
+        self,
+        anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,
+        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow,
+        use_suss: list[bool],
+    ) -> MPTimeSeriesAnomalies:
+        """
+        Combines anomalies detected using SuSS and fixed window approaches into a single MPTimeSeriesAnomalies object.
+        For each point, uses either the SuSS or fixed window anomaly based on the use_suss flag.
+
+        Parameters:
+        anomalies_suss: MPTimeSeriesAnomalies
+            Anomalies detected using the SuSS window
+        anomalies_fixed: MPTimeSeriesAnomalies
+            Anomalies detected using the fixed window
+        use_suss: list[bool]
+            Flags indicating whether to use the SuSS or fixed window for each point
+
+        Returns:
+        MPTimeSeriesAnomalies
+            Combined anomalies object containing flags, scores and metadata from both approaches
+        """
+        return MPTimeSeriesAnomalies(
+            flags=[
+                (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
+                for i in range(len(anomalies_suss.flags))
+            ],
+            scores=[
+                (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
+                for i in range(len(anomalies_suss.scores))
+            ],
+            thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
+            matrix_profile_suss=anomalies_suss.matrix_profile,
+            matrix_profile_fixed=anomalies_fixed.matrix_profile,
+            window_size=anomalies_suss.window_size,
+            original_flags=anomalies_suss.original_flags,
+            use_suss=use_suss,
+        )
