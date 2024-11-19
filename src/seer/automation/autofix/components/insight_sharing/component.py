@@ -21,21 +21,55 @@ class InsightSharingPrompts:
         task_description: str,
         latest_thought: str,
         past_insights: list[str],
+        step_type: str | None = None,
     ):
         past_insights = [f"{i + 1}. {insight}" for i, insight in enumerate(past_insights)]
-        return textwrap.dedent(
-            """\
+
+        if step_type == "root_cause_analysis":
+            template = """\
             Given the chain of thought below for {task_description}:
             {insights}
 
-            Write the next under-20-word conclusion in the chain of thought based on the notes below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets ALL of these criteria, return <NO_INSIGHT/>.
+            Write the next under-20-word conclusion in the chain of thought based on the notes below. {no_insight_instruction} The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets ALL of these criteria, return <NO_INSIGHT/>.
+
+            If you do write something, write it so that someone else could immediately understand your point in detail.
 
             NOTES TO ANALYZE:
             {latest_thought}"""
-        ).format(
+        elif step_type == "plan":
+            template = """\
+            Given the chain of thought below for {task_description}:
+            {insights}
+
+            Write the next under-20-word conclusion in the chain of thought based on the notes below, focusing specifically on building up to a solution. The conclusion should be a concrete plan or insight about how to fix the issue, not just analysis. {no_insight_instruction} Every item should build off the previous one towards the final solution.
+
+            If you do write something, write it so that someone else could immediately understand your point in detail.
+
+            NOTES TO ANALYZE:
+            {latest_thought}"""
+        else:
+            template = """\
+            Given the chain of thought below for {task_description}:
+            {insights}
+
+            Write the next under-20-word conclusion in the chain of thought based on the notes below. {no_insight_instruction} The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step.
+
+            If you do write something, write it so that someone else could immediately understand your point in detail.
+
+            NOTES TO ANALYZE:
+            {latest_thought}"""
+
+        no_insight_instruction = (
+            "If there is no clear conclusion that adds a ton of new insight and value, return <NO_INSIGHT/>. If it is similar to a previous conclusion, return <NO_INSIGHT/>."
+            if past_insights
+            else ""
+        )
+
+        return textwrap.dedent(template).format(
             task_description=task_description,
             latest_thought=latest_thought,
             insights="\n".join(past_insights) if past_insights else "not started yet",
+            no_insight_instruction=no_insight_instruction,
         )
 
     @staticmethod
@@ -71,6 +105,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 task_description=request.task_description,
                 latest_thought=request.latest_thought,
                 past_insights=request.past_insights,
+                step_type=request.step_type,
             )
             completion = llm_client.generate_text(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),

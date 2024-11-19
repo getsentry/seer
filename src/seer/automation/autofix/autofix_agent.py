@@ -135,14 +135,21 @@ class AutofixAgent(LlmAgent):
     def share_insights(self, context: AutofixContext, text: str, generated_at_memory_index: int):
         # generate insights
         insight_sharing = InsightSharingComponent(context)
-        past_insights = context.state.get().get_all_insights()
+        state = context.state.get()
+        past_insights = state.get_all_insights()
+
+        # Get the current step type
+        cur_step = state.steps[-1]
+        step_type = cur_step.key
+
         insight_card = insight_sharing.invoke(
             InsightSharingRequest(
                 latest_thought=text,
                 memory=self.memory,
-                task_description=context.state.get().get_step_description(),
+                task_description=state.get_step_description(),
                 past_insights=past_insights,
                 generated_at_memory_index=generated_at_memory_index,
+                step_type=step_type,
             )
         )
         # add the insight card to the current step
