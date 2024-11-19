@@ -159,7 +159,7 @@ class TestCleanupTasks(unittest.TestCase):
         # Create and save alerts with old points
         external_alert_id1, _, _, _ = self._save_alert(1000, 0)
         external_alert_id2, _, _, _ = self._save_alert(500, 0)
-        external_alert_id3, _, _, _ = self._save_alert(500, 0)
+        external_alert_id3, _, _, _ = self._save_alert(0, 500)
 
         # Set last_queued_at to be over 28 days ago for alerts 1 and 2
         with Session() as session:
