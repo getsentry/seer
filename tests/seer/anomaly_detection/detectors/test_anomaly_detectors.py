@@ -14,7 +14,7 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPBatchAnomalyDetector,
     MPStreamAnomalyDetector,
 )
-from seer.anomaly_detection.models import MPTimeSeriesAnomalies
+from seer.anomaly_detection.models import MPTimeSeriesAnomaliesSingleWindow
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.exceptions import ServerError
@@ -76,7 +76,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             mp_utils=self.mp_utils,
         )
 
-        assert isinstance(result, MPTimeSeriesAnomalies)
+        assert isinstance(result, MPTimeSeriesAnomaliesSingleWindow)
         assert isinstance(result.flags, list)
         assert result.scores == [0.1, 6.5, 4.8, 0.2]
         assert isinstance(result.scores, list)
@@ -171,7 +171,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
         anomalies = self.detector.detect(self.timeseries, self.config, mock_scorer, mock_utils)
 
-        assert isinstance(anomalies, MPTimeSeriesAnomalies)
+        assert isinstance(anomalies, MPTimeSeriesAnomaliesSingleWindow)
         assert isinstance(anomalies.flags, list)
         assert isinstance(anomalies.scores, list)
         assert isinstance(anomalies.matrix_profile, np.ndarray)

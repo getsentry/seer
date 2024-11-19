@@ -43,9 +43,12 @@ class TestCleanupTasks(unittest.TestCase):
             anomalies = MPTimeSeriesAnomalies(
                 flags=np.array([]),
                 scores=np.array([]),
-                matrix_profile=np.array([]),
+                matrix_profile_suss=np.array([]),
+                matrix_profile_fixed=np.array([]),
                 window_size=0,
                 thresholds=np.array([]),
+                original_flags=np.array([]),
+                use_suss=np.array([]),
             )
         else:
             anomalies = MPBatchAnomalyDetector().detect(ts, config)
