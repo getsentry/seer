@@ -289,6 +289,7 @@ class BaseTools:
                         "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
+                required=["path"],
             ),
             FunctionTool(
                 name="expand_document",
@@ -311,6 +312,7 @@ class BaseTools:
                         "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
+                required=["input"],
             ),
             FunctionTool(
                 name="keyword_search",
@@ -339,6 +341,7 @@ class BaseTools:
                         "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
                     },
                 ],
+                required=["keyword", "supported_extensions"],
             ),
             FunctionTool(
                 name="file_search",
@@ -356,6 +359,7 @@ class BaseTools:
                         "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
+                required=["filename"],
             ),
             FunctionTool(
                 name="file_search_wildcard",
@@ -373,6 +377,7 @@ class BaseTools:
                         "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
+                required=["pattern"],
             ),
         ]
 
@@ -392,6 +397,7 @@ class BaseTools:
                             "description": "The question you want to ask your team.",
                         }
                     ],
+                    required=["question"],
                 )
             )
 
