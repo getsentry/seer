@@ -8,6 +8,7 @@ from seer.automation.agent.client import LlmClient, LlmProvider
 from seer.automation.agent.models import Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
+from seer.automation.utils import AgentError
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger("autofix")
@@ -147,12 +148,18 @@ class LlmAgent:
         return Message(role="tool", content=tool_result, tool_call_id=tool_call.id)
 
     def get_tool_by_name(self, name: str) -> FunctionTool:
-        return next(tool for tool in self.tools if tool.name == name)
+        try:
+            return next(tool for tool in self.tools if tool.name == name)
+        except StopIteration:
+            raise AgentError() from ValueError(f"Invalid tool name: {name}")
 
     def parse_tool_arguments(self, tool: FunctionTool, args: str) -> dict:
-        return parse_json_with_keys(
-            args, [param["name"] for param in tool.parameters if isinstance(param["name"], str)]
-        )
+        try:
+            return parse_json_with_keys(
+                args, [param["name"] for param in tool.parameters if isinstance(param["name"], str)]
+            )
+        except Exception as e:
+            raise AgentError() from ValueError(f"Invalid tool arguments: {args}\nException: {e}")
 
     def process_tool_calls(self, tool_calls: list[ToolCall]):
         for tool_call in tool_calls:
