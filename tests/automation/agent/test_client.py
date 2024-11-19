@@ -406,3 +406,68 @@ def test_anthropic_prep_message_and_tools():
         assert "input_schema" in tool_dicts[0]
 
     assert returned_system_prompt == system_prompt
+
+def test_validate_tool_message_sequence():
+    messages = [
+        Message(role="user", content="Hello"),
+        Message(
+            role="tool_use",
+            content="Using search",
+            tool_calls=[ToolCall(id="search_1", function="search", args='{"query": "test"}')],
+        ),
+        Message(role="tool", content="Search results", tool_call_id="search_1"),
+        Message(
+            role="tool_use",
+            content="Using another tool",
+            tool_calls=[ToolCall(id="tool_2", function="other", args='{"param": "value"}')],
+        ),
+        # Invalid tool result without matching tool_use
+        Message(role="tool", content="Invalid tool result", tool_call_id="invalid_id"),
+    ]
+
+    validated_messages = LlmClient.validate_tool_message_sequence(messages)
+
+    assert len(validated_messages) == 5
+    # First message unchanged
+    assert validated_messages[0].role == "user"
+    assert validated_messages[0].content == "Hello"
+    
+    # Valid tool_use remains
+    assert validated_messages[1].role == "tool_use"
+    assert validated_messages[1].tool_calls[0].id == "search_1"
+    
+    # Valid tool result remains
+    assert validated_messages[2].role == "tool"
+    assert validated_messages[2].tool_call_id == "search_1"
+    
+    # Second valid tool_use remains
+    assert validated_messages[3].role == "tool_use"
+    assert validated_messages[3].tool_calls[0].id == "tool_2"
+    
+    # Invalid tool result converted to user message
+    assert validated_messages[4].role == "user"
+    assert validated_messages[4].content == "Invalid tool result"
+    assert validated_messages[4].tool_call_id is None
+
+def test_anthropic_provider_handles_invalid_tool_sequence(mock_anthropic_client):
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-sonnet-20240229")
+
+    messages = [
+        Message(role="user", content="Hello"),
+        # This would previously cause an error due to tool_result without tool_use
+        Message(role="tool", content="Invalid tool result", tool_call_id="invalid_id"),
+    ]
+
+    mock_anthropic_client.messages.create.return_value = MockAnthropicResponse(
+        content="Response", role="assistant"
+    )
+
+    # This should now work without raising an error
+    response = llm_client.generate_text(
+        messages=messages,
+        model=model,
+    )
+
+    assert response.message.content == "Response"
+    assert response.message.role == "assistant"
