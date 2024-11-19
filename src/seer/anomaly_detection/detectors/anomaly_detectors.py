@@ -45,7 +45,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
     @sentry_sdk.trace
     def detect(
-        self, timeseries: TimeSeries, config: AnomalyDetectionConfig
+        self, timeseries: TimeSeries, config: AnomalyDetectionConfig, window_size: int | None = None
     ) -> MPTimeSeriesAnomalies:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
@@ -60,7 +60,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        return self._compute_matrix_profile(timeseries, config)
+        return self._compute_matrix_profile(timeseries, config, window_size)
 
     @inject
     @sentry_sdk.trace
@@ -68,6 +68,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         self,
         timeseries: TimeSeries,
         config: AnomalyDetectionConfig,
+        window_size: int | None = None,
         ws_selector: WindowSizeSelector = injected,
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
@@ -92,7 +93,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             raise ServerError("Timestamps and values are not of the same length")
 
         ts_values = timeseries.values
-        window_size = ws_selector.optimal_window_size(ts_values)
+        if window_size is None:
+            window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
             # TODO: Add sentry logging of this error
             raise ServerError("Invalid window size")
