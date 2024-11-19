@@ -80,24 +80,43 @@ class DbAlertDataAccessor(AlertDataAccessor):
         window_size = db_alert.anomaly_algo_data.get("window_size")
         flags = []
         scores = []
-        mp = []
+        mp_suss = []
+        mp_fixed = []
         ts = []
         values = []
         original_flags = []
+        use_suss = []
         for point in db_alert.timeseries:
             ts.append(point.timestamp.timestamp())
             values.append(point.value)
             flags.append(point.anomaly_type)
             scores.append(point.anomaly_score)
-            if point.anomaly_algo_data is not None:
-                dist, idx, l_idx, r_idx, original_flag = MPTimeSeriesAnomalies.extract_algo_data(
-                    point.anomaly_algo_data
+
+            algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
+            if algo_data["mp_suss"]:
+                mp_suss.append(
+                    [
+                        algo_data["mp_suss"]["dist"],
+                        algo_data["mp_suss"]["idx"],
+                        algo_data["mp_suss"]["l_idx"],
+                        algo_data["mp_suss"]["r_idx"],
+                    ]
                 )
-                mp.append([dist, idx, l_idx, r_idx])
-                # Default to "none" if original flag is not present
-                if original_flag is None:
-                    original_flag = "none"
-                original_flags.append(original_flag)
+            else:
+                mp_suss.append(None)
+            if algo_data["mp_fixed"]:
+                mp_fixed.append(
+                    [
+                        algo_data["mp_fixed"]["dist"],
+                        algo_data["mp_fixed"]["idx"],
+                        algo_data["mp_fixed"]["l_idx"],
+                        algo_data["mp_fixed"]["r_idx"],
+                    ]
+                )
+            else:
+                mp_fixed.append(None)
+            original_flags.append(algo_data["original_flag"])
+            use_suss.append(algo_data["use_suss"])
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
 
@@ -107,15 +126,22 @@ class DbAlertDataAccessor(AlertDataAccessor):
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
             scores=scores,
-            matrix_profile=stumpy.mparray.mparray(
-                mp,
+            matrix_profile_suss=stumpy.mparray.mparray(
+                mp_suss,
                 k=1,
                 m=window_size,
+                excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
+            ),
+            matrix_profile_fixed=stumpy.mparray.mparray(
+                mp_fixed,
+                k=1,
+                m=10,  # TODO: this should not be hardcoded
                 excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
             ),
             window_size=window_size,
             thresholds=[],  # Note: thresholds are not stored in the database. They are computed on the fly.
             original_flags=original_flags,
+            use_suss=use_suss,
         )
         return DynamicAlert(
             organization_id=db_alert.organization_id,
