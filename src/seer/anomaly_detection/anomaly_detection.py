@@ -184,7 +184,7 @@ class AnomalyDetection(BaseModel):
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
             history_mp=anomalies.matrix_profile_fixed,
-            window_size=10,  # TODO: Make this custom/dynamic
+            window_size=10,
             original_flags=original_flags,
         )
         streamed_anomalies_fixed = stream_detector_fixed.detect(
@@ -291,13 +291,10 @@ class AnomalyDetection(BaseModel):
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
 
-        # TODO: Run batch detection for both suss and fixed windows
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
         historic_anomalies_suss = batch_detector.detect(historic, config)
-        historic_anomalies_fixed = batch_detector.detect(
-            historic, config, window_size=10
-        )  # TODO: window size should not be hardcoded
+        historic_anomalies_fixed = batch_detector.detect(historic, config, window_size=10)
 
         # Run stream detection on current data
         # SuSS Window

@@ -139,7 +139,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
 
 class MPStreamAnomalyDetector(AnomalyDetector):
-    # TODO: Likely need to update fields for both suss and fixed windows???
     history_timestamps: npt.NDArray[np.float64] = Field(
         ..., description="Baseline timeseries to which streaming points will be added."
     )
