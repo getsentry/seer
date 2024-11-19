@@ -24,7 +24,6 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesPoint,
     TimeSeriesWithHistory,
 )
-from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomaliesSingleWindow
 from seer.db import TaskStatus
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError, ServerError
@@ -77,14 +76,14 @@ class AnomalyDetection(BaseModel):
         """
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector = MPBatchAnomalyDetector()
-        anomalies = None
+
         anomalies_suss = batch_detector.detect(
             convert_external_ts_to_internal(timeseries), config, window_size=window_size
         )
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries), config, window_size=10
         )
-        anomalies = self._combine_anomalies(
+        anomalies = AlertDataAccessor().combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)
         )
 
@@ -206,7 +205,7 @@ class AnomalyDetection(BaseModel):
 
         anomalies.use_suss.append(use_suss_window)
 
-        streamed_anomalies = self._combine_anomalies(
+        streamed_anomalies = alert_data_accessor.combine_anomalies(
             streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss
         )
 
@@ -336,7 +335,7 @@ class AnomalyDetection(BaseModel):
                 historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
             )
 
-        anomalies = self._combine_anomalies(
+        anomalies = AlertDataAccessor().combine_anomalies(
             streamed_anomalies_suss,
             streamed_anomalies_fixed,
             [True]
@@ -357,45 +356,6 @@ class AnomalyDetection(BaseModel):
                 anomaly_score=anomalies.scores[i],
                 anomaly_type=anomalies.flags[i],
             )
-
-    def _combine_anomalies(
-        self,
-        anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,
-        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow,
-        use_suss: list[bool],
-    ) -> MPTimeSeriesAnomalies:
-        """
-        Combines anomalies detected using SuSS and fixed window approaches into a single MPTimeSeriesAnomalies object.
-        For each point, uses either the SuSS or fixed window anomaly based on the use_suss flag.
-
-        Parameters:
-        anomalies_suss: MPTimeSeriesAnomalies
-            Anomalies detected using the SuSS window
-        anomalies_fixed: MPTimeSeriesAnomalies
-            Anomalies detected using the fixed window
-        use_suss: list[bool]
-            Flags indicating whether to use the SuSS or fixed window for each point
-
-        Returns:
-        MPTimeSeriesAnomalies
-            Combined anomalies object containing flags, scores and metadata from both approaches
-        """
-        return MPTimeSeriesAnomalies(
-            flags=[
-                (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
-                for i in range(len(anomalies_suss.flags))
-            ],
-            scores=[
-                (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
-                for i in range(len(anomalies_suss.scores))
-            ],
-            thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
-            matrix_profile_suss=anomalies_suss.matrix_profile,
-            matrix_profile_fixed=anomalies_fixed.matrix_profile,
-            window_size=anomalies_suss.window_size,
-            original_flags=anomalies_suss.original_flags,
-            use_suss=use_suss,
-        )
 
     @sentry_sdk.trace
     def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
