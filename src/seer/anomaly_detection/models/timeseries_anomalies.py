@@ -154,7 +154,6 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                     "l_idx": l_index_fixed,
                     "r_idx": r_index_fixed,
                 }
-            # TODO: Confirm that these indexes are correct
             original_flag = self.original_flags[i] if i < len(self.original_flags) else "none"
             use_suss = self.use_suss[i] if i < len(self.use_suss) else True
 

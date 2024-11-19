@@ -138,7 +138,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             matrix_profile_fixed=stumpy.mparray.mparray(
                 mp_fixed,
                 k=1,
-                m=10,  # TODO: this should not be hardcoded
+                m=10,
                 excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
             ),
             window_size=window_size,
