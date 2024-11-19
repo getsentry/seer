@@ -93,35 +93,39 @@ class DbAlertDataAccessor(AlertDataAccessor):
             scores.append(point.anomaly_score)
 
             algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
+            mp_suss_data = None
             if algo_data["mp_suss"]:
-                mp_suss.append(
-                    [
-                        algo_data["mp_suss"]["dist"],
-                        algo_data["mp_suss"]["idx"],
-                        algo_data["mp_suss"]["l_idx"],
-                        algo_data["mp_suss"]["r_idx"],
-                    ]
-                )
-            else:
-                mp_suss.append(None)
+                mp_suss_data = [
+                    algo_data["mp_suss"]["dist"],
+                    algo_data["mp_suss"]["idx"],
+                    algo_data["mp_suss"]["l_idx"],
+                    algo_data["mp_suss"]["r_idx"],
+                ]
+            mp_suss.append(mp_suss_data)
+
+            mp_fixed_data = None
             if algo_data["mp_fixed"]:
-                mp_fixed.append(
-                    [
-                        algo_data["mp_fixed"]["dist"],
-                        algo_data["mp_fixed"]["idx"],
-                        algo_data["mp_fixed"]["l_idx"],
-                        algo_data["mp_fixed"]["r_idx"],
-                    ]
-                )
-            else:
-                mp_fixed.append(None)
+                mp_fixed_data = [
+                    algo_data["mp_fixed"]["dist"],
+                    algo_data["mp_fixed"]["idx"],
+                    algo_data["mp_fixed"]["l_idx"],
+                    algo_data["mp_fixed"]["r_idx"],
+                ]
+            mp_fixed.append(mp_fixed_data)
+
             original_flags.append(algo_data["original_flag"])
             use_suss.append(algo_data["use_suss"])
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
 
+        # TODO: Can optimize this by using extend or list comprehension
+        # Default value is "none" for original flags
         if len(original_flags) < len(ts):
             original_flags = ["none"] * (len(ts) - len(original_flags)) + original_flags
+
+        # Default value is True for use_suss
+        if len(use_suss) < len(ts):
+            use_suss = [True] * (len(ts) - len(use_suss)) + use_suss
 
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,

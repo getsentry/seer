@@ -22,9 +22,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
@@ -122,10 +125,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             anomaly=MPTimeSeriesAnomalies(
                 flags=["none"],
                 scores=[0.8],
-                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
                 thresholds=[0.0],
                 original_flags=["none"],
+                use_suss=[True],
             ),
             anomaly_algo_data={"dummy": 10},
         )
@@ -154,9 +159,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=["none"],
                 scores=[1.0],
-                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
                 thresholds=[0.0],
+                original_flags=["none"],
+                use_suss=[True],
             ),
             anomaly_algo_data={"window_size": 1},
             data_purge_flag=TaskStatus.NOT_QUEUED,
@@ -234,10 +242,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none"] * 5,
             scores=[1.0] * 5,
-            matrix_profile=np.array([[1.0, 10, -1, -1]] * 5),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 5),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 5),
             window_size=1,
             thresholds=[0.0] * 5,
             original_flags=["none", "none"],
+            use_suss=[True, True],
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -282,9 +292,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -331,9 +344,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -381,9 +397,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -424,9 +443,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(

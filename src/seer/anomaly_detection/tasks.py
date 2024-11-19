@@ -70,6 +70,7 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
     return deleted_count
 
 
+# TODO: Update to use the new anomaly_algo_data and to use SuSS and fixed windows
 def update_matrix_profiles(alert: DbDynamicAlert, anomaly_detection_config: AnomalyDetectionConfig):
 
     timeseries = TimeSeries(
