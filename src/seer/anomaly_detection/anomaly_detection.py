@@ -304,7 +304,7 @@ class AnomalyDetection(BaseModel):
         stream_detector_suss = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
-            history_mp=historic_anomalies_suss.matrix_profile_suss,
+            history_mp=historic_anomalies_suss.matrix_profile,
             window_size=historic_anomalies_suss.window_size,
             original_flags=historic_anomalies_suss.original_flags,
         )
@@ -316,7 +316,7 @@ class AnomalyDetection(BaseModel):
         stream_detector_fixed = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
-            history_mp=historic_anomalies_fixed.matrix_profile_fixed,
+            history_mp=historic_anomalies_fixed.matrix_profile,
             window_size=historic_anomalies_fixed.window_size,
             original_flags=historic_anomalies_fixed.original_flags,
         )
@@ -338,7 +338,15 @@ class AnomalyDetection(BaseModel):
             streamed_anomalies_fixed.scores = (
                 historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
             )
-        anomalies = self._combine_anomalies(streamed_anomalies_suss, streamed_anomalies_fixed)
+
+        anomalies = self._combine_anomalies(
+            streamed_anomalies_suss,
+            streamed_anomalies_fixed,
+            [True]
+            * len(
+                ts_external
+            ),  # Defaulting to using SuSS window because switching logic is for streaming only
+        )
 
         return ts_external, anomalies
 

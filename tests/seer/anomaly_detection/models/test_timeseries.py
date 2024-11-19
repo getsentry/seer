@@ -15,9 +15,12 @@ class TestTimeSeries(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=["none"],
                 scores=[0.8],
-                matrix_profile=np.array([[0.1, 0, 1, 2]]),
+                matrix_profile_suss=np.array([[0.1, 0, 1, 2]]),
+                matrix_profile_fixed=np.array([[0.1, 0, 1, 2]]),
                 window_size=2,
                 thresholds=[0.0],
+                original_flags=["none"],
+                use_suss=[True],
             ),
         )
 

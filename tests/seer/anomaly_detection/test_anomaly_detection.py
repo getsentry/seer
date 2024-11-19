@@ -83,6 +83,8 @@ class TestAnomalyDetection(unittest.TestCase):
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
     def test_detect_anomalies_online(self, mock_reset_cleanup, mock_save_timepoint, mock_query):
 
+        fixed_window_size = 10
+
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
@@ -98,7 +100,8 @@ class TestAnomalyDetection(unittest.TestCase):
         ts_timestamps = np.arange(1, len(ts_values) + 1) + datetime.now().timestamp()
         window_size = loaded_synthetic_data.window_sizes[0]
 
-        dummy_mp = np.ones((len(ts_values) - window_size + 1, 4))
+        dummy_mp_suss = np.ones((len(ts_values) - window_size + 1, 4))
+        dummy_mp_fixed = np.ones((len(ts_values) - fixed_window_size + 1, 4))
 
         mock_query.return_value = DynamicAlert(
             organization_id=0,
@@ -112,8 +115,8 @@ class TestAnomalyDetection(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps)),
                 scores=np.array([0.4] * len(ts_timestamps)),
-                matrix_profile_suss=dummy_mp,
-                matrix_profile_fixed=dummy_mp,
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
                 window_size=window_size,
                 thresholds=np.array([0.0] * len(ts_timestamps)),
                 original_flags=np.array(["none"] * len(ts_timestamps)),
@@ -155,10 +158,12 @@ class TestAnomalyDetection(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps[:100])),
                 scores=np.array([0.4] * len(ts_timestamps[:100])),
-                matrix_profile=dummy_mp,
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
                 window_size=window_size,
                 thresholds=np.array([0.0] * len(ts_timestamps[:100])),
                 original_flags=np.array(["none"] * len(ts_timestamps[:100])),
+                use_suss=np.array([True] * len(ts_timestamps[:100])),
             ),
             cleanup_config=cleanup_config,
         )
@@ -197,8 +202,8 @@ class TestAnomalyDetection(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=["none"] * len(ts_timestamps),
                 scores=[0.0] * len(ts_timestamps),
-                matrix_profile_suss=dummy_mp,
-                matrix_profile_fixed=dummy_mp,
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
                 window_size=window_size,
                 thresholds=[0.0] * len(ts_timestamps),
                 original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
