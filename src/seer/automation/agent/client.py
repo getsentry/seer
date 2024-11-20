@@ -321,10 +321,14 @@ class AnthropicProvider:
             system_prompt=system_prompt,
             tools=tools,
         )
+        
+        # Validate message sequence before processing
+        self._validate_messages(messages)
 
         anthropic_client = self.get_client()
 
         completion = anthropic_client.messages.create(
+
             system=system_prompt or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
@@ -375,15 +379,22 @@ class AnthropicProvider:
     @staticmethod
     def to_message_param(message: Message) -> MessageParam:
         if message.role == "tool":
+            if message.tool_call_id:
+                # Only create tool_result if we have a valid tool_call_id
+                return MessageParam(
+                    role="user",
+                    content=[
+                        ToolResultBlockParam(
+                            type="tool_result",
+                            content=message.content or "",
+                            tool_use_id=message.tool_call_id,
+                        )
+                    ],
+                )
+            # Fallback to regular user message if no tool_call_id
             return MessageParam(
-                role="user",
-                content=[
-                    ToolResultBlockParam(
-                        type="tool_result",
-                        content=message.content or "",
-                        tool_use_id=message.tool_call_id or "",
-                    )
-                ],
+                role="user", 
+                content=[TextBlockParam(type="text", text=message.content or "")]
             )
         elif message.role == "tool_use":
             if not message.tool_calls:
@@ -549,6 +560,36 @@ class LlmClient:
             else:
                 new_messages.append(message)
         return new_messages
+
+    @staticmethod 
+    def validate_tool_message_sequence(messages: list[Message] | None) -> list[Message]:
+        """
+        Validates that tool result messages have corresponding tool use messages before them.
+        Returns a new message list with invalid tool messages converted to regular messages.
+        """
+        if not messages:
+            return []
+            
+        # Track valid tool use IDs we've seen
+        tool_use_ids = set()
+        validated_messages = []
+        
+        for message in messages:
+            # Track valid tool use IDs
+            if message.role == "tool_use" and message.tool_calls:
+                for tool_call in message.tool_calls:
+                    if tool_call.id:
+                        tool_use_ids.add(tool_call.id)
+                validated_messages.append(message)
+            elif message.role == "tool" and message.tool_call_id:
+                if message.tool_call_id not in tool_use_ids:
+                    # Convert to regular user message if no matching tool use found
+                    validated_messages.append(Message(role="user", content=message.content))
+                else:
+                    validated_messages.append(message)
+            else:
+                validated_messages.append(message)
+        return validated_messages
 
 
 @module.provider
