@@ -106,8 +106,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             or "mp_suss" not in last_point.anomaly_algo_data
             or "mp_fixed" not in last_point.anomaly_algo_data
         ):
-            self._recalculate_batch_detection(db_alert)
-            db_alert = self.query(db_alert.external_alert_id)
+            db_alert = self._recalculate_batch_detection(db_alert)
 
         for point in db_alert.timeseries:
             ts.append(point.timestamp.timestamp())
@@ -187,6 +186,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
 
     @sentry_sdk.trace
     def _recalculate_batch_detection(self, db_alert: DbDynamicAlert):
+        """
+        Recalculates the matrix profiles for SuSS and Fixed windows for an alert then returns the updated alert
+        """
 
         batch_detector = MPBatchAnomalyDetector()
         timeseries = [
@@ -223,6 +225,23 @@ class DbAlertDataAccessor(AlertDataAccessor):
             anomaly_algo_data=db_alert.anomaly_algo_data,
             data_purge_flag=db_alert.data_purge_flag,
         )
+
+        with Session() as session:
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == db_alert.external_alert_id)
+                .one_or_none()
+            )
+            if alert is None:
+                logger.error(
+                    "alert_not_found",
+                    extra={
+                        "external_alert_id": db_alert.external_alert_id,
+                    },
+                )
+                return None
+
+            return alert
 
     @sentry_sdk.trace
     def query(self, external_alert_id: int) -> DynamicAlert | None:
