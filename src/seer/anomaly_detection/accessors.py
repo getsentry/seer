@@ -185,7 +185,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         )
 
     @sentry_sdk.trace
-    def _recalculate_batch_detection(self, db_alert: DbDynamicAlert):
+    def _recalculate_batch_detection(self, db_alert: DbDynamicAlert) -> DbDynamicAlert | None:
         """
         Recalculates the matrix profiles for SuSS and Fixed windows for an alert then returns the updated alert
         """
@@ -240,6 +240,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     },
                 )
                 return None
+
+            print(alert)
 
             return alert
 
