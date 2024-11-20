@@ -37,10 +37,11 @@ class InsightContextOutput(BaseModel):
 
 class InsightSharingRequest(BaseComponentRequest):
     latest_thought: str
-    task_description: str
     memory: list[Message]
+    task_description: str
     past_insights: list[str]
-    generated_at_memory_index: int = -1
+    generated_at_memory_index: int
+    step_type: str | None = None
 
 
 class InsightSharingOutput(BaseComponentOutput):
