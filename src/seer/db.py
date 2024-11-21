@@ -338,7 +338,6 @@ class DbDynamicAlertTimeSeries(Base):
         "DbDynamicAlert",
         back_populates="timeseries",
     )
-    # reported_anomaly: Mapped[str] = mapped_column(String, nullable=False)
 
     def __str__(self):
         return f"timstamp: {self.timestamp}, value: {self.value}, anomaly_type:{self.anomaly_type}"
