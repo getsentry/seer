@@ -6,7 +6,7 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 
-from seer.anomaly_detection.accessors import AlertDataAccessor
+from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
 from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
 from seer.anomaly_detection.models import MPTimeSeriesAnomalies
@@ -83,7 +83,7 @@ class AnomalyDetection(BaseModel):
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries), config, window_size=10
         )
-        anomalies = AlertDataAccessor().combine_anomalies(
+        anomalies = DbAlertDataAccessor().combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)
         )
 
