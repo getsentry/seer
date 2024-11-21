@@ -10,7 +10,7 @@ from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.anomaly_detection.tasks import cleanup_disabled_alerts, cleanup_timeseries
-from seer.db import DbDynamicAlert, Session, TaskStatus
+from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
 
 
 class TestCleanupTasks(unittest.TestCase):
@@ -195,6 +195,13 @@ class TestCleanupTasks(unittest.TestCase):
                     .one_or_none()
                 )
                 assert alert is None
+
+                timeseries = (
+                    session.query(DbDynamicAlertTimeSeries)
+                    .filter(DbDynamicAlertTimeSeries.dynamic_alert_id == alert_id)
+                    .all()
+                )
+                assert len(timeseries) == 0
 
         # Confirm that alert 4 and its respective timeseries are not deleted
         with Session() as session:
