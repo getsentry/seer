@@ -85,7 +85,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         values = []
         original_flags = []
         for point in db_alert.timeseries:
-            ts.append(point.timestamp.timestamp)
+            ts.append(point.timestamp.timestamp())
             values.append(point.value)
             flags.append(point.anomaly_type)
             scores.append(point.anomaly_score)

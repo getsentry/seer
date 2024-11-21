@@ -91,9 +91,9 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         self.assertEqual(
             len(alert_from_db.timeseries.values), 2, "Must have two data points in timeseries"
         )
-        self.assertEqual(alert_from_db.timeseries.timestamps[0](), point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
-        self.assertEqual(alert_from_db.timeseries.timestamps[1](), point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
 
         # Verify updating an existing alert
@@ -137,11 +137,11 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         self.assertEqual(
             len(alert_from_db.timeseries.values), 3, "Must have three data points in timeseries"
         )
-        self.assertEqual(alert_from_db.timeseries.timestamps[0](), point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
-        self.assertEqual(alert_from_db.timeseries.timestamps[1](), point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
-        self.assertEqual(alert_from_db.timeseries.timestamps[2](), point3.timestamp)
+        self.assertEqual(alert_from_db.timeseries.timestamps[2], point3.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[2], point3.value)
 
         # Resaving an existing alert should update existing data, including overwritinf the entire time series
