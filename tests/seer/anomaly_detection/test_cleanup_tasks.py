@@ -160,6 +160,7 @@ class TestCleanupTasks(unittest.TestCase):
         external_alert_id1, _, _, _ = self._save_alert(1000, 0)
         external_alert_id2, _, _, _ = self._save_alert(500, 0)
         external_alert_id3, _, _, _ = self._save_alert(0, 500)
+        external_alert_id4, _, _, _ = self._save_alert(0, 500)
 
         # Set last_queued_at to be over 28 days ago for alerts 1 and 2
         with Session() as session:
@@ -171,26 +172,37 @@ class TestCleanupTasks(unittest.TestCase):
                 )
                 assert alert is not None
                 alert.last_queued_at = datetime.now() - timedelta(days=29)
-            session.commit()
 
-        cleanup_disabled_alerts()
-
-        with Session() as session:
-            for alert_id in [external_alert_id1, external_alert_id2]:
+            for alert_id in [external_alert_id3]:
                 alert = (
                     session.query(DbDynamicAlert)
                     .filter(DbDynamicAlert.external_alert_id == alert_id)
                     .one_or_none()
                 )
                 assert alert is not None
-                assert len(alert.timeseries) == 0
+                alert.created_at = datetime.now() - timedelta(days=29)
+                alert.last_queued_at = None
 
-        # Confirm that timestamps from alert 3 are not deleted
+            session.commit()
+
+        cleanup_disabled_alerts()
+
+        with Session() as session:
+            for alert_id in [external_alert_id1, external_alert_id2, external_alert_id3]:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(DbDynamicAlert.external_alert_id == alert_id)
+                    .one_or_none()
+                )
+                assert alert is None
+
+        # Confirm that alert 4 and its respective timeseries are not deleted
         with Session() as session:
             alert = (
                 session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == external_alert_id3)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id4)
                 .one_or_none()
             )
+
             assert alert is not None
             assert len(alert.timeseries) == 500
