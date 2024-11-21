@@ -111,7 +111,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 self.context.event_manager.add_log("Cleaning up the findings...")
 
                 formatted_response = llm_client.generate_structured(
-                    messages=LlmClient.clean_tool_call_assistant_messages(agent.memory),
+                    messages=agent.memory,
                     prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
                     model=OpenAiProvider.model("gpt-4o-2024-08-06"),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,

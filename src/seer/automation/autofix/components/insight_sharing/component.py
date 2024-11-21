@@ -126,11 +126,7 @@ class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharin
                 insight=insight,
                 latest_thought=request.latest_thought,
             )
-            memory = []
-            for message in llm_client.clean_tool_call_assistant_messages(request.memory):
-                if message.role != "system":
-                    memory.append(message)
-
+            memory = [msg for msg in request.memory if msg.role != "system"]
             completion = llm_client.generate_structured(
                 messages=memory,
                 prompt=prompt_two,
