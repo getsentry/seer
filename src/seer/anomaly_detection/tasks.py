@@ -117,11 +117,11 @@ def toggle_data_purge_flag(alert_id: int):
 @sentry_sdk.trace
 def cleanup_disabled_alerts():
 
-    logger.info(
-        "Cleaning up timeseries data for alerts that have been inactive (detection has not been run) for over 28 days"
-    )
-
     date_threshold = datetime.now() - timedelta(days=28)
+
+    logger.info(
+        f"Cleaning up timeseries data for alerts that have been inactive (detection has not been run) since {date_threshold}"
+    )
 
     with Session() as session:
         # Get and delete alerts that haven't been queued for detection in the last 28 days indicating that they are disabled and are safe to cleanup
