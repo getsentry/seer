@@ -33,6 +33,11 @@ class CodegenUnitTestsRequest(BaseModel):
     pr_id: int  # The PR number
 
 
+class CodegenPrReviewRequest(BaseModel):
+    repo: RepoDefinition
+    pr_id: int  # The PR number
+
+
 class CodegenContinuation(CodegenState):
     request: CodegenUnitTestsRequest
 
@@ -49,6 +54,10 @@ class CodeUnitTestRequest(BaseComponentRequest):
 
 
 class CodegenUnitTestsResponse(BaseModel):
+    run_id: int
+
+
+class CodegenPrReviewResponse(BaseModel):
     run_id: int
 
 
