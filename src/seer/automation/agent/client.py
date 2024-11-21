@@ -474,9 +474,9 @@ class LlmClient:
         default_temperature = defaults.temperature if defaults else None
         # More defaults to come
 
-        messages = self.clean_message_content(messages if messages else [])
+        messages = LlmClient.clean_message_content(messages if messages else [])
         if not tools:
-            messages = self.clean_tool_call_assistant_messages(messages)
+            messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
         if model.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
@@ -520,8 +520,8 @@ class LlmClient:
         if run_name:
             langfuse_context.update_current_observation(name=run_name + " - Generate Structured")
 
-        messages = self.clean_message_content(messages if messages else [])
-        messages = self.clean_tool_call_assistant_messages(messages)
+        messages = LlmClient.clean_message_content(messages if messages else [])
+        messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
         if model.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
@@ -539,7 +539,8 @@ class LlmClient:
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")
 
-    def clean_tool_call_assistant_messages(self, messages: list[Message]) -> list[Message]:
+    @staticmethod
+    def clean_tool_call_assistant_messages(messages: list[Message]) -> list[Message]:
         new_messages = []
         for message in messages:
             if message.role == "assistant" and message.tool_calls:
@@ -556,7 +557,8 @@ class LlmClient:
                 new_messages.append(message)
         return new_messages
 
-    def clean_message_content(self, messages: list[Message]) -> list[Message]:
+    @staticmethod
+    def clean_message_content(messages: list[Message]) -> list[Message]:
         new_messages = []
         for message in messages:
             if not message.content:

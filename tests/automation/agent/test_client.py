@@ -287,7 +287,7 @@ def test_clean_tool_call_assistant_messages():
         Message(role="assistant", content="Final response"),
     ]
 
-    cleaned_messages = LlmClient().clean_tool_call_assistant_messages(messages)
+    cleaned_messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
     assert len(cleaned_messages) == 5
     assert cleaned_messages[0].role == "user"
@@ -302,7 +302,7 @@ def test_clean_message_content():
         Message(role="user", content=""),
     ]
 
-    cleaned_messages = LlmClient().clean_message_content(messages)
+    cleaned_messages = LlmClient.clean_message_content(messages)
 
     assert len(cleaned_messages) == 1
     assert cleaned_messages[0].role == "user"
