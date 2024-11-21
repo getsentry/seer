@@ -50,4 +50,4 @@ def get_unittest_state(request: CodegenUnitTestsStateRequest):
 
 
 def codegen_pr_review(request: CodegenPrReviewRequest):
-    return NotImplementedError("PR Review is not implemented yet.")
+    raise NotImplementedError("PR Review is not implemented yet.")

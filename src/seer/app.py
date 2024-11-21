@@ -46,6 +46,9 @@ from seer.automation.codebase.models import (
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
     CodegenPrReviewRequest,
+    CodegenPrReviewResponse,
+    CodegenPrReviewStateRequest,
+    CodegenPrReviewStateResponse,
     CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
@@ -262,15 +265,15 @@ def codegen_unit_tests_state_endpoint(
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")
-def codegen_pr_review_endpoint(data: CodegenPrReviewRequest) -> NotImplementedError:
+def codegen_pr_review_endpoint(data: CodegenPrReviewRequest) -> CodegenPrReviewResponse:
     return codegen_pr_review(data)
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review/state")
 def codegen_pr_review_state_endpoint(
-    data: CodegenUnitTestsStateRequest,
-) -> NotImplementedError:
-    return NotImplementedError("PR Review state is not implemented yet.")
+    data: CodegenPrReviewStateRequest,
+) -> CodegenPrReviewStateResponse:
+    raise NotImplementedError("PR Review state is not implemented yet.")
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")

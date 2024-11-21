@@ -72,3 +72,16 @@ class CodegenUnitTestsStateResponse(BaseModel):
     triggered_at: datetime.datetime
     updated_at: datetime.datetime
     completed_at: datetime.datetime | None = None
+
+
+class CodegenPrReviewStateRequest(BaseModel):
+    run_id: int
+
+
+class CodegenPrReviewStateResponse(BaseModel):
+    run_id: int
+    status: CodegenStatus
+    changes: list[FileChange]
+    triggered_at: datetime.datetime
+    updated_at: datetime.datetime
+    completed_at: datetime.datetime | None = None
