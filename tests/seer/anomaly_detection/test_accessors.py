@@ -109,14 +109,18 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         # Adding a new timepoint with an existing timestamp should fail
         with self.assertRaises(Exception):
             alert_data_accessor.save_timepoint(
-                external_alert_id, point1, anomaly_algo_data={"dummy": 10}
+                external_alert_id,
+                point1,
+                anomaly_algo_data={
+                    "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                    "mp_fixed": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                },
             )
 
         # Adding a new timepoint with new timestamp should succeed
         point3 = TimeSeriesPoint(
             timestamp=3000.0,
             value=500.0,
-            anomaly_algo_data={"dummy": 10},
             anomaly=Anomaly(anomaly_type="none", anomaly_score=1.0),
         )
         alert_data_accessor.save_timepoint(
@@ -132,7 +136,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 original_flags=["none"],
                 use_suss=[True],
             ),
-            anomaly_algo_data={"dummy": 10},
+            anomaly_algo_data={
+                "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                "mp_fixed": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+            },
         )
         alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
         self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
@@ -226,6 +233,69 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             )
             self.assertEqual(db_dynamic_alert.timeseries[0].timestamp.timestamp(), point1.timestamp)
             self.assertAlmostEqual(db_dynamic_alert.timeseries[0].value, point1.value)
+
+    def test_recalculate_batch_detection(self):
+        """Test that matrix profiles are recalculated when missing from timeseries points"""
+        # Create and save alert with timeseries points missing matrix profile data
+        organization_id = 100
+        project_id = 101
+        external_alert_id = 10
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+        points = [TimeSeriesPoint(timestamp=100.0 * i, value=42.42) for i in range(5)]
+
+        # Create anomalies without matrix profile data
+        anomalies = MPTimeSeriesAnomalies(
+            flags=["none"] * 5,
+            scores=[1.0] * 5,
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 5),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 5),
+            window_size=3,
+            thresholds=[0.0] * 5,
+            original_flags=["none"] * 5,
+            use_suss=[True] * 5,
+        )
+
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=points,
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 3},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        # Query the alert to trigger recalculation
+        alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
+
+        self.assertIsNotNone(alert_from_db)
+        self.assertEqual(len(alert_from_db.timeseries.timestamps), 5)
+
+        # Verify that matrix profiles were recalculated
+        with Session() as session:
+            db_alert = (
+                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).one()
+            )
+
+            # Check that each timepoint now has matrix profile data
+            for ts_point in db_alert.timeseries:
+                self.assertIn("mp_suss", ts_point.anomaly_algo_data)
+                self.assertIn("mp_fixed", ts_point.anomaly_algo_data)
+
+                # Verify structure of matrix profile data
+                self.assertIn("dist", ts_point.anomaly_algo_data["mp_suss"])
+                self.assertIn("idx", ts_point.anomaly_algo_data["mp_suss"])
+                self.assertIn("l_idx", ts_point.anomaly_algo_data["mp_suss"])
+                self.assertIn("r_idx", ts_point.anomaly_algo_data["mp_suss"])
+
+                self.assertIn("dist", ts_point.anomaly_algo_data["mp_fixed"])
+                self.assertIn("idx", ts_point.anomaly_algo_data["mp_fixed"])
+                self.assertIn("l_idx", ts_point.anomaly_algo_data["mp_fixed"])
+                self.assertIn("r_idx", ts_point.anomaly_algo_data["mp_fixed"])
 
     def test_original_flags_padding(self):
         """Test that original_flags gets padded with 'none' even when there is missing original flag data"""

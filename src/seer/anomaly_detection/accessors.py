@@ -10,7 +10,7 @@ import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
 
-from seer.anomaly_detection.detectors import MPBatchAnomalyDetector
+from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPConfig
 from seer.anomaly_detection.models import (
     DynamicAlert,
     MPTimeSeries,
@@ -102,11 +102,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
         timeseries = db_alert.timeseries
 
         # If the timeseries does not have both matrix profiles, then we need to recalculate them using batch detection
-        last_point = db_alert.timeseries[-1]
-        if (
-            last_point.anomaly_algo_data is None
-            or "mp_suss" not in last_point.anomaly_algo_data
-            or "mp_fixed" not in last_point.anomaly_algo_data
+        if len(timeseries) > 0 and (
+            timeseries[-1].anomaly_algo_data is not None
+            and "mp_suss" not in timeseries[-1].anomaly_algo_data
+            and "mp_fixed" not in timeseries[-1].anomaly_algo_data
         ):
             timeseries = self._recalculate_batch_detection(db_alert)
 
@@ -161,7 +160,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             matrix_profile_fixed=stumpy.mparray.mparray(
                 mp_fixed,
                 k=1,
-                m=10,
+                m=MPConfig().fixed_window_size,
                 excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
             ),
             window_size=window_size,
@@ -213,7 +212,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
             window_size=db_alert.anomaly_algo_data.get("window_size"),
         )
         anomalies_fixed = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries), ad_config, window_size=10
+            convert_external_ts_to_internal(timeseries),
+            ad_config,
+            window_size=MPConfig().fixed_window_size,
         )
         recalculated_anomalies = self.combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)

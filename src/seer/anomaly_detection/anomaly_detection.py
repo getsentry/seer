@@ -8,7 +8,11 @@ from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
-from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
+from seer.anomaly_detection.detectors import (
+    MPBatchAnomalyDetector,
+    MPConfig,
+    MPStreamAnomalyDetector,
+)
 from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
@@ -81,7 +85,9 @@ class AnomalyDetection(BaseModel):
             convert_external_ts_to_internal(timeseries), config, window_size=window_size
         )
         anomalies_fixed = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries), config, window_size=10
+            convert_external_ts_to_internal(timeseries),
+            config,
+            window_size=MPConfig().fixed_window_size,
         )
         anomalies = DbAlertDataAccessor().combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)
@@ -335,7 +341,7 @@ class AnomalyDetection(BaseModel):
                 historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
             )
 
-        anomalies = AlertDataAccessor().combine_anomalies(
+        anomalies = DbAlertDataAccessor().combine_anomalies(
             streamed_anomalies_suss,
             streamed_anomalies_fixed,
             [True]
