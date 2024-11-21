@@ -90,6 +90,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 if "<NO_ROOT_CAUSES>" in response:
                     reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
+                    if "</NO_ROOT_CAUSES>" in reason:
+                        reason = reason.split("</NO_ROOT_CAUSES>")[0].strip()
                     return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
 
                 # Ask for reproduction (NOTE: disabled due to speed; should be relocated to a different step in the future)
