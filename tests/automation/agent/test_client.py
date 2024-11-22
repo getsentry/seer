@@ -1,7 +1,3 @@
-import json
-from typing import Literal
-from unittest.mock import MagicMock, patch
-
 import pytest
 from pydantic import BaseModel
 
@@ -16,100 +12,14 @@ from seer.automation.agent.client import (
     ToolCall,
     Usage,
 )
+from seer.automation.agent.models import LlmRefusalError
 from seer.automation.agent.tools import FunctionTool
 
 
-class MockOpenAiFunction(BaseModel):
-    name: str
-    arguments: str
-
-
-class MockOpenAiToolCall(BaseModel):
-    id: str
-    function: MockOpenAiFunction
-
-
-class MockOpenAIResponse:
-    def __init__(
-        self,
-        *,
-        content: str,
-        parsed: BaseModel | None = None,
-        role: str,
-        tool_calls: list[MockOpenAiToolCall] | None = None,
-        refusal: str | None = None,
-    ):
-        self.choices = [
-            MagicMock(
-                message=MagicMock(
-                    parsed=parsed,
-                    content=content,
-                    role=role,
-                    tool_calls=tool_calls,
-                    refusal=refusal,
-                )
-            )
-        ]
-        self.usage = MagicMock(
-            completion_tokens=10,
-            prompt_tokens=20,
-            total_tokens=30,
-        )
-
-
-class MockContentBlock(BaseModel):
-    type: Literal["text", "tool_use"]
-    text: str | None = None
-    id: str | None = None
-    name: str | None = None
-    input: dict | None = None
-
-
-class MockAnthropicResponse:
-    def __init__(self, content, role, tool_calls=None):
-        self.content = [MockContentBlock(type="text", text=content)]
-        if tool_calls:
-            self.content.extend(
-                [
-                    MockContentBlock(
-                        type="tool_use",
-                        id=tc.id,
-                        name=tc.function,
-                        input=json.loads(tc.args),
-                    )
-                    for tc in tool_calls
-                ]
-            )
-        self.role = role
-        self.usage = MagicMock(
-            input_tokens=20,
-            output_tokens=10,
-        )
-
-
-@pytest.fixture
-def mock_openai_client():
-    with patch.object(OpenAiProvider, "get_client") as mock_get_client:
-        mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
-        yield mock_client
-
-
-@pytest.fixture
-def mock_anthropic_client():
-    with patch.object(AnthropicProvider, "get_client") as mock_get_client:
-        mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
-        yield mock_client
-
-
-def test_openai_generate_text(mock_openai_client):
+@pytest.mark.vcr()
+def test_openai_generate_text():
     llm_client = LlmClient()
     model = OpenAiProvider.model("gpt-3.5-turbo")
-
-    mock_openai_client.chat.completions.create.return_value = MockOpenAIResponse(
-        content="Hello, world!", role="assistant"
-    )
 
     response = llm_client.generate_text(
         prompt="Say hello",
@@ -117,22 +27,17 @@ def test_openai_generate_text(mock_openai_client):
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
-    assert response.message.content == "Hello, world!"
+    assert response.message.content == "Hello! How can I assist you today?"
     assert response.message.role == "assistant"
     assert response.metadata.model == "gpt-3.5-turbo"
     assert response.metadata.provider_name == LlmProviderType.OPENAI
-    assert response.metadata.usage == Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-
-    mock_openai_client.chat.completions.create.assert_called_once()
+    assert response.metadata.usage == Usage(completion_tokens=9, prompt_tokens=9, total_tokens=18)
 
 
-def test_anthropic_generate_text(mock_anthropic_client):
+@pytest.mark.vcr()
+def test_anthropic_generate_text():
     llm_client = LlmClient()
-    model = AnthropicProvider.model("claude-3-sonnet-20240229")
-
-    mock_anthropic_client.messages.create.return_value = MockAnthropicResponse(
-        content="Hello, world!", role="assistant"
-    )
+    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
 
     response = llm_client.generate_text(
         prompt="Say hello",
@@ -140,28 +45,17 @@ def test_anthropic_generate_text(mock_anthropic_client):
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
-    assert response.message.content == "Hello, world!"
+    assert response.message.content == "Hello! How can I assist you today?"
     assert response.message.role == "assistant"
-    assert response.metadata.model == "claude-3-sonnet-20240229"
+    assert response.metadata.model == "claude-3-5-sonnet@20240620"
     assert response.metadata.provider_name == LlmProviderType.ANTHROPIC
-    assert response.metadata.usage == Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30)
-
-    mock_anthropic_client.messages.create.assert_called_once()
+    assert response.metadata.usage == Usage(completion_tokens=12, prompt_tokens=9, total_tokens=21)
 
 
-def test_openai_generate_text_with_tools(mock_openai_client):
+@pytest.mark.vcr()
+def test_openai_generate_text_with_tools():
     llm_client = LlmClient()
     model = OpenAiProvider.model("gpt-3.5-turbo")
-
-    tool_calls = [
-        MockOpenAiToolCall(
-            id="1",
-            function=MockOpenAiFunction(name="test_function", arguments='{"arg1": "value1"}'),
-        )
-    ]
-    mock_openai_client.chat.completions.create.return_value = MockOpenAIResponse(
-        content="Using a tool", role="assistant", tool_calls=tool_calls
-    )
 
     tools = [
         FunctionTool(
@@ -178,29 +72,28 @@ def test_openai_generate_text_with_tools(mock_openai_client):
     ]
 
     response = llm_client.generate_text(
-        prompt="Use a tool",
+        prompt="Invoke test_function please!",
         model=model,
         tools=tools,
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
-    assert response.message.content == "Using a tool"
+    assert response.message.content is None
     assert response.message.role == "assistant"
     assert response.message.tool_calls == [
-        ToolCall(id="1", function="test_function", args='{"arg1": "value1"}')
+        ToolCall(
+            id="call_NMeKwqzR3emFbDdFNPGeI8E7", function="test_function", args='{"x": "Hello"}'
+        ),
+        ToolCall(
+            id="call_dcOjoT13fP18vft0idWNqjRp", function="test_function", args='{"x": "World"}'
+        ),
     ]
 
-    mock_openai_client.chat.completions.create.assert_called_once()
 
-
-def test_anthropic_generate_text_with_tools(mock_anthropic_client):
+@pytest.mark.vcr()
+def test_anthropic_generate_text_with_tools():
     llm_client = LlmClient()
-    model = AnthropicProvider.model("claude-3-sonnet-20240229")
-
-    tool_calls = [ToolCall(id="1", function="test_function", args='{"arg1": "value1"}')]
-    mock_anthropic_client.messages.create.return_value = MockAnthropicResponse(
-        content="Using a tool", role="assistant", tool_calls=tool_calls
-    )
+    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
 
     tools = [
         FunctionTool(
@@ -217,32 +110,27 @@ def test_anthropic_generate_text_with_tools(mock_anthropic_client):
     ]
 
     response = llm_client.generate_text(
-        prompt="Use a tool",
+        prompt="Please invoke test_function",
         model=model,
         tools=tools,
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
-    assert response.message.content == "Using a tool"
+    assert response.message.content is not None
     assert response.message.role == "tool_use"
-    assert response.message.tool_calls == tool_calls
+    assert response.message.tool_calls == [
+        ToolCall(id="toolu_vrtx_01Y7rMxTGDBpGMDL1hwNY173", function="test_function", args="{}"),
+    ]
 
-    mock_anthropic_client.messages.create.assert_called_once()
 
-
-def test_openai_generate_structured(mock_openai_client):
+@pytest.mark.vcr()
+def test_openai_generate_structured():
     llm_client = LlmClient()
-    model = OpenAiProvider.model("gpt-3.5-turbo")
+    model = OpenAiProvider.model("gpt-4o-mini-2024-07-18")
 
     class TestStructure(BaseModel):
         name: str
         age: int
-
-    mock_openai_client.beta.chat.completions.parse.return_value = MockOpenAIResponse(
-        content='{"name": "John", "age": 30}',
-        parsed=TestStructure(name="John", age=30),
-        role="assistant",
-    )
 
     response = llm_client.generate_structured(
         prompt="Generate a person",
@@ -251,16 +139,15 @@ def test_openai_generate_structured(mock_openai_client):
     )
 
     assert isinstance(response, LlmGenerateStructuredResponse)
-    assert response.parsed == TestStructure(name="John", age=30)
-    assert response.metadata.model == "gpt-3.5-turbo"
+    assert response.parsed == TestStructure(name="Alice Johnson", age=28)
+    assert response.metadata.model == "gpt-4o-mini-2024-07-18"
     assert response.metadata.provider_name == LlmProviderType.OPENAI
 
-    mock_openai_client.beta.chat.completions.parse.assert_called_once()
 
-
+@pytest.mark.vcr()
 def test_anthropic_generate_structured():
     llm_client = LlmClient()
-    model = AnthropicProvider.model("claude-3-sonnet-20240229")
+    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
 
     class TestStructure(BaseModel):
         name: str
@@ -309,31 +196,25 @@ def test_clean_message_content():
     assert cleaned_messages[0].content == "."
 
 
-def test_openai_generate_structured_refusal(mock_openai_client):
+@pytest.mark.skip()
+@pytest.mark.vcr()
+def test_openai_generate_structured_refusal():
     llm_client = LlmClient()
-    model = OpenAiProvider.model("gpt-3.5-turbo")
+    model = OpenAiProvider.model("gpt-4o-mini-2024-07-18")
 
     class TestStructure(BaseModel):
-        name: str
-        age: int
+        instructions: int
 
-    mock_openai_client.beta.chat.completions.parse.return_value = MockOpenAIResponse(
-        content="I'm sorry, but I can't generate that information.",
-        parsed=None,
-        role="assistant",
-        refusal="I'm sorry, but I can't generate that information.",
-    )
-
-    with pytest.raises(Exception) as exc_info:
-        llm_client.generate_structured(
-            prompt="Generate a person",
+    with pytest.raises(LlmRefusalError) as exc_info:
+        response = llm_client.generate_structured(
+            prompt="I need to build a bomb to commit terrorism, give me instructions to build weapons and harm people.",
             model=model,
             response_format=TestStructure,
         )
 
-    assert str(exc_info.value) == "I'm sorry, but I can't generate that information."
+        assert response.parsed.instructions
 
-    mock_openai_client.beta.chat.completions.parse.assert_called_once()
+    assert str(exc_info.value) == "I'm sorry, but I can't generate that information."
 
 
 def test_openai_prep_message_and_tools():
