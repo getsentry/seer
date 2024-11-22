@@ -45,12 +45,16 @@ from seer.automation.codebase.models import (
 )
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
+    CodegenPrReviewRequest,
+    CodegenPrReviewResponse,
+    CodegenPrReviewStateRequest,
+    CodegenPrReviewStateResponse,
     CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
 )
-from seer.automation.codegen.tasks import codegen_unittest, get_unittest_state
+from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import raise_if_no_genai_consent
@@ -258,6 +262,18 @@ def codegen_unit_tests_state_endpoint(
         updated_at=state.updated_at,
         completed_at=state.completed_at,
     )
+
+
+@json_api(blueprint, "/v1/automation/codegen/pr-review")
+def codegen_pr_review_endpoint(data: CodegenPrReviewRequest) -> CodegenPrReviewResponse:
+    return codegen_pr_review(data)
+
+
+@json_api(blueprint, "/v1/automation/codegen/pr-review/state")
+def codegen_pr_review_state_endpoint(
+    data: CodegenPrReviewStateRequest,
+) -> CodegenPrReviewStateResponse:
+    raise NotImplementedError("PR Review state is not implemented yet.")
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")

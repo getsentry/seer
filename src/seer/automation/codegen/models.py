@@ -33,6 +33,11 @@ class CodegenUnitTestsRequest(BaseModel):
     pr_id: int  # The PR number
 
 
+class CodegenPrReviewRequest(BaseModel):
+    repo: RepoDefinition
+    pr_id: int  # The PR number
+
+
 class CodegenContinuation(CodegenState):
     request: CodegenUnitTestsRequest
 
@@ -52,11 +57,28 @@ class CodegenUnitTestsResponse(BaseModel):
     run_id: int
 
 
+class CodegenPrReviewResponse(BaseModel):
+    run_id: int
+
+
 class CodegenUnitTestsStateRequest(BaseModel):
     run_id: int
 
 
 class CodegenUnitTestsStateResponse(BaseModel):
+    run_id: int
+    status: CodegenStatus
+    changes: list[FileChange]
+    triggered_at: datetime.datetime
+    updated_at: datetime.datetime
+    completed_at: datetime.datetime | None = None
+
+
+class CodegenPrReviewStateRequest(BaseModel):
+    run_id: int
+
+
+class CodegenPrReviewStateResponse(BaseModel):
     run_id: int
     status: CodegenStatus
     changes: list[FileChange]

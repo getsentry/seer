@@ -1,6 +1,7 @@
 from celery_app.config import CeleryQueues
 from seer.automation.codegen.models import (
     CodegenContinuation,
+    CodegenPrReviewRequest,
     CodegenStatus,
     CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
@@ -46,3 +47,7 @@ def codegen_unittest(request: CodegenUnitTestsRequest):
 def get_unittest_state(request: CodegenUnitTestsStateRequest):
     state = CodegenContinuationState.from_id(request.run_id, model=CodegenContinuation)
     return state.get()
+
+
+def codegen_pr_review(request: CodegenPrReviewRequest):
+    raise NotImplementedError("PR Review is not implemented yet.")
