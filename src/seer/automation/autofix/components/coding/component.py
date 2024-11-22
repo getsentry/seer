@@ -99,12 +99,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     ):
         state = self.context.state.get()
 
-        # Clean memory of tool messages since we're running without tools
-        cleaned_memory = LlmClient.clean_tool_call_assistant_messages(memory)
-
         agent = AutofixAgent(
             config=AgentConfig(interactive=True),
-            memory=cleaned_memory,
+            memory=memory,
             context=self.context,
             name="Plan+Code Simple fixer",
         )
@@ -219,11 +216,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             class NeedToSearchCodebaseOutput(BaseModel):
                 need_to_search_codebase: bool
 
-            # Clean message roles to ensure compatibility with OpenAI's API
-            cleaned_memory = LlmClient.clean_tool_call_assistant_messages(memory)
-
             output = llm_client.generate_structured(
-                messages=cleaned_memory,
+                messages=memory,
                 prompt="Given the above instruction, do you need to search the codebase for more context or have an immediate answer?",
                 model=OpenAiProvider.model("gpt-4o-mini"),
                 response_format=NeedToSearchCodebaseOutput,

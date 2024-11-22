@@ -297,6 +297,18 @@ def test_clean_tool_call_assistant_messages():
     assert cleaned_messages[4].role == "assistant"
 
 
+def test_clean_message_content():
+    messages = [
+        Message(role="user", content=""),
+    ]
+
+    cleaned_messages = LlmClient.clean_message_content(messages)
+
+    assert len(cleaned_messages) == 1
+    assert cleaned_messages[0].role == "user"
+    assert cleaned_messages[0].content == "."
+
+
 def test_openai_generate_structured_refusal(mock_openai_client):
     llm_client = LlmClient()
     model = OpenAiProvider.model("gpt-3.5-turbo")

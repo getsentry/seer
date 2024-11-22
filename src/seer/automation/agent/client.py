@@ -474,6 +474,10 @@ class LlmClient:
         default_temperature = defaults.temperature if defaults else None
         # More defaults to come
 
+        messages = LlmClient.clean_message_content(messages if messages else [])
+        if not tools:
+            messages = LlmClient.clean_tool_call_assistant_messages(messages)
+
         if model.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
 
@@ -516,6 +520,9 @@ class LlmClient:
         if run_name:
             langfuse_context.update_current_observation(name=run_name + " - Generate Structured")
 
+        messages = LlmClient.clean_message_content(messages if messages else [])
+        messages = LlmClient.clean_tool_call_assistant_messages(messages)
+
         if model.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
             return model.generate_structured(
@@ -548,6 +555,15 @@ class LlmClient:
                 )
             else:
                 new_messages.append(message)
+        return new_messages
+
+    @staticmethod
+    def clean_message_content(messages: list[Message]) -> list[Message]:
+        new_messages = []
+        for message in messages:
+            if not message.content:
+                message.content = "."
+            new_messages.append(message)
         return new_messages
 
 
