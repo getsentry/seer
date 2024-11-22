@@ -57,12 +57,14 @@ class AnomalyDetection(BaseModel):
         )
         stream.update(6.0)
 
+    @inject
     @sentry_sdk.trace
     def _batch_detect(
         self,
         timeseries: List[TimeSeriesPoint],
         config: AnomalyDetectionConfig,
         window_size: int | None = None,
+        mp_config: MPConfig = injected,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         """
         Stateless batch anomaly detection on entire timeseries as provided. In batch mode, analysis of a
@@ -87,7 +89,7 @@ class AnomalyDetection(BaseModel):
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries),
             config,
-            window_size=MPConfig().fixed_window_size,
+            window_size=mp_config.fixed_window_size,
         )
         anomalies = DbAlertDataAccessor().combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)

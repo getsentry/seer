@@ -7,11 +7,11 @@ class MPConfig(BaseModel):
     """
 
     ignore_trivial: bool = Field(
-        True,
+        ...,
         description="Flag that tells the stumpy library to ignore trivial matches to speed up MP computation",
     )
     normalize_mp: bool = Field(
-        False,
+        ...,
         description="Flag to control if the matrix profile is normalized first",
     )
     fixed_window_size: int = Field(

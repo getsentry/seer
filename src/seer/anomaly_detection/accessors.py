@@ -22,6 +22,7 @@ from seer.anomaly_detection.models.cleanup import CleanupConfig
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
+from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
@@ -84,8 +85,13 @@ class AlertDataAccessor(BaseModel, abc.ABC):
 
 class DbAlertDataAccessor(AlertDataAccessor):
 
+    @inject
     @sentry_sdk.trace
-    def _hydrate_alert(self, db_alert: DbDynamicAlert) -> DynamicAlert:
+    def _hydrate_alert(
+        self,
+        db_alert: DbDynamicAlert,
+        mp_config: MPConfig = injected,
+    ) -> DynamicAlert:
         rand_offset = random.randint(0, 24)
         timestamp_threshold = (datetime.now() - timedelta(days=28, hours=rand_offset)).timestamp()
         num_old_points = 0
@@ -107,7 +113,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             and "mp_suss" not in timeseries[-1].anomaly_algo_data
             and "mp_fixed" not in timeseries[-1].anomaly_algo_data
         ):
-            timeseries = self._recalculate_batch_detection(db_alert)
+            timeseries = self._recalculate_batch_detection(db_alert, mp_config)
 
         for point in timeseries:
             ts.append(point.timestamp.timestamp())
@@ -118,7 +124,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if point.anomaly_algo_data is not None:
                 algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
 
-                if algo_data["mp_suss"]:
+                if "mp_suss" in algo_data:
                     mp_suss_data = [
                         algo_data["mp_suss"]["dist"],
                         algo_data["mp_suss"]["idx"],
@@ -135,9 +141,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         algo_data["mp_fixed"]["r_idx"],
                     ]
                     mp_fixed.append(mp_fixed_data)
-
                 original_flags.append(algo_data["original_flag"])
                 use_suss.append(algo_data["use_suss"])
+
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
         # Default value is "none" for original flags
@@ -160,7 +166,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             matrix_profile_fixed=stumpy.mparray.mparray(
                 mp_fixed,
                 k=1,
-                m=MPConfig().fixed_window_size,
+                m=mp_config.fixed_window_size,
                 excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
             ),
             window_size=window_size,
@@ -185,9 +191,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
             ),
         )
 
+    @inject
     @sentry_sdk.trace
     def _recalculate_batch_detection(
-        self, db_alert: DbDynamicAlert
+        self, db_alert: DbDynamicAlert, mp_config: MPConfig = injected
     ) -> list[DbDynamicAlertTimeSeries]:
         """
         Recalculates the matrix profiles for SuSS and Fixed windows for an alert then returns the updated timeseries
@@ -214,7 +221,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries),
             ad_config,
-            window_size=MPConfig().fixed_window_size,
+            window_size=mp_config.fixed_window_size,
         )
         recalculated_anomalies = self.combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)

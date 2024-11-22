@@ -4,10 +4,13 @@ import numpy as np
 import sentry_sdk
 
 from celery_app.app import celery_app
+from seer.anomaly_detection.accessors import DbAlertDataAccessor
+from seer.anomaly_detection.detectors import MPConfig
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.db import DbDynamicAlert, Session, TaskStatus
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -70,16 +73,30 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
     return deleted_count
 
 
-def update_matrix_profiles(alert: DbDynamicAlert, anomaly_detection_config: AnomalyDetectionConfig):
+@inject
+def update_matrix_profiles(
+    alert: DbDynamicAlert,
+    anomaly_detection_config: AnomalyDetectionConfig,
+    mp_config: MPConfig = injected,
+):
 
     timeseries = TimeSeries(
         timestamps=np.array([timestep.timestamp.timestamp() for timestep in alert.timeseries]),
         values=np.array([timestep.value for timestep in alert.timeseries]),
     )
 
-    anomalies = MPBatchAnomalyDetector()._compute_matrix_profile(
+    anomalies_suss = MPBatchAnomalyDetector()._compute_matrix_profile(
         timeseries=timeseries, config=anomaly_detection_config
     )
+    anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
+        timeseries=timeseries,
+        config=anomaly_detection_config,
+        window_size=mp_config.fixed_window_size,
+    )
+    anomalies = DbAlertDataAccessor().combine_anomalies(
+        anomalies_suss, anomalies_fixed, [True] * len(timeseries.timestamps)
+    )
+
     algo_data_map = dict(
         zip(timeseries.timestamps, anomalies.get_anomaly_algo_data(len(timeseries.timestamps)))
     )
