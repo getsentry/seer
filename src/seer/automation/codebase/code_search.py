@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import List, Optional
+import chardet
 
 from seer.automation.codebase.models import Match, SearchResult
 
@@ -15,12 +16,14 @@ class CodeSearcher:
         max_results: int = 16,
         max_file_size_bytes: int = 1_000_000,  # 1 MB by default
         start_path: Optional[str] = None,
+        default_encoding: str = 'utf-8',
     ):
         self.directory = directory
         self.supported_extensions = supported_extensions
         self.max_results = max_results
         self.start_path = start_path
         self.max_file_size_bytes = max_file_size_bytes
+        self.default_encoding = default_encoding
 
     def calculate_proximity_score(self, file_path: str) -> float:
         if not self.start_path:
@@ -46,11 +49,49 @@ class CodeSearcher:
 
         # Calculate proximity score based on distances
         total_distance = start_distance + file_distance
-        return 1 / (
-            total_distance + 1
-        )  # +1 to avoid division by zero and to ensure score is never 0
+        return 1 / (total_distance + 1)
+
+    def _read_file_with_encoding(self, file_path: str) -> Optional[List[str]]:
+        """
+        Smart file reader that attempts to detect and handle different file encodings.
+        Returns list of lines if successful, None if file cannot be read.
+        """
+        # First try: Read a sample to detect encoding
+        try:
+            # Read only first 32KB to detect encoding for large files
+            with open(file_path, 'rb') as f:
+                raw_data = f.read(32768)
+            if not raw_data:
+                return []
+            
+            result = chardet.detect(raw_data)
+            encoding = result['encoding'] if result['confidence'] > 0.6 else self.default_encoding
+            
+            # Attempt to read with detected encoding
+            with open(file_path, 'r', encoding=encoding) as f:
+                return f.readlines()
+        except UnicodeDecodeError:
+            # If detection failed, try common fallback encodings
+            fallback_encodings = ['latin-1', 'iso-8859-1', 'cp1252', 'windows-1251']
+            for enc in fallback_encodings:
+                try:
+                    with open(file_path, 'r', encoding=enc) as f:
+                        return f.readlines()
+                except UnicodeDecodeError:
+                    continue
+            
+            logger.warning(
+                f"Failed to read {file_path} with all attempted encodings: "
+                f"detected={encoding}, fallbacks={fallback_encodings}"
+            )
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error reading {file_path}: {str(e)}")
+            return None
 
     def search_file(self, file_path: str, keyword: str) -> Optional[SearchResult]:
+        relative_path = os.path.relpath(file_path, self.directory)
+        matches = []
         relative_path = os.path.relpath(file_path, self.directory)
         matches = []
 
@@ -59,10 +100,12 @@ class CodeSearcher:
                 logger.debug(f"Skipping {file_path} as it exceeds the maximum file size limit.")
                 return None
 
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if keyword.lower() in line.lower():
+            lines = self._read_file_with_encoding(file_path)
+            if lines is None:
+                return None
+                
+            for i, line in enumerate(lines):
+                if keyword.lower() in line.lower():
                         start = max(0, i - 8)
                         end = min(len(lines), i + 9)
                         context = "".join(lines[start:end])
@@ -72,8 +115,8 @@ class CodeSearcher:
             if matches:
                 score = self.calculate_proximity_score(file_path)
                 return SearchResult(relative_path=relative_path, matches=matches, score=score)
-        except UnicodeDecodeError:
-            logger.exception(f"Unable to read {file_path}")
+        except Exception as e:
+            logger.exception(f"Error processing {file_path}: {str(e)}")
         return None
 
     def search(self, keyword: str) -> List[SearchResult]:
