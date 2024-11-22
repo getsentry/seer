@@ -8,7 +8,7 @@ from typing import Literal
 
 import requests
 import sentry_sdk
-from github import Auth, Github, GithubIntegration, UnknownObjectException
+from github import Auth, Github, GithubException, GithubIntegration, UnknownObjectException
 from github.GitRef import GitRef
 from github.Repository import Repository
 from unidiff import PatchSet
@@ -450,13 +450,26 @@ class RepoClient:
         description: str,
         provided_base: str | None = None,
     ):
-        return self.repo.create_pull(
-            title=title,
-            body=description,
-            base=provided_base or self.get_default_branch(),
-            head=branch.ref,
-            draft=True,
-        )
+        try:
+            return self.repo.create_pull(
+                title=title,
+                body=description,
+                base=provided_base or self.get_default_branch(),
+                head=branch.ref,
+                draft=True,
+            )
+        except GithubException as e:
+            if e.status == 422:
+                # fallback to creating a regular PR if draft PR is not supported
+                return self.repo.create_pull(
+                    title=title,
+                    body=description,
+                    base=provided_base or self.get_default_branch(),
+                    head=branch.ref,
+                    draft=False,
+                )
+            else:
+                raise e
 
     def get_index_file_set(
         self, sha: str | None = None, max_file_size_bytes=2 * 1024 * 1024, skip_empty_files=False
