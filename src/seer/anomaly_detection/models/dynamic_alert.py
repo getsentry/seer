@@ -18,3 +18,4 @@ class DynamicAlert(BaseModel):
     timeseries: TimeSeries
     anomalies: TimeSeriesAnomalies
     cleanup_config: CleanupConfig
+    only_suss: bool

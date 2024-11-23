@@ -171,25 +171,37 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
     @staticmethod
     def extract_algo_data(map: dict):
         # Matrix profile for SuSS and fixed windows could be None so we check for that
-        mp_suss_data = map.get("mp_suss")
-        mp_suss = None
-        if mp_suss_data is not None:
-            mp_suss = {
-                "dist": mp_suss_data.get("dist"),
-                "idx": mp_suss_data.get("idx"),
-                "l_idx": mp_suss_data.get("l_idx"),
-                "r_idx": mp_suss_data.get("r_idx"),
-            }
 
-        mp_fixed_data = map.get("mp_fixed")
+        mp_suss = None
         mp_fixed = None
-        if mp_fixed_data is not None:
-            mp_fixed = {
-                "dist": mp_fixed_data.get("dist"),
-                "idx": mp_fixed_data.get("idx"),
-                "l_idx": mp_fixed_data.get("l_idx"),
-                "r_idx": mp_fixed_data.get("r_idx"),
+        # Indicating older algo_data format
+        if "dist" in map:
+            mp_suss = {
+                "dist": map.get("dist"),
+                "idx": map.get("idx"),
+                "l_idx": map.get("l_idx"),
+                "r_idx": map.get("r_idx"),
             }
+        else:
+            mp_suss_data = map.get("mp_suss")
+
+            if mp_suss_data is not None:
+                mp_suss = {
+                    "dist": mp_suss_data.get("dist"),
+                    "idx": mp_suss_data.get("idx"),
+                    "l_idx": mp_suss_data.get("l_idx"),
+                    "r_idx": mp_suss_data.get("r_idx"),
+                }
+
+            mp_fixed_data = map.get("mp_fixed")
+
+            if mp_fixed_data is not None:
+                mp_fixed = {
+                    "dist": mp_fixed_data.get("dist"),
+                    "idx": mp_fixed_data.get("idx"),
+                    "l_idx": mp_fixed_data.get("l_idx"),
+                    "r_idx": mp_fixed_data.get("r_idx"),
+                }
 
         return {
             "mp_suss": mp_suss,

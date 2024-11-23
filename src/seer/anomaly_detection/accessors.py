@@ -10,7 +10,7 @@ import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
 
-from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPConfig
+from seer.anomaly_detection.detectors import MPConfig
 from seer.anomaly_detection.models import (
     DynamicAlert,
     MPTimeSeries,
@@ -19,7 +19,6 @@ from seer.anomaly_detection.models import (
     TimeSeriesAnomalies,
 )
 from seer.anomaly_detection.models.cleanup import CleanupConfig
-from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
 from seer.dependency_injection import inject, injected
@@ -77,7 +76,7 @@ class AlertDataAccessor(BaseModel, abc.ABC):
     def combine_anomalies(
         self,
         anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,
-        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow,
+        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow | None,
         use_suss: list[bool],
     ):
         return NotImplemented
@@ -107,13 +106,15 @@ class DbAlertDataAccessor(AlertDataAccessor):
 
         timeseries = db_alert.timeseries
 
-        # If the timeseries does not have both matrix profiles, then we need to recalculate them using batch detection
-        if len(timeseries) > 0 and (
-            timeseries[-1].anomaly_algo_data is not None
-            and "mp_suss" not in timeseries[-1].anomaly_algo_data
-            and "mp_fixed" not in timeseries[-1].anomaly_algo_data
+        # If the timeseries does not have both matrix profiles, then we only use the suss window
+        only_suss = False
+        if len(timeseries) > 0 and any(
+            point.anomaly_algo_data is not None
+            and "mp_suss" not in point.anomaly_algo_data
+            and "mp_fixed" not in point.anomaly_algo_data
+            for point in timeseries
         ):
-            timeseries = self._recalculate_batch_detection(db_alert, mp_config)
+            only_suss = True
 
         for point in timeseries:
             ts.append(point.timestamp.timestamp())
@@ -141,8 +142,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         algo_data["mp_fixed"]["r_idx"],
                     ]
                     mp_fixed.append(mp_fixed_data)
-                original_flags.append(algo_data["original_flag"])
                 use_suss.append(algo_data["use_suss"])
+                original_flags.append(algo_data["original_flag"])
 
             if point.timestamp.timestamp() < timestamp_threshold:
                 num_old_points += 1
@@ -189,79 +190,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 timestamp_threshold=timestamp_threshold,
                 num_acceptable_points=24 * 4 * 2,  # Num alerts for 2 days
             ),
+            only_suss=only_suss,
         )
-
-    @inject
-    @sentry_sdk.trace
-    def _recalculate_batch_detection(
-        self, db_alert: DbDynamicAlert, mp_config: MPConfig = injected
-    ) -> list[DbDynamicAlertTimeSeries]:
-        """
-        Recalculates the matrix profiles for SuSS and Fixed windows for an alert then returns the updated timeseries
-        """
-
-        batch_detector = MPBatchAnomalyDetector()
-        timeseries = [
-            TimeSeriesPoint(timestamp=point.timestamp.timestamp(), value=point.value)
-            for point in db_alert.timeseries
-        ]
-
-        ad_config = AnomalyDetectionConfig(
-            time_period=db_alert.config.get("time_period"),
-            sensitivity=db_alert.config.get("sensitivity"),
-            direction=db_alert.config.get("direction"),
-            expected_seasonality=db_alert.config.get("expected_seasonality"),
-        )
-
-        anomalies_suss = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries),
-            ad_config,
-            window_size=db_alert.anomaly_algo_data.get("window_size"),
-        )
-        anomalies_fixed = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries),
-            ad_config,
-            window_size=mp_config.fixed_window_size,
-        )
-        recalculated_anomalies = self.combine_anomalies(
-            anomalies_suss, anomalies_fixed, [True] * len(timeseries)
-        )
-
-        ts = self.update_timeseries(db_alert, recalculated_anomalies)
-        return ts
-
-    @sentry_sdk.trace
-    def update_timeseries(self, db_alert: DbDynamicAlert, anomalies: MPTimeSeriesAnomalies):
-        with Session() as session:
-            alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == db_alert.external_alert_id)
-                .one_or_none()
-            )
-            if alert is None:
-                raise ClientError(f"Alert with id {db_alert.external_alert_id} not found")
-
-            # Delete existing timeseries first to avoid uniqueness constraint violation
-            session.query(DbDynamicAlertTimeSeries).filter(
-                DbDynamicAlertTimeSeries.dynamic_alert_id == alert.id
-            ).delete()
-
-            algo_data = anomalies.get_anomaly_algo_data(len(db_alert.timeseries))
-            ts = [
-                DbDynamicAlertTimeSeries(
-                    dynamic_alert_id=alert.id,
-                    timestamp=point.timestamp,
-                    value=point.value,
-                    anomaly_type=anomalies.flags[i],
-                    anomaly_score=anomalies.scores[i],
-                    anomaly_algo_data=algo_data[i],
-                )
-                for i, point in enumerate(db_alert.timeseries)
-            ]
-            alert.timeseries = ts
-            session.commit()
-
-            return ts
 
     @sentry_sdk.trace
     def query(self, external_alert_id: int) -> DynamicAlert | None:
@@ -433,7 +363,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
     def combine_anomalies(
         self,
         anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,
-        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow,
+        anomalies_fixed: MPTimeSeriesAnomaliesSingleWindow | None,
         use_suss: list[bool],
     ) -> MPTimeSeriesAnomalies:
         """
@@ -454,16 +384,26 @@ class DbAlertDataAccessor(AlertDataAccessor):
         """
         return MPTimeSeriesAnomalies(
             flags=[
-                (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
+                (
+                    (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
+                    if anomalies_fixed is not None
+                    else anomalies_suss.flags[i]
+                )
                 for i in range(len(anomalies_suss.flags))
             ],
             scores=[
-                (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
+                (
+                    (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
+                    if anomalies_fixed is not None
+                    else anomalies_suss.scores[i]
+                )
                 for i in range(len(anomalies_suss.scores))
             ],
             thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
             matrix_profile_suss=anomalies_suss.matrix_profile,
-            matrix_profile_fixed=anomalies_fixed.matrix_profile,
+            matrix_profile_fixed=(
+                anomalies_fixed.matrix_profile if anomalies_fixed is not None else None
+            ),
             window_size=anomalies_suss.window_size,
             original_flags=anomalies_suss.original_flags,
             use_suss=use_suss,

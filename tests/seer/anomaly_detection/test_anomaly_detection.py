@@ -123,6 +123,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 use_suss=np.array([True] * len(ts_timestamps)),
             ),
             cleanup_config=cleanup_config,
+            only_suss=False,
         )
 
         # Dummy return so we don't hit db
@@ -166,6 +167,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 use_suss=np.array([True] * len(ts_timestamps[:100])),
             ),
             cleanup_config=cleanup_config,
+            only_suss=False,
         )
 
         with self.assertRaises(Exception):
@@ -210,6 +212,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 use_suss=[True] * len(ts_timestamps),
             ),
             cleanup_config=cleanup_config,
+            only_suss=False,
         )
 
         with self.assertRaises(ServerError) as e:

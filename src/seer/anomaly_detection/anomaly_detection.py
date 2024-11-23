@@ -186,32 +186,37 @@ class AnomalyDetection(BaseModel):
             convert_external_ts_to_internal(ts_external), config
         )
 
-        # Fixed Window
-        stream_detector_fixed = MPStreamAnomalyDetector(
-            history_timestamps=historic.timeseries.timestamps,
-            history_values=historic.timeseries.values,
-            history_mp=anomalies.matrix_profile_fixed,
-            window_size=10,
-            original_flags=original_flags,
-        )
-        streamed_anomalies_fixed = stream_detector_fixed.detect(
-            convert_external_ts_to_internal(ts_external), config
-        )
+        streamed_anomalies_fixed = None
+        if not historic.only_suss:
+            # Fixed Window
+            stream_detector_fixed = MPStreamAnomalyDetector(
+                history_timestamps=historic.timeseries.timestamps,
+                history_values=historic.timeseries.values,
+                history_mp=anomalies.matrix_profile_fixed,
+                window_size=10,
+                original_flags=original_flags,
+            )
+            streamed_anomalies_fixed = stream_detector_fixed.detect(
+                convert_external_ts_to_internal(ts_external), config
+            )
 
-        # Check if next detection should switch window
-        use_suss_window = anomalies.use_suss[-1]
-        if use_suss_window and streamed_anomalies_suss.flags[-1] == "anomaly_higher_confidence":
-            use_suss_window = False
+            # Check if next detection should switch window
+            use_suss_window = anomalies.use_suss[-1]
+            if use_suss_window and streamed_anomalies_suss.flags[-1] == "anomaly_higher_confidence":
+                use_suss_window = False
 
-        # If we are using fixed window and we are past the SuSS anomalous region
-        if (
-            not use_suss_window
-            and streamed_anomalies_fixed.flags[-1] == "none"
-            and streamed_anomalies_suss.flags[-1] == "none"
-        ):
-            use_suss_window = True
+            # If we are using fixed window and we are past the SuSS anomalous region
+            if (
+                not use_suss_window
+                and streamed_anomalies_fixed.flags[-1] == "none"
+                and streamed_anomalies_suss.flags[-1] == "none"
+            ):
+                use_suss_window = True
 
-        anomalies.use_suss.append(use_suss_window)
+            anomalies.use_suss.append(use_suss_window)
+
+        else:
+            anomalies.use_suss.append(True)
 
         streamed_anomalies = alert_data_accessor.combine_anomalies(
             streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss

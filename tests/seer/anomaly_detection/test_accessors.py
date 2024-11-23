@@ -234,7 +234,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             self.assertEqual(db_dynamic_alert.timeseries[0].timestamp.timestamp(), point1.timestamp)
             self.assertAlmostEqual(db_dynamic_alert.timeseries[0].value, point1.value)
 
-    def test_recalculate_batch_detection(self):
+    def test_skip_fixed_window(self):
         """Test that matrix profiles are recalculated when missing from timeseries points"""
         # Create and save alert with timeseries points missing matrix profile data
         organization_id = 100
@@ -284,31 +284,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
         self.assertIsNotNone(alert_from_db)
         self.assertEqual(len(alert_from_db.timeseries.timestamps), 700)
-
-        # Verify that matrix profiles were recalculated
-        with Session() as session:
-            db_alert = (
-                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).one()
-            )
-
-            # Check that each timepoint now has matrix profile data
-            for ts_point in db_alert.timeseries:
-                if ts_point.anomaly_algo_data is not None:
-                    self.assertIn("mp_suss", ts_point.anomaly_algo_data)
-                    self.assertIn("mp_fixed", ts_point.anomaly_algo_data)
-
-                    if ts_point.anomaly_algo_data["mp_suss"] is not None:
-                        # Verify structure of matrix profile data
-                        self.assertIn("dist", ts_point.anomaly_algo_data["mp_suss"])
-                        self.assertIn("idx", ts_point.anomaly_algo_data["mp_suss"])
-                        self.assertIn("l_idx", ts_point.anomaly_algo_data["mp_suss"])
-                        self.assertIn("r_idx", ts_point.anomaly_algo_data["mp_suss"])
-
-                    if ts_point.anomaly_algo_data["mp_fixed"] is not None:
-                        self.assertIn("dist", ts_point.anomaly_algo_data["mp_fixed"])
-                        self.assertIn("idx", ts_point.anomaly_algo_data["mp_fixed"])
-                        self.assertIn("l_idx", ts_point.anomaly_algo_data["mp_fixed"])
-                        self.assertIn("r_idx", ts_point.anomaly_algo_data["mp_fixed"])
+        self.assertEqual(alert_from_db.only_suss, True)
 
     def test_original_flags_padding(self):
         """Test that original_flags gets padded with 'none' even when there is missing original flag data"""
