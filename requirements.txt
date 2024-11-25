@@ -6,7 +6,7 @@
 #
 aiohappyeyeballs==2.4.3
     # via aiohttp
-aiohttp==3.11.1
+aiohttp==3.11.7
     # via
     #   -r requirements-constraints.txt
     #   datasets
@@ -42,7 +42,7 @@ backoff==2.2.1
     # via
     #   langfuse
     #   posthog
-bcrypt==4.2.0
+bcrypt==4.2.1
     # via chromadb
 billiard==4.2.1
     # via celery
@@ -68,6 +68,8 @@ cffi==1.17.1
     # via
     #   cryptography
     #   pynacl
+chardet==5.2.0
+    # via -r requirements-constraints.txt
 charset-normalizer==2.1.1
     # via
     #   -r requirements-constraints.txt
@@ -108,7 +110,7 @@ convertdate==2.4.0
     # via -r requirements-constraints.txt
 covdefaults==2.3.0
     # via -r requirements-constraints.txt
-coverage==7.6.5
+coverage==7.6.8
     # via
     #   covdefaults
     #   pytest-cov
@@ -124,7 +126,7 @@ cython==3.0.2
     # via -r requirements-constraints.txt
 datasets==3.1.0
     # via optimum
-deprecated==1.2.14
+deprecated==1.2.15
     # via pygithub
 dill==0.3.8
     # via
@@ -197,7 +199,7 @@ google-auth==2.36.0
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-cloud-aiplatform==1.72.0
+google-cloud-aiplatform==1.73.0
     # via -r requirements-constraints.txt
 google-cloud-bigquery==3.27.0
     # via google-cloud-aiplatform
@@ -232,7 +234,7 @@ grpc-google-iam-v1==0.13.1
     #   google-cloud-secret-manager
 grpc-stubs==1.53.0.5
     # via sentry-protos
-grpcio==1.67.1
+grpcio==1.68.0
     # via
     #   chromadb
     #   google-api-core
@@ -243,11 +245,11 @@ grpcio==1.67.1
     #   grpcio-reflection
     #   grpcio-status
     #   sentry-protos
-grpcio-health-checking==1.67.1
+grpcio-health-checking==1.68.0
     # via -r requirements-constraints.txt
-grpcio-reflection==1.67.1
+grpcio-reflection==1.68.0
     # via -r requirements-constraints.txt
-grpcio-status==1.67.1
+grpcio-status==1.68.0
     # via google-api-core
 gunicorn==22.0.0
     # via -r requirements-constraints.txt
@@ -259,7 +261,7 @@ holidays==0.31
     # via
     #   -r requirements-constraints.txt
     #   prophet
-httpcore==1.0.6
+httpcore==1.0.7
     # via httpx
 httptools==0.6.4
     # via uvicorn
@@ -418,9 +420,9 @@ numpy==1.26.1
     #   transformers
 onnx==1.16.0
     # via -r requirements-constraints.txt
-onnxruntime==1.20.0
+onnxruntime==1.20.1
     # via chromadb
-openai==1.54.4
+openai==1.55.0
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
@@ -481,7 +483,7 @@ pip-tools==7.4.1
     # via -r requirements-constraints.txt
 pluggy==1.5.0
     # via pytest
-posthog==3.7.0
+posthog==3.7.2
     # via chromadb
 prompt-toolkit==3.0.48
     # via click-repl
@@ -549,7 +551,7 @@ pygithub==2.1.1
     # via -r requirements-constraints.txt
 pygments==2.18.0
     # via rich
-pyjwt==2.9.0
+pyjwt==2.10.0
     # via pygithub
 pymeeus==0.5.12
     # via
@@ -670,7 +672,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.35
+sentry-protos==0.1.37
     # via -r requirements-constraints.txt
 sentry-sdk==2.18.0
     # via -r requirements-constraints.txt
@@ -701,7 +703,7 @@ sqlalchemy==2.0.25
     #   pytest-alembic
 stanio==0.5.1
     # via cmdstanpy
-starlette==0.41.2
+starlette==0.41.3
     # via fastapi
 statsmodels==0.14.0
     # via -r requirements-constraints.txt
@@ -752,7 +754,7 @@ tree-sitter==0.21.3
     #   tree-sitter-languages
 tree-sitter-languages==1.10.2
     # via -r requirements-constraints.txt
-typer==0.13.0
+typer==0.13.1
     # via chromadb
 types-colorama==0.4.15.12
     # via -r requirements-constraints.txt
@@ -815,7 +817,7 @@ urllib3==1.26.19
     #   requests
     #   sentry-sdk
     #   vcrpy
-uvicorn==0.32.0
+uvicorn==0.32.1
     # via chromadb
 uvloop==0.21.0
     # via uvicorn
@@ -830,7 +832,7 @@ vine==5.1.0
     #   kombu
 watchdog==6.0.0
     # via -r requirements-constraints.txt
-watchfiles==0.24.0
+watchfiles==1.0.0
     # via uvicorn
 wcwidth==0.2.13
     # via prompt-toolkit
@@ -841,16 +843,16 @@ werkzeug==3.0.3
     #   -r requirements-constraints.txt
     #   flask
     #   openapi-core
-wheel==0.45.0
+wheel==0.45.1
     # via pip-tools
-wrapt==1.16.0
+wrapt==1.17.0
     # via
     #   deprecated
     #   langfuse
     #   vcrpy
 xxhash==3.5.0
     # via datasets
-yarl==1.17.1
+yarl==1.18.0
     # via
     #   aiohttp
     #   vcrpy
