@@ -126,17 +126,17 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         )
 
     def to_model(self):
+        model_data = {
+            "title": self.title,
+            "description": self.description,
+        }
+        
+        if self.relevant_code:
+            model_data["code_context"] = self.relevant_code.model_dump()["snippets"]
+        
         return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
+            model_data
+        )
                 #     else None
                 # ),
                 "code_context": (
