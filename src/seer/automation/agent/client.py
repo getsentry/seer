@@ -503,8 +503,7 @@ class LlmClient:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
             logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
-            raise
-            raise ValueError(f"Invalid provider: {model.provider_name}")
+            raise e
 
     @observe(name="Generate Structured")
     def generate_structured(
@@ -544,7 +543,7 @@ class LlmClient:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
             logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
-            raise
+            raise e
 
     @staticmethod
     def clean_tool_call_assistant_messages(messages: list[Message]) -> list[Message]:
