@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import List, Optional
+
 import chardet
 
 from seer.automation.codebase.models import Match, SearchResult
@@ -16,7 +17,7 @@ class CodeSearcher:
         max_results: int = 16,
         max_file_size_bytes: int = 1_000_000,  # 1 MB by default
         start_path: Optional[str] = None,
-        default_encoding: str = 'utf-8',
+        default_encoding: str = "utf-8",
     ):
         self.directory = directory
         self.supported_extensions = supported_extensions
@@ -59,27 +60,27 @@ class CodeSearcher:
         # First try: Read a sample to detect encoding
         try:
             # Read only first 32KB to detect encoding for large files
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 raw_data = f.read(32768)
             if not raw_data:
                 return []
-            
+
             result = chardet.detect(raw_data)
-            encoding = result['encoding'] if result['confidence'] > 0.6 else self.default_encoding
-            
+            encoding = result["encoding"] if result["confidence"] > 0.6 else self.default_encoding
+
             # Attempt to read with detected encoding
-            with open(file_path, 'r', encoding=encoding) as f:
+            with open(file_path, "r", encoding=encoding) as f:
                 return f.readlines()
         except UnicodeDecodeError:
             # If detection failed, try common fallback encodings
-            fallback_encodings = ['latin-1', 'iso-8859-1', 'cp1252', 'windows-1251']
+            fallback_encodings = ["latin-1", "iso-8859-1", "cp1252", "windows-1251"]
             for enc in fallback_encodings:
                 try:
-                    with open(file_path, 'r', encoding=enc) as f:
+                    with open(file_path, "r", encoding=enc) as f:
                         return f.readlines()
                 except UnicodeDecodeError:
                     continue
-            
+
             logger.warning(
                 f"Failed to read {file_path} with all attempted encodings: "
                 f"detected={encoding}, fallbacks={fallback_encodings}"
@@ -91,9 +92,7 @@ class CodeSearcher:
 
     def search_file(self, file_path: str, keyword: str) -> Optional[SearchResult]:
         relative_path = os.path.relpath(file_path, self.directory)
-        matches = []
-        relative_path = os.path.relpath(file_path, self.directory)
-        matches = []
+        matches: List[Match] = []
 
         try:
             if os.path.getsize(file_path) > self.max_file_size_bytes:
@@ -103,14 +102,14 @@ class CodeSearcher:
             lines = self._read_file_with_encoding(file_path)
             if lines is None:
                 return None
-                
+
             for i, line in enumerate(lines):
                 if keyword.lower() in line.lower():
-                        start = max(0, i - 8)
-                        end = min(len(lines), i + 9)
-                        context = "".join(lines[start:end])
-                        matches.append(Match(line_number=i + 1, context=context))
-                        break  # Stop after finding the first match
+                    start = max(0, i - 8)
+                    end = min(len(lines), i + 9)
+                    context = "".join(lines[start:end])
+                    matches.append(Match(line_number=i + 1, context=context))
+                    break  # Stop after finding the first match
 
             if matches:
                 score = self.calculate_proximity_score(file_path)
