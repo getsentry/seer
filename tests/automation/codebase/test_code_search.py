@@ -128,3 +128,54 @@ class TestCodeSearcher(unittest.TestCase):
     def test_keyword_not_found(self):
         results = self.code_searcher.search("nonexistent")
         assert len(results) == 0, "Should return empty list when keyword is not found"
+
+    def test_read_file_with_encoding(self):
+        # Test UTF-8 file
+        with open(os.path.join(self.test_dir, "utf8.txt"), "w", encoding="utf-8") as f:
+            f.write("Hello in UTF-8 🌍")
+
+        # Test different encoding
+        with open(os.path.join(self.test_dir, "latin1.txt"), "wb") as f:
+            f.write("Hello in Latin-1 é".encode("latin-1"))
+
+        # Test file with different encoding than default
+        result1 = self.code_searcher.search_file(os.path.join(self.test_dir, "utf8.txt"), "Hello")
+        result2 = self.code_searcher.search_file(os.path.join(self.test_dir, "latin1.txt"), "Hello")
+
+        assert result1 is not None, "Should read UTF-8 file"
+        assert result2 is not None, "Should read Latin-1 file"
+        assert "Hello in UTF-8" in result1.matches[0].context
+        assert "Hello in Latin-1" in result2.matches[0].context
+
+    def test_read_file_with_invalid_encoding(self):
+        # Create a binary file that's not valid in any text encoding
+        with open(os.path.join(self.test_dir, "binary.txt"), "wb") as f:
+            f.write(bytes([0xFF, 0xFE, 0x00, 0x00]))  # Invalid UTF-8
+
+        result = self.code_searcher.search_file(
+            os.path.join(self.test_dir, "binary.txt"), "keyword"
+        )
+        assert result is None, "Should return None for unreadable files"
+
+    def test_custom_default_encoding(self):
+        # Create a file with specific encoding
+        test_text = "Test with special char é"
+        with open(os.path.join(self.test_dir, "special.txt"), "w", encoding="latin-1") as f:
+            f.write(test_text)
+
+        # Create searcher with latin-1 as default encoding
+        latin1_searcher = CodeSearcher(self.test_dir, {".txt"}, default_encoding="latin-1")
+
+        result = latin1_searcher.search_file(os.path.join(self.test_dir, "special.txt"), "special")
+
+        assert result is not None, "Should read file with custom default encoding"
+        assert "special char" in result.matches[0].context
+
+    def test_empty_file(self):
+        # Test handling of empty files
+        empty_file = os.path.join(self.test_dir, "empty.txt")
+        with open(empty_file, "w"):
+            pass
+
+        result = self.code_searcher.search_file(empty_file, "keyword")
+        assert result is None, "Should handle empty files gracefully"
