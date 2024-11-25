@@ -286,6 +286,7 @@ class AnthropicProvider:
         return anthropic.AnthropicVertex(
             project_id=app_config.GOOGLE_CLOUD_PROJECT,
             region="europe-west1" if app_config.USE_EU_REGION else "us-east5",
+            max_retries=8,
         )
 
     @classmethod
@@ -466,41 +467,43 @@ class LlmClient:
         max_tokens: int | None = None,
         run_name: str | None = None,
     ) -> LlmGenerateTextResponse:
-        if run_name:
-            langfuse_context.update_current_observation(name=run_name + " - Generate Text")
-            langfuse_context.flush()
+        try:
+            if run_name:
+                langfuse_context.update_current_observation(name=run_name + " - Generate Text")
+                langfuse_context.flush()
 
-        defaults = model.defaults
-        default_temperature = defaults.temperature if defaults else None
-        # More defaults to come
+            defaults = model.defaults
+            default_temperature = defaults.temperature if defaults else None
 
-        messages = LlmClient.clean_message_content(messages if messages else [])
-        if not tools:
-            messages = LlmClient.clean_tool_call_assistant_messages(messages)
+            messages = LlmClient.clean_message_content(messages if messages else [])
+            if not tools:
+                messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
-        if model.provider_name == LlmProviderType.OPENAI:
-            model = cast(OpenAiProvider, model)
-
-            return model.generate_text(
-                max_tokens=max_tokens,
-                messages=messages,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=temperature or default_temperature,
-                tools=tools,
-            )
-        elif model.provider_name == LlmProviderType.ANTHROPIC:
-            model = cast(AnthropicProvider, model)
-
-            return model.generate_text(
-                max_tokens=max_tokens,
-                messages=messages,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=temperature or default_temperature,
-                tools=tools,
-            )
-        else:
+            if model.provider_name == LlmProviderType.OPENAI:
+                model = cast(OpenAiProvider, model)
+                return model.generate_text(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature or default_temperature,
+                    tools=tools,
+                )
+            elif model.provider_name == LlmProviderType.ANTHROPIC:
+                model = cast(AnthropicProvider, model)
+                return model.generate_text(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature or default_temperature,
+                    tools=tools,
+                )
+            else:
+                raise ValueError(f"Invalid provider: {model.provider_name}")
+        except Exception as e:
+            logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            raise
             raise ValueError(f"Invalid provider: {model.provider_name}")
 
     @observe(name="Generate Structured")
@@ -517,27 +520,31 @@ class LlmClient:
         max_tokens: int | None = None,
         run_name: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
-        if run_name:
-            langfuse_context.update_current_observation(name=run_name + " - Generate Structured")
+        try:
+            if run_name:
+                langfuse_context.update_current_observation(name=run_name + " - Generate Structured")
 
-        messages = LlmClient.clean_message_content(messages if messages else [])
-        messages = LlmClient.clean_tool_call_assistant_messages(messages)
+            messages = LlmClient.clean_message_content(messages if messages else [])
+            messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
-        if model.provider_name == LlmProviderType.OPENAI:
-            model = cast(OpenAiProvider, model)
-            return model.generate_structured(
-                max_tokens=max_tokens,
-                messages=messages,
-                prompt=prompt,
-                response_format=response_format,
-                system_prompt=system_prompt,
-                temperature=temperature,
-                tools=tools,
-            )
-        elif model.provider_name == LlmProviderType.ANTHROPIC:
-            raise NotImplementedError("Anthropic structured outputs are not yet supported")
-        else:
-            raise ValueError(f"Invalid provider: {model.provider_name}")
+            if model.provider_name == LlmProviderType.OPENAI:
+                model = cast(OpenAiProvider, model)
+                return model.generate_structured(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    response_format=response_format,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    tools=tools,
+                )
+            elif model.provider_name == LlmProviderType.ANTHROPIC:
+                raise NotImplementedError("Anthropic structured outputs are not yet supported")
+            else:
+                raise ValueError(f"Invalid provider: {model.provider_name}")
+        except Exception as e:
+            logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            raise
 
     @staticmethod
     def clean_tool_call_assistant_messages(messages: list[Message]) -> list[Message]:
