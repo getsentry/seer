@@ -402,7 +402,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
             matrix_profile_suss=anomalies_suss.matrix_profile,
             matrix_profile_fixed=(
-                anomalies_fixed.matrix_profile if anomalies_fixed is not None else None
+                anomalies_fixed.matrix_profile if anomalies_fixed is not None else np.array([])
             ),
             window_size=anomalies_suss.window_size,
             original_flags=anomalies_suss.original_flags,

@@ -301,8 +301,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none"] * 5,
             scores=[1.0] * 5,
-            matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 5),
-            matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 5),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 2),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 2),
             window_size=1,
             thresholds=[0.0] * 5,
             original_flags=["none", "none"],
@@ -335,6 +335,13 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             alert_from_db.anomalies.original_flags,
             expected_flags,
             "Original flags should be padded with 'none' at the start",
+        )
+
+        expected_use_suss = [True] * 3 + [True, True]
+        self.assertEqual(
+            alert_from_db.anomalies.use_suss,
+            expected_use_suss,
+            "Use suss should be padded with True at the start",
         )
 
     def test_queue_data_purge_flag(self):
