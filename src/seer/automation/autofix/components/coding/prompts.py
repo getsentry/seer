@@ -1,7 +1,12 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanStepsPromptXml
+from seer.automation.autofix.components.coding.models import (
+    FuzzyDiffChunk,
+    PlanStepsPromptXml,
+    RootCausePlanTaskPromptXml,
+)
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
 from seer.automation.models import EventDetails
 from seer.automation.summarize.issue import IssueSummary
@@ -31,12 +36,29 @@ class CodingPrompts:
             )
 
     @staticmethod
+    def format_extra_root_cause_instruction(instruction: str):
+        return f"The user has provided the following instruction for the fix along with the root cause: {format_instruction(instruction)}"
+
+    @staticmethod
+    def format_original_instruction(instruction: str):
+        return f"Earlier, the user provided context: {format_instruction(instruction)}"
+
+    @staticmethod
+    def format_root_cause(root_cause: RootCauseAnalysisItem | str):
+        if isinstance(root_cause, RootCauseAnalysisItem):
+            return f"""The root cause of the issue has been identified and context about the issue has been provided: {RootCausePlanTaskPromptXml.from_root_cause(
+                    root_cause
+                ).to_prompt_str()}"""
+        else:
+            return f"The user has provided the following instruction for the fix: {root_cause}"
+
+    @staticmethod
     def format_fix_discovery_msg(
         event: str,
-        task_str: str,
         repo_names: list[str],
-        instruction: str | None,
-        fix_instruction: str | None,
+        root_cause: RootCauseAnalysisItem | str,
+        original_instruction: str | None,
+        root_cause_extra_instruction: str | None,
         summary: Optional[IssueSummary] = None,
         has_tools: bool = True,
     ):
@@ -44,17 +66,14 @@ class CodingPrompts:
             """\
             {repo_names_str}
             Given the issue: {summary_str}
-            {event_str}
-
-            {instruction}
-            The root cause of the issue has been identified and context about the issue has been provided:
-            {task_str}
+            {event_str}{original_instruction}
+            {root_cause_str}{root_cause_extra_instruction}
 
             # Your goal:
             Provide the most actionable and effective steps to fix the issue.
 
             Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue. Your list of steps to fix the problem should be detailed enough so that following it exactly will lead to a fully complete solution.
-            {fix_instruction}
+
             When ready with your final answer, detail the precise plan to fix the issue.
 
             # Guidelines:
@@ -69,10 +88,23 @@ class CodingPrompts:
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
             event_str=event,
-            task_str=task_str,
             repo_names_str=format_repo_names(repo_names),
-            instruction=format_instruction(instruction),
-            fix_instruction=format_instruction(fix_instruction),
+            root_cause_str=CodingPrompts.format_root_cause(root_cause),
+            original_instruction=(
+                ("\n" + CodingPrompts.format_original_instruction(original_instruction))
+                if original_instruction
+                else ""
+            ),
+            root_cause_extra_instruction=(
+                (
+                    "\n"
+                    + CodingPrompts.format_extra_root_cause_instruction(
+                        root_cause_extra_instruction
+                    )
+                )
+                if root_cause_extra_instruction
+                else ""
+            ),
             summary_str=format_summary(summary),
             use_tools_instructions=(
                 "- Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix."
@@ -128,25 +160,22 @@ class CodingPrompts:
     def format_single_simple_change_msg(
         *,
         event: str,
-        task_str: str,
         repo_names: list[str],
-        instruction: str | None,
-        fix_instruction: str | None,
+        root_cause: RootCauseAnalysisItem | str,
+        original_instruction: str | None,
+        root_cause_extra_instruction: str | None,
         summary: Optional[IssueSummary] = None,
     ):
         return textwrap.dedent(
             """\
             {repo_names_str}
             Given the issue: {summary_str}
-            {event_str}
-
-            {instruction_str}
-            The root cause of the issue has been identified and context about the issue has been provided:
-            {task_str}
+            {event_str}{original_instruction}
+            {root_cause_str}{root_cause_extra_instruction}
 
             # Your goal: Write the exact code changes in a unified diff format to fix the issue.
             Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue.
-            {fix_instruction_str}
+
             Think step by step, when ready with your final answer, detail the precise changes to make to fix the issue.
 
             Provide your file_changes, each inside a <file_change></file_change> tag. Follow the below format strictly:
@@ -183,9 +212,22 @@ class CodingPrompts:
             repo_names_str=", ".join(repo_names),
             summary_str=f"Summary: {summary}" if summary else "",
             event_str=event,
-            task_str=task_str,
-            instruction_str=f"Instruction: {instruction}" if instruction else "",
-            fix_instruction_str=f"Fix instruction: {fix_instruction}" if fix_instruction else "",
+            root_cause_str=CodingPrompts.format_root_cause(root_cause),
+            original_instruction=(
+                ("\n" + CodingPrompts.format_original_instruction(original_instruction))
+                if original_instruction
+                else ""
+            ),
+            root_cause_extra_instruction=(
+                (
+                    "\n"
+                    + CodingPrompts.format_extra_root_cause_instruction(
+                        root_cause_extra_instruction
+                    )
+                )
+                if root_cause_extra_instruction
+                else ""
+            ),
         )
 
     @staticmethod
@@ -202,8 +244,7 @@ class CodingPrompts:
             The following diffs were found to be incorrect:
             {diff_chunks}
 
-            Provide the corrected unified diffs inside a <corrected_diffs></corrected_diffs> block:
-            """
+            Provide the corrected unified diffs inside a <corrected_diffs></corrected_diffs> block:"""
         ).format(
             file_path=file_path,
             file_content=file_content,
@@ -223,28 +264,41 @@ class CodingPrompts:
 
     @staticmethod
     def format_is_obvious_msg(
+        summary: Optional[IssueSummary],
         event_details: EventDetails,
-        task_str: str,
-        fix_instruction: str | None,
+        root_cause: RootCauseAnalysisItem | str,
+        original_instruction: str | None,
+        root_cause_extra_instruction: str | None,
     ):
         return (
             textwrap.dedent(
                 """\
-                Here is an issue in our codebase:
+                Here is an issue in our codebase: {summary_str}
 
-                {event_details}
-
-                The root cause of the issue has been identified and context about the issue has been provided:
-                {task_str}
-
-                {fix_instruction}
+                {event_details}{original_instruction}
+                {root_cause_str}{root_cause_extra_instruction}
 
                 Does the code change exist ONLY in files you can already see in your context here or do you need to look at other files?"""
             )
             .format(
+                summary_str=format_summary(summary),
                 event_details=event_details.format_event(),
-                task_str=task_str,
-                fix_instruction=fix_instruction if fix_instruction else "",
+                root_cause_str=CodingPrompts.format_root_cause(root_cause),
+                original_instruction=(
+                    ("\n" + CodingPrompts.format_original_instruction(original_instruction))
+                    if original_instruction
+                    else ""
+                ),
+                root_cause_extra_instruction=(
+                    (
+                        "\n"
+                        + CodingPrompts.format_extra_root_cause_instruction(
+                            root_cause_extra_instruction
+                        )
+                    )
+                    if root_cause_extra_instruction
+                    else ""
+                ),
             )
             .strip()
         )

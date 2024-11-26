@@ -43,20 +43,20 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, input: str, repo_name: str | None = None):
-        file_contents = self.context.get_file_contents(input, repo_name=repo_name)
+    def expand_document(self, file_path: str, repo_name: str | None = None):
+        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         if repo_name is None:
             client = self.context.get_repo_client(repo_name, self.repo_client_type)
             repo_name = client.repo_name
 
-        self.context.event_manager.add_log(f"Looking at `{input}` in `{repo_name}`...")
+        self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
 
         if file_contents:
             return file_contents
 
         # show potential corrected paths if nothing was found here
-        other_paths = self._get_potential_abs_paths(input, repo_name)
+        other_paths = self._get_potential_abs_paths(file_path, repo_name)
         return f"<document with the provided path not found/>\n{other_paths}".strip()
 
     @observe(name="List Directory")
@@ -302,7 +302,7 @@ class BaseTools:
                 ),
                 parameters=[
                     {
-                        "name": "input",
+                        "name": "file_path",
                         "type": "string",
                         "description": "The document path to expand.",
                     },
@@ -312,7 +312,7 @@ class BaseTools:
                         "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
-                required=["input"],
+                required=["file_path"],
             ),
             FunctionTool(
                 name="keyword_search",
