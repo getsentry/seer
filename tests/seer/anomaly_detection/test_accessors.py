@@ -22,9 +22,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
@@ -106,14 +109,18 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         # Adding a new timepoint with an existing timestamp should fail
         with self.assertRaises(Exception):
             alert_data_accessor.save_timepoint(
-                external_alert_id, point1, anomaly_algo_data={"dummy": 10}
+                external_alert_id,
+                point1,
+                anomaly_algo_data={
+                    "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                    "mp_fixed": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                },
             )
 
         # Adding a new timepoint with new timestamp should succeed
         point3 = TimeSeriesPoint(
             timestamp=3000.0,
             value=500.0,
-            anomaly_algo_data={"dummy": 10},
             anomaly=Anomaly(anomaly_type="none", anomaly_score=1.0),
         )
         alert_data_accessor.save_timepoint(
@@ -122,12 +129,17 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             anomaly=MPTimeSeriesAnomalies(
                 flags=["none"],
                 scores=[0.8],
-                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
                 thresholds=[0.0],
                 original_flags=["none"],
+                use_suss=[True],
             ),
-            anomaly_algo_data={"dummy": 10},
+            anomaly_algo_data={
+                "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                "mp_fixed": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+            },
         )
         alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
         self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
@@ -154,9 +166,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=["none"],
                 scores=[1.0],
-                matrix_profile=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
                 thresholds=[0.0],
+                original_flags=["none"],
+                use_suss=[True],
             ),
             anomaly_algo_data={"window_size": 1},
             data_purge_flag=TaskStatus.NOT_QUEUED,
@@ -219,6 +234,58 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             self.assertEqual(db_dynamic_alert.timeseries[0].timestamp.timestamp(), point1.timestamp)
             self.assertAlmostEqual(db_dynamic_alert.timeseries[0].value, point1.value)
 
+    def test_skip_fixed_window(self):
+        """Test that matrix profiles are recalculated when missing from timeseries points"""
+        # Create and save alert with timeseries points missing matrix profile data
+        organization_id = 100
+        project_id = 101
+        external_alert_id = 10
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+        points = [TimeSeriesPoint(timestamp=100000.0 * i, value=42.42 + i) for i in range(700)]
+
+        anomalies = MPTimeSeriesAnomalies(
+            flags=["none"] * 700,
+            scores=[1.0] * 700,
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 700),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 700),
+            window_size=3,
+            thresholds=[0.0] * 700,
+            original_flags=["none"] * 700,
+            use_suss=[True] * 700,
+        )
+
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            config=config,
+            timeseries=points,
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 3},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        with Session() as session:
+            # Get the actual alert ID first
+            db_alert = (
+                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).one()
+            )
+
+            # Force the algo_data to be something other than the default (in this case what the old class represented)
+            for ts in db_alert.timeseries:
+                ts.anomaly_algo_data = {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1}
+            session.commit()
+
+        # Query the alert to trigger recalculation
+        alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
+
+        self.assertIsNotNone(alert_from_db)
+        self.assertEqual(len(alert_from_db.timeseries.timestamps), 700)
+        self.assertEqual(alert_from_db.only_suss, True)
+
     def test_original_flags_padding(self):
         """Test that original_flags gets padded with 'none' even when there is missing original flag data"""
         organization_id = 100
@@ -234,10 +301,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none"] * 5,
             scores=[1.0] * 5,
-            matrix_profile=np.array([[1.0, 10, -1, -1]] * 5),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 2),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 2),
             window_size=1,
             thresholds=[0.0] * 5,
             original_flags=["none", "none"],
+            use_suss=[True, True],
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -268,6 +337,13 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             "Original flags should be padded with 'none' at the start",
         )
 
+        expected_use_suss = [True] * 3 + [True, True]
+        self.assertEqual(
+            alert_from_db.anomalies.use_suss,
+            expected_use_suss,
+            "Use suss should be padded with True at the start",
+        )
+
     def test_queue_data_purge_flag(self):
 
         # Create and save alert
@@ -282,9 +358,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -331,9 +410,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -381,9 +463,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -424,9 +509,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         anomalies = MPTimeSeriesAnomalies(
             flags=["none", "none"],
             scores=[1.0, 0.95],
-            matrix_profile=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
             thresholds=[0.0, 0.0],
+            original_flags=["none", "none"],
+            use_suss=[True, True],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(

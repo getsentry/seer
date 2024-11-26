@@ -32,7 +32,7 @@ def mp_scorer_provider() -> MPScorer:
 @anomaly_detection_module.provider
 def mpconfig_provider() -> MPConfig:
     return MPConfig(
-        ignore_trivial=True, normalize_mp=False
+        ignore_trivial=True, normalize_mp=False, fixed_window_size=10
     )  # Avoiding complexities around normalizing matrix profile across stream computation for now.
 
 
