@@ -3,11 +3,13 @@ import time
 import unittest
 from unittest import mock
 
+import httpx
 import pytest
 from celery import Celery
 from celery.apps.worker import Worker
 from johen import generate
 from johen.pytest import parametrize
+from openai import APITimeoutError
 from sqlalchemy import text
 
 from seer.app import app, autofix_update_endpoint
@@ -21,6 +23,7 @@ from seer.automation.autofix.models import (
 from seer.automation.codebase.models import CodebaseStatusCheckRequest, CodebaseStatusCheckResponse
 from seer.automation.models import RepoDefinition
 from seer.automation.state import LocalMemoryState
+from seer.automation.summarize.models import SummarizeIssueRequest
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
 from seer.dependency_injection import Module, resolve
@@ -493,6 +496,40 @@ class TestSeer(unittest.TestCase):
                 self.assertIsInstance(response, AutofixEndpointResponse)
                 self.assertTrue(response.started)
                 self.assertEqual(response.run_id, mock_request.run_id)
+
+    @mock.patch("seer.app.run_summarize_issue")
+    def test_summarize_issue_endpoint_timeout(self, mock_run_summarize_issue):
+        """Test that summarize_issue_endpoint handles APITimeoutError correctly"""
+        mock_run_summarize_issue.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/automation/summarize/issue"
+            )
+        )
+        test_data = next(generate(SummarizeIssueRequest))
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/issue",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 504  # GatewayTimeout
+        mock_run_summarize_issue.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.run_summarize_issue")
+    def test_summarize_issue_endpoint_internal_error(self, mock_run_summarize_issue):
+        """Test that summarize_issue_endpoint handles general exceptions correctly"""
+        mock_run_summarize_issue.side_effect = Exception("Test error")
+        test_data = next(generate(SummarizeIssueRequest))
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/issue",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 500  # InternalServerError
+        mock_run_summarize_issue.assert_called_once_with(test_data)
 
 
 class TestGetCodebaseIndexStatusEndpoint(unittest.TestCase):
