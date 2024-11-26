@@ -87,6 +87,7 @@ class OpenAiProvider:
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
     ):
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
@@ -107,6 +108,7 @@ class OpenAiProvider:
                 else openai.NotGiven()
             ),
             max_tokens=max_tokens or openai.NotGiven(),
+            timeout=timeout or openai.NotGiven(),
         )
 
         openai_message = completion.choices[0].message
@@ -151,6 +153,7 @@ class OpenAiProvider:
         temperature: float | None = None,
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
+        timeout: float | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
@@ -172,6 +175,7 @@ class OpenAiProvider:
             ),
             response_format=response_format,
             max_tokens=max_tokens or openai.NotGiven(),
+            timeout=timeout or openai.NotGiven(),
         )
 
         openai_message = completion.choices[0].message
@@ -315,6 +319,7 @@ class AnthropicProvider:
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
     ):
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -332,6 +337,7 @@ class AnthropicProvider:
             messages=cast(Iterable[MessageParam], message_dicts),
             max_tokens=max_tokens or 8192,
             temperature=temperature or NOT_GIVEN,
+            timeout=timeout or NOT_GIVEN,
         )
 
         message = self._format_claude_response_to_message(completion)
@@ -466,6 +472,7 @@ class LlmClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
+        timeout: float | None = None,
     ) -> LlmGenerateTextResponse:
         try:
             if run_name:
@@ -488,6 +495,7 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=tools,
+                    timeout=timeout,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
@@ -498,6 +506,7 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=tools,
+                    timeout=timeout,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -518,10 +527,13 @@ class LlmClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
+        timeout: float | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         try:
             if run_name:
-                langfuse_context.update_current_observation(name=run_name + " - Generate Structured")
+                langfuse_context.update_current_observation(
+                    name=run_name + " - Generate Structured"
+                )
 
             messages = LlmClient.clean_message_content(messages if messages else [])
             messages = LlmClient.clean_tool_call_assistant_messages(messages)
@@ -536,6 +548,7 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature,
                     tools=tools,
+                    timeout=timeout,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 raise NotImplementedError("Anthropic structured outputs are not yet supported")

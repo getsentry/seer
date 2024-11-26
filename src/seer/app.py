@@ -4,8 +4,10 @@ import time
 import flask
 import sentry_sdk
 from flask import Blueprint, Flask, jsonify
+from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
 from seer.anomaly_detection.models.external import (
     DeleteAlertDataRequest,
@@ -278,7 +280,12 @@ def codegen_pr_review_state_endpoint(
 
 @json_api(blueprint, "/v1/automation/summarize/issue")
 def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueResponse:
-    return run_summarize_issue(data)
+    try:
+        return run_summarize_issue(data)
+    except APITimeoutError as e:
+        raise GatewayTimeout from e
+    except Exception as e:
+        raise InternalServerError from e
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
