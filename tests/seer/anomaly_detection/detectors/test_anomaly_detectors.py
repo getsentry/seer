@@ -242,7 +242,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "anomaly_higher_confidence",
         ]
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
-        print(f"test_stream_detect_spiked_history_spiked_stream_long_ts: {stream_anomalies.flags}")
+        # print(f"test_stream_detect_spiked_history_spiked_stream_long_ts: {stream_anomalies.flags}")
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[2] == "anomaly_higher_confidence"
         # # Fourth and fifth may or may not be flagged depending on prophet's prediction which has some randomness
@@ -269,7 +269,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "none",
             "none",
         ]
-        print(f"test_stream_detect_spiked_history_spiked_stream: {stream_anomalies.flags}")
+        # print(f"test_stream_detect_spiked_history_spiked_stream: {stream_anomalies.flags}")
         assert history_anomalies.window_size == 3
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[0] == "none"
@@ -312,7 +312,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         ]
 
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
-        print(f"test_stream_detect_flat_history_spiked_stream: {stream_anomalies.flags}")
         assert history_anomalies.window_size == 3
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[0] == "none"

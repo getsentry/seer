@@ -125,7 +125,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if point.anomaly_algo_data is not None:
                 algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
 
-                if "mp_suss" in algo_data:
+                if "mp_suss" in algo_data and algo_data["mp_suss"]:
                     mp_suss_data = [
                         algo_data["mp_suss"]["dist"],
                         algo_data["mp_suss"]["idx"],
@@ -134,7 +134,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     ]
                     mp_suss.append(mp_suss_data)
 
-                if algo_data["mp_fixed"]:
+                if "mp_fixed" in algo_data and algo_data["mp_fixed"]:
                     mp_fixed_data = [
                         algo_data["mp_fixed"]["dist"],
                         algo_data["mp_fixed"]["idx"],

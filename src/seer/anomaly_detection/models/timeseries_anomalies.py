@@ -126,9 +126,6 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
         algo_data = [None] * min(padding_suss, padding_fixed)
 
         for i in range(min(padding_suss, padding_fixed), front_pad_to_len):
-            # if algo_data[i] is None:
-            #     continue
-
             mp_suss = None
             if i >= padding_suss:
                 suss_idx = i - padding_suss
@@ -155,7 +152,7 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                     "r_idx": r_index_fixed,
                 }
             original_flag = self.original_flags[i] if i < len(self.original_flags) else "none"
-            use_suss = self.use_suss[i] if i < len(self.use_suss) else True
+            use_suss = self.use_suss[len(self.use_suss) - front_pad_to_len + i]
 
             algo_data.append(
                 {

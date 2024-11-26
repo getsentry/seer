@@ -256,10 +256,6 @@ class TestAnomalyDetection(unittest.TestCase):
         dummy_mp_suss = np.ones((len(ts_values) - window_size + 1, 4))
         dummy_mp_fixed = np.ones((len(ts_values) - fixed_window_size + 1, 4))
 
-        print(dummy_mp_suss)
-        print()
-        print(dummy_mp_fixed)
-
         mock_query.return_value = DynamicAlert(
             organization_id=0,
             project_id=0,

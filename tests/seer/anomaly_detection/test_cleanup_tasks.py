@@ -152,9 +152,6 @@ class TestCleanupTasks(unittest.TestCase):
                 assert new.timestamp.timestamp() > date_threshold
                 assert old.timestamp == new.timestamp
                 assert old.value == new.value
-                print(new.anomaly_algo_data)
-                print(algo_data)
-                print()
                 if new.anomaly_algo_data is not None and algo_data is None:
                     assert new.anomaly_algo_data["mp_suss"] is None
                     assert (
