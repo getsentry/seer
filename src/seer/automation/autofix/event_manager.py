@@ -200,6 +200,8 @@ class AutofixEventManager:
                 )
             )
 
+            cur.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
+
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True
     ):
