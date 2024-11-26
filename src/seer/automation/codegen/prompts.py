@@ -161,6 +161,7 @@ class CodingUnitTestPrompts:
 
 
 class CodingCodeReviewPrompts:
+    @staticmethod
     def format_system_msg():
         return textwrap.dedent(
             """\
