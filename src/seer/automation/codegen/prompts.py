@@ -197,3 +197,7 @@ class CodingCodeReviewPrompts:
         ).format(
             diff_str=diff_str,
         )
+
+    # call this right before final_response
+    def format_pr_review_messages_json():
+        return ""
