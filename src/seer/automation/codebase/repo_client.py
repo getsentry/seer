@@ -95,6 +95,7 @@ class RepoClientType(str, Enum):
     READ = "read"
     WRITE = "write"
     CODECOV_UNIT_TEST = "codecov_unit_test"
+    CODECOV_PR_REVIEW = "codecov_pr_review"
 
 
 class RepoClient:
@@ -178,7 +179,7 @@ class RepoClient:
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
-        elif type == RepoClientType.CODECOV_UNIT_TEST:
+        elif type == RepoClientType.CODECOV_UNIT_TEST or type == RepoClientType.CODECOV_PR_REVIEW:
             return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
