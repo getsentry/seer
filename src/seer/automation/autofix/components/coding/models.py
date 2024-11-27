@@ -18,8 +18,8 @@ from seer.automation.summarize.issue import IssueSummary
 class CodingRequest(BaseComponentRequest):
     event_details: EventDetails
     root_cause_and_fix: RootCauseAnalysisItem | str
-    instruction: str | None = None
-    fix_instruction: str | None = None
+    original_instruction: str | None = None
+    root_cause_extra_instruction: str | None = None
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
 
