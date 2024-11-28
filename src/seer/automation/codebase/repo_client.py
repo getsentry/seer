@@ -8,7 +8,7 @@ from typing import Literal
 
 import requests
 import sentry_sdk
-from github import Auth, Github, GithubException, GithubIntegration, UnknownObjectException
+from github import Auth, Github, GithubException, GithubIntegration, UnknownObjectException, InputGitTreeElement
 from github.GitRef import GitRef
 from github.Repository import Repository
 from unidiff import PatchSet
@@ -337,27 +337,27 @@ class RepoClient:
 
         return ref
 
-    def _commit_file_change(
-        self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
-    ):
-        if not patch and not change:
-            raise ValueError("Either patch or change must be provided")
-
+    def get_one_file_autofix_change( self, *, branch_ref: str,
+                               patch: FilePatch | None = None,
+                               change: FileChange | None = None) -> InputGitTreeElement| None:
+        """
+        This method is used to get a single change to be committed by Autofix. 
+        It supports both FilePatch and FileChange objects.
+        """
         path = patch.path if patch else (change.path if change else None)
-        patch_type = patch.type if patch else (change.change_type if change else None)
         if not path:
             raise ValueError("Path must be provided")
+
+        patch_type = patch.type if patch else (change.change_type if change else None)
         if not patch_type:
             raise ValueError("Patch type must be provided")
-
         if patch_type == "create":
             patch_type = "A"
         elif patch_type == "delete":
             patch_type = "D"
         elif patch_type == "edit":
             patch_type = "M"
-        commit_message = change.commit_message if change else None
-
+        
         contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
 
         if isinstance(contents, list):
@@ -372,28 +372,76 @@ class RepoClient:
         if path.startswith("/"):
             path = path[1:]
 
-        if patch_type == "D" and contents:
-            self.repo.delete_file(
-                path,
-                commit_message or "File deletion",
-                contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
-                branch=branch_ref,
-            )
-        elif patch_type == "A" and new_contents:
-            self.repo.create_file(
-                path, commit_message or "New file", new_contents, branch=branch_ref
-            )
-        else:
-            if contents is None:
-                raise FileNotFoundError(f"File {path} does not exist in the repository.")
+        # if the file is being deleted, there is no new contents to add to the git tree
+        if not new_contents:
+            return None
+        
+        blob = self.repo.create_git_blob(new_contents, "utf-8")
+        return InputGitTreeElement(
+            path=path,
+            mode='100644',
+            type='blob',
+            sha=blob.sha)
+    
+        
+    
+    # def _commit_file_change(
+    #     self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
+    # ):
+    #     if not patch and not change:
+    #         raise ValueError("Either patch or change must be provided")
 
-            self.repo.update_file(
-                path,
-                commit_message or "File change",
-                new_contents or "",
-                contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
-                branch=branch_ref,
-            )
+    #     path = patch.path if patch else (change.path if change else None)
+    #     patch_type = patch.type if patch else (change.change_type if change else None)
+    #     if not path:
+    #         raise ValueError("Path must be provided")
+    #     if not patch_type:
+    #         raise ValueError("Patch type must be provided")
+
+    #     if patch_type == "create":
+    #         patch_type = "A"
+    #     elif patch_type == "delete":
+    #         patch_type = "D"
+    #     elif patch_type == "edit":
+    #         patch_type = "M"
+    #     commit_message = change.commit_message if change else None
+
+    #     contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
+
+    #     if isinstance(contents, list):
+    #         raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
+
+    #     to_apply = contents.decoded_content.decode("utf-8") if contents else None
+    #     new_contents = (
+    #         patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
+    #     )
+
+    #     # Remove leading slash if it exists, the github api will reject paths with leading slashes.
+    #     if path.startswith("/"):
+    #         path = path[1:]
+
+    #     if patch_type == "D" and contents:
+    #         self.repo.delete_file(
+    #             path,
+    #             commit_message or "File deletion",
+    #             contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
+    #             branch=branch_ref,
+    #         )
+    #     elif patch_type == "A" and new_contents:
+    #         self.repo.create_file(
+    #             path, commit_message or "New file", new_contents, branch=branch_ref
+    #         )
+    #     else:
+    #         if contents is None:
+    #             raise FileNotFoundError(f"File {path} does not exist in the repository.")
+
+    #         self.repo.update_file(
+    #             path,
+    #             commit_message or "File change",
+    #             new_contents or "",
+    #             contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
+    #             branch=branch_ref,
+    #         )
 
     def create_branch_from_changes(
         self,
@@ -410,22 +458,35 @@ class RepoClient:
             branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
         )
         branch_ref = self._create_branch(new_branch_name)
-
+        
+        tree_elements = []
         if file_patches:
             for patch in file_patches:
                 try:
-                    self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
+                    # self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
+                    tree_elements.append(self.get_one_file_autofix_change(branch_ref=branch_ref.ref, patch=patch))
                 except Exception as e:
-                    logger.exception(f"Error committing file patch: {e}")
+                    logger.exception(f"Error processing file patch: {e}")
 
         elif file_changes:
             for change in file_changes:
                 try:
-                    self._commit_file_change(change=change, branch_ref=branch_ref.ref)
+                    # self._commit_file_change(change=change, branch_ref=branch_ref.ref)
+                    tree_elements.append(self.get_one_file_autofix_change(branch_ref=branch_ref.ref, change=change))
                 except Exception as e:
-                    logger.exception(f"Error committing file change: {e}")
-
-        branch_ref.update()
+                    logger.exception(f"Error processing file change: {e}")
+        # latest commit is the head of new branch
+        latest_commit = self.repo.get_git_commit(self.get_branch_head_sha(new_branch_name))
+        base_tree = latest_commit.tree
+        new_tree = self.repo.create_git_tree(tree_elements, base_tree)
+        
+        new_commit = self.repo.create_git_commit(
+            message="Changes suggested by Autofix",
+            tree=new_tree,
+            parents=[latest_commit]
+        )
+        
+        branch_ref.edit(sha=new_commit.sha)
 
         # Check that the changes were made
         comparison = self.repo.compare(self.get_default_branch_head_sha(), branch_ref.object.sha)
