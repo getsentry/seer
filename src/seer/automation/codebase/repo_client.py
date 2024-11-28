@@ -587,3 +587,25 @@ class RepoClient:
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
         return response.json()["html_url"]
+
+    def post_pr_review_confirmation_comment(self, pr_url: str):
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
+        comment = "On it! We are reviewing the PR and will provide feedback shortly."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_pr_review_no_comments_required(self, pr_url: str):
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
+        comment = "No changes requiring review at this time."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
