@@ -345,10 +345,10 @@ class RepoClient:
         It supports both FilePatch and FileChange objects.
         """
         path = patch.path if patch else (change.path if change else None)
+        patch_type = patch.type if patch else (change.change_type if change else None)
         if not path:
             raise ValueError("Path must be provided")
-
-        patch_type = patch.type if patch else (change.change_type if change else None)
+        
         if not patch_type:
             raise ValueError("Patch type must be provided")
         if patch_type == "create":
@@ -404,7 +404,6 @@ class RepoClient:
         if file_patches:
             for patch in file_patches:
                 try:
-                    # self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
                     tree_elements.append(self.get_one_file_autofix_change(branch_ref=branch_ref.ref, patch=patch))
                 except Exception as e:
                     logger.exception(f"Error processing file patch: {e}")
@@ -412,7 +411,6 @@ class RepoClient:
         elif file_changes:
             for change in file_changes:
                 try:
-                    # self._commit_file_change(change=change, branch_ref=branch_ref.ref)
                     tree_elements.append(self.get_one_file_autofix_change(branch_ref=branch_ref.ref, change=change))
                 except Exception as e:
                     logger.exception(f"Error processing file change: {e}")
