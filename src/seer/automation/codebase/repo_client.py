@@ -383,65 +383,6 @@ class RepoClient:
             type='blob',
             sha=blob.sha)
     
-        
-    
-    # def _commit_file_change(
-    #     self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
-    # ):
-    #     if not patch and not change:
-    #         raise ValueError("Either patch or change must be provided")
-
-    #     path = patch.path if patch else (change.path if change else None)
-    #     patch_type = patch.type if patch else (change.change_type if change else None)
-    #     if not path:
-    #         raise ValueError("Path must be provided")
-    #     if not patch_type:
-    #         raise ValueError("Patch type must be provided")
-
-    #     if patch_type == "create":
-    #         patch_type = "A"
-    #     elif patch_type == "delete":
-    #         patch_type = "D"
-    #     elif patch_type == "edit":
-    #         patch_type = "M"
-    #     commit_message = change.commit_message if change else None
-
-    #     contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
-
-    #     if isinstance(contents, list):
-    #         raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
-
-    #     to_apply = contents.decoded_content.decode("utf-8") if contents else None
-    #     new_contents = (
-    #         patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
-    #     )
-
-    #     # Remove leading slash if it exists, the github api will reject paths with leading slashes.
-    #     if path.startswith("/"):
-    #         path = path[1:]
-
-    #     if patch_type == "D" and contents:
-    #         self.repo.delete_file(
-    #             path,
-    #             commit_message or "File deletion",
-    #             contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
-    #             branch=branch_ref,
-    #         )
-    #     elif patch_type == "A" and new_contents:
-    #         self.repo.create_file(
-    #             path, commit_message or "New file", new_contents, branch=branch_ref
-    #         )
-    #     else:
-    #         if contents is None:
-    #             raise FileNotFoundError(f"File {path} does not exist in the repository.")
-
-    #         self.repo.update_file(
-    #             path,
-    #             commit_message or "File change",
-    #             new_contents or "",
-    #             contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
-    #             branch=branch_ref,
-    #         )
 
     def create_branch_from_changes(
         self,
