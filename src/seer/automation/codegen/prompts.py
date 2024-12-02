@@ -176,6 +176,7 @@ class CodingCodeReviewPrompts:
 
     @staticmethod
     def format_pr_review_plan_step(diff_str: str):
+        print(diff_str)
         return textwrap.dedent(
             """\
             You are given the below code changes as a diff:
@@ -194,11 +195,21 @@ class CodingCodeReviewPrompts:
             - Be respectful and professional in your feedback.
             - Do not include any placeholders; your feedback should be clear and detailed.
             - Before giving your final answer, think step-by-step to ensure your review is thorough.
+            - Use the following JSON format for each comment:
+                {{
+                    "path": "{{file_name}}",
+                    "line": line_number_here,
+                    "body": "Your comment text here"
+                    "start_line": start_line_number_here,
+                }}
+            - Ensure each comment includes:
+                - The correct file name ("{{file_name}}").
+                - The specific line number requiring the comment.
+                - Clear, professional, and actionable feedback.
+            - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
+            - Wrap the suggestions in a <suggestion> and </suggestion> block.
+            - ONLY return the list of JSON objects, nothing else. They need to be parsed directly by the system. 
             """
         ).format(
             diff_str=diff_str,
         )
-
-    # call this right before final_response
-    def format_pr_review_messages_json():
-        return ""

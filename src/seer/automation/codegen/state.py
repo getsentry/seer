@@ -12,7 +12,10 @@ from seer.db import DbRunState, Session
 class CodegenContinuationState(DbState[CodegenContinuation]):
     @classmethod
     def from_id(
-        cls, id: int, model: type[BaseModel], type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST
+        cls,
+        id: int,
+        model: type[BaseModel],
+        type: tuple[DbStateRunTypes, ...] = (DbStateRunTypes.UNIT_TEST, DbStateRunTypes.PR_REVIEW),
     ) -> "CodegenContinuationState":
         return cast(CodegenContinuationState, super().from_id(id, model, type=type))
 
