@@ -372,16 +372,14 @@ class RepoClient:
         if path.startswith("/"):
             path = path[1:]
 
-        # if the file is being deleted, there is no new contents to add to the git tree
-        if not new_contents:
-            return None
+        # don't create a blob if the file is being deleted
+        blob = self.repo.create_git_blob(new_contents, "utf-8") if new_contents else None
         
-        blob = self.repo.create_git_blob(new_contents, "utf-8")
         return InputGitTreeElement(
             path=path,
             mode='100644',
             type='blob',
-            sha=blob.sha)
+            sha=blob.sha if blob else None)
     
 
     def create_branch_from_changes(
