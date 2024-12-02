@@ -16,6 +16,7 @@ _State = TypeVar("_State", bound=BaseModel)
 class DbStateRunTypes(str, Enum):
     AUTOFIX = "autofix"
     UNIT_TEST = "unit-test"
+    PR_REVIEW = "pr-review"
 
 
 class State(abc.ABC, Generic[_State]):
