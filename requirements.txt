@@ -551,7 +551,7 @@ pygithub==2.1.1
     # via -r requirements-constraints.txt
 pygments==2.18.0
     # via rich
-pyjwt==2.10.0
+pyjwt==2.10.1
     # via pygithub
 pymeeus==0.5.12
     # via
