@@ -66,6 +66,25 @@ class RootCauseAnalysisItem(BaseModel):
     # reproduction: str | None = None
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
+    @field_validator("title", "description")
+    @classmethod
+    def validate_required_text_fields(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Required field cannot be empty or whitespace")
+        return v.strip()
+
+    @classmethod
+    def create_from_prompt(cls, prompt: "RootCauseAnalysisItemPrompt") -> "RootCauseAnalysisItem":
+        """Helper method to safely create instance from prompt"""
+        return cls(
+            title=prompt.title,
+            description=prompt.description,
+            code_context=(
+                prompt.relevant_code.model_dump()["snippets"] 
+                if prompt.relevant_code else None
+            )
+        )
+
     def to_markdown_string(self) -> str:
         markdown = f"# {self.title}\n\n"
         markdown += f"## Description\n{self.description}\n\n" if self.description else ""
@@ -92,6 +111,13 @@ class RootCauseAnalysisItemPrompt(BaseModel):
     # reproduction_instructions: str | None = None
     # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
+
+    @field_validator("title", "description")
+    @classmethod
+    def validate_required_fields(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Field cannot be empty or whitespace")
+        return v.strip()
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
@@ -126,24 +152,20 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         )
 
     def to_model(self):
-        return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
-                "code_context": (
-                    self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
-                ),
-            }
-        )
+        model_data = {
+            "title": self.title,
+            "description": self.description,
+            "code_context": (
+                self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
+            ),
+        }
+        
+        try:
+            return RootCauseAnalysisItem.model_validate(model_data)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to validate RootCauseAnalysisItem. Input data: {model_data}"
+            ) from e
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
