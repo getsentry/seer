@@ -85,6 +85,7 @@ def summarize_issue(
         response_format=IssueSummary,
         temperature=0.0,
         max_tokens=2048,
+        timeout=7.0,
     )
 
     return (

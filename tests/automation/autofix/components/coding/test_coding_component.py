@@ -334,8 +334,6 @@ class TestCodingComponent:
         ]
         mock_request.event_details = EventDetails(
             title="Test Error",
-            description="Test Description",
-            error_message="Test Error Message",
         )
         mock_request.fix_instruction = "Fix the code"
         mock_request.initial_memory = None
@@ -391,8 +389,6 @@ class TestCodingComponent:
         ]
         mock_request.event_details = EventDetails(
             title="Test Error",
-            description="Test Description",
-            error_message="Test Error Message",
         )
         mock_request.fix_instruction = "Fix the code"
         mock_request.initial_memory = None
@@ -530,9 +526,7 @@ class TestCodingComponent:
             return_value=mock_agent,
         ):
             # Execute
-            coding_output = component._handle_simple_fix(
-                request, "test task", request.initial_memory
-            )
+            coding_output = component._handle_simple_fix(request, request.initial_memory)
 
         # Assert
         assert coding_output is not None

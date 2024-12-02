@@ -14,3 +14,7 @@ class MPConfig(BaseModel):
         ...,
         description="Flag to control if the matrix profile is normalized first",
     )
+    fixed_window_size: int = Field(
+        10,
+        description="Fixed window size for the matrix profile",
+    )

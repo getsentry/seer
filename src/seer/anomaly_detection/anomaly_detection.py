@@ -6,10 +6,14 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 
-from seer.anomaly_detection.accessors import AlertDataAccessor
+from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
-from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
-from seer.anomaly_detection.models import MPTimeSeriesAnomalies, TimeSeriesAnomalies
+from seer.anomaly_detection.detectors import (
+    MPBatchAnomalyDetector,
+    MPConfig,
+    MPStreamAnomalyDetector,
+)
+from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
@@ -53,9 +57,14 @@ class AnomalyDetection(BaseModel):
         )
         stream.update(6.0)
 
+    @inject
     @sentry_sdk.trace
     def _batch_detect(
-        self, timeseries: List[TimeSeriesPoint], config: AnomalyDetectionConfig
+        self,
+        timeseries: List[TimeSeriesPoint],
+        config: AnomalyDetectionConfig,
+        window_size: int | None = None,
+        mp_config: MPConfig = injected,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         """
         Stateless batch anomaly detection on entire timeseries as provided. In batch mode, analysis of a
@@ -73,7 +82,19 @@ class AnomalyDetection(BaseModel):
         """
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector = MPBatchAnomalyDetector()
-        anomalies = batch_detector.detect(convert_external_ts_to_internal(timeseries), config)
+
+        anomalies_suss = batch_detector.detect(
+            convert_external_ts_to_internal(timeseries), config, window_size=window_size
+        )
+        anomalies_fixed = batch_detector.detect(
+            convert_external_ts_to_internal(timeseries),
+            config,
+            window_size=mp_config.fixed_window_size,
+        )
+        anomalies = DbAlertDataAccessor().combine_anomalies(
+            anomalies_suss, anomalies_fixed, [True] * len(timeseries)
+        )
+
         return timeseries, anomalies
 
     @inject
@@ -152,15 +173,53 @@ class AnomalyDetection(BaseModel):
             raise ServerError("Invalid state")
 
         # Run stream detection
-        stream_detector = MPStreamAnomalyDetector(
+
+        # SuSS Window
+        stream_detector_suss = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
-            history_mp=anomalies.matrix_profile,
+            history_mp=anomalies.matrix_profile_suss,
             window_size=anomalies.window_size,
             original_flags=original_flags,
         )
-        streamed_anomalies = stream_detector.detect(
+        streamed_anomalies_suss = stream_detector_suss.detect(
             convert_external_ts_to_internal(ts_external), config
+        )
+
+        streamed_anomalies_fixed = None
+        if not historic.only_suss:
+            # Fixed Window
+            stream_detector_fixed = MPStreamAnomalyDetector(
+                history_timestamps=historic.timeseries.timestamps,
+                history_values=historic.timeseries.values,
+                history_mp=anomalies.matrix_profile_fixed,
+                window_size=10,
+                original_flags=original_flags,
+            )
+            streamed_anomalies_fixed = stream_detector_fixed.detect(
+                convert_external_ts_to_internal(ts_external), config
+            )
+
+            # Check if next detection should switch window
+            use_suss_window = anomalies.use_suss[-1]
+            if use_suss_window and streamed_anomalies_suss.flags[-1] == "anomaly_higher_confidence":
+                use_suss_window = False
+
+            # If we are using fixed window and we are past the SuSS anomalous region
+            if (
+                not use_suss_window
+                and streamed_anomalies_fixed.flags[-1] == "none"
+                and streamed_anomalies_suss.flags[-1] == "none"
+            ):
+                use_suss_window = True
+
+            anomalies.use_suss.append(use_suss_window)
+
+        else:
+            anomalies.use_suss.append(True)
+
+        streamed_anomalies = alert_data_accessor.combine_anomalies(
+            streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss
         )
 
         # Save new data point
@@ -246,31 +305,65 @@ class AnomalyDetection(BaseModel):
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
-        historic_anomalies = batch_detector.detect(historic, config)
+        historic_anomalies_suss = batch_detector.detect(historic, config)
+        historic_anomalies_fixed = batch_detector.detect(historic, config, window_size=10)
 
         # Run stream detection on current data
-        stream_detector = MPStreamAnomalyDetector(
+        # SuSS Window
+        stream_detector_suss = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
-            history_mp=historic_anomalies.matrix_profile,
-            window_size=historic_anomalies.window_size,
-            original_flags=historic_anomalies.original_flags,
+            history_mp=historic_anomalies_suss.matrix_profile,
+            window_size=historic_anomalies_suss.window_size,
+            original_flags=historic_anomalies_suss.original_flags,
         )
-        streamed_anomalies = stream_detector.detect(
+        streamed_anomalies_suss = stream_detector_suss.detect(
+            convert_external_ts_to_internal(ts_external), config
+        )
+
+        # Fixed Window
+        stream_detector_fixed = MPStreamAnomalyDetector(
+            history_timestamps=historic.timestamps,
+            history_values=historic.values,
+            history_mp=historic_anomalies_fixed.matrix_profile,
+            window_size=historic_anomalies_fixed.window_size,
+            original_flags=historic_anomalies_fixed.original_flags,
+        )
+        streamed_anomalies_fixed = stream_detector_fixed.detect(
             convert_external_ts_to_internal(ts_external), config
         )
 
         if trim_current_by > 0:
             ts_external = ts_with_history.history[-trim_current_by:] + ts_external
-            streamed_anomalies.flags = (
-                historic_anomalies.flags[-trim_current_by:] + streamed_anomalies.flags
+            streamed_anomalies_suss.flags = (
+                historic_anomalies_suss.flags[-trim_current_by:] + streamed_anomalies_suss.flags
             )
-            streamed_anomalies.scores = (
-                historic_anomalies.scores[-trim_current_by:] + streamed_anomalies.scores
+            streamed_anomalies_suss.scores = (
+                historic_anomalies_suss.scores[-trim_current_by:] + streamed_anomalies_suss.scores
             )
-        return ts_external, streamed_anomalies
+            streamed_anomalies_fixed.flags = (
+                historic_anomalies_fixed.flags[-trim_current_by:] + streamed_anomalies_fixed.flags
+            )
+            streamed_anomalies_fixed.scores = (
+                historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
+            )
 
-    def _update_anomalies(self, ts_external: List[TimeSeriesPoint], anomalies: TimeSeriesAnomalies):
+        anomalies = DbAlertDataAccessor().combine_anomalies(
+            streamed_anomalies_suss,
+            streamed_anomalies_fixed,
+            [True]
+            * len(
+                ts_external
+            ),  # Defaulting to using SuSS window because switching logic is for streaming only
+        )
+
+        return ts_external, anomalies
+
+    def _update_anomalies(
+        self,
+        ts_external: List[TimeSeriesPoint],
+        anomalies: MPTimeSeriesAnomalies,
+    ):
         for i, point in enumerate(ts_external):
             point.anomaly = Anomaly(
                 anomaly_score=anomalies.scores[i],

@@ -18,7 +18,7 @@ from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSel
 from seer.anomaly_detection.models import (
     AnomalyDetectionConfig,
     AnomalyFlags,
-    MPTimeSeriesAnomalies,
+    MPTimeSeriesAnomaliesSingleWindow,
     TimeSeries,
     TimeSeriesAnomalies,
 )
@@ -45,8 +45,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
 
     @sentry_sdk.trace
     def detect(
-        self, timeseries: TimeSeries, config: AnomalyDetectionConfig
-    ) -> MPTimeSeriesAnomalies:
+        self, timeseries: TimeSeries, config: AnomalyDetectionConfig, window_size: int | None = None
+    ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method uses matrix profile to detect and score anonalies in the time series.
 
@@ -60,7 +60,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        return self._compute_matrix_profile(timeseries, config)
+        return self._compute_matrix_profile(timeseries, config, window_size)
 
     @inject
     @sentry_sdk.trace
@@ -68,11 +68,12 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         self,
         timeseries: TimeSeries,
         config: AnomalyDetectionConfig,
+        window_size: int | None = None,
         ws_selector: WindowSizeSelector = injected,
         mp_config: MPConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-    ) -> MPTimeSeriesAnomalies:
+    ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
 
@@ -92,7 +93,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             raise ServerError("Timestamps and values are not of the same length")
 
         ts_values = timeseries.values
-        window_size = ws_selector.optimal_window_size(ts_values)
+        if window_size is None:
+            window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
             # TODO: Add sentry logging of this error
             raise ServerError("Invalid window size")
@@ -127,7 +129,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         # Update the flags in flags_and_scores with the smoothed flags
         flags_and_scores.flags = smoothed_flags
 
-        return MPTimeSeriesAnomalies(
+        return MPTimeSeriesAnomaliesSingleWindow(
             flags=flags_and_scores.flags,
             scores=flags_and_scores.scores,
             matrix_profile=mp,
@@ -162,7 +164,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
-    ) -> MPTimeSeriesAnomalies:
+    ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
 
@@ -173,7 +175,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             Parameters for tweaking the algorithm
 
         Returns:
-            A MPTimeSeriesAnomalies object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
+            A MPTimeSeriesAnomaliesSingleWindow object with the matrix profile, matrix profile distances, anomaly scores, anomaly flags and the window size used
         """
         if len(timeseries.values) == 0:
             raise ServerError("No values to detect anomalies for")
@@ -243,7 +245,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 self.history_values = stream.T_
                 self.history_mp = np.vstack([self.history_mp, cur_mp])
 
-            return MPTimeSeriesAnomalies(
+            return MPTimeSeriesAnomaliesSingleWindow(
                 flags=flags,
                 scores=scores,
                 matrix_profile=stumpy.mparray.mparray(

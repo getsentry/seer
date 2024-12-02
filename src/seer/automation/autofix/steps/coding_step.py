@@ -68,7 +68,7 @@ class AutofixCodingStep(AutofixPipelineStep):
             self.context.event_manager.add_log("Continuing to analyze...")
 
         state = self.context.state.get()
-        root_cause_and_fix, fix_instruction = state.get_selected_root_cause_and_fix()
+        root_cause_and_fix, root_cause_extra_instruction = state.get_selected_root_cause_and_fix()
 
         if not root_cause_and_fix:
             raise ValueError("Root cause analysis must be performed before coding")
@@ -84,8 +84,8 @@ class AutofixCodingStep(AutofixPipelineStep):
             CodingRequest(
                 event_details=event_details,
                 root_cause_and_fix=root_cause_and_fix,
-                instruction=state.request.instruction,
-                fix_instruction=fix_instruction,
+                original_instruction=state.request.instruction,
+                root_cause_extra_instruction=root_cause_extra_instruction,
                 summary=summary,
                 initial_memory=self.request.initial_memory,
             )

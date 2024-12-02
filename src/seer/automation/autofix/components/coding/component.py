@@ -1,3 +1,4 @@
+import json
 import logging
 
 from langfuse.decorators import observe
@@ -6,7 +7,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
@@ -14,7 +15,6 @@ from seer.automation.autofix.components.coding.models import (
     CodingRequest,
     FileMissingObj,
     PlanStepsPromptXml,
-    RootCausePlanTaskPromptXml,
     SimpleChangeOutputXml,
 )
 from seer.automation.autofix.components.coding.prompts import CodingPrompts
@@ -94,7 +94,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     def _handle_simple_fix(
         self,
         request: CodingRequest,
-        task_str: str,
         memory: list[Message],
     ):
         state = self.context.state.get()
@@ -111,11 +110,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 system_prompt=CodingPrompts.format_system_msg(has_tools=False),
                 prompt=CodingPrompts.format_single_simple_change_msg(
                     event=request.event_details.format_event(),
-                    task_str=task_str,
+                    root_cause=request.root_cause_and_fix,
                     summary=request.summary,
                     repo_names=[repo.full_name for repo in state.request.repos],
-                    instruction=request.instruction,
-                    fix_instruction=request.fix_instruction,
+                    original_instruction=request.original_instruction,
+                    root_cause_extra_instruction=request.root_cause_extra_instruction,
                 ),
                 temperature=0.0,
                 run_name="Simple fixer",
@@ -150,7 +149,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 if context.snippet
             ]
 
-            for file in relevant_files:
+            for i, file in enumerate(relevant_files):
                 file_content = (
                     self.context.get_file_contents(
                         path=file["file_path"], repo_name=file["repo_name"]
@@ -160,12 +159,22 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 )
                 if file_content:
                     agent_message = Message(
-                        role="assistant",
+                        role="tool_use",
                         content=f"Expand document: {file['file_path']} in {file['repo_name']}",
+                        tool_calls=[
+                            ToolCall(
+                                id=str(i),
+                                function="expand_document",
+                                args=json.dumps(
+                                    {"file_path": file["file_path"], "repo_name": file["repo_name"]}
+                                ),
+                            )
+                        ],
                     )
                     user_message = Message(
-                        role="user",
+                        role="tool",
                         content=file_content,
+                        tool_call_id=str(i),
                     )
                     memory.append(agent_message)
                     memory.append(user_message)
@@ -184,7 +193,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         self,
         request: CodingRequest,
         memory: list[Message],
-        task_str: str,
         llm_client: LlmClient = injected,
     ) -> bool:
         if memory:
@@ -195,9 +203,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             output = llm_client.generate_structured(
                 messages=memory,
                 prompt=CodingPrompts.format_is_obvious_msg(
+                    summary=request.summary,
                     event_details=request.event_details,
-                    task_str=task_str,
-                    fix_instruction=request.fix_instruction,
+                    root_cause=request.root_cause_and_fix,
+                    original_instruction=request.original_instruction,
+                    root_cause_extra_instruction=request.root_cause_extra_instruction,
                 ),
                 model=OpenAiProvider.model("gpt-4o-mini"),
                 response_format=IsObviousOutput,
@@ -234,13 +244,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     @ai_track(description="Plan+Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         with BaseTools(self.context) as tools:
-            task_str = (
-                RootCausePlanTaskPromptXml.from_root_cause(
-                    request.root_cause_and_fix
-                ).to_prompt_str()
-                if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem)
-                else request.root_cause_and_fix
-            )
 
             memory = request.initial_memory
 
@@ -248,7 +251,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             if not memory:
                 memory = self._prefill_initial_memory(request)
-                is_obvious = self._is_obvious(request, memory, task_str)
+                is_obvious = self._is_obvious(request, memory)
             else:
                 is_obvious = self._is_feedback_obvious(memory)
 
@@ -261,7 +264,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             )
 
             if is_obvious:
-                coding_output = self._handle_simple_fix(request, task_str, memory)
+                coding_output = self._handle_simple_fix(request, memory)
             else:
                 state = self.context.state.get()
 
@@ -272,11 +275,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                             role="user",
                             content=CodingPrompts.format_fix_discovery_msg(
                                 event=request.event_details.format_event(),
-                                task_str=task_str,
+                                root_cause=request.root_cause_and_fix,
                                 summary=request.summary,
                                 repo_names=[repo.full_name for repo in state.request.repos],
-                                instruction=request.instruction,
-                                fix_instruction=request.fix_instruction,
+                                original_instruction=request.original_instruction,
+                                root_cause_extra_instruction=request.root_cause_extra_instruction,
                                 has_tools=True,
                             ),
                         ),

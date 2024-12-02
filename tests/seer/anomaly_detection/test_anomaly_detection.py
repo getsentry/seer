@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
-from seer.anomaly_detection.models import DynamicAlert, MPTimeSeries
+from seer.anomaly_detection.models import (
+    DynamicAlert,
+    MPTimeSeries,
+    MPTimeSeriesAnomaliesSingleWindow,
+)
 from seer.anomaly_detection.models.cleanup import CleanupConfig
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
@@ -81,7 +85,14 @@ class TestAnomalyDetection(unittest.TestCase):
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
-    def test_detect_anomalies_online(self, mock_reset_cleanup, mock_save_timepoint, mock_query):
+    def test_detect_anomalies_online(
+        self,
+        mock_reset_cleanup,
+        mock_save_timepoint,
+        mock_query,
+    ):
+
+        fixed_window_size = 10
 
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
@@ -98,7 +109,8 @@ class TestAnomalyDetection(unittest.TestCase):
         ts_timestamps = np.arange(1, len(ts_values) + 1) + datetime.now().timestamp()
         window_size = loaded_synthetic_data.window_sizes[0]
 
-        dummy_mp = np.ones((len(ts_values) - window_size + 1, 4))
+        dummy_mp_suss = np.ones((len(ts_values) - window_size + 1, 4))
+        dummy_mp_fixed = np.ones((len(ts_values) - fixed_window_size + 1, 4))
 
         mock_query.return_value = DynamicAlert(
             organization_id=0,
@@ -112,12 +124,15 @@ class TestAnomalyDetection(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps)),
                 scores=np.array([0.4] * len(ts_timestamps)),
-                matrix_profile=dummy_mp,
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
                 window_size=window_size,
                 thresholds=np.array([0.0] * len(ts_timestamps)),
                 original_flags=np.array(["none"] * len(ts_timestamps)),
+                use_suss=np.array([True] * len(ts_timestamps)),
             ),
             cleanup_config=cleanup_config,
+            only_suss=False,
         )
 
         # Dummy return so we don't hit db
@@ -153,12 +168,15 @@ class TestAnomalyDetection(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps[:100])),
                 scores=np.array([0.4] * len(ts_timestamps[:100])),
-                matrix_profile=dummy_mp,
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
                 window_size=window_size,
                 thresholds=np.array([0.0] * len(ts_timestamps[:100])),
                 original_flags=np.array(["none"] * len(ts_timestamps[:100])),
+                use_suss=np.array([True] * len(ts_timestamps[:100])),
             ),
             cleanup_config=cleanup_config,
+            only_suss=False,
         )
 
         with self.assertRaises(Exception):
@@ -195,17 +213,132 @@ class TestAnomalyDetection(unittest.TestCase):
             anomalies=MPTimeSeriesAnomalies(
                 flags=["none"] * len(ts_timestamps),
                 scores=[0.0] * len(ts_timestamps),
-                matrix_profile=dummy_mp,
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
                 window_size=window_size,
                 thresholds=[0.0] * len(ts_timestamps),
                 original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
+                use_suss=[True] * len(ts_timestamps),
             ),
             cleanup_config=cleanup_config,
+            only_suss=False,
         )
 
         with self.assertRaises(ServerError) as e:
             AnomalyDetection().detect_anomalies(request=request)
         assert "Invalid state" in str(e.exception)
+
+    @patch("seer.anomaly_detection.detectors.MPStreamAnomalyDetector.detect")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
+    def test_detect_anomalies_online_switch_window(
+        self, mock_reset_cleanup, mock_save_timepoint, mock_query, mock_stream_detector
+    ):
+
+        fixed_window_size = 10
+
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
+        )
+
+        cleanup_config = CleanupConfig(
+            num_old_points=0, timestamp_threshold=0, num_acceptable_points=0
+        )
+
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
+        )
+        ts_values = loaded_synthetic_data.timeseries[0]
+        ts_timestamps = np.arange(1, len(ts_values) + 1) + datetime.now().timestamp()
+        window_size = loaded_synthetic_data.window_sizes[0]
+
+        dummy_mp_suss = np.ones((len(ts_values) - window_size + 1, 4))
+        dummy_mp_fixed = np.ones((len(ts_values) - fixed_window_size + 1, 4))
+
+        mock_query.return_value = DynamicAlert(
+            organization_id=0,
+            project_id=0,
+            external_alert_id=0,
+            config=config,
+            timeseries=MPTimeSeries(
+                timestamps=ts_timestamps,
+                values=ts_values,
+            ),
+            anomalies=MPTimeSeriesAnomalies(
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps)),
+                scores=np.array([0.4] * len(ts_timestamps)),
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
+                window_size=window_size,
+                thresholds=np.array([0.0] * len(ts_timestamps)),
+                original_flags=np.array(["none"] * len(ts_timestamps)),
+                use_suss=np.array([False] * len(ts_timestamps)),
+            ),
+            cleanup_config=cleanup_config,
+            only_suss=False,
+        )
+
+        # Dummy return so we don't hit db
+        mock_save_timepoint.return_value = ""
+        mock_reset_cleanup.return_value = ""
+
+        # Can return back to the SuSS window after using the fixed window
+        mock_stream_detector.return_value = MPTimeSeriesAnomaliesSingleWindow(
+            flags=["none"] * len(ts_timestamps),
+            scores=[0.0] * len(ts_timestamps),
+            matrix_profile=dummy_mp_suss,
+            window_size=window_size,
+            thresholds=[0.0] * len(ts_timestamps),
+            original_flags=["none"] * len(ts_timestamps),
+        )
+
+        new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
+        context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=new_timestamp, value=0.5))
+
+        request = DetectAnomaliesRequest(
+            organization_id=0, project_id=0, config=config, context=context
+        )
+        response = AnomalyDetection().detect_anomalies(request=request)
+
+        assert mock_stream_detector.call_count == 2
+        assert isinstance(response, DetectAnomaliesResponse)
+        assert isinstance(response.timeseries, list)
+        assert len(response.timeseries) == 1  # Checking just 1 streamed value
+        assert isinstance(response.timeseries[0], TimeSeriesPoint)
+        assert response.timeseries[0].timestamp == new_timestamp
+
+        mock_query.return_value = DynamicAlert(
+            organization_id=0,
+            project_id=0,
+            external_alert_id=0,
+            config=config,
+            timeseries=MPTimeSeries(
+                timestamps=ts_timestamps,
+                values=ts_values,
+            ),
+            anomalies=MPTimeSeriesAnomalies(
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps)),
+                scores=np.array([0.4] * len(ts_timestamps)),
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
+                window_size=window_size,
+                thresholds=np.array([0.0] * len(ts_timestamps)),
+                original_flags=np.array(["none"] * len(ts_timestamps)),
+                use_suss=np.array([True] * len(ts_timestamps)),
+            ),
+            cleanup_config=cleanup_config,
+            only_suss=True,
+        )
+
+        response = AnomalyDetection().detect_anomalies(request=request)
+
+        assert mock_stream_detector.call_count == 3
+        assert isinstance(response, DetectAnomaliesResponse)
+        assert isinstance(response.timeseries, list)
+        assert len(response.timeseries) == 1  # Checking just 1 streamed value
+        assert isinstance(response.timeseries[0], TimeSeriesPoint)
+        assert response.timeseries[0].timestamp == new_timestamp
 
     def test_detect_anomalies_combo(self):
 

@@ -255,3 +255,23 @@ class TestAutofixEventManager:
         plan_step = state_obj.steps[-1]
         assert plan_step.key == event_manager.plan_step.key
         assert plan_step.status == AutofixStatus.PROCESSING
+
+    def test_ask_user_question(self, event_manager, state):
+        # Setup initial state with a processing step
+        state.get().steps = [
+            RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING, progress=[])
+        ]
+
+        test_question = "Would you like to proceed?"
+        event_manager.ask_user_question(test_question)
+
+        # Check the current step's status
+        assert state.get().steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE
+
+        # Check if the question was added to progress items
+        assert len(state.get().steps[-1].progress) == 1
+        assert state.get().steps[-1].progress[0].message == test_question
+        assert state.get().steps[-1].progress[0].type == ProgressType.INFO
+
+        # Check overall state status
+        assert state.get().status == AutofixStatus.WAITING_FOR_USER_RESPONSE

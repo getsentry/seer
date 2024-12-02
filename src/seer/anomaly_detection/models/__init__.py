@@ -4,6 +4,7 @@ DynamicAlert = dynamic_alert.DynamicAlert
 MPTimeSeries = timeseries.MPTimeSeries
 TimeSeries = timeseries.TimeSeries
 MPTimeSeriesAnomalies = timeseries_anomalies.MPTimeSeriesAnomalies
+MPTimeSeriesAnomaliesSingleWindow = timeseries_anomalies.MPTimeSeriesAnomaliesSingleWindow
 TimeSeriesAnomalies = timeseries_anomalies.TimeSeriesAnomalies
 Sensitivities = external.Sensitivities
 Directions = external.Directions

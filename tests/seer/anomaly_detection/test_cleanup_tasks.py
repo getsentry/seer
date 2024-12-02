@@ -43,9 +43,12 @@ class TestCleanupTasks(unittest.TestCase):
             anomalies = MPTimeSeriesAnomalies(
                 flags=np.array([]),
                 scores=np.array([]),
-                matrix_profile=np.array([]),
+                matrix_profile_suss=np.array([]),
+                matrix_profile_fixed=np.array([]),
                 window_size=0,
                 thresholds=np.array([]),
+                original_flags=np.array([]),
+                use_suss=np.array([]),
             )
         else:
             anomalies = MPBatchAnomalyDetector().detect(ts, config)
@@ -149,7 +152,29 @@ class TestCleanupTasks(unittest.TestCase):
                 assert new.timestamp.timestamp() > date_threshold
                 assert old.timestamp == new.timestamp
                 assert old.value == new.value
-                assert new.anomaly_algo_data == algo_data
+                if new.anomaly_algo_data is not None and algo_data is None:
+                    assert new.anomaly_algo_data["mp_suss"] is None
+                    assert (
+                        "dist" in new.anomaly_algo_data["mp_fixed"]
+                        and "idx" in new.anomaly_algo_data["mp_fixed"]
+                        and "l_idx" in new.anomaly_algo_data["mp_fixed"]
+                        and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+                    )
+
+                if new.anomaly_algo_data is not None and algo_data is not None:
+                    assert (
+                        new.anomaly_algo_data["mp_suss"]["dist"] == algo_data["dist"]
+                        and new.anomaly_algo_data["mp_suss"]["idx"] == algo_data["idx"]
+                        and new.anomaly_algo_data["mp_suss"]["l_idx"] == algo_data["l_idx"]
+                        and new.anomaly_algo_data["mp_suss"]["r_idx"] == algo_data["r_idx"]
+                    )
+                    assert new.anomaly_algo_data["original_flag"] == algo_data["original_flag"]
+                    assert (
+                        "dist" in new.anomaly_algo_data["mp_fixed"]
+                        and "idx" in new.anomaly_algo_data["mp_fixed"]
+                        and "l_idx" in new.anomaly_algo_data["mp_fixed"]
+                        and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+                    )
 
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):

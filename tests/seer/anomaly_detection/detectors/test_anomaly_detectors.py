@@ -14,7 +14,7 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPBatchAnomalyDetector,
     MPStreamAnomalyDetector,
 )
-from seer.anomaly_detection.models import MPTimeSeriesAnomalies
+from seer.anomaly_detection.models import MPTimeSeriesAnomaliesSingleWindow
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.exceptions import ServerError
@@ -76,7 +76,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             mp_utils=self.mp_utils,
         )
 
-        assert isinstance(result, MPTimeSeriesAnomalies)
+        assert isinstance(result, MPTimeSeriesAnomaliesSingleWindow)
         assert isinstance(result.flags, list)
         assert result.scores == [0.1, 6.5, 4.8, 0.2]
         assert isinstance(result.scores, list)
@@ -171,7 +171,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
 
         anomalies = self.detector.detect(self.timeseries, self.config, mock_scorer, mock_utils)
 
-        assert isinstance(anomalies, MPTimeSeriesAnomalies)
+        assert isinstance(anomalies, MPTimeSeriesAnomaliesSingleWindow)
         assert isinstance(anomalies.flags, list)
         assert isinstance(anomalies.scores, list)
         assert isinstance(anomalies.matrix_profile, np.ndarray)
@@ -242,7 +242,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "anomaly_higher_confidence",
         ]
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
-        print(f"test_stream_detect_spiked_history_spiked_stream_long_ts: {stream_anomalies.flags}")
+        # print(f"test_stream_detect_spiked_history_spiked_stream_long_ts: {stream_anomalies.flags}")
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[2] == "anomaly_higher_confidence"
         # # Fourth and fifth may or may not be flagged depending on prophet's prediction which has some randomness
@@ -269,7 +269,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "none",
             "none",
         ]
-        print(f"test_stream_detect_spiked_history_spiked_stream: {stream_anomalies.flags}")
+        # print(f"test_stream_detect_spiked_history_spiked_stream: {stream_anomalies.flags}")
         assert history_anomalies.window_size == 3
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[0] == "none"
@@ -312,7 +312,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         ]
 
         history_anomalies, stream_anomalies = self._detect_anomalies(history_ts, stream_ts)
-        print(f"test_stream_detect_flat_history_spiked_stream: {stream_anomalies.flags}")
         assert history_anomalies.window_size == 3
         assert stream_anomalies.flags == expected_stream_flags
         # assert stream_anomalies.flags[0] == "none"
