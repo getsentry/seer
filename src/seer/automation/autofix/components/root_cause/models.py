@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 from pydantic_xml import attr
 
 from seer.automation.agent.models import Message
@@ -58,13 +58,16 @@ class UnitTestSnippet(BaseModel):
     description: str
 
 
+
+
 class RootCauseAnalysisItem(BaseModel):
-    id: int = -1
-    title: str
-    description: str
-    # unit_test: UnitTestSnippet | None = None
-    # reproduction: str | None = None
-    code_context: Optional[list[RootCauseRelevantContext]] = None
+    id: int = Field(default=-1, description="Unique identifier for the analysis item")
+    title: str = Field(..., description="Title describing the root cause")
+    description: str = Field(..., description="Detailed description of the root cause")
+    code_context: Optional[list[RootCauseRelevantContext]] = Field(default=None, description="Related code context snippets")
+
+    def to_markdown_string(self) -> str:
+        markdown = f"# {self.title}\n\n"
 
     def to_markdown_string(self) -> str:
         markdown = f"# {self.title}\n\n"
@@ -126,24 +129,15 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         )
 
     def to_model(self):
-        return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
-                "code_context": (
-                    self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
-                ),
-            }
-        )
+        # Create base data with required fields
+        model_data = {
+            "title": self.title,
+            "description": self.description,
+            # Convert relevant_code to code_context if it exists
+            "code_context": self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
+        }
+        
+        return RootCauseAnalysisItem.model_validate(model_data)
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
