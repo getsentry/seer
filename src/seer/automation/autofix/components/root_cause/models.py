@@ -89,8 +89,6 @@ class RootCauseAnalysisItem(BaseModel):
 class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
-    # reproduction_instructions: str | None = None
-    # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
     @classmethod
@@ -98,16 +96,6 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         return cls(
             title=model.title,
             description=model.description,
-            # reproduction_instructions=model.reproduction,
-            # unit_test=(
-            #     UnitTestSnippetPrompt(
-            #         file_path=model.unit_test.file_path,
-            #         code_snippet=model.unit_test.snippet,
-            #         description=model.unit_test.description,
-            #     )
-            #     if model.unit_test
-            #     else None
-            # ),
             relevant_code=(
                 RootCauseAnalysisRelevantContext(
                     snippets=[
@@ -126,22 +114,30 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         )
 
     def to_model(self):
+        # First, get base data excluding the relevant_code field to avoid conflicts
+        base_data = self.model_dump(exclude={'relevant_code'})
+        
+        # Transform relevant_code into code_context with proper structure
+        code_context = None
+        if self.relevant_code and self.relevant_code.snippets:
+            code_context = [
+                RootCauseRelevantContext(
+                    id=i,  # Assign sequential IDs
+                    title=snippet.title,
+                    description=snippet.description,
+                    snippet=RootCauseRelevantCodeSnippet(
+                        file_path=snippet.snippet.file_path,
+                        repo_name=snippet.snippet.repo_name,
+                        snippet=snippet.snippet.snippet
+                    ) if snippet.snippet else None
+                )
+                for i, snippet in enumerate(self.relevant_code.snippets)
+            ]
+
         return RootCauseAnalysisItem.model_validate(
             {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
-                "code_context": (
-                    self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
-                ),
+                **base_data,
+                "code_context": code_context,
             }
         )
 
