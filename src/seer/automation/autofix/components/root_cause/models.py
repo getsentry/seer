@@ -40,31 +40,33 @@ class RootCauseRelevantContext(BaseModel):
 class RootCauseAnalysisRelevantContext(BaseModel):
     snippets: list[RootCauseRelevantContext]
 
+# Removing legacy test-related models since they are no longer used
+# class UnitTestSnippetPrompt(BaseModel):
+#    file_path: str
+#    code_snippet: str
+#    description: str
 
-class UnitTestSnippetPrompt(BaseModel):
-    file_path: str
-    code_snippet: str
-    description: str
+#    @field_validator("code_snippet")
+#    @classmethod
+#    def clean_code_snippet(cls, v: str) -> str:
+#        return remove_code_backticks(v)
 
-    @field_validator("code_snippet")
-    @classmethod
-    def clean_code_snippet(cls, v: str) -> str:
-        return remove_code_backticks(v)
-
-
-class UnitTestSnippet(BaseModel):
-    file_path: str
-    snippet: str
-    description: str
-
+# class UnitTestSnippet(BaseModel):
+#    file_path: str
+#    snippet: str
+#    description: str
+# testing line
 
 class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    # unit_test: UnitTestSnippet | None = None
-    # reproduction: str | None = None
     code_context: Optional[list[RootCauseRelevantContext]] = None
+
+    model_config = {
+        "extra": "ignore"  # Ignore extra fields during validation with a test
+    }
+
 
     def to_markdown_string(self) -> str:
         markdown = f"# {self.title}\n\n"
@@ -89,26 +91,12 @@ class RootCauseAnalysisItem(BaseModel):
 class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
-    # reproduction_instructions: str | None = None
-    # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
-
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
         return cls(
             title=model.title,
             description=model.description,
-            # reproduction_instructions=model.reproduction,
-            # unit_test=(
-            #     UnitTestSnippetPrompt(
-            #         file_path=model.unit_test.file_path,
-            #         code_snippet=model.unit_test.snippet,
-            #         description=model.unit_test.description,
-            #     )
-            #     if model.unit_test
-            #     else None
-            # ),
-            relevant_code=(
                 RootCauseAnalysisRelevantContext(
                     snippets=[
                         RootCauseRelevantContext(
@@ -125,26 +113,17 @@ class RootCauseAnalysisItemPrompt(BaseModel):
             ),
         )
 
+
     def to_model(self):
         return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
+            {   
+                "title": self.title,
+                "description": self.description,
                 "code_context": (
                     self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
                 ),
             }
         )
-
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
     cause: RootCauseAnalysisItemPrompt
