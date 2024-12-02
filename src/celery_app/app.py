@@ -19,14 +19,17 @@ def setup_celery_entrypoint(app: Celery):
     app.on_configure.connect(init_celery_app)
 
 
+
 @inject
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
-    for k, v in config.items():
-        setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
-    from celery_app.tasks import setup_periodic_tasks
+    if not hasattr(sender, '_config_initialized'):
+        for k, v in config.items():
+            setattr(sender.conf, k, v)
+        bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+        from celery_app.tasks import setup_periodic_tasks
 
-    sender.on_after_finalize.connect(setup_periodic_tasks)
+        sender.on_after_finalize.connect(setup_periodic_tasks)
+        sender._config_initialized = True
 
 
 setup_celery_entrypoint(celery_app)
