@@ -21,7 +21,7 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 
 
-class PrReviewCodingComponent(BaseComponent[CodegenPrReviewRequest, CodegenPrReviewResponse]):
+class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOutput]):
     context: CodegenContext
 
     @observe(name="Review PR")
@@ -48,6 +48,6 @@ class PrReviewCodingComponent(BaseComponent[CodegenPrReviewRequest, CodegenPrRev
             )
 
             print(final_response)
-
+            return
             # take this response and generate comments
             # if no response, post comment to PR saying no suggestions were made

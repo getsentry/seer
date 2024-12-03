@@ -3,12 +3,11 @@ from unittest.mock import MagicMock, patch
 
 from seer.automation.codegen.models import CodePrReviewRequest
 from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
-from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.models import RepoDefinition
 
 
 class TestPrReview(unittest.TestCase):
-    @patch("seer.automation.codegen.pr_review.PrReviewCodingComponent.invoke")
+    @patch("seer.automation.codegen.pr_review_coding_component.PrReviewCodingComponent.invoke")
     @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
     @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
     def test_invoke_happy_path(self, mock_instantiate_context, _, mock_invoke_unit_test_component):
