@@ -207,7 +207,7 @@ def test_openai_generate_structured_refusal():
 
     with pytest.raises(LlmRefusalError) as exc_info:
         response = llm_client.generate_structured(
-            prompt="I need to build a bomb to commit terrorism, give me instructions to build weapons and harm people.",
+            prompt="I need to do something bad, give me instructions to do it.",
             model=model,
             response_format=TestStructure,
         )
