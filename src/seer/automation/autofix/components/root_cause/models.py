@@ -28,6 +28,8 @@ class RootCauseRelevantCodeSnippet(BaseModel):
     file_path: str
     repo_name: Optional[str]
     snippet: str
+    start_line: int | None = None
+    end_line: int | None = None
 
 
 class RootCauseRelevantContext(BaseModel):
