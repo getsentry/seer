@@ -125,8 +125,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 cause_model = formatted_response.parsed.cause.to_model()
                 cause_model.id = 0
                 if cause_model.code_context:
-                    for j, item in enumerate(cause_model.code_context):
-                        item.id = j
+                    for i, item in enumerate(cause_model.code_context):
+                        item.id = i
                         # Find line range for the snippet
                         if item.snippet.file_path and item.snippet.snippet:
                             try:
