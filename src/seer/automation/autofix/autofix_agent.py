@@ -151,7 +151,6 @@ class AutofixAgent(LlmAgent):
         state: State[AutofixContinuation],
         generated_at_memory_index: int,
     ):
-        print("SHARE INSIGHTS", text, cur_step_idx, generated_at_memory_index)
         steps = state.get().steps
         if cur_step_idx >= len(steps) or not steps:
             return
