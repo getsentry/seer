@@ -15,7 +15,6 @@ from seer.dependency_injection import inject, injected
 
 class InsightSharingPrompts:
     @staticmethod
-    @inject
     def format_step_one(
         *,
         task_description: str,
@@ -73,7 +72,6 @@ class InsightSharingPrompts:
         )
 
     @staticmethod
-    @inject
     def format_step_two(*, insight: str, latest_thought: str):
         return textwrap.dedent(
             """\
@@ -132,12 +130,6 @@ def create_insight_output(
         insight=insight,
         latest_thought=latest_thought,
     )
-
-    memory = [
-        message
-        for message in llm_client.clean_tool_call_assistant_messages(memory)
-        if message.role != "system"
-    ]
 
     completion = llm_client.generate_structured(
         messages=memory,
