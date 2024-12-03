@@ -504,3 +504,38 @@ class TestRepoClientIndexFileSet:
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+
+    @pytest.mark.parametrize("patch_type,path,expected_sha", [
+        ("create", "new_file.py", "new_blob_sha"),
+        ("edit", "existing.py", "modified_blob_sha"),
+        ("delete", "delete_me.py", None),
+        ("edit", "/leading/slash.py", "modified_blob_sha"),
+    ])
+    def test_get_one_file_autofix_change_combinations(self,
+        repo_client,
+        mock_github,
+        patch_type,
+        path,
+        expected_sha):
+        
+        # mock the blob creation
+        mock_blob = MagicMock(sha=expected_sha)
+        mock_github.get_repo.return_value.create_git_blob.return_value = mock_blob
+
+        
+        patch = MagicMock(**{
+            'path': path,
+            'type': patch_type,
+            'apply.return_value': 'new content' if expected_sha else None
+        })
+
+        # Execute
+        result = repo_client.get_one_file_autofix_change(branch_ref="main", patch=patch)
+
+        expected_path = path[1:] if path.startswith("/") else path
+ 
+        assert result._identity["path"] == expected_path
+        assert result._identity["mode"] == '100644'
+        assert result._identity["type"] == 'blob'
+        assert result._identity["sha"] == expected_sha
