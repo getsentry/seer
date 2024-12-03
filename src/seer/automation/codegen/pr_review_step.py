@@ -9,11 +9,9 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import CodePrReviewRequest, CodeUnitTestRequest
-from seer.automation.codegen.pr_review import PrReviewCodingComponent
+from seer.automation.codegen.models import CodePrReviewRequest
+from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.step import CodegenStep
-from seer.automation.codegen.unit_test_coding_component import UnitTestCodingComponent
-from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 
