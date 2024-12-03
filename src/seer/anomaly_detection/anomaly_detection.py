@@ -8,12 +8,8 @@ from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
-from seer.anomaly_detection.detectors import (
-    MPBatchAnomalyDetector,
-    MPConfig,
-    MPStreamAnomalyDetector,
-)
-from seer.anomaly_detection.models import MPTimeSeriesAnomalies
+from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
+from seer.anomaly_detection.models import AlgoConfig, MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
@@ -64,7 +60,7 @@ class AnomalyDetection(BaseModel):
         timeseries: List[TimeSeriesPoint],
         config: AnomalyDetectionConfig,
         window_size: int | None = None,
-        mp_config: MPConfig = injected,
+        algo_config: AlgoConfig = injected,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         """
         Stateless batch anomaly detection on entire timeseries as provided. In batch mode, analysis of a
@@ -89,7 +85,7 @@ class AnomalyDetection(BaseModel):
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries),
             config,
-            window_size=mp_config.fixed_window_size,
+            window_size=algo_config.mp_fixed_window_size,
         )
         anomalies = DbAlertDataAccessor().combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)

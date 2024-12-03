@@ -2,8 +2,8 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
-from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.normalizers import Normalizer
+from seer.anomaly_detection.models import AlgoConfig
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ServerError
 
@@ -14,7 +14,7 @@ class MPUtils(BaseModel):
         self,
         mp: npt.NDArray,
         pad_to_len: int | None = None,
-        mp_config: MPConfig = injected,
+        algo_config: AlgoConfig = injected,
         normalizer: Normalizer = injected,
     ) -> npt.NDArray[np.float64]:
         """
@@ -29,7 +29,7 @@ class MPUtils(BaseModel):
             If not none then the matrix profile is padded to the required lenght. Since Stumpy ignores MP for the first few time steps
             (as determined by the window size), the padding is done in the front of the matrix profile.
 
-        mp_config: MPConfig
+        algo_config: AlgoConfig
             normalize_mp flag in the config is used to determine if returned mp distances should be normalized. Normalization ensures that the
             distances are always between 0 and 1 (both values included)
 
@@ -37,7 +37,7 @@ class MPUtils(BaseModel):
         The distances as a numpy array of floats
         """
         mp_dist = mp[:, 0]
-        if mp_config is not None and mp_config.normalize_mp:
+        if algo_config is not None and algo_config.mp_normalize:
             if normalizer is None:
                 raise ServerError("Need normalizer to normalize MP")
             mp_dist = normalizer.normalize(mp_dist)

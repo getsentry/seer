@@ -10,8 +10,8 @@ import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
 
-from seer.anomaly_detection.detectors import MPConfig
 from seer.anomaly_detection.models import (
+    AlgoConfig,
     DynamicAlert,
     MPTimeSeries,
     MPTimeSeriesAnomalies,
@@ -89,7 +89,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
     def _hydrate_alert(
         self,
         db_alert: DbDynamicAlert,
-        mp_config: MPConfig = injected,
+        algo_config: AlgoConfig = injected,
     ) -> DynamicAlert:
         rand_offset = random.randint(0, 24)
         timestamp_threshold = (datetime.now() - timedelta(days=28, hours=rand_offset)).timestamp()
@@ -167,7 +167,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             matrix_profile_fixed=stumpy.mparray.mparray(
                 mp_fixed,
                 k=1,
-                m=mp_config.fixed_window_size,
+                m=algo_config.mp_fixed_window_size,
                 excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
             ),
             window_size=window_size,

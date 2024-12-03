@@ -1,6 +1,5 @@
 from seer.anomaly_detection.detectors import (
     anomaly_detectors,
-    mp_config,
     mp_scorers,
     mp_utils,
     normalizers,
@@ -9,7 +8,6 @@ from seer.anomaly_detection.detectors import (
 )
 
 AnomalyDetector = anomaly_detectors.AnomalyDetector
-MPConfig = mp_config.MPConfig
 MPBatchAnomalyDetector = anomaly_detectors.MPBatchAnomalyDetector
 MPStreamAnomalyDetector = anomaly_detectors.MPStreamAnomalyDetector
 
