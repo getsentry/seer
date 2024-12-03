@@ -1,0 +1,262 @@
+interactions:
+- request:
+    body: '{"messages": [{"content": "Given the chain of thought below for :\nnot
+      started yet\n\nWrite the next under-20-word conclusion in the chain of thought
+      based on the notes below.  The criteria for a good conclusion are that it should
+      be a large, novel jump in insights, not similar to any item in the existing
+      chain of thought, it should be a complete conclusion after some meaty analysis,
+      not a plan of what to analyze next, and it should be valuable for . It should
+      also be very concrete, to-the-point, and specific. Every item in the chain of
+      thought should read like a chain that clearly builds off of the previous step.\n\nIf
+      you do write something, write it so that someone else could immediately understand
+      your point in detail.\n\nNOTES TO ANALYZE:\nThinking about the solution...",
+      "role": "user"}], "model": "gpt-4o-mini-2024-07-18", "temperature": 0.0}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      authorization:
+      - redacted
+      connection:
+      - keep-alive
+      content-length:
+      - '860'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - OpenAI/Python 1.55.0
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.55.0
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.0rc1
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA4xSwYrbMBC9+ysGnePF8SabNLf0sIXSSyGnlmIUeWxPK4+ENEmbXfLvRU429rJb
+        6MWI99483pvxcwagqFYbUKbTYnpv863ebYvFrvvy+PT0SdZh+ZU/fP64+7Z4bMu1mqUJt/+JRl6m
+        7ozrvUUhxxfaBNSCyXW+ur8vl8vyYTEQvavRprHWS75weU9MeVmUi7xY5fOruekcGYxqA98zAIDn
+        4Ztyco1/1AaK2QvSY4y6RbW5iQBUcDYhSsdIUTSLmo2kcSzIQ/Qt+OC0EToiaD+8OxAHxCSkhbhN
+        glQ0gtEMkVqmhoxmsSdA7jQbBHfEoK1N0vqQzEhOoLkGYnZHnZYCv0k6YhDUfbybpgnYHKJOG+GD
+        tVf8fKtnXeuD28crf8MbYopdFVBHx6lKFOfVwJ4zgB/DGg+vNqN8cL2XStwv5GQ4f1he/NR4vSl7
+        JcWJthN8PZ+941fVKJpsnBxCGW06rMfR8Wr6UJObENmk9ds073lfmhO3/2M/EsagF6wrH7Am87rx
+        KAuYbv4v2W3LQ2AVT1GwrxriFoMPdPm1Gl8Vq2K5b9YrU6jsnP0FAAD//wMAhBVrUGgDAAA=
+    headers:
+      CF-Cache-Status:
+      - DYNAMIC
+      CF-RAY:
+      - 8ec611f77bd917de-SJC
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 03 Dec 2024 19:47:44 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=sRbIRnlxXL_gOSn4svvgzpM3ghkd2BTEAOxjK4jZaO4-1733255264-1.0.1.1-Mux5HtkfZNJym5n2ZwilG_DfZSxKZKUucKSG3NTcA8biR5lhLZBhzCqHBxwbxy7zeFQ_ZZsIKPvv9QS_8dwKAA;
+        path=/; expires=Tue, 03-Dec-24 20:17:44 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=ItSMUDIP.tOAHmHiYMGS9.mzuYB5PI0Dp_1t4opYLyw-1733255264376-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      openai-organization:
+      - functional-software
+      openai-processing-ms:
+      - '392'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149999794'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_1c9535320acaf6e5d37dbba30842c344
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"content": "You''re taking a while. If you need help, ask
+      me a concrete question using the tool provided.", "role": "user"}, {"content":
+      "Thinking about the solution...", "role": "assistant"}, {"content": "Return
+      the pieces of context from the issue details or the files in the codebase that
+      are directly relevant to the text below:\nA proactive approach to initiating
+      projects can significantly enhance overall productivity and innovation within
+      teams.\n\nThat means choose the most relevant codebase snippets (codebase_context),
+      event logs (breadcrumb_context), or stacktrace/variable data (stacktrace_context),
+      that show specifically what the text mentions. Don''t include any repeated information;
+      just include what''s needed.\n\nAlso provide a one-line explanation of how the
+      pieces of context directly explain the text.\n\nTo know what''s needed, reference
+      these notes:\nThinking about the solution...", "role": "user"}], "model": "gpt-4o-mini-2024-07-18",
+      "max_tokens": 4096, "response_format": {"type": "json_schema", "json_schema":
+      {"schema": {"$defs": {"BreadcrumbContext": {"properties": {"type": {"title":
+      "Type", "type": "string"}, "category": {"title": "Category", "type": "string"},
+      "body": {"title": "Body", "type": "string"}, "level": {"title": "Level", "type":
+      "string"}, "data_as_json": {"title": "Data As Json", "type": "string"}}, "required":
+      ["type", "category", "body", "level", "data_as_json"], "title": "BreadcrumbContext",
+      "type": "object", "additionalProperties": false}, "CodeSnippetContext": {"properties":
+      {"repo_name": {"title": "Repo Name", "type": "string"}, "file_path": {"title":
+      "File Path", "type": "string"}, "snippet": {"title": "Snippet", "type": "string"}},
+      "required": ["repo_name", "file_path", "snippet"], "title": "CodeSnippetContext",
+      "type": "object", "additionalProperties": false}, "StacktraceContext": {"properties":
+      {"file_name": {"title": "File Name", "type": "string"}, "repo_name": {"title":
+      "Repo Name", "type": "string"}, "function": {"title": "Function", "type": "string"},
+      "line_no": {"title": "Line No", "type": "integer"}, "col_no": {"title": "Col
+      No", "type": "integer"}, "code_snippet": {"title": "Code Snippet", "type": "string"},
+      "vars_as_json": {"title": "Vars As Json", "type": "string"}}, "required": ["file_name",
+      "repo_name", "function", "line_no", "col_no", "code_snippet", "vars_as_json"],
+      "title": "StacktraceContext", "type": "object", "additionalProperties": false}},
+      "properties": {"explanation": {"title": "Explanation", "type": "string"}, "codebase_context":
+      {"items": {"$ref": "#/$defs/CodeSnippetContext"}, "title": "Codebase Context",
+      "type": "array"}, "stacktrace_context": {"items": {"$ref": "#/$defs/StacktraceContext"},
+      "title": "Stacktrace Context", "type": "array"}, "event_log_context": {"items":
+      {"$ref": "#/$defs/BreadcrumbContext"}, "title": "Event Log Context", "type":
+      "array"}}, "required": ["explanation", "codebase_context", "stacktrace_context",
+      "event_log_context"], "title": "InsightContextOutput", "type": "object", "additionalProperties":
+      false}, "name": "InsightContextOutput", "strict": true}}, "stream": false, "temperature":
+      0.0}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      authorization:
+      - redacted
+      connection:
+      - keep-alive
+      content-length:
+      - '3144'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - OpenAI/Python 1.55.0
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-helper-method:
+      - beta.chat.completions.parse
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.55.0
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.0rc1
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA5RUYYvbOBD9nl8h9DkptpNcSr7t9dpSehR6hDvu1ouZSBNHu7LGSJPshpD/XiR7
+        7Wx34e7ACDPvzejNkzTniRDSaLkWUu2BVdPa2Q1sbrK83nz9qv/+6+bPD67+/PFYLOn76fu3P+Q0
+        ZtD2HhU/Z71T1LQW2ZDrYOURGGPVfDWfF8tl8csiAQ1ptDGtbnm2oFljnJkVWbGYZatZ/r7P3pNR
+        GORa3E6EEOKc1qjTaXySa5FNnyMNhgA1yvVAEkJ6sjEiIQQTGBzL6QgqcowuST+XEp9aCw6i8lKu
+        S7nZowhoUTFqkahPHISx9hDYA6PY06NoPYFic8T4F30Qxhk2qYoApwUjNEKRtbAl34UVOGERtGAS
+        pmk9HVHHdH2IlQyfUqJxjo4p4V0pp6VUpHELAateSinXt3fTUgYG9cAe1CsEj+i4slRfA+dS8qnF
+        1GEvuRoldzsBY03+lDhRf3UtLlG2pDv4S5eKWjh8HDzYeWjwkfxDbDGwR2iscfiTD7FLdHtwCl91
+        a/GINu1g3I5SSANDBaG6D/0Bncty6CH+ruPyDR/Fp+ftY2Aal75D8gNvE8/ldwQ9cNg0GBiaduAU
+        WTGf5dksyzd5ts7i90+MX0p5mV4bmUxqENm4+rWFY28vvfvNBHUIAbXoLlRtMIgd+TcuVQMOamzQ
+        cXR0SxS4v1nxdaVz+Z++9Woro4d282K+WA52tODZKNOC45Aot3G9sUbhwPmVtsP/hz14axJ2929+
+        Fpt88ZOfd5frl+lxdwgQp4M7WNvHL8NTt1S3nrahx4f4zjgT9pVHCOTisw5MrUzoZSLEXRophxdT
+        Il6gpuWK6QFdLLicr7p6cpxkI5qv5j3KxGBHYJX3k+hlwUojg7HhaipJBWqPekwdRxgctKErYHLV
+        9ms5b9XuWo8H+x/Kj4BS2DLqqvWojXrZ8kjzeJ+m4du0weYkWIZTYGyqnXE1+tabbs7u2ipbZcvt
+        7v1KZXJymfwAAAD//wMADlYsLnUGAAA=
+    headers:
+      CF-Cache-Status:
+      - DYNAMIC
+      CF-RAY:
+      - 8ec611fb39447ae0-SJC
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 03 Dec 2024 19:47:46 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=TvmnZYSBhJDHB7yUq95.CYUOrNqjdToxwTD9l6pBopE-1733255266-1.0.1.1-mtBYu2ZkApD3PQ4aqP3SoPICGpRGhXc.dQXAU6UtE5mCNaJWlP0ACH0WZJTRVmL5hZ4KmIogrEvVwrjZ1z3nzQ;
+        path=/; expires=Tue, 03-Dec-24 20:17:46 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=wtmazmJ2TrBmwtnBgj.wJKNkZfwbOenRfLtOcGyoq2A-1733255266353-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      openai-organization:
+      - functional-software
+      openai-processing-ms:
+      - '1753'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149995698'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 1ms
+      x-request-id:
+      - req_bcb81d28d599f919988dea4008feb5d9
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -175,6 +175,7 @@ def test_share_insights_no_new_insights(autofix_agent):
 
 
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+@pytest.mark.vcr()
 def test_run_iteration_prompts_for_help_near_max_iterations(
     mock_get_completion, interactive_autofix_agent, run_config
 ):
@@ -202,6 +203,7 @@ def test_run_iteration_prompts_for_help_near_max_iterations(
 
 
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+@pytest.mark.vcr()
 def test_run_iteration_prompts_for_help_at_interval(
     mock_get_completion, interactive_autofix_agent, run_config
 ):
@@ -226,6 +228,7 @@ def test_run_iteration_prompts_for_help_at_interval(
 
 
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
+@pytest.mark.vcr()
 def test_run_iteration_no_help_prompt_when_not_needed(
     mock_get_completion, interactive_autofix_agent, run_config
 ):
