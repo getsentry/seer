@@ -166,7 +166,6 @@ class AutofixAgent(LlmAgent):
             memory=self.memory,
             generated_at_memory_index=generated_at_memory_index,
         )
-        print("INSIGHT CARD", insight_card)
 
         with state.update() as cur:
             if insight_card:
