@@ -131,6 +131,8 @@ def create_insight_output(
         latest_thought=latest_thought,
     )
 
+    memory = [msg for msg in memory if msg.role != "system"]
+
     completion = llm_client.generate_structured(
         messages=memory,
         prompt=prompt_two,
