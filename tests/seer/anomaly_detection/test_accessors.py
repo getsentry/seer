@@ -25,7 +25,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -132,7 +132,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
                 matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
-                thresholds=[0.0],
+                thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
             ),
@@ -169,7 +169,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
                 matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
-                thresholds=[0.0],
+                thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
             ),
@@ -251,7 +251,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 700),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 700),
             window_size=3,
-            thresholds=[0.0] * 700,
+            # thresholds=[0.0] * 700,
+            thresholds=[],
             original_flags=["none"] * 700,
             use_suss=[True] * 700,
         )
@@ -304,7 +305,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 2),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 2),
             window_size=1,
-            thresholds=[0.0] * 5,
+            # thresholds=[0.0] * 5,
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -361,7 +363,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -413,7 +415,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -466,7 +468,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -512,7 +514,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )

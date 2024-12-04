@@ -87,11 +87,12 @@ def update_matrix_profiles(
     )
 
     anomalies_suss = MPBatchAnomalyDetector()._compute_matrix_profile(
-        timeseries=timeseries, config=anomaly_detection_config
+        timeseries=timeseries, ad_config=anomaly_detection_config, algo_config=algo_config
     )
     anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
         timeseries=timeseries,
-        config=anomaly_detection_config,
+        ad_config=anomaly_detection_config,
+        algo_config=algo_config,
         window_size=algo_config.mp_fixed_window_size,
     )
     anomalies = DbAlertDataAccessor().combine_anomalies(
