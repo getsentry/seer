@@ -561,12 +561,12 @@ class TestRepoClientIndexFileSet:
         ),
         (
             "changes",
-            [FileChange(
-                path='test.py',
-                content='new content',
-                mode='100644',
-                type='blob'
-            )]
+            [MagicMock(**{
+                "path":'test.py',
+                "content":'new content',
+                "mode":'100644',
+                "type":'blob'
+            })]
         )
         ])
     def test_create_branch_from_changes_success(self, repo_client, input_type, input_data):
