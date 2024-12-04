@@ -1,5 +1,3 @@
-import os
-from unittest.mock import patch
 from xml.etree.ElementTree import Element
 
 import pytest
@@ -15,46 +13,35 @@ from seer.automation.utils import (
     raise_if_no_genai_consent,
     remove_cdata,
 )
+from seer.configuration import AppConfig
+from seer.dependency_injection import resolve
+from seer.rpc import DummyRpcClient
 
 
 class TestCheckGenAiConsent:
-    @pytest.fixture
-    def mock_rpc_client(self):
-        with patch("seer.automation.utils.SentryRpcClient") as mock:
-            yield mock
-
-    def test_check_passing(self, mock_rpc_client):
-        os.environ["NO_SENTRY_INTEGRATION"] = ""
-        mock_rpc_client.return_value.call.return_value = {"consent": True}
+    def test_check_with_should_consent(self):
+        resolve(AppConfig).NO_SENTRY_INTEGRATION = False
+        resolve(DummyRpcClient).should_consent = True
         assert check_genai_consent(1) is True
+        assert ("get_organization_autofix_consent", {"org_id": 1}) in resolve(
+            DummyRpcClient
+        ).invocations
 
-    def test_check_failing(self, mock_rpc_client):
-        os.environ["NO_SENTRY_INTEGRATION"] = ""
-        mock_rpc_client.return_value.call.return_value = {"consent": False}
+    def test_check_without_should_consent(self):
+        resolve(AppConfig).NO_SENTRY_INTEGRATION = False
+        resolve(DummyRpcClient).should_consent = False
         assert check_genai_consent(1) is False
+        assert ("get_organization_autofix_consent", {"org_id": 1}) in resolve(
+            DummyRpcClient
+        ).invocations
 
-    def test_check_failing_none(self, mock_rpc_client):
-        os.environ["NO_SENTRY_INTEGRATION"] = ""
-        mock_rpc_client.return_value.call.return_value = None
-        assert check_genai_consent(1) is False
-
-    def test_check_passing_without_integration(self, mock_rpc_client):
-        os.environ["NO_SENTRY_INTEGRATION"] = "1"
-        mock_rpc_client.return_value.call.return_value = None
-
-        assert check_genai_consent(1) is True
-        mock_rpc_client.return_value.call.assert_not_called()
-
-
-class TestCheckGenAiConsentRaise:
-    @pytest.fixture
-    def mock_check_genai_consent(self):
-        with patch("seer.automation.utils.check_genai_consent", return_value=False) as mock:
-            yield mock
-
-    def test_check_failing_raise(self, mock_check_genai_consent):
         with pytest.raises(ConsentError):
             raise_if_no_genai_consent(1)
+
+    def test_check_with_no_sentry_integration(self):
+        resolve(AppConfig).NO_SENTRY_INTEGRATION = True
+        assert check_genai_consent(1) is True
+        assert not resolve(DummyRpcClient).invocations
 
 
 class TestXmlUtils:

@@ -25,7 +25,7 @@ def get_last_non_empty_line(text: str) -> str:
 
 @observe(name="Find original snippet")
 def find_original_snippet(
-    snippet: str, file_contents: str, threshold=0.8, initial_line_threshold=0.9
+    snippet: str, file_contents: str, threshold: float = 0.8, initial_line_threshold: float = 0.9
 ) -> tuple[str, int, int] | None:
     """
     This function finds the original snippet of code in a file given a snippet and the file contents.

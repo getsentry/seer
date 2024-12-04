@@ -117,6 +117,8 @@ def extract_json_from_text(string: str | None) -> dict | None:
         # Extract the JSON
         json_string = string[start_index : end_index + 1]
         json_object = json.loads(json_string)
+        if not isinstance(json_object, dict):
+            return None
         return json_object
     except json.JSONDecodeError:
         return None
