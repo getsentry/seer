@@ -14,6 +14,7 @@ from seer.automation.autofix.models import (
     CodebaseState,
     StepType,
 )
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.models import (
     EventDetails,
@@ -262,6 +263,56 @@ class TestAutofixContext(unittest.TestCase):
         self.assertEqual(len(result2), 1)
         self.assertEqual(result2[0].role, "assistant")
         self.assertEqual(result2[0].content, "Test message 2")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.autofix.autofix_context.get_read_app_credentials")
+    @patch("seer.automation.autofix.autofix_context.get_write_app_credentials")
+    @patch("seer.automation.autofix.autofix_context.get_codecov_unit_test_app_credentials")
+    def test_get_repo_client_with_different_types(
+        self,
+        mock_get_codecov_unit_test_app_credentials,
+        mock_get_write_app_credentials,
+        mock_get_read_app_credentials,
+        mock_RepoClient,
+    ):
+        instance = self.autofix_context
+        mock_repo = MagicMock()
+        instance.repos = [mock_repo]
+
+        mock_get_read_app_credentials.return_value = ("read_app_id", "read_private_key")
+        mock_get_write_app_credentials.return_value = ("write_app_id", "write_private_key")
+        mock_get_codecov_unit_test_app_credentials.return_value = ("codecov_app_id", "codecov_private_key")
+
+        # Test READ type
+        instance.get_repo_client(type=RepoClientType.READ)
+        mock_RepoClient.from_repo_definition.assert_called_with(mock_repo, RepoClientType.READ)
+        mock_get_read_app_credentials.assert_called_once()
+
+        # Reset mock calls
+        mock_RepoClient.from_repo_definition.reset_mock()
+        mock_get_read_app_credentials.reset_mock()
+
+        # Test WRITE type
+        instance.get_repo_client(type=RepoClientType.WRITE)
+        mock_RepoClient.from_repo_definition.assert_called_with(mock_repo, RepoClientType.WRITE)
+        mock_get_write_app_credentials.assert_called_once()
+
+        # Reset mock calls
+        mock_RepoClient.from_repo_definition.reset_mock()
+        mock_get_write_app_credentials.reset_mock()
+
+        # Test CODECOV_UNIT_TEST type
+        instance.get_repo_client(type=RepoClientType.CODECOV_UNIT_TEST)
+        mock_RepoClient.from_repo_definition.assert_called_with(mock_repo, RepoClientType.CODECOV_UNIT_TEST)
+        mock_get_codecov_unit_test_app_credentials.assert_called_once()
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_repo_client_with_repo_name(self, mock_RepoClient):
+        instance = self.autofix_context
+        instance.repos = [MagicMock(full_name="repo1"), MagicMock(full_name="repo2")]
+
+        instance.get_repo_client(repo_name="repo2", type=RepoClientType.READ)
+        mock_RepoClient.from_repo_definition.assert_called_with(instance.repos[1], RepoClientType.READ)
 
 
 class TestAutofixContextPrCommit(unittest.TestCase):
