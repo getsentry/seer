@@ -15,8 +15,10 @@ class CodegenStep(PipelineStep):
     @staticmethod
     def _instantiate_context(
         request: PipelineStepTaskRequest,
-        type: Optional[DbStateRunTypes] = DbStateRunTypes.UNIT_TEST,
+        type: Optional[DbStateRunTypes],
     ) -> PipelineContext:
+        if type is None:
+            type = DbStateRunTypes.UNIT_TEST
         return CodegenContext.from_run_id(request.run_id, type=type)
 
     def _invoke(self, **kwargs: Any) -> Any:
