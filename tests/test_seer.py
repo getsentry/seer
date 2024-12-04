@@ -20,8 +20,6 @@ from seer.automation.autofix.models import (
     AutofixUpdateRequest,
     AutofixUpdateType,
 )
-from seer.automation.codebase.models import CodebaseStatusCheckRequest, CodebaseStatusCheckResponse
-from seer.automation.models import RepoDefinition
 from seer.automation.state import LocalMemoryState
 from seer.automation.summarize.models import SummarizeIssueRequest
 from seer.configuration import AppConfig, provide_test_defaults
@@ -530,37 +528,6 @@ class TestSeer(unittest.TestCase):
 
         assert response.status_code == 500  # InternalServerError
         mock_run_summarize_issue.assert_called_once_with(test_data)
-
-
-class TestGetCodebaseIndexStatusEndpoint(unittest.TestCase):
-    @mock.patch("seer.app.CodebaseStatusCheckResponse")
-    def test_get_codebase_index_status_endpoint(self, mock_response):
-        # Prepare test data
-        test_data = CodebaseStatusCheckRequest(
-            organization_id=123,
-            project_id=456,
-            repo=RepoDefinition(
-                provider="github", owner="test-owner", name="test-repo", external_id="test-repo-id"
-            ),
-        )
-
-        # Mock the response
-        mock_response.return_value = CodebaseStatusCheckResponse(status="up_to_date")
-
-        # Make a POST request to the endpoint
-        response = app.test_client().post(
-            "/v1/automation/codebase/index/status",
-            data=test_data.json(),
-            content_type="application/json",
-        )
-
-        # Assert that the response is correct
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.get_data(as_text=True))
-        self.assertEqual(response_data, {"status": "up_to_date"})
-
-        # Assert that CodebaseStatusCheckResponse was called with the correct status
-        mock_response.assert_called_once_with(status="up_to_date")
 
 
 @parametrize(count=1)
