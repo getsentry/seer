@@ -3,6 +3,7 @@ import textwrap
 from typing import Mapping, cast
 
 import sentry_sdk
+from github import UnknownObjectException
 from pydantic import ValidationError
 
 from seer.automation.agent.models import Message
@@ -181,7 +182,14 @@ class AutofixContext(PipelineContext):
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
         for repo in self.repos:
-            repo_client = RepoClient.from_repo_definition(repo, RepoClientType.READ)
+            try:
+                repo_client = RepoClient.from_repo_definition(repo, RepoClientType.READ)
+            except UnknownObjectException:
+                self.event_manager.on_error(
+                    error_msg=f"Autofix does not have access to the `{repo.full_name}` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
+                    should_completely_error=True,
+                )
+                return
 
             valid_file_paths = repo_client.get_valid_file_paths()
             for frame in stacktrace.frames:

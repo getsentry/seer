@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from github.GithubException import UnknownObjectException
 from johen import generate
 
 from seer.automation.agent.models import Message
@@ -262,6 +263,34 @@ class TestAutofixContext(unittest.TestCase):
         self.assertEqual(len(result2), 1)
         self.assertEqual(result2[0].role, "assistant")
         self.assertEqual(result2[0].content, "Test message 2")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_process_stacktrace_paths_unknown_object_exception(self, mock_RepoClient):
+        mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="test_file.py",
+                    in_app=True,
+                    repo_name=None,
+                    context=[],
+                    abs_path="path",
+                    line_no=1,
+                    col_no=1,
+                )
+            ]
+        )
+        test_repo = RepoDefinition(
+            provider="github", owner="test", name="repo", external_id="1", full_name="test/repo"
+        )
+        self.autofix_context.repos = [test_repo]
+
+        self.autofix_context._process_stacktrace_paths(stacktrace)
+
+        self.autofix_context.event_manager.on_error.assert_called_once_with(
+            error_msg="Autofix does not have access to the `test/repo` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
+            should_completely_error=True,
+        )
 
 
 class TestAutofixContextPrCommit(unittest.TestCase):
