@@ -6,7 +6,6 @@ import numpy as np
 from seer.anomaly_detection.detectors import (
     FlagsAndScores,
     MPCascadingScorer,
-    MPConfig,
     MPUtils,
     SuSSWindowSizeSelector,
 )
@@ -14,7 +13,7 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPBatchAnomalyDetector,
     MPStreamAnomalyDetector,
 )
-from seer.anomaly_detection.models import MPTimeSeriesAnomaliesSingleWindow
+from seer.anomaly_detection.models import AlgoConfig, MPTimeSeriesAnomaliesSingleWindow
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.exceptions import ServerError
@@ -30,7 +29,14 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             time_period=15, sensitivity="low", direction="up", expected_seasonality="auto"
         )  # TODO: Placeholder values as not used in detection yet
 
-        self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
+        self.algo_config = AlgoConfig(
+            mp_ignore_trivial=False,
+            mp_normalize=False,
+            mp_fixed_window_size=10,
+            prophet_uncertainty_samples=1,
+            return_thresholds=False,
+            return_predicted_range=False,
+        )
         self.ws_selector = MagicMock()
         self.scorer = MagicMock()
         self.mp_utils = MagicMock()
@@ -71,7 +77,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
             ts,
             self.config,
             ws_selector=self.ws_selector,
-            mp_config=self.mp_config,
+            algo_config=self.algo_config,
             scorer=self.scorer,
             mp_utils=self.mp_utils,
         )
@@ -111,7 +117,7 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
                 ts,
                 self.config,
                 ws_selector=self.ws_selector,
-                mp_config=self.mp_config,
+                algo_config=self.algo_config,
                 scorer=self.scorer,
                 mp_utils=self.mp_utils,
             )
@@ -120,14 +126,14 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
         ts = TimeSeries(timestamps=np.array([]), values=np.array([]))
         with self.assertRaises(ServerError, msg="No values to detect anomalies for"):
             self.detector._compute_matrix_profile(
-                ts, self.config, self.ws_selector, self.mp_config, self.scorer, self.mp_utils
+                ts, self.config, self.ws_selector, self.algo_config, self.scorer, self.mp_utils
             )
 
     def test_timestamps_and_values_not_same_length(self):
         ts = TimeSeries(timestamps=np.array([1, 2, 3]), values=np.array([1, 2]))
         with self.assertRaises(ServerError, msg="Timestamps and values are not of the same length"):
             self.detector._compute_matrix_profile(
-                ts, self.config, self.ws_selector, self.mp_config, self.scorer, self.mp_utils
+                ts, self.config, self.ws_selector, self.algo_config, self.scorer, self.mp_utils
             )
 
 
@@ -147,7 +153,14 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         self.config = AnomalyDetectionConfig(
             time_period=15, sensitivity="medium", direction="both", expected_seasonality="auto"
         )  # TODO: Placeholder values as not used in detection yet
-        self.mp_config = MPConfig(ignore_trivial=False, normalize_mp=False)
+        self.algo_config = AlgoConfig(
+            mp_ignore_trivial=False,
+            mp_normalize=False,
+            mp_fixed_window_size=10,
+            prophet_uncertainty_samples=1,
+            return_thresholds=False,
+            return_predicted_range=False,
+        )
 
     @patch("stumpy.stumpi")
     @patch("seer.anomaly_detection.detectors.MPScorer")
@@ -199,7 +212,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 ),
                 config=self.config,
                 ws_selector=SuSSWindowSizeSelector(),
-                mp_config=self.mp_config,
+                algo_config=self.algo_config,
                 scorer=MPCascadingScorer(),
                 mp_utils=MPUtils(),
             )
