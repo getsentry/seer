@@ -35,6 +35,20 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+class _DatabaseState:
+    """Track database initialization state with testing support"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        """Reset initialization state - used primarily for testing"""
+        self._initialized = False
+
+    @property
+    def initialized(self):
+        return self._initialized
+
+_db_state = _DatabaseState()
 
 @inject
 def initialize_database(
@@ -44,8 +58,12 @@ def initialize_database(
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+    global _db_state
+    if not _db_state.initialized:
+        db.init_app(app)
+        migrate.init_app(app, db)
+        _db_state._initialized = True
+        logger.debug("SQLAlchemy initialization complete")
 
     with app.app_context():
         Session.configure(bind=db.engine)
@@ -59,6 +77,11 @@ class Base(DeclarativeBase):
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
 Session = sessionmaker(autoflush=False, expire_on_commit=False)
+
+
+def reset_db_state():
+    """Reset database initialization state - used for testing"""
+    _db_state.reset()
 
 
 class TaskStatus(StrEnum):
