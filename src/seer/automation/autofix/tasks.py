@@ -356,7 +356,11 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
     context = AutofixContext(
         state=state, sentry_client=get_sentry_client(), event_manager=event_manager
     )
-    step_to_restart = cast(DefaultStep, state.get().steps[-1])
+    step_to_restart = next(
+        (step for step in reversed(state.get().steps) if isinstance(step, DefaultStep)), None
+    )
+    if not step_to_restart:
+        raise ValueError("No DefaultStep found in steps")
 
     is_coding_step = step_to_restart.key == "plan"
     memory = (

@@ -95,6 +95,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         self,
         request: CodingRequest,
         memory: list[Message],
+        append_initial_prompt: bool = True,
     ):
         state = self.context.state.get()
 
@@ -108,13 +109,17 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             run_config=RunConfig(
                 model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                 system_prompt=CodingPrompts.format_system_msg(has_tools=False),
-                prompt=CodingPrompts.format_single_simple_change_msg(
-                    event=request.event_details.format_event(),
-                    root_cause=request.root_cause_and_fix,
-                    summary=request.summary,
-                    repo_names=[repo.full_name for repo in state.request.repos],
-                    original_instruction=request.original_instruction,
-                    root_cause_extra_instruction=request.root_cause_extra_instruction,
+                prompt=(
+                    CodingPrompts.format_single_simple_change_msg(
+                        event=request.event_details.format_event(),
+                        root_cause=request.root_cause_and_fix,
+                        summary=request.summary,
+                        repo_names=[repo.full_name for repo in state.request.repos],
+                        original_instruction=request.original_instruction,
+                        root_cause_extra_instruction=request.root_cause_extra_instruction,
+                    )
+                    if append_initial_prompt
+                    else CodingPrompts.format_single_simple_change_msg_formatting_instructions()  # when we have initial memory, in case the previous step was the complex fix, we tell the model of the simple fix output format requirements
                 ),
                 temperature=0.0,
                 run_name="Simple fixer",
@@ -264,7 +269,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             )
 
             if is_obvious:
-                coding_output = self._handle_simple_fix(request, memory)
+                coding_output = self._handle_simple_fix(
+                    request, memory, append_initial_prompt=not bool(request.initial_memory)
+                )
             else:
                 state = self.context.state.get()
 

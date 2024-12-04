@@ -231,6 +231,46 @@ class CodingPrompts:
         )
 
     @staticmethod
+    def format_single_simple_change_msg_formatting_instructions():
+        return textwrap.dedent(
+            """# Your goal: Write the exact code changes in a unified diff format to fix the issue.
+            Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue.
+
+            Think step by step, when ready with your final answer, detail the precise changes to make to fix the issue.
+
+            Provide your file_changes, each inside a <file_change></file_change> tag. Follow the below format strictly:
+            <file_change file_path="path/to/file.py" repo_name="repo_name">
+            <commit_message>Provide a commit message that describes the change you are making</commit_message>
+            <description>Provide a detailed description of the changes you are making</description>
+            <unified_diff>
+            --- a/path/to/file.py
+            +++ b/path/to/file.py
+            @@ -1,3 +1,3 @@
+                return 'fab'
+                y = 2
+                x = 1
+            -def foo():
+            +def foo():
+                return 'foo'
+                def bar():
+                return 'bar'
+            </unified_diff>
+            </file_change>
+
+            <file_change>
+            ...
+            </file_change>
+
+            # Guidelines:
+            - Each file change must be a separate step and be explicit and clear.
+              - You MUST include exact file paths for each change you provide.
+            - No placeholders are allowed, the changes must be clear and detailed.
+            - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete changes.
+            - Think step-by-step before giving the final answer.
+            - Provide both the high-level plan and the exact code changes needed."""
+        )
+
+    @staticmethod
     def format_incorrect_diff_fixer(
         file_path: str, diff_chunks: list[FuzzyDiffChunk], file_content: str
     ):
