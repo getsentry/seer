@@ -29,6 +29,7 @@ from sqlalchemy import (
     select,
     text,
 )
+from threading import Lock
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -36,29 +37,57 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 
+class Base(DeclarativeBase):
+    pass
+
+class DatabaseManager:
+    _instance: Optional['DatabaseManager'] = None
+    _lock = Lock()
+    _initialized = False
+
+    def __new__(cls) -> 'DatabaseManager':
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:  # Double-check pattern
+                    cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not hasattr(self, 'db'):
+            self.db = SQLAlchemy(model_class=Base)
+            self.migrate = Migrate(directory="src/migrations")
+            self.session = sessionmaker(autoflush=False, expire_on_commit=False)
+            
+    def initialize_app(self, app: Flask, config: AppConfig) -> None:
+        """Initialize the database with Flask app context"""
+        if not self._initialized:
+            with self._lock:
+                if not self._initialized:
+                    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+                    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+                    
+                    self.db.init_app(app)
+                    self.migrate.init_app(app, self.db)
+
+                    with app.app_context():
+                        self.session.configure(bind=self.db.engine)
+                    
+                    self._initialized = True
+
+# Create global instance
+db_manager = DatabaseManager()
+db = db_manager.db
+migrate = db_manager.migrate
+Session = db_manager.session
+
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+    """Initialize database using the singleton database manager"""
+    db_manager.initialize_app(app, config)
 
-    db.init_app(app)
-    migrate.init_app(app, db)
-
-    with app.app_context():
-        Session.configure(bind=db.engine)
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-# Initialized in src/app.run
-db: SQLAlchemy = SQLAlchemy(model_class=Base)
-migrate = Migrate(directory="src/migrations")
-Session = sessionmaker(autoflush=False, expire_on_commit=False)
 
 
 class TaskStatus(StrEnum):
