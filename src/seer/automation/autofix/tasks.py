@@ -345,7 +345,11 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
     event_manager.reset_steps_to_point(step_index, insight_card_index)
 
     context = AutofixContext(state=state, event_manager=event_manager)
-    step_to_restart = cast(DefaultStep, state.get().steps[-1])
+    step_to_restart = next(
+        (step for step in reversed(state.get().steps) if isinstance(step, DefaultStep)), None
+    )
+    if not step_to_restart:
+        raise ValueError("No DefaultStep found in steps")
 
     is_coding_step = step_to_restart.key == "plan"
     memory = (
