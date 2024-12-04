@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 import sentry_sdk
 
@@ -14,7 +14,8 @@ class CodegenStep(PipelineStep):
 
     @staticmethod
     def _instantiate_context(
-        request: PipelineStepTaskRequest, type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST
+        request: PipelineStepTaskRequest,
+        type: Optional[DbStateRunTypes] = DbStateRunTypes.UNIT_TEST,
     ) -> PipelineContext:
         return CodegenContext.from_run_id(request.run_id, type=type)
 

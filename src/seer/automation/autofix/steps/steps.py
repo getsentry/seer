@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from typing import Any
+from typing import Any, Optional
 
 import sentry_sdk
 
@@ -47,7 +47,7 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
 
     @staticmethod
     def _instantiate_context(
-        request: PipelineStepTaskRequest, type: DbStateRunTypes = DbStateRunTypes.AUTOFIX
+        request: PipelineStepTaskRequest, type: Optional[DbStateRunTypes] = None
     ) -> PipelineContext:
         return AutofixContext.from_run_id(request.run_id)
 
