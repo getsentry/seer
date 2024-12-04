@@ -558,6 +558,7 @@ class TestRepoClientIndexFileSet:
         mock_branch_ref = MagicMock()
         mock_branch_ref.ref = "refs/heads/test-branch"
         mock_branch_ref.object.sha = "new-commit-sha"
+
         
         # Create test data
         file_patches = [
@@ -571,7 +572,7 @@ class TestRepoClientIndexFileSet:
         # Test the method
         with patch.object(repo_client, '_create_branch', return_value=mock_branch_ref):
             with patch.object(repo_client, 'get_default_branch_head_sha', return_value="default-sha"):
-                with patch.object(repo_client, 'compare', return_value=mock_comparison):
+                with patch.object(repo_client.repo, 'compare', return_value=mock_comparison):
                     result = repo_client.create_branch_from_changes(
                         pr_title="Test PR",
                         file_patches=file_patches
