@@ -1,11 +1,11 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from github import UnknownObjectException
+from github import UnknownObjectException, GitRef
 from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import RepoDefinition
+from seer.automation.models import FileChange, RepoDefinition
 
 
 @pytest.fixture
@@ -541,11 +541,44 @@ class TestRepoClientIndexFileSet:
         assert result._identity["sha"] == expected_sha
 
 
-def test_create_branch_from_changes_invalid_input(repo_client):
-    # Test with no changes provided
-    with pytest.raises(ValueError, match="Either file_patches or file_changes must be provided"):
-        repo_client.create_branch_from_changes(
-            pr_title="Test PR",
-            file_patches=None,
-            file_changes=None
-        )
+    def test_create_branch_from_changes_invalid_input(self, repo_client):
+        # Test with no changes provided
+        with pytest.raises(ValueError, match="Either file_patches or file_changes must be provided"):
+            repo_client.create_branch_from_changes(
+                pr_title="Test PR",
+                file_patches=None,
+                file_changes=None
+            )
+
+    def test_create_branch_from_changes_success(self, repo_client):
+        
+        mock_comparison = MagicMock()
+        mock_comparison.ahead_by = 1
+
+        mock_branch_ref = MagicMock()
+        mock_branch_ref.ref = "refs/heads/test-branch"
+        mock_branch_ref.object.sha = "new-commit-sha"
+        
+        # Create test data
+        file_patches = [
+            MagicMock(**{
+                'path': 'test.py',
+                'type': 'edit',
+                'apply.return_value': 'new content'
+            })
+        ]
+
+        # Test the method
+        with patch.object(repo_client, '_create_branch', return_value=mock_branch_ref):
+            with patch.object(repo_client, 'get_default_branch_head_sha', return_value="default-sha"):
+                with patch.object(repo_client, 'compare', return_value=mock_comparison):
+                    result = repo_client.create_branch_from_changes(
+                        pr_title="Test PR",
+                        file_patches=file_patches
+                )
+
+        # Assertions
+        assert result == mock_branch_ref
+        repo_client.repo.create_git_blob.assert_called_once()
+        repo_client.repo.create_git_tree.assert_called_once()
+        repo_client.repo.create_git_commit.assert_called_once()
