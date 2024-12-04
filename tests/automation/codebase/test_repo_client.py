@@ -550,8 +550,26 @@ class TestRepoClientIndexFileSet:
                 file_changes=None
             )
 
-    def test_create_branch_from_changes_success(self, repo_client):
-        
+    @pytest.mark.parametrize("input_type,input_data", [
+        (
+            "patches",
+            [MagicMock(**{
+                'path': 'test.py',
+                'type': 'edit',
+                'apply.return_value': 'new content'
+            })]
+        ),
+        (
+            "changes",
+            [FileChange(
+                path='test.py',
+                content='new content',
+                mode='100644',
+                type='blob'
+            )]
+        )
+        ])
+    def test_create_branch_from_changes_success(self, repo_client, input_type, input_data):
         mock_comparison = MagicMock()
         mock_comparison.ahead_by = 1
 
@@ -559,24 +577,15 @@ class TestRepoClientIndexFileSet:
         mock_branch_ref.ref = "refs/heads/test-branch"
         mock_branch_ref.object.sha = "new-commit-sha"
 
-        
-        # Create test data
-        file_patches = [
-            MagicMock(**{
-                'path': 'test.py',
-                'type': 'edit',
-                'apply.return_value': 'new content'
-            })
-        ]
-
         # Test the method
         with patch.object(repo_client, '_create_branch', return_value=mock_branch_ref):
             with patch.object(repo_client, 'get_default_branch_head_sha', return_value="default-sha"):
                 with patch.object(repo_client.repo, 'compare', return_value=mock_comparison):
                     result = repo_client.create_branch_from_changes(
                         pr_title="Test PR",
-                        file_patches=file_patches
-                )
+                        file_patches=input_data if input_type == "patches" else None,
+                        file_changes=input_data if input_type == "changes" else None
+                    )
 
         # Assertions
         assert result == mock_branch_ref
