@@ -112,6 +112,7 @@ def vcr_config():
         "record_mode": "none" if os.environ.get("CI") else "once",
         "before_record_request": filter_unrelated_requests,
         "filter_post_data_parameters": ["client_secret", "refresh_token"],
+        "ignore_hosts": ["169.254.169.254"],
     }
 
 

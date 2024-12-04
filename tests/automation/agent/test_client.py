@@ -35,7 +35,6 @@ def test_openai_generate_text():
 
 
 @pytest.mark.vcr()
-@pytest.mark.skip()
 def test_anthropic_generate_text():
     llm_client = LlmClient()
     model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
@@ -92,7 +91,6 @@ def test_openai_generate_text_with_tools():
 
 
 @pytest.mark.vcr()
-@pytest.mark.skip()
 def test_anthropic_generate_text_with_tools():
     llm_client = LlmClient()
     model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
