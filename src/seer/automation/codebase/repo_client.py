@@ -8,10 +8,16 @@ from typing import Literal
 
 import requests
 import sentry_sdk
-from github import Auth, Github, GithubException, GithubIntegration, UnknownObjectException, InputGitTreeElement
+from github import (
+    Auth,
+    Github,
+    GithubException,
+    GithubIntegration,
+    InputGitTreeElement,
+    UnknownObjectException,
+)
 from github.GitRef import GitRef
 from github.Repository import Repository
-from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
@@ -19,7 +25,6 @@ from seer.automation.models import FileChange, FilePatch, InitializationError, R
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
-from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +272,6 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
-
     def get_file_content(self, path: str, sha: str | None = None) -> str | None:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
@@ -310,9 +314,9 @@ class RepoClient:
 
         return ref
 
-    def process_one_file_for_git_commit(self, *, branch_ref: str,
-                                        patch: FilePatch | None = None,
-                                        change: FileChange | None = None) -> InputGitTreeElement | None:
+    def process_one_file_for_git_commit(
+        self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
+    ) -> InputGitTreeElement | None:
         """
         This method is used to get a single change to be committed by to github.
         It processes a FilePatch/FileChange object and converts it into an InputGitTreeElement which can be commited
@@ -322,7 +326,7 @@ class RepoClient:
         patch_type = patch.type if patch else (change.change_type if change else None)
         if not path:
             raise ValueError("Path must be provided")
-        
+
         if not patch_type:
             raise ValueError("Patch type must be provided")
         if patch_type == "create":
@@ -353,11 +357,8 @@ class RepoClient:
         # 100644 is the git code for creating a Regular non-executable file
         # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
         return InputGitTreeElement(
-            path=path,
-            mode='100644',
-            type='blob',
-            sha=blob.sha if blob else None)
-    
+            path=path, mode="100644", type="blob", sha=blob.sha if blob else None
+        )
 
     def create_branch_from_changes(
         self,
@@ -374,12 +375,14 @@ class RepoClient:
             branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
         )
         branch_ref = self._create_branch(new_branch_name)
-        
+
         tree_elements = []
         if file_patches:
             for patch in file_patches:
                 try:
-                    element = self.process_one_file_for_git_commit(branch_ref=branch_ref.ref, patch=patch)
+                    element = self.process_one_file_for_git_commit(
+                        branch_ref=branch_ref.ref, patch=patch
+                    )
                     if element:
                         tree_elements.append(element)
                 except Exception as e:
@@ -388,7 +391,9 @@ class RepoClient:
         elif file_changes:
             for change in file_changes:
                 try:
-                    element = self.process_one_file_for_git_commit(branch_ref=branch_ref.ref, change=change)
+                    element = self.process_one_file_for_git_commit(
+                        branch_ref=branch_ref.ref, change=change
+                    )
                     if element:
                         tree_elements.append(element)
                 except Exception as e:
@@ -397,13 +402,11 @@ class RepoClient:
         latest_commit = self.repo.get_git_commit(self.get_branch_head_sha(new_branch_name))
         base_tree = latest_commit.tree
         new_tree = self.repo.create_git_tree(tree_elements, base_tree)
-        
+
         new_commit = self.repo.create_git_commit(
-            message=pr_title,
-            tree=new_tree,
-            parents=[latest_commit]
+            message=pr_title, tree=new_tree, parents=[latest_commit]
         )
-        
+
         branch_ref.edit(sha=new_commit.sha)
 
         # Check that the changes were made

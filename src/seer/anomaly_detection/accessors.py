@@ -392,14 +392,26 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     combined_flags[i] = anomalies_suss.flags[i]
                     combined_scores[i] = anomalies_suss.scores[i]
                     combined_original_flags[i] = anomalies_suss.original_flags[i]
-                    if i < len(anomalies_suss.thresholds):
-                        combined_thresholds[i] = anomalies_suss.thresholds[i]
+                    if (
+                        anomalies_suss.thresholds is not None
+                        and anomalies_fixed.thresholds is not None
+                        and combined_thresholds is not None
+                    ):
+                        for j in range(len(anomalies_suss.thresholds)):
+                            if i < len(anomalies_suss.thresholds[j]):
+                                combined_thresholds[j][i] = anomalies_suss.thresholds[j][i]
                 else:
                     combined_flags[i] = anomalies_fixed.flags[i]
                     combined_scores[i] = anomalies_fixed.scores[i]
                     combined_original_flags[i] = anomalies_fixed.original_flags[i]
-                    if i < len(anomalies_fixed.thresholds):
-                        combined_thresholds[i] = anomalies_fixed.thresholds[i]
+                    if (
+                        anomalies_suss.thresholds is not None
+                        and anomalies_fixed.thresholds is not None
+                        and combined_thresholds is not None
+                    ):
+                        for j in range(len(anomalies_suss.thresholds)):
+                            if i < len(anomalies_fixed.thresholds[j]):
+                                combined_thresholds[j][i] = anomalies_fixed.thresholds[j][i]
 
         return MPTimeSeriesAnomalies(
             flags=combined_flags,

@@ -5,8 +5,8 @@ import re
 from typing import TypeVar
 from xml.etree import ElementTree as ET
 
-import chardet
 import billiard  # type: ignore[import-untyped]
+import chardet
 import torch
 from openai.types.chat import ParsedChatCompletion
 from sentence_transformers import SentenceTransformer
@@ -250,7 +250,7 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
     return structured_message.parsed
 
 
-def detect_encoding(raw_data: bytes, fallback_encoding: str="utf-8"):
+def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
     """
     Try to detect the encoding of the given data using chardet library. If the confidence is not high enough, fallback.
     """
