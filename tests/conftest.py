@@ -12,10 +12,10 @@ from sqlalchemy import text
 from celery_app.config import CeleryConfig
 from seer.app import module
 from seer.bootup import bootup, stub_module
-from seer.configuration import configuration_test_module
-from seer.db import Session, db
+from seer.db import Session, db, reset_db_state
 from seer.dependency_injection import resolve
 from seer.inference_models import reset_loading_state
+from seer.rpc import rpc_stub_module
 from seer.rpc import rpc_stub_module
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ def alembic_runner(alembic_config: Config, setup_app):
 @pytest.fixture(autouse=True)
 def setup_app():
     with module, configuration_test_module, stub_module, rpc_stub_module:
+        reset_db_state()  # Ensure clean database initialization state
         reset_loading_state()
         bootup(start_model_loading=False, integrations=[])
         app = resolve(Flask)
