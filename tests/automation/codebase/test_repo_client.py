@@ -539,3 +539,13 @@ class TestRepoClientIndexFileSet:
         assert result._identity["mode"] == '100644'
         assert result._identity["type"] == 'blob'
         assert result._identity["sha"] == expected_sha
+
+
+def test_create_branch_from_changes_invalid_input(repo_client):
+    # Test with no changes provided
+    with pytest.raises(ValueError, match="Either file_patches or file_changes must be provided"):
+        repo_client.create_branch_from_changes(
+            pr_title="Test PR",
+            file_patches=None,
+            file_changes=None
+        )
