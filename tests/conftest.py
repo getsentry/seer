@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
     os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/tests/test_gcloud_credentials.json"
 
 
 @pytest.fixture
