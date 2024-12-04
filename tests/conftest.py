@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
     os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/tests/test_gcloud_credentials.json"
 
 
 @pytest.fixture
@@ -112,6 +113,7 @@ def vcr_config():
         "record_mode": "none" if os.environ.get("CI") else "once",
         "before_record_request": filter_unrelated_requests,
         "filter_post_data_parameters": ["client_secret", "refresh_token"],
+        "ignore_hosts": ["169.254.169.254"],
     }
 
 
