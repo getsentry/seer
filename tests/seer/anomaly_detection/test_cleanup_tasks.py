@@ -14,9 +14,8 @@ from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatu
 
 
 class TestCleanupTasks(unittest.TestCase):
-    def _save_alert(self, num_old_points: int, num_new_points: int):
+    def _save_alert(self, external_alert_id: int, num_old_points: int, num_new_points: int):
         # Helper function to save an alert with a given number of old and new points
-        external_alert_id = random.randint(1, 100)
         organization_id = 100
         project_id = 101
         cur_ts = datetime.now().timestamp()
@@ -81,13 +80,13 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
-        external_alert_id, config, _, _ = self._save_alert(0, 0)
+        external_alert_id, config, _, _ = self._save_alert(0, 0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries(external_alert_id, date_threshold)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
-        external_alert_id, config, points, anomalies = self._save_alert(1000, 0)
+        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries(external_alert_id, date_threshold)
 
@@ -107,7 +106,7 @@ class TestCleanupTasks(unittest.TestCase):
     def test_cleanup_timeseries(self):
 
         # Create and save alert with 2000 points (1000 old, 1000 new)
-        external_alert_id, config, points, anomalies = self._save_alert(1000, 1000)
+        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 1000)
         points_new = points[1000:]
         ts_new = TimeSeries(
             timestamps=np.array([point.timestamp for point in points_new]),
@@ -182,10 +181,10 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
-        external_alert_id1, _, _, _ = self._save_alert(1000, 0)
-        external_alert_id2, _, _, _ = self._save_alert(500, 0)
-        external_alert_id3, _, _, _ = self._save_alert(0, 500)
-        external_alert_id4, _, _, _ = self._save_alert(0, 500)
+        external_alert_id1, _, _, _ = self._save_alert(1, 1000, 0)
+        external_alert_id2, _, _, _ = self._save_alert(2, 500, 0)
+        external_alert_id3, _, _, _ = self._save_alert(3, 0, 500)
+        external_alert_id4, _, _, _ = self._save_alert(4, 0, 500)
 
         # Set last_queued_at to be over 28 days ago for alerts 1 and 2
         with Session() as session:
