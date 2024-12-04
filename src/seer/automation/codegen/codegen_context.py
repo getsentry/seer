@@ -6,6 +6,7 @@ from seer.automation.codegen.models import CodegenContinuation
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
+from seer.automation.state import DbStateRunTypes
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,8 @@ class CodegenContext(PipelineContext):
         logger.info(f"CodegenContext initialized with run_id {self.run_id}")
 
     @classmethod
-    def from_run_id(cls, run_id: int):
-        state = CodegenContinuationState.from_id(run_id, model=CodegenContinuation)
+    def from_run_id(cls, run_id: int, type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST):
+        state = CodegenContinuationState.from_id(run_id, model=CodegenContinuation, type=type)
         with state.update() as cur:
             cur.mark_triggered()
 

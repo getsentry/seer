@@ -1,5 +1,5 @@
 import dataclasses
-from typing import cast
+from typing import Union, cast
 
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ class CodegenContinuationState(DbState[CodegenContinuation]):
         cls,
         id: int,
         model: type[BaseModel],
-        type: tuple[DbStateRunTypes, ...] = (DbStateRunTypes.UNIT_TEST, DbStateRunTypes.PR_REVIEW),
+        type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST,
     ) -> "CodegenContinuationState":
         return cast(CodegenContinuationState, super().from_id(id, model, type=type))
 

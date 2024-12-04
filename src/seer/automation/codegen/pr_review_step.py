@@ -26,16 +26,17 @@ class PrReviewStepRequest(PipelineStepTaskRequest):
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 def pr_review_task(*args, request: dict[str, Any]):
+    print("BEFORE INVOKE")
     PrReviewStep(request).invoke()
 
 
 class PrReviewStep(CodegenStep):
     """
-    This class represents the unittest step in the codegen pipeline. It is responsible for
-    generating unit tests based on the provided code changes in a pull request.
+    This class represents the PR Review step in the codegen pipeline. It is responsible for
+    generating pull request comments for provided code changes in a pull request.
     """
 
-    name = "UnittestStep"
+    name = "PrReviewStep"
     max_retries = 2
 
     @staticmethod
@@ -49,13 +50,15 @@ class PrReviewStep(CodegenStep):
     @observe(name="Codegen - PR Review")
     @ai_track(description="Codegen - PR Review Step")
     def _invoke(self, **kwargs):
+        print("HI 2")
         self.logger.info("Executing Codegen - PR Review Step")
         self.context.event_manager.mark_running()
+        print("HI 3")
 
         repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_REVIEW)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
-
+        print("BEFORE TRY")
         try:
             pr_review_output = PrReviewCodingComponent(self.context).invoke(
                 CodePrReviewRequest(

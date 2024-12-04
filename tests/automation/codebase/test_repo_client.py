@@ -504,3 +504,41 @@ class TestRepoClientIndexFileSet:
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_post_pr_review_confirmation_comment(self, mock_post, repo_client):
+        pr_url = "https://github.com/sentry/sentry/pull/12345"
+        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
+        expected_comment = "On it! We are reviewing the PR and will provide feedback shortly."
+        expected_params = {"body": expected_comment}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_pr_review_confirmation_comment(pr_url)
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_pr_review_no_comments_required(self, mock_post, repo_client):
+        pr_url = "https://github.com/sentry/sentry/pull/12345"
+        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
+        expected_comment = "No changes requiring review at this time."
+        expected_params = {"body": expected_comment}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_pr_review_no_comments_required(pr_url)
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"

@@ -5,6 +5,7 @@ import sentry_sdk
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodegenStatus
 from seer.automation.pipeline import PipelineContext, PipelineStep, PipelineStepTaskRequest
+from seer.automation.state import DbStateRunTypes
 from seer.automation.utils import make_done_signal
 
 
@@ -12,8 +13,10 @@ class CodegenStep(PipelineStep):
     context: CodegenContext
 
     @staticmethod
-    def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
-        return CodegenContext.from_run_id(request.run_id)
+    def _instantiate_context(
+        request: PipelineStepTaskRequest, type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST
+    ) -> PipelineContext:
+        return CodegenContext.from_run_id(request.run_id, type=type)
 
     def _invoke(self, **kwargs: Any) -> Any:
         sentry_sdk.set_tag("run_id", self.context.run_id)

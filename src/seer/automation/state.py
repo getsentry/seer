@@ -78,9 +78,7 @@ class DbState(State[_State]):
             return cls(id=db_state.id, model=value.__class__, type=type)
 
     @classmethod
-    def from_id(
-        cls, id: int, model: Type[BaseModel], type: tuple[DbStateRunTypes, ...]
-    ) -> "DbState[_State]":
+    def from_id(cls, id: int, model: Type[BaseModel], type: DbStateRunTypes) -> "DbState[_State]":
         return cls(id=id, model=model, type=type)
 
     def get(self) -> _State:
@@ -91,6 +89,7 @@ class DbState(State[_State]):
                 raise ValueError(f"No state found for id {self.id}")
 
             if db_state.type not in self.type:
+                print(db_state.type, self.type, "TYPEEE")
                 raise ValueError(
                     f"Invalid state type: '{db_state.type}', expected one of: '{self.type}'"
                 )

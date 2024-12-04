@@ -207,7 +207,7 @@ class CodingCodeReviewPrompts:
                 - The specific line number requiring the comment.
                 - Clear, professional, and actionable feedback.
             - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
-            - Wrap the suggestions in a <suggestion> and </suggestion> block.
+            - Wrap the suggestions in a <comments> and </comments> block.
             - ONLY return the list of JSON objects, nothing else. They need to be parsed directly by the system. 
             """
         ).format(
