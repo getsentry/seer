@@ -3,6 +3,8 @@ import logging
 import sentry_sdk
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
+from threading import Lock
+
 from sentry_sdk.types import Event
 
 from seer.automation.utils import AgentError
