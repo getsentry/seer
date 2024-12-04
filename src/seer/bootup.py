@@ -7,7 +7,7 @@ from sentry_sdk.types import Event
 
 from seer.automation.utils import AgentError
 from seer.configuration import AppConfig
-from seer.db import initialize_database
+from seer.db import initialize_database, Session, db
 from seer.dependency_injection import Module, inject, injected
 from seer.inference_models import initialize_models
 from seer.logging import initialize_logs
@@ -30,6 +30,26 @@ def traces_sampler(sampling_context: dict):
 class DisablePreparedStatementConnection(Connection):
     pass
 
+@inject
+def configure_celery_worker(
+    *,
+    integrations: list[Integration],
+    config: AppConfig = injected,
+):
+    """
+    Configure Celery worker environment without full application bootup.
+    This ensures database access is properly configured without risking
+    SQLAlchemy reinitialization issues.
+    """
+    initialize_sentry_sdk(integrations)
+    with sentry_sdk.metrics.timing(key="seer_celery_config_time"):
+        initialize_logs(["seer.", "celery_app."])
+        config.do_validation()
+        # Ensure database session is configured without reinitializing
+        from flask import current_app
+        with current_app.app_context():
+            Session.configure(bind=db.engine)
+            logger.debug("Celery worker database session configured")
 
 @inject
 def bootup(
