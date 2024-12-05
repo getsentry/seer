@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from seer.automation.agent.models import Message
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -46,8 +46,8 @@ class InsightSharingRequest(BaseComponentRequest):
 
 class InsightSharingOutput(BaseComponentOutput):
     insight: str
-    codebase_context: list[CodeSnippetContext] = Field(default_factory=list)
-    stacktrace_context: list[StacktraceContext] = Field(default_factory=list)
-    breadcrumb_context: list[BreadcrumbContext] = Field(default_factory=list)
-    justification: str = ""
+    codebase_context: list[CodeSnippetContext]
+    stacktrace_context: list[StacktraceContext]
+    breadcrumb_context: list[BreadcrumbContext]
+    justification: str
     generated_at_memory_index: int = -1
