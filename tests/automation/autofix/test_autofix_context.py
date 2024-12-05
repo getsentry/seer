@@ -45,10 +45,11 @@ class TestAutofixContext(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event]),
                 )
             ),
-            t=DbStateRunTypes.AUTOFIX,
+            type=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(
             self.state,
+            MagicMock(),
             MagicMock(),
         )
 
@@ -69,7 +70,7 @@ class TestAutofixContext(unittest.TestCase):
             )
         )
 
-        AutofixContext(state, mock_event_manager)
+        AutofixContext(state, MagicMock(), mock_event_manager)
 
         mock_event_manager.migrate_step_keys.assert_called_once()
 
@@ -145,11 +146,10 @@ class TestAutofixContext(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertIsInstance(result, IssueSummary)
-        if result:
-            self.assertEqual(result.title, "title")
-            self.assertEqual(result.whats_wrong, "whats wrong")
-            self.assertEqual(result.trace, "trace")
-            self.assertEqual(result.possible_cause, "possible cause")
+        self.assertEqual(result.title, "title")
+        self.assertEqual(result.whats_wrong, "whats wrong")
+        self.assertEqual(result.trace, "trace")
+        self.assertEqual(result.possible_cause, "possible cause")
 
         with Session() as session:
             invalid_summary_data = {"bad data": "uh oh"}
@@ -305,9 +305,9 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
                 ),
             ),
-            t=DbStateRunTypes.AUTOFIX,
+            type=DbStateRunTypes.AUTOFIX,
         )
-        self.autofix_context = AutofixContext(self.state, MagicMock())
+        self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch("seer.automation.autofix.autofix_context.RepoClient")

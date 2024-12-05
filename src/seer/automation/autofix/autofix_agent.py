@@ -1,24 +1,21 @@
-import contextlib
 import logging
-from concurrent.futures import Executor, Future, ThreadPoolExecutor
+import threading
 from typing import Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import Message
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.component import create_insight_output
-from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
-from seer.automation.state import State
-from seer.dependency_injection import copy_modules_initializer
+from seer.automation.autofix.components.insight_sharing.component import InsightSharingComponent
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingRequest
+from seer.automation.autofix.models import AutofixStatus, DefaultStep
+from seer.bootup import module
+from seer.configuration import configuration_module
 
 logger = logging.getLogger(__name__)
 
 
 class AutofixAgent(LlmAgent):
-    futures: list[Future]
-    executor: Executor
-
     def __init__(
         self,
         config: AgentConfig,
@@ -82,24 +79,16 @@ class AutofixAgent(LlmAgent):
         self.memory.append(completion.message)
 
         # log thoughts to the user
-        cur = self.context.state.get()
         if (
             completion.message.content
             and self.config.interactive
-            and not cur.request.options.disable_interactivity
+            and not self.context.state.get().request.options.disable_interactivity
         ):
             text_before_tag = completion.message.content.split("<")[0]
             text = text_before_tag
             if text:
-                cur_step_idx = len(cur.steps) - 1
-                self.futures.append(
-                    self.executor.submit(
-                        self.share_insights,
-                        text,
-                        cur_step_idx,
-                        self.context.state,
-                        len(self.memory) - 1,
-                    )
+                self.run_in_thread(
+                    func=self.share_insights, args=(self.context, text, len(self.memory) - 1)
                 )
 
         # call any tools the model wants to use
@@ -115,17 +104,6 @@ class AutofixAgent(LlmAgent):
             self.context.store_memory(run_config.memory_storage_key, self.memory)
 
         return self.memory
-
-    @contextlib.contextmanager
-    def manage_run(self):
-        self.futures = []
-        self.executor = ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer())
-        with super().manage_run(), self.executor:
-            yield
-        for future in self.futures:
-            exc = future.exception()
-            if exc is not None:
-                raise exc
 
     def use_user_messages(self):
         # adds any queued user messages to the memory
@@ -144,32 +122,43 @@ class AutofixAgent(LlmAgent):
             self.queued_user_messages = []
             self.context.event_manager.add_log("Thanks for the input. Thinking through it now...")
 
-    def share_insights(
-        self,
-        text: str,
-        cur_step_idx: int,
-        state: State[AutofixContinuation],
-        generated_at_memory_index: int,
-    ):
-        steps = state.get().steps
-        if cur_step_idx >= len(steps) or not steps:
-            return
+    def run_in_thread(self, func, args):
+        def wrapper():
+            # ensures dependency injection works
+            module.enable()
+            configuration_module.enable()
 
-        step = steps[cur_step_idx]
-        if not isinstance(step, DefaultStep):
-            return
+            func(*args)
 
-        insight_card, usage = create_insight_output(
-            latest_thought=text,
-            task_description=step.description,
-            past_insights=step.get_all_insights(),
-            memory=self.memory,
-            generated_at_memory_index=generated_at_memory_index,
+        threading.Thread(target=wrapper).start()
+
+    def share_insights(self, context: AutofixContext, text: str, generated_at_memory_index: int):
+        # generate insights
+        insight_sharing = InsightSharingComponent(context)
+        state = context.state.get()
+        past_insights = state.get_all_insights()
+
+        # Get the current step type
+        cur_step = state.steps[-1]
+        step_type = cur_step.key
+
+        insight_card = insight_sharing.invoke(
+            InsightSharingRequest(
+                latest_thought=text,
+                memory=self.memory,
+                task_description=state.get_step_description(),
+                past_insights=past_insights,
+                generated_at_memory_index=generated_at_memory_index,
+                step_type=step_type,
+            )
         )
-
-        with state.update() as cur:
-            if insight_card:
-                cur_step = cur.steps[cur_step_idx]
-                assert isinstance(cur_step, DefaultStep)
-                cur_step.insights.append(insight_card)
-            cur.usage += usage
+        # add the insight card to the current step
+        if insight_card:
+            if len(context.state.get().get_all_insights()) == len(
+                past_insights
+            ):  # in case something else was added in parallel, don't add this insight
+                with context.state.update() as cur:
+                    if cur.steps and isinstance(cur.steps[-1], DefaultStep):
+                        step = cur.steps[-1]
+                        step.insights.append(insight_card)
+                        cur.steps[-1] = step

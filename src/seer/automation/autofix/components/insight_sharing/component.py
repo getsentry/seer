@@ -5,29 +5,24 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider
-from seer.automation.agent.models import Message, Usage
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.models import (
     InsightContextOutput,
     InsightSharingOutput,
+    InsightSharingRequest,
 )
+from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
 
 
 class InsightSharingPrompts:
     @staticmethod
     def format_step_one(
-        *,
         task_description: str,
         latest_thought: str,
         past_insights: list[str],
         step_type: str | None = None,
     ):
-        no_insight_instruction = (
-            "If there is no clear conclusion that adds a ton of new insight and value, return <NO_INSIGHT/>. If it is similar to a previous conclusion, return <NO_INSIGHT/>."
-            if past_insights
-            else ""
-        )
-
         past_insights = [f"{i + 1}. {insight}" for i, insight in enumerate(past_insights)]
 
         if step_type == "root_cause_analysis":
@@ -64,6 +59,12 @@ class InsightSharingPrompts:
             NOTES TO ANALYZE:
             {latest_thought}"""
 
+        no_insight_instruction = (
+            "If there is no clear conclusion that adds a ton of new insight and value, return <NO_INSIGHT/>. If it is similar to a previous conclusion, return <NO_INSIGHT/>."
+            if past_insights
+            else ""
+        )
+
         return textwrap.dedent(template).format(
             task_description=task_description,
             latest_thought=latest_thought,
@@ -72,7 +73,7 @@ class InsightSharingPrompts:
         )
 
     @staticmethod
-    def format_step_two(*, insight: str, latest_thought: str):
+    def format_step_two(insight: str, latest_thought: str):
         return textwrap.dedent(
             """\
             Return the pieces of context from the issue details or the files in the codebase that are directly relevant to the text below:
@@ -90,66 +91,62 @@ class InsightSharingPrompts:
         )
 
 
-@observe(name="Sharing Insights")
-@ai_track(description="Sharing Insights")
-@inject
-def create_insight_output(
-    *,
-    latest_thought: str,
-    task_description: str,
-    past_insights: list[str],
-    step_type: str | None = None,
-    memory: list[Message],
-    generated_at_memory_index: int = -1,
-    llm_client: LlmClient = injected,
-) -> tuple[InsightSharingOutput | None, Usage]:
-    usage = Usage()
+class InsightSharingComponent(BaseComponent[InsightSharingRequest, InsightSharingOutput]):
+    context: AutofixContext
 
-    prompt_one = InsightSharingPrompts.format_step_one(
-        step_type=step_type,
-        task_description=task_description,
-        latest_thought=latest_thought,
-        past_insights=past_insights,
-    )
+    @observe(name="Sharing Insights")
+    @ai_track(description="Sharing Insights")
+    @inject
+    def invoke(
+        self, request: InsightSharingRequest, llm_client: LlmClient = injected
+    ) -> InsightSharingOutput | None:
+        try:
+            prompt_one = InsightSharingPrompts.format_step_one(
+                task_description=request.task_description,
+                latest_thought=request.latest_thought,
+                past_insights=request.past_insights,
+                step_type=request.step_type,
+            )
+            completion = llm_client.generate_text(
+                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+                prompt=prompt_one,
+                temperature=0.0,
+            )
+            with self.context.state.update() as cur:
+                cur.usage += completion.metadata.usage
+            insight = completion.message.content
+            if not insight or insight == "<NO_INSIGHT/>":
+                return None
 
-    completion = llm_client.generate_text(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
-        prompt=prompt_one,
-        temperature=0.0,
-    )
+            insight = re.sub(
+                r"^\d+\.\s+", "", insight
+            )  # since the model often starts the insight with a number, e.g. "3. Insight..."
 
-    insight = completion.message.content
-    if not insight or insight == "<NO_INSIGHT/>":
-        return None, usage
+            prompt_two = InsightSharingPrompts.format_step_two(
+                insight=insight,
+                latest_thought=request.latest_thought,
+            )
+            memory = [msg for msg in request.memory if msg.role != "system"]
+            completion = llm_client.generate_structured(
+                messages=memory,
+                prompt=prompt_two,
+                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+                response_format=InsightContextOutput,
+                temperature=0.0,
+                max_tokens=4096,
+            )
 
-    insight = re.sub(
-        r"^\d+\.\s+", "", insight
-    )  # since the model often starts the insight with a number, e.g. "3. Insight..."
+            with self.context.state.update() as cur:
+                cur.usage += completion.metadata.usage
 
-    prompt_two = InsightSharingPrompts.format_step_two(
-        insight=insight,
-        latest_thought=latest_thought,
-    )
-
-    memory = [msg for msg in memory if msg.role != "system"]
-
-    completion = llm_client.generate_structured(
-        messages=memory,
-        prompt=prompt_two,
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
-        response_format=InsightContextOutput,
-        temperature=0.0,
-        max_tokens=4096,
-    )
-
-    usage += completion.metadata.usage
-
-    response = InsightSharingOutput(
-        insight=insight,
-        justification=completion.parsed.explanation,
-        codebase_context=completion.parsed.codebase_context,
-        stacktrace_context=completion.parsed.stacktrace_context,
-        breadcrumb_context=completion.parsed.event_log_context,
-        generated_at_memory_index=generated_at_memory_index,
-    )
-    return response, usage
+            response = InsightSharingOutput(
+                insight=insight,
+                justification=completion.parsed.explanation,
+                codebase_context=completion.parsed.codebase_context,
+                stacktrace_context=completion.parsed.stacktrace_context,
+                breadcrumb_context=completion.parsed.event_log_context,
+                generated_at_memory_index=request.generated_at_memory_index,
+            )
+            return response
+        except Exception:
+            return None

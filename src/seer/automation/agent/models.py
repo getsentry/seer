@@ -1,4 +1,3 @@
-import dataclasses
 from enum import Enum
 from typing import Generic, Optional, TypeVar
 
@@ -63,8 +62,7 @@ class LlmGenerateTextResponse(BaseModel):
 StructuredOutputType = TypeVar("StructuredOutputType")
 
 
-@dataclasses.dataclass
-class LlmGenerateStructuredResponse(Generic[StructuredOutputType]):
+class LlmGenerateStructuredResponse(BaseModel, Generic[StructuredOutputType]):
     parsed: StructuredOutputType
     metadata: LlmResponseMetadata
 

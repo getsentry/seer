@@ -20,8 +20,9 @@ class DummyCodebaseStateManager(CodebaseStateManager):
         super().__init__("1", LocalMemoryState({"file_changes": []}))
 
     def store_file_change(self, file_change: FileChange):
-        with self.state.update() as state:
-            state["file_changes"] = state.get("file_changes", []) + [file_change]
+        state = self.state.get()
+        state["file_changes"] = state.get("file_changes", []) + [file_change]
+        self.state.set(state)
 
     def get_file_changes(self) -> list[FileChange]:
         return self.state.get()["file_changes"]

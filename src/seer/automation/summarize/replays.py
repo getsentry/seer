@@ -60,8 +60,8 @@ class SummarizeReplaysResponse(BaseModel):
     impact_summary: str
 
     @classmethod
-    def from_parsed_model(cls, parsed_model: CommonReplaySummary) -> "SummarizeReplaysResponse":
-        return SummarizeReplaysResponse(
+    def from_parsed_model(cls, parsed_model: CommonReplaySummary):
+        return cls(
             common_steps=parsed_model.common_user_steps_taken,
             reproduction=parsed_model.reproduction_steps,
             impact_summary=parsed_model.issue_impact_summary,
@@ -141,7 +141,7 @@ def step_to_string(step: Step, target_group_id: int):
     return content
 
 
-def steps_to_string(steps: list[Step], target_group_id: int) -> str:
+def steps_to_string(steps: list[Step], target_group_id: int):
     return "\n".join([step_to_string(step, target_group_id) for step in steps])
 
 

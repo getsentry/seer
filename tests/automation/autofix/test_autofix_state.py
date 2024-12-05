@@ -1,22 +1,59 @@
-import datetime
+from unittest.mock import MagicMock, patch
 
-from johen import generate
+import pytest
 
 from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.state import DbStateRunTypes
+from seer.db import DbRunState
 
 
 class TestContinuationState:
+    @pytest.fixture
+    def mock_session(self):
+        with patch("seer.automation.autofix.state.Session") as mock:
+            yield mock
+
+    def test_set(self, mock_session):
+        mock_session_instance = MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_session_instance
+
+        state = ContinuationState(id=1, model=AutofixContinuation, type=DbStateRunTypes.AUTOFIX)
+        mock_autofix_continuation = MagicMock(spec=AutofixContinuation)
+        mock_autofix_continuation.model_dump.return_value = {"key": "value"}
+        mock_autofix_continuation.updated_at = "2023-01-01"
+        mock_autofix_continuation.last_triggered_at = "2023-01-02"
+
+        state.set(mock_autofix_continuation)
+
+        mock_autofix_continuation.mark_updated.assert_called_once()
+        mock_session_instance.merge.assert_called_once()
+        mock_session_instance.commit.assert_called_once()
+
+        args, _ = mock_session_instance.merge.call_args
+        db_state = args[0]
+        assert isinstance(db_state, DbRunState)
+        assert db_state.id == 1
+        assert db_state.value == {"key": "value"}
+        assert db_state.updated_at == "2023-01-01"
+        assert db_state.last_triggered_at == "2023-01-02"
+
+    def test_get(self):
+        with patch("seer.automation.state.DbState.get") as mock_get:
+            mock_get.return_value = MagicMock(spec=AutofixContinuation)
+            state = ContinuationState(id=1, model=AutofixContinuation, type=DbStateRunTypes.AUTOFIX)
+            result = state.get()
+
+            mock_get.assert_called_once()
+            assert isinstance(result, AutofixContinuation)
+
     def test_update(self):
-        continuation = next(generate(AutofixContinuation))
-        continuation.updated_at = "2023-01-01"
-        continuation.last_triggered_at = "2023-01-02"
-        state = ContinuationState.new(group_id=1, value=continuation, t=DbStateRunTypes.AUTOFIX)
+        with patch("seer.automation.state.DbState.update") as mock_update:
+            mock_context = MagicMock()
+            mock_update.return_value.__enter__.return_value = mock_context
 
-        with state.update() as cur:
-            cur.updated_at = "2023-01-01"
-            cur.last_triggered_at = "2023-01-02"
+            state = ContinuationState(id=1, model=AutofixContinuation, type=DbStateRunTypes.AUTOFIX)
+            with state.update() as context:
+                assert context == mock_context
 
-        assert state.get().updated_at == datetime.datetime(2023, 1, 1, 0, 0)
-        assert state.get().last_triggered_at == datetime.datetime(2023, 1, 2, 0, 0)
+            mock_update.assert_called_once()
