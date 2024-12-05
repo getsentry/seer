@@ -337,11 +337,12 @@ class RepoClient:
 
         return ref
 
-    def get_one_file_autofix_change( self, *, branch_ref: str,
-                               patch: FilePatch | None = None,
-                               change: FileChange | None = None) -> InputGitTreeElement | None:
+    def process_one_file_for_git_commit(self, *, branch_ref: str,
+                                        patch: FilePatch | None = None,
+                                        change: FileChange | None = None) -> InputGitTreeElement | None:
         """
-        This method is used to get a single change to be committed by Autofix. 
+        This method is used to get a single change to be committed by to github.
+        It processes a FilePatch/FileChange object and converts it into an InputGitTreeElement which can be commited
         It supports both FilePatch and FileChange objects.
         """
         path = patch.path if patch else (change.path if change else None)
@@ -374,7 +375,9 @@ class RepoClient:
 
         # don't create a blob if the file is being deleted
         blob = self.repo.create_git_blob(new_contents, "utf-8") if new_contents else None
-        
+
+        # 100644 is the git code for creating a Regular non-executable file
+        # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
         return InputGitTreeElement(
             path=path,
             mode='100644',
@@ -402,7 +405,7 @@ class RepoClient:
         if file_patches:
             for patch in file_patches:
                 try:
-                    element = self.get_one_file_autofix_change(branch_ref=branch_ref.ref, patch=patch)
+                    element = self.process_one_file_for_git_commit(branch_ref=branch_ref.ref, patch=patch)
                     if element:
                         tree_elements.append(element)
                 except Exception as e:
@@ -411,7 +414,7 @@ class RepoClient:
         elif file_changes:
             for change in file_changes:
                 try:
-                    element = self.get_one_file_autofix_change(branch_ref=branch_ref.ref, change=change)
+                    element = self.process_one_file_for_git_commit(branch_ref=branch_ref.ref, change=change)
                     if element:
                         tree_elements.append(element)
                 except Exception as e:

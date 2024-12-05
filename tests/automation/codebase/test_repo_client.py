@@ -531,7 +531,7 @@ class TestRepoClientIndexFileSet:
         })
 
         # Execute
-        result = repo_client.get_one_file_autofix_change(branch_ref="main", patch=patch)
+        result = repo_client.process_one_file_for_git_commit(branch_ref="main", patch=patch)
 
         expected_path = path[1:] if path.startswith("/") else path
  
@@ -634,6 +634,6 @@ class TestRepoClientIndexFileSet:
     ])
     def test_get_one_file_autofix_change_invalid_input(self, repo_client, patch):
         with pytest.raises(ValueError):
-            repo_client.get_one_file_autofix_change(branch_ref='main',
-                patch=patch
-            )
+            repo_client.process_one_file_for_git_commit(branch_ref='main',
+                                                        patch=patch
+                                                        )
