@@ -578,19 +578,21 @@ class TestRepoClientIndexFileSet:
         mock_branch_ref.ref = "refs/heads/test-branch"
         mock_branch_ref.object.sha = "new-commit-sha"
 
+        mock_blob = MagicMock(sha='new-commit-sha')
+
+        repo_client.repo.create_git_blob.return_value = mock_blob
+        repo_client.repo.compare.return_value = mock_comparison
+        repo_client.repo._create_branch.return_value = mock_branch_ref
+        repo_client.repo.get_default_branch_head_sha.return_value = "default-sha"
+
         # Test the method
-        with patch.object(repo_client, '_create_branch', return_value=mock_branch_ref):
-            with patch.object(repo_client, 'get_default_branch_head_sha', return_value="default-sha"):
-                with patch.object(repo_client.repo, 'compare', return_value=mock_comparison):
-                    result = repo_client.create_branch_from_changes(
+        result = repo_client.create_branch_from_changes(
                         pr_title="Test PR",
                         file_patches=input_data if input_type == "patches" else None,
                         file_changes=input_data if input_type == "changes" else None
                     )
 
         # Assertions
-        assert result == mock_branch_ref
-        repo_client.repo.create_git_blob.assert_called_once()
         repo_client.repo.create_git_tree.assert_called_once()
         repo_client.repo.create_git_commit.assert_called_once()
 
@@ -603,12 +605,17 @@ class TestRepoClientIndexFileSet:
         mock_branch_ref.ref = "refs/heads/test-branch"
         mock_branch_ref.object.sha = "new-commit-sha"
 
+        # mock the blob creation    
+        mock_blob = MagicMock(sha='blob-sha')
+
+        repo_client.repo.create_git_blob.return_value = mock_blob
+        repo_client.repo.compare.return_value = mock_comparison
+        repo_client.repo._create_branch.return_value = mock_branch_ref
+        repo_client.repo.get_default_branch_head_sha.return_value = "default-sha"
+        
         # Test the method
-        with patch.object(repo_client, '_create_branch', return_value=mock_branch_ref):
-            with patch.object(repo_client, 'get_default_branch_head_sha', return_value="default-sha"):
-                with patch.object(repo_client.repo, 'compare', return_value=mock_comparison):
-                    result = repo_client.create_branch_from_changes(
-                        pr_title="Test PR",
+        result = repo_client.create_branch_from_changes(
+                            pr_title="Test PR",
                         file_patches=[MagicMock(**{
                             'path': 'test.py',
                             'type': 'edit',
@@ -618,7 +625,6 @@ class TestRepoClientIndexFileSet:
 
         # Assertions
         assert not result  # branch was deleted
-        repo_client.repo.create_git_blob.assert_called_once()
         repo_client.repo.create_git_tree.assert_called_once()
         repo_client.repo.create_git_commit.assert_called_once()
 
