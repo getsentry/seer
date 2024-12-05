@@ -550,6 +550,7 @@ class TestRepoClientIndexFileSet:
                 file_changes=None
             )
 
+
     @pytest.mark.parametrize("input_type,input_data", [
         (
             "patches",
@@ -589,6 +590,34 @@ class TestRepoClientIndexFileSet:
 
         # Assertions
         assert result == mock_branch_ref
+        repo_client.repo.create_git_blob.assert_called_once()
+        repo_client.repo.create_git_tree.assert_called_once()
+        repo_client.repo.create_git_commit.assert_called_once()
+
+    def test_create_branch_from_changes_no_changes(self, repo_client):
+        mock_comparison = MagicMock()
+        # this is the case where the branch is up to date with the default branch
+        mock_comparison.ahead_by = 0
+
+        mock_branch_ref = MagicMock()
+        mock_branch_ref.ref = "refs/heads/test-branch"
+        mock_branch_ref.object.sha = "new-commit-sha"
+
+        # Test the method
+        with patch.object(repo_client, '_create_branch', return_value=mock_branch_ref):
+            with patch.object(repo_client, 'get_default_branch_head_sha', return_value="default-sha"):
+                with patch.object(repo_client.repo, 'compare', return_value=mock_comparison):
+                    result = repo_client.create_branch_from_changes(
+                        pr_title="Test PR",
+                        file_patches=[MagicMock(**{
+                            'path': 'test.py',
+                            'type': 'edit',
+                            'apply.return_value': 'new content'
+                        })]
+                    )
+
+        # Assertions
+        assert not result  # branch was deleted
         repo_client.repo.create_git_blob.assert_called_once()
         repo_client.repo.create_git_tree.assert_called_once()
         repo_client.repo.create_git_commit.assert_called_once()
