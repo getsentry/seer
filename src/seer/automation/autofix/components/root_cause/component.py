@@ -1,7 +1,9 @@
 import logging
 
+
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
+from pydantic import ValidationError
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
@@ -122,7 +124,19 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 )
 
                 # Assign the ids to be the numerical indices of the causes and relevant code context
-                cause_model = formatted_response.parsed.cause.to_model()
+                try:
+                    cause_model = formatted_response.parsed.cause.to_model()
+                except ValidationError as e:
+                    logger.error(f"Validation error during model conversion: {str(e)}")
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Failed to process root cause analysis due to model validation error"
+                    )
+                except Exception as e:
+                    logger.error(f"Unexpected error during model conversion: {str(e)}")
+                    return RootCauseAnalysisOutput(
+                        causes=[], termination_reason=f"Unexpected error during analysis: {str(e)}")
+                
                 cause_model.id = 0
                 if cause_model.code_context:
                     for i, item in enumerate(cause_model.code_context):

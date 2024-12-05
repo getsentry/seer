@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated, Optional
 
 from pydantic import BaseModel, StringConstraints, field_validator
@@ -8,6 +9,8 @@ from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, PromptXmlModel
 from seer.automation.summarize.issue import IssueSummary
+
+logger = logging.getLogger(__name__)
 
 
 class SnippetPromptXml(PromptXmlModel, tag="code"):
@@ -66,7 +69,7 @@ class RootCauseAnalysisItem(BaseModel):
     description: str
     # unit_test: UnitTestSnippet | None = None
     # reproduction: str | None = None
-    code_context: Optional[list[RootCauseRelevantContext]] = None
+    code_context: list[RootCauseRelevantContext] = []
 
     def to_markdown_string(self) -> str:
         markdown = f"# {self.title}\n\n"
@@ -128,24 +131,24 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         )
 
     def to_model(self):
-        return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
-                "code_context": (
-                    self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
-                ),
-            }
-        )
+        # Create a clean dict with only the required fields
+        model_data = {
+            "title": self.title,
+            "description": self.description,
+            "id": -1  # Default value that will be overwritten later
+        }
+        
+        # Handle code context conversion separately
+        try:
+            if self.relevant_code is not None:
+                model_data["code_context"] = self.relevant_code.model_dump()["snippets"]
+            else:
+                model_data["code_context"] = []
+        except Exception as e:
+            logger.warning(f"Failed to convert relevant_code: {str(e)}")
+            model_data["code_context"] = []
+        
+        return RootCauseAnalysisItem.model_validate(model_data)
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
