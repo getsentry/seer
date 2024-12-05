@@ -592,3 +592,13 @@ class TestRepoClientIndexFileSet:
         repo_client.repo.create_git_blob.assert_called_once()
         repo_client.repo.create_git_tree.assert_called_once()
         repo_client.repo.create_git_commit.assert_called_once()
+
+    @pytest.mark.parametrize("patch", [
+        (MagicMock(path='test.py', type=None)),
+        (MagicMock(path=None, type='edit'))
+    ])
+    def test_get_one_file_autofix_change_invalid_input(self, repo_client, patch):
+        with pytest.raises(ValueError):
+            repo_client.get_one_file_autofix_change(branch_ref='main',
+                patch=patch
+            )
