@@ -1,6 +1,5 @@
 import abc
 import logging
-from enum import Enum
 from typing import Optional
 
 import numpy as np
@@ -10,13 +9,16 @@ import sentry_sdk
 from prophet import Prophet  # type: ignore
 from pydantic import BaseModel, Field
 
+from seer.anomaly_detection.models import (
+    AlgoConfig,
+    PointLocation,
+    RelativeLocation,
+    Threshold,
+    ThresholdType,
+)
+from seer.dependency_injection import inject, injected
+
 logger = logging.getLogger(__name__)
-
-
-class PointLocation(Enum):
-    UP = 1
-    DOWN = 2
-    NONE = 3
 
 
 class LocationDetector(BaseModel, abc.ABC):
@@ -31,7 +33,7 @@ class LocationDetector(BaseModel, abc.ABC):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-    ) -> Optional[PointLocation]:
+    ) -> Optional[RelativeLocation]:
         return NotImplemented
 
 
@@ -54,7 +56,7 @@ class LinearRegressionLocationDetector(LocationDetector):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-    ) -> Optional[PointLocation]:
+    ) -> Optional[RelativeLocation]:
         """
         Detect relative location of the streamed value in the context of recent data points using linear regression.
 
@@ -63,7 +65,7 @@ class LinearRegressionLocationDetector(LocationDetector):
             history_values (npt.NDArray[np.float64]): Historical time series data
 
         Returns:
-            PointLocation: The detected relative location of the streamed value as compared to the trend of recent data points (UP, DOWN, or NONE).
+            RelativeLocation: The detected relative location of the streamed value as compared to the trend of recent data points (UP, DOWN, or NONE).
             UP: The streamed value is above the trend of recent data points.
             DOWN: The streamed value is below the trend of recent data points.
             NONE: The streamed value is within the expected range of recent data points.
@@ -80,11 +82,20 @@ class LinearRegressionLocationDetector(LocationDetector):
         slope, _ = np.polyfit(x, y, 1)
 
         if slope > self.threshold:
-            return PointLocation.UP
+            return RelativeLocation(
+                location=PointLocation.UP,
+                thresholds=[],
+            )
         elif slope < -self.threshold:
-            return PointLocation.DOWN
+            return RelativeLocation(
+                location=PointLocation.DOWN,
+                thresholds=[],
+            )
         else:
-            return PointLocation.NONE
+            return RelativeLocation(
+                location=PointLocation.NONE,
+                thresholds=[],
+            )
 
 
 class ProphetLocationDetector(LocationDetector):
@@ -98,18 +109,16 @@ class ProphetLocationDetector(LocationDetector):
 
     """
 
-    uncertainty_samples: int = Field(
-        default=25, description="Whether to use uncertainty samples for Prophet"
-    )
-
     @sentry_sdk.trace
+    @inject
     def detect(
         self,
         streamed_value: np.float64,
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-    ) -> Optional[PointLocation]:
+        algo_config: AlgoConfig = injected,
+    ) -> Optional[RelativeLocation]:
         """
         Detect relative location of the streamed value in the context of recent data points using Prophet.
 
@@ -120,13 +129,16 @@ class ProphetLocationDetector(LocationDetector):
             history_timestamps (npt.NDArray[np.float64]): Historical time series timestamps
 
         Returns:
-            PointLocation: The detected relative location of the streamed value as compared to the predicted value (UP, DOWN, or NONE).
+            RelativeLocation: The detected relative location of the streamed value as compared to the predicted value (UP, DOWN, or NONE).
             UP: The streamed value is above the predicted value.
             DOWN: The streamed value is below the predicted value.
             NONE: The streamed value is within the expected range of recent data points.
         """
         # Create Prophet model and fit on historical data
-        model = Prophet(mcmc_samples=0, uncertainty_samples=self.uncertainty_samples)
+        model = Prophet(
+            mcmc_samples=algo_config.prophet_mcmc_samples,
+            uncertainty_samples=algo_config.prophet_uncertainty_samples,
+        )
         ts = pd.DataFrame({"ds": history_timestamps, "y": history_values})
         model.fit(ts)
 
@@ -136,20 +148,51 @@ class ProphetLocationDetector(LocationDetector):
 
         # Predict and compare with streamed value
         forecast = model.predict(future)
-        if self.uncertainty_samples > 0:
-            prophet_yhat_upper = forecast.loc[len(forecast) - 1]["yhat_upper"]
-            prophet_yhat_lower = forecast.loc[len(forecast) - 1]["yhat_lower"]
-            if streamed_value > prophet_yhat_upper:
-                return PointLocation.UP
-            elif streamed_value < prophet_yhat_lower:
-                return PointLocation.DOWN
+        if algo_config.prophet_uncertainty_samples > 0 or algo_config.prophet_mcmc_samples > 0:
+            streamed_forecast = forecast.loc[len(forecast) - 1]
+            yhat_upper = streamed_forecast["yhat_upper"]
+            yhat_lower = streamed_forecast["yhat_lower"]
+            if algo_config.return_thresholds:
+                thresholds = [
+                    Threshold(type=ThresholdType.PREDICTION, upper=yhat_upper, lower=yhat_lower),
+                    Threshold(
+                        type=ThresholdType.TREND,
+                        upper=streamed_forecast["trend_upper"],
+                        lower=streamed_forecast["trend_lower"],
+                    ),
+                ]
             else:
-                return PointLocation.NONE
+                thresholds = []
+
+            if streamed_value > yhat_upper:
+                return RelativeLocation(
+                    location=PointLocation.UP,
+                    thresholds=thresholds,
+                )
+            elif streamed_value < yhat_lower:
+                return RelativeLocation(
+                    location=PointLocation.DOWN,
+                    thresholds=thresholds,
+                )
+            else:
+                return RelativeLocation(
+                    location=PointLocation.NONE,
+                    thresholds=thresholds,
+                )
         else:
             forecast = forecast.yhat.loc[len(forecast) - 1]
             if np.isclose(streamed_value, forecast, rtol=1e-5, atol=1e-8):
-                return PointLocation.NONE
+                return RelativeLocation(
+                    location=PointLocation.NONE,
+                    thresholds=[],
+                )
             elif streamed_value > forecast:
-                return PointLocation.UP
+                return RelativeLocation(
+                    location=PointLocation.UP,
+                    thresholds=[],
+                )
             else:
-                return PointLocation.DOWN
+                return RelativeLocation(
+                    location=PointLocation.DOWN,
+                    thresholds=[],
+                )

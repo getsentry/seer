@@ -10,7 +10,7 @@ from seer.anomaly_detection.detectors.mp_scorers import (
     MPIQRScorer,
     MPScorer,
 )
-from seer.anomaly_detection.models import AnomalyDetectionConfig
+from seer.anomaly_detection.models import AnomalyDetectionConfig, RelativeLocation, ThresholdType
 from seer.exceptions import ClientError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
@@ -110,6 +110,51 @@ class TestMPCascadingScorer(unittest.TestCase):
                 actual_flags = flags_and_scores.flags
 
                 assert actual_flags[0] == expected_flags[i]
+                self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.MP_DIST_IQR)
+
+    def test_stream_score_with_thresholds(self):
+
+        expected_flag = "anomaly_higher_confidence"
+
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=False
+        )
+
+        ts_baseline = loaded_synthetic_data.timeseries[0]
+        ts_timestamps = loaded_synthetic_data.timestamps[0]
+        mp_dist_baseline = loaded_synthetic_data.mp_dists[0]
+        window_size = loaded_synthetic_data.window_sizes[0]
+
+        ad_config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        )
+
+        test_ts_val = ts_baseline[-1] * 10
+        test_mp_dist = mp_dist_baseline[-1] * 10
+
+        flags_and_scores = self.scorer.stream_score(
+            test_ts_val,
+            ts_timestamps[-1],
+            test_mp_dist,
+            ts_baseline,
+            ts_timestamps,
+            mp_dist_baseline,
+            ad_config,
+            window_size,
+        )
+        assert flags_and_scores is not None
+        actual_flags = flags_and_scores.flags
+
+        assert actual_flags[0] == expected_flag
+        self.assertEqual(len(flags_and_scores.thresholds), 1)
+        self.assertEqual(len(flags_and_scores.thresholds[0]), 1)
+        self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.MP_DIST_IQR)
+        self.assertGreater(flags_and_scores.thresholds[0][0].lower, 0.0)
+        self.assertAlmostEqual(
+            flags_and_scores.thresholds[0][0].upper,
+            flags_and_scores.thresholds[0][0].lower,
+            places=2,
+        )
 
     def test_failed_case(self):
         class DummyScorer(MPScorer):
@@ -180,24 +225,24 @@ class TestLowVarianceScorer(unittest.TestCase):
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
 
-        flag, _, _ = scorer._to_flag_and_score(30, 5, ad_config)
+        flag, _, _, _ = scorer._to_flag_and_score(30, 5, ad_config)
         self.assertEqual(flag, "anomaly_higher_confidence")
 
         ad_config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="up", expected_seasonality="auto"
         )
 
-        flag, _, _ = scorer._to_flag_and_score(30, 5, ad_config)
+        flag, _, _, _ = scorer._to_flag_and_score(30, 5, ad_config)
         self.assertEqual(flag, "anomaly_higher_confidence")
 
         ad_config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="down", expected_seasonality="auto"
         )
 
-        flag, _, _ = scorer._to_flag_and_score(30, 5, ad_config)
+        flag, _, _, _ = scorer._to_flag_and_score(30, 5, ad_config)
         self.assertEqual(flag, "none")
 
-        flag, _, _ = scorer._to_flag_and_score(-100, 5, ad_config)
+        flag, _, _, _ = scorer._to_flag_and_score(-100, 5, ad_config)
         self.assertEqual(flag, "anomaly_higher_confidence")
 
 
@@ -210,7 +255,7 @@ class TestMPIQRScorer(unittest.TestCase):
 
         # if original flag is "none". then location detector should not be called.
         mp_based_flag = "none"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag,
             "up",
             1.0,
@@ -222,7 +267,7 @@ class TestMPIQRScorer(unittest.TestCase):
         self.assertEqual(flag, mp_based_flag)
 
         mp_based_flag = "none"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag,
             "down",
             1.0,
@@ -234,7 +279,7 @@ class TestMPIQRScorer(unittest.TestCase):
         self.assertEqual(flag, mp_based_flag)
 
         mp_based_flag = "none"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag,
             "both",
             1.0,
@@ -253,7 +298,7 @@ class TestMPIQRScorer(unittest.TestCase):
 
         # if original flag is "none". then location detector should not be called.
         mp_based_flag = "none"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag,
             "both",
             1.0,
@@ -265,7 +310,7 @@ class TestMPIQRScorer(unittest.TestCase):
         self.assertEqual(flag, mp_based_flag)
 
         mp_based_flag = "anomaly_higher_confidence"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag,
             "both",
             1.0,
@@ -277,7 +322,7 @@ class TestMPIQRScorer(unittest.TestCase):
         self.assertEqual(flag, mp_based_flag)
 
         mp_based_flag = "anomaly_lower_confidence"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag,
             "both",
             1.0,
@@ -347,12 +392,12 @@ class TestMPIQRScorer(unittest.TestCase):
         for i, combo in enumerate(combos):
             mp_based_flag = combo["mp_based_flag"]
             direction = combo["direction"]
-            location = combo["location"]
+            location = RelativeLocation(location=combo["location"], thresholds=[])
             expected_flag = combo["expected_flag"]
 
             mock_location_detector.return_value = location
 
-            flag = scorer._adjust_flag_for_direction(
+            flag, _ = scorer._adjust_flag_for_direction(
                 mp_based_flag, direction, 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
             )
             self.assertEqual(mock_location_detector.call_count, i + 1)
@@ -362,10 +407,12 @@ class TestMPIQRScorer(unittest.TestCase):
     def test_adjust_flag_for_anomalous_case_when_location_inbwetween(self, mock_location_detector):
         scorer = MPIQRScorer()
 
-        mock_location_detector.return_value = PointLocation.NONE
+        mock_location_detector.return_value = RelativeLocation(
+            location=PointLocation.NONE, thresholds=[]
+        )
 
         mp_based_flag = "anomaly_higher_confidence"
-        flag = scorer._adjust_flag_for_direction(
+        flag, _ = scorer._adjust_flag_for_direction(
             mp_based_flag, "up", 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
         )
         mock_location_detector.assert_called_once()
@@ -378,7 +425,7 @@ class TestMPIQRScorer(unittest.TestCase):
         mock_location_detector.return_value = None
 
         mp_based_flag = "anomaly_higher_confidence"
-        flag = scorer._adjust_flag_for_direction(
+        flag, thresholds = scorer._adjust_flag_for_direction(
             mp_based_flag, "up", 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
         )
         mock_location_detector.assert_called_once()

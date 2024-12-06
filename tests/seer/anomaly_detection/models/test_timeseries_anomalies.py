@@ -14,7 +14,7 @@ class TestConverters(unittest.TestCase):
             matrix_profile_suss=np.array([[0.1, 0, 1, 2], [0.3, 1, 2, 3]]),
             matrix_profile_fixed=np.array([[0.2, 1, 2, 3], [0.4, 2, 3, 4]]),
             window_size=2,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )

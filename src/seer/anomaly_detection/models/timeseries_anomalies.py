@@ -5,6 +5,8 @@ from typing import Dict, List, Optional
 import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field
 
+from seer.anomaly_detection.models.relative_location import Threshold
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,11 +41,11 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
     Anomalies detected using a single window
     """
 
-    flags: list[str] = Field(..., description="Anomaly flags")
+    flags: List[str] = Field(..., description="Anomaly flags")
 
-    scores: list[float] = Field(..., description="Anomaly scores")
+    scores: List[float] = Field(..., description="Anomaly scores")
 
-    thresholds: list[float] = Field(..., description="Score thresholds")
+    thresholds: Optional[List[List[Threshold]]] = Field(..., description="Score thresholds")
 
     matrix_profile: npt.NDArray = Field(
         ..., description="The matrix profile of the time series using which anomalies were detected"
@@ -51,7 +53,7 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
 
     window_size: int = Field(..., description="Window size used to build the matrix profile")
 
-    original_flags: list[str | None] = Field(
+    original_flags: List[str | None] = Field(
         default=[], description="The original flags of the time series"
     )
 
@@ -94,7 +96,7 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
 
     scores: list[float] = Field(..., description="Anomaly scores")
 
-    thresholds: list[float] = Field(..., description="Score thresholds")
+    thresholds: Optional[List[List[Threshold]]] = Field(..., description="Score thresholds")
 
     matrix_profile_suss: npt.NDArray = Field(
         ...,
