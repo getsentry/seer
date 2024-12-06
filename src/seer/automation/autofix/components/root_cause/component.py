@@ -1,4 +1,5 @@
 import logging
+from pydantic import ValidationError
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -95,9 +96,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         reason = reason.split("</NO_ROOT_CAUSES>")[0].strip()
                     return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
 
-                # Ask for reproduction (NOTE: disabled due to speed; should be relocated to a different step in the future)
-                # self.context.event_manager.add_log("Thinking about how to reproduce the issue...")
-                # response = agent.run(
+                self.context.event_manager.add_log("Cleaning up the findings...")
+
                 #     run_config=RunConfig(
                 #         model=OpenAiProvider.model("gpt-4o-2024-08-06"),
                 #         prompt=RootCauseAnalysisPrompts.reproduction_prompt_msg(),
@@ -121,8 +121,17 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     run_name="Root Cause Extraction & Formatting",
                 )
 
+                self.context.event_manager.add_log("Converting formatted response to model...")
+
                 # Assign the ids to be the numerical indices of the causes and relevant code context
-                cause_model = formatted_response.parsed.cause.to_model()
+                try:
+                    cause_model = formatted_response.parsed.cause.to_model()
+                except ValidationError as e:
+                    logger.error(f"Validation error during model transformation: {e}")
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason=f"Failed to validate root cause analysis data: {str(e)}",
+                    )
                 cause_model.id = 0
                 if cause_model.code_context:
                     for i, item in enumerate(cause_model.code_context):

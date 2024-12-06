@@ -64,8 +64,7 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    # unit_test: UnitTestSnippet | None = None
-    # reproduction: str | None = None
+hello = 0
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
     def to_markdown_string(self) -> str:
@@ -91,8 +90,6 @@ class RootCauseAnalysisItem(BaseModel):
 class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
-    # reproduction_instructions: str | None = None
-    # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
 
     @classmethod
@@ -100,16 +97,6 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         return cls(
             title=model.title,
             description=model.description,
-            # reproduction_instructions=model.reproduction,
-            # unit_test=(
-            #     UnitTestSnippetPrompt(
-            #         file_path=model.unit_test.file_path,
-            #         code_snippet=model.unit_test.snippet,
-            #         description=model.unit_test.description,
-            #     )
-            #     if model.unit_test
-            #     else None
-            # ),
             relevant_code=(
                 RootCauseAnalysisRelevantContext(
                     snippets=[
@@ -130,17 +117,8 @@ class RootCauseAnalysisItemPrompt(BaseModel):
     def to_model(self):
         return RootCauseAnalysisItem.model_validate(
             {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
+                "title": self.title,
+                "description": self.description,
                 "code_context": (
                     self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
                 ),
