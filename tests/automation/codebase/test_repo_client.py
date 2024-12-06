@@ -522,6 +522,8 @@ class TestRepoClientIndexFileSet:
         # mock the blob creation
         mock_blob = MagicMock(sha=expected_sha)
         mock_github.get_repo.return_value.create_git_blob.return_value = mock_blob
+        mock_content_file = MagicMock(decoded_content=b"content")
+        repo_client.repo.get_contents.return_value = mock_content_file if patch_type != "create" else None
 
         
         patch = MagicMock(**{

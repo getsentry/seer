@@ -16,6 +16,7 @@ from unidiff import PatchSet
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
+from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.utils import class_method_lru_cache
@@ -281,6 +282,7 @@ class RepoClient:
         data = requests.get(comparison.diff_url, headers=self._get_auth_headers(accept_type="diff"))
         data.raise_for_status()  # Raise an exception for HTTP errors
 
+        # todo note utf-8 hardcoded here
         patch_set = PatchSet(data.content.decode("utf-8"))
 
         added_files = [patch.path for patch in patch_set.added_files]
@@ -306,6 +308,7 @@ class RepoClient:
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
+            # todo note this assumes utf-8 encoding
             return contents.decoded_content.decode()
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
@@ -360,11 +363,13 @@ class RepoClient:
             patch_type = "M"
         
         contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
+        # logger.info(f"Type of contents is {type(contents)} {contents.encoding} {contents.decoded_content}, {contents.content}")
+        detected_encoding = detect_encoding(contents.decoded_content) if contents else None
 
         if isinstance(contents, list):
             raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
 
-        to_apply = contents.decoded_content.decode("utf-8") if contents else None
+        to_apply = contents.decoded_content.decode(detected_encoding) if contents else None
         new_contents = (
             patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
         )
@@ -374,7 +379,7 @@ class RepoClient:
             path = path[1:]
 
         # don't create a blob if the file is being deleted
-        blob = self.repo.create_git_blob(new_contents, "utf-8") if new_contents else None
+        blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
 
         # 100644 is the git code for creating a Regular non-executable file
         # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
