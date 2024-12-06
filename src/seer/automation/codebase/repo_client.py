@@ -267,36 +267,6 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
-    @class_method_lru_cache(maxsize=16)
-    def get_commit_file_diffs(self, prev_sha: str, next_sha: str) -> tuple[list[str], list[str]]:
-        """
-        Returns the list of files to change and files to delete in the diff in order to turn a commit into another.
-        """
-        comparison = self.repo.compare(prev_sha, next_sha)
-
-        # Support reverse diffs, because the api would return an empty list of files if the comparison is behind
-        is_behind = comparison.status == "behind"
-        if is_behind:
-            comparison = self.repo.compare(next_sha, prev_sha)
-
-        data = requests.get(comparison.diff_url, headers=self._get_auth_headers(accept_type="diff"))
-        data.raise_for_status()  # Raise an exception for HTTP errors
-
-        # todo note utf-8 hardcoded here
-        patch_set = PatchSet(data.content.decode("utf-8"))
-
-        added_files = [patch.path for patch in patch_set.added_files]
-        modified_files = [patch.path for patch in patch_set.modified_files]
-        removed_files = [patch.path for patch in patch_set.removed_files]
-
-        if is_behind:
-            # If the comparison is behind, the added files are actually the removed files
-            changed_files = list(set(modified_files + removed_files))
-            removed_files = added_files
-        else:
-            changed_files = list(set(added_files + modified_files))
-
-        return changed_files, removed_files
 
     def get_file_content(self, path: str, sha: str | None = None) -> str | None:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
