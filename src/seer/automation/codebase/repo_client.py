@@ -278,8 +278,8 @@ class RepoClient:
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
-            # todo note this assumes utf-8 encoding
-            return contents.decoded_content.decode()
+            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
+            return contents.decoded_content.decode(detected_encoding)
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
 
@@ -331,7 +331,9 @@ class RepoClient:
             patch_type = "D"
         elif patch_type == "edit":
             patch_type = "M"
-        
+
+        # todo there is some code duplication with get_file_content method
+        #  the difference is that detected_encoding is also used later in blog creation
         contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
         if isinstance(contents, list):
             raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
