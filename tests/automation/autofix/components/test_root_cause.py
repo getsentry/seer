@@ -20,6 +20,7 @@ from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisRequest,
     RootCauseRelevantCodeSnippet,
     RootCauseRelevantContext,
+    UnitTestSnippetPrompt,
 )
 from seer.automation.models import EventDetails
 from seer.dependency_injection import Module
@@ -329,6 +330,54 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
 
+    def test_root_cause_prompt_validation(self):
+        # Test case 1: Basic prompt without optional fields
+        basic_prompt = RootCauseAnalysisItemPrompt(
+            title="Test Root Cause",
+            description="Test Description",
+            relevant_code=None
+        )
+        model = basic_prompt.to_model()
+        assert model.title == "Test Root Cause"
+        assert model.description == "Test Description"
+        assert model.unit_test is None
+        assert model.reproduction is None
+
+        # Test case 2: Prompt with all optional fields
+        full_prompt = RootCauseAnalysisItemPrompt(
+            title="Test Root Cause",
+            description="Test Description",
+            reproduction_instructions="Test reproduction steps",
+            unit_test=UnitTestSnippetPrompt(
+                file_path="test/file.py",
+                code_snippet="def test_function():\n    pass",
+                description="Test unit test"
+            ),
+            relevant_code=RootCauseAnalysisRelevantContext(
+                snippets=[
+                    RootCauseRelevantContext(
+                        id=0,
+                        title="Test Context",
+                        description="Test function",
+                        snippet=RootCauseRelevantCodeSnippet(
+                            file_path="test.py",
+                            snippet="def test_function():\n    return True",
+                            repo_name=None
+                        )
+                    )
+                ]
+            )
+        )
+
+        # Verify model conversion works with all fields
+        model = full_prompt.to_model()
+        assert model.title == "Test Root Cause"
+        assert model.description == "Test Description"
+        assert model.reproduction == "Test reproduction steps"
+        assert model.unit_test is not None
+        assert model.unit_test.file_path == "test/file.py"
+        assert model.unit_test.snippet == "def test_function():\n    pass"
+
     def test_root_cause_line_numbers_no_match(self, component, mock_agent):
         mock_agent.return_value.run.side_effect = [
             "Some root cause analysis",
@@ -377,3 +426,51 @@ class TestRootCauseComponent:
         # Verify that the output is still generated but without line numbers
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
+
+    def test_root_cause_prompt_validation(self):
+        # Test case 1: Basic prompt without optional fields
+        basic_prompt = RootCauseAnalysisItemPrompt(
+            title="Test Root Cause",
+            description="Test Description",
+            relevant_code=None
+        )
+        model = basic_prompt.to_model()
+        assert model.title == "Test Root Cause"
+        assert model.description == "Test Description"
+        assert model.unit_test is None
+        assert model.reproduction is None
+
+        # Test case 2: Prompt with all optional fields
+        full_prompt = RootCauseAnalysisItemPrompt(
+            title="Test Root Cause",
+            description="Test Description",
+            reproduction_instructions="Test reproduction steps",
+            unit_test=UnitTestSnippetPrompt(
+                file_path="test/file.py",
+                code_snippet="def test_function():\n    pass",
+                description="Test unit test"
+            ),
+            relevant_code=RootCauseAnalysisRelevantContext(
+                snippets=[
+                    RootCauseRelevantContext(
+                        id=0,
+                        title="Test Context",
+                        description="Test function",
+                        snippet=RootCauseRelevantCodeSnippet(
+                            file_path="test.py",
+                            snippet="def test_function():\n    return True",
+                            repo_name=None
+                        )
+                    )
+                ]
+            )
+        )
+
+        # Verify model conversion works with all fields
+        model = full_prompt.to_model()
+        assert model.title == "Test Root Cause"
+        assert model.description == "Test Description"
+        assert model.reproduction == "Test reproduction steps"
+        assert model.unit_test is not None
+        assert model.unit_test.file_path == "test/file.py"
+        assert model.unit_test.snippet == "def test_function():\n    pass"
