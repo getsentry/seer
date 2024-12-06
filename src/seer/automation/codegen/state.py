@@ -1,5 +1,5 @@
 import dataclasses
-from typing import cast
+from typing import Union, cast
 
 from pydantic import BaseModel
 
@@ -12,7 +12,10 @@ from seer.db import DbRunState, Session
 class CodegenContinuationState(DbState[CodegenContinuation]):
     @classmethod
     def from_id(
-        cls, id: int, model: type[BaseModel], type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST
+        cls,
+        id: int,
+        model: type[BaseModel],
+        type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST,
     ) -> "CodegenContinuationState":
         return cast(CodegenContinuationState, super().from_id(id, model, type=type))
 

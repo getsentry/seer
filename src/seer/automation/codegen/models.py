@@ -1,5 +1,6 @@
 import datetime
 from enum import Enum
+from typing import Union
 
 from pydantic import BaseModel, Field
 
@@ -39,7 +40,7 @@ class CodegenPrReviewRequest(BaseModel):
 
 
 class CodegenContinuation(CodegenState):
-    request: CodegenUnitTestsRequest
+    request: Union[CodegenUnitTestsRequest, CodegenPrReviewRequest]
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()
@@ -85,3 +86,11 @@ class CodegenPrReviewStateResponse(BaseModel):
     triggered_at: datetime.datetime
     updated_at: datetime.datetime
     completed_at: datetime.datetime | None = None
+
+
+class CodePrReviewRequest(BaseComponentRequest):
+    diff: str
+
+
+class CodePrReviewOutput(BaseComponentOutput):
+    diffs: list[FileChange]

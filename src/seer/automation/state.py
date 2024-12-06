@@ -16,6 +16,7 @@ _State = TypeVar("_State", bound=BaseModel)
 class DbStateRunTypes(str, Enum):
     AUTOFIX = "autofix"
     UNIT_TEST = "unit-test"
+    PR_REVIEW = "pr-review"
 
 
 class State(abc.ABC, Generic[_State]):
@@ -87,8 +88,11 @@ class DbState(State[_State]):
             if db_state is None:
                 raise ValueError(f"No state found for id {self.id}")
 
-            if db_state.type != self.type:
-                raise ValueError(f"Invalid state type: '{db_state.type}', expected: '{self.type}'")
+            if db_state.type not in self.type:
+                print(db_state.type, self.type, "TYPEEE")
+                raise ValueError(
+                    f"Invalid state type: '{db_state.type}', expected one of: '{self.type}'"
+                )
 
             return cast(_State, self.model.model_validate(db_state.value))
 

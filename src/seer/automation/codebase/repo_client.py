@@ -95,6 +95,7 @@ class RepoClientType(str, Enum):
     READ = "read"
     WRITE = "write"
     CODECOV_UNIT_TEST = "codecov_unit_test"
+    CODECOV_PR_REVIEW = "codecov_pr_review"
 
 
 class RepoClient:
@@ -178,7 +179,7 @@ class RepoClient:
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
-        elif type == RepoClientType.CODECOV_UNIT_TEST:
+        elif type == RepoClientType.CODECOV_UNIT_TEST or type == RepoClientType.CODECOV_PR_REVIEW:
             return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
@@ -581,6 +582,28 @@ class RepoClient:
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
         comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_pr_review_confirmation_comment(self, pr_url: str):
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
+        comment = "On it! We are reviewing the PR and will provide feedback shortly."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_pr_review_no_comments_required(self, pr_url: str):
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
+        comment = "No changes requiring review at this time."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)

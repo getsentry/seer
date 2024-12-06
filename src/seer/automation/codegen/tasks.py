@@ -2,19 +2,37 @@ from celery_app.config import CeleryQueues
 from seer.automation.codegen.models import (
     CodegenContinuation,
     CodegenPrReviewRequest,
+    CodegenPrReviewResponse,
     CodegenStatus,
     CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
 )
+from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
 from seer.automation.codegen.state import CodegenContinuationState
-from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
+from seer.automation.codegen.unittest_step import (
+    UnittestStep,
+    UnittestStepRequest,
+)
 from seer.automation.state import DbState, DbStateRunTypes
 
 
 def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, type=DbStateRunTypes.UNIT_TEST
+    )
+
+    with state.update() as cur:
+        cur.status = CodegenStatus.PENDING
+        cur.signals = []
+        cur.mark_triggered()
+
+    return state
+
+
+def create_initial_pr_review_run(request: CodegenPrReviewRequest) -> DbState[CodegenContinuation]:
+    state = CodegenContinuationState.new(
+        CodegenContinuation(request=request), group_id=request.pr_id, type=DbStateRunTypes.PR_REVIEW
     )
 
     with state.update() as cur:
@@ -50,4 +68,16 @@ def get_unittest_state(request: CodegenUnitTestsStateRequest):
 
 
 def codegen_pr_review(request: CodegenPrReviewRequest):
-    raise NotImplementedError("PR Review is not implemented yet.")
+    state = create_initial_pr_review_run(request)
+
+    cur_state = state.get()
+
+    pr_review_request = PrReviewStepRequest(
+        run_id=cur_state.run_id,
+        pr_id=request.pr_id,
+        repo_definition=request.repo,
+    )
+
+    PrReviewStep.get_signature(pr_review_request, queue=CeleryQueues.DEFAULT).apply_async()
+
+    return CodegenPrReviewResponse(run_id=cur_state.run_id)
