@@ -254,7 +254,7 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
     return structured_message.parsed
 
 
-def detect_encoding(raw_data, fallback_encoding: str="utf-8") -> str:
+def detect_encoding(raw_data: bytes, fallback_encoding: str="utf-8"):
     """
     Try to detect the encoding of the given data using chardet library. If the confidence is not high enough, fallback.
     """
@@ -265,4 +265,5 @@ def detect_encoding(raw_data, fallback_encoding: str="utf-8") -> str:
     except Exception as e:
         logger.exception(f"Error detecting encoding of data: {e}")
         encoding = fallback_encoding
+
     return encoding
