@@ -4,7 +4,8 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import Literal
+from typing import List, Literal, Optional
+from typing_extensions import TypedDict
 
 import requests
 import sentry_sdk
@@ -609,3 +610,42 @@ class RepoClient:
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
         return response.json()["html_url"]
+
+
+    # TODO - where to put these types?
+    class ReviewComment(TypedDict):
+        line: int
+        start_line: Optional[int]
+        side: Literal["LEFT", "RIGHT"]
+        start_side: Optional[Literal["LEFT", "RIGHT"]]
+        in_reply_to: Optional[str]
+
+
+    # TODO - where to put these types?
+    class GeneratedComments(TypedDict):
+        commit_id: str
+        body: Optional[str]
+        event: Optional[Literal["APPROVE", "REQUEST_CHANGES", "COMMENT"]] 
+        comments: List[ReviewComment]
+
+    # TODO - maybe should make a new client? this file is getting kinda long and kitchen-sink-y
+    # actually the stuff in existing ai-review-prompt is nicely decomposed - move that over here - https://github.com/codecov/ai-review-prompt/blob/508ea937174e2f461bfd96326eac37de0b7153bb/app/Services/GithubService.php#L550
+    def post_pr_review_generated_comments_batch(self, pr_url: str, generatedComments: GeneratedComments):
+        """
+        Create a GitHub pull request review with multiple comments.
+        """
+        # TODO - DRY some of this up. maybe use stuff from 'self'?
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        # TODO - need to obtain 'owner' if we want to make this a Review vs. many individual comments
+        url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_id}/reviews"
+        params = {
+            "commit_id": commit_id,
+            "comments": comments,
+            "body": generatedComments
+        }
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+
+        return response.json()
