@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -12,7 +12,7 @@ from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodePrReviewRequest
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.step import CodegenStep
-from seer.automation.models import RepoDefinition
+from seer.automation.models import FileChange, RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 
 
@@ -66,18 +66,27 @@ class PrReviewStep(CodegenStep):
                 ),
             )
 
-            # if pr_review_output:
-            #     for file_change in pr_review_output.diffs:
-            #         self.context.event_manager.append_file_change(file_change)
-            #     generator = GeneratedTestsPullRequestCreator(
-            #         pr_review_output.diffs, pr, repo_client
-            #     )
-            #     generator.create_github_pull_request()
-            # else:
-            #     repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
-            #     return
+            if pr_review_output:
+                review_comments = convert_file_changes_to_generated_comments(pr_review_output.diffs)
+                try:
+                    repo_client.post_pr_review_generated_comments_batch(pr.url, review_comments)
+                except ValueError:
+                    # TODO - handle this error
+                    return
+
+            else:
+                # TODO - handle this error / record somewhere
+                repo_client.post_pr_review_no_comments_required(pr.url)
+                return
 
         except ValueError:
             return
 
         self.context.event_manager.mark_completed()
+
+# TODO - move this helper somewhere sensical
+def convert_file_changes_to_generated_comments(
+    file_changes: List[FileChange], commit_id: str, body: Optional[str] = None
+) -> List[ReviewComment]:
+    # TODO - implement me
+    return None
