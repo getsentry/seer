@@ -1,6 +1,5 @@
 import contextlib
 import datetime
-import logging
 import json
 from enum import StrEnum
 from typing import Any, List, Optional
@@ -36,8 +35,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
-logger = logging.getLogger(__name__)
-_db_instances = {}
+_db_instances: dict[int, bool] = {}
+
 
 @inject
 def initialize_database(
@@ -49,20 +48,15 @@ def initialize_database(
 
     global _db_instances
     app_id = id(app)
-    
+
     if app_id not in _db_instances:
         try:
-            logger.debug("Initializing SQLAlchemy for app instance %s", app_id)
             db.init_app(app)
             migrate.init_app(app, db)
             _db_instances[app_id] = True
         except RuntimeError as e:
             if "already been registered" not in str(e):
                 raise
-            logger.debug(
-                "SQLAlchemy instance already registered for app %s, skipping initialization",
-                app_id
-            )
             _db_instances[app_id] = True
 
     with app.app_context():
