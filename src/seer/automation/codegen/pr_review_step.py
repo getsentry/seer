@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -9,10 +9,11 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import CodePrReviewRequest
+from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
+from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
 from seer.automation.codegen.step import CodegenStep
-from seer.automation.models import RepoDefinition
+from seer.automation.models import FileChange, RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 
 
@@ -60,24 +61,20 @@ class PrReviewStep(CodegenStep):
         diff_content = repo_client.get_pr_diff_content(pr.url)
         print("BEFORE TRY")
         try:
-            pr_review_output = PrReviewCodingComponent(self.context).invoke(
+            generated_pr_review = PrReviewCodingComponent(self.context).invoke(
                 CodePrReviewRequest(
                     diff=diff_content,
                 ),
             )
+        except ValueError as e:
+            self.logger.error(f"Error generating pr review for {pr.url}: {e}")
+            return
 
-            # if pr_review_output:
-            #     for file_change in pr_review_output.diffs:
-            #         self.context.event_manager.append_file_change(file_change)
-            #     generator = GeneratedTestsPullRequestCreator(
-            #         pr_review_output.diffs, pr, repo_client
-            #     )
-            #     generator.create_github_pull_request()
-            # else:
-            #     repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
-            #     return
-
-        except ValueError:
+        try:
+            publisher = PrReviewPublisher(repo_client=repo_client, pr=pr)
+            publisher.publish(pr_review=generated_pr_review),
+        except ValueError as e:
+            self.logger.error(f"Error publishing pr review for {pr.url}: {e}")
             return
 
         self.context.event_manager.mark_completed()

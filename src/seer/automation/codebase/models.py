@@ -1,3 +1,4 @@
+from typing import List, Literal, NotRequired, Optional, TypedDict
 from pydantic import BaseModel
 from pydantic_xml import attr
 
@@ -55,3 +56,14 @@ class SearchResult(BaseModel):
     relative_path: str
     matches: list[Match]
     score: float
+
+
+class GithubPrReviewComment(TypedDict):
+    commit_id: str
+    body: str
+    path: str
+    side: NotRequired[Literal["LEFT", "RIGHT"]]
+    line: NotRequired[int]
+    start_line: NotRequired[int]
+    start_side: NotRequired[Literal["LEFT", "RIGHT"]]
+    in_reply_to: NotRequired[str]

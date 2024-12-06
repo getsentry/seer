@@ -4,7 +4,8 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import Literal
+from typing import List, Literal, Optional
+from typing_extensions import TypedDict
 
 import requests
 import sentry_sdk
@@ -15,6 +16,7 @@ from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
+from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -601,11 +603,24 @@ class RepoClient:
 
     def post_pr_review_no_comments_required(self, pr_url: str):
         pr_id = int(pr_url.split("/")[-1])
-        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        repo_name = pr_url.split("github.com/repos/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
         comment = "No changes requiring review at this time."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_pr_review_comment(self, pr_url: str, comment: GithubPrReviewComment):
+        """
+        Create a (standalone) review comment on a GitHub pull request.
+        See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+        """
+        pr_id = int(pr_url.split("/")[-1])
+        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0] # formatted as owner-name/repo-name
+        url = f"https://api.github.com/repos/{repo_path}/pulls/{pr_id}/comments"
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=comment)
         response.raise_for_status()
         return response.json()["html_url"]

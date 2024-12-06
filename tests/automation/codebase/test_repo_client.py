@@ -4,6 +4,7 @@ import pytest
 from github import UnknownObjectException
 from pydantic import ValidationError
 
+from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
 
@@ -540,5 +541,23 @@ class TestRepoClientIndexFileSet:
         result = repo_client.post_pr_review_no_comments_required(pr_url)
 
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_pr_review(self, mock_post, repo_client):
+        pr_url = "https://github.com/sentry/sentry/pull/12345"
+        expected_url = "https://api.github.com/repos/sentry/sentry/pull/12345/comments"
+        comment = GithubPrReviewComment(path="file.py", line=10, body="Please fix this", start_line=None)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_pr_review_comment(pr_url, comment)
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=comment)
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
