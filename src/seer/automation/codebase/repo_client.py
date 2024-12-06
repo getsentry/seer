@@ -363,7 +363,6 @@ class RepoClient:
             patch_type = "M"
         
         contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
-        # logger.info(f"Type of contents is {type(contents)} {contents.encoding} {contents.decoded_content}, {contents.content}")
         detected_encoding = detect_encoding(contents.decoded_content) if contents else None
 
         if isinstance(contents, list):
