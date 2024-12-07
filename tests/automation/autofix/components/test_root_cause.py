@@ -329,6 +329,95 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
 
+    def test_root_cause_analysis_item_with_optional_fields(self):
+        # Test RootCauseAnalysisItem with optional fields
+        item = RootCauseAnalysisItem(
+            title="Test Item",
+            description="Test Description",
+            unit_test=UnitTestSnippet(
+                file_path="test/file.py",
+                snippet="def test_function():\n    pass",
+                description="Test unit test"
+            ),
+            reproduction="Steps to reproduce",
+            code_context=[
+                RootCauseRelevantContext(
+                    id=0,
+                    title="Test Context",
+                    description="Test function",
+                    snippet=RootCauseRelevantCodeSnippet(
+                        file_path="test.py",
+                        snippet="def test_function():\n    return True",
+                        repo_name=None
+                    )
+                )
+            ]
+        )
+        
+        assert item.title == "Test Item"
+        assert item.description == "Test Description"
+        assert item.unit_test is not None
+        assert item.unit_test.file_path == "test/file.py"
+        assert item.unit_test.snippet == "def test_function():\n    pass"
+        assert item.reproduction == "Steps to reproduce"
+        assert len(item.code_context) == 1
+        assert item.code_context[0].title == "Test Context"
+
+    def test_root_cause_analysis_item_prompt_conversion(self):
+        # Test conversion between RootCauseAnalysisItemPrompt and RootCauseAnalysisItem
+        prompt = RootCauseAnalysisItemPrompt(
+            title="Test Prompt",
+            description="Test Description",
+            reproduction_instructions="Test reproduction steps",
+            unit_test=UnitTestSnippetPrompt(
+                file_path="test/file.py",
+                code_snippet="def test_function():\n    pass",
+                description="Test unit test"
+            ),
+            relevant_code=RootCauseAnalysisRelevantContext(
+                snippets=[
+                    RootCauseRelevantContext(
+                        id=0,
+                        title="Test Context",
+                        description="Test function",
+                        snippet=RootCauseRelevantCodeSnippet(
+                            file_path="test.py",
+                            snippet="def test_function():\n    return True",
+                            repo_name=None
+                        )
+                    )
+                ]
+            )
+        )
+
+        # Convert prompt to model
+        model = prompt.to_model()
+
+        # Verify conversion
+        assert model.title == "Test Prompt"
+        assert model.description == "Test Description"
+        assert model.reproduction == "Test reproduction steps"
+        assert model.unit_test is not None
+        assert model.unit_test.file_path == "test/file.py"
+        assert model.unit_test.snippet == "def test_function():\n    pass"
+        assert model.code_context is not None
+        assert len(model.code_context) == 1
+        assert model.code_context[0].title == "Test Context"
+
+        # Convert back to prompt
+        new_prompt = RootCauseAnalysisItemPrompt.from_model(model)
+
+        # Verify conversion back to prompt
+        assert new_prompt.title == "Test Prompt"
+        assert new_prompt.description == "Test Description"
+        assert new_prompt.reproduction_instructions == "Test reproduction steps"
+        assert new_prompt.unit_test is not None
+        assert new_prompt.unit_test.file_path == "test/file.py"
+        assert new_prompt.unit_test.code_snippet == "def test_function():\n    pass"
+        assert new_prompt.relevant_code is not None
+        assert len(new_prompt.relevant_code.snippets) == 1
+        assert new_prompt.relevant_code.snippets[0].title == "Test Context"
+
     def test_root_cause_line_numbers_no_match(self, component, mock_agent):
         mock_agent.return_value.run.side_effect = [
             "Some root cause analysis",
@@ -377,3 +466,92 @@ class TestRootCauseComponent:
         # Verify that the output is still generated but without line numbers
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
+
+    def test_root_cause_analysis_item_with_optional_fields(self):
+        # Test RootCauseAnalysisItem with optional fields
+        item = RootCauseAnalysisItem(
+            title="Test Item",
+            description="Test Description",
+            unit_test=UnitTestSnippet(
+                file_path="test/file.py",
+                snippet="def test_function():\n    pass",
+                description="Test unit test"
+            ),
+            reproduction="Steps to reproduce",
+            code_context=[
+                RootCauseRelevantContext(
+                    id=0,
+                    title="Test Context",
+                    description="Test function",
+                    snippet=RootCauseRelevantCodeSnippet(
+                        file_path="test.py",
+                        snippet="def test_function():\n    return True",
+                        repo_name=None
+                    )
+                )
+            ]
+        )
+        
+        assert item.title == "Test Item"
+        assert item.description == "Test Description"
+        assert item.unit_test is not None
+        assert item.unit_test.file_path == "test/file.py"
+        assert item.unit_test.snippet == "def test_function():\n    pass"
+        assert item.reproduction == "Steps to reproduce"
+        assert len(item.code_context) == 1
+        assert item.code_context[0].title == "Test Context"
+
+    def test_root_cause_analysis_item_prompt_conversion(self):
+        # Test conversion between RootCauseAnalysisItemPrompt and RootCauseAnalysisItem
+        prompt = RootCauseAnalysisItemPrompt(
+            title="Test Prompt",
+            description="Test Description",
+            reproduction_instructions="Test reproduction steps",
+            unit_test=UnitTestSnippetPrompt(
+                file_path="test/file.py",
+                code_snippet="def test_function():\n    pass",
+                description="Test unit test"
+            ),
+            relevant_code=RootCauseAnalysisRelevantContext(
+                snippets=[
+                    RootCauseRelevantContext(
+                        id=0,
+                        title="Test Context",
+                        description="Test function",
+                        snippet=RootCauseRelevantCodeSnippet(
+                            file_path="test.py",
+                            snippet="def test_function():\n    return True",
+                            repo_name=None
+                        )
+                    )
+                ]
+            )
+        )
+
+        # Convert prompt to model
+        model = prompt.to_model()
+
+        # Verify conversion
+        assert model.title == "Test Prompt"
+        assert model.description == "Test Description"
+        assert model.reproduction == "Test reproduction steps"
+        assert model.unit_test is not None
+        assert model.unit_test.file_path == "test/file.py"
+        assert model.unit_test.snippet == "def test_function():\n    pass"
+        assert model.code_context is not None
+        assert len(model.code_context) == 1
+        assert model.code_context[0].title == "Test Context"
+
+        # Convert back to prompt
+        new_prompt = RootCauseAnalysisItemPrompt.from_model(model)
+
+        # Verify conversion back to prompt
+        assert new_prompt.title == "Test Prompt"
+        assert new_prompt.description == "Test Description"
+        assert new_prompt.reproduction_instructions == "Test reproduction steps"
+        assert new_prompt.unit_test is not None
+        assert new_prompt.unit_test.file_path == "test/file.py"
+        assert new_prompt.unit_test.code_snippet == "def test_function():\n    pass"
+        assert new_prompt.relevant_code is not None
+        assert len(new_prompt.relevant_code.snippets) == 1
+        assert new_prompt.relevant_code.snippets[0].title == "Test Context"
