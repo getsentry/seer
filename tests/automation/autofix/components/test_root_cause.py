@@ -329,6 +329,73 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
 
+    def test_validation_error_handling(self, component, mock_agent):
+        mock_agent.return_value.run.side_effect = [
+            "Some root cause analysis",
+            "Formatter",
+        ]
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=MultipleRootCauseAnalysisOutputPrompt(
+                cause=RootCauseAnalysisItemPrompt(
+                    title="Test Root Cause",
+                    description="Description",
+                    relevant_code=None,
+                )
+            ),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        module = Module()
+        module.constant(LlmClient, mock_llm_client)
+
+        with module, patch.object(
+            RootCauseAnalysisItemPrompt, "to_model", side_effect=pydantic.ValidationError(errors=[], model=MagicMock())
+        ):
+            output = component.invoke(MagicMock())
+
+        assert output.causes == []
+        assert output.termination_reason.startswith("Failed to validate root cause analysis data:")
+
+    def test_root_cause_analysis_without_reproduction(self, component, mock_agent):
+        mock_agent.return_value.run.side_effect = [
+            "Some root cause analysis",
+            "Formatter",
+        ]
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=MultipleRootCauseAnalysisOutputPrompt(
+                cause=RootCauseAnalysisItemPrompt(
+                    title="Test Root Cause",
+                    description="Description",
+                    relevant_code=None,
+                )
+            ),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        module = Module()
+        module.constant(LlmClient, mock_llm_client)
+
+        with module:
+            output = component.invoke(MagicMock())
+
+        assert output is not None
+        assert len(output.causes) == 1
+        assert output.causes[0].title == "Test Root Cause"
+        assert output.causes[0].description == "Description"
+        assert not hasattr(output.causes[0], 'reproduction')
+
     def test_root_cause_line_numbers_no_match(self, component, mock_agent):
         mock_agent.return_value.run.side_effect = [
             "Some root cause analysis",
@@ -377,3 +444,70 @@ class TestRootCauseComponent:
         # Verify that the output is still generated but without line numbers
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
+
+    def test_validation_error_handling(self, component, mock_agent):
+        mock_agent.return_value.run.side_effect = [
+            "Some root cause analysis",
+            "Formatter",
+        ]
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=MultipleRootCauseAnalysisOutputPrompt(
+                cause=RootCauseAnalysisItemPrompt(
+                    title="Test Root Cause",
+                    description="Description",
+                    relevant_code=None,
+                )
+            ),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        module = Module()
+        module.constant(LlmClient, mock_llm_client)
+
+        with module, patch.object(
+            RootCauseAnalysisItemPrompt, "to_model", side_effect=pydantic.ValidationError(errors=[], model=MagicMock())
+        ):
+            output = component.invoke(MagicMock())
+
+        assert output.causes == []
+        assert output.termination_reason.startswith("Failed to validate root cause analysis data:")
+
+    def test_root_cause_analysis_without_reproduction(self, component, mock_agent):
+        mock_agent.return_value.run.side_effect = [
+            "Some root cause analysis",
+            "Formatter",
+        ]
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            parsed=MultipleRootCauseAnalysisOutputPrompt(
+                cause=RootCauseAnalysisItemPrompt(
+                    title="Test Root Cause",
+                    description="Description",
+                    relevant_code=None,
+                )
+            ),
+            metadata=LlmResponseMetadata(
+                model="test-model",
+                provider_name=LlmProviderType.OPENAI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        module = Module()
+        module.constant(LlmClient, mock_llm_client)
+
+        with module:
+            output = component.invoke(MagicMock())
+
+        assert output is not None
+        assert len(output.causes) == 1
+        assert output.causes[0].title == "Test Root Cause"
+        assert output.causes[0].description == "Description"
+        assert not hasattr(output.causes[0], 'reproduction')
