@@ -27,7 +27,7 @@ from seer.automation.agent.models import (
     LlmResponseMetadata,
     Message,
     StructuredOutputType,
-    ToolCall,
+    ToolCall, TokenCounter,
     Usage,
 )
 from seer.automation.agent.tools import FunctionTool
@@ -475,6 +475,42 @@ class LlmClient:
         timeout: float | None = None,
     ) -> LlmGenerateTextResponse:
         try:
+            # Get token limits from config
+            config = AppConfig.model_validate({})
+            max_tokens = max_tokens or config.MAX_COMPLETION_TOKENS
+            
+            messages = messages or []
+            
+            # Clean and validate messages
+            messages = self._prepare_messages(
+                messages=messages,
+                model=model, 
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+                prompt=prompt
+            )
+
+            # Validate final token counts
+            token_count = TokenCounter.count_messages_tokens(messages, model.model_name)
+            if token_count.num_tokens + max_tokens + config.TOKEN_LIMIT_BUFFER > config.MAX_TOTAL_TOKENS:
+                # Try to trim messages if possible
+                if len(messages) > 1:
+                    messages = self._trim_message_history(
+                        messages=messages,
+                        model=model,
+                        max_tokens=max_tokens
+                    )
+                    token_count = TokenCounter.count_messages_tokens(messages, model.model_name)
+                
+                # If still over limit, raise error
+                if token_count.num_tokens + max_tokens + config.TOKEN_LIMIT_BUFFER > config.MAX_TOTAL_TOKENS:
+                    raise TokenLimitError(
+                        f"Token limit would be exceeded. Current tokens: {token_count.num_tokens}, "
+                        f"Requested completion tokens: {max_tokens}, "
+                        f"Buffer: {config.TOKEN_LIMIT_BUFFER}, "
+                        f"Max total: {config.MAX_TOTAL_TOKENS}"
+                    )
+
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
                 langfuse_context.flush()
@@ -512,9 +548,64 @@ class LlmClient:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
             logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            if isinstance(e, TokenLimitError):
+                # If token limit error, try one last time with minimal context
+                try:
+                    if messages and len(messages) > 2:
+                        messages = [messages[0], messages[-1]] if messages[0].role == "system" else [messages[-1]]
+                        return self.generate_text(
+                            messages=messages,
+                            model=model,
+                            max_tokens=max_tokens,
+                            system_prompt=system_prompt,
+                            temperature=temperature,
+                            tools=tools,
+                            timeout=timeout
+                        )
+                except Exception as retry_error:
+                    logger.exception("Retry with minimal context failed")
             raise e
 
+    def _prepare_messages(
+        self,
+        *,
+        messages: list[Message],
+        model: LlmProvider,
+        max_tokens: int,
+        system_prompt: str | None = None,
+        prompt: str | None = None,
+    ) -> list[Message]:
+        """Prepare and validate messages for the API call"""
+        messages = LlmClient.clean_message_content(messages)
+        
+        # Add system prompt if provided
+        if system_prompt:
+            messages.insert(0, Message(role="system", content=system_prompt))
+            
+        # Add prompt if provided
+        if prompt:
+            messages.append(Message(role="user", content=prompt))
+            
+        return messages
+
+    def _trim_message_history(
+        self,
+        *,
+        messages: list[Message],
+        model: LlmProvider,
+        max_tokens: int,
+    ) -> list[Message]:
+        """Trim message history to fit within token limits"""
+        config = AppConfig.model_validate({})
+        while len(messages) > 1:
+            token_count = TokenCounter.count_messages_tokens(messages, model.model_name)
+            if token_count.num_tokens + max_tokens + config.TOKEN_LIMIT_BUFFER <= config.MAX_TOTAL_TOKENS:
+                break
+            messages.pop(1)  # Keep system message if present, remove oldest messages
+        return messages
+
     @observe(name="Generate Structured")
+    def generate_structured(
     def generate_structured(
         self,
         *,
