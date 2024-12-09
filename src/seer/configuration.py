@@ -87,6 +87,22 @@ class AppConfig(BaseModel):
     GRPC_SERVER_ENABLE: ParseBool = False
     HOSTNAME: str = Field(default_factory=gethostname)
 
+    # Token limits configuration
+    MAX_TOTAL_TOKENS: ParseInt = 8192  # Default max total tokens
+    MAX_PROMPT_TOKENS: ParseInt = 6144  # Default max prompt tokens
+    MAX_COMPLETION_TOKENS: ParseInt = 2048  # Default max completion tokens
+    TOKEN_LIMIT_BUFFER: ParseInt = 500  # Buffer to prevent hitting limits
+    MAX_MESSAGE_HISTORY: ParseInt = 50  # Max number of messages in history
+    
+    def validate_token_limits(self):
+        """Validate token limit configuration"""
+        if self.MAX_PROMPT_TOKENS + self.MAX_COMPLETION_TOKENS + self.TOKEN_LIMIT_BUFFER > self.MAX_TOTAL_TOKENS:
+            raise ValueError(
+                f"Invalid token configuration: sum of prompt tokens ({self.MAX_PROMPT_TOKENS}), "
+                f"completion tokens ({self.MAX_COMPLETION_TOKENS}), and buffer ({self.TOKEN_LIMIT_BUFFER}) "
+                f"exceeds maximum total tokens ({self.MAX_TOTAL_TOKENS})"
+            )
+
     # Test utility that disables deployment conditional behavior.
     # Update this to reflect new kinds of conditional behavior by adding
     # more test coverage and locking them in.
@@ -139,8 +155,11 @@ class AppConfig(BaseModel):
             # assert self.LANGFUSE_PUBLIC_KEY, "LANGFUSE_PUBLIC_KEY required for production!"
             # assert self.LANGFUSE_SECRET_KEY, "LANGFUSE_SECRET_KEY required for production!"
 
+
             assert self.GITHUB_APP_ID, "GITHUB_APP_ID required for production!"
             assert self.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY required for production!"
+            
+            self.validate_token_limits()
 
             if not self.JSON_API_SHARED_SECRETS:
                 logger.warning("No JSON_API_SHARED_SECRETS was configured for this environment")
