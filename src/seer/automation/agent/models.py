@@ -1,7 +1,8 @@
 from enum import Enum
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar, List
 
 from pydantic import BaseModel
+
 
 
 class ToolCall(BaseModel):
@@ -15,11 +16,15 @@ class Usage(BaseModel):
     prompt_tokens: int = 0
     total_tokens: int = 0
 
+    truncated: bool = False
+    """Indicates if the message history was truncated due to token limits"""
+
     def __add__(self, other: "Usage"):
         return Usage(
             completion_tokens=self.completion_tokens + other.completion_tokens,
             prompt_tokens=self.prompt_tokens + other.prompt_tokens,
             total_tokens=self.total_tokens + other.total_tokens,
+            truncated=getattr(self, 'truncated', False) or getattr(other, 'truncated', False)
         )
 
     def __sub__(self, other: "Usage"):
@@ -28,6 +33,10 @@ class Usage(BaseModel):
             prompt_tokens=self.prompt_tokens - other.prompt_tokens,
             total_tokens=self.total_tokens - other.total_tokens,
         )
+
+    model_fields["completion_tokens"].description = "Number of tokens in completion"
+    model_fields["prompt_tokens"].description = "Number of tokens in prompt"
+    model_fields["total_tokens"].description = "Total number of tokens used"
 
 
 class LlmProviderType(str, Enum):
@@ -80,3 +89,51 @@ class LlmRefusalError(Exception):
     """Raised when the LLM refuses to complete the request."""
 
     pass
+
+class TokenCountResult(BaseModel):
+    num_tokens: int
+    truncated: bool = False
+    
+class TokenCounter:
+    TOKEN_COSTS = {
+        "gpt-3.5-turbo": {
+            "per_message": 3,
+            "per_name": 1,
+            "per_content": 1,
+            "per_function": 3,
+            "per_function_arg": 3,
+        },
+        "gpt-4": {
+            "per_message": 3,
+            "per_name": 1,
+            "per_content": 1,
+            "per_function": 3, 
+            "per_function_arg": 3,
+        }
+    }
+    
+    @classmethod
+    def count_message_tokens(cls, message: Message, model: str) -> int:
+        """Count the number of tokens in a message"""
+        costs = cls.TOKEN_COSTS.get(model, cls.TOKEN_COSTS["gpt-4"])
+        num_tokens = costs["per_message"]
+        
+        if message.content:
+            num_tokens += len(message.content) // 4  # Approximate tokens
+            
+        if message.tool_calls:
+            for tool in message.tool_calls:
+                num_tokens += costs["per_function"]
+                if tool.function:
+                    num_tokens += len(tool.function) // 4
+                if tool.args:
+                    num_tokens += len(tool.args) // 4
+                    
+        return num_tokens
+        
+    @classmethod
+    def count_messages_tokens(cls, messages: List[Message], model: str) -> TokenCountResult:
+        total_tokens = sum(cls.count_message_tokens(msg, model) for msg in messages)
+        return TokenCountResult(
+            num_tokens=total_tokens
+        )
