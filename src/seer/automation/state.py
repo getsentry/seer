@@ -104,6 +104,12 @@ class DbState(State[_State]):
         """
         pass
 
+    def before_update(self, value: _State):
+        """
+        Can be used to run some logic before the update is applied to the db
+        """
+        pass
+
     @contextlib.contextmanager
     def update(self):
         """
@@ -120,6 +126,7 @@ class DbState(State[_State]):
             assert r
             value = self.model.model_validate(r.value)
             yield value
+            self.before_update(value)
             db_state = DbRunState(id=self.id, value=value.model_dump(mode="json"))
             self.apply_to_run_state(value, db_state)
             session.merge(db_state)
