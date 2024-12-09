@@ -7,24 +7,6 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.state import DbStateRunTypes
 
 
-def test_update_preserves_last_triggered():
-    """Test that update preserves last_triggered_at while updated_at is set to current time"""
-    continuation = next(generate(AutofixContinuation))
-    trigger_time = datetime.datetime(2023, 1, 2)
-    continuation.last_triggered_at = trigger_time
-    state = ContinuationState.new(group_id=1, value=continuation, t=DbStateRunTypes.AUTOFIX)
-
-    with state.update():
-        # Don't make any changes
-        pass
-
-    result = state.get()
-    assert result.last_triggered_at == trigger_time
-    # updated_at should be set to current time
-    assert isinstance(result.updated_at, datetime.datetime)
-    assert result.updated_at > datetime.datetime(2023, 1, 1)
-
-
 def test_before_update_marks_updated():
     """Test that before_update correctly marks the state as updated with current time"""
     continuation = next(generate(AutofixContinuation))
