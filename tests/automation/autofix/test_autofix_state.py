@@ -14,9 +14,9 @@ def test_update_preserves_last_triggered():
     continuation.last_triggered_at = trigger_time
     state = ContinuationState.new(group_id=1, value=continuation, t=DbStateRunTypes.AUTOFIX)
 
-    with state.update() as cur:
-        # Even if we try to set updated_at, it will be overridden by before_update
-        cur.last_triggered_at = trigger_time
+    with state.update():
+        # Don't make any changes
+        pass
 
     result = state.get()
     assert result.last_triggered_at == trigger_time
