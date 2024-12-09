@@ -231,15 +231,15 @@ class AutofixContext(PipelineContext):
                 if not changes_step:
                     raise ValueError("Changes step not found")
                 changes_step = cast(ChangesStep, changes_step)
-                change_state = next(
+                change_state, changes_state_index = next(
                     (
-                        change
-                        for change in changes_step.changes
+                        (change, i)
+                        for i, change in enumerate(changes_step.changes)
                         if change.repo_external_id == codebase_state.repo_external_id
                     ),
-                    None,
+                    (None, None),
                 )
-                if codebase_state.file_changes and change_state:
+                if codebase_state.file_changes and change_state and changes_state_index is not None:
                     key = codebase_state.repo_external_id or codebase_state.repo_id
 
                     if key is None:
@@ -306,6 +306,10 @@ class AutofixContext(PipelineContext):
                     change_state.pull_request = CommittedPullRequestDetails(
                         pr_number=pr.number, pr_url=pr.html_url, pr_id=pr.id
                     )
+
+                    with self.state.update() as state:
+                        step = cast(ChangesStep, state.steps[changes_step.index])
+                        step.changes[changes_state_index].pull_request = change_state.pull_request
 
                     with Session() as session:
                         pr_id_mapping = DbPrIdToAutofixRunIdMapping(
