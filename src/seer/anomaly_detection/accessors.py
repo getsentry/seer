@@ -382,29 +382,44 @@ class DbAlertDataAccessor(AlertDataAccessor):
         MPTimeSeriesAnomalies
             Combined anomalies object containing flags, scores and metadata from both approaches
         """
-        return MPTimeSeriesAnomalies(
-            flags=[
-                (
-                    (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
-                    if anomalies_fixed is not None
-                    else anomalies_suss.flags[i]
-                )
+        combined_flags = anomalies_suss.flags
+        combined_scores = anomalies_suss.scores
+        combined_thresholds = anomalies_suss.thresholds
+        combined_original_flags = anomalies_suss.original_flags
+        if anomalies_fixed is not None:
+            combined_flags = [
+                (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
                 for i in range(len(anomalies_suss.flags))
-            ],
-            scores=[
-                (
-                    (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
-                    if anomalies_fixed is not None
-                    else anomalies_suss.scores[i]
-                )
+            ]
+
+            combined_scores = [
+                (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
                 for i in range(len(anomalies_suss.scores))
-            ],
-            thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
+            ]
+
+            combined_thresholds = [
+                (anomalies_suss.thresholds[i] if use_suss[i] else anomalies_fixed.thresholds[i])
+                for i in range(len(anomalies_suss.thresholds))
+            ]
+
+            combined_original_flags = [
+                (
+                    anomalies_suss.original_flags[i]
+                    if use_suss[i]
+                    else anomalies_fixed.original_flags[i]
+                )
+                for i in range(len(anomalies_suss.original_flags))
+            ]
+
+        return MPTimeSeriesAnomalies(
+            flags=combined_flags,
+            scores=combined_scores,
+            thresholds=combined_thresholds,
             matrix_profile_suss=anomalies_suss.matrix_profile,
             matrix_profile_fixed=(
                 anomalies_fixed.matrix_profile if anomalies_fixed is not None else np.array([])
             ),
             window_size=anomalies_suss.window_size,
-            original_flags=anomalies_suss.original_flags,
+            original_flags=combined_original_flags,
             use_suss=use_suss,
         )
