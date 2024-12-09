@@ -1,4 +1,5 @@
 import unittest
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from github.GithubException import UnknownObjectException
@@ -378,6 +379,15 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             if pr_mapping:
                 cur = self.state.get()
                 self.assertEqual(pr_mapping.run_id, cur.run_id)
+
+        state = self.autofix_context.state.get()
+        changes_step = cast(ChangesStep, state.find_step(key="changes"))
+        self.assertIsNotNone(changes_step)
+        self.assertGreater(len(changes_step.changes), 0)
+
+        self.assertIsNotNone(changes_step.changes[0].pull_request)
+        if changes_step.changes[0].pull_request:
+            self.assertEqual(changes_step.changes[0].pull_request.pr_number, 1)
 
 
 if __name__ == "__main__":
