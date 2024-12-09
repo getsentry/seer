@@ -8,13 +8,14 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.codebase.models import GithubPrComment
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import CodePrReviewRequest
+from seer.automation.codebase.utils import format_pr_review
+from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import FileChange, RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
-
 
 class PrReviewStepRequest(PipelineStepTaskRequest):
     pr_id: int
@@ -65,17 +66,13 @@ class PrReviewStep(CodegenStep):
                     diff=diff_content,
                 ),
             )
-
             if pr_review_output:
-                review_comments = convert_file_changes_to_generated_comments(pr_review_output.diffs)
+                pr_review = format_pr_review(pr_review_output)
                 try:
-                    repo_client.post_pr_review_generated_comments_batch(pr.url, review_comments)
+                    repo_client.post_pr_review(pr.url, pr_review)
                 except ValueError:
-                    # TODO - handle this error
                     return
-
             else:
-                # TODO - handle this error / record somewhere
                 repo_client.post_pr_review_no_comments_required(pr.url)
                 return
 
@@ -84,9 +81,3 @@ class PrReviewStep(CodegenStep):
 
         self.context.event_manager.mark_completed()
 
-# TODO - move this helper somewhere sensical
-def convert_file_changes_to_generated_comments(
-    file_changes: List[FileChange], commit_id: str, body: Optional[str] = None
-) -> List[ReviewComment]:
-    # TODO - implement me
-    return None

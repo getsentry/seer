@@ -16,6 +16,7 @@ from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
+from seer.automation.codebase.models import GithubPrComment, GithubPrReview
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -611,41 +612,34 @@ class RepoClient:
         response.raise_for_status()
         return response.json()["html_url"]
 
-
-    # TODO - where to put these types?
-    class ReviewComment(TypedDict):
-        line: int
-        start_line: Optional[int]
-        side: Literal["LEFT", "RIGHT"]
-        start_side: Optional[Literal["LEFT", "RIGHT"]]
-        in_reply_to: Optional[str]
-
-
-    # TODO - where to put these types?
-    class GeneratedComments(TypedDict):
-        commit_id: str
-        body: Optional[str]
-        event: Optional[Literal["APPROVE", "REQUEST_CHANGES", "COMMENT"]] 
-        comments: List[ReviewComment]
-
-    # TODO - maybe should make a new client? this file is getting kinda long and kitchen-sink-y
-    # actually the stuff in existing ai-review-prompt is nicely decomposed - move that over here - https://github.com/codecov/ai-review-prompt/blob/508ea937174e2f461bfd96326eac37de0b7153bb/app/Services/GithubService.php#L550
-    def post_pr_review_generated_comments_batch(self, pr_url: str, generatedComments: GeneratedComments):
+    def post_pr_review(self, pr_url: str, pr_review: GithubPrReview):
         """
-        Create a GitHub pull request review with multiple comments.
+        Create a new GitHub pull request review that contains generated comments.
+        See https://docs.github.com/en/rest/pulls/reviews?apiVersion=2022-11-28#create-a-review-for-a-pull-request
         """
-        # TODO - DRY some of this up. maybe use stuff from 'self'?
         pr_id = int(pr_url.split("/")[-1])
-        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
-        # TODO - need to obtain 'owner' if we want to make this a Review vs. many individual comments
+        repo_name = self.repo_name
+        owner = self.repo_owner
         url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_id}/reviews"
         params = {
-            "commit_id": commit_id,
-            "comments": comments,
-            "body": generatedComments
+            "comments": pr_review.comments,
+            "body": pr_review.body
         }
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
-
         return response.json()
+
+    def post_pr_standalone_comment(self, pr_url: str, comment: GithubPrComment):
+        """
+        Create a standalone comment on a GitHub pull request.
+        See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+        """
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]

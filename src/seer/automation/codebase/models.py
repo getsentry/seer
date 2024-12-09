@@ -1,3 +1,4 @@
+from typing import List, Literal, Optional, TypedDict
 from pydantic import BaseModel
 from pydantic_xml import attr
 
@@ -55,3 +56,21 @@ class SearchResult(BaseModel):
     relative_path: str
     matches: list[Match]
     score: float
+
+
+class GithubPrComment(TypedDict):
+    path: str
+    position: Optional[int]
+    body: str
+    line: Optional[int]
+    side: Optional[Literal["LEFT", "RIGHT"]]
+    start_line: Optional[int]
+    start_side: Optional[Literal["LEFT", "RIGHT"]]
+    in_reply_to: Optional[str]
+
+
+class GithubPrReview(TypedDict):
+    commit_id: Optional[str]
+    body: str
+    event: Optional[Literal["APPROVE", "REQUEST_CHANGES", "COMMENT"]] 
+    comments: List[GithubPrComment]

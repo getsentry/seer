@@ -87,10 +87,9 @@ class CodegenPrReviewStateResponse(BaseModel):
     updated_at: datetime.datetime
     completed_at: datetime.datetime | None = None
 
-
 class CodePrReviewRequest(BaseComponentRequest):
     diff: str
 
 
 class CodePrReviewOutput(BaseComponentOutput):
-    diffs: list[FileChange]
+    comments: list[dict] # dict has path: str, line: int, body: str, start_line: int
