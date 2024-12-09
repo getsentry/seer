@@ -37,6 +37,11 @@ from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
+# Token management constants
+MAX_TOTAL_TOKENS = 8192     # Maximum total tokens allowed
+MAX_PROMPT_TOKENS = 6144    # Maximum prompt tokens allowed 
+MAX_COMPLETION_TOKENS = 2048 # Maximum completion tokens allowed
+DEFAULT_MAX_MESSAGES = 10   # Default maximum number of messages to keep in history
 
 @dataclass
 class OpenAiProvider:
@@ -456,8 +461,72 @@ class AnthropicProvider:
         return message_dicts, tool_dicts, system_prompt
 
 
+
 LlmProvider = Union[OpenAiProvider, AnthropicProvider]
 
+class TokenManager:
+    @staticmethod
+    def estimate_tokens(messages: List[Message]) -> int:
+        """
+        Estimates token count for messages. This is a simplified estimation - 
+        assuming ~4 chars per token as a rough estimate.
+        """
+        total_chars = sum(
+            len(msg.content or "") + 
+            sum(len(str(call.args or "")) for call in (msg.tool_calls or []))
+            for msg in messages
+        )
+        return total_chars // 4  # Rough estimation of tokens
+
+    @staticmethod
+    def truncate_messages(
+        messages: List[Message], 
+        max_tokens: int = MAX_PROMPT_TOKENS,
+        max_messages: int = DEFAULT_MAX_MESSAGES
+    ) -> List[Message]:
+        """
+        Truncates message history to fit within token limits while preserving context.
+        Keeps system messages and most recent messages.
+        """
+        if not messages:
+            return []
+
+        # Always keep system messages
+        system_messages = [m for m in messages if m.role == "system"]
+        other_messages = [m for m in messages if m.role != "system"]
+
+        # Keep most recent messages up to max_messages
+        truncated = other_messages[-max_messages:] if len(other_messages) > max_messages else other_messages
+        
+        # Combine system messages with truncated messages
+        result = system_messages + truncated
+
+        # Check token count and truncate further if needed
+        while TokenManager.estimate_tokens(result) > max_tokens and len(result) > len(system_messages) + 1:
+            # Remove the oldest non-system message
+            for i, msg in enumerate(result):
+                if msg.role != "system":
+                    result.pop(i)
+                    break
+
+        return result
+
+    @staticmethod
+    def validate_token_limits(
+        messages: List[Message], 
+        max_tokens: int | None = None
+    ) -> tuple[List[Message], int]:
+        """
+        Validates and adjusts message history and completion tokens to stay within limits.
+        """
+        estimated_prompt_tokens = TokenManager.estimate_tokens(messages)
+        
+        if estimated_prompt_tokens > MAX_PROMPT_TOKENS:
+            messages = TokenManager.truncate_messages(messages, MAX_PROMPT_TOKENS)
+            estimated_prompt_tokens = TokenManager.estimate_tokens(messages)
+
+        safe_max_tokens = min(MAX_TOTAL_TOKENS - estimated_prompt_tokens, MAX_COMPLETION_TOKENS, max_tokens or MAX_COMPLETION_TOKENS)
+        return messages, safe_max_tokens
 
 class LlmClient:
     @observe(name="Generate Text")
@@ -486,10 +555,14 @@ class LlmClient:
             if not tools:
                 messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
+            # Add token management
+            messages, adjusted_max_tokens = TokenManager.validate_token_limits(messages, max_tokens)
+
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
                 return model.generate_text(
-                    max_tokens=max_tokens,
+                    max_tokens=adjusted_max_tokens,
+                    messages=messages,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
@@ -500,7 +573,7 @@ class LlmClient:
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
                 return model.generate_text(
-                    max_tokens=max_tokens,
+                    max_tokens=adjusted_max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
@@ -538,10 +611,14 @@ class LlmClient:
             messages = LlmClient.clean_message_content(messages if messages else [])
             messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
+            # Add token management
+            messages, adjusted_max_tokens = TokenManager.validate_token_limits(messages, max_tokens)
+
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
                 return model.generate_structured(
-                    max_tokens=max_tokens,
+                    max_tokens=adjusted_max_tokens,
+                    messages=messages,
                     messages=messages,
                     prompt=prompt,
                     response_format=response_format,
@@ -580,9 +657,9 @@ class LlmClient:
     def clean_message_content(messages: list[Message]) -> list[Message]:
         new_messages = []
         for message in messages:
-            if not message.content:
-                message.content = "."
-            new_messages.append(message)
+            # Only add messages that have actual content or tool calls
+            if message.content or message.tool_calls:
+                new_messages.append(message)
         return new_messages
 
 
