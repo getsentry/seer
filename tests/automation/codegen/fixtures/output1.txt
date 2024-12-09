@@ -1,0 +1,16 @@
+<comments>
+[
+    {
+        "path": "src/file1.py",
+        "line": 42,
+        "body": "Consider refactoring this function to reduce its complexity. It currently exceeds 20 lines, making it harder to read and maintain. Extracting the repeated logic into a helper function could improve clarity and reusability."
+        "start_line": 45,
+    },
+    {
+        "path": "src/utils/helper.py",
+        "line": 18,
+        "body": "This regular expression could benefit from a comment explaining its purpose. Complex regex patterns are often difficult to understand and maintain."
+        "start_line": 20,
+    }
+]
+</comments>

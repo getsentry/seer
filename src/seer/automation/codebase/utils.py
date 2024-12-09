@@ -2,8 +2,10 @@ import functools
 import logging
 import os
 import shutil
+from typing import List
 
-from seer.automation.codebase.models import Document
+from seer.automation.codebase.models import Document, GithubPrComment, GithubPrReview
+from seer.automation.codegen.models import CodePrReviewOutput
 from seer.automation.models import StacktraceFrame
 
 logger = logging.getLogger(__name__)
@@ -146,3 +148,22 @@ def group_documents_by_language(documents: list[Document]) -> dict[str, list[Doc
         file_type_count[file_type].append(doc)
 
     return file_type_count
+
+def format_pr_review(pr_review_output: CodePrReviewOutput) -> GithubPrReview:
+    comments = []
+    for diff in pr_review_output.diffs:
+        if not hasattr(diff, "path") or not hasattr(diff, "line") or not hasattr(diff, "comment"):
+            continue
+        
+        comment = GithubPrComment(
+            path=diff.path,
+            line=diff.line,
+            body=diff.comment,
+            start_line=diff.start_line,
+        )
+        comments.append(comment)
+
+    return GithubPrReview(
+        body="We've reviewed your PR and posted suggestions!",
+        comments=comments
+    )

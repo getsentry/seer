@@ -4,7 +4,8 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import Literal
+from typing import List, Literal, Optional
+from typing_extensions import TypedDict
 
 import requests
 import sentry_sdk
@@ -15,6 +16,7 @@ from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
+from seer.automation.codebase.models import GithubPrComment, GithubPrReview
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -604,6 +606,38 @@ class RepoClient:
         repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
         comment = "No changes requiring review at this time."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_pr_review(self, pr_url: str, pr_review: GithubPrReview):
+        """
+        Create a new GitHub pull request review that contains generated comments.
+        See https://docs.github.com/en/rest/pulls/reviews?apiVersion=2022-11-28#create-a-review-for-a-pull-request
+        """
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = self.repo_name
+        owner = self.repo_owner
+        url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_id}/reviews"
+        params = {
+            "comments": pr_review.comments,
+            "body": pr_review.body
+        }
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()
+
+    def post_pr_standalone_comment(self, pr_url: str, comment: GithubPrComment):
+        """
+        Create a standalone comment on a GitHub pull request.
+        See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+        """
+        pr_id = int(pr_url.split("/")[-1])
+        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)

@@ -542,3 +542,8 @@ class TestRepoClientIndexFileSet:
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_pr_review(self, mock_post, repo_client):
+        # TODO - write me
+        return

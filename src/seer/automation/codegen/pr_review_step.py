@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -8,13 +8,14 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.codebase.models import GithubPrComment
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import CodePrReviewRequest
+from seer.automation.codebase.utils import format_pr_review
+from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.step import CodegenStep
-from seer.automation.models import RepoDefinition
+from seer.automation.models import FileChange, RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
-
 
 class PrReviewStepRequest(PipelineStepTaskRequest):
     pr_id: int
@@ -65,19 +66,18 @@ class PrReviewStep(CodegenStep):
                     diff=diff_content,
                 ),
             )
-
-            # if pr_review_output:
-            #     for file_change in pr_review_output.diffs:
-            #         self.context.event_manager.append_file_change(file_change)
-            #     generator = GeneratedTestsPullRequestCreator(
-            #         pr_review_output.diffs, pr, repo_client
-            #     )
-            #     generator.create_github_pull_request()
-            # else:
-            #     repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
-            #     return
+            if pr_review_output:
+                pr_review = format_pr_review(pr_review_output)
+                try:
+                    repo_client.post_pr_review(pr.url, pr_review)
+                except ValueError:
+                    return
+            else:
+                repo_client.post_pr_review_no_comments_required(pr.url)
+                return
 
         except ValueError:
             return
 
         self.context.event_manager.mark_completed()
+
