@@ -8,7 +8,7 @@ from typing import Literal
 
 import requests
 import sentry_sdk
-from github import Auth, Github, GithubException, GithubIntegration, UnknownObjectException
+from github import Auth, Github, GithubException, GithubIntegration, UnknownObjectException, InputGitTreeElement
 from github.GitRef import GitRef
 from github.Repository import Repository
 from unidiff import PatchSet
@@ -16,6 +16,7 @@ from unidiff import PatchSet
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
+from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.utils import class_method_lru_cache
@@ -266,35 +267,6 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
-    @class_method_lru_cache(maxsize=16)
-    def get_commit_file_diffs(self, prev_sha: str, next_sha: str) -> tuple[list[str], list[str]]:
-        """
-        Returns the list of files to change and files to delete in the diff in order to turn a commit into another.
-        """
-        comparison = self.repo.compare(prev_sha, next_sha)
-
-        # Support reverse diffs, because the api would return an empty list of files if the comparison is behind
-        is_behind = comparison.status == "behind"
-        if is_behind:
-            comparison = self.repo.compare(next_sha, prev_sha)
-
-        data = requests.get(comparison.diff_url, headers=self._get_auth_headers(accept_type="diff"))
-        data.raise_for_status()  # Raise an exception for HTTP errors
-
-        patch_set = PatchSet(data.content.decode("utf-8"))
-
-        added_files = [patch.path for patch in patch_set.added_files]
-        modified_files = [patch.path for patch in patch_set.modified_files]
-        removed_files = [patch.path for patch in patch_set.removed_files]
-
-        if is_behind:
-            # If the comparison is behind, the added files are actually the removed files
-            changed_files = list(set(modified_files + removed_files))
-            removed_files = added_files
-        else:
-            changed_files = list(set(added_files + modified_files))
-
-        return changed_files, removed_files
 
     def get_file_content(self, path: str, sha: str | None = None) -> str | None:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
@@ -306,7 +278,8 @@ class RepoClient:
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
-            return contents.decoded_content.decode()
+            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
+            return contents.decoded_content.decode(detected_encoding)
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
 
@@ -337,33 +310,35 @@ class RepoClient:
 
         return ref
 
-    def _commit_file_change(
-        self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
-    ):
-        if not patch and not change:
-            raise ValueError("Either patch or change must be provided")
-
+    def process_one_file_for_git_commit(self, *, branch_ref: str,
+                                        patch: FilePatch | None = None,
+                                        change: FileChange | None = None) -> InputGitTreeElement | None:
+        """
+        This method is used to get a single change to be committed by to github.
+        It processes a FilePatch/FileChange object and converts it into an InputGitTreeElement which can be commited
+        It supports both FilePatch and FileChange objects.
+        """
         path = patch.path if patch else (change.path if change else None)
         patch_type = patch.type if patch else (change.change_type if change else None)
         if not path:
             raise ValueError("Path must be provided")
+        
         if not patch_type:
             raise ValueError("Patch type must be provided")
-
         if patch_type == "create":
             patch_type = "A"
         elif patch_type == "delete":
             patch_type = "D"
         elif patch_type == "edit":
             patch_type = "M"
-        commit_message = change.commit_message if change else None
 
         contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
-
         if isinstance(contents, list):
             raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
 
-        to_apply = contents.decoded_content.decode("utf-8") if contents else None
+        detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
+
+        to_apply = contents.decoded_content.decode(detected_encoding) if contents else None
         new_contents = (
             patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
         )
@@ -372,28 +347,17 @@ class RepoClient:
         if path.startswith("/"):
             path = path[1:]
 
-        if patch_type == "D" and contents:
-            self.repo.delete_file(
-                path,
-                commit_message or "File deletion",
-                contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
-                branch=branch_ref,
-            )
-        elif patch_type == "A" and new_contents:
-            self.repo.create_file(
-                path, commit_message or "New file", new_contents, branch=branch_ref
-            )
-        else:
-            if contents is None:
-                raise FileNotFoundError(f"File {path} does not exist in the repository.")
+        # don't create a blob if the file is being deleted
+        blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
 
-            self.repo.update_file(
-                path,
-                commit_message or "File change",
-                new_contents or "",
-                contents.sha,  # FYI: It wants the sha of the content blob here, not a commit sha.
-                branch=branch_ref,
-            )
+        # 100644 is the git code for creating a Regular non-executable file
+        # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
+        return InputGitTreeElement(
+            path=path,
+            mode='100644',
+            type='blob',
+            sha=blob.sha if blob else None)
+    
 
     def create_branch_from_changes(
         self,
@@ -410,22 +374,37 @@ class RepoClient:
             branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
         )
         branch_ref = self._create_branch(new_branch_name)
-
+        
+        tree_elements = []
         if file_patches:
             for patch in file_patches:
                 try:
-                    self._commit_file_change(patch=patch, branch_ref=branch_ref.ref)
+                    element = self.process_one_file_for_git_commit(branch_ref=branch_ref.ref, patch=patch)
+                    if element:
+                        tree_elements.append(element)
                 except Exception as e:
-                    logger.exception(f"Error committing file patch: {e}")
+                    logger.exception(f"Error processing file patch: {e}")
 
         elif file_changes:
             for change in file_changes:
                 try:
-                    self._commit_file_change(change=change, branch_ref=branch_ref.ref)
+                    element = self.process_one_file_for_git_commit(branch_ref=branch_ref.ref, change=change)
+                    if element:
+                        tree_elements.append(element)
                 except Exception as e:
-                    logger.exception(f"Error committing file change: {e}")
-
-        branch_ref.update()
+                    logger.exception(f"Error processing file change: {e}")
+        # latest commit is the head of new branch
+        latest_commit = self.repo.get_git_commit(self.get_branch_head_sha(new_branch_name))
+        base_tree = latest_commit.tree
+        new_tree = self.repo.create_git_tree(tree_elements, base_tree)
+        
+        new_commit = self.repo.create_git_commit(
+            message=pr_title,
+            tree=new_tree,
+            parents=[latest_commit]
+        )
+        
+        branch_ref.edit(sha=new_commit.sha)
 
         # Check that the changes were made
         comparison = self.repo.compare(self.get_default_branch_head_sha(), branch_ref.object.sha)
