@@ -102,6 +102,22 @@ class TestRepoClient:
             "test_file.py", ref="test_sha"
         )
 
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_fail_get_file_content(self, mock_requests, repo_client, mock_github):
+        mock_content = MagicMock()
+        mock_content.decoded_content = b"test content"
+        # this is a list of contents, so the content returned should be None
+        mock_github.get_repo.return_value.get_contents\
+            .return_value = [mock_content, mock_content]
+
+        content, encoding = repo_client.get_file_content("test_file.py")
+
+        assert not content
+        assert encoding == "utf-8"
+        mock_github.get_repo.return_value.get_contents.assert_called_with(
+            "test_file.py", ref="test_sha"
+        )
+
     def test_get_valid_file_paths(self, repo_client, mock_github):
         mock_tree = MagicMock()
         mock_tree.tree = [MagicMock(path="file1.py"), MagicMock(path="file2.py")]
