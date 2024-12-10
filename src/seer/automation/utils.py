@@ -11,7 +11,9 @@ import torch
 from openai.types.chat import ParsedChatCompletion
 from sentence_transformers import SentenceTransformer
 
-from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
+from seer.rpc import RpcClient
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
 # ALERT: Using magic number four. This is temporary code that ensures that AutopFix uses all 4
@@ -107,12 +109,15 @@ def process_repo_provider(provider: str) -> str:
     return provider
 
 
-def check_genai_consent(org_id: int) -> bool:
-    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+@inject
+def check_genai_consent(
+    org_id: int, client: RpcClient = injected, config: AppConfig = injected
+) -> bool:
+    if config.NO_SENTRY_INTEGRATION:
         # If we are running in a local environment, we just pass this check
         return True
 
-    response = get_sentry_client().call("get_organization_autofix_consent", org_id=org_id)
+    response = client.call("get_organization_autofix_consent", org_id=org_id)
 
     if response and response.get("consent", False) is True:
         return True
@@ -122,15 +127,6 @@ def check_genai_consent(org_id: int) -> bool:
 def raise_if_no_genai_consent(org_id: int) -> None:
     if not check_genai_consent(org_id):
         raise ConsentError(f"Organization {org_id} has not consented to use GenAI")
-
-
-def get_sentry_client() -> RpcClient:
-    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
-        rpc_client: DummyRpcClient = DummyRpcClient()
-        rpc_client.dry_run = True
-        return rpc_client
-    else:
-        return SentryRpcClient()
 
 
 def escape_xml_chars(s: str) -> str:
