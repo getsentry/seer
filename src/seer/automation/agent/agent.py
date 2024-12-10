@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from typing import Optional
 
@@ -117,20 +118,21 @@ class LlmAgent:
 
         logger.debug(f"----[{self.name}] Running Agent----")
 
-        self.reset_iterations()
+        with self.manage_run():
+            while self.should_continue(run_config):
+                self.run_iteration(run_config=run_config)
 
-        while self.should_continue(run_config):
-            self.run_iteration(run_config=run_config)
-
-        if self.iterations == run_config.max_iterations:
-            raise MaxIterationsReachedException(
-                f"Agent {self.name} reached maximum iterations without finishing."
-            )
+                if self.iterations >= run_config.max_iterations:
+                    raise MaxIterationsReachedException(
+                        f"Agent {self.name} reached maximum iterations without finishing."
+                    )
 
         return self.get_last_message_content()
 
-    def reset_iterations(self):
+    @contextlib.contextmanager
+    def manage_run(self):
         self.iterations = 0
+        yield
 
     def add_user_message(self, content: str):
         self.memory.append(Message(role="user", content=content))

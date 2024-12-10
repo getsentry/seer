@@ -2,7 +2,6 @@ import logging
 
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
-from seer.automation.codegen.models import CodegenContinuation
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
@@ -34,7 +33,7 @@ class CodegenContext(PipelineContext):
 
     @classmethod
     def from_run_id(cls, run_id: int):
-        state = CodegenContinuationState.from_id(run_id, model=CodegenContinuation)
+        state = CodegenContinuationState(run_id)
         with state.update() as cur:
             cur.mark_triggered()
 

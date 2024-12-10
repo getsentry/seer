@@ -1,7 +1,7 @@
 import datetime
 import enum
 import uuid
-from typing import Annotated, Any, Literal, Optional, Union, cast
+from typing import Annotated, Any, Literal, Optional, Union
 
 from johen import gen
 from johen.examples import Examples
@@ -137,6 +137,18 @@ class BaseStep(BaseModel):
                 return step
         return None
 
+    @property
+    def description(self) -> str:
+        if self.type == StepType.DEFAULT and self.key == "root_cause_analysis_processing":
+            return "figuring out what is causing the issue (not thinking about solutions yet)"
+        elif self.type == StepType.DEFAULT and self.key == "plan":
+            return "coming up with a fix for the issue"
+        elif self.type == StepType.ROOT_CAUSE_ANALYSIS:
+            return "selecting the final root cause"
+        elif self.type == StepType.CHANGES:
+            return "writing the code changes to fix the issue"
+        return ""
+
     def find_or_add_child(self, base_step: "Step") -> "Step":
         existing = self.find_child(id=base_step.id)
         if existing:
@@ -170,6 +182,13 @@ class DefaultStep(BaseStep):
     type: Literal[StepType.DEFAULT] = StepType.DEFAULT
     insights: list[InsightSharingOutput] = []
     initial_memory_length: int = 1
+
+    def get_all_insights(self):
+        insights = []
+        if self.status != AutofixStatus.ERROR and isinstance(self, DefaultStep):
+            for insight in self.insights:
+                insights.append(insight.insight)
+        return insights
 
 
 class RootCauseStep(BaseStep):
@@ -302,14 +321,14 @@ class AutofixUpdateType(str, enum.Enum):
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
-    type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE]
+    type: Literal[AutofixUpdateType.SELECT_ROOT_CAUSE] = AutofixUpdateType.SELECT_ROOT_CAUSE
     cause_id: int | None = None
     custom_root_cause: str | None = None
     instruction: str | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
-    type: Literal[AutofixUpdateType.CREATE_PR]
+    type: Literal[AutofixUpdateType.CREATE_PR] = AutofixUpdateType.CREATE_PR
     repo_external_id: str | None = None
     repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 
@@ -351,17 +370,7 @@ class AutofixContinuation(AutofixGroupState):
     def get_step_description(self) -> str:
         if not self.steps:
             return ""
-        step = self.steps[-1]
-        if step.type == StepType.DEFAULT and step.key == "root_cause_analysis_processing":
-            return "figuring out what is causing the issue (not thinking about solutions yet)"
-        elif step.type == StepType.DEFAULT and step.key == "plan":
-            return "coming up with a fix for the issue"
-        elif step.type == StepType.ROOT_CAUSE_ANALYSIS:
-            return "selecting the final root cause"
-        elif step.type == StepType.CHANGES:
-            return "writing the code changes to fix the issue"
-        else:
-            return ""
+        return self.steps[-1].description
 
     def kill_all_processing_steps(self):
         for step in self.steps:
@@ -462,14 +471,6 @@ class AutofixContinuation(AutofixGroupState):
         for key, codebase in self.codebases.items():
             codebase.file_changes = []
             self.codebases[key] = codebase
-
-    def get_all_insights(self):
-        insights = []
-        step = self.steps[-1]
-        if step.status != AutofixStatus.ERROR and isinstance(step, DefaultStep):
-            for insight in cast(DefaultStep, step).insights:
-                insights.append(insight.insight)
-        return insights
 
     @property
     def is_running(self):

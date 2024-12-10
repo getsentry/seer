@@ -16,19 +16,23 @@ def main(context: dict[str, str]) -> int:
     venv.ensure(venv_dir, python_version, url, sha256)
     venv.sync(reporoot, venv_dir, requirements)
 
-    # install colima
     repo_config = configparser.ConfigParser()
     repo_config.read(f"{reporoot}/devenv/config.ini")
-    colima.install(
-        repo_config["colima"]["version"],
-        repo_config["colima"][constants.SYSTEM_MACHINE],
-        repo_config["colima"][f"{constants.SYSTEM_MACHINE}_sha256"],
-        reporoot,
-    )
-    limactl.install(reporoot)
 
-    # start colima if it's not already running
-    colima.start(reporoot)
+    if constants.DARWIN:
+        colima.install(
+            repo_config["colima"]["version"],
+            repo_config["colima"][constants.SYSTEM_MACHINE],
+            repo_config["colima"][f"{constants.SYSTEM_MACHINE}_sha256"],
+            reporoot,
+        )
+        limactl.install(
+            repo_config["lima"]["version"],
+            repo_config["lima"][constants.SYSTEM_MACHINE],
+            repo_config["lima"][f"{constants.SYSTEM_MACHINE}_sha256"],
+            reporoot,
+        )
+        colima.start(reporoot)
 
     print("Executing update tasks in Makefile...")
     proc.run(("make", "-C", reporoot, "update"), exit=True)

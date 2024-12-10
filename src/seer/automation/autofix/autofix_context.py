@@ -25,8 +25,9 @@ from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefi
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.summarize.issue import IssueSummary
-from seer.automation.utils import AgentError, get_sentry_client
+from seer.automation.utils import AgentError
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
+from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
@@ -56,11 +57,12 @@ class AutofixContext(PipelineContext):
     event_manager: AutofixEventManager
     sentry_client: RpcClient
 
+    @inject
     def __init__(
         self,
         state: State[AutofixContinuation],
-        sentry_client: RpcClient,
         event_manager: AutofixEventManager,
+        sentry_client: RpcClient = injected,
     ):
         request = state.get().request
 
@@ -88,13 +90,13 @@ class AutofixContext(PipelineContext):
 
     @classmethod
     def from_run_id(cls, run_id: int):
-        state = ContinuationState.from_id(run_id, model=AutofixContinuation)
+        state = ContinuationState(run_id)
         with state.update() as cur:
             cur.mark_triggered()
 
         event_manager = AutofixEventManager(state)
 
-        return cls(state, get_sentry_client(), event_manager)
+        return cls(state, event_manager)
 
     @property
     def run_id(self) -> int:
@@ -220,108 +222,112 @@ class AutofixContext(PipelineContext):
         repo_id: int | None = None,
         pr_to_comment_on_url: str | None = None,
     ):
-        with self.state.update() as state:
-            for codebase_state in state.codebases.values():
-                if (
-                    repo_external_id is None and repo_id is None
-                ) or codebase_state.repo_external_id == repo_external_id:
-                    changes_step = state.find_step(key="changes")
-                    if not changes_step:
-                        raise ValueError("Changes step not found")
-                    changes_step = cast(ChangesStep, changes_step)
-                    change_state = next(
-                        (
-                            change
-                            for change in changes_step.changes
-                            if change.repo_external_id == codebase_state.repo_external_id
-                        ),
-                        None,
+        state = self.state.get()
+        for codebase_state in state.codebases.values():
+            if (
+                repo_external_id is None and repo_id is None
+            ) or codebase_state.repo_external_id == repo_external_id:
+                changes_step = state.find_step(key="changes")
+                if not changes_step:
+                    raise ValueError("Changes step not found")
+                changes_step = cast(ChangesStep, changes_step)
+                change_state, changes_state_index = next(
+                    (
+                        (change, i)
+                        for i, change in enumerate(changes_step.changes)
+                        if change.repo_external_id == codebase_state.repo_external_id
+                    ),
+                    (None, None),
+                )
+                if codebase_state.file_changes and change_state and changes_state_index is not None:
+                    key = codebase_state.repo_external_id or codebase_state.repo_id
+
+                    if key is None:
+                        raise ValueError("Repo key not found")
+
+                    repo_definition = self.repos_by_key().get(key)
+
+                    if repo_definition is None:
+                        raise ValueError(f"Repo definition not found for key {key}")
+
+                    repo_client = RepoClient.from_repo_definition(
+                        repo_definition, RepoClientType.WRITE
                     )
-                    if codebase_state.file_changes and change_state:
-                        key = codebase_state.repo_external_id or codebase_state.repo_id
 
-                        if key is None:
-                            raise ValueError("Repo key not found")
+                    branch_ref = repo_client.create_branch_from_changes(
+                        pr_title=change_state.title,
+                        file_patches=change_state.diff,
+                    )
 
-                        repo_definition = self.repos_by_key().get(key)
+                    if branch_ref is None:
+                        logger.warning("Failed to create branch from changes")
+                        return None
 
-                        if repo_definition is None:
-                            raise ValueError(f"Repo definition not found for key {key}")
+                    pr_title = f"""🤖 {change_state.title}"""
 
-                        repo_client = RepoClient.from_repo_definition(
-                            repo_definition, RepoClientType.WRITE
+                    ref_note = ""
+                    org_slug = self.get_org_slug(state.request.organization_id)
+                    if org_slug:
+                        issue_url = f"https://sentry.io/organizations/{org_slug}/issues/{state.request.issue.id}/"
+                        issue_link = (
+                            f"[{state.request.issue.short_id}]({issue_url})"
+                            if state.request.issue.short_id
+                            else issue_url
                         )
-
-                        branch_ref = repo_client.create_branch_from_changes(
-                            pr_title=change_state.title,
-                            file_patches=change_state.diff,
+                        suspect_pr_link = (
+                            f", which was likely introduced in [this PR]({pr_to_comment_on_url})."
+                            if pr_to_comment_on_url
+                            else ""
                         )
+                        ref_note = f"Fixes {issue_link}{suspect_pr_link}\n"
 
-                        if branch_ref is None:
-                            logger.warning("Failed to create branch from changes")
-                            return None
+                    pr_description = textwrap.dedent(
+                        """\
+                        👋 Hi there! This PR was automatically generated by Autofix 🤖
+                        {user_line}
 
-                        pr_title = f"""🤖 {change_state.title}"""
+                        {ref_note}
+                        {description}
 
-                        ref_note = ""
-                        org_slug = self.get_org_slug(state.request.organization_id)
-                        if org_slug:
-                            issue_url = f"https://sentry.io/organizations/{org_slug}/issues/{state.request.issue.id}/"
-                            issue_link = (
-                                f"[{state.request.issue.short_id}]({issue_url})"
-                                if state.request.issue.short_id
-                                else issue_url
-                            )
-                            suspect_pr_link = (
-                                f", which was likely introduced in [this PR]({pr_to_comment_on_url})."
-                                if pr_to_comment_on_url
-                                else ""
-                            )
-                            ref_note = f"Fixes {issue_link}{suspect_pr_link}\n"
+                        If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: {run_id}."""
+                    ).format(
+                        run_id=state.run_id,
+                        user_line=(
+                            f"\nThis fix was triggered by {state.request.invoking_user.display_name}"
+                            if state.request.invoking_user
+                            else ""
+                        ),
+                        description=change_state.description,
+                        ref_note=ref_note,
+                    )
 
-                        pr_description = textwrap.dedent(
-                            """\
-                            👋 Hi there! This PR was automatically generated by Autofix 🤖
-                            {user_line}
+                    pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
 
-                            {ref_note}
-                            {description}
+                    change_state.pull_request = CommittedPullRequestDetails(
+                        pr_number=pr.number, pr_url=pr.html_url, pr_id=pr.id
+                    )
 
-                            If you have any questions or feedback for the Sentry team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: {run_id}."""
-                        ).format(
+                    with self.state.update() as state:
+                        step = cast(ChangesStep, state.steps[changes_step.index])
+                        step.changes[changes_state_index].pull_request = change_state.pull_request
+
+                    with Session() as session:
+                        pr_id_mapping = DbPrIdToAutofixRunIdMapping(
+                            provider=repo_client.provider,
+                            pr_id=pr.id,
                             run_id=state.run_id,
-                            user_line=(
-                                f"\nThis fix was triggered by {state.request.invoking_user.display_name}"
-                                if state.request.invoking_user
-                                else ""
-                            ),
-                            description=change_state.description,
-                            ref_note=ref_note,
                         )
+                        session.add(pr_id_mapping)
+                        session.commit()
 
-                        pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
-
-                        change_state.pull_request = CommittedPullRequestDetails(
-                            pr_number=pr.number, pr_url=pr.html_url, pr_id=pr.id
+                    if (
+                        pr_to_comment_on_url
+                    ):  # for GitHub Copilot, leave a comment that the PR is made
+                        repo_client.comment_pr_generated_for_copilot(
+                            pr_to_comment_on_url=pr_to_comment_on_url,
+                            new_pr_url=pr.html_url,
+                            run_id=state.run_id,
                         )
-
-                        with Session() as session:
-                            pr_id_mapping = DbPrIdToAutofixRunIdMapping(
-                                provider=repo_client.provider,
-                                pr_id=pr.id,
-                                run_id=state.run_id,
-                            )
-                            session.add(pr_id_mapping)
-                            session.commit()
-
-                        if (
-                            pr_to_comment_on_url
-                        ):  # for GitHub Copilot, leave a comment that the PR is made
-                            repo_client.comment_pr_generated_for_copilot(
-                                pr_to_comment_on_url=pr_to_comment_on_url,
-                                new_pr_url=pr.html_url,
-                                run_id=state.run_id,
-                            )
 
     def comment_root_cause_on_pr(
         self, pr_url: str, repo_definition: RepoDefinition, root_cause: str

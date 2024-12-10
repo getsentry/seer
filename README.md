@@ -140,3 +140,20 @@ accidentally include any sensitive personal files in your source tree before usi
 Each time you push with `make push-staging` there will be a period of time while the VM polls and unpacks the new image
 before it is loaded.  If you have a `SENTRY_DSN` and `SENTRY_ENVIRONMENT` set, a release will be created by the push,
 allowing you to track when the server has loaded that release version.
+
+
+## Running Tests
+
+You can run all tests with `make test`.
+
+Make sure you have the test database running when running individual tests, do that via `docker compose up -d test-db`.
+
+To run a single test, use `pytest tests/path/to/test.py::test_name`.
+
+### VCRs
+
+VCRs are a way to record and replay HTTP requests.  They are useful for recording requests from external services that you don't control instead of mocking them.
+
+To use VCRs, add the `@pytest.mark.vcr()` decorator to your test.
+
+To record new VCRs, delete the existing cassettes and run the test.  Subsequent test runs will use the cassette instead of making requests.
