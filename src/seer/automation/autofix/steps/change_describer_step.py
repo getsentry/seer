@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from langfuse.decorators import observe
@@ -15,6 +16,8 @@ from seer.automation.autofix.config import (
 from seer.automation.autofix.models import CodebaseChange
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.pipeline import PipelineStepTaskRequest
+
+logger = logging.getLogger(__name__)
 
 
 class AutofixChangeDescriberRequest(PipelineStepTaskRequest):
@@ -93,7 +96,15 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     codebase_changes.append(change)
 
         self.context.event_manager.send_coding_complete(codebase_changes)
-        self.context.event_manager.add_log("Here are Autofix's suggested changes to fix the issue.")
+        if codebase_changes:
+            self.context.event_manager.add_log(
+                "Here are Autofix's suggested changes to fix the issue."
+            )
+        else:
+            self.context.event_manager.add_log(
+                "Autofix couldn't find any changes to make. Maybe help Autofix rethink by editing a card above?"
+            )
+            logger.exception("Autofix couldn't find a fix.")
 
         # GitHub Copilot can automatically make a PR after the coding step
         if self.request.pr_to_comment_on:
