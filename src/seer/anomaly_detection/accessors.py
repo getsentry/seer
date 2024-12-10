@@ -387,29 +387,17 @@ class DbAlertDataAccessor(AlertDataAccessor):
         combined_thresholds = anomalies_suss.thresholds
         combined_original_flags = anomalies_suss.original_flags
         if anomalies_fixed is not None:
-            combined_flags = [
-                (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
-                for i in range(len(anomalies_suss.flags))
-            ]
-
-            combined_scores = [
-                (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
-                for i in range(len(anomalies_suss.scores))
-            ]
-
-            combined_thresholds = [
-                (anomalies_suss.thresholds[i] if use_suss[i] else anomalies_fixed.thresholds[i])
-                for i in range(len(anomalies_suss.thresholds))
-            ]
-
-            combined_original_flags = [
-                (
-                    anomalies_suss.original_flags[i]
-                    if use_suss[i]
-                    else anomalies_fixed.original_flags[i]
-                )
-                for i in range(len(anomalies_suss.original_flags))
-            ]
+            for i in range(len(anomalies_suss.flags)):
+                if use_suss[i]:
+                    combined_flags[i] = anomalies_suss.flags[i]
+                    combined_scores[i] = anomalies_suss.scores[i]
+                    combined_thresholds[i] = anomalies_suss.thresholds[i]
+                    combined_original_flags[i] = anomalies_suss.original_flags[i]
+                else:
+                    combined_flags[i] = anomalies_fixed.flags[i]
+                    combined_scores[i] = anomalies_fixed.scores[i]
+                    combined_thresholds[i] = anomalies_fixed.thresholds[i]
+                    combined_original_flags[i] = anomalies_fixed.original_flags[i]
 
         return MPTimeSeriesAnomalies(
             flags=combined_flags,
