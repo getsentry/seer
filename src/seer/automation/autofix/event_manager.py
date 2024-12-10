@@ -70,6 +70,7 @@ class AutofixEventManager:
             cur_step.progress = []
             cur_step.completedMessage = None  # type: ignore[assignment]
             cur.status = AutofixStatus.PROCESSING
+            cur.mark_triggered()
 
     def send_root_cause_analysis_will_start(self):
         with self.state.update() as cur:
