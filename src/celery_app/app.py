@@ -13,18 +13,27 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
+def _is_celery_worker() -> bool:
+    """Check if we're running in a Celery worker process"""
+    return (
+        os.environ.get("CELERY_APP") is not None 
+        or "celery" in sys.argv[0].lower()
+    )
 
 # This abstract helps tests that want to validate the entry point process.
 def setup_celery_entrypoint(app: Celery):
-    app.on_configure.connect(init_celery_app)
-
+    # Only initialize when the worker actually starts
+    app.on_worker_init.connect(init_celery_app)
 
 @inject
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
-    from celery_app.tasks import setup_periodic_tasks
+        
+    # Only run bootup if we're in a Celery worker process
+    if _is_celery_worker():
+        bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+        from celery_app.tasks import setup_periodic_tasks
 
     sender.on_after_finalize.connect(setup_periodic_tasks)
 
