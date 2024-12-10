@@ -4,8 +4,9 @@ import json
 from enum import StrEnum
 from typing import Any, List, Optional
 
+
 import sqlalchemy
-from flask import Flask
+from flask import Flask, current_app
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
@@ -35,14 +36,28 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+def is_db_initialized() -> bool:
+    """Check if database is already initialized in current Flask app"""
+    return bool(current_app and hasattr(current_app, "_database_initialized"))
+
+def mark_db_initialized() -> None:
+    """Mark database as initialized in current Flask app"""
+    if current_app:
+        setattr(current_app, "_database_initialized", True)
+    else:
+        logger.warning("No Flask application context found when marking database as initialized")
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
+    if is_db_initialized():
+        return
+
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -50,6 +65,7 @@ def initialize_database(
     with app.app_context():
         Session.configure(bind=db.engine)
 
+    mark_db_initialized()
 
 class Base(DeclarativeBase):
     pass
