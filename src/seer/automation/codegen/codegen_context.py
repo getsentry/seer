@@ -67,7 +67,7 @@ class CodegenContext(PipelineContext):
     ) -> str | None:
         repo_client = self.get_repo_client()
 
-        file_contents = repo_client.get_file_content(path)
+        file_contents, _ = repo_client.get_file_content(path)
 
         if not ignore_local_changes:
             cur_state = self.state.get()
