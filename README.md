@@ -146,9 +146,12 @@ allowing you to track when the server has loaded that release version.
 
 You can run all tests with `make test`.
 
+### Running Individual Tests
+
 Make sure you have the test database running when running individual tests, do that via `docker compose up -d test-db`.
 
-To run a single test, use `pytest tests/path/to/test.py::test_name`.
+To run a single test, make sure you're in a shell, by doing `make shell`, and then run `pytest tests/path/to/test.py::test_name`.
+
 
 ### VCRs
 
