@@ -1,4 +1,4 @@
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Any
 
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr
@@ -64,11 +64,17 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    # unit_test: UnitTestSnippet | None = None
-    # reproduction: str | None = None
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
+    class Config:
+        # Allow extra fields for backward compatibility
+        extra = "allow"
+        # Ignore validation for missing fields that are currently commented out
+        validate_assignment = False
+
     def to_markdown_string(self) -> str:
+        markdown = f"# {self.title}\n\n"
+        markdown += f"## Description\n{self.description}\n\n" if self.description else ""
         markdown = f"# {self.title}\n\n"
         markdown += f"## Description\n{self.description}\n\n" if self.description else ""
 
