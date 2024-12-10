@@ -35,6 +35,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+_db_instances: dict[int, bool] = {}
+
 
 @inject
 def initialize_database(
@@ -44,8 +46,18 @@ def initialize_database(
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+    global _db_instances
+    app_id = id(app)
+
+    if app_id not in _db_instances:
+        try:
+            db.init_app(app)
+            migrate.init_app(app, db)
+            _db_instances[app_id] = True
+        except RuntimeError as e:
+            if "already been registered" not in str(e):
+                raise
+            _db_instances[app_id] = True
 
     with app.app_context():
         Session.configure(bind=db.engine)
