@@ -332,8 +332,6 @@ class RepoClient:
         elif patch_type == "edit":
             patch_type = "M"
 
-        # todo there is some code duplication with get_file_content method
-        #  the difference is that detected_encoding is also used later in blog creation
         contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
         if isinstance(contents, list):
             raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
@@ -401,7 +399,7 @@ class RepoClient:
         new_tree = self.repo.create_git_tree(tree_elements, base_tree)
         
         new_commit = self.repo.create_git_commit(
-            message="Changes suggested by Autofix",
+            message=pr_title,
             tree=new_tree,
             parents=[latest_commit]
         )
