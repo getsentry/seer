@@ -95,7 +95,7 @@ class TestRepoClient:
         mock_content.decoded_content = b"test content"
         mock_github.get_repo.return_value.get_contents.return_value = mock_content
 
-        content, encoding = repo_client.get_file_content("test_file.py")
+        content, _ = repo_client.get_file_content("test_file.py")
 
         assert content == "test content"
         mock_github.get_repo.return_value.get_contents.assert_called_with(
