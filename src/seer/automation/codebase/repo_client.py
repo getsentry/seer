@@ -332,13 +332,11 @@ class RepoClient:
         elif patch_type == "edit":
             patch_type = "M"
 
-        contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
-        if isinstance(contents, list):
-            raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
+        to_apply = None
+        detected_encoding = "utf-8"
+        if patch_type != "A":
+            to_apply, detected_encoding = self.get_file_content(path, sha=branch_ref)
 
-        detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-
-        to_apply = contents.decoded_content.decode(detected_encoding) if contents else None
         new_contents = (
             patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
         )
