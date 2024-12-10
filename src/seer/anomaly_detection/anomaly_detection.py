@@ -284,10 +284,10 @@ class AnomalyDetection(BaseModel):
 
         orig_curr_len = len(ts_with_history.current)
         logger.info(
-            f"Detecting anomalies for time series with {len(ts_with_history.history)} datapoints and history of {orig_curr_len} datapoints"
+            f"Detecting anomalies for time series with {orig_curr_len} datapoints and history of {len(ts_with_history.history)} datapoints"
         )
         trim_current_by = 0
-        MAX_STREAM_DETECTION_LEN = 400
+        MAX_STREAM_DETECTION_LEN = 100
         if orig_curr_len > MAX_STREAM_DETECTION_LEN:
             trim_current_by = orig_curr_len - MAX_STREAM_DETECTION_LEN
             logger.info(
