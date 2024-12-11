@@ -1,4 +1,5 @@
 import unittest
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from github.GithubException import UnknownObjectException
@@ -45,11 +46,10 @@ class TestAutofixContext(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event]),
                 )
             ),
-            type=DbStateRunTypes.AUTOFIX,
+            t=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(
             self.state,
-            MagicMock(),
             MagicMock(),
         )
 
@@ -70,7 +70,7 @@ class TestAutofixContext(unittest.TestCase):
             )
         )
 
-        AutofixContext(state, MagicMock(), mock_event_manager)
+        AutofixContext(state, mock_event_manager)
 
         mock_event_manager.migrate_step_keys.assert_called_once()
 
@@ -133,7 +133,7 @@ class TestAutofixContext(unittest.TestCase):
             valid_summary_data = {
                 "title": "title",
                 "whats_wrong": "whats wrong",
-                "trace": "trace",
+                "session_related_issues": "session_related_issues",
                 "possible_cause": "possible cause",
             }
             db_issue_summary = DbIssueSummary(group_id=0, summary=valid_summary_data)
@@ -146,10 +146,11 @@ class TestAutofixContext(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertIsInstance(result, IssueSummary)
-        self.assertEqual(result.title, "title")
-        self.assertEqual(result.whats_wrong, "whats wrong")
-        self.assertEqual(result.trace, "trace")
-        self.assertEqual(result.possible_cause, "possible cause")
+        if result:
+            self.assertEqual(result.title, "title")
+            self.assertEqual(result.whats_wrong, "whats wrong")
+            self.assertEqual(result.session_related_issues, "session_related_issues")
+            self.assertEqual(result.possible_cause, "possible cause")
 
         with Session() as session:
             invalid_summary_data = {"bad data": "uh oh"}
@@ -280,9 +281,7 @@ class TestAutofixContext(unittest.TestCase):
                 )
             ]
         )
-        test_repo = RepoDefinition(
-            provider="github", owner="test", name="repo", external_id="1", full_name="test/repo"
-        )
+        test_repo = RepoDefinition(provider="github", owner="test", name="repo", external_id="1")
         self.autofix_context.repos = [test_repo]
 
         self.autofix_context._process_stacktrace_paths(stacktrace)
@@ -305,9 +304,9 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
                 ),
             ),
-            type=DbStateRunTypes.AUTOFIX,
+            t=DbStateRunTypes.AUTOFIX,
         )
-        self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
+        self.autofix_context = AutofixContext(self.state, MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch("seer.automation.autofix.autofix_context.RepoClient")
@@ -378,6 +377,15 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             if pr_mapping:
                 cur = self.state.get()
                 self.assertEqual(pr_mapping.run_id, cur.run_id)
+
+        state = self.autofix_context.state.get()
+        changes_step = cast(ChangesStep, state.find_step(key="changes"))
+        self.assertIsNotNone(changes_step)
+        self.assertGreater(len(changes_step.changes), 0)
+
+        self.assertIsNotNone(changes_step.changes[0].pull_request)
+        if changes_step.changes[0].pull_request:
+            self.assertEqual(changes_step.changes[0].pull_request.pr_number, 1)
 
 
 if __name__ == "__main__":

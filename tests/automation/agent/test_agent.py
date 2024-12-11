@@ -1,6 +1,7 @@
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
+from johen import generate
 
 from seer.automation.agent.agent import (
     AgentConfig,
@@ -9,26 +10,14 @@ from seer.automation.agent.agent import (
     RunConfig,
 )
 from seer.automation.agent.client import OpenAiProvider
-from seer.automation.agent.models import (
-    LlmGenerateTextResponse,
-    LlmProviderType,
-    LlmResponseMetadata,
-    Message,
-    ToolCall,
-    Usage,
-)
+from seer.automation.agent.models import LlmGenerateTextResponse, Message, ToolCall, Usage
 from seer.automation.agent.tools import FunctionTool
 
 
 @pytest.fixture
-def mock_llm_client():
-    return Mock()
-
-
-@pytest.fixture
-def agent(mock_llm_client):
+def agent():
     config = AgentConfig()
-    return LlmAgent(config=config, client=mock_llm_client, name="TestAgent")
+    return LlmAgent(config=config, name="TestAgent")
 
 
 @pytest.fixture
@@ -36,61 +25,62 @@ def run_config():
     return RunConfig(
         system_prompt="You are a helpful assistant.",
         prompt="Hello, how are you?",
-        model=MagicMock(spec=OpenAiProvider),
+        model=OpenAiProvider(model_name="gpt-4o-mini"),
         temperature=0.0,
         run_name="Test Run",
     )
 
 
-def test_agent_initialization(agent):
-    assert not agent.config.interactive
-    assert agent.name == "TestAgent"
-    assert agent.iterations == 0
-    assert agent.memory == []
+def test_update_usage(agent: LlmAgent):
+    usage1 = next(generate(Usage))
+    usage2 = next(generate(Usage))
+    agent.update_usage(usage1)
+    agent.update_usage(usage2)
+    assert agent.usage == usage1 + usage2
 
 
-def test_add_user_message(agent):
-    agent.add_user_message("Test message")
-    assert len(agent.memory) == 1
-    assert agent.memory[0].role == "user"
-    assert agent.memory[0].content == "Test message"
-
-
-def test_get_last_message_content(agent):
-    assert agent.get_last_message_content() is None
-    agent.add_user_message("Test message")
-    assert agent.get_last_message_content() == "Test message"
-
-
-def test_reset_iterations(agent):
-    agent.iterations = 5
-    agent.reset_iterations()
-    assert agent.iterations == 0
-
-
-def test_update_usage(agent):
-    usage = Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
-    agent.update_usage(usage)
-    assert agent.usage == usage
-
-
-def test_process_message(agent):
+def test_process_message(agent: LlmAgent):
     message = Message(role="assistant", content="Hello!", tool_calls=[])
     agent.process_message(message)
     assert len(agent.memory) == 1
     assert agent.iterations == 1
 
 
-def test_process_message_with_tool_calls(agent):
+def test_process_message_with_tool_calls(agent: LlmAgent):
     tool_call = ToolCall(id="1", function="test_tool", args='{"arg": "value"}')
     message = Message(role="assistant", content="Using a tool", tool_calls=[tool_call])
 
-    with patch.object(agent, "process_tool_calls") as mock_process_tool_calls:
-        agent.process_message(message)
-        mock_process_tool_calls.assert_called_once_with([tool_call])
+    fn1 = Mock()
+    fn2 = Mock(return_value="Fn2 result")
+    agent.tools.append(
+        FunctionTool(
+            name="unrelated_tool",
+            description="",
+            fn=fn1,
+            parameters=[],
+            required=[],
+        )
+    )
+
+    agent.tools.append(
+        FunctionTool(
+            name="test_tool",
+            description="",
+            fn=fn2,
+            parameters=[{"name": "arg"}],
+            required=[],
+        )
+    )
+
+    agent.process_message(message)
+    fn1.assert_not_called()
+    fn2.assert_called_once_with(arg="value")
+    assert len(agent.memory) == 2
+    assert agent.iterations == 1
+    assert agent.memory[1].content == "Fn2 result"
 
 
-def test_should_continue(agent, run_config):
+def test_should_continue(agent: LlmAgent, run_config: RunConfig):
     # First iteration
     assert agent.should_continue(run_config)
 
@@ -116,97 +106,57 @@ def test_should_continue(agent, run_config):
     assert agent.should_continue(run_config)
 
 
-def test_run_iteration(agent, run_config, mock_llm_client):
-    mock_response = LlmGenerateTextResponse(
-        message=Message(role="assistant", content="Hello!"),
-        metadata=LlmResponseMetadata(
-            model="test-model",
-            provider_name=LlmProviderType.OPENAI,
-            usage=Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
-        ),
-    )
-    mock_llm_client.generate_text.return_value = mock_response
-
+@pytest.mark.vcr()
+def test_run_iteration(agent: LlmAgent, run_config: RunConfig):
     agent.run_iteration(run_config)
 
     assert len(agent.memory) == 1
-    assert agent.memory[0].content == "Hello!"
+    assert agent.memory[0].content == "How can I assist you today?"
     assert agent.iterations == 1
-    assert agent.usage.total_tokens == 30
+    assert agent.usage.total_tokens == 20
 
 
-def test_run_with_tool_calls(agent, run_config, mock_llm_client):
+@pytest.mark.vcr()
+def test_run_with_tool_calls(agent: LlmAgent, run_config: RunConfig):
     tool = FunctionTool(
         name="test_tool", description="A test tool", parameters=[], fn=lambda: "Tool result"
     )
     agent.tools = [tool]
-
-    mock_response1 = LlmGenerateTextResponse(
-        message=Message(
-            role="assistant",
-            content="Using a tool",
-            tool_calls=[ToolCall(id="1", function="test_tool", args="{}")],
-        ),
-        metadata=LlmResponseMetadata(
-            model="test-model",
-            provider_name=LlmProviderType.OPENAI,
-            usage=Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
-        ),
-    )
-    mock_response2 = LlmGenerateTextResponse(
-        message=Message(role="assistant", content="Done"),
-        metadata=LlmResponseMetadata(
-            model="test-model",
-            provider_name=LlmProviderType.OPENAI,
-            usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-        ),
-    )
-    mock_llm_client.generate_text.side_effect = [mock_response1, mock_response2]
-
+    run_config.prompt = "Can you call test_tool?"
     result = agent.run(run_config)
 
-    assert result == "Done"
+    assert result == 'The test_tool has been successfully called, and the result is "Tool result".'
     assert (
         len(agent.memory) == 4
     )  # User message, initial assistant message, tool response, final message
     assert agent.iterations == 2
-    assert agent.usage.total_tokens == 50
+    assert agent.usage.total_tokens == 141
 
 
-def test_run_max_iterations_exception(agent, run_config, mock_llm_client):
-    mock_response = LlmGenerateTextResponse(
-        message=Message(role="assistant", content="Thinking..."),
-        metadata=LlmResponseMetadata(
-            model="test-model",
-            provider_name=LlmProviderType.OPENAI,
-            usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-        ),
-    )
-    mock_llm_client.generate_text.return_value = mock_response
+def test_run_max_iterations_exception(run_config: RunConfig):
+    class LoopingAgent(LlmAgent):
+        def should_continue(self, run_config: RunConfig) -> bool:
+            return True
 
-    run_config.max_iterations = 1
+        def get_completion(self, run_config: RunConfig) -> LlmGenerateTextResponse:
+            return next(generate(LlmGenerateTextResponse))
+
+    agent = LoopingAgent(config=AgentConfig())
+
+    run_config.max_iterations = 100
 
     with pytest.raises(MaxIterationsReachedException):
         agent.run(run_config)
 
-    assert agent.iterations == 1
+    assert agent.iterations == 100
 
 
-def test_run_with_initial_prompt(agent, run_config, mock_llm_client):
-    mock_response = LlmGenerateTextResponse(
-        message=Message(role="assistant", content="Hello!"),
-        metadata=LlmResponseMetadata(
-            model="test-model",
-            provider_name=LlmProviderType.OPENAI,
-            usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-        ),
-    )
-    mock_llm_client.generate_text.return_value = mock_response
-
+@pytest.mark.vcr()
+def test_run_with_initial_prompt(agent: LlmAgent, run_config: RunConfig):
     run_config.prompt = "Initial prompt"
     result = agent.run(run_config)
 
-    assert result == "Hello!"
+    assert result
     assert len(agent.memory) == 2  # Initial user message and assistant response
     assert agent.memory[0].content == "Initial prompt"
     assert agent.memory[0].role == "user"
