@@ -31,15 +31,17 @@ class DisablePreparedStatementConnection(Connection):
     pass
 
 
+
 @inject
 def bootup(
-    *, start_model_loading: bool, integrations: list[Integration], config: AppConfig = injected
+    *, start_model_loading: bool, integrations: list[Integration], config: AppConfig = injected, skip_db: bool = False
 ):
     initialize_sentry_sdk(integrations)
     with sentry_sdk.metrics.timing(key="seer_bootup_time"):
         initialize_logs(["seer.", "celery_app."])
         config.do_validation()
-        initialize_database()
+        if not skip_db:
+            initialize_database()
         initialize_models(start_model_loading)
 
 
