@@ -176,7 +176,6 @@ class CodingCodeReviewPrompts:
 
     @staticmethod
     def format_pr_review_plan_step(diff_str: str):
-        print(diff_str)
         return textwrap.dedent(
             """\
             You are given the below code changes as a diff:

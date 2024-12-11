@@ -27,7 +27,6 @@ class PrReviewStepRequest(PipelineStepTaskRequest):
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 def pr_review_task(*args, request: dict[str, Any]):
-    print("BEFORE INVOKE")
     PrReviewStep(request).invoke()
 
 
@@ -57,7 +56,6 @@ class PrReviewStep(CodegenStep):
         repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_REVIEW)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
-        print("BEFORE TRY")
         try:
             generated_pr_review = PrReviewCodingComponent(self.context).invoke(
                 CodePrReviewRequest(

@@ -65,14 +65,12 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
     @staticmethod
     def _format_output(llm_output: str) -> CodePrReviewOutput | None:
         comments_json = extract_text_inside_tags(llm_output, "comments")
-        print(comments_json)
         if len(comments_json) == 0:
             raise ValueError("Failed to extract pr review comments from LLM response")
 
         try:
             comments_data = json.loads(comments_json)
         except json.JSONDecodeError as e:
-            print(comments_json)
             raise ValueError(f"Invalid JSON format inside <comments>: {e}")
 
         if not isinstance(comments_data, list):
@@ -87,7 +85,6 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
 
             body = comment_data["body"]
             if "code_suggestion" in comment_data:
-                print(comment_data["code_suggestion"])
                 code_suggestion = comment_data["code_suggestion"]
                 body += f"\n```suggestion\n{code_suggestion}\n```"
 
