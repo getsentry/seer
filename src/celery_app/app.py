@@ -6,11 +6,11 @@ import billiard  # type: ignore[import-untyped]
 from celery import Celery, signals
 from sentry_sdk.integrations.celery import CeleryIntegration
 
-from celery_app.config import CeleryConfig
+from seer.configuration import CeleryConfig
+from seer.db import initialize_celery_database
 from seer.bootup import bootup
 from seer.dependency_injection import inject, injected
 
-logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
 
@@ -23,7 +23,8 @@ def setup_celery_entrypoint(app: Celery):
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+    initialize_celery_database(config)
+    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)], skip_db=True)
     from celery_app.tasks import setup_periodic_tasks
 
     sender.on_after_finalize.connect(setup_periodic_tasks)
