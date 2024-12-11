@@ -1,6 +1,6 @@
 import datetime
 from enum import Enum
-from typing import Union
+from typing import List, Union
 
 from pydantic import BaseModel, Field
 
@@ -93,4 +93,10 @@ class CodePrReviewRequest(BaseComponentRequest):
 
 
 class CodePrReviewOutput(BaseComponentOutput):
-    diffs: list[FileChange]
+    class Comment(BaseModel):
+        path: str
+        line: int
+        body: str
+        start_line: int
+
+    comments: List[Comment]

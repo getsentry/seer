@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from seer.automation.codegen.models import CodePrReviewRequest
+from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
+from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
 from seer.automation.models import RepoDefinition
 
@@ -44,3 +45,55 @@ class TestPrReview(unittest.TestCase):
 
     # add Test for when PR comments are created
     # add Test for when no suggestions are made
+
+
+    def test_format_response_valid_input(self):
+        mock_output = """
+        <comments>
+        [
+            {
+                "path": "src/file1.py",
+                "line": 42,
+                "body": "Consider refactoring this function to reduce its complexity. It currently exceeds 20 lines, making it harder to read and maintain. Extracting the repeated logic into a helper function could improve clarity and reusability."
+                "start_line": 40,
+            },
+            {
+                "path": "src/utils/helper.py",
+                "line": 18,
+                "body": "This regular expression could benefit from a comment explaining its purpose. Complex regex patterns are often difficult to understand and maintain."
+                "start_line": 15,
+            }
+        ]
+        </comments>
+        """
+        output = PrReviewCodingComponent._format_output(mock_output)
+        expected_output = CodePrReviewOutput(
+            diffs=[
+                {
+                    "path": "src/file1.py",
+                    "line": 42,
+                    "body": "Consider refactoring this function to reduce its complexity. It currently exceeds 20 lines, making it harder to read and maintain. Extracting the repeated logic into a helper function could improve clarity and reusability.",
+                    "start_line": 45,
+                },
+                {
+                    "path": "src/utils/helper.py",
+                    "line": 18,
+                    "body": "This regular expression could benefit from a comment explaining its purpose. Complex regex patterns are often difficult to understand and maintain.",
+                    "start_line": 20,
+                },
+            ]
+        )
+        self.assertEqual(len(output.diffs), len(expected_output.diffs))
+        for actual, expected in zip(output.diffs, expected_output.diffs):
+            self.assertEqual(actual["path"], expected["path"])
+            self.assertEqual(actual["line"], expected["line"])
+            self.assertEqual(actual["body"], expected["body"])
+            self.assertEqual(actual["start_line"], expected["start_line"])
+
+    def test_format_response_invalid_input(self):
+        invalid_output = "<comments>[{\"path\": \"src/file.py\", \"line\": 10}]</comments>"
+
+        with self.assertRaises(ValueError) as context:
+            PrReviewCodingComponent._format_output(invalid_output)
+
+        self.assertIn("Invalid comment format", str(context.exception))
