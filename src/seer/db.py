@@ -35,20 +35,31 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+# Module-level flag to track initialization state
+_db_initialized = False
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+    global _db_initialized
+    if _db_initialized:
+        return
+
+    try:
+        app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
 
     db.init_app(app)
     migrate.init_app(app, db)
 
+
     with app.app_context():
         Session.configure(bind=db.engine)
+    
+    _db_initialized = True
 
 
 class Base(DeclarativeBase):
