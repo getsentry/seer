@@ -19,13 +19,20 @@ def setup_celery_entrypoint(app: Celery):
     app.on_configure.connect(init_celery_app)
 
 
+# Track if bootup has been performed
+_bootup_complete = False
+
 @inject
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
+    global _bootup_complete
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+    
+    if not _bootup_complete:
+        bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+        _bootup_complete = True
+    
     from celery_app.tasks import setup_periodic_tasks
-
     sender.on_after_finalize.connect(setup_periodic_tasks)
 
 
