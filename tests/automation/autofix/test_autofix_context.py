@@ -133,7 +133,7 @@ class TestAutofixContext(unittest.TestCase):
             valid_summary_data = {
                 "title": "title",
                 "whats_wrong": "whats wrong",
-                "trace": "trace",
+                "session_related_issues": "session_related_issues",
                 "possible_cause": "possible cause",
             }
             db_issue_summary = DbIssueSummary(group_id=0, summary=valid_summary_data)
@@ -149,7 +149,7 @@ class TestAutofixContext(unittest.TestCase):
         if result:
             self.assertEqual(result.title, "title")
             self.assertEqual(result.whats_wrong, "whats wrong")
-            self.assertEqual(result.trace, "trace")
+            self.assertEqual(result.session_related_issues, "session_related_issues")
             self.assertEqual(result.possible_cause, "possible cause")
 
         with Session() as session:
@@ -281,9 +281,7 @@ class TestAutofixContext(unittest.TestCase):
                 )
             ]
         )
-        test_repo = RepoDefinition(
-            provider="github", owner="test", name="repo", external_id="1", full_name="test/repo"
-        )
+        test_repo = RepoDefinition(provider="github", owner="test", name="repo", external_id="1")
         self.autofix_context.repos = [test_repo]
 
         self.autofix_context._process_stacktrace_paths(stacktrace)

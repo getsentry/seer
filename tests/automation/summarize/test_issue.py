@@ -24,10 +24,10 @@ class TestSummarizeIssue:
 
     def test_summarize_issue_success(self, mock_llm_client, sample_request):
         mock_structured_completion = MagicMock()
-        mock_raw_summary = MagicMock(
+        mock_raw_summary = IssueSummary(
             title="Test headline",
             whats_wrong="Test what's wrong",
-            trace="Test trace",
+            session_related_issues="Test session related issues",
             possible_cause="Test possible cause",
         )
         mock_structured_completion.choices[0].message.parsed = mock_raw_summary
@@ -47,7 +47,7 @@ class TestSummarizeIssue:
         assert result.group_id == 1
         assert result.headline == "Test headline"
         assert result.whats_wrong == "Test what's wrong"
-        assert result.trace == "Test trace"
+        assert result.trace == "Test session related issues"
         assert result.possible_cause == "Test possible cause"
         assert raw_result == mock_raw_summary
 
@@ -58,10 +58,10 @@ class TestSummarizeIssue:
         mock_from_event.return_value = mock_event_details
 
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=MagicMock(
+            parsed=IssueSummary(
                 title="Test headline",
                 whats_wrong="Test what's wrong",
-                trace="Test trace",
+                session_related_issues="Test session related issues",
                 possible_cause="Test possible cause",
             ),
             metadata=LlmResponseMetadata(
@@ -96,7 +96,7 @@ class TestRunSummarizeIssue:
             IssueSummary(
                 title="Test headline",
                 whats_wrong="Test what's wrong",
-                trace="Test trace",
+                session_related_issues="Test session related issues",
                 possible_cause="Test possible cause",
             ),
         )
@@ -134,7 +134,7 @@ class TestRunSummarizeIssue:
             IssueSummary(
                 title="Test headline",
                 whats_wrong="Test what's wrong",
-                trace="Test trace",
+                session_related_issues="Test session related issues",
                 possible_cause="Test possible cause",
             ),
         )

@@ -36,7 +36,7 @@ class TestRootCauseStep(unittest.TestCase):
                 issue_summary=IssueSummary(
                     title="title",
                     whats_wrong="whats wrong",
-                    trace="trace",
+                    session_related_issues="trace",
                     possible_cause="possible cause",
                 ),
             )
@@ -73,7 +73,7 @@ class TestRootCauseStep(unittest.TestCase):
                 issue_summary=IssueSummary(
                     title="title",
                     whats_wrong="whats wrong",
-                    trace="trace",
+                    session_related_issues="trace",
                     possible_cause="possible cause",
                 ),
                 options=AutofixRequestOptions(comment_on_pr_with_url=pr_url),
