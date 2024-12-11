@@ -51,10 +51,8 @@ class PrReviewStep(CodegenStep):
     @observe(name="Codegen - PR Review")
     @ai_track(description="Codegen - PR Review Step")
     def _invoke(self, **kwargs):
-        print("HI 2")
         self.logger.info("Executing Codegen - PR Review Step")
         self.context.event_manager.mark_running()
-        print("HI 3")
 
         repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_REVIEW)
         pr = repo_client.repo.get_pull(self.request.pr_id)

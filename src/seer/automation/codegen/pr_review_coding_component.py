@@ -8,7 +8,11 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.client import AnthropicProvider, LlmClient
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml
-from seer.automation.autofix.components.coding.utils import task_to_file_change, task_to_file_create, task_to_file_delete
+from seer.automation.autofix.components.coding.utils import (
+    task_to_file_change,
+    task_to_file_create,
+    task_to_file_delete,
+)
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -55,18 +59,20 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
 
             if not final_response:
                 return None
-            
+
             return self._format_output(final_response)
 
     @staticmethod
     def _format_output(llm_output: str) -> CodePrReviewOutput | None:
         comments_json = extract_text_inside_tags(llm_output, "comments")
+        print(comments_json)
         if len(comments_json) == 0:
             raise ValueError("Failed to extract pr review comments from LLM response")
 
         try:
             comments_data = json.loads(comments_json)
         except json.JSONDecodeError as e:
+            print(comments_json)
             raise ValueError(f"Invalid JSON format inside <comments>: {e}")
 
         if not isinstance(comments_data, list):
@@ -79,11 +85,19 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
             if not all(key in comment_data for key in expected_keys):
                 continue
 
-            results.append(CodePrReviewOutput.Comment(
-                path=comment_data["path"],
-                line=comment_data["line"],
-                body=comment_data["body"],
-                start_line=comment_data["start_line"],
-            ))
+            body = comment_data["body"]
+            if "code_suggestion" in comment_data:
+                print(comment_data["code_suggestion"])
+                code_suggestion = comment_data["code_suggestion"]
+                body += f"\n```suggestion\n{code_suggestion}\n```"
+
+            results.append(
+                CodePrReviewOutput.Comment(
+                    path=comment_data["path"],
+                    line=comment_data["line"],
+                    body=body,
+                    start_line=comment_data["start_line"],
+                )
+            )
 
         return CodePrReviewOutput(comments=results)

@@ -201,14 +201,14 @@ class CodingCodeReviewPrompts:
                     "line": line_number_here,
                     "body": "Your comment text here"
                     "start_line": start_line_number_here,
+                    "code_suggestion": "If you have a code suggestion, provide it here"
                 }}
             - Ensure each comment includes:
                 - The correct file name ("{{file_name}}").
                 - The specific line number requiring the comment.
                 - Clear, professional, and actionable feedback.
             - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
-            - Wrap the suggestions in a <comments> and </comments> block.
-            - ONLY return the list of JSON objects, nothing else. They need to be parsed directly by the system. 
+            - Wrap the comments in a <comments> and </comments> block.
             """
         ).format(
             diff_str=diff_str,

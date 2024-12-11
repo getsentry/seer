@@ -32,7 +32,7 @@ def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[Cod
 
 def create_initial_pr_review_run(request: CodegenPrReviewRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
-        CodegenContinuation(request=request), group_id=request.pr_id, type=DbStateRunTypes.PR_REVIEW
+        CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_REVIEW
     )
 
     with state.update() as cur:
