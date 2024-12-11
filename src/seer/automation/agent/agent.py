@@ -138,7 +138,9 @@ class LlmAgent:
         self.memory.append(Message(role="user", content=content))
 
     def get_last_message_content(self) -> str | None:
-        return self.memory[-1].content if self.memory else None
+        return (
+            self.memory[-1].content if self.memory and self.memory[-1].role == "assistant" else None
+        )
 
     def call_tool(self, tool_call: ToolCall) -> Message:
         logger.debug(f"[{tool_call.id}] Calling tool {tool_call.function}")
