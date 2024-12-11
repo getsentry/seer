@@ -127,7 +127,7 @@ class LlmAgent:
                         f"Agent {self.name} reached maximum iterations without finishing."
                     )
 
-        return self.get_last_message_content()
+        return self.get_last_assistant_message_content()
 
     @contextlib.contextmanager
     def manage_run(self):
@@ -137,8 +137,10 @@ class LlmAgent:
     def add_user_message(self, content: str):
         self.memory.append(Message(role="user", content=content))
 
-    def get_last_message_content(self) -> str | None:
-        return self.memory[-1].content if self.memory else None
+    def get_last_assistant_message_content(self) -> str | None:
+        return (
+            self.memory[-1].content if self.memory and self.memory[-1].role == "assistant" else None
+        )
 
     def call_tool(self, tool_call: ToolCall) -> Message:
         logger.debug(f"[{tool_call.id}] Calling tool {tool_call.function}")
