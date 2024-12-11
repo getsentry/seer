@@ -35,6 +35,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+_flask_initialized = False
+_celery_initialized = False
 
 @inject
 def initialize_database(
