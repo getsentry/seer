@@ -7,10 +7,9 @@ import sentry_sdk
 
 from celery_app.app import celery_app
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
-from seer.anomaly_detection.detectors import MPConfig
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
+from seer.anomaly_detection.models import AlgoConfig, TimeSeries
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
-from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.db import DbDynamicAlert, Session, TaskStatus
 from seer.dependency_injection import inject, injected
 
@@ -79,7 +78,7 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
 def update_matrix_profiles(
     alert: DbDynamicAlert,
     anomaly_detection_config: AnomalyDetectionConfig,
-    mp_config: MPConfig = injected,
+    algo_config: AlgoConfig = injected,
 ):
 
     timeseries = TimeSeries(
@@ -93,7 +92,7 @@ def update_matrix_profiles(
     anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
         timeseries=timeseries,
         config=anomaly_detection_config,
-        window_size=mp_config.fixed_window_size,
+        window_size=algo_config.mp_fixed_window_size,
     )
     anomalies = DbAlertDataAccessor().combine_anomalies(
         anomalies_suss, anomalies_fixed, [True] * len(timeseries.timestamps)

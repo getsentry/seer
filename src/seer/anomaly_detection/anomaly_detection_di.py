@@ -2,7 +2,6 @@ from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAcces
 from seer.anomaly_detection.detectors import (
     MinMaxNormalizer,
     MPCascadingScorer,
-    MPConfig,
     MPScorer,
     MPUtils,
     Normalizer,
@@ -13,6 +12,7 @@ from seer.anomaly_detection.detectors.location_detectors import (
     LocationDetector,
     ProphetLocationDetector,
 )
+from seer.anomaly_detection.models import AlgoConfig
 from seer.dependency_injection import Module
 
 anomaly_detection_module = Module()
@@ -30,10 +30,15 @@ def mp_scorer_provider() -> MPScorer:
 
 
 @anomaly_detection_module.provider
-def mpconfig_provider() -> MPConfig:
-    return MPConfig(
-        ignore_trivial=True, normalize_mp=False, fixed_window_size=10
-    )  # Avoiding complexities around normalizing matrix profile across stream computation for now.
+def algoconfig_provider() -> AlgoConfig:
+    return AlgoConfig(
+        mp_ignore_trivial=True,
+        mp_normalize=False,
+        prophet_uncertainty_samples=1,
+        mp_fixed_window_size=10,
+        return_thresholds=False,
+        return_predicted_range=False,
+    )
 
 
 @anomaly_detection_module.provider

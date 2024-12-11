@@ -39,12 +39,7 @@ from seer.automation.autofix.tasks import (
     run_autofix_root_cause,
     update_code_change,
 )
-from seer.automation.codebase.models import (
-    CodebaseStatusCheckRequest,
-    CodebaseStatusCheckResponse,
-    RepoAccessCheckRequest,
-    RepoAccessCheckResponse,
-)
+from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
     CodegenPrReviewRequest,
@@ -165,24 +160,11 @@ def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckR
     return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
 
 
-@json_api(blueprint, "/v1/automation/codebase/index/status")
-def get_codebase_index_status_endpoint(
-    data: CodebaseStatusCheckRequest,
-) -> CodebaseStatusCheckResponse:
-    # TODO: Remove this once sentry side is updated
-    return CodebaseStatusCheckResponse(status="up_to_date")
-
-
 @json_api(blueprint, "/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     raise_if_no_genai_consent(data.organization_id)
     run_id = run_autofix_root_cause(data)
     return AutofixEndpointResponse(started=True, run_id=run_id)
-
-
-@json_api(blueprint, "/v1/automation/autofix/raise-error")  # TODO remove this endpoint
-def autofix_test_copilot_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    raise Exception("This is a test error to create a Sentry issue")
 
 
 @json_api(blueprint, "/v1/automation/autofix/update")

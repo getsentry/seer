@@ -7,7 +7,6 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.detectors.mp_config import MPConfig
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
 from seer.anomaly_detection.detectors.smoothers import (
@@ -16,6 +15,7 @@ from seer.anomaly_detection.detectors.smoothers import (
 )
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
+    AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
     MPTimeSeriesAnomaliesSingleWindow,
@@ -70,7 +70,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         config: AnomalyDetectionConfig,
         window_size: int | None = None,
         ws_selector: WindowSizeSelector = injected,
-        mp_config: MPConfig = injected,
+        algo_config: AlgoConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
@@ -102,7 +102,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         mp = stumpy.stump(
             ts_values,
             m=max(3, window_size),
-            ignore_trivial=mp_config.ignore_trivial,
+            ignore_trivial=algo_config.mp_ignore_trivial,
             normalize=False,
         )
 

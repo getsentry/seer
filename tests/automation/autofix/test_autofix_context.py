@@ -1,6 +1,8 @@
 import unittest
+from typing import cast
 from unittest.mock import MagicMock, patch
 
+from github.GithubException import UnknownObjectException
 from johen import generate
 
 from seer.automation.agent.models import Message
@@ -44,11 +46,10 @@ class TestAutofixContext(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event]),
                 )
             ),
-            type=DbStateRunTypes.AUTOFIX,
+            t=DbStateRunTypes.AUTOFIX,
         )
         self.autofix_context = AutofixContext(
             self.state,
-            MagicMock(),
             MagicMock(),
         )
 
@@ -69,7 +70,7 @@ class TestAutofixContext(unittest.TestCase):
             )
         )
 
-        AutofixContext(state, MagicMock(), mock_event_manager)
+        AutofixContext(state, mock_event_manager)
 
         mock_event_manager.migrate_step_keys.assert_called_once()
 
@@ -145,10 +146,11 @@ class TestAutofixContext(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertIsInstance(result, IssueSummary)
-        self.assertEqual(result.title, "title")
-        self.assertEqual(result.whats_wrong, "whats wrong")
-        self.assertEqual(result.trace, "trace")
-        self.assertEqual(result.possible_cause, "possible cause")
+        if result:
+            self.assertEqual(result.title, "title")
+            self.assertEqual(result.whats_wrong, "whats wrong")
+            self.assertEqual(result.trace, "trace")
+            self.assertEqual(result.possible_cause, "possible cause")
 
         with Session() as session:
             invalid_summary_data = {"bad data": "uh oh"}
@@ -263,6 +265,34 @@ class TestAutofixContext(unittest.TestCase):
         self.assertEqual(result2[0].role, "assistant")
         self.assertEqual(result2[0].content, "Test message 2")
 
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_process_stacktrace_paths_unknown_object_exception(self, mock_RepoClient):
+        mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="test_file.py",
+                    in_app=True,
+                    repo_name=None,
+                    context=[],
+                    abs_path="path",
+                    line_no=1,
+                    col_no=1,
+                )
+            ]
+        )
+        test_repo = RepoDefinition(
+            provider="github", owner="test", name="repo", external_id="1", full_name="test/repo"
+        )
+        self.autofix_context.repos = [test_repo]
+
+        self.autofix_context._process_stacktrace_paths(stacktrace)
+
+        self.autofix_context.event_manager.on_error.assert_called_once_with(
+            error_msg="Autofix does not have access to the `test/repo` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
+            should_completely_error=True,
+        )
+
 
 class TestAutofixContextPrCommit(unittest.TestCase):
     def setUp(self):
@@ -276,9 +306,9 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     issue=IssueDetails(id=0, title="", events=[error_event], short_id="ISSUE_1"),
                 ),
             ),
-            type=DbStateRunTypes.AUTOFIX,
+            t=DbStateRunTypes.AUTOFIX,
         )
-        self.autofix_context = AutofixContext(self.state, MagicMock(), MagicMock())
+        self.autofix_context = AutofixContext(self.state, MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch("seer.automation.autofix.autofix_context.RepoClient")
@@ -349,6 +379,15 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             if pr_mapping:
                 cur = self.state.get()
                 self.assertEqual(pr_mapping.run_id, cur.run_id)
+
+        state = self.autofix_context.state.get()
+        changes_step = cast(ChangesStep, state.find_step(key="changes"))
+        self.assertIsNotNone(changes_step)
+        self.assertGreater(len(changes_step.changes), 0)
+
+        self.assertIsNotNone(changes_step.changes[0].pull_request)
+        if changes_step.changes[0].pull_request:
+            self.assertEqual(changes_step.changes[0].pull_request.pr_number, 1)
 
 
 if __name__ == "__main__":

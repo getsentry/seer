@@ -19,7 +19,7 @@ from seer.automation.state import DbState, DbStateRunTypes
 
 def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
-        CodegenContinuation(request=request), group_id=request.pr_id, type=DbStateRunTypes.UNIT_TEST
+        CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.UNIT_TEST
     )
 
     with state.update() as cur:
@@ -63,7 +63,7 @@ def codegen_unittest(request: CodegenUnitTestsRequest):
 
 
 def get_unittest_state(request: CodegenUnitTestsStateRequest):
-    state = CodegenContinuationState.from_id(request.run_id, model=CodegenContinuation)
+    state = CodegenContinuationState(request.run_id)
     return state.get()
 
 

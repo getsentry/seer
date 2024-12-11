@@ -5,12 +5,15 @@ import re
 from typing import TypeVar
 from xml.etree import ElementTree as ET
 
+import chardet
 import billiard  # type: ignore[import-untyped]
 import torch
 from openai.types.chat import ParsedChatCompletion
 from sentence_transformers import SentenceTransformer
 
-from seer.rpc import DummyRpcClient, RpcClient, SentryRpcClient
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
+from seer.rpc import RpcClient
 from seer.stubs import DummySentenceTransformer, can_use_model_stubs
 
 # ALERT: Using magic number four. This is temporary code that ensures that AutopFix uses all 4
@@ -106,12 +109,15 @@ def process_repo_provider(provider: str) -> str:
     return provider
 
 
-def check_genai_consent(org_id: int) -> bool:
-    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
+@inject
+def check_genai_consent(
+    org_id: int, client: RpcClient = injected, config: AppConfig = injected
+) -> bool:
+    if config.NO_SENTRY_INTEGRATION:
         # If we are running in a local environment, we just pass this check
         return True
 
-    response = get_sentry_client().call("get_organization_autofix_consent", org_id=org_id)
+    response = client.call("get_organization_autofix_consent", org_id=org_id)
 
     if response and response.get("consent", False) is True:
         return True
@@ -121,15 +127,6 @@ def check_genai_consent(org_id: int) -> bool:
 def raise_if_no_genai_consent(org_id: int) -> None:
     if not check_genai_consent(org_id):
         raise ConsentError(f"Organization {org_id} has not consented to use GenAI")
-
-
-def get_sentry_client() -> RpcClient:
-    if os.environ.get("NO_SENTRY_INTEGRATION") == "1":
-        rpc_client: DummyRpcClient = DummyRpcClient()
-        rpc_client.dry_run = True
-        return rpc_client
-    else:
-        return SentryRpcClient()
 
 
 def escape_xml_chars(s: str) -> str:
@@ -251,3 +248,18 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
         raise RuntimeError("Failed to parse message")
 
     return structured_message.parsed
+
+
+def detect_encoding(raw_data: bytes, fallback_encoding: str="utf-8"):
+    """
+    Try to detect the encoding of the given data using chardet library. If the confidence is not high enough, fallback.
+    """
+    try:
+        result = chardet.detect(raw_data)
+        encoding = result["encoding"] if result["confidence"] > 0.6 else fallback_encoding
+    # if something went wrong, fallback
+    except Exception as e:
+        logger.exception(f"Error detecting encoding of data: {e}")
+        encoding = fallback_encoding
+
+    return encoding

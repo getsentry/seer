@@ -2,9 +2,8 @@ import logging
 import os
 from typing import List, Optional
 
-import chardet
-
 from seer.automation.codebase.models import Match, SearchResult
+from seer.automation.utils import detect_encoding
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +64,7 @@ class CodeSearcher:
             if not raw_data:
                 return []
 
-            result = chardet.detect(raw_data)
-            encoding = result["encoding"] if result["confidence"] > 0.6 else self.default_encoding
+            encoding = detect_encoding(raw_data, fallback_encoding=self.default_encoding)
 
             # Attempt to read with detected encoding
             with open(file_path, "r", encoding=encoding) as f:
