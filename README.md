@@ -15,9 +15,12 @@ These instructions require access to internal Sentry resources and are intended 
 
 1. Install [direnv](https://direnv.net/) or a similar tool
 2. Install [pyenv](https://github.com/pyenv/pyenv) and configure Python 3.11
-3. Install [Docker](https://www.docker.com/get-started)
-4. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
-
+```bash
+pyenv install 3.11
+pyenv local 3.11
+```
+3. Install [Docker](https://www.docker.com/get-started). Note that if you want to install Docker from brew instead of Docker Desktop, then you would need to install docker-compose as well.
+4. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) and authenticate.
 ### Environment Setup
 
 1. Clone the repository and navigate to the project root
@@ -30,9 +33,9 @@ These instructions require access to internal Sentry resources and are intended 
 Download model artifacts:
 
 ```bash
-gsutil cp -r gs://sentry-ml/seer/models ./models
+gsutil cp -r gs://sentry-ml/seer/models .
 ```
-
+If you see a prompt "Reauthentication required. Please insert your security key and press enter...", re-authenticate using the command `gcloud auth login` and set the project id to the one for Seer.
 ### Running Seer
 
 1. Start the development environment:
@@ -46,6 +49,12 @@ gsutil cp -r gs://sentry-ml/seer/models ./models
    ```bash
    make update
    ```
+3. If you encounter authentication errors, run:
+
+   ```bash
+   gcloud auth application-default login
+   ```
+
 
 ## Integrating with Local Sentry
 
@@ -148,7 +157,7 @@ You can run all tests with `make test`.
 
 ### Running Individual Tests
 
-Make sure you have the test database running when running individual tests, do that via `docker compose up -d test-db`.
+Make sure you have the test database running when running individual tests, do that via `docker compose up --remove-orphans -d test-db`.
 
 To run a single test, make sure you're in a shell, by doing `make shell`, and then run `pytest tests/path/to/test.py::test_name`.
 
