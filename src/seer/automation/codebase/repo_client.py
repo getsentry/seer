@@ -580,6 +580,7 @@ class RepoClient:
         This can be used to create an overall PR comment instead of associated with a specific line.
         See https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
         """
+        print(pr_url)
         pr_id = int(pr_url.split("/")[-1])
         repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]  # formatted as owner-name/repo-name
         url = f"https://api.github.com/repos/{repo_path}/issues/{pr_id}/comments"
