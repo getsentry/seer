@@ -1,8 +1,10 @@
 import contextlib
 import datetime
 import json
+import logging
 from enum import StrEnum
 from typing import Any, List, Optional
+
 
 import sqlalchemy
 from flask import Flask
@@ -35,20 +37,32 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+logger = logging.getLogger(__name__)
+_db_initialized = False
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
+    global _db_initialized
+    
+    if _db_initialized and hasattr(app, 'extensions') and 'sqlalchemy' in app.extensions:
+        logger.debug("SQLAlchemy already initialized for this Flask app instance")
+        return
+    
+    logger.debug("Initializing SQLAlchemy for Flask app")
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
 
     db.init_app(app)
     migrate.init_app(app, db)
 
+
     with app.app_context():
         Session.configure(bind=db.engine)
+        _db_initialized = True
 
 
 class Base(DeclarativeBase):
