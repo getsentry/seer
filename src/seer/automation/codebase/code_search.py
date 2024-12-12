@@ -60,7 +60,11 @@ class CodeSearcher:
         try:
             # Read only first 32KB to detect encoding for large files
             with open(file_path, "rb") as f:
-                raw_data = f.read(32768)
+                # note the number of bytes to read is increased from 32KB to 256KB
+                # theoretically, this could cause an incorrectly detected encoding if there are some special characters
+                # in the file after the first 256KB of data
+                # Hopefully it is a corner case, especially since files larger than 1MB are ignored from search
+                raw_data = f.read(262144)
             if not raw_data:
                 return []
 

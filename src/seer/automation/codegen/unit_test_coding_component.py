@@ -100,7 +100,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 task.repo_name, type=RepoClientType.CODECOV_UNIT_TEST
             )
             if task.type == "file_change":
-                file_content = repo_client.get_file_content(task.file_path)
+                file_content, _ = repo_client.get_file_content(task.file_path)
                 if not file_content:
                     logger.warning(f"Failed to get content for {task.file_path}")
                     continue

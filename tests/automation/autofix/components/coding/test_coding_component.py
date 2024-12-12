@@ -256,10 +256,10 @@ class TestCodingComponent:
         # Simulate file content for different scenarios
         def mock_get_file_content(file_path):
             if file_path in ["missing_file1.py", "missing_file2.py"]:
-                return None
+                return None, "utf-8"
             elif file_path == "existing_file.py":
-                return "Existing content"
-            return "def foo():\n    return 'Hello'"
+                return "Existing content", "utf-8"
+            return "def foo():\n    return 'Hello'", "utf-8"
 
         mock_repo_client.get_file_content.side_effect = mock_get_file_content
 
