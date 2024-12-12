@@ -56,19 +56,32 @@ class PrReviewStep(CodegenStep):
         repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_REVIEW)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
+
+        generator = PrReviewCodingComponent(self.context)
+        publisher = PrReviewPublisher(repo_client=repo_client, pr=pr)
+
         try:
-            generated_pr_review = PrReviewCodingComponent(self.context).invoke(
+            publisher.publish_ack()
+        except Exception as e:
+            self.logger.warning(f"Error publishing ack for {pr.url}: {e}")
+            # proceed even if ack fails
+            pass
+
+        try:
+            generated_pr_review = generator.invoke(
                 CodePrReviewRequest(
                     diff=diff_content,
                 ),
             )
         except ValueError as e:
             self.logger.error(f"Error generating pr review for {pr.url}: {e}")
+            # send "no changes required" upon generation error including if output
+            # does not conform to expected format
+            publisher.publish_no_changes_required()
             return
 
         try:
-            publisher = PrReviewPublisher(repo_client=repo_client, pr=pr)
-            publisher.publish(pr_review=generated_pr_review),
+            publisher.publish_generated_pr_review(pr_review=generated_pr_review),
         except ValueError as e:
             self.logger.error(f"Error publishing pr review for {pr.url}: {e}")
             return

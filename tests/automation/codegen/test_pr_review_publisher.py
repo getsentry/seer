@@ -2,110 +2,96 @@ import unittest
 from unittest.mock import MagicMock, patch
 from typing import List
 
+from github.PullRequest import PullRequest
+
 from seer.automation.codebase.models import GithubPrReviewComment
+from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codegen.models import CodePrReviewOutput
 from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
 
-
-# Mock dependencies
-class RepoClient:
-    def post_pr_review_no_comments_required(self, pr_url: str):
-        pass
-
-    def post_pr_review_comment(self, pr_url: str, comment: GithubPrReviewComment):
-        pass
-
-
-class PullRequest:
-    def __init__(self, url: str):
-        self.url = url
-
-
-class GithubPrReviewComment:
-    def __init__(self, path: str, line: int, body: str, start_line: int):
-        self.path = path
-        self.line = line
-        self.body = body
-        self.start_line = start_line
-
-
-class CodePrReviewOutput:
-    class Comment:
-        def __init__(self, path: str, line: int, body: str, start_line: int):
-            self.path = path
-            self.line = line
-            self.body = body
-            self.start_line = start_line
-
-    def __init__(self, comments: List[Comment]):
-        self.comments = comments
-
-
-# Test Class
 class TestPrReviewPublisher(unittest.TestCase):
     def setUp(self):
-        self.repo_client = MagicMock(spec=RepoClient)
-        self.pr = PullRequest(url="https://github.com/test/repo/pull/123")
-        self.publisher = PrReviewPublisher(self.repo_client, self.pr)
+        self.mock_repo_client = MagicMock(spec=RepoClient)
+        self.mock_pr = MagicMock(spec=PullRequest)
+        self.mock_pr.url = "https://api.github.com/repos/owner-name/repo-name/pulls/1"
+        self.mock_pr.head.sha = "abcdef1234567890"
 
-    def test_publish_no_comments(self):
-        pr_review = CodePrReviewOutput(comments=[])
-        self.publisher.publish(pr_review)
-
-        self.repo_client.post_pr_review_no_comments_required.assert_called_once_with(self.pr.url)
-        self.repo_client.post_pr_review_comment.assert_not_called()
-
-    def test_publish_with_comments(self):
-        pr_review = CodePrReviewOutput(
-            comments=[
-                CodePrReviewOutput.Comment(path="file1.py", line=10, comment="Fix this", start_line=5),
-                CodePrReviewOutput.Comment(path="file2.py", line=20, comment="Improve this", start_line=15),
-            ]
-        )
-        self.publisher.publish(pr_review)
-
-        self.repo_client.post_pr_review_no_comments_required.assert_not_called()
-        self.repo_client.post_pr_review_comment.assert_any_call(
-            self.pr.url,
-            GithubPrReviewComment(path="file1.py", line=10, body="Fix this", start_line=5),
-        )
-        self.repo_client.post_pr_review_comment.assert_any_call(
-            self.pr.url,
-            GithubPrReviewComment(path="file2.py", line=20, body="Improve this", start_line=15),
-        )
-        self.assertEqual(self.repo_client.post_pr_review_comment.call_count, 2)
-
-    @patch("logger.warning")
-    def test_publish_with_comment_post_failure(self, mock_logger_warning):
-        pr_review = CodePrReviewOutput(
-            comments=[
-                CodePrReviewOutput.Comment(path="file1.py", line=10, comment="Fix this", start_line=5),
-            ]
-        )
-        self.repo_client.post_pr_review_comment.side_effect = [ValueError("Failed to post")]
-
-        self.publisher.publish(pr_review)
-
-        self.repo_client.post_pr_review_no_comments_required.assert_not_called()
-        self.repo_client.post_pr_review_comment.assert_called_once()
-        mock_logger_warning.assert_called_once_with(
-            "Failed to post comment: GithubPrReviewComment(path='file1.py', line=10, body='Fix this', start_line=5)"
+        self.publisher = PrReviewPublisher(
+            repo_client=self.mock_repo_client,
+            pr=self.mock_pr
         )
 
-    def test_format_comments(self):
-        pr_review = CodePrReviewOutput(
-            comments=[
-                CodePrReviewOutput.Comment(path="file1.py", line=10, comment="Fix this", start_line=5),
-                CodePrReviewOutput.Comment(path="file2.py", line=20, comment="Improve this", start_line=15),
-            ]
+    def test_publish_no_changes_required(self):
+        self.publisher.publish_no_changes_required()
+        self.mock_repo_client.post_issue_comment.assert_called_once_with(
+            self.mock_pr.url,
+            "No changes requiring review at this time."
         )
-        formatted_comments = PrReviewPublisher._format_comments(pr_review)
 
-        self.assertEqual(len(formatted_comments), 2)
-        self.assertEqual(formatted_comments[0].path, "file1.py")
-        self.assertEqual(formatted_comments[0].line, 10)
-        self.assertEqual(formatted_comments[0].body, "Fix this")
-        self.assertEqual(formatted_comments[0].start_line, 5)
-        self.assertEqual(formatted_comments[1].path, "file2.py")
-        self.assertEqual(formatted_comments[1].line, 20)
-        self.assertEqual(formatted_comments[1].body, "Improve this")
-        self.assertEqual(formatted_comments[1].start_line, 15)
+    def test_publish_ack(self):
+        self.publisher.publish_ack()
+        self.mock_repo_client.post_issue_comment.assert_called_once_with(
+            self.mock_pr.url,
+            "On it! We are reviewing the PR and will provide feedback shortly."
+        )
+
+    def test_publish_generated_pr_review_no_comments(self):
+        mock_pr_review_output = MagicMock(spec=CodePrReviewOutput)
+        mock_pr_review_output.comments = []
+
+        self.publisher.publish_generated_pr_review(mock_pr_review_output)
+        self.mock_repo_client.post_issue_comment.assert_called_once_with(
+            self.mock_pr.url,
+            "No changes requiring review at this time."
+        )
+
+    def test_publish_generated_pr_review_with_comments(self):
+        mock_comment = MagicMock(spec=GithubPrReviewComment)
+        mock_comment.path = "file.py"
+        mock_comment.line = 10
+        mock_comment.body = "This is a review comment."
+
+        mock_pr_review_output = MagicMock(spec=CodePrReviewOutput)
+        mock_pr_review_output.comments = [mock_comment]
+
+        with patch.object(
+            PrReviewPublisher,
+            '_format_comments',
+            return_value=[mock_comment]
+        ) as mock_format_comments:
+            self.publisher.publish_generated_pr_review(mock_pr_review_output)
+
+            self.mock_repo_client.post_pr_review_comment.assert_called_once_with(
+                self.mock_pr.url,
+                mock_comment
+            )
+
+            mock_format_comments.assert_called_once_with(
+                self.mock_pr.head.sha,
+                mock_pr_review_output
+            )
+
+    def test_publish_generated_pr_review_handles_exception(self): 
+        mock_comment = MagicMock(spec=GithubPrReviewComment)
+        mock_comment.path = "file.py"
+        mock_comment.line = 10
+        mock_comment.body = "This is a review comment."
+
+        mock_pr_review_output = MagicMock(spec=CodePrReviewOutput)
+        mock_pr_review_output.comments = [mock_comment]
+
+        self.mock_repo_client.post_pr_review_comment.side_effect = ValueError("Invalid comment")
+
+        with patch.object(
+            PrReviewPublisher,
+            '_format_comments',
+            return_value=[mock_comment]
+        ):
+            self.publisher.publish_generated_pr_review(mock_pr_review_output)
+
+            self.mock_repo_client.post_pr_review_comment.assert_called_once_with(
+                self.mock_pr.url,
+                mock_comment
+            )
+
+            self.mock_repo_client.post_issue_comment.assert_not_called()

@@ -574,22 +574,16 @@ class RepoClient:
         response.raise_for_status()
         return response.json()["html_url"]
 
-    def post_pr_review_confirmation_comment(self, pr_url: str):
+    def post_issue_comment(self, pr_url: str, comment: str):
+        """
+        Create an issue comment on a GitHub issue (all pull requests are issues). 
+        This can be used to create an overall PR comment instead of associated with a specific line.
+        See https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
+        Note that expected input is pr_url NOT pr_html_url
+        """
         pr_id = int(pr_url.split("/")[-1])
-        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
-        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
-        comment = "On it! We are reviewing the PR and will provide feedback shortly."
-        params = {"body": comment}
-        headers = self._get_auth_headers()
-        response = requests.post(url, headers=headers, json=params)
-        response.raise_for_status()
-        return response.json()["html_url"]
-
-    def post_pr_review_no_comments_required(self, pr_url: str):
-        pr_id = int(pr_url.split("/")[-1])
-        repo_name = pr_url.split("github.com/")[1].split("/pull")[0]
-        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_id}/comments"
-        comment = "No changes requiring review at this time."
+        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]  # formatted as owner-name/repo-name
+        url = f"https://api.github.com/repos/{repo_path}/issues/{pr_id}/comments"
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
@@ -598,13 +592,12 @@ class RepoClient:
 
     def post_pr_review_comment(self, pr_url: str, comment: GithubPrReviewComment):
         """
-        Create a (standalone) review comment on a GitHub pull request.
+        Create a review comment on a GitHub pull request.
         See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+        Note that expected input is pr_url NOT pr_html_url
         """
         pr_id = int(pr_url.split("/")[-1])
-        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[
-            0
-        ]  # formatted as owner-name/repo-name
+        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]  # formatted as owner-name/repo-name
         url = f"https://api.github.com/repos/{repo_path}/pulls/{pr_id}/comments"
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=comment)
