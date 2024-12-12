@@ -4,7 +4,13 @@ from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import (
+    LlmGenerateTextResponse,
+    LlmResponseMetadata,
+    Message,
+    ToolCall,
+    Usage,
+)
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import create_insight_output
@@ -62,6 +68,49 @@ class AutofixAgent(LlmAgent):
             self.add_user_message(
                 "You're taking a while. If you need help, ask me a concrete question using the tool provided."
             )
+
+    def get_completion(self, run_config: RunConfig):
+        content_chunks = []
+        tool_calls = []
+        usage = Usage()
+
+        stream = self.client.generate_text_stream(
+            messages=self.memory,
+            model=run_config.model,
+            system_prompt=run_config.system_prompt if run_config.system_prompt else None,
+            tools=(self.tools if len(self.tools) > 0 else None),
+            temperature=run_config.temperature or 0.0,
+        )
+
+        cleared = False
+        for chunk in stream:
+            if isinstance(chunk, str):
+                with self.context.state.update() as cur:
+                    cur_step = cur.steps[-1]
+                    if not cleared:
+                        cur_step.clear_output_stream()
+                        cleared = True
+                    cur_step.receive_output_stream(chunk)
+                content_chunks.append(chunk)
+            elif isinstance(chunk, ToolCall):
+                tool_calls.append(chunk)
+            elif isinstance(chunk, Usage):
+                usage += chunk
+
+        message = self.client.construct_message_from_stream(
+            content_chunks=content_chunks,
+            tool_calls=tool_calls,
+            model=run_config.model,
+        )
+
+        return LlmGenerateTextResponse(
+            message=message,
+            metadata=LlmResponseMetadata(
+                model=run_config.model.model_name,
+                provider_name=run_config.model.provider_name,
+                usage=usage,
+            ),
+        )
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")

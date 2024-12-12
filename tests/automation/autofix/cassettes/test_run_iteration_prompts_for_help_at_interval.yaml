@@ -49,19 +49,20 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA4xSwYrbMBC9+ysGnePF8SabNLf0sIXSSyGnlmIUeWxPK4+ENEmbXfLvRU429rJb
-        6MWI99483pvxcwagqFYbUKbTYnpv863ebYvFrvvy+PT0SdZh+ZU/fP64+7Z4bMu1mqUJt/+JRl6m
-        7ozrvUUhxxfaBNSCyXW+ur8vl8vyYTEQvavRprHWS75weU9MeVmUi7xY5fOruekcGYxqA98zAIDn
-        4Ztyco1/1AaK2QvSY4y6RbW5iQBUcDYhSsdIUTSLmo2kcSzIQ/Qt+OC0EToiaD+8OxAHxCSkhbhN
-        glQ0gtEMkVqmhoxmsSdA7jQbBHfEoK1N0vqQzEhOoLkGYnZHnZYCv0k6YhDUfbybpgnYHKJOG+GD
-        tVf8fKtnXeuD28crf8MbYopdFVBHx6lKFOfVwJ4zgB/DGg+vNqN8cL2XStwv5GQ4f1he/NR4vSl7
-        JcWJthN8PZ+941fVKJpsnBxCGW06rMfR8Wr6UJObENmk9ds073lfmhO3/2M/EsagF6wrH7Am87rx
-        KAuYbv4v2W3LQ2AVT1GwrxriFoMPdPm1Gl8Vq2K5b9YrU6jsnP0FAAD//wMAhBVrUGgDAAA=
+        H4sIAAAAAAAAAwAAAP//jFJNa9tAEL3rVwx7toL8ESf4FvpFLoX0UAKliPXuSNp0NbPsjt2a4P9e
+        VnYshaTQixDvzXu8N7PPBYByVm1AmU6L6YMv7+zTw+Hz4X6dnFxvv3z7ev/4cek+0PdPj+ZBzbKC
+        t09o5EV1ZbgPHsUxnWgTUQtm1/nNclUtF7fVaiB6tuizrA1SrrjsHblyUS1WZXVTzm/P6o6dwaQ2
+        8KMAAHgevjknWfyjNlDNXpAeU9Itqs1lCEBF9hlROiWXRJOo2UgaJkEaot9BiKyNuD2CDsN/B8IZ
+        3Xrsy8R+76iFhpNgTOCIeK9zyxlI1JQajn0eMJ32HqnFPCMMHAJH2ZEThwkajtBG/i0daLJgcY+e
+        Q48kV9NgEZtd0nk5tPP+jB8vTT23OVc68xe8ceRSV0fUiSm3SsJBDeyxAPg5bHT3akkqRO6D1MK/
+        kLLhfH198lPjISfs7ZkUFu2n+HL2jl9tUbTzaXITZbTp0I7S8YB6Zx1PiGLS+m2a97xPzR21/2M/
+        EsZgELR1iGided14HIuY3/m/xi5bHgKrdEiCfd04ajGG6E6vrAn1ujHzCucVblVxLP4CAAD//wMA
+        lpgGwnMDAAA=
     headers:
       CF-Cache-Status:
       - DYNAMIC
       CF-RAY:
-      - 8ec611f77bd917de-SJC
+      - 8f1038dfc827faf0-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -69,14 +70,14 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Tue, 03 Dec 2024 19:47:44 GMT
+      - Thu, 12 Dec 2024 19:46:44 GMT
       Server:
       - cloudflare
       Set-Cookie:
-      - __cf_bm=sRbIRnlxXL_gOSn4svvgzpM3ghkd2BTEAOxjK4jZaO4-1733255264-1.0.1.1-Mux5HtkfZNJym5n2ZwilG_DfZSxKZKUucKSG3NTcA8biR5lhLZBhzCqHBxwbxy7zeFQ_ZZsIKPvv9QS_8dwKAA;
-        path=/; expires=Tue, 03-Dec-24 20:17:44 GMT; domain=.api.openai.com; HttpOnly;
+      - __cf_bm=vC0YAGXNQkFu9JHm6rr1dS4DaGHIY67kzFA6ghlBRvU-1734032804-1.0.1.1-NWNsgHjQ6J9Ex41yeHsHF0ARwDw69rwRn8FKL0fp8UYG3ZF7puQDwcF74JXU5ihuGlf.7cLJfh2TsGpLLx0UKg;
+        path=/; expires=Thu, 12-Dec-24 20:16:44 GMT; domain=.api.openai.com; HttpOnly;
         Secure; SameSite=None
-      - _cfuvid=ItSMUDIP.tOAHmHiYMGS9.mzuYB5PI0Dp_1t4opYLyw-1733255264376-0.0.1.1-604800000;
+      - _cfuvid=49Kjtz_EK0fheQBlyO.R3dmeN5MINATBzFlQUNm43.U-1734032804600-0.0.1.1-604800000;
         path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Transfer-Encoding:
       - chunked
@@ -89,7 +90,7 @@ interactions:
       openai-organization:
       - functional-software
       openai-processing-ms:
-      - '392'
+      - '683'
       openai-version:
       - '2020-10-01'
       strict-transport-security:
@@ -107,7 +108,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_1c9535320acaf6e5d37dbba30842c344
+      - req_544497d1016a81a832e9c5aa43789ebb
     status:
       code: 200
       message: OK
@@ -116,9 +117,9 @@ interactions:
       me a concrete question using the tool provided.", "role": "user"}, {"content":
       "Thinking about the solution...", "role": "assistant"}, {"content": "Return
       the pieces of context from the issue details or the files in the codebase that
-      are directly relevant to the text below:\nA proactive approach to initiating
-      projects can significantly enhance overall productivity and innovation within
-      teams.\n\nThat means choose the most relevant codebase snippets (codebase_context),
+      are directly relevant to the text below:\nA proactive approach to problem-solving
+      fosters innovation, transforming challenges into opportunities for growth and
+      development.\n\nThat means choose the most relevant codebase snippets (codebase_context),
       event logs (breadcrumb_context), or stacktrace/variable data (stacktrace_context),
       that show specifically what the text mentions. Don''t include any repeated information;
       just include what''s needed.\n\nAlso provide a one-line explanation of how the
@@ -161,7 +162,7 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '3144'
+      - '3155'
       content-type:
       - application/json
       host:
@@ -191,25 +192,25 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA5RUYYvbOBD9nl8h9DkptpNcSr7t9dpSehR6hDvu1ouZSBNHu7LGSJPshpD/XiR7
-        7Wx34e7ACDPvzejNkzTniRDSaLkWUu2BVdPa2Q1sbrK83nz9qv/+6+bPD67+/PFYLOn76fu3P+Q0
-        ZtD2HhU/Z71T1LQW2ZDrYOURGGPVfDWfF8tl8csiAQ1ptDGtbnm2oFljnJkVWbGYZatZ/r7P3pNR
-        GORa3E6EEOKc1qjTaXySa5FNnyMNhgA1yvVAEkJ6sjEiIQQTGBzL6QgqcowuST+XEp9aCw6i8lKu
-        S7nZowhoUTFqkahPHISx9hDYA6PY06NoPYFic8T4F30Qxhk2qYoApwUjNEKRtbAl34UVOGERtGAS
-        pmk9HVHHdH2IlQyfUqJxjo4p4V0pp6VUpHELAateSinXt3fTUgYG9cAe1CsEj+i4slRfA+dS8qnF
-        1GEvuRoldzsBY03+lDhRf3UtLlG2pDv4S5eKWjh8HDzYeWjwkfxDbDGwR2iscfiTD7FLdHtwCl91
-        a/GINu1g3I5SSANDBaG6D/0Bncty6CH+ruPyDR/Fp+ftY2Aal75D8gNvE8/ldwQ9cNg0GBiaduAU
-        WTGf5dksyzd5ts7i90+MX0p5mV4bmUxqENm4+rWFY28vvfvNBHUIAbXoLlRtMIgd+TcuVQMOamzQ
-        cXR0SxS4v1nxdaVz+Z++9Woro4d282K+WA52tODZKNOC45Aot3G9sUbhwPmVtsP/hz14axJ2929+
-        Fpt88ZOfd5frl+lxdwgQp4M7WNvHL8NTt1S3nrahx4f4zjgT9pVHCOTisw5MrUzoZSLEXRophxdT
-        Il6gpuWK6QFdLLicr7p6cpxkI5qv5j3KxGBHYJX3k+hlwUojg7HhaipJBWqPekwdRxgctKErYHLV
-        9ms5b9XuWo8H+x/Kj4BS2DLqqvWojXrZ8kjzeJ+m4du0weYkWIZTYGyqnXE1+tabbs7u2ipbZcvt
-        7v1KZXJymfwAAAD//wMADlYsLnUGAAA=
+        H4sIAAAAAAAAAwAAAP//nFRNb9swDL3nVwg6bUDSOennslM3bMN2WLu2t3kwFJm2lcmiINFpsyD/
+        fZDs2O5aYB8XI+EjH98jKO4mjHGV8yXjshIka6tnl/n668/7y0WyuLvVJ+tr+fbjVan8fPP+8uYz
+        n4YKXK1B0qHqSGJtNZBC08LSgSAIrPPz45PkeHGRnEagxhx0KCstzU5wViujZotkcTJLzmfzi666
+        QiXB8yX7NmGMsV38Bp0mhwe+ZMn0EKnBe1ECX/ZJjHGHOkS48F55Eob4dAAlGgITpe9SDg9WCyOC
+        8pQvU35XAfOgQRLkLKY+kGdK68aTEwSswntmHQpJagPh10pDPfOoN8qUTBlGFTCJOayEB6ZB5J4R
+        MmUMbkSs8aib0M8zYXJWOryniqG16KgxihT4o5RPU34gyToZKV9+26XcgcXMiBqi3k8dL5obsBjr
+        CqUhs4KqmPDKO/nqupV5i3oD7mjtY543ylqgmFU0RgaSwdptp/KFrITWYEp4yXbMATXOsD52RE4Y
+        X6CrPxnCq97E9sXLN2yf8v330IiE/EFOyN+tRKW9lWdF/tltpzziT9THFK0MZAZTvpwnca66/Xfa
+        DTkbT+JfHEb2jXA+Ez5b+07ELk1T3teHP8sYaZwDQ+/GwGFCsAFDmcbytwHR1nbGv3y4apdCEJTo
+        tuOJzW7b7YsJK8xb8O6gOyzyoSlThnC0bFtWoOt2sN06DRvQj3vmgsT/OpyGz6hfn9z27IewHz9R
+        B0XjRTgTptG6i+/7N6+xDO/Od3gfL5RRvsocCI8mvG9PaHlE9xPGvsfb0jw6F2FjaksZ4Q8wgfD0
+        +HXLx4eTNqDzswNKSEIPwHlyMX2GMMuBhNJ+dJ64FLKCfCgdbplocoUjYDKy/VTOc9ytdWXKv6Ef
+        ACnBEuSZdZAr+djykOZgHc/i82n9mKNg7reeoM4KZUpw1qn24BY2OyvkPIF5Ais+2U9+AQAA//8D
+        AEOPDjV+BgAA
     headers:
       CF-Cache-Status:
       - DYNAMIC
       CF-RAY:
-      - 8ec611fb39447ae0-SJC
+      - 8f1038e58dd9fa2a-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -217,14 +218,14 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Tue, 03 Dec 2024 19:47:46 GMT
+      - Thu, 12 Dec 2024 19:46:46 GMT
       Server:
       - cloudflare
       Set-Cookie:
-      - __cf_bm=TvmnZYSBhJDHB7yUq95.CYUOrNqjdToxwTD9l6pBopE-1733255266-1.0.1.1-mtBYu2ZkApD3PQ4aqP3SoPICGpRGhXc.dQXAU6UtE5mCNaJWlP0ACH0WZJTRVmL5hZ4KmIogrEvVwrjZ1z3nzQ;
-        path=/; expires=Tue, 03-Dec-24 20:17:46 GMT; domain=.api.openai.com; HttpOnly;
+      - __cf_bm=yvKqTNQGsd4lt.xUqR.S9esu_4vuYBC98RKZVPNTIHs-1734032806-1.0.1.1-t6Cq5W67_9ZFf1yn4oQRrEAmytYbWtOl0iyF_jVyoHlNYbkhCMTNfrBCLXIeVM4cdvtMkL_St164EKHEqT1kSw;
+        path=/; expires=Thu, 12-Dec-24 20:16:46 GMT; domain=.api.openai.com; HttpOnly;
         Secure; SameSite=None
-      - _cfuvid=wtmazmJ2TrBmwtnBgj.wJKNkZfwbOenRfLtOcGyoq2A-1733255266353-0.0.1.1-604800000;
+      - _cfuvid=hVKjJV8S2gyB0VwbofgLUnwtWrFOqdSV3ZHCN0pbNpc-1734032806804-0.0.1.1-604800000;
         path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Transfer-Encoding:
       - chunked
@@ -237,7 +238,7 @@ interactions:
       openai-organization:
       - functional-software
       openai-processing-ms:
-      - '1753'
+      - '1963'
       openai-version:
       - '2020-10-01'
       strict-transport-security:
@@ -249,13 +250,13 @@ interactions:
       x-ratelimit-remaining-requests:
       - '29999'
       x-ratelimit-remaining-tokens:
-      - '149995698'
+      - '149995695'
       x-ratelimit-reset-requests:
       - 2ms
       x-ratelimit-reset-tokens:
       - 1ms
       x-request-id:
-      - req_bcb81d28d599f919988dea4008feb5d9
+      - req_b3a88b11f754073add3875f248e1d446
     status:
       code: 200
       message: OK

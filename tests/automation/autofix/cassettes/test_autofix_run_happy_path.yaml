@@ -21,24 +21,24 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/71SS7OiOBjd96+4ddfjvRIEtXfgg4cmiiBCNhQEhGB4yEOEqfnvg/aiN1PVu9ml
-        vuQ8vnPy94+Pj0+fkKiuvaa4Rfnnz4/P3gfLL38qResVwzIKoBWBWryfFWrNxKIO7lslZnjiPYbF
-        dW4Mki3JHtis40PZHz15xquOcPafRfToAv1xds2FKKg95lEUGN1ugZVj+9wOT6jLlqnlIoFbvRL3
-        yj7Uj5EOHefMiWWF+RrXetL5e8J6/2ieUDxbGEqDbe2QkUOCJjkTyytBteivYncnmWdTOmnm1lAV
-        B0B61p3BNUAlIdiRA18EdLE4GVNuLnz+9do5epa0imqPvjbmheXyPa1JUUavCJKmKeuf399d133F
-        RRGzyC9p/UWK7Ntvm+SbsKINJyXzm2tRZR9/et7WUUXza/EVZT5lH6NITsM/ouo7G3EPSqIvVsSj
-        07fHd01e0/8yKkd+FVW/bmj4u8Oo15NAIfRAdfM8aByiWq1lTYlXmqhlhoAGo3Mt0rmpNJ71mwtQ
-        hgY7c6145maQgymjeL0BrgU7ZJHBzQy6X+nTyJFenDubM+jV+BplSsLD16gI1VNHhuKxB9vUBUsu
-        yE/DPgsfAQhrbAppAKYviiTKXxQaj1KjO6zdkX4zQ5bUoHzbI1UCmJdLlCXtOANENWb4UnLEiges
-        3Aa03haho7WuI3ekF/IALPNAsTkC7H7UbEPFbsPVb63wYvxfWkN40V5aTzhyQcvt4GBM0VrqUHoT
-        oHUWDut3hMW7ghyxMZ8+MoUy6F/V2I17YbWWFtTP7DagQhNe7BbzpyQENiPKcjyjxFD/G+fwmJGM
-        Zf7FvmlpOSW5zd77b5eF66DixYsuTWowbRYMpAltJBqg3Juq/iQ3fD+bLy6WhKM3ONYNU/gcs5pC
-        2lHsJN2If6IB9nAY8xuMfqzex1tTILfuYKy4k13KVmc/91fX8QGHMGwtcX7yhCdI2SmhexiwBk0R
-        9PGqCm3NubaT3FGYLUQON4TAWMT2FuVojuO55shNf5DZcooUF82M3eYwF8bvX66P0v0O1FW8daBR
-        rYsh80Cj9YrT3JLJRpb387EvjVuYGWCVKLFNBZzrYwi04FGaFq61zrzcdruHfEO+fYE33tI8m0v7
-        PppCaxWjwj5uqukM4/sl0Ba6thEEK5kUtHGUXVbMzpu+LM+Am3NX93Yy84QHPutm0FpYdtmpR9XZ
-        leKEu9+vvuCpi1PEydmkiOjGOqTykSaXMM25lvc29YoESSA6qivnkn3sHkt17ggKJ++wJ33++Odf
-        aaGiRZQFAAA=
+        H4sIAAAAAAAC/71SuZajSBD05yv6tb1ScwipGQ+BOAWI+3B4XOIQRSFu2Lf/vjBjjLneGuVkZUZE
+        RuTfPz4+PsM4Trsu6OErrT9/fnwuIUYeQ4TSHQJcCEao4FUHZxz9VujCih5G2vR9thColHeUe5bC
+        4DnDIMnD1YBL2DvNo7EYP6JgS5vhQalZaWBn2nm88RM/S/yB1dGYRsrnXS4QolMLuYUWZSUKG1x7
+        FFrMuI52gLwcA2lVWrQ9tShRRXTGV1y2mgkkb3H6G+G/TGzM0cp2QjrzJOpJGZR+M1iN51xMLt5h
+        zBePWatnRiYIR79I1wVkCHohPv/ad07npmjTLij2jXGCJH9Vuxg26W5B3vdN9/Pra5qmYwZhVqVh
+        U3THGIKvcOjzr7iCQ3JoqrB/whZ8/Fd79666tB2LOD1WMCvqj42mLpL/nBu2qaJ+wmMKwqL6rfxX
+        TEG//BZ6TcM2bX//FMmfDNNFzCMuLtRCNKxVQJVC6ATQNz4tnIXSwhTOrzxHqbx1e0AHnnPD5fU2
+        e2X1UjkLlzEZkctsVjlvUc3bopRacadFJHWpHVOyUa14aseNpolxeS/BhNeneIXjHWNLDyPRqNbX
+        O0jGCEs63yDKCEN2iDytdwgB3yAnlfEmxbydFJPqt0tZFJ7CfPzaKCAfthoW89rJdxo0NrPV516r
+        wrAwcYXBc69TvBB1hJF1xNlojNnLxjkknD0k9B+uxNH+L641cYSda5aZjFDWzdiVIuTSOsmltqpm
+        ttkp7H3wVwS1Um3+LKlBNNGyR2P3nlN1QgmLGJDQc06D5yR5XCd5dLuuvkMgcf0aQud7x6gih20i
+        lsR8V2x8UFU7ZsKLqG9Mhefqz5Bj13DnqcTT3dZ1hcl6z0xePujdEOtrD0sMBbntWI3nbh6Ve/za
+        JK/Cpve16znF27xsxpsP1Lr5t6gucpQMrHAHBVuduZAKLZYMfmKk5JpC028DYoxKQArh+zo8dLfC
+        wDlL7LOdCr778EdBrkf+IYW5Og/Ic9GfHBChTfOJloP2ZIctejhb4y1TxSXr+e6CnXnzkdlxe2a/
+        W8tEAnAHgUIVsz2H6PeJgyd0VG75NPAVzt90VTsggJDeATmfJE2Db4Y2FBJfZj/1MpEqD5ybn4EZ
+        PynTmtg3TTAHnKcuYldRUpI4asYNDSo5D//Q8wkfXNnx0ZIvNAeYBLSQ68t0snJZExXsm5bOSqtJ
+        bT12T/xy10VGHoORWThgNDkGaPpSko0knm20700uNHXoEfOVslqQu5Go0R6KIqR1x8kHfSv7Ofv8
+        8c+/4UPvbokFAAA=
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
@@ -49,7 +49,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Fri, 22 Nov 2024 22:39:02 GMT
+      - Thu, 12 Dec 2024 19:47:09 GMT
       Expires:
       - Mon, 01 Jan 1990 00:00:00 GMT
       Pragma:
@@ -75,250 +75,28 @@ interactions:
     body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
       "text", "text": "You have the following repositories to work with:\n- red-bob-sandwich/red-samuel-basketball\n-
       black-mary-sandwich/white-alice-banana\n- magenta-john-table/orange-john-basketball\n\nGiven
-      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\n\n\nThe
-      root cause of the issue has been identified and context about the issue has
-      been provided:\nThe file index.py is missing variable ''a''.\n\n# Your goal:\nProvide
-      the most actionable and effective steps to fix the issue.\n\nSince you are an
-      exceptional principal engineer, your solution should not just add logs or throw
-      more errors, but should meaningfully fix the issue. Your list of steps to fix
-      the problem should be detailed enough so that following it exactly will lead
-      to a fully complete solution.\n\nWhen ready with your final answer, detail the
-      precise plan to fix the issue.\n\n# Guidelines:\n- No placeholders are allowed,
-      the fix must be clear and detailed.\n- Make sure you use the tools provided
-      to look through the codebase and at the files you are changing before outputting
-      your suggested fix.\n- The fix must be comprehensive. Do not provide temporary
-      examples, placeholders or incomplete steps.\n- If the issue occurs in multiple
-      places or files, make sure to provide a fix for each occurrence, no matter how
-      many there are.\n- In your suggested fixes, whenever you are providing code,
-      provide explicit diffs to show the exact changes that need to be made.\n- You
-      do not need to make changes in test files, someone else will do that.\n- At
-      any point, please feel free to ask your teammates (who are much more familiar
-      with the codebase) any specific questions that would help you in your analysis.\n-
-      EVERY TIME before you use a tool, think step-by-step each time before using
-      the tools provided to you.\n- You also MUST think step-by-step before giving
-      the final answer."}]}], "system": "You are an exceptional principal engineer
-      that is amazing at finding and fixing issues in codebases.\n\nYou have access
-      to tools that allow you to search a codebase to find the relevant code snippets
-      and view relevant files. You can use these tools as many times as you want to
-      find the relevant code snippets.\n\n# Guidelines:\n- EVERY TIME before you use
-      a tool, think step-by-step each time before using the tools provided to you.\n-
-      You also MUST think step-by-step before giving the final answer.", "tools":
-      [{"name": "list_directory", "description": "Given the path for a directory in
-      this codebase, returns the immediate contents of the directory such as files
-      and direct subdirectories. Does not include nested directories.", "input_schema":
-      {"type": "object", "properties": {"path": {"type": "string", "description":
-      "The path to view. For example, \"src/app/components\""}, "repo_name": {"type":
-      "string", "description": "Optional name of the repository to search in if you
-      know it."}}, "required": ["path"]}}, {"name": "expand_document", "description":
-      "Given a document path, returns the entire document text.\n- Note: To save time
-      and money, if you''re looking to expand multiple documents, call this tool multiple
-      times in the same message.\n- If a document has already been expanded earlier
-      in the conversation, don''t use this tool again for the same file path.", "input_schema":
-      {"type": "object", "properties": {"input": {"type": "string", "description":
-      "The document path to expand."}, "repo_name": {"type": "string", "description":
-      "Optional name of the repository to search in if you know it."}}, "required":
-      ["input"]}}, {"name": "keyword_search", "description": "Searches for a keyword
-      in the codebase.", "input_schema": {"type": "object", "properties": {"keyword":
-      {"type": "string", "description": "The keyword to search for."}, "supported_extensions":
-      {"type": "array", "description": "The str[] of supported extensions to search
-      in. Include the dot in the extension. For example, [''.py'', ''.js''].", "items":
-      {"type": "string"}}, "repo_name": {"type": "string", "description": "Optional
-      name of the repository to search in if you know it."}, "in_proximity_to": {"type":
-      "string", "description": "Optional path to search in proximity to, the results
-      will be ranked based on proximity to this path."}}, "required": ["keyword",
-      "supported_extensions"]}}, {"name": "file_search", "description": "Searches
-      for a file in the codebase.", "input_schema": {"type": "object", "properties":
-      {"filename": {"type": "string", "description": "The file to search for."}, "repo_name":
-      {"type": "string", "description": "Optional name of the repository to search
-      in if you know it."}}, "required": ["filename"]}}, {"name": "file_search_wildcard",
-      "description": "Searches for files in a folder using a wildcard pattern.", "input_schema":
-      {"type": "object", "properties": {"pattern": {"type": "string", "description":
-      "The wildcard pattern to match files."}, "repo_name": {"type": "string", "description":
-      "Optional name of the repository to search in if you know it."}}, "required":
-      ["pattern"]}}, {"name": "ask_a_question", "description": "Asks your team members
-      a quick question.", "input_schema": {"type": "object", "properties": {"question":
-      {"type": "string", "description": "The question you want to ask your team."}},
-      "required": ["question"]}}], "anthropic_version": "vertex-2023-10-16"}'
-    headers:
-      accept:
-      - application/json
-      accept-encoding:
-      - gzip, deflate
-      authorization:
-      - redacted
-      baggage:
-      - sentry-trace_id=31c64b573c5447fc86cbbd494f12dc21,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
-      connection:
-      - keep-alive
-      content-length:
-      - '5386'
-      content-type:
-      - application/json
-      host:
-      - us-east5-aiplatform.googleapis.com
-      sentry-trace:
-      - 31c64b573c5447fc86cbbd494f12dc21-8faa020fe899d903-1
-      user-agent:
-      - AnthropicVertex/Python 0.34.2
-      x-stainless-arch:
-      - arm64
-      x-stainless-lang:
-      - python
-      x-stainless-os:
-      - Linux
-      x-stainless-package-version:
-      - 0.34.2
-      x-stainless-runtime:
-      - CPython
-      x-stainless-runtime-version:
-      - 3.11.0rc1
-    method: POST
-    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:rawPredict
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAC/1VR207DMAz9lSjP7dQW2EbfJm0TDB4QICRuqqLWWwNpksXO1G3qv5MWJuAhinJ8
-        LrZz5LLiOW9wU+wctUWS3uCTHqdXjb3cPaazg9fbxeLQ8IjT3kJPBUSxgQA4o3pAIEokoSlAjalA
-        BaxUwlcQn8UXMRqtgeJdFmdJdp4mWRZ4pdEEQZG/Hk++BG3vMFw5vwViDTBhrTOirBnVEhnukaAR
-        JEuh1J6RYWupKybCWcs2cIBJRA+jN/2mHwgsS3O2lA4pYtcMa+NVxZQpBcE3WVfQjuw+qFXIKp1B
-        HAoOrEFJxknAEe+i3yaNUYXHfvphb/3bnza3+Fje3c93q9XLZA3g52Iym/vnQNWi6cV9SoEgXFn3
-        em19mPQ4wD+MU0O8694jjmRs4UCEDf6PHgoIWw+6DDLtlYq4H34l+A3GBZlP0MjzdJxMIm48/QWn
-        0677Aj1kORX6AQAA
-    headers:
-      Alt-Svc:
-      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-      Cache-Control:
-      - private
-      Content-Encoding:
-      - gzip
-      Server:
-      - scaffolding on HTTPServer2
-      Transfer-Encoding:
-      - chunked
-      Vary:
-      - Origin
-      - X-Origin
-      - Referer
-      X-Content-Type-Options:
-      - nosniff
-      X-Frame-Options:
-      - SAMEORIGIN
-      X-XSS-Protection:
-      - '0'
-      content-type:
-      - application/json
-      date:
-      - Fri, 22 Nov 2024 22:39:04 GMT
-      request-id:
-      - req_vrtx_01QCf1RE3eg3Gx2eQvTheZNp
-      x-vertex-ai-internal-prediction-backend:
-      - harpoon
-    status:
-      code: 200
-      message: OK
-- request:
-    body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com
-    headers:
-      Accept:
-      - '*/*'
-      Accept-Encoding:
-      - gzip, deflate
-      Connection:
-      - keep-alive
-      Content-Length:
-      - '268'
-      Content-Type:
-      - application/x-www-form-urlencoded
-      User-Agent:
-      - python-requests/2.32.2
-      x-goog-api-client:
-      - gl-python/3.11.0rc1 auth/2.36.0 cred-type/u
-    method: POST
-    uri: https://oauth2.googleapis.com/token
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAC/71Uu5KjSBD09ysmxj5pAAlJrId4a3gMAoHAIaC7Bc2rkQDxuLh/PzRrrHMR651X
-        UR2ZWZUZXX//eHt7jwFAbRt1pED1+8+39ylmuHVM8UgUypC3Qr+NKPur/Opu8t3Guxn7BVXoj3DD
-        E3ZKVoGVn7LMORZ7cKcSQRp7rQm0DeNkevpAqHEnelT1fbJNpcigd6QMRM1rV0ER3cz6GTVq39qj
-        UlGqXADpUy9X3VA5cpMp3rb37tVOrCK7tvytkcQzXzjyHR1y+im2EV6lHWnrWEiDTx5dHP6sObKt
-        KlfGwEDSk1B+uIdJgemnH1EJKQabovfs+1+vndHY4AdaOF4bb1iO++62gDToZUHWdU378+NjGIZ1
-        SkhaorjB7RqQ6iPuu+yjb9ED1zeyRlWMy7cFVWP49idUey8X3BMDtC5Jius/AkBJerhqyri7kUf1
-        a/LvmKJu+jXoEcUP9Pj1guHvDNF0yhIFYAufnMus0SbWWq3qmlDQdlpls+ZsD4ELhiDnl/pUBIxZ
-        mbNXBW66DSqDNvISh6LEBK4xmC6Yg8rGunCi0JV/cX56tI1v9nqRacDGeLUIVM8DmMlTZ+Q8YDg6
-        qc+zXsFnwsA2dNg8YagXRYbqF4W2MXN7sMRgoZe2pst3Zi1Ppsoz4ebYmFXWLz0GqPY29BsauOkc
-        KsVsijKBV60PrscBTGydMFydKB4NGG9aNHuoeD0UfmtB3/6/tGboay+t0Vi4DDcYjNmmTJEfzLxg
-        DffCWuK3heQ7gtosF38m5LBNMr2i8brAL1stJziuvD7BbAd9rw835wwyXgkUbqnNzFb/G3fdhCWo
-        yir2vULLGwrUXvm9v8yR4GqSF69TcLJRh4PuZwIqzhVQGgZdy3vidwz85iozuMxmLHEbuTEuXlGm
-        M+Dwmg0LfjRnYzLmxb/Zppfoz4OvzUcFmZqnjK11qy6PI5X6AnagEQlVLAea3TPdrNOGE9FSILjE
-        LXa7rblPZWDvrFJlJLcTL57aXiV+D65eKVKt8kVWw2jvN4INtfl06jJmNZZovMEVd8LMcgB8XLDT
-        V0CJKnlkVqqjyDpz0/KbtWKk+cflLF0U1UQYjMdnGwd4ajwxjJN72c0CCU6qxhtnwVodaRqkYg7D
-        I0u2iK5mPLibWoHGclKYQ3q0pPtBhf2M0sjyL8TsFRYWylG/GVykH6kEHOSitkV8eErFcmTqKvrS
-        yi9DiBRoC7uDsMXdTmgia1Uoo3ITbmGK71WfsmF+dSDFSdbNAzqjnVe9N/Cyn3LMVel1+/3HP/8C
-        OkUPB5QFAAA=
-    headers:
-      Alt-Svc:
-      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-      Cache-Control:
-      - no-cache, no-store, max-age=0, must-revalidate
-      Content-Encoding:
-      - gzip
-      Content-Type:
-      - application/json; charset=utf-8
-      Date:
-      - Fri, 22 Nov 2024 22:39:05 GMT
-      Expires:
-      - Mon, 01 Jan 1990 00:00:00 GMT
-      Pragma:
-      - no-cache
-      Server:
-      - scaffolding on HTTPServer2
-      Transfer-Encoding:
-      - chunked
-      Vary:
-      - Origin
-      - X-Origin
-      - Referer
-      X-Content-Type-Options:
-      - nosniff
-      X-Frame-Options:
-      - SAMEORIGIN
-      X-XSS-Protection:
-      - '0'
-    status:
-      code: 200
-      message: OK
-- request:
-    body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
-      "text", "text": "You have the following repositories to work with:\n- red-bob-sandwich/red-samuel-basketball\n-
-      black-mary-sandwich/white-alice-banana\n- magenta-john-table/orange-john-basketball\n\nGiven
-      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\n\n\nThe
-      root cause of the issue has been identified and context about the issue has
-      been provided:\nThe file index.py is missing variable ''a''.\n\n# Your goal:\nProvide
-      the most actionable and effective steps to fix the issue.\n\nSince you are an
-      exceptional principal engineer, your solution should not just add logs or throw
-      more errors, but should meaningfully fix the issue. Your list of steps to fix
-      the problem should be detailed enough so that following it exactly will lead
-      to a fully complete solution.\n\nWhen ready with your final answer, detail the
-      precise plan to fix the issue.\n\n# Guidelines:\n- No placeholders are allowed,
-      the fix must be clear and detailed.\n- Make sure you use the tools provided
-      to look through the codebase and at the files you are changing before outputting
-      your suggested fix.\n- The fix must be comprehensive. Do not provide temporary
-      examples, placeholders or incomplete steps.\n- If the issue occurs in multiple
-      places or files, make sure to provide a fix for each occurrence, no matter how
-      many there are.\n- In your suggested fixes, whenever you are providing code,
-      provide explicit diffs to show the exact changes that need to be made.\n- You
-      do not need to make changes in test files, someone else will do that.\n- At
-      any point, please feel free to ask your teammates (who are much more familiar
-      with the codebase) any specific questions that would help you in your analysis.\n-
-      EVERY TIME before you use a tool, think step-by-step each time before using
-      the tools provided to you.\n- You also MUST think step-by-step before giving
-      the final answer."}]}, {"role": "assistant", "content": [{"type": "tool_use",
-      "id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY", "name": "file_search", "input":
-      {"filename": "index.py"}}]}, {"role": "user", "content": [{"type": "tool_result",
-      "content": "Error: Please provide a repo name because you have multiple repos.",
-      "tool_use_id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY"}]}], "system": "You are
-      an exceptional principal engineer that is amazing at finding and fixing issues
+      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\nThe
+      user has provided the following instruction for the fix: The file index.py is
+      missing variable ''a''.\n\n# Your goal:\nProvide the most actionable and effective
+      steps to fix the issue.\n\nSince you are an exceptional principal engineer,
+      your solution should not just add logs or throw more errors, but should meaningfully
+      fix the issue. Your list of steps to fix the problem should be detailed enough
+      so that following it exactly will lead to a fully complete solution.\n\nWhen
+      ready with your final answer, detail the precise plan to fix the issue.\n\n#
+      Guidelines:\n- No placeholders are allowed, the fix must be clear and detailed.\n-
+      Make sure you use the tools provided to look through the codebase and at the
+      files you are changing before outputting your suggested fix.\n- The fix must
+      be comprehensive. Do not provide temporary examples, placeholders or incomplete
+      steps.\n- If the issue occurs in multiple places or files, make sure to provide
+      a fix for each occurrence, no matter how many there are.\n- In your suggested
+      fixes, whenever you are providing code, provide explicit diffs to show the exact
+      changes that need to be made.\n- You do not need to make changes in test files,
+      someone else will do that.\n- At any point, please feel free to ask your teammates
+      (who are much more familiar with the codebase) any specific questions that would
+      help you in your analysis.\n- EVERY TIME before you use a tool, think step-by-step
+      each time before using the tools provided to you.\n- You also MUST think step-by-step
+      before giving the final answer."}]}], "stream": true, "system": "You are an
+      exceptional principal engineer that is amazing at finding and fixing issues
       in codebases.\n\nYou have access to tools that allow you to search a codebase
       to find the relevant code snippets and view relevant files. You can use these
       tools as many times as you want to find the relevant code snippets.\n\n# Guidelines:\n-
@@ -335,13 +113,13 @@ interactions:
       Note: To save time and money, if you''re looking to expand multiple documents,
       call this tool multiple times in the same message.\n- If a document has already
       been expanded earlier in the conversation, don''t use this tool again for the
-      same file path.", "input_schema": {"type": "object", "properties": {"input":
+      same file path.", "input_schema": {"type": "object", "properties": {"file_path":
       {"type": "string", "description": "The document path to expand."}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
-      in if you know it."}}, "required": ["input"]}}, {"name": "keyword_search", "description":
-      "Searches for a keyword in the codebase.", "input_schema": {"type": "object",
-      "properties": {"keyword": {"type": "string", "description": "The keyword to
-      search for."}, "supported_extensions": {"type": "array", "description": "The
+      in if you know it."}}, "required": ["file_path"]}}, {"name": "keyword_search",
+      "description": "Searches for a keyword in the codebase.", "input_schema": {"type":
+      "object", "properties": {"keyword": {"type": "string", "description": "The keyword
+      to search for."}, "supported_extensions": {"type": "array", "description": "The
       str[] of supported extensions to search in. Include the dot in the extension.
       For example, [''.py'', ''.js''].", "items": {"type": "string"}}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
@@ -369,17 +147,17 @@ interactions:
       authorization:
       - redacted
       baggage:
-      - sentry-trace_id=31c64b573c5447fc86cbbd494f12dc21,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
+      - sentry-trace_id=1ebd1f01f89147a689812bf9b722cef9,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
       connection:
       - keep-alive
       content-length:
-      - '5738'
+      - '5371'
       content-type:
       - application/json
       host:
       - us-east5-aiplatform.googleapis.com
       sentry-trace:
-      - 31c64b573c5447fc86cbbd494f12dc21-b9153f37d9914fee-1
+      - 1ebd1f01f89147a689812bf9b722cef9-bb60d26d172c658c-1
       user-agent:
       - AnthropicVertex/Python 0.34.2
       x-stainless-arch:
@@ -395,27 +173,34 @@ interactions:
       x-stainless-runtime-version:
       - 3.11.0rc1
     method: POST
-    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:rawPredict
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:streamRawPredict
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/1WSTY/TMBCG/8rIl70koU0/tOS2iFMFCE7sQldZJ562pu44ZOx+qMp/Zxy2oL3Y
-        8uuZ149f+6qsUZU68LY+9uFcT6YfVr/a9/3jA/2YPT7Fz5vdcuUfnlSmwqXDVIrMeosi9N4lQTNb
-        DpqCSAdv0InWOh0N5rN8kbMnwpAfy7yclPPppCylrvUUUDqqn9ebb8BzchinSn3CAAeEsLO0Bw7Y
-        QXMZ52pNa5oW8B2BEA0EDxtLBl5kwHPRXV7AEmjnpLdHhB47zzb43iIDW2oRTgg7fUS6C9Agklg4
-        A6edbXfgCSGxaUssBgiWOWKxprIAQboTC9S9FKKW4Z/3Rc409mhNlIMvicn5VgccLTbWYaGG7P9N
-        vXd15BThGH5ax1v8Xz+u+n1cTLfzeTfzW9t8uY/fUmSkD6k5udV/IVI/dVHiuo7ya8UtiPRCAli/
-        yj2avPFNzprMSe76LgmsDxFd3mjeY2gEXg3Dc6Y4+K7uUcvbveUdNxh/R5QgVUXRuUzF8T8IxEhT
-        B79HYlVNl/fLTPkY3oizxTD8AVF3xbx1AgAA
+        H4sIAAAAAAAC/1SOwWrDMBBE7/4Ks2cLbLnJQcdS6KW3QiCUIlRrm4aoK0e7Mg3B/x6lJAEf983s
+        Y3BCElP/IrPboWVxSSrvxJn6DHIaEQwsQmjuN5gz7P01552dkvzZtttsvzY+0+nlG191Wvfvz28/
+        U19+lqoCUgxX4Jj3xUv/3ugxFDYElz2qXq0URyIUNWmlW/3UtVqX3hBJymowH58NsMTRJnSlCYZy
+        CDfEeMxIA95hfkymMYuVeEBiMN267RuIWRZwnuu5qi4AAAD//0qFhE1BZl46WpAoKIEElYBqAAAA
+        AP//gqqBOik+KSc/ORt7KGJRAvRLZl5KaoWSlYEOqjzIoVB9JakVIIVgykpJqVYBDoDWAwAAAP//
+        wmo9MBRLEvFbD1aCYj1EBNVauDKo5T6pJQj7gbYDAAAA//+ir+3ARKpQkpGZl62QmASMMBC7WKG4
+        JLVAIakSOVhgrgMAAAD//6Kz60Au0YvJi8kzhDgG6AIAAAAA//+irwv0FNwyi4pLdBQ8FfJSU1MU
+        SvJRQwXoIAAAAAD//6JzkAD1JpaAIi1VAaKzFuEUAAAAAP//onPYFFQqpGXmpCokJhflFxcrJObk
+        KBSlFuQXZ5bkF2WmFqNlKwAAAAD//6Kv46xi8nQVwlNBsQZzB9ANAAAAAP//oq8bQMlFoTg1sSg5
+        QyEtv0ghBqIfGG4xsDIH6CYAAAAA//+ic/rJzMOIKJAzgWV0aVEqtiwPAAAA//+is/vKU4GJKi8F
+        nMCT84uKUpPB5SPQIQAAAAD//6KzQ0BJW6NYE5SOoGU00A0AAAAA//+irxvUixVKiyF5HeSaeGha
+        KsnPzwElKIyiCAAAAP//onMIgSoLJXCtDgAAAP//wlFj5xcQqrDzC5CsRU95AAAAAP//olI7wBBP
+        OwAYkvHAIAYpToHyS2HtrsBA37y0qBBTi7SogpCwoLCQilLzsmyg0rzEXJBmpCgBWwZs7QCNroVn
+        bAAAAAD//6JSbBhixgakuZUFbJ7BFRcAvZyZmAMWRDRpgK4AAAAA//8aSFdUxyhhpFEAAAAA//8a
+        SPeAYgwUecjFLwAAAP//Gkj3WIGqBEgOAgAAAP//GkhngCslaAEHAAAA//8aSHeA6sValMYwAAAA
+        //+iSrliiJL+AAAAAP//SkXtnGH1GoqkEpJXUDpGyKUHlu5RLVL/CL0vZGSAaJMAAAAA//9KRe8t
+        YvoOWU4Js4YGAAAA//8DAOIrSD5wDgAA
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-      Cache-Control:
-      - private
       Content-Encoding:
       - gzip
-      Server:
-      - scaffolding on HTTPServer2
+      Content-Type:
+      - text/event-stream; charset=utf-8
       Transfer-Encoding:
       - chunked
       Vary:
@@ -428,95 +213,19 @@ interactions:
       - SAMEORIGIN
       X-XSS-Protection:
       - '0'
-      content-type:
-      - application/json
+      cache-control:
+      - no-cache
       date:
-      - Fri, 22 Nov 2024 22:39:08 GMT
+      - Thu, 12 Dec 2024 19:47:10 GMT
       request-id:
-      - req_vrtx_01Ls79vPzTrieZzJGd2P9oLf
-      x-vertex-ai-internal-prediction-backend:
-      - harpoon
+      - req_vrtx_01WcvLF2t7pd15uGecANqHvD
+      server:
+      - hypercorn-h11
+      x-accel-buffering:
+      - 'no'
     status:
       code: 200
       message: OK
-- request:
-    body: null
-    headers:
-      Accept:
-      - '*/*'
-      Accept-Encoding:
-      - gzip, deflate
-      Connection:
-      - keep-alive
-      User-Agent:
-      - PyGithub/Python
-      authorization:
-      - redacted
-    method: GET
-    uri: https://api.github.com/repos/red-bob-sandwich/red-samuel-basketball
-  response:
-    body:
-      string: !!binary |
-        H4sIAAAAAAAAAyWMMQ6DMAxFr1K5ayEdmDhAR66AAlghUhOj+HtAqHev1S5veE96FxVWjYlppElw
-        e4nVjR60yWqFKyKy1Nna2/sOHDqG4E37lLHb0q9SQmOF4xD9854YXex+JkPa6T/1k6lPhudAny8N
-        KV3qdgAAAA==
-    headers:
-      Access-Control-Allow-Origin:
-      - '*'
-      Access-Control-Expose-Headers:
-      - ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining,
-        X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes,
-        X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO,
-        X-GitHub-Request-Id, Deprecation, Sunset
-      Content-Encoding:
-      - gzip
-      Content-Security-Policy:
-      - default-src 'none'
-      Content-Type:
-      - application/json; charset=utf-8
-      Date:
-      - Fri, 22 Nov 2024 22:39:08 GMT
-      Referrer-Policy:
-      - origin-when-cross-origin, strict-origin-when-cross-origin
-      Server:
-      - github.com
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubdomains; preload
-      Transfer-Encoding:
-      - chunked
-      Vary:
-      - Accept-Encoding, Accept, X-Requested-With
-      X-Accepted-OAuth-Scopes:
-      - repo
-      X-Content-Type-Options:
-      - nosniff
-      X-Frame-Options:
-      - deny
-      X-GitHub-Media-Type:
-      - github.v3; format=json
-      X-GitHub-Request-Id:
-      - F6F4:30C27B:3051FCA:30B3035:6741080C
-      X-OAuth-Scopes:
-      - repo
-      X-RateLimit-Limit:
-      - '5000'
-      X-RateLimit-Remaining:
-      - '4999'
-      X-RateLimit-Reset:
-      - '1732318748'
-      X-RateLimit-Resource:
-      - core
-      X-RateLimit-Used:
-      - '1'
-      X-XSS-Protection:
-      - '0'
-      github-authentication-token-expiration:
-      - 2025-02-02 19:42:38 UTC
-      x-github-api-version-selected:
-      - '2022-11-28'
-    status:
-      code: 404
-      message: Not Found
 - request:
     body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com
     headers:
@@ -539,24 +248,24 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/71TyZKjOBS891dU1HlcxWJcRd8wm7GRyhiMgYuDRQaxCSMWw8T8++DqQ18mom9z
-        0osnvcx8maG/f7y8vIZxjCi9dqRA9evPl9cp5MS3kJGQIpeBpBjmhyNquQY/zsCwRK+671nHs/ZN
-        uFbSKGlMzut8FZoPYupuRcmxMGvpfmwemiL1NxDZRNJIZjTBSTAH1qiu0EJE+mS7tBikdMh3LD/X
-        RfJYDaLmaf7Xoau39kE1vXF/krK6RTvqcP6VM0hzBbY3eJuel7t72OZdvYaqHsqpf5AQtaWTYWvW
-        Tvc4gBMbc97aVWm0n20ey77mtp8jw34Ir389d0aPBreIXvFzY14Qxe8ujUmDnhYsR42Tl6zrGvrz
-        /X0cx7eUkLREYYPpW0yq97Dvsve4JH2yasqwu5G2+uPznqIW1zfyhqoQl398Tu/lMjDgGL2VJF2U
-        fmv8junaTb+EblHYovbXDU5+Z4imfRbpMf7Ce/s8GyzEBjWqrglkY2NUlgBna/SdePRzaan3hc/B
-        Cs5u5Tvp2q8AC/ISB4rK+Q4YoRPPfmVhU94zyJOemAeXtfDNeltompgHzxZJdqcxnslgclrucyIb
-        1afZrJIh4hIa2EIeccwTIkP1E8LgYW6NX4q/wKtr6EgdrLUJ7iQu4LcNrLJ+6XHxzloHl4aNnXQO
-        9GKGikYSz+h9bzvGk1BHnFhHusvGnDstnH2iu30i/+ZKLtb/xTUnF+PJ9QALFnD8EcwWAxVphHkh
-        AOcsfCnfFpLvCGpYLv5MyBaaaHpG43b+paRGTnBYuX2EhS65uH3An7KEc8tYF5caZtbuv+c8Pijj
-        qqzCi1sYecPEtVt+76+JxPcgeeKCSrQjxt0FF7jxvZINGEuw+fMYMQk520+sMksWbWCJG+TgsXjF
-        fMkjDrxsXOYfcAYTmBf/Zmu9RJ/cLqtKaR3D1XC9ygLUaFftM13NqyTZGPdt8eGGXd2ZBG70cctp
-        3QTOPbhI8HKQY6+8GeZqnoh+BZb6Yd2NQLeaI3fJQpZJpe0jOe14l9e3Fl8IWkiiEJ37NTUZPpzU
-        20BV23DUKO6rFRT2m9DJh4QqnxwVj9rg6YXVO0oVnw9DeAXtQVQ2g9xIsrDdjkNOv/qMtvEx7M4b
-        I2CSeb/BXHUTp07kkNQ2SEk7LemLx1m/GyQ7NlQbJ5ABVWWcNi1xhkVylUrdup9uB30lIr131YcZ
-        TodCrnR/d1QsB92uJRJFt/Bkm1cY7I7+seFF4d5N4UWkvUhzYAvLH3JaM1D1zyjbF8Kecuv09cc/
-        /wK4UtO6lAUAAA==
+        H4sIAAAAAAAC/71Ry5aiShDcz1f06fXVBpRWZocIiAoI8io2faAonkUB8lLm3H+/ML2Y5ezuIjeZ
+        GRGZEb9+vL29BxCitv3qqgKR959v76+A4dYBxZsuW+5YuyXRoxksuSAFs33kVYKLA5UIzmRHD+bU
+        u+aX5gTntHtiybtxJDvksVRm4tESnLqs2AKwTYC7lR279lg0SXsUHgldfVbU161W0tNBh7C7bDCt
+        nNt9wwFDKcUj8BvZO1nCZviMokwVUuz30xbkjc3sbxgWRkN3O06Ia3G/D4QEXHho3HlTvEvGSfYY
+        NeOdve97DdX3In8904g805IfKXrHvv+z/IyedfZA7Ve2fLxhOe53t4VVjRYL0q6r258fH+M4rpNq
+        fhkFddauYVV+BH2XfrQNbtFjyCBa4yrJyNuMI1n09jdcP6MyEldrVAYZ/us6xFUfrWocdHH1KL8v
+        /x3TV/f6PvSAggd6fE+y6E+G6HVOQxlmena+25NCa5nSKmVX+4LyqeQ2o8k+Bq6GwTRXaZbAFTfq
+        JD5Bjgtdtjcqo1Jqnjx1Gbx0S3xpuZFdhTOFPH7hvDi0kcXGepap4UZdWlV0Mkc4VcOVkXLAcHRI
+        zOlaRkPIRK1/Z/OQoRaKFJGFQtnMlKN+BKNmiVvN4juNSC/txDP+5lBrZdrPPQaejK3v1jS0ksmX
+        i0k7SlXkKT3wDiN8sSRkOBLKDg0Z5zVr9pHs9JHwRytyjf9La4pcZdF6qseE1abZ2Iln1dzeqrkx
+        6VYy26kse9XvCIiGZ39e6M7W4WuJxumAi1slrzJYchVwtz1woxSSKA3Fw+S7LAVJ0QfufuHAoSvV
+        ocQxvneu/RLjhTM6nWn/PmbAM+NAlqbgW8eNXBMDhyORxAkm7d/MOU7XNg9gAxeuGnizR/kSvzGq
+        k7Kda7lnC2e8asHZB36a/ZtUQq1BIA6PahicxBBUUMnWQYwlP371xcHbN51s2sW017Irm67S9Mbj
+        h9yWWVleMOLA5qwXvYwccARBrT/1g0aYYkJSuGO213KKR/5y27WnJ49VT9+JEbpkd+tKhrOgJteY
+        juWeZ1esoh45JD1VV7+XzV4N3fPT9kiYswWZIqq2j8GOoYjNilT9KVw2K5FNaGjmT2DYtH5r6L2M
+        EY8Lowurm9k5PRrYzgqPqhsNKGFWKDapM7et7VOYVlwEByYEwskAYXbstwfabkpCgDjmVvPklH7L
+        CnxvNpdJccTibtjXHBWgeYzTeNtmNVYMpHp7ydKZetxIUOHv2r1jc+7iMJ7A9YNGBn+AJHn/8e9/
+        PJUPBokFAAA=
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
@@ -567,7 +276,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Fri, 22 Nov 2024 22:39:08 GMT
+      - Thu, 12 Dec 2024 19:47:12 GMT
       Expires:
       - Mon, 01 Jan 1990 00:00:00 GMT
       Pragma:
@@ -593,61 +302,55 @@ interactions:
     body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
       "text", "text": "You have the following repositories to work with:\n- red-bob-sandwich/red-samuel-basketball\n-
       black-mary-sandwich/white-alice-banana\n- magenta-john-table/orange-john-basketball\n\nGiven
-      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\n\n\nThe
-      root cause of the issue has been identified and context about the issue has
-      been provided:\nThe file index.py is missing variable ''a''.\n\n# Your goal:\nProvide
-      the most actionable and effective steps to fix the issue.\n\nSince you are an
-      exceptional principal engineer, your solution should not just add logs or throw
-      more errors, but should meaningfully fix the issue. Your list of steps to fix
-      the problem should be detailed enough so that following it exactly will lead
-      to a fully complete solution.\n\nWhen ready with your final answer, detail the
-      precise plan to fix the issue.\n\n# Guidelines:\n- No placeholders are allowed,
-      the fix must be clear and detailed.\n- Make sure you use the tools provided
-      to look through the codebase and at the files you are changing before outputting
-      your suggested fix.\n- The fix must be comprehensive. Do not provide temporary
-      examples, placeholders or incomplete steps.\n- If the issue occurs in multiple
-      places or files, make sure to provide a fix for each occurrence, no matter how
-      many there are.\n- In your suggested fixes, whenever you are providing code,
-      provide explicit diffs to show the exact changes that need to be made.\n- You
-      do not need to make changes in test files, someone else will do that.\n- At
-      any point, please feel free to ask your teammates (who are much more familiar
-      with the codebase) any specific questions that would help you in your analysis.\n-
-      EVERY TIME before you use a tool, think step-by-step each time before using
-      the tools provided to you.\n- You also MUST think step-by-step before giving
-      the final answer."}]}, {"role": "assistant", "content": [{"type": "tool_use",
-      "id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY", "name": "file_search", "input":
-      {"filename": "index.py"}}]}, {"role": "user", "content": [{"type": "tool_result",
-      "content": "Error: Please provide a repo name because you have multiple repos.",
-      "tool_use_id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY"}]}, {"role": "assistant",
-      "content": [{"type": "tool_use", "id": "toolu_vrtx_01PDJrku51g44p3ogibN8uQ2",
-      "name": "file_search", "input": {"filename": "index.py", "repo_name": "red-bob-sandwich/red-samuel-basketball"}}]},
-      {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
-      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/repos/repos#get-a-repository\",
-      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01PDJrku51g44p3ogibN8uQ2"}]}],
-      "system": "You are an exceptional principal engineer that is amazing at finding
-      and fixing issues in codebases.\n\nYou have access to tools that allow you to
-      search a codebase to find the relevant code snippets and view relevant files.
-      You can use these tools as many times as you want to find the relevant code
-      snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool, think step-by-step
+      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\nThe
+      user has provided the following instruction for the fix: The file index.py is
+      missing variable ''a''.\n\n# Your goal:\nProvide the most actionable and effective
+      steps to fix the issue.\n\nSince you are an exceptional principal engineer,
+      your solution should not just add logs or throw more errors, but should meaningfully
+      fix the issue. Your list of steps to fix the problem should be detailed enough
+      so that following it exactly will lead to a fully complete solution.\n\nWhen
+      ready with your final answer, detail the precise plan to fix the issue.\n\n#
+      Guidelines:\n- No placeholders are allowed, the fix must be clear and detailed.\n-
+      Make sure you use the tools provided to look through the codebase and at the
+      files you are changing before outputting your suggested fix.\n- The fix must
+      be comprehensive. Do not provide temporary examples, placeholders or incomplete
+      steps.\n- If the issue occurs in multiple places or files, make sure to provide
+      a fix for each occurrence, no matter how many there are.\n- In your suggested
+      fixes, whenever you are providing code, provide explicit diffs to show the exact
+      changes that need to be made.\n- You do not need to make changes in test files,
+      someone else will do that.\n- At any point, please feel free to ask your teammates
+      (who are much more familiar with the codebase) any specific questions that would
+      help you in your analysis.\n- EVERY TIME before you use a tool, think step-by-step
       each time before using the tools provided to you.\n- You also MUST think step-by-step
-      before giving the final answer.", "tools": [{"name": "list_directory", "description":
-      "Given the path for a directory in this codebase, returns the immediate contents
-      of the directory such as files and direct subdirectories. Does not include nested
-      directories.", "input_schema": {"type": "object", "properties": {"path": {"type":
-      "string", "description": "The path to view. For example, \"src/app/components\""},
+      before giving the final answer."}]}, {"role": "assistant", "content": [{"type":
+      "tool_use", "id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk", "name": "file_search",
+      "input": {"filename": "index.py"}}]}, {"role": "user", "content": [{"type":
+      "tool_result", "content": "Error: Please provide a repo name because you have
+      multiple repos.", "tool_use_id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk"}]}],
+      "stream": true, "system": "You are an exceptional principal engineer that is
+      amazing at finding and fixing issues in codebases.\n\nYou have access to tools
+      that allow you to search a codebase to find the relevant code snippets and view
+      relevant files. You can use these tools as many times as you want to find the
+      relevant code snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool,
+      think step-by-step each time before using the tools provided to you.\n- You
+      also MUST think step-by-step before giving the final answer.", "tools": [{"name":
+      "list_directory", "description": "Given the path for a directory in this codebase,
+      returns the immediate contents of the directory such as files and direct subdirectories.
+      Does not include nested directories.", "input_schema": {"type": "object", "properties":
+      {"path": {"type": "string", "description": "The path to view. For example, \"src/app/components\""},
       "repo_name": {"type": "string", "description": "Optional name of the repository
       to search in if you know it."}}, "required": ["path"]}}, {"name": "expand_document",
       "description": "Given a document path, returns the entire document text.\n-
       Note: To save time and money, if you''re looking to expand multiple documents,
       call this tool multiple times in the same message.\n- If a document has already
       been expanded earlier in the conversation, don''t use this tool again for the
-      same file path.", "input_schema": {"type": "object", "properties": {"input":
+      same file path.", "input_schema": {"type": "object", "properties": {"file_path":
       {"type": "string", "description": "The document path to expand."}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
-      in if you know it."}}, "required": ["input"]}}, {"name": "keyword_search", "description":
-      "Searches for a keyword in the codebase.", "input_schema": {"type": "object",
-      "properties": {"keyword": {"type": "string", "description": "The keyword to
-      search for."}, "supported_extensions": {"type": "array", "description": "The
+      in if you know it."}}, "required": ["file_path"]}}, {"name": "keyword_search",
+      "description": "Searches for a keyword in the codebase.", "input_schema": {"type":
+      "object", "properties": {"keyword": {"type": "string", "description": "The keyword
+      to search for."}, "supported_extensions": {"type": "array", "description": "The
       str[] of supported extensions to search in. Include the dot in the extension.
       For example, [''.py'', ''.js''].", "items": {"type": "string"}}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
@@ -675,17 +378,17 @@ interactions:
       authorization:
       - redacted
       baggage:
-      - sentry-trace_id=31c64b573c5447fc86cbbd494f12dc21,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
+      - sentry-trace_id=1ebd1f01f89147a689812bf9b722cef9,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
       connection:
       - keep-alive
       content-length:
-      - '6225'
+      - '5723'
       content-type:
       - application/json
       host:
       - us-east5-aiplatform.googleapis.com
       sentry-trace:
-      - 31c64b573c5447fc86cbbd494f12dc21-bbdb4933ecc5b213-1
+      - 1ebd1f01f89147a689812bf9b722cef9-927e4045433fbae7-1
       user-agent:
       - AnthropicVertex/Python 0.34.2
       x-stainless-arch:
@@ -701,25 +404,39 @@ interactions:
       x-stainless-runtime-version:
       - 3.11.0rc1
     method: POST
-    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:rawPredict
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:streamRawPredict
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/1WQUUvDMBSF/0rJczO3zjntm+5FmILCREGkZOndGpcmNfemWxn97yZ1QyWQkC/n
-        npx7j0yVLGc1bovW0aEYT1Yzu6S35fz2fiFqdP66Xj7fPbKUUddAlAKi2EIAzuoIBKJCEoYCqm0J
-        OjCphS+BT/mMozUGiLcZz8bZ5WScZUEnrSEIFfn78exLcIgOw5GzB6CkhoRclyAIJytltokyCVWQ
-        2LC5xEFjUZF1CnDE+vTXyFpdeIwJh97i3Z+7W2R2Ll8XpMSqbZ82ZjV9+Ww2QWpEHYs3SkPx82Os
-        N40PaY4DPimUKeEwaro4gBChOOG1FnLHa+E6jsKUeyWri32lCLjQSgJfCxMW6/uPlCHZpnAgwmj+
-        5x0eEL48GBlMjdc6ZX4YdwgxpCnI7sAgyyfX2VXKrKe/8GbW999d4ppl0wEAAA==
+        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
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-      Cache-Control:
-      - private
       Content-Encoding:
       - gzip
-      Server:
-      - scaffolding on HTTPServer2
+      Content-Type:
+      - text/event-stream; charset=utf-8
       Transfer-Encoding:
       - chunked
       Vary:
@@ -732,14 +449,16 @@ interactions:
       - SAMEORIGIN
       X-XSS-Protection:
       - '0'
-      content-type:
-      - application/json
+      cache-control:
+      - no-cache
       date:
-      - Fri, 22 Nov 2024 22:39:11 GMT
+      - Thu, 12 Dec 2024 19:47:13 GMT
       request-id:
-      - req_vrtx_013RpDHtGPuf2SWStsxWB1gm
-      x-vertex-ai-internal-prediction-backend:
-      - harpoon
+      - req_vrtx_01FCmh2avedSRNw9DR1ckkD9
+      server:
+      - hypercorn-h11
+      x-accel-buffering:
+      - 'no'
     status:
       code: 200
       message: OK
@@ -747,7 +466,7 @@ interactions:
     body: null
     headers:
       Accept:
-      - '*/*'
+      - application/vnd.github.machine-man-preview+json
       Accept-Encoding:
       - gzip, deflate
       Connection:
@@ -757,13 +476,13 @@ interactions:
       authorization:
       - redacted
     method: GET
-    uri: https://api.github.com/repos/black-mary-sandwich/white-alice-banana
+    uri: https://api.github.com/repos/red-bob-sandwich/red-samuel-basketball/installation
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAAyWMMQ6DMAxFr1K5ayEdmDhAR66AAlghUhOj+HtAqHev1S5veE96FxVWjYlppElw
-        e4nVjR60yWqFKyKy1Nna2/sOHDqG4E37lLHb0q9SQmOF4xD9854YXex+JkPa6T/1k6lPhudAny8N
-        KV3qdgAAAA==
+        H4sIAAAAAAAAAx2NMQ7CMBAEv4JMy8UUqfIASr6ADudILCU+y7cuIsTfOaXZZnZ3vmEXM14kTOGp
+        uDy0lzncwqyp71LAyFpevW3OV6DaFKMzG5aMtb+HpHtsYohcq51xXQTE1KSqZWg7KBcDb9t5RR9t
+        hFWIu2dBTgyZyYcu9Rq6uWm8j+H3B12NqGibAAAA
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -779,7 +498,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Fri, 22 Nov 2024 22:39:11 GMT
+      - Thu, 12 Dec 2024 19:47:16 GMT
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -790,32 +509,16 @@ interactions:
       - chunked
       Vary:
       - Accept-Encoding, Accept, X-Requested-With
-      X-Accepted-OAuth-Scopes:
-      - repo
       X-Content-Type-Options:
       - nosniff
       X-Frame-Options:
       - deny
       X-GitHub-Media-Type:
-      - github.v3; format=json
+      - github.v3; param=machine-man-preview; format=json
       X-GitHub-Request-Id:
-      - F6F7:1DABDC:2FC1D13:3022D70:6741080F
-      X-OAuth-Scopes:
-      - repo
-      X-RateLimit-Limit:
-      - '5000'
-      X-RateLimit-Remaining:
-      - '4998'
-      X-RateLimit-Reset:
-      - '1732318748'
-      X-RateLimit-Resource:
-      - core
-      X-RateLimit-Used:
-      - '2'
+      - F997:368EF6:B8FFDC0:BC1CFF0:675B3DC4
       X-XSS-Protection:
       - '0'
-      github-authentication-token-expiration:
-      - 2025-02-02 19:42:38 UTC
       x-github-api-version-selected:
       - '2022-11-28'
     status:
@@ -843,24 +546,24 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/71RybKiSBTd11e8eOvWBwgqtWOeJBUZJNkYkCAkswIidPS/N75a1KYjate7Gzfz
-        DPecv398fHyGCCVdd+2bIqk/f358TiHFrkOCS0ShDPiY6V8SHbivoBQDc1crFZ8zN3DCx3Q4h0LK
-        xKw85ZSkCKawp1iYWhQhjUU16hfaBpKaaX5vyiqsidhw3b7WranL+SI0okq0dZ3WKJQWU+48nPJy
-        jzTJ3kBGvu+J09B0pkbxsqATe+KlJdE0BO603zrbmhFKftizGdpqAC0eoMG5ms2dNVu2VMWnTMz5
-        UXRmsv3Vz6YNfbX2Dzy0KUHumM+/3jcnrxY/ku6K3xdvGJb93naoaZN3BFnft93Pr69xHNdp06Rl
-        Era4W6Om+gqHPvvq7mWXPJ4YJeuySXH9seBqHH/8CYfKZohXbRn2t+ZR/fH7sIjg+taskyrE5S/n
-        3zVd++mXUT4JH8nj1wuOf3eYTHoWKQgfsW67s0YCrHVa1beBoG21ymLAbI3QQSPMuWXWC0iBCsxe
-        BZ2UhpVJmnmJA1GioGOOwEEzrCx8WJpIfO7NaXikhW/WepFp0cZ8r5pYPY9obp4HSs4hxZJRfZ4P
-        VfyMqLgLbCaPKOJNkSX1m0LbgNwajyJc6CUaOFwPankCKkcFG74FVTYsOwqpFh1cWhI56RwoxQxE
-        uYl9bYA+P6KJqSOKrSPFIxHlTYvmECveEAu/teKL9X9pzfFFe2u9zIXLdOBozhYBRG4EecGYjssc
-        xe8Im+8KalAu+UyJzbTR9K7G6+Gl7LS8wWHlDRFm+vjiDcHmnMWUVyKFXWaQWep/4/xNUKKqrMKL
-        V2h5S6DaK7/vl9kG+qB58x6ll4YuYHYUBnpUSbs+n8UEI4a+rrr2m6vM4sWbudRt5uZryYo07REH
-        fjYu+BeYzcmcl/xm97VUn5u0Mzp5StgS5d3uITupO1xjIziHakdQNzhxMsifz91s0JHahyx/4n1y
-        K7s3uGJ2kvo4nIjdlWJflx33sKbdLU4OwmorF6Mr4bnpUTFu3Qu9Io5Wzg700D+v5o6eoOSde0G7
-        wQrs56fMCvx076iKx+eWIbdiAzytJVnXceRROdqzcSJd7VR3OxkSh6qYxPZQ8U3UMEa0kUt7r0n3
-        1XRqQ9Y+oVgcxUnVs/KetFfJ4Q6dEMimH7TcjHVBfrIZe0Bld56U/GqFYn9KusFg0vFUQ0K6XbOd
-        aSjZpfD1BEsL19bL9pvHsBrSx/Nazkq9nZlWNfj4iT25KIy92GX56Gr609iA5PwyIX1LP3/88y9u
-        QT+3lAUAAA==
+        H4sIAAAAAAAC/71TuZajSBD05yv6tb1Sc7aa8UAChBBHAeJy9KBAUNwSIETN239f6DHGHG+NcrIy
+        IyIjXv768fb2HkGY9v11aMu0ef/59j5HFLeNCN7y2HrHnDKp6Tw6sidL6+jdJXgofOBOIiItr7iQ
+        BPfFjA4vcGOeD3hCGGU6aWyKMdp4ZLiPSrN2YUPp43VPtzXg7pTHv4CpKh2KeyvnRFhRVfJFnGzB
+        vThDQ5+BLJdnC93nY2OaMgO4c3nK1bYMmwje7aoXvE8ZHF72y+gk21Bv0T4LVP4y2bwl2hI4yj6l
+        oV0KfDkIX52HNuCe3i3l4eQZQe7Y93/WndNXhx5pf0XrxjTLcd/VHrZdulqQD0PX//z4mKZpm7Vt
+        VqVRh/otbOuPaBzyD1i1Y7Lpqmi4tY/67W/tY58+UHNrt2kdoeqv7f29WgaeCKbbqs1Q87aoalDy
+        W/l3TNdh/i1USKNH+vj9g5I/GabzKY9liAx0si9YIXWk9Eo9dOFe+VSKC6XLYRV4ehXg5dVWHXgi
+        rWHxFRRVacgXWqM0QiuylyEHs+GIs14AdN6fiNTnV0zVJQG6ge1C00FaW0ttcrQmiNvnmZKKgOLI
+        uLHwuU6eMZX0oc0WMUWsEHnarBAKvUBOxiGYdEdkdIcf9Eaa9SNPhbTQ6XU+LjUKHgETeh0JnQyH
+        con1g9QmvjIGvjDBmW1iimti2SUh5c4L55jI7pjs/3AlHvi/uHDiKSvXSztkrI4XYzHPasWF0QqA
+        DSdb7FTWvvY7gkavFn/m1Ga7eF6jcYfAq3qlaBGsuTbwmDHwkhw2SR6LAg49loBNOUbe14pRxZ7U
+        xRJHhf6pC+uqWjGT44kM7QkFvnWLZAlH3zyS4dZhYfiuEhKn5V5d36UTO3VCJb2IK1YX+ItHxRo/
+        mDSsMBoOVj0MXOY1By4+8HjxD+sNsbXqJ/9JKc7FCPs75h0ri70cFWbPq16N6GewrH9E/MuZilNf
+        SBUViRJV781L6dE++QxgyXiqwMWq8yxgY0NzzoGv1j7bqqQpyPsSkjCJwCdD3KczJNypxMGj7spN
+        mX8K9K0sktKEht0WBdWHTfB5DP1zeyEe7lHNVYW0avZYWCSYbU1n+1DsoqGPm8NAE7adPkvmTiYm
+        OMTnSPSFuCvPJCgN7XrcdDnNbqRWrS2ajBh2l9zPtYT4neoiwlCPFE+3giftcYlf6lM2zFtBGFwi
+        Cy24BpETpzVfqVEh+iPi1EFOzcbc25sxvunzDVePncD1ugluRnwCTQPond3avUTz4OYVEGcGeP/x
+        73+sdDSriQUAAA==
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
@@ -871,7 +574,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Fri, 22 Nov 2024 22:39:11 GMT
+      - Thu, 12 Dec 2024 19:47:16 GMT
       Expires:
       - Mon, 01 Jan 1990 00:00:00 GMT
       Pragma:
@@ -897,66 +600,60 @@ interactions:
     body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
       "text", "text": "You have the following repositories to work with:\n- red-bob-sandwich/red-samuel-basketball\n-
       black-mary-sandwich/white-alice-banana\n- magenta-john-table/orange-john-basketball\n\nGiven
-      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\n\n\nThe
-      root cause of the issue has been identified and context about the issue has
-      been provided:\nThe file index.py is missing variable ''a''.\n\n# Your goal:\nProvide
-      the most actionable and effective steps to fix the issue.\n\nSince you are an
-      exceptional principal engineer, your solution should not just add logs or throw
-      more errors, but should meaningfully fix the issue. Your list of steps to fix
-      the problem should be detailed enough so that following it exactly will lead
-      to a fully complete solution.\n\nWhen ready with your final answer, detail the
-      precise plan to fix the issue.\n\n# Guidelines:\n- No placeholders are allowed,
-      the fix must be clear and detailed.\n- Make sure you use the tools provided
-      to look through the codebase and at the files you are changing before outputting
-      your suggested fix.\n- The fix must be comprehensive. Do not provide temporary
-      examples, placeholders or incomplete steps.\n- If the issue occurs in multiple
-      places or files, make sure to provide a fix for each occurrence, no matter how
-      many there are.\n- In your suggested fixes, whenever you are providing code,
-      provide explicit diffs to show the exact changes that need to be made.\n- You
-      do not need to make changes in test files, someone else will do that.\n- At
-      any point, please feel free to ask your teammates (who are much more familiar
-      with the codebase) any specific questions that would help you in your analysis.\n-
-      EVERY TIME before you use a tool, think step-by-step each time before using
-      the tools provided to you.\n- You also MUST think step-by-step before giving
-      the final answer."}]}, {"role": "assistant", "content": [{"type": "tool_use",
-      "id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY", "name": "file_search", "input":
-      {"filename": "index.py"}}]}, {"role": "user", "content": [{"type": "tool_result",
-      "content": "Error: Please provide a repo name because you have multiple repos.",
-      "tool_use_id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY"}]}, {"role": "assistant",
-      "content": [{"type": "tool_use", "id": "toolu_vrtx_01PDJrku51g44p3ogibN8uQ2",
+      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\nThe
+      user has provided the following instruction for the fix: The file index.py is
+      missing variable ''a''.\n\n# Your goal:\nProvide the most actionable and effective
+      steps to fix the issue.\n\nSince you are an exceptional principal engineer,
+      your solution should not just add logs or throw more errors, but should meaningfully
+      fix the issue. Your list of steps to fix the problem should be detailed enough
+      so that following it exactly will lead to a fully complete solution.\n\nWhen
+      ready with your final answer, detail the precise plan to fix the issue.\n\n#
+      Guidelines:\n- No placeholders are allowed, the fix must be clear and detailed.\n-
+      Make sure you use the tools provided to look through the codebase and at the
+      files you are changing before outputting your suggested fix.\n- The fix must
+      be comprehensive. Do not provide temporary examples, placeholders or incomplete
+      steps.\n- If the issue occurs in multiple places or files, make sure to provide
+      a fix for each occurrence, no matter how many there are.\n- In your suggested
+      fixes, whenever you are providing code, provide explicit diffs to show the exact
+      changes that need to be made.\n- You do not need to make changes in test files,
+      someone else will do that.\n- At any point, please feel free to ask your teammates
+      (who are much more familiar with the codebase) any specific questions that would
+      help you in your analysis.\n- EVERY TIME before you use a tool, think step-by-step
+      each time before using the tools provided to you.\n- You also MUST think step-by-step
+      before giving the final answer."}]}, {"role": "assistant", "content": [{"type":
+      "tool_use", "id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk", "name": "file_search",
+      "input": {"filename": "index.py"}}]}, {"role": "user", "content": [{"type":
+      "tool_result", "content": "Error: Please provide a repo name because you have
+      multiple repos.", "tool_use_id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk"}]}, {"role":
+      "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01P2v1MoowsgkAtbegM2jiLB",
       "name": "file_search", "input": {"filename": "index.py", "repo_name": "red-bob-sandwich/red-samuel-basketball"}}]},
       {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
-      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/repos/repos#get-a-repository\",
-      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01PDJrku51g44p3ogibN8uQ2"}]},
-      {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01C2o7cWCtiaTvvPfnT3Ujpf",
-      "name": "file_search", "input": {"filename": "index.py", "repo_name": "black-mary-sandwich/white-alice-banana"}}]},
-      {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
-      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/repos/repos#get-a-repository\",
-      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01C2o7cWCtiaTvvPfnT3Ujpf"}]}],
-      "system": "You are an exceptional principal engineer that is amazing at finding
-      and fixing issues in codebases.\n\nYou have access to tools that allow you to
-      search a codebase to find the relevant code snippets and view relevant files.
-      You can use these tools as many times as you want to find the relevant code
-      snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool, think step-by-step
-      each time before using the tools provided to you.\n- You also MUST think step-by-step
-      before giving the final answer.", "tools": [{"name": "list_directory", "description":
-      "Given the path for a directory in this codebase, returns the immediate contents
-      of the directory such as files and direct subdirectories. Does not include nested
-      directories.", "input_schema": {"type": "object", "properties": {"path": {"type":
-      "string", "description": "The path to view. For example, \"src/app/components\""},
+      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/apps/apps#get-a-repository-installation-for-the-authenticated-app\",
+      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01P2v1MoowsgkAtbegM2jiLB"}]}],
+      "stream": true, "system": "You are an exceptional principal engineer that is
+      amazing at finding and fixing issues in codebases.\n\nYou have access to tools
+      that allow you to search a codebase to find the relevant code snippets and view
+      relevant files. You can use these tools as many times as you want to find the
+      relevant code snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool,
+      think step-by-step each time before using the tools provided to you.\n- You
+      also MUST think step-by-step before giving the final answer.", "tools": [{"name":
+      "list_directory", "description": "Given the path for a directory in this codebase,
+      returns the immediate contents of the directory such as files and direct subdirectories.
+      Does not include nested directories.", "input_schema": {"type": "object", "properties":
+      {"path": {"type": "string", "description": "The path to view. For example, \"src/app/components\""},
       "repo_name": {"type": "string", "description": "Optional name of the repository
       to search in if you know it."}}, "required": ["path"]}}, {"name": "expand_document",
       "description": "Given a document path, returns the entire document text.\n-
       Note: To save time and money, if you''re looking to expand multiple documents,
       call this tool multiple times in the same message.\n- If a document has already
       been expanded earlier in the conversation, don''t use this tool again for the
-      same file path.", "input_schema": {"type": "object", "properties": {"input":
+      same file path.", "input_schema": {"type": "object", "properties": {"file_path":
       {"type": "string", "description": "The document path to expand."}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
-      in if you know it."}}, "required": ["input"]}}, {"name": "keyword_search", "description":
-      "Searches for a keyword in the codebase.", "input_schema": {"type": "object",
-      "properties": {"keyword": {"type": "string", "description": "The keyword to
-      search for."}, "supported_extensions": {"type": "array", "description": "The
+      in if you know it."}}, "required": ["file_path"]}}, {"name": "keyword_search",
+      "description": "Searches for a keyword in the codebase.", "input_schema": {"type":
+      "object", "properties": {"keyword": {"type": "string", "description": "The keyword
+      to search for."}, "supported_extensions": {"type": "array", "description": "The
       str[] of supported extensions to search in. Include the dot in the extension.
       For example, [''.py'', ''.js''].", "items": {"type": "string"}}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
@@ -984,17 +681,17 @@ interactions:
       authorization:
       - redacted
       baggage:
-      - sentry-trace_id=31c64b573c5447fc86cbbd494f12dc21,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
+      - sentry-trace_id=1ebd1f01f89147a689812bf9b722cef9,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
       connection:
       - keep-alive
       content-length:
-      - '6712'
+      - '6247'
       content-type:
       - application/json
       host:
       - us-east5-aiplatform.googleapis.com
       sentry-trace:
-      - 31c64b573c5447fc86cbbd494f12dc21-84e2405e051c38fc-1
+      - 1ebd1f01f89147a689812bf9b722cef9-94690e691d172c0f-1
       user-agent:
       - AnthropicVertex/Python 0.34.2
       x-stainless-arch:
@@ -1010,25 +707,30 @@ interactions:
       x-stainless-runtime-version:
       - 3.11.0rc1
     method: POST
-    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:rawPredict
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:streamRawPredict
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/1WQy07DMBBF/8XrGNJAIugSymMBm4JQFVRZ02RI0jp2mhmXVlX+HTu0Eix9fOfq
-        zBxFU4qpaKlSu573Kp6kTZ5nL0+Yr+s+zZvXh7ficbEXkeBDhyGKRFChB73VAQBRQwyGPWptidqz
-        QoMrUV7JVJI1BlnuEpnEyfUkThKfK6xh9BPTz+O5l63VylEoHpXC252lPg6QFjSf1en34v7d3T3P
-        81m79VEDbRj+ajQqQuiLOsybzvnu44hPicaUuL/oDsEbO6tOuPWrGAa5trWRDCuNl7YHU+EvWQFt
-        kFegtRiGZSSIbad6BL/Uf+Xxg3Dr0BS+1zitI+HGQ3mPUUix3aAhMZ3cZlkkrOO/8CYbhh9D4aq+
-        jQEAAA==
+        H4sIAAAAAAAC/1SOwWrDMBBE7/4Ks2cLbLmBRPfQEsght0IpQpGWYKquHO/KtAT/e5WSlOa4b2aH
+        hzOSmPoTmd0JLYubpApOnKkvIN8jgoGHEJr7DeYCQ7jmfLLzJF+27Z6HLaZ1r/3h1e/WvduE1ctx
+        X34epwqYUrwCxzyUXfrdTQFjYT66HFD1aqU4EaGoWSvd6qeu1br0fCIp1mDe3htgSaOd0JUmGMox
+        3hDjOSN5vMP8p0xjFivpA4nBdEW2gZTlP+z1stRLVf0AAAD//0qFBE5BZl46WpgoKIEElYBqAAAA
+        AP//gqqBuik+KSc/ORt7MGJRAvRMZl5KaoWSlYEOqjzIpVB9Jfn5OfGlxaBAAwc3iF8KD3Bv30Tn
+        qsxIs6iq5JTC9NxEP1+/jDyg0rzEXJDmtMwcYMSlJhYlZ4AtA3oTaDTQeygA6A8AAAAA///C6g9g
+        fJQk4vcHWAmKPyAiCPdDAjwLGEFwxQVAv2cm5oAFgSqUwKENAAAA//8aSBdUx4BDSqkWESAAAAAA
+        //8aSOeAI68W4g4AAAAA//8aSHfEAFN6DNgEpVqU1AIAAAD//xpIR1XoFVTGKClhJmEAAAAA//8a
+        SEfpAMOpKLUgPz4vEcllQEcBAAAA//8aSEflpsLDCegSAAAAAP//GkiXgJJRUk5icrZubmIRxElA
+        FwEAAAD//xpIF1XqFidiSUMAAAAA//8a0FyfUp4JLKZr4Y4BAAAA//8aSMfol6NleQAAAAD//xpI
+        x2RklqTqJuZkJqfqIgUPAAAA//8aSBclJSIyFgAAAP//GtiaIi8xRqkW4RgAAAAA///C0R7JLyDU
+        HMkvQHIKcsQDAAAA//9KRW0iYvUYiqQSkkdQmmfITRksjbRapFYaWovMwhQ1MQIAAAD//0pFb7Zi
+        +g9ZTgmmDwAAAP//AwDFrfH37woAAA==
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-      Cache-Control:
-      - private
       Content-Encoding:
       - gzip
-      Server:
-      - scaffolding on HTTPServer2
+      Content-Type:
+      - text/event-stream; charset=utf-8
       Transfer-Encoding:
       - chunked
       Vary:
@@ -1041,14 +743,16 @@ interactions:
       - SAMEORIGIN
       X-XSS-Protection:
       - '0'
-      content-type:
-      - application/json
+      cache-control:
+      - no-cache
       date:
-      - Fri, 22 Nov 2024 22:39:13 GMT
+      - Thu, 12 Dec 2024 19:47:18 GMT
       request-id:
-      - req_vrtx_01RNM4pvnEGcLNEynVCfC5Gu
-      x-vertex-ai-internal-prediction-backend:
-      - harpoon
+      - req_vrtx_01Sqfy46stLrbiVp4UgKTDwC
+      server:
+      - hypercorn-h11
+      x-accel-buffering:
+      - 'no'
     status:
       code: 200
       message: OK
@@ -1056,7 +760,7 @@ interactions:
     body: null
     headers:
       Accept:
-      - '*/*'
+      - application/vnd.github.machine-man-preview+json
       Accept-Encoding:
       - gzip, deflate
       Connection:
@@ -1066,13 +770,13 @@ interactions:
       authorization:
       - redacted
     method: GET
-    uri: https://api.github.com/repos/magenta-john-table/orange-john-basketball
+    uri: https://api.github.com/repos/black-mary-sandwich/white-alice-banana/installation
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAAyWMMQ6DMAxFr1K5ayEdmDhAR66AAlghUhOj+HtAqHev1S5veE96FxVWjYlppElw
-        e4nVjR60yWqFKyKy1Nna2/sOHDqG4E37lLHb0q9SQmOF4xD9854YXex+JkPa6T/1k6lPhudAny8N
-        KV3qdgAAAA==
+        H4sIAAAAAAAAAx2NMQ7CMBAEv4JMy8UUqfIASr6ADudILCU+y7cuIsTfOaXZZnZ3vmEXM14kTOGp
+        uDy0lzncwqyp71LAyFpevW3OV6DaFKMzG5aMtb+HpHtsYohcq51xXQTE1KSqZWg7KBcDb9t5RR9t
+        hFWIu2dBTgyZyYcu9Rq6uWm8j+H3B12NqGibAAAA
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -1088,7 +792,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Fri, 22 Nov 2024 22:39:13 GMT
+      - Thu, 12 Dec 2024 19:47:19 GMT
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -1099,32 +803,16 @@ interactions:
       - chunked
       Vary:
       - Accept-Encoding, Accept, X-Requested-With
-      X-Accepted-OAuth-Scopes:
-      - repo
       X-Content-Type-Options:
       - nosniff
       X-Frame-Options:
       - deny
       X-GitHub-Media-Type:
-      - github.v3; format=json
+      - github.v3; param=machine-man-preview; format=json
       X-GitHub-Request-Id:
-      - F6FA:3CE335:2F33609:2F94651:67410811
-      X-OAuth-Scopes:
-      - repo
-      X-RateLimit-Limit:
-      - '5000'
-      X-RateLimit-Remaining:
-      - '4997'
-      X-RateLimit-Reset:
-      - '1732318748'
-      X-RateLimit-Resource:
-      - core
-      X-RateLimit-Used:
-      - '3'
+      - 28B9:146D55:9F4C1BD:A20345D:675B3DC7
       X-XSS-Protection:
       - '0'
-      github-authentication-token-expiration:
-      - 2025-02-02 19:42:38 UTC
       x-github-api-version-selected:
       - '2022-11-28'
     status:
@@ -1152,24 +840,24 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/71TyZKjOBS891dU1HmqisW4TN8wmMU22GA2cSFAyOwgs8PE/Ptg96EvE9G3ub14
-        Uma+lyn9/ePt7T2AELWt39U5qt5/vr3PAcV+BgSHBL7weEtpE5+LgKBtPbFfRvKGcC0qpqDOQ7G1
-        2a2sb1pf0E5oL0Xhtb+l+AMciisiz77VzN9VKLO9MXhmUuoK8xi2u4HhqGY2Y6cLRK81Ekbepzmh
-        sX5QG82NGBpQ7rlr38tSWlzvkrwjduC8USmWtWQNXvJi24TZIOwtDt2X8RbwMThxiLtxhnITdVly
-        KTV1rou9p2DC1ne5JQXKDf1e0Qnym3n/67kzmnDaoNZPnxvTDMu+ui2sMXpakHQdbn9+fY3j+BnX
-        dVygAKftJ6zLr6Dvki9Y1H30gYugu9dN+baiqjR6+xOqb1GTVvf6E5VBWvzxevsoVsCQQvRZ1PE6
-        6WvGV0x+N/8adI+CBjW/TtLod4ZoPiahBNNLerxZi0JqqdIqZYc9Xtkqpc5oiz4CE44g49b6mANK
-        K7XFLoEZb0CpkmpWpJ5woICpjpoJF1Dq6Zk/Esjlnpwnm9TTu/65ymBIq89WHcnGCJd6OFNiBiiW
-        DCtjOZfREFJR692YLKSIJ0WCqieFQmuZPl4EsNIfNprJdVolzprMUR69x1qZ9GuPguvj8hxMQjNe
-        PClfNEGsI1fpgbsf4cxUIcVWoWSTkLLnVbOPJLuP+N9akaP/X1pL5ChPrUlduVQTjOqiE5rAjVqW
-        M6ppMRfhZWH9iqDSitWfGd0YHM7PaOwOOEWrZHUalHYfpkwXOXbv0UYSUXYBJXattUSX/xvn0l4B
-        y6IMHDtXMkzAyi5e+4tsDVytfvKG1vGkinjWqeRyyz3zZjEWsDnaoOrJe3EVSbTOpq5xq5k6rV6R
-        Gj+mnpuMK37SFnVWl9W/xSLW6CMiuYMHAtxuZ3Tf06O90mE34sFyWk409VqzwxTWMW55qc8nWoc2
-        SOruQZY9SWaP+0RjNSQXUyXtPgN5chFHalCEIfqwquUwuCyg62VQD+4u4ZzN1G3HLY4BWMYkCHdA
-        Ol4c1+EWXJRIAUXPSiXZUNZydJdZvGQxYbskVjpY4CzoNh263PMNted5jMJvNRj3BkFUD8ln0+pA
-        +sT9MI3cBPcb/p5hHIHLpomT0LNbp/hgbXzyaZYaY7UH1vplxEsHURSfrVTfyJbhOwVHKHicHsE3
-        7+/IA9/hU9fdDKKyS6MAgjtOec95Bj2e+bIKVusD2YvyZmEPLMuavRGQu0nIVaSz6ol7//HPvxF1
-        zF+UBQAA
+        H4sIAAAAAAAC/72UN5OjShSF8/0VUxOvNFiZzUAgBBqQ8CZRQeMa0yCMMFvvvz+YCTbcbINObt/+
+        zr3nVPXvH29v7z4AUds+uiqP0Puvt/fJJ45bH2M0my73NJdvtFNp6Uqj8dd9TEsB9BzeUxQ71HGe
+        H8eEOPpuPc6P0JaJSLkIWLu7H/npdGuQLhQASWbWaUHKWtTLtfn6czdmdnU9+9W9LHfPwKOjvoT+
+        SUR6EOk4gdoNuXGgGQodh1GOaMu5FWD+SfbEnVyjF9ggJFNlUebWLt3dXf+UuFfGZ3RG4/WzehEc
+        QoYCVxi1g1veK7aoaQ/uUx6OA4bv6fef687RWMMmah9w3Zikj8evaguqOlotSLuubn99fAzDsE2q
+        Kikiv4btFlTlh9936UffRg1EcbWNSh8Wb39rB0XVh5u68Lu4asq/trfPYuG/IIi2RZVA9LZMhWD4
+        PflXTI9u+h6Ujfwmar5vYPgnw2iS0kAA8AYl3ZxFXIFiK5Zd7Z3EnZiZhCJ4hWsrhTsvp9TKJRhS
+        nvnRzYr8JpikTMiYnCXjTXCnm8FPSqbCz5OERQ6zMq8WrsJY3S4yNSDltVSFF20Ac/X6JM6ZSxzx
+        AGnzZxm+AiJsPZ3OAgJbEWmEVoRILsjhxrmDYvCUYjCdgs6TcmEIj2RrpUz7pUaAi0p5do0DI5k9
+        IZ8V7lyFjti7DjuAiUYBcUSBYOGAsKZFsw8Fqw9Pf7RCW/1XWnNoi6vWKHMJrcyLsTNDy5lJyZk6
+        34xksVNc+6qvCJBSLP5MkU7XwbRGY3WuXbRiVkFQHivXpnrXDlOAwjTg2dmzaQygvPftw8ooAvtc
+        B+cj4TlS7ZVFsTLDi4R7+gBdR4t94Tz7X1EDwjhLuJGbg2zVpm16mmKePbV0SRPjV1btOotH2Rq/
+        OsizSMlzvs5DgeW9bIDFB2ZW1h0cbBt1bWMxAcKCjZ6l/fGJlQ4lP+GlV4rD3djYHAwThqSXzwBR
+        HHRM/VBrggn0YLzT0a3zqfYx7zP5pdEPNet0pjDSc5AZNu9W1kF+HYKdZe5xZ3CbXODbfXkxqb6x
+        jxxb4Fdn7HSFviQpRk1lcSUf6HE1Hieq3Rw2uyrmJkjpkRhM16YatYvVQPXRbRR0k9gYhnxvkaFt
+        XFO8vrN+mKStKqY+T4siPEgNXnvsQarD/X14mmBGrM2xfRp0BSNLtxy7ii4pveLmgsMC414x3HnD
+        Th0eIB4dXDnEMdNZr6BucyrmJLOrDElKgpfUCX0aU2eg9+InFGKcbk5sfLhkRtcyT3gA6CmKx6um
+        vv/473+H5foBiQUAAA==
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
@@ -1180,7 +868,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Fri, 22 Nov 2024 22:39:14 GMT
+      - Thu, 12 Dec 2024 19:47:19 GMT
       Expires:
       - Mon, 01 Jan 1990 00:00:00 GMT
       Pragma:
@@ -1206,71 +894,369 @@ interactions:
     body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
       "text", "text": "You have the following repositories to work with:\n- red-bob-sandwich/red-samuel-basketball\n-
       black-mary-sandwich/white-alice-banana\n- magenta-john-table/orange-john-basketball\n\nGiven
-      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\n\n\nThe
-      root cause of the issue has been identified and context about the issue has
-      been provided:\nThe file index.py is missing variable ''a''.\n\n# Your goal:\nProvide
-      the most actionable and effective steps to fix the issue.\n\nSince you are an
-      exceptional principal engineer, your solution should not just add logs or throw
-      more errors, but should meaningfully fix the issue. Your list of steps to fix
-      the problem should be detailed enough so that following it exactly will lead
-      to a fully complete solution.\n\nWhen ready with your final answer, detail the
-      precise plan to fix the issue.\n\n# Guidelines:\n- No placeholders are allowed,
-      the fix must be clear and detailed.\n- Make sure you use the tools provided
-      to look through the codebase and at the files you are changing before outputting
-      your suggested fix.\n- The fix must be comprehensive. Do not provide temporary
-      examples, placeholders or incomplete steps.\n- If the issue occurs in multiple
-      places or files, make sure to provide a fix for each occurrence, no matter how
-      many there are.\n- In your suggested fixes, whenever you are providing code,
-      provide explicit diffs to show the exact changes that need to be made.\n- You
-      do not need to make changes in test files, someone else will do that.\n- At
-      any point, please feel free to ask your teammates (who are much more familiar
-      with the codebase) any specific questions that would help you in your analysis.\n-
-      EVERY TIME before you use a tool, think step-by-step each time before using
-      the tools provided to you.\n- You also MUST think step-by-step before giving
-      the final answer."}]}, {"role": "assistant", "content": [{"type": "tool_use",
-      "id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY", "name": "file_search", "input":
-      {"filename": "index.py"}}]}, {"role": "user", "content": [{"type": "tool_result",
-      "content": "Error: Please provide a repo name because you have multiple repos.",
-      "tool_use_id": "toolu_vrtx_01EjFPRDvJJZ7feeuDa7ADuY"}]}, {"role": "assistant",
-      "content": [{"type": "tool_use", "id": "toolu_vrtx_01PDJrku51g44p3ogibN8uQ2",
+      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\nThe
+      user has provided the following instruction for the fix: The file index.py is
+      missing variable ''a''.\n\n# Your goal:\nProvide the most actionable and effective
+      steps to fix the issue.\n\nSince you are an exceptional principal engineer,
+      your solution should not just add logs or throw more errors, but should meaningfully
+      fix the issue. Your list of steps to fix the problem should be detailed enough
+      so that following it exactly will lead to a fully complete solution.\n\nWhen
+      ready with your final answer, detail the precise plan to fix the issue.\n\n#
+      Guidelines:\n- No placeholders are allowed, the fix must be clear and detailed.\n-
+      Make sure you use the tools provided to look through the codebase and at the
+      files you are changing before outputting your suggested fix.\n- The fix must
+      be comprehensive. Do not provide temporary examples, placeholders or incomplete
+      steps.\n- If the issue occurs in multiple places or files, make sure to provide
+      a fix for each occurrence, no matter how many there are.\n- In your suggested
+      fixes, whenever you are providing code, provide explicit diffs to show the exact
+      changes that need to be made.\n- You do not need to make changes in test files,
+      someone else will do that.\n- At any point, please feel free to ask your teammates
+      (who are much more familiar with the codebase) any specific questions that would
+      help you in your analysis.\n- EVERY TIME before you use a tool, think step-by-step
+      each time before using the tools provided to you.\n- You also MUST think step-by-step
+      before giving the final answer."}]}, {"role": "assistant", "content": [{"type":
+      "tool_use", "id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk", "name": "file_search",
+      "input": {"filename": "index.py"}}]}, {"role": "user", "content": [{"type":
+      "tool_result", "content": "Error: Please provide a repo name because you have
+      multiple repos.", "tool_use_id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk"}]}, {"role":
+      "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01P2v1MoowsgkAtbegM2jiLB",
       "name": "file_search", "input": {"filename": "index.py", "repo_name": "red-bob-sandwich/red-samuel-basketball"}}]},
       {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
-      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/repos/repos#get-a-repository\",
-      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01PDJrku51g44p3ogibN8uQ2"}]},
-      {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01C2o7cWCtiaTvvPfnT3Ujpf",
+      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/apps/apps#get-a-repository-installation-for-the-authenticated-app\",
+      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01P2v1MoowsgkAtbegM2jiLB"}]},
+      {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01GKMaCziY6ZzcdqgmaNMNhn",
       "name": "file_search", "input": {"filename": "index.py", "repo_name": "black-mary-sandwich/white-alice-banana"}}]},
       {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
-      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/repos/repos#get-a-repository\",
-      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01C2o7cWCtiaTvvPfnT3Ujpf"}]},
-      {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01Vya5csRDh5wXCTuBHRZDmq",
+      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/apps/apps#get-a-repository-installation-for-the-authenticated-app\",
+      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01GKMaCziY6ZzcdqgmaNMNhn"}]}],
+      "stream": true, "system": "You are an exceptional principal engineer that is
+      amazing at finding and fixing issues in codebases.\n\nYou have access to tools
+      that allow you to search a codebase to find the relevant code snippets and view
+      relevant files. You can use these tools as many times as you want to find the
+      relevant code snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool,
+      think step-by-step each time before using the tools provided to you.\n- You
+      also MUST think step-by-step before giving the final answer.", "tools": [{"name":
+      "list_directory", "description": "Given the path for a directory in this codebase,
+      returns the immediate contents of the directory such as files and direct subdirectories.
+      Does not include nested directories.", "input_schema": {"type": "object", "properties":
+      {"path": {"type": "string", "description": "The path to view. For example, \"src/app/components\""},
+      "repo_name": {"type": "string", "description": "Optional name of the repository
+      to search in if you know it."}}, "required": ["path"]}}, {"name": "expand_document",
+      "description": "Given a document path, returns the entire document text.\n-
+      Note: To save time and money, if you''re looking to expand multiple documents,
+      call this tool multiple times in the same message.\n- If a document has already
+      been expanded earlier in the conversation, don''t use this tool again for the
+      same file path.", "input_schema": {"type": "object", "properties": {"file_path":
+      {"type": "string", "description": "The document path to expand."}, "repo_name":
+      {"type": "string", "description": "Optional name of the repository to search
+      in if you know it."}}, "required": ["file_path"]}}, {"name": "keyword_search",
+      "description": "Searches for a keyword in the codebase.", "input_schema": {"type":
+      "object", "properties": {"keyword": {"type": "string", "description": "The keyword
+      to search for."}, "supported_extensions": {"type": "array", "description": "The
+      str[] of supported extensions to search in. Include the dot in the extension.
+      For example, [''.py'', ''.js''].", "items": {"type": "string"}}, "repo_name":
+      {"type": "string", "description": "Optional name of the repository to search
+      in if you know it."}, "in_proximity_to": {"type": "string", "description": "Optional
+      path to search in proximity to, the results will be ranked based on proximity
+      to this path."}}, "required": ["keyword", "supported_extensions"]}}, {"name":
+      "file_search", "description": "Searches for a file in the codebase.", "input_schema":
+      {"type": "object", "properties": {"filename": {"type": "string", "description":
+      "The file to search for."}, "repo_name": {"type": "string", "description": "Optional
+      name of the repository to search in if you know it."}}, "required": ["filename"]}},
+      {"name": "file_search_wildcard", "description": "Searches for files in a folder
+      using a wildcard pattern.", "input_schema": {"type": "object", "properties":
+      {"pattern": {"type": "string", "description": "The wildcard pattern to match
+      files."}, "repo_name": {"type": "string", "description": "Optional name of the
+      repository to search in if you know it."}}, "required": ["pattern"]}}, {"name":
+      "ask_a_question", "description": "Asks your team members a quick question.",
+      "input_schema": {"type": "object", "properties": {"question": {"type": "string",
+      "description": "The question you want to ask your team."}}, "required": ["question"]}}],
+      "anthropic_version": "vertex-2023-10-16"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      authorization:
+      - redacted
+      baggage:
+      - sentry-trace_id=1ebd1f01f89147a689812bf9b722cef9,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
+      connection:
+      - keep-alive
+      content-length:
+      - '6771'
+      content-type:
+      - application/json
+      host:
+      - us-east5-aiplatform.googleapis.com
+      sentry-trace:
+      - 1ebd1f01f89147a689812bf9b722cef9-a0cd264576ee5b03-1
+      user-agent:
+      - AnthropicVertex/Python 0.34.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.34.2
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.0rc1
+    method: POST
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:streamRawPredict
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/1SOwU7DMBBE7/mKaM+xlLhFav0FHCjXSqDKcuNVMBg7ZNdWS5V/r4sIonubN7Oj
+        wYyBVf2JRGZATWwmrqxho+oL8HlEUHBnQrNoUBdw9ubToPPEJ91263dn3dvu8Tl/9/uXoxuedvm0
+        LT/3VQVM0d+AIXKlN/z0Rou+sN6bZFGsxIOgGAKyyFLIVq67VsqS62PgshrU66EB4jjqCU1JggrJ
+        +19E+JUw9LjA9Dc5jIk1xw8MBKrbbmQDMfF/KDfzXC83V9UVAAD//0qFBFJBZl46WtgoKIEElYBq
+        AAAAAP//gqqBui0+KSc/ORt7cGJRAvRUZl5KaoWSlYEOqjzIxVB9Jfn5OfGlxaDAAwc7iF8KC3jX
+        dMe0MEOXxJSstJQ8j+BM99w0szIPoNK8xFyQ5rTMHGAEpiYWJWeALQN6F2g0qjcBAAAA///C6gVg
+        lJQk4vcCWAmKFyAiCKdDwjwLGEdwxQVAb2cm5oAFgSqUEC4BuwUAAAD//xpIt1THAIML6iCgUwAA
+        AAD//xpIp+Sk5iXCgwboFgAAAAD//xpIt+SmxgATfAzIDJCTgK4BAAAA//8aSNekVugVVMZA0w3Q
+        LQAAAAD//xpIt+gAQ6UotSA/HjkVA90EAAAA//8aSDeB8j0kvoCOAroFAAAA//8a0JQDLHrzShJ1
+        UTI5OIQAAAAA//8aSFdl5WfkoRc7AAAAAP//Gkj36JYkJuWk6udD4gsAAAD//xpIlxQl5qWnoscW
+        OHwAAAAA//8a6PjSTQK7CugSAAAAAP//GkiXJBZnp5YkwQtmoGsAAAAA//8a0DoiJ0apFhFZQNcA
+        AAAA///C0RbJLyDUFMkvQHILyCQAAAAA//9KRW0eYvURiqQSkg9QmmbIzRcsDbRapBYaWmvMwqwW
+        6BIAAAAA//9KRW+oYvoGWU4JI+kCAAAA//8DAPZ8pPPqCgAA
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - text/event-stream; charset=utf-8
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+      cache-control:
+      - no-cache
+      date:
+      - Thu, 12 Dec 2024 19:47:20 GMT
+      request-id:
+      - req_vrtx_017BSiv5wifdgL7cp3v2uuX8
+      server:
+      - hypercorn-h11
+      x-accel-buffering:
+      - 'no'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - application/vnd.github.machine-man-preview+json
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - PyGithub/Python
+      authorization:
+      - redacted
+    method: GET
+    uri: https://api.github.com/repos/magenta-john-table/orange-john-basketball/installation
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAx2NMQ7CMBAEv4JMy8UUqfIASr6ADudILCU+y7cuIsTfOaXZZnZ3vmEXM14kTOGp
+        uDy0lzncwqyp71LAyFpevW3OV6DaFKMzG5aMtb+HpHtsYohcq51xXQTE1KSqZWg7KBcDb9t5RR9t
+        hFWIu2dBTgyZyYcu9Rq6uWm8j+H3B12NqGibAAAA
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      Access-Control-Expose-Headers:
+      - ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining,
+        X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes,
+        X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO,
+        X-GitHub-Request-Id, Deprecation, Sunset
+      Content-Encoding:
+      - gzip
+      Content-Security-Policy:
+      - default-src 'none'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 12 Dec 2024 19:47:21 GMT
+      Referrer-Policy:
+      - origin-when-cross-origin, strict-origin-when-cross-origin
+      Server:
+      - github.com
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubdomains; preload
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding, Accept, X-Requested-With
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - deny
+      X-GitHub-Media-Type:
+      - github.v3; param=machine-man-preview; format=json
+      X-GitHub-Request-Id:
+      - 86DE:368EF6:B9011AD:BC1E43A:675B3DC9
+      X-XSS-Protection:
+      - '0'
+      x-github-api-version-selected:
+      - '2022-11-28'
+    status:
+      code: 404
+      message: Not Found
+- request:
+    body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '268'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-requests/2.32.2
+      x-goog-api-client:
+      - gl-python/3.11.0rc1 auth/2.36.0 cred-type/u
+    method: POST
+    uri: https://oauth2.googleapis.com/token
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/72ROZejOBSF8/4VdSoeu1gL0xlggwEjF2ADIvFhtQViMYtZ+sx/H6gOOuxsAiVP
+        T9+9uvfXj7e39yCKkra9dVWelO8/396ngOK3ASFYLltwTK0NB5fV52rjq+YnmDuFS7I45WqojEAT
+        PVktjzZKrjdGBoHRSKW6SbspS3rJcSs2DA6VeHiVju2fZoyBleFelnXtqLK1KJCnFjY39yxo4xjU
+        jkk3uS48SZ6jA4jqh1OGNnURSvC0QNroJZ97oTfFe1l3i/HEVtmzlNUokO5QFxzTFqyDLZtHxaMM
+        9MJ7MRostVK4k+BwFnD61BIIkmPf/1n/nIw1apL2htYf0yzPf0/bqKqTNYJH19Xtz4+PYRi296q6
+        4ySoUbuNquIj6LvHR98mDSrTapsUAcJvf1uPcNXHmxoHXVo1xV/X2yde+C8UJVtc3VH5trgqUfzb
+        +XdNt276bVRMgiZpft+g+E+HyaQ9QiVCZ6TZ11klAVJbtehqX1I/1exKAcXH0AUYzssprAK6B9qY
+        DyPMcH5WrrRBGYSR3cezAqfz5TCBzEQnSSMST1iZukOaKDW3i0wd0cY6quKjNURz9TpRcgYpngxL
+        az4V8Suk4ta32SykiBXxSMoVodILcjjv4QAuBwZchA6U8gSOAuXTYg2KR7/MqOhoMr5bk9HlPvtK
+        PoO9XMWe2kNPHKKJLUOKL0PFISPKmRbNPlacPpb+aMWu+X9pzbGrrlqjsb+zYF6CnQXWyK6MkZnz
+        +XJf4lTXveq7ghLgJZ8psdk6nNZqnA66uFWzCkUFX0GX6aEbP6IyfoQHcfZdlojKvA/c3crAoSvX
+        ocxTvqfVfoHxyoyPGunbA4KelQaKPAerDuZz6FqtXdZZTFgSLMVX4j0oS9Ec6EUrq4beklG21m8O
+        xqwyYH9Y/TDR8t64REsOwrzkRxgesS1SlhXPtyjWsc8Lz8TXW/CCwHtGe3RjNp3IDWQKqniDXfsu
+        mak+aRwbjrNuR9an0qs7T3m16TGz6D1vt57CxGdvxwhwDOWv05WZey0hyk5v3Ea43d2WluB8ylF0
+        llU64ATvknHpEHi91vY2UygKeJINnRw7E8mapT0/EVnq42HkBsE250061YCTs/11w4iq6tOBHGe8
+        0SNZ0E12uGpkg+ZhA5h4jrX2mRTUrp6mDFQEO6lP335IWOwIKcG5QUOyPdM6fcNEIGH1sAm+dnoe
+        XkdD5jeVBuDrc58Hmfkwn7keMydfmXiJk4WS0uq9nz3V4jgON3ibrfaLIaydl92FnObOjkMVn9zw
+        /uPf/wAQXOOoiQUAAA==
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 12 Dec 2024 19:47:21 GMT
+      Expires:
+      - Mon, 01 Jan 1990 00:00:00 GMT
+      Pragma:
+      - no-cache
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
+      "text", "text": "You have the following repositories to work with:\n- red-bob-sandwich/red-samuel-basketball\n-
+      black-mary-sandwich/white-alice-banana\n- magenta-john-table/orange-john-basketball\n\nGiven
+      the issue: \npurple-timothy-football\nExceptions:\n\n----------\nEvent Logs:\n\n----------\n\nThe
+      user has provided the following instruction for the fix: The file index.py is
+      missing variable ''a''.\n\n# Your goal:\nProvide the most actionable and effective
+      steps to fix the issue.\n\nSince you are an exceptional principal engineer,
+      your solution should not just add logs or throw more errors, but should meaningfully
+      fix the issue. Your list of steps to fix the problem should be detailed enough
+      so that following it exactly will lead to a fully complete solution.\n\nWhen
+      ready with your final answer, detail the precise plan to fix the issue.\n\n#
+      Guidelines:\n- No placeholders are allowed, the fix must be clear and detailed.\n-
+      Make sure you use the tools provided to look through the codebase and at the
+      files you are changing before outputting your suggested fix.\n- The fix must
+      be comprehensive. Do not provide temporary examples, placeholders or incomplete
+      steps.\n- If the issue occurs in multiple places or files, make sure to provide
+      a fix for each occurrence, no matter how many there are.\n- In your suggested
+      fixes, whenever you are providing code, provide explicit diffs to show the exact
+      changes that need to be made.\n- You do not need to make changes in test files,
+      someone else will do that.\n- At any point, please feel free to ask your teammates
+      (who are much more familiar with the codebase) any specific questions that would
+      help you in your analysis.\n- EVERY TIME before you use a tool, think step-by-step
+      each time before using the tools provided to you.\n- You also MUST think step-by-step
+      before giving the final answer."}]}, {"role": "assistant", "content": [{"type":
+      "tool_use", "id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk", "name": "file_search",
+      "input": {"filename": "index.py"}}]}, {"role": "user", "content": [{"type":
+      "tool_result", "content": "Error: Please provide a repo name because you have
+      multiple repos.", "tool_use_id": "toolu_vrtx_01QQMnfZT58fZpTVRVTxu7vk"}]}, {"role":
+      "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01P2v1MoowsgkAtbegM2jiLB",
+      "name": "file_search", "input": {"filename": "index.py", "repo_name": "red-bob-sandwich/red-samuel-basketball"}}]},
+      {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
+      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/apps/apps#get-a-repository-installation-for-the-authenticated-app\",
+      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01P2v1MoowsgkAtbegM2jiLB"}]},
+      {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01GKMaCziY6ZzcdqgmaNMNhn",
+      "name": "file_search", "input": {"filename": "index.py", "repo_name": "black-mary-sandwich/white-alice-banana"}}]},
+      {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
+      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/apps/apps#get-a-repository-installation-for-the-authenticated-app\",
+      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01GKMaCziY6ZzcdqgmaNMNhn"}]},
+      {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_vrtx_01EgAfV1DadjfdnHSiGmf6vH",
       "name": "file_search", "input": {"filename": "index.py", "repo_name": "magenta-john-table/orange-john-basketball"}}]},
       {"role": "user", "content": [{"type": "tool_result", "content": "Error: 404
-      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/repos/repos#get-a-repository\",
-      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01Vya5csRDh5wXCTuBHRZDmq"}]}],
-      "system": "You are an exceptional principal engineer that is amazing at finding
-      and fixing issues in codebases.\n\nYou have access to tools that allow you to
-      search a codebase to find the relevant code snippets and view relevant files.
-      You can use these tools as many times as you want to find the relevant code
-      snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool, think step-by-step
-      each time before using the tools provided to you.\n- You also MUST think step-by-step
-      before giving the final answer.", "tools": [{"name": "list_directory", "description":
-      "Given the path for a directory in this codebase, returns the immediate contents
-      of the directory such as files and direct subdirectories. Does not include nested
-      directories.", "input_schema": {"type": "object", "properties": {"path": {"type":
-      "string", "description": "The path to view. For example, \"src/app/components\""},
+      {\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest/apps/apps#get-a-repository-installation-for-the-authenticated-app\",
+      \"status\": \"404\"}", "tool_use_id": "toolu_vrtx_01EgAfV1DadjfdnHSiGmf6vH"}]}],
+      "stream": true, "system": "You are an exceptional principal engineer that is
+      amazing at finding and fixing issues in codebases.\n\nYou have access to tools
+      that allow you to search a codebase to find the relevant code snippets and view
+      relevant files. You can use these tools as many times as you want to find the
+      relevant code snippets.\n\n# Guidelines:\n- EVERY TIME before you use a tool,
+      think step-by-step each time before using the tools provided to you.\n- You
+      also MUST think step-by-step before giving the final answer.", "tools": [{"name":
+      "list_directory", "description": "Given the path for a directory in this codebase,
+      returns the immediate contents of the directory such as files and direct subdirectories.
+      Does not include nested directories.", "input_schema": {"type": "object", "properties":
+      {"path": {"type": "string", "description": "The path to view. For example, \"src/app/components\""},
       "repo_name": {"type": "string", "description": "Optional name of the repository
       to search in if you know it."}}, "required": ["path"]}}, {"name": "expand_document",
       "description": "Given a document path, returns the entire document text.\n-
       Note: To save time and money, if you''re looking to expand multiple documents,
       call this tool multiple times in the same message.\n- If a document has already
       been expanded earlier in the conversation, don''t use this tool again for the
-      same file path.", "input_schema": {"type": "object", "properties": {"input":
+      same file path.", "input_schema": {"type": "object", "properties": {"file_path":
       {"type": "string", "description": "The document path to expand."}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
-      in if you know it."}}, "required": ["input"]}}, {"name": "keyword_search", "description":
-      "Searches for a keyword in the codebase.", "input_schema": {"type": "object",
-      "properties": {"keyword": {"type": "string", "description": "The keyword to
-      search for."}, "supported_extensions": {"type": "array", "description": "The
+      in if you know it."}}, "required": ["file_path"]}}, {"name": "keyword_search",
+      "description": "Searches for a keyword in the codebase.", "input_schema": {"type":
+      "object", "properties": {"keyword": {"type": "string", "description": "The keyword
+      to search for."}, "supported_extensions": {"type": "array", "description": "The
       str[] of supported extensions to search in. Include the dot in the extension.
       For example, [''.py'', ''.js''].", "items": {"type": "string"}}, "repo_name":
       {"type": "string", "description": "Optional name of the repository to search
@@ -1298,17 +1284,17 @@ interactions:
       authorization:
       - redacted
       baggage:
-      - sentry-trace_id=31c64b573c5447fc86cbbd494f12dc21,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
+      - sentry-trace_id=1ebd1f01f89147a689812bf9b722cef9,sentry-environment=production,sentry-transaction=seer.automation.autofix.steps.coding_step.autofix_coding_task,sentry-sample_rate=1.0,sentry-sampled=true
       connection:
       - keep-alive
       content-length:
-      - '7202'
+      - '7298'
       content-type:
       - application/json
       host:
       - us-east5-aiplatform.googleapis.com
       sentry-trace:
-      - 31c64b573c5447fc86cbbd494f12dc21-8e8bf8facee5a0f3-1
+      - 1ebd1f01f89147a689812bf9b722cef9-b3b1f23daf1fc8a9-1
       user-agent:
       - AnthropicVertex/Python 0.34.2
       x-stainless-arch:
@@ -1324,27 +1310,47 @@ interactions:
       x-stainless-runtime-version:
       - 3.11.0rc1
     method: POST
-    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:rawPredict
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:streamRawPredict
   response:
     body:
       string: !!binary |
-        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
+        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
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
-      Cache-Control:
-      - private
       Content-Encoding:
       - gzip
-      Server:
-      - scaffolding on HTTPServer2
+      Content-Type:
+      - text/event-stream; charset=utf-8
       Transfer-Encoding:
       - chunked
       Vary:
@@ -1357,14 +1363,16 @@ interactions:
       - SAMEORIGIN
       X-XSS-Protection:
       - '0'
-      content-type:
-      - application/json
+      cache-control:
+      - no-cache
       date:
-      - Fri, 22 Nov 2024 22:39:17 GMT
+      - Thu, 12 Dec 2024 19:47:22 GMT
       request-id:
-      - req_vrtx_01Cvd8mFYDx65e8pZoyrihrV
-      x-vertex-ai-internal-prediction-backend:
-      - harpoon
+      - req_vrtx_018qXsvUMaqfmB7xzWEgUuMp
+      server:
+      - hypercorn-h11
+      x-accel-buffering:
+      - 'no'
     status:
       code: 200
       message: OK

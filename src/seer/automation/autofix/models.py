@@ -127,9 +127,18 @@ class BaseStep(BaseModel):
     completedMessage: Optional[str] = None
 
     queued_user_messages: list[str] = []
+    output_stream: str | None = None
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
+
+    def receive_output_stream(self, stream_chunk: str):
+        if self.output_stream is None:
+            self.output_stream = ""
+        self.output_stream += stream_chunk
+
+    def clear_output_stream(self):
+        self.output_stream = None
 
     def find_child(self, *, id: str) -> "Step | None":
         for step in self.progress:
