@@ -582,9 +582,7 @@ class RepoClient:
         Note that expected input is pr_url NOT pr_html_url
         """
         pr_id = int(pr_url.split("/")[-1])
-        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[
-            0
-        ]  # formatted as owner-name/repo-name
+        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]  # formatted as owner-name/repo-name
         url = f"https://api.github.com/repos/{repo_path}/issues/{pr_id}/comments"
         params = {"body": comment}
         headers = self._get_auth_headers()
@@ -599,9 +597,7 @@ class RepoClient:
         Note that expected input is pr_url NOT pr_html_url
         """
         pr_id = int(pr_url.split("/")[-1])
-        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[
-            0
-        ]  # formatted as owner-name/repo-name
+        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]
         url = f"https://api.github.com/repos/{repo_path}/pulls/{pr_id}/comments"
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=comment)
