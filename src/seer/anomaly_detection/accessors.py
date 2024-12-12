@@ -382,29 +382,34 @@ class DbAlertDataAccessor(AlertDataAccessor):
         MPTimeSeriesAnomalies
             Combined anomalies object containing flags, scores and metadata from both approaches
         """
+        combined_flags = anomalies_suss.flags
+        combined_scores = anomalies_suss.scores
+        combined_thresholds = anomalies_suss.thresholds
+        combined_original_flags = anomalies_suss.original_flags
+        if anomalies_fixed is not None:
+            for i in range(len(anomalies_suss.flags)):
+                if use_suss[i]:
+                    combined_flags[i] = anomalies_suss.flags[i]
+                    combined_scores[i] = anomalies_suss.scores[i]
+                    combined_original_flags[i] = anomalies_suss.original_flags[i]
+                    if i < len(anomalies_suss.thresholds):
+                        combined_thresholds[i] = anomalies_suss.thresholds[i]
+                else:
+                    combined_flags[i] = anomalies_fixed.flags[i]
+                    combined_scores[i] = anomalies_fixed.scores[i]
+                    combined_original_flags[i] = anomalies_fixed.original_flags[i]
+                    if i < len(anomalies_fixed.thresholds):
+                        combined_thresholds[i] = anomalies_fixed.thresholds[i]
+
         return MPTimeSeriesAnomalies(
-            flags=[
-                (
-                    (anomalies_suss.flags[i] if use_suss[i] else anomalies_fixed.flags[i])
-                    if anomalies_fixed is not None
-                    else anomalies_suss.flags[i]
-                )
-                for i in range(len(anomalies_suss.flags))
-            ],
-            scores=[
-                (
-                    (anomalies_suss.scores[i] if use_suss[i] else anomalies_fixed.scores[i])
-                    if anomalies_fixed is not None
-                    else anomalies_suss.scores[i]
-                )
-                for i in range(len(anomalies_suss.scores))
-            ],
-            thresholds=anomalies_suss.thresholds,  # Use thresholds from either one since they're the same
+            flags=combined_flags,
+            scores=combined_scores,
+            thresholds=combined_thresholds,
             matrix_profile_suss=anomalies_suss.matrix_profile,
             matrix_profile_fixed=(
                 anomalies_fixed.matrix_profile if anomalies_fixed is not None else np.array([])
             ),
             window_size=anomalies_suss.window_size,
-            original_flags=anomalies_suss.original_flags,
+            original_flags=combined_original_flags,
             use_suss=use_suss,
         )

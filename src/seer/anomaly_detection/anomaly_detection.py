@@ -214,8 +214,9 @@ class AnomalyDetection(BaseModel):
         else:
             anomalies.use_suss.append(True)
 
+        num_anomlies = len(streamed_anomalies_suss.flags)
         streamed_anomalies = alert_data_accessor.combine_anomalies(
-            streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss
+            streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss[-num_anomlies:]
         )
 
         # Save new data point
@@ -349,7 +350,7 @@ class AnomalyDetection(BaseModel):
             streamed_anomalies_fixed,
             [True]
             * len(
-                ts_external
+                streamed_anomalies_suss.flags
             ),  # Defaulting to using SuSS window because switching logic is for streaming only
         )
 
