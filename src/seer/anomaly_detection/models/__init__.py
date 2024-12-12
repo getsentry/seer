@@ -2,6 +2,7 @@ from seer.anomaly_detection.models import (
     algo_config,
     dynamic_alert,
     external,
+    relative_location,
     timeseries,
     timeseries_anomalies,
 )
@@ -19,3 +20,7 @@ AnomalyFlags = external.AnomalyFlags
 Anomaly = external.Anomaly
 AnomalyDetectionConfig = external.AnomalyDetectionConfig
 TimeSeriesPoint = external.TimeSeriesPoint
+RelativeLocation = relative_location.RelativeLocation
+Threshold = relative_location.Threshold
+ThresholdType = relative_location.ThresholdType
+PointLocation = relative_location.PointLocation
