@@ -131,13 +131,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         # Update the flags in flags_and_scores with the smoothed flags
         flags_and_scores.flags = smoothed_flags
 
-        print("Batch Detect (compute matrix profile)")
-        print("len flags", len(smoothed_flags))
-        print("len scores", len(flags_and_scores.scores))
-        print("len thresholds", len(flags_and_scores.thresholds))
-        print("len original_flags", len(original_flags))
-        print()
-
         return MPTimeSeriesAnomaliesSingleWindow(
             flags=smoothed_flags,
             scores=flags_and_scores.scores,
