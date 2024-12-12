@@ -1,16 +1,22 @@
 import random
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
 
 import numpy as np
+
 
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
 from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.anomaly_detection.models.timeseries import TimeSeries
-from seer.anomaly_detection.tasks import cleanup_disabled_alerts, cleanup_timeseries
+from seer.anomaly_detection.tasks import (cleanup_disabled_alerts, cleanup_timeseries,
+                                        CHUNK_SIZE)
+from sqlalchemy.exc import OperationalError
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
+
+
 
 
 class TestCleanupTasks(unittest.TestCase):
@@ -234,5 +240,80 @@ class TestCleanupTasks(unittest.TestCase):
                 .one_or_none()
             )
 
+
             assert alert is not None
             assert len(alert.timeseries) == 500
+            
+    def test_large_batch_update_with_connection_issues(self):
+        """
+        Test to verify that the chunked processing handles database connection
+        issues gracefully when processing large batches of data.
+        """
+        # Create a large dataset that would previously cause connection issues
+        NUM_OLD_POINTS = 1000
+        NUM_NEW_POINTS = 2000
+        external_alert_id, config, points, _ = self._save_alert(
+            999, NUM_OLD_POINTS, NUM_NEW_POINTS
+        )
+        
+        # Verify initial data
+        with Session() as session:
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+            self.assertIsNotNone(alert)
+            self.assertEqual(len(alert.timeseries), NUM_OLD_POINTS + NUM_NEW_POINTS)
+            
+        # Mock the Session commit to simulate connection issues
+        original_commit = Session.commit
+        commit_count = 0
+        failed_commits = set()
+        
+        def mock_commit(session_self):
+            nonlocal commit_count
+            commit_count += 1
+            
+            # Simulate connection issues for specific commits
+            if commit_count % 3 == 0 and commit_count not in failed_commits:
+                failed_commits.add(commit_count)
+                raise OperationalError(
+                    "consuming input failed: server closed the connection unexpectedly",
+                    None,
+                    None
+                )
+            return original_commit(session_self)
+        
+        date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
+        
+        # Patch the commit method and run the cleanup
+        with patch.object(Session, 'commit', mock_commit):
+            # Should not raise any exceptions due to retry mechanism
+            cleanup_timeseries(external_alert_id, date_threshold)
+        
+        # Verify the results
+        with Session() as session:
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+            self.assertIsNotNone(alert)
+            
+            # Verify only new points remain
+            self.assertEqual(len(alert.timeseries), NUM_NEW_POINTS)
+            
+            # Verify all remaining points are newer than threshold
+            for ts in alert.timeseries:
+                self.assertTrue(ts.timestamp.timestamp() >= date_threshold)
+            
+            # Verify all points have properly computed algo_data
+            for ts in alert.timeseries:
+                self.assertIsNotNone(ts.anomaly_algo_data)
+                self.assertTrue("mp_suss" in ts.anomaly_algo_data or "mp_fixed" in ts.anomaly_algo_data)
+            
+            # Verify chunked processing by checking final stats
+            expected_chunks = -(-NUM_NEW_POINTS // CHUNK_SIZE)  # Ceiling division
+            self.assertTrue(commit_count >= expected_chunks)
+            self.assertTrue(len(failed_commits) > 0)  # Verify some commits actually failed
