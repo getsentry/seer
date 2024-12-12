@@ -579,8 +579,8 @@ class RepoClient:
         Create an issue comment on a GitHub issue (all pull requests are issues). 
         This can be used to create an overall PR comment instead of associated with a specific line.
         See https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
+        Note that expected input is pr_url NOT pr_html_url
         """
-        print(pr_url)
         pr_id = int(pr_url.split("/")[-1])
         repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]  # formatted as owner-name/repo-name
         url = f"https://api.github.com/repos/{repo_path}/issues/{pr_id}/comments"
@@ -594,6 +594,7 @@ class RepoClient:
         """
         Create a review comment on a GitHub pull request.
         See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+        Note that expected input is pr_url NOT pr_html_url
         """
         pr_id = int(pr_url.split("/")[-1])
         repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[0]  # formatted as owner-name/repo-name
