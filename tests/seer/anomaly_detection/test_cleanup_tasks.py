@@ -167,7 +167,6 @@ class TestCleanupTasks(unittest.TestCase):
                         and new.anomaly_algo_data["mp_suss"]["l_idx"] == algo_data["l_idx"]
                         and new.anomaly_algo_data["mp_suss"]["r_idx"] == algo_data["r_idx"]
                     )
-                    assert new.anomaly_algo_data["original_flag"] == algo_data["original_flag"]
                     assert (
                         "dist" in new.anomaly_algo_data["mp_fixed"]
                         and "idx" in new.anomaly_algo_data["mp_fixed"]

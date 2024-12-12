@@ -350,7 +350,7 @@ class AnomalyDetection(BaseModel):
             streamed_anomalies_fixed,
             [True]
             * len(
-                ts_external
+                streamed_anomalies_suss.flags
             ),  # Defaulting to using SuSS window because switching logic is for streaming only
         )
 

@@ -119,6 +119,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
 
+        original_flags = flags_and_scores.flags
+
         # Apply smoothing to the flags
         batch_flag_smoother = MajorityVoteBatchFlagSmoother()
         smoothed_flags = batch_flag_smoother.smooth(
@@ -129,12 +131,20 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         # Update the flags in flags_and_scores with the smoothed flags
         flags_and_scores.flags = smoothed_flags
 
+        print("Batch Detect (compute matrix profile)")
+        print("len flags", len(smoothed_flags))
+        print("len scores", len(flags_and_scores.scores))
+        print("len thresholds", len(flags_and_scores.thresholds))
+        print("len original_flags", len(original_flags))
+        print()
+
         return MPTimeSeriesAnomaliesSingleWindow(
-            flags=flags_and_scores.flags,
+            flags=smoothed_flags,
             scores=flags_and_scores.scores,
             matrix_profile=mp,
             window_size=window_size,
             thresholds=flags_and_scores.thresholds,
+            original_flags=original_flags,
         )
 
 
@@ -233,7 +243,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     cur_flag=flags_and_scores.flags,
                 )
 
-                original_flags = flags_and_scores.flags
                 flags_and_scores.flags = smoothed_flags
 
                 scores.extend(flags_and_scores.scores)
@@ -256,5 +265,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 ),
                 window_size=self.window_size,
                 thresholds=thresholds,
-                original_flags=original_flags,
+                original_flags=self.original_flags,
             )
