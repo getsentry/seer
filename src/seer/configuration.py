@@ -111,7 +111,7 @@ class AppConfig(BaseModel):
 
     @property
     def is_anomaly_detection_enabled(self):
-        return self.ANOMALY_DETECTION_ENABLED or "breakpoint" in self.HOSTNAME
+        return self.ANOMALY_DETECTION_ENABLED or "anomaly-detect" in self.HOSTNAME
 
     @cached_property
     def smoke_test_id(self) -> str:
