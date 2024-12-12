@@ -197,10 +197,10 @@ class CodingCodeReviewPrompts:
             - Use the following JSON format for each comment:
                 {{
                     "path": "{{file_name}}",
-                    "line": line_number_here,
-                    "body": "Your comment text here"
-                    "start_line": start_line_number_here,
-                    "code_suggestion": "If you have a code suggestion, provide it here"
+                    "line": The end line line of the code block where you are suggesting changes,
+                    "body": "Your comment text here",
+                    "start_line": The starting line of the code block where you are suggesting changes,
+                    "code_suggestion": "If you have a code suggestion, provide it here. Ensure you are properly escaping special characters"
                 }}
             - Ensure each comment includes:
                 - The correct file name ("{{file_name}}").

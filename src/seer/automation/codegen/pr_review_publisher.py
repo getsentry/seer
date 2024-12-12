@@ -11,10 +11,12 @@ from seer.automation.codegen.models import (
 
 logger = logging.getLogger(__name__)
 
+
 class PrReviewPublisher:
     """
     The PrReviewPublisher class publishes review comments to a pull request (PR)
     """
+
     def __init__(self, repo_client: RepoClient, pr: PullRequest):
         self.repo_client = repo_client
         self.pr = pr
@@ -34,19 +36,27 @@ class PrReviewPublisher:
             try:
                 repo_client.post_pr_review_comment(pr_url, comment)
             except ValueError as e:
-                logger.warning(f"Failed to post comment on PR {pr_url} for SHA {self.pr.head.sha}: {comment}. Error: {e}")
+                logger.warning(
+                    f"Failed to post comment on PR {pr_url} for SHA {self.pr.head.sha}: {comment}. Error: {e}"
+                )
                 continue
 
     def publish_no_changes_required(self) -> None:
-        self.repo_client.post_issue_comment(self.pr.url, "No changes requiring review at this time.")
+        self.repo_client.post_issue_comment(
+            self.pr.url, "No changes requiring review at this time."
+        )
         return
 
     def publish_ack(self) -> None:
-        self.repo_client.post_issue_comment(self.pr.url, "On it! We are reviewing the PR and will provide feedback shortly.")
+        self.repo_client.post_issue_comment(
+            self.pr.url, "On it! We are reviewing the PR and will provide feedback shortly."
+        )
         return
 
     @staticmethod
-    def _format_comments(commit_id: str, pr_review: CodePrReviewOutput) -> List[GithubPrReviewComment]:
+    def _format_comments(
+        commit_id: str, pr_review: CodePrReviewOutput
+    ) -> List[GithubPrReviewComment]:
         comments = []
         for comment in pr_review.comments:
             c = GithubPrReviewComment(
@@ -55,6 +65,7 @@ class PrReviewPublisher:
                 path=comment.path,
                 line=comment.line,
                 body=comment.body,
+                start_line=comment.start_line,
             )
             comments.append(c)
 

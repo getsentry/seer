@@ -87,7 +87,6 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
             if "code_suggestion" in comment_data:
                 code_suggestion = comment_data["code_suggestion"]
                 body += f"\n```suggestion\n{code_suggestion}\n```"
-
             results.append(
                 CodePrReviewOutput.Comment(
                     path=comment_data["path"],
