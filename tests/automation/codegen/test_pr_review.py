@@ -43,9 +43,6 @@ class TestPrReview(unittest.TestCase):
         assert isinstance(actual_request, CodePrReviewRequest)
         assert actual_request.diff == mock_diff_content
 
-    # add Test for when PR comments are created
-    # add Test for when no suggestions are made
-
 
     def test_format_response_valid_input(self):
         mock_output = """
