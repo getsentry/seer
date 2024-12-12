@@ -18,7 +18,7 @@ class TestTimeSeries(unittest.TestCase):
                 matrix_profile_suss=np.array([[0.1, 0, 1, 2]]),
                 matrix_profile_fixed=np.array([[0.1, 0, 1, 2]]),
                 window_size=2,
-                thresholds=[0.0],
+                thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
             ),

@@ -80,11 +80,15 @@ class AnomalyDetection(BaseModel):
         batch_detector = MPBatchAnomalyDetector()
 
         anomalies_suss = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries), config, window_size=window_size
+            convert_external_ts_to_internal(timeseries),
+            config,
+            algo_config=algo_config,
+            window_size=window_size,
         )
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries),
             config,
+            algo_config=algo_config,
             window_size=algo_config.mp_fixed_window_size,
         )
         anomalies = DbAlertDataAccessor().combine_anomalies(
@@ -254,7 +258,9 @@ class AnomalyDetection(BaseModel):
 
     @sentry_sdk.trace
     def _combo_detect(
-        self, ts_with_history: TimeSeriesWithHistory, config: AnomalyDetectionConfig
+        self,
+        ts_with_history: TimeSeriesWithHistory,
+        config: AnomalyDetectionConfig,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         """
         Stateless online anomaly detection for a part of a time series. This function takes two parts of the time series -
