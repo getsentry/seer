@@ -128,7 +128,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     for i, item in enumerate(cause_model.code_context):
                         item.id = i
                         # Find line range for the snippet
-                        if item.snippet.file_path and item.snippet.snippet:
+                        if item.snippet and item.snippet.file_path and item.snippet.snippet:
                             try:
                                 file_contents = self.context.get_file_contents(
                                     item.snippet.file_path,

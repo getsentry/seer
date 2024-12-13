@@ -68,6 +68,7 @@ class AutofixEventManager:
             cur_step = cur.find_or_add(step)
             cur_step.status = AutofixStatus.PROCESSING
             cur_step.progress = []
+            cur_step.clear_output_stream()
             cur_step.completedMessage = None  # type: ignore[assignment]
             cur.status = AutofixStatus.PROCESSING
             cur.mark_triggered()

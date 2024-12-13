@@ -1,0 +1,165 @@
+interactions:
+- request:
+    body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '268'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-requests/2.32.2
+      x-goog-api-client:
+      - gl-python/3.11.0rc1 auth/2.36.0 cred-type/u
+    method: POST
+    uri: https://oauth2.googleapis.com/token
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/71UubKjSBD05ytePHvR4xaMhxCXBC2BOAQOwSVo1BxPgDg29t8XZowx11ujneqq
+        zKzMiPr7x8fHZ5QkWdeFffPM6s+fH59zRPK7CBcsj6n2+0mf82IJ45CkxFGpwUR8uxipCnfCmLLI
+        x1mZejSYk3JFT3PHFkOnHnJWNRE4D8UzX2aiH47wmDcoHl7n7qaMXBvk9xYyXSdq+yONsZ7T1hRu
+        M/x9ivOOBWIocu7ANVdGt1/+LGP+sUDzA6SKedBox6NfPN8ZUPQnU8/xSMz9s2DhN8GSbrKpKnfS
+        gBcupdVRelcCfSyNvAhsmuBynNgzn39tO2dTC19ZF8JtY4rh+V/VLmnabLOg6Pu2+/n1NY7jLm+a
+        HGVRC7td0lRf0dAXXwlqhhRrUdQ/mlf18V/t3TfqstcbJtkONTmsP1aaGqb/OTesU7B+NLusiiD6
+        rfxXTGE//xZ6yKJX9vr9A9M/GWbzqYiVBF7g6eYsGgGg1mlV3waixmqlQwIlQL4HkL+sr7Iq35Mo
+        Y5Emv0TPi+JQBmngRplPF8WfL7Y0g9KEunjCs7uwYZ5dwoQPc7fStAllbKUmVa0xWZq3TsqlT/JE
+        XFuLXqXvmEy74MaUMYlvEEVWbxAatUKOl6M/AluigS30oJZnoApkQB1aUBXDWiMT1aQDryUSO18C
+        5bmAo9ykd23w74cxmZk6Jvk6VlwiId155RxSxR1S8Q9X6pn/F9eSetrGNRnHnAHLauwiMEbp0EZp
+        Lhc7X+3Utr7mVwQ1QKs/c3Zj2njeonF730OdVjYwqfjG9+jB99IiqdMilg5L4DF4Uj+HyOM2DBR7
+        chvLPBncT21QIbRhpuqJCG4j9O/WI1LkJdp4nq1lqIgNnu3RcYKnpxAwdl0ixgnTrpINq/Xvq0fl
+        Fr85GosxrTo3PXSyzht2svogLKBMZqPGd+bUTXKvvzHH9mbVnM+pWgpe6rXpK72yrc5hDi0tD625
+        hv65serkGp4HkQjnotOBUp7BQXsd3jbDRLxcVvVJJz2OZdtUZ+vRG0AZU0Xmqdw4gMZ/zQMqT5k7
+        xAqB9k04TIQt3PaWaH1jvl2JC+lG1UnBXt8SkoUlm1Ww3zNS4CtiPgQ9pZAxasDQcxNF4xB4kqZ/
+        S0/BfT4wOkQR5+zzzgJ9f3pTY/Ru57zXSfxdr1fLX77DcG/t55OPCfLBySDrsbfagkBE6dlyIZM5
+        YEhRhs5WsQ9R7suGpERaD9g5vKeURcz8lU1eh71XzsbRCCWrHPQbdlUPl/wqPQLaoJPb6Tjq5MGj
+        DuPnj3/+BZgAh9WJBQAA
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 12 Dec 2024 19:52:02 GMT
+      Expires:
+      - Mon, 01 Jan 1990 00:00:00 GMT
+      Pragma:
+      - no-cache
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"max_tokens": 8192, "messages": [{"role": "user", "content": [{"type":
+      "text", "text": "Please invoke test_function"}]}], "stream": true, "tools":
+      [{"name": "test_function", "description": "A test function", "input_schema":
+      {"type": "object", "properties": {"x": {"type": "string", "description": ""}},
+      "required": []}}], "anthropic_version": "vertex-2023-10-16"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      authorization:
+      - redacted
+      connection:
+      - keep-alive
+      content-length:
+      - '364'
+      content-type:
+      - application/json
+      host:
+      - us-east5-aiplatform.googleapis.com
+      user-agent:
+      - AnthropicVertex/Python 0.34.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.34.2
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.11.0rc1
+    method: POST
+    uri: https://us-east5-aiplatform.googleapis.com/v1/projects/ml-ai-420606/locations/us-east5/publishers/anthropic/models/claude-3-5-sonnet@20240620:streamRawPredict
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/1SOzYrCQBCE73mK0OcEYvzDOXpwL6s3QZBlGJNWw872jOke0ZW8uxNZF+1bfVVd
+        FJ6RRKU/yGwOqFlMK0ltxKj0BnL1CAreTMieGtQNmrr3+aDPrVx0MfjY7Bb7z+V09Tsvd42v/Poo
+        g338ea+KoHW2B4a5ib306HU12sgqa0KN+TAf5+yIUPKyKEfFpCxiqHIkcTKo7VcGLM7rFk2MgaJg
+        7R9iPAWkCp8w/O8lH0SL+0ZiUMPxLAMX5JWNui7tr0uSOwAAAP//SoWETUFmXjpakCgogQSVgGoA
+        AAAA//+CqoG6Kj4pJz85G3soYlEC9E5mXkpqhZKVgQ6qPMitUH0lqRUghWDKSkmpFuw0AAAAAP//
+        wmotMPRKEvFbC1aCYi1EBNU6uDKopc6pRSWJmXk5lYoKnkqQ4FGABRIAAAD//6KvS9RzchQy88qA
+        caVQkpGqBI8qAAAAAP//oq8rFEpSi0vi00rzkksy8/MU0vKLgC4BugIAAAD//6KzKyrzS/UUQjIy
+        i2FxAnQCAAAA//+isxPgYZCRCHUF0A0AAAAA//+isxvy84AJAWgtAAAA//+is7UFiUWJuaklqUUK
+        eUAaJVuAQwEAAAD//6Kvc1IUYpQw3QAAAAD//6KvGypilBTKMzKTM9AcAnYKAAAA//+ic+xkFivk
+        pymAVCgUlxSBC2s0BwEAAAD//6Kvg3QUkkpLwMkUAAAA//+id0CUqBcr5OWXKOQmFmVDMgoAAAD/
+        /6J3ykwsVigCVsiZRakpegrBmaB6GV5wAwAAAP//on+RiZlLAAAAAP//orMbUjJT8uCOAFoPAAAA
+        //+icw1aolBQlF+WmZKqkKhQXJCanJmWmQx2DtApAAAAAP//onNIlCXmlKaCqk9gZQ7MsPASFak+
+        AwAAAP//oncu9QS1MIABlJyaCm1qAQAAAP//onduKc8syQA1buB1K3ppCnQTAAAA//+iczwlJwID
+        BeSufGgZBgAAAP//onsZpoeZawEAAAD//6KvG2LyYvI8UotSMaoRAAAAAP//onPuLUY4AGg5AAAA
+        //+id7MXM1UCHQEAAAD//xqAxGgFzZsAAAAA///C0fvKLyDU+covQLIYJT4BAAAA//+iUofOEE+H
+        Lj8/J760GNQJBnefQfxSWAc6zDI8qDw9MjgoyqugLC0lIzGz1MSwAqgU3MgEBQlSzwNsHbDzCjS8
+        FpQtAQAAAP//olJMGGLGBKTfnAXsZ8MVA0vrkszEHLAgtGMKDUIAAAAA//+iSqwYgo0CAAAA//9K
+        RR2ewOoXFEklJLejjA4gBzuWMYJapEECtBEBQwOjWuQUAgAAAP//QnMTNo8hyymhF1wAAAAA//8D
+        APKdWhlzEQAA
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - text/event-stream; charset=utf-8
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+      cache-control:
+      - no-cache
+      date:
+      - Thu, 12 Dec 2024 19:52:03 GMT
+      request-id:
+      - req_vrtx_01YaSmUvrBevmFeJiwKkt9u6
+      server:
+      - hypercorn-h11
+      x-accel-buffering:
+      - 'no'
+    status:
+      code: 200
+      message: OK
+version: 1

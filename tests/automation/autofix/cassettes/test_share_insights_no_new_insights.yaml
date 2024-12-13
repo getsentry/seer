@@ -2,15 +2,17 @@ interactions:
 - request:
     body: '{"messages": [{"content": "Given the chain of thought below for :\n1. orange-alice-apple\n\nWrite
       the next under-20-word conclusion in the chain of thought based on the notes
-      below, or if there is no good conclusion to add, return <NO_INSIGHT/>. The criteria
-      for a good conclusion are that it should be a large, novel jump in insights,
-      not similar to any item in the existing chain of thought, it should be a complete
-      conclusion after some meaty analysis, not a plan of what to analyze next, and
-      it should be valuable for . It should also be very concrete, to-the-point, and
-      specific. Every item in the chain of thought should read like a chain that clearly
-      builds off of the previous step. If you can''t find a conclusion that meets
-      ALL of these criteria, return <NO_INSIGHT/>.\n\nThinking about the solution",
-      "role": "user"}], "model": "gpt-4o-mini-2024-07-18", "temperature": 0.0}'
+      below. If there is no clear conclusion that adds a ton of new insight and value,
+      return <NO_INSIGHT/>. If it is similar to a previous conclusion, return <NO_INSIGHT/>.
+      The criteria for a good conclusion are that it should be a large, novel jump
+      in insights, not similar to any item in the existing chain of thought, it should
+      be a complete conclusion after some meaty analysis, not a plan of what to analyze
+      next, and it should be valuable for . It should also be very concrete, to-the-point,
+      and specific. Every item in the chain of thought should read like a chain that
+      clearly builds off of the previous step.\n\nIf you do write something, write
+      it so that someone else could immediately understand your point in detail.\n\nNOTES
+      TO ANALYZE:\nThinking about the solution", "role": "user"}], "model": "gpt-4o-mini-2024-07-18",
+      "temperature": 0.0}'
     headers:
       accept:
       - application/json
@@ -21,13 +23,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '883'
+      - '1023'
       content-type:
       - application/json
       host:
       - api.openai.com
       user-agent:
-      - OpenAI/Python 1.53.0
+      - OpenAI/Python 1.55.0
       x-stainless-arch:
       - arm64
       x-stainless-async:
@@ -37,7 +39,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 1.53.0
+      - 1.55.0
       x-stainless-retry-count:
       - '0'
       x-stainless-runtime:
@@ -49,18 +51,19 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA2xQy07DMBC85yssnxNwmtBWEULiwKNFagVUgIRQ5DibxK1jW7ErClX/HeXRNqi9
-        7GFmZ3Z2tg5CmKc4QpgV1LJSC+92/hRMs83q/j14K5YviztCko/v3+dNOF3m2K0VKlkCs3vVBVOl
-        FmC5ki3NKqAWald/FJBgSAJ/1BClSkHUslxbL1ReySX3BmQQemTk+eNOXSjOwOAIfToIIbRtZp1T
-        prDBESLuHinBGJoDjg5LCOFKiRrB1BhuLJUWu0eSKWlBNtGvZ/N4MnudPDwuLm/6OxVka0PrnHIt
-        RIfvDkeFynWlEtPxBzzjkpsiroAaJesDxiqNG3bnIPTVPLf+lxfrSpXaxlatQJqmr2Hrh4+dHtmr
-        jrPKUtETjX33jF2cgqVcmF47mFFWQHqUEqf32+nNcxbtf1zmJy5O54TNj7FQxhmXOVS64m3fmY5J
-        QknqD8LMx87O+QMAAP//AwCQRbumfQIAAA==
+        H4sIAAAAAAAAAwAAAP//jJJRS8MwFIXf+ytCnlfturnNIYIP4hSciqIPIiVN7trMNInJrThk/13S
+        zbXiBF/ycL97Ts69yWdECJWCTgnlJUNeWRWfieUdFuVTPePn6bW0b4+rK+tHt5P30bKkvaAw+RI4
+        fqsOuKmsApRGbzB3wBCCa388GCaDdHx83IDKCFBBVliMhyaupJZxmqTDOBnH/clWXRrJwdMpeY4I
+        IeSzOUNOLeCDTknS+65U4D0rgE53TYRQZ1SoUOa99Mg00l4LudEIuol+Mr/JLuf3lxezh8PTbo+D
+        Re1ZyKlrpbb19e5SZQrrTO63fFdfSC19mTlg3uhwgUdjaUPXESEvzXD1j7zUOlNZzNC8gg6GaTLa
+        +NF2py092jI0yFRH1O/39thlApBJ5TvboZzxEkQrbVfJaiFNB0SdoX+H2ee9GVzq4j/2LeAcLILI
+        rAMh+c+B2zYH4cf91bZbchOY+pVHqLKF1AU46+TmvRc2y3M24BMYJzmN1tEXAAAA//8DAL8ke/T9
+        AgAA
     headers:
       CF-Cache-Status:
       - DYNAMIC
       CF-RAY:
-      - 8db1fc911ea717f2-SJC
+      - 8f1038c4289dfa36-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -68,14 +71,14 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Thu, 31 Oct 2024 07:38:38 GMT
+      - Thu, 12 Dec 2024 19:46:39 GMT
       Server:
       - cloudflare
       Set-Cookie:
-      - __cf_bm=1zewOKX4kOovg36dAModWim5anntkXld8m95Yv.2LAc-1730360318-1.0.1.1-M0r6PcuavSmvkgOLdXW0sGryf_1rVFIys_bjWRTTq.9frrWAugOOnax9Cp61KZwgBGH2JDo_U3RtvwLLtnzy2g;
-        path=/; expires=Thu, 31-Oct-24 08:08:38 GMT; domain=.api.openai.com; HttpOnly;
+      - __cf_bm=pGjWuSTo9cVDeEEU6m1a8DDR6.6LEOwir5VT45JBOjM-1734032799-1.0.1.1-F_DlONWtvPLlquxehf.prE_m_MjstAWK_zPN7G.779QJ9mz6xd2OSXjPC.H68s7WbLzW5eTfWdePFD5P9qH_eA;
+        path=/; expires=Thu, 12-Dec-24 20:16:39 GMT; domain=.api.openai.com; HttpOnly;
         Secure; SameSite=None
-      - _cfuvid=ldIWioKAEaUIWcarfIxbLPKyHlvgGj4t7Saz7ajthQ4-1730360318191-0.0.1.1-604800000;
+      - _cfuvid=tt2aS_vPBaWPllzrRSuPse.59qID.V0D86NUfm6M20Y-1734032799673-0.0.1.1-604800000;
         path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Transfer-Encoding:
       - chunked
@@ -88,7 +91,7 @@ interactions:
       openai-organization:
       - functional-software
       openai-processing-ms:
-      - '457'
+      - '179'
       openai-version:
       - '2020-10-01'
       strict-transport-security:
@@ -100,13 +103,13 @@ interactions:
       x-ratelimit-remaining-requests:
       - '29999'
       x-ratelimit-remaining-tokens:
-      - '149999788'
+      - '149999754'
       x-ratelimit-reset-requests:
       - 2ms
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_6e10240ddf83cdb2b3ec072cb8a7f032
+      - req_1ab886d4ce99977960268fd26f0c4ac4
     status:
       code: 200
       message: OK
