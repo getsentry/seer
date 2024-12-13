@@ -1,14 +1,18 @@
 import abc
 import logging
+import os
+import sys
 
 import numpy as np
 import numpy.typing as npt
 import sentry_sdk
-import stumpy  # type: ignore # mypy throws "missing library stubs"
+
+# import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
 from seer.anomaly_detection.detectors.mp_scorers import MPScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
+from seer.anomaly_detection.detectors.noise_reducers import NoiseReducer
 from seer.anomaly_detection.detectors.smoothers import (
     MajorityVoteBatchFlagSmoother,
     MajorityVoteStreamFlagSmoother,
@@ -25,6 +29,10 @@ from seer.anomaly_detection.models import (
 )
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ServerError
+
+stumpy_path_src = "/Users/aayushseth/code/stumpy-noise-reduction"
+sys.path.insert(0, os.path.abspath(stumpy_path_src))
+import stumpy  # type: ignore # mypy throws "missing library stubs"
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +89,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         ws_selector: WindowSizeSelector = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
+        noise_reducer: NoiseReducer = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method calls stumpy.stump to compute the matrix profile and scores the matrix profile distances
@@ -107,11 +116,13 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             # TODO: Add sentry logging of this error
             raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
+        noise_parameter = noise_reducer.get_noise_parameter(ts_values)
         mp = stumpy.stump(
             ts_values,
             m=max(3, window_size),
             ignore_trivial=algo_config.mp_ignore_trivial,
             normalize=False,
+            std_noise=noise_parameter,
         )
 
         # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
@@ -176,6 +187,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         algo_config: AlgoConfig = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
+        noise_reducer: NoiseReducer = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
         This method uses stumpy.stumpi to stream compute the matrix profile and scores the matrix profile distances
@@ -213,8 +225,10 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             streamed_mp: list[list[float]] = []
             thresholds: list[list[Threshold]] = []
             for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
+
                 # Update the stumpi stream processor with new data
-                stream.update(cur_val)
+                noise_parameter = noise_reducer.get_noise_parameter(np.array(self.history_values))
+                stream.update(cur_val, std_noise=noise_parameter)
 
                 # Get the matrix profile for the new data and score it
                 cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
