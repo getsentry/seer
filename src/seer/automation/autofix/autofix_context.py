@@ -140,7 +140,6 @@ class AutofixContext(PipelineContext):
         Gets a repo client for the current single repo or for a given repo name.
         If there are more than 1 repos, a repo name must be provided.
         """
-        # Find the repo definition
         repo: RepoDefinition | None = None
         if len(self.repos) == 1:
             repo = self.repos[0]
