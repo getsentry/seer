@@ -1,5 +1,6 @@
 import logging
 
+from flask import has_app_context, current_app
 import sentry_sdk
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
@@ -31,17 +32,22 @@ class DisablePreparedStatementConnection(Connection):
     pass
 
 
+
 @inject
 def bootup(
-    *, start_model_loading: bool, integrations: list[Integration], config: AppConfig = injected
+    *, start_model_loading: bool, integrations: list[Integration], config: AppConfig = injected, skip_db_init: bool = False
 ):
     initialize_sentry_sdk(integrations)
+    
+    
     with sentry_sdk.metrics.timing(key="seer_bootup_time"):
         initialize_logs(["seer.", "celery_app."])
         config.do_validation()
-        initialize_database()
+        
+        # Only initialize database if we have an app context
+        if has_app_context():
+            initialize_database()
         initialize_models(start_model_loading)
-
 
 @inject
 def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = injected) -> None:

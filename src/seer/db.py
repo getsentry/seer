@@ -7,6 +7,7 @@ from typing import Any, List, Optional
 import sqlalchemy
 from flask import Flask
 from flask_migrate import Migrate
+from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
 from pgvector.sqlalchemy import Vector  # type: ignore
 from pydantic import BaseModel
@@ -35,20 +36,35 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+# Track initialization state globally
+_db_initialized = False
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
+    global _db_initialized
+    
+    # Only initialize if not already done
+    if _db_initialized:
+        return
+        
+    # If there's already an instance registered, we can reuse it
+    if 'sqlalchemy' in current_app.extensions:
+        return
+    
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+
 
     db.init_app(app)
     migrate.init_app(app, db)
 
+
     with app.app_context():
         Session.configure(bind=db.engine)
+        _db_initialized = True
 
 
 class Base(DeclarativeBase):
