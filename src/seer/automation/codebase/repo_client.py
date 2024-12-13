@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import shutil
@@ -118,6 +119,7 @@ class RepoClient:
     def __init__(
         self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
     ):
+        print("NEW REPO CLIENT")  # TODO
         if repo_definition.provider != "github":
             # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
             # easier if it does
@@ -181,6 +183,7 @@ class RepoClient:
         return False
 
     @classmethod
+    @functools.cache
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)

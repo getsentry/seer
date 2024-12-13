@@ -69,7 +69,6 @@ class AutofixContext(PipelineContext):
         self.organization_id = request.organization_id
         self.project_id = request.project_id
         self.repos = request.repos
-        self._repo_clients: dict[tuple[str, RepoClientType], RepoClient] = {}
 
         self.sentry_client = sentry_client
 
@@ -153,15 +152,7 @@ class AutofixContext(PipelineContext):
                 "Repo not found. Please provide a valid repo name or external ID."
             )
 
-        # Check cache first
-        cache_key = (repo.external_id, type)
-        if cache_key in self._repo_clients:
-            return self._repo_clients[cache_key]
-
-        # Create new client if not in cache
-        repo_client = RepoClient.from_repo_definition(repo, type)
-        self._repo_clients[cache_key] = repo_client
-        return repo_client
+        return RepoClient.from_repo_definition(repo, type)
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
