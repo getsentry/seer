@@ -70,9 +70,9 @@ class AutofixAgent(LlmAgent):
             )
 
     def get_completion(self, run_config: RunConfig):
-    """
-    Streams the preliminary output to the current step and only returns when output is complete
-    """
+        """
+        Streams the preliminary output to the current step and only returns when output is complete
+        """
         content_chunks = []
         tool_calls = []
         usage = Usage()
