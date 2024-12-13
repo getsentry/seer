@@ -69,6 +69,7 @@ class AutofixContext(PipelineContext):
         self.organization_id = request.organization_id
         self.project_id = request.project_id
         self.repos = request.repos
+        self._repo_clients: dict[tuple[str, RepoClientType], RepoClient] = {}
 
         self.sentry_client = sentry_client
 
@@ -134,33 +135,33 @@ class AutofixContext(PipelineContext):
         repo_name: str | None = None,
         repo_external_id: str | None = None,
         type: RepoClientType = RepoClientType.READ,
-    ):
+    ) -> RepoClient:
         """
         Gets a repo client for the current single repo or for a given repo name.
         If there are more than 1 repos, a repo name must be provided.
         """
-        repo_client: RepoClient | None = None
+        # Find the repo definition
+        repo: RepoDefinition | None = None
         if len(self.repos) == 1:
-            repo_client = RepoClient.from_repo_definition(self.repos[0], type)
+            repo = self.repos[0]
         elif repo_name:
             repo = next((r for r in self.repos if r.full_name == repo_name), None)
-
-            if not repo:
-                raise AgentError() from ValueError(f"Repo {repo_name} not found.")
-
-            repo_client = RepoClient.from_repo_definition(repo, type)
         elif repo_external_id:
             repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
 
-            if not repo:
-                raise AgentError() from ValueError(f"Repo {repo_external_id} not found.")
-
-            repo_client = RepoClient.from_repo_definition(repo, type)
-        else:
+        if not repo:
             raise AgentError() from ValueError(
-                "Please provide a repo name because you have multiple repos."
+                "Repo not found. Please provide a valid repo name or external ID."
             )
 
+        # Check cache first
+        cache_key = (repo.external_id, type)
+        if cache_key in self._repo_clients:
+            return self._repo_clients[cache_key]
+
+        # Create new client if not in cache
+        repo_client = RepoClient.from_repo_definition(repo, type)
+        self._repo_clients[cache_key] = repo_client
         return repo_client
 
     def get_file_contents(
@@ -185,7 +186,9 @@ class AutofixContext(PipelineContext):
         """
         for repo in self.repos:
             try:
-                repo_client = RepoClient.from_repo_definition(repo, RepoClientType.READ)
+                repo_client = self.get_repo_client(
+                    repo_external_id=repo.external_id, type=RepoClientType.READ
+                )
             except UnknownObjectException:
                 self.event_manager.on_error(
                     error_msg=f"Autofix does not have access to the `{repo.full_name}` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
@@ -250,8 +253,8 @@ class AutofixContext(PipelineContext):
                     if repo_definition is None:
                         raise ValueError(f"Repo definition not found for key {key}")
 
-                    repo_client = RepoClient.from_repo_definition(
-                        repo_definition, RepoClientType.WRITE
+                    repo_client = self.get_repo_client(
+                        repo_external_id=repo_definition.external_id, type=RepoClientType.WRITE
                     )
 
                     branch_ref = repo_client.create_branch_from_changes(
@@ -360,7 +363,9 @@ class AutofixContext(PipelineContext):
         )
 
         # comment root cause analysis on PR
-        repo_client = RepoClient.from_repo_definition(repo_definition, RepoClientType.READ)
+        repo_client = self.get_repo_client(
+            repo_external_id=repo_definition.external_id, type=RepoClientType.READ
+        )
         repo_client.comment_root_cause_on_pr_for_copilot(
             pr_url, state.run_id, state.request.issue.id, markdown_comment
         )
