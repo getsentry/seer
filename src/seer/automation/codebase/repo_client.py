@@ -119,7 +119,6 @@ class RepoClient:
     def __init__(
         self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
     ):
-        print("NEW REPO CLIENT")  # TODO
         if repo_definition.provider != "github":
             # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
             # easier if it does
