@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import shutil
@@ -181,6 +182,7 @@ class RepoClient:
         return False
 
     @classmethod
+    @functools.cache
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)

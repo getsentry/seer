@@ -8,6 +8,13 @@ from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
 
 
+@pytest.fixture(autouse=True)
+def clear_repo_client_cache():
+    """Clear the RepoClient.from_repo_definition cache before each test"""
+    RepoClient.from_repo_definition.cache_clear()
+    yield
+
+
 @pytest.fixture
 def mock_github():
     with patch("seer.automation.codebase.repo_client.Github") as mock:
