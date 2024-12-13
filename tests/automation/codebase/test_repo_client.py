@@ -1,11 +1,11 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from github import UnknownObjectException, GitRef
+from github import UnknownObjectException
 from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import FileChange, RepoDefinition
+from seer.automation.models import RepoDefinition
 
 
 @pytest.fixture
@@ -355,29 +355,33 @@ class TestRepoClient:
         mock_requests.assert_called_once()
         mock_response.raise_for_status.assert_called_once()
 
-    @pytest.mark.parametrize("patch_type,path,expected_sha", [
-        ("create", "new_file.py", "new_blob_sha"),
-        ("edit", "existing.py", "modified_blob_sha"),
-        ("delete", "delete_me.py", None),
-        ("edit", "/leading/slash.py", "modified_blob_sha"),
-    ])
-    def test_get_one_file_autofix_change_combinations(self,
-                                                      repo_client,
-                                                      mock_github,
-                                                      patch_type,
-                                                      path,
-                                                      expected_sha):
+    @pytest.mark.parametrize(
+        "patch_type,path,expected_sha",
+        [
+            ("create", "new_file.py", "new_blob_sha"),
+            ("edit", "existing.py", "modified_blob_sha"),
+            ("delete", "delete_me.py", None),
+            ("edit", "/leading/slash.py", "modified_blob_sha"),
+        ],
+    )
+    def test_get_one_file_autofix_change_combinations(
+        self, repo_client, mock_github, patch_type, path, expected_sha
+    ):
         # mock the blob creation
         mock_blob = MagicMock(sha=expected_sha)
         mock_github.get_repo.return_value.create_git_blob.return_value = mock_blob
         mock_content_file = MagicMock(decoded_content=b"content")
-        repo_client.repo.get_contents.return_value = mock_content_file if patch_type != "create" else None
+        repo_client.repo.get_contents.return_value = (
+            mock_content_file if patch_type != "create" else None
+        )
 
-        patch = MagicMock(**{
-            'path': path,
-            'type': patch_type,
-            'apply.return_value': 'new content' if expected_sha else None
-        })
+        patch = MagicMock(
+            **{
+                "path": path,
+                "type": patch_type,
+                "apply.return_value": "new content" if expected_sha else None,
+            }
+        )
 
         # Execute
         result = repo_client.process_one_file_for_git_commit(branch_ref="main", patch=patch)
@@ -385,38 +389,45 @@ class TestRepoClient:
         expected_path = path[1:] if path.startswith("/") else path
 
         assert result._identity["path"] == expected_path
-        assert result._identity["mode"] == '100644'
-        assert result._identity["type"] == 'blob'
+        assert result._identity["mode"] == "100644"
+        assert result._identity["type"] == "blob"
         assert result._identity["sha"] == expected_sha
 
     def test_create_branch_from_changes_invalid_input(self, repo_client):
         # Test with no changes provided
-        with pytest.raises(ValueError, match="Either file_patches or file_changes must be provided"):
+        with pytest.raises(
+            ValueError, match="Either file_patches or file_changes must be provided"
+        ):
             repo_client.create_branch_from_changes(
-                pr_title="Test PR",
-                file_patches=None,
-                file_changes=None
+                pr_title="Test PR", file_patches=None, file_changes=None
             )
 
-    @pytest.mark.parametrize("input_type,input_data", [
-        (
+    @pytest.mark.parametrize(
+        "input_type,input_data",
+        [
+            (
                 "patches",
-                [MagicMock(**{
-                    'path': 'test.py',
-                    'type': 'edit',
-                    'apply.return_value': 'new content'
-                })]
-        ),
-        (
+                [
+                    MagicMock(
+                        **{"path": "test.py", "type": "edit", "apply.return_value": "new content"}
+                    )
+                ],
+            ),
+            (
                 "changes",
-                [MagicMock(**{
-                    "path": 'test.py',
-                    "content": 'new content',
-                    "mode": '100644',
-                    "type": 'blob'
-                })]
-        )
-    ])
+                [
+                    MagicMock(
+                        **{
+                            "path": "test.py",
+                            "content": "new content",
+                            "mode": "100644",
+                            "type": "blob",
+                        }
+                    )
+                ],
+            ),
+        ],
+    )
     def test_create_branch_from_changes_success(self, repo_client, input_type, input_data):
         mock_comparison = MagicMock()
         mock_comparison.ahead_by = 1
@@ -425,7 +436,7 @@ class TestRepoClient:
         mock_branch_ref.ref = "refs/heads/test-branch"
         mock_branch_ref.object.sha = "new-commit-sha"
 
-        mock_blob = MagicMock(sha='new-commit-sha')
+        mock_blob = MagicMock(sha="new-commit-sha")
 
         repo_client.repo.create_git_blob.return_value = mock_blob
         repo_client.repo.compare.return_value = mock_comparison
@@ -433,10 +444,10 @@ class TestRepoClient:
         repo_client.repo.get_default_branch_head_sha.return_value = "default-sha"
 
         # Test the method
-        result = repo_client.create_branch_from_changes(
+        repo_client.create_branch_from_changes(
             pr_title="Test PR",
             file_patches=input_data if input_type == "patches" else None,
-            file_changes=input_data if input_type == "changes" else None
+            file_changes=input_data if input_type == "changes" else None,
         )
 
         # Assertions
@@ -453,7 +464,7 @@ class TestRepoClient:
         mock_branch_ref.object.sha = "new-commit-sha"
 
         # mock the blob creation
-        mock_blob = MagicMock(sha='blob-sha')
+        mock_blob = MagicMock(sha="blob-sha")
 
         repo_client.repo.create_git_blob.return_value = mock_blob
         repo_client.repo.compare.return_value = mock_comparison
@@ -463,11 +474,11 @@ class TestRepoClient:
         # Test the method
         result = repo_client.create_branch_from_changes(
             pr_title="Test PR",
-            file_patches=[MagicMock(**{
-                'path': 'test.py',
-                'type': 'edit',
-                'apply.return_value': 'new content'
-            })]
+            file_patches=[
+                MagicMock(
+                    **{"path": "test.py", "type": "edit", "apply.return_value": "new content"}
+                )
+            ],
         )
 
         # Assertions
@@ -475,15 +486,13 @@ class TestRepoClient:
         repo_client.repo.create_git_tree.assert_called_once()
         repo_client.repo.create_git_commit.assert_called_once()
 
-    @pytest.mark.parametrize("patch", [
-        (MagicMock(path='test.py', type=None)),
-        (MagicMock(path=None, type='edit'))
-    ])
+    @pytest.mark.parametrize(
+        "patch", [(MagicMock(path="test.py", type=None)), (MagicMock(path=None, type="edit"))]
+    )
     def test_get_one_file_autofix_change_invalid_input(self, repo_client, patch):
         with pytest.raises(ValueError):
-            repo_client.process_one_file_for_git_commit(branch_ref='main',
-                                                        patch=patch
-                                                        )
+            repo_client.process_one_file_for_git_commit(branch_ref="main", patch=patch)
+
 
 class TestRepoClientIndexFileSet:
     @patch("seer.automation.codebase.repo_client.Github")
@@ -649,5 +658,3 @@ class TestRepoClientIndexFileSet:
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-
-

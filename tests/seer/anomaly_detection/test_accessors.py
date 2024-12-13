@@ -4,7 +4,13 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
-from seer.anomaly_detection.models import Anomaly, MPTimeSeriesAnomalies
+from seer.anomaly_detection.models import (
+    Anomaly,
+    MPTimeSeriesAnomalies,
+    MPTimeSeriesAnomaliesSingleWindow,
+    Threshold,
+    ThresholdType,
+)
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, Session, TaskStatus
 
@@ -25,7 +31,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -132,7 +138,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
                 matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
-                thresholds=[0.0],
+                thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
             ),
@@ -169,7 +175,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
                 matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
                 window_size=1,
-                thresholds=[0.0],
+                thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
             ),
@@ -251,7 +257,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 700),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 700),
             window_size=3,
-            thresholds=[0.0] * 700,
+            thresholds=[],
             original_flags=["none"] * 700,
             use_suss=[True] * 700,
         )
@@ -304,7 +310,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1]] * 2),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1]] * 2),
             window_size=1,
-            thresholds=[0.0] * 5,
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -361,7 +367,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -413,7 +419,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -466,7 +472,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -512,7 +518,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
             window_size=1,
-            thresholds=[0.0, 0.0],
+            thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
         )
@@ -543,3 +549,72 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
         with self.assertRaises(Exception):
             alert_data_accessor.reset_cleanup_task(999)
+
+    def test_combine_anomalies(self):
+        suss_thresholds = [
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=10.0, lower=10.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=10.0, lower=10.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=20.0, lower=20.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=20.0, lower=20.0),
+        ]
+        anomalies_suss = MPTimeSeriesAnomaliesSingleWindow(
+            flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
+            scores=[1.0, 0.95, 0.95, 0.95],
+            matrix_profile=np.array(
+                [[1.0, 10, -1, -1], [1.5, 15, -1, -1], [1.0, 10, -1, -1], [1.5, 15, -1, -1]]
+            ),
+            window_size=30,
+            thresholds=[suss_thresholds],
+            original_flags=[
+                "none",
+                "anomaly_higher_confidence",
+                "anomaly_higher_confidence",
+                "none",
+            ],
+        )
+        fixed_thresholds = [
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=1.0, lower=1.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=2.0, lower=2.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=3.0, lower=3.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, upper=4.0, lower=4.0),
+        ]
+
+        anomalies_fixed = MPTimeSeriesAnomaliesSingleWindow(
+            flags=["none", "none", "none", "none"],
+            scores=[1.0, 0.95, 3, 0.95],
+            matrix_profile=np.array(
+                [[1.0, 10, -1, -1], [12, 15, -1, -1], [19.0, 10, -1, -1], [20, 15, -1, -1]]
+            ),
+            window_size=10,
+            thresholds=[fixed_thresholds],
+            original_flags=["none", "none", "none", "none"],
+        )
+
+        accessor = DbAlertDataAccessor()
+        combined_anomalies = accessor.combine_anomalies(
+            anomalies_suss, anomalies_fixed, [True, True, False, True]
+        )
+
+        assert combined_anomalies.flags == ["none", "anomaly_higher_confidence", "none", "none"]
+        assert combined_anomalies.scores == [1.0, 0.95, 3, 0.95]
+        assert np.array_equal(
+            combined_anomalies.matrix_profile_suss,
+            np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1], [1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+        )
+        assert np.array_equal(
+            combined_anomalies.matrix_profile_fixed,
+            np.array([[1.0, 10, -1, -1], [12, 15, -1, -1], [19.0, 10, -1, -1], [20, 15, -1, -1]]),
+        )
+        assert combined_anomalies.window_size == 30
+        assert len(combined_anomalies.thresholds[0]) == 4
+        assert combined_anomalies.thresholds[0][0] == suss_thresholds[0]
+        assert combined_anomalies.thresholds[0][1] == suss_thresholds[1]
+        assert combined_anomalies.thresholds[0][2] == fixed_thresholds[2]
+        assert combined_anomalies.thresholds[0][3] == suss_thresholds[3]
+        assert combined_anomalies.original_flags == [
+            "none",
+            "anomaly_higher_confidence",
+            "none",
+            "none",
+        ]
+        assert combined_anomalies.use_suss == [True, True, False, True]

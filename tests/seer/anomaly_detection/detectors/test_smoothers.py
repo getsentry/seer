@@ -21,7 +21,8 @@ class TestMajorityVoteBatchFlagSmoother(unittest.TestCase):
             mp_ignore_trivial=False,
             mp_normalize=False,
             mp_fixed_window_size=10,
-            prophet_uncertainty_samples=1,
+            prophet_uncertainty_samples=25,
+            prophet_mcmc_samples=0,
             return_thresholds=False,
             return_predicted_range=False,
         )
@@ -180,7 +181,8 @@ class TestMajorityVoteStreamFlagSmoother(unittest.TestCase):
             mp_ignore_trivial=False,
             mp_normalize=False,
             mp_fixed_window_size=10,
-            prophet_uncertainty_samples=1,
+            prophet_uncertainty_samples=25,
+            prophet_mcmc_samples=0,
             return_thresholds=False,
             return_predicted_range=False,
         )
