@@ -129,7 +129,7 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
     @staticmethod
     @abc.abstractmethod
     def _instantiate_context(
-        request: PipelineStepTaskRequest, type: Optional[DbStateRunTypes] = None
+        request: PipelineStepTaskRequest, type: DbStateRunTypes | None = None
     ) -> _ContextType:
         pass
 

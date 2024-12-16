@@ -185,6 +185,14 @@ class RepoClient:
 
         return False
 
+    @staticmethod
+    def _extract_id_from_pr_url(pr_url: str):
+        """
+        Extracts the repository path and PR/issue ID from the provided URL.
+        """
+        pr_id = int(pr_url.split("/")[-1])
+        return pr_id
+
     @classmethod
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
@@ -581,16 +589,10 @@ class RepoClient:
         See https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
         Note that expected input is pr_url NOT pr_html_url
         """
-        pr_id = int(pr_url.split("/")[-1])
-        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[
-            0
-        ]  # formatted as owner-name/repo-name
-        url = f"https://api.github.com/repos/{repo_path}/issues/{pr_id}/comments"
-        params = {"body": comment}
-        headers = self._get_auth_headers()
-        response = requests.post(url, headers=headers, json=params)
-        response.raise_for_status()
-        return response.json()["html_url"]
+        pr_id = self._extract_id_from_pr_url(pr_url)
+        issue = self.repo.get_issue(number=pr_id)
+        comment_obj = issue.create_comment(body=comment)
+        return comment_obj.html_url
 
     def post_pr_review_comment(self, pr_url: str, comment: GithubPrReviewComment):
         """
@@ -598,12 +600,16 @@ class RepoClient:
         See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
         Note that expected input is pr_url NOT pr_html_url
         """
-        pr_id = int(pr_url.split("/")[-1])
-        repo_path = pr_url.split("github.com/repos/")[1].split("/pulls")[
-            0
-        ]  # formatted as owner-name/repo-name
-        url = f"https://api.github.com/repos/{repo_path}/pulls/{pr_id}/comments"
-        headers = self._get_auth_headers()
-        response = requests.post(url, headers=headers, json=comment)
-        response.raise_for_status()
-        return response.json()["html_url"]
+        pr_id = self._extract_id_from_pr_url(pr_url)
+        pr = self.repo.get_pull(number=pr_id)
+        commit = self.repo.get_commit(comment["commit_id"])
+
+        review_comment = pr.create_review_comment(
+            body=comment["body"],
+            commit=commit,
+            path=comment["path"],
+            line=comment.get("line", None),
+            side=comment.get("side", None),
+            start_line=comment.get("start_line", None),
+        )
+        return review_comment.html_url
