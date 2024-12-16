@@ -115,8 +115,7 @@ class TestRepoClient:
         mock_content = MagicMock()
         mock_content.decoded_content = b"test content"
         # this is a list of contents, so the content returned should be None
-        mock_github.get_repo.return_value.get_contents\
-            .return_value = [mock_content, mock_content]
+        mock_github.get_repo.return_value.get_contents.return_value = [mock_content, mock_content]
 
         content, encoding = repo_client.get_file_content("test_file.py")
 
@@ -667,39 +666,64 @@ class TestRepoClientIndexFileSet:
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
 
-    @patch("seer.automation.codebase.repo_client.requests.post")
-    def test_post_issue_comment(self, mock_post, repo_client):
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_post_issue_comment(self, mock_github, repo_client):
         pr_url = "https://github.com/repos/sentry/sentry/pulls/12345"
-        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
         expected_comment = "No changes requiring review at this time."
-        expected_params = {"body": expected_comment}
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-        }
-        mock_post.return_value = mock_response
+        mock_repo = MagicMock()
+        mock_github_instance = mock_github.return_value
+        mock_github_instance.get_repo.return_value = mock_repo
+
+        mock_issue = MagicMock()
+        mock_issue.create_comment.return_value.html_url = (
+            "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        )
+        mock_repo.get_issue.return_value = mock_issue
 
         result = repo_client.post_issue_comment(pr_url, expected_comment)
 
-        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
-
+        mock_repo.get_issue.assert_called_once_with(12345)
+        mock_issue.create_comment.assert_called_once_with(body=expected_comment)
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
 
-    @patch("seer.automation.codebase.repo_client.requests.post")
-    def test_post_pr_review_comment(self, mock_post, repo_client):
+    @patch("seer.automation.codebase.repo_client.Github")
+    def test_post_pr_review_comment(self, mock_github, repo_client):
         pr_url = "https://github.com/repos/sentry/sentry/pulls/12345"
-        expected_url = "https://api.github.com/repos/sentry/sentry/pulls/12345/comments"
-        comment = GithubPrReviewComment(path="file.py", line=10, body="Please fix this", start_line=None)
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        comment = {
+            "path": "file.py",
+            "line": 10,
+            "body": "Please fix this",
+            "start_line": None,
+            "commit_id": "commitsha123",
         }
-        mock_post.return_value = mock_response
 
+        # Mock the repository
+        mock_repo = MagicMock()
+        mock_github_instance = mock_github.return_value
+        mock_github_instance.get_repo.return_value = mock_repo
+
+        # Mock the pull request and its create_review_comment method
+        mock_pull = MagicMock()
+        mock_commit = MagicMock()
+        mock_commit.sha = comment["commit_id"]
+        mock_repo.get_pull.return_value = mock_pull
+        mock_repo.get_commit.return_value = mock_commit
+        mock_pull.create_review_comment.return_value.html_url = (
+            "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        )
+
+        # Call the method under test
         result = repo_client.post_pr_review_comment(pr_url, comment)
 
-        mock_post.assert_called_once_with(expected_url, headers=ANY, json=comment)
-
+        mock_repo.get_pull.assert_called_once_with(12345)
+        mock_repo.get_commit.assert_called_once_with("commitsha123")
+        mock_pull.create_review_comment.assert_called_once_with(
+            body=comment["body"],
+            commit=mock_commit,
+            path=comment["path"],
+            line=comment.get("line", ANY),
+            side=comment.get("side", ANY),
+            start_line=comment.get("start_line", ANY),
+        )
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
