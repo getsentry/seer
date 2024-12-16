@@ -34,10 +34,11 @@ def algoconfig_provider() -> AlgoConfig:
     return AlgoConfig(
         mp_ignore_trivial=True,
         mp_normalize=False,
-        prophet_uncertainty_samples=1,
+        prophet_uncertainty_samples=5,
+        prophet_mcmc_samples=0,
         mp_fixed_window_size=10,
-        return_thresholds=False,
-        return_predicted_range=False,
+        return_thresholds=True,
+        return_predicted_range=True,
     )
 
 

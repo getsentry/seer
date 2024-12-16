@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pydantic import BaseModel
 
@@ -299,3 +301,198 @@ def test_anthropic_prep_message_and_tools():
         assert "input_schema" in tool_dicts[0]
 
     assert returned_system_prompt == system_prompt
+
+
+@pytest.mark.vcr()
+def test_openai_generate_text_stream():
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    stream_items = list(
+        llm_client.generate_text_stream(
+            prompt="Say hello",
+            model=model,
+        )
+    )
+
+    # Check that we got content chunks and usage
+    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    usage_items = [item for item in stream_items if isinstance(item, Usage)]
+
+    assert len(content_chunks) > 0
+    assert "".join(content_chunks) == "Hello! How can I assist you today?"
+    assert len(usage_items) == 1
+    assert usage_items[0].completion_tokens == 9
+    assert usage_items[0].prompt_tokens == 9
+    assert usage_items[0].total_tokens == 18
+
+
+@pytest.mark.vcr()
+def test_anthropic_generate_text_stream():
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    stream_items = list(
+        llm_client.generate_text_stream(
+            prompt="Say hello",
+            model=model,
+        )
+    )
+
+    # Check that we got content chunks and usage
+    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    usage_items = [item for item in stream_items if isinstance(item, Usage)]
+
+    assert len(content_chunks) > 0
+    assert "".join(content_chunks) == "Hello! How can I assist you today?"
+    assert len(usage_items) == 1
+    assert usage_items[0].completion_tokens > 0
+    assert usage_items[0].prompt_tokens > 0
+    assert (
+        usage_items[0].total_tokens
+        == usage_items[0].completion_tokens + usage_items[0].prompt_tokens
+    )
+
+
+@pytest.mark.vcr()
+def test_openai_generate_text_stream_with_tools():
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-4o-2024-08-06")
+
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function that takes a string input",
+            parameters=[
+                {
+                    "name": "x",
+                    "type": "string",
+                    "description": "The string to process",
+                },
+            ],
+            fn=lambda x: x,
+        )
+    ]
+
+    stream_items = list(
+        llm_client.generate_text_stream(
+            prompt="Call test_function with the input 'test data'",
+            model=model,
+            tools=tools,
+        )
+    )
+
+    # Check that we got tool calls and usage
+    tool_calls = [item for item in stream_items if isinstance(item, ToolCall)]
+    usage_items = [item for item in stream_items if isinstance(item, Usage)]
+
+    if tool_calls:
+        assert len(tool_calls) >= 1
+        tool_call = tool_calls[0]
+        assert tool_call.function == "test_function"
+        assert tool_call.id is not None
+        args = json.loads(tool_call.args)
+        assert "x" in args
+        assert isinstance(args["x"], str)
+
+    assert len(usage_items) == 1
+    assert usage_items[0].completion_tokens > 0
+    assert usage_items[0].prompt_tokens > 0
+    assert (
+        usage_items[0].total_tokens
+        == usage_items[0].completion_tokens + usage_items[0].prompt_tokens
+    )
+
+
+@pytest.mark.vcr()
+def test_anthropic_generate_text_stream_with_tools():
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[
+                {
+                    "name": "x",
+                    "type": "string",
+                },
+            ],
+            fn=lambda x: x,
+        )
+    ]
+
+    stream_items = list(
+        llm_client.generate_text_stream(
+            prompt="Please invoke test_function",
+            model=model,
+            tools=tools,
+        )
+    )
+
+    # Check that we got content chunks, tool calls and usage
+    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    tool_calls = [item for item in stream_items if isinstance(item, ToolCall)]
+    usage_items = [item for item in stream_items if isinstance(item, Usage)]
+
+    assert len(content_chunks) > 0
+    assert len(tool_calls) == 1
+    assert tool_calls[0].function == "test_function"
+    assert len(usage_items) == 1
+
+
+def test_construct_message_from_stream_openai():
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    content_chunks = ["Hello", " world", "!"]
+    tool_calls = [ToolCall(id="123", function="test_function", args='{"x": "test"}')]
+
+    message = llm_client.construct_message_from_stream(
+        content_chunks=content_chunks,
+        tool_calls=tool_calls,
+        model=model,
+    )
+
+    assert message.role == "assistant"
+    assert message.content == "Hello world!"
+    assert len(message.tool_calls) == 1
+    assert message.tool_calls[0].id == "123"
+    assert message.tool_calls[0].function == "test_function"
+    assert message.tool_calls[0].args == '{"x": "test"}'
+
+
+def test_construct_message_from_stream_anthropic():
+    llm_client = LlmClient()
+    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    content_chunks = ["Hello", " world", "!"]
+    tool_calls = [ToolCall(id="123", function="test_function", args='{"x": "test"}')]
+
+    message = llm_client.construct_message_from_stream(
+        content_chunks=content_chunks,
+        tool_calls=tool_calls,
+        model=model,
+    )
+
+    assert message.role == "tool_use"
+    assert message.content == "Hello world!"
+    assert len(message.tool_calls) == 1
+    assert message.tool_calls[0].id == "123"
+    assert message.tool_calls[0].function == "test_function"
+    assert message.tool_calls[0].args == '{"x": "test"}'
+    assert message.tool_call_id == "123"
+
+
+def test_construct_message_from_stream_invalid_provider():
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+    model.provider_name = "invalid"  # type: ignore
+
+    with pytest.raises(ValueError, match="Invalid provider: invalid"):
+        llm_client.construct_message_from_stream(
+            content_chunks=["test"],
+            tool_calls=[],
+            model=model,
+        )

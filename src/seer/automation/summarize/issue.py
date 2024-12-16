@@ -18,7 +18,7 @@ class Step(BaseModel):
 class IssueSummary(BaseModel):
     title: str
     whats_wrong: str
-    trace: str
+    session_related_issues: str
     possible_cause: str
 
 
@@ -42,16 +42,16 @@ def summarize_issue(
     if connected_event_details:
         connected_issues = "\n----\n".join(
             [
-                f"Connected Issue:\n{event.format_event()}"
+                f"Issue from the same session:\n{event.format_event()}"
                 for _, event in enumerate(connected_event_details)
             ]
         )
         connected_issues_input = f"""
-        Also, we know about some other issues that occurred in the same application trace, listed below. The issue above occurred somewhere alongside these:
+        Also, we know about some other issues that occurred in the same application session, listed below. The issue above occurred somewhere alongside these:
         {connected_issues}
         """
     else:
-        connected_issues_input = "Connected issues we've found: none"
+        connected_issues_input = "Issues from the same session: none"
 
     prompt = textwrap.dedent(
         f"""Our code is broken! Please summarize the issue below in a few short bullet points so our engineers can immediately understand what's wrong.
@@ -68,8 +68,8 @@ def summarize_issue(
         ###### What's wrong? [not optional]
         summary of the stacktrace, breadcrumbs, and other context
 
-        ###### Trace [optional]
-        insights from the connected issues, if any [return empty string if none]
+        ###### Session related issues [optional]
+        insights from the application session issues, if relevant to this issue [return empty string if none]
 
         ###### Possible cause [optional]
         guess as to the cause, maybe show if there's clear smoking bullet [return empty string if none]
@@ -93,7 +93,7 @@ def summarize_issue(
             group_id=request.group_id,
             headline=completion.parsed.title,
             whats_wrong=completion.parsed.whats_wrong,
-            trace=completion.parsed.trace,
+            trace=completion.parsed.session_related_issues,
             possible_cause=completion.parsed.possible_cause,
         ),
         completion.parsed,

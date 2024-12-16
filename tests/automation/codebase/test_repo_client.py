@@ -1,12 +1,19 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from github import UnknownObjectException, GitRef
+from github import UnknownObjectException
 from pydantic import ValidationError
 
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import FileChange, RepoDefinition
+from seer.automation.models import RepoDefinition
+
+
+@pytest.fixture(autouse=True)
+def clear_repo_client_cache():
+    """Clear the RepoClient.from_repo_definition cache before each test"""
+    RepoClient.from_repo_definition.cache_clear()
+    yield
 
 
 @pytest.fixture
@@ -96,9 +103,25 @@ class TestRepoClient:
         mock_content.decoded_content = b"test content"
         mock_github.get_repo.return_value.get_contents.return_value = mock_content
 
-        content = repo_client.get_file_content("test_file.py")
+        content, _ = repo_client.get_file_content("test_file.py")
 
         assert content == "test content"
+        mock_github.get_repo.return_value.get_contents.assert_called_with(
+            "test_file.py", ref="test_sha"
+        )
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_fail_get_file_content(self, mock_requests, repo_client, mock_github):
+        mock_content = MagicMock()
+        mock_content.decoded_content = b"test content"
+        # this is a list of contents, so the content returned should be None
+        mock_github.get_repo.return_value.get_contents\
+            .return_value = [mock_content, mock_content]
+
+        content, encoding = repo_client.get_file_content("test_file.py")
+
+        assert not content
+        assert encoding == "utf-8"
         mock_github.get_repo.return_value.get_contents.assert_called_with(
             "test_file.py", ref="test_sha"
         )
@@ -429,7 +452,7 @@ class TestRepoClient:
         repo_client.repo.get_default_branch_head_sha.return_value = "default-sha"
 
         # Test the method
-        result = repo_client.create_branch_from_changes(
+        repo_client.create_branch_from_changes(
             pr_title="Test PR",
             file_patches=input_data if input_type == "patches" else None,
             file_changes=input_data if input_type == "changes" else None,

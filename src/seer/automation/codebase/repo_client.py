@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import shutil
@@ -14,12 +15,11 @@ from github import (
     Github,
     GithubException,
     GithubIntegration,
-    UnknownObjectException,
     InputGitTreeElement,
+    UnknownObjectException,
 )
 from github.GitRef import GitRef
 from github.Repository import Repository
-from unidiff import PatchSet
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
@@ -28,7 +28,6 @@ from seer.automation.models import FileChange, FilePatch, InitializationError, R
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
-from seer.utils import class_method_lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +193,7 @@ class RepoClient:
         return pr_id
 
     @classmethod
+    @functools.cache
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
@@ -285,7 +285,8 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
-    def get_file_content(self, path: str, sha: str | None = None) -> str | None:
+
+    def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
@@ -296,11 +297,11 @@ class RepoClient:
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-            return contents.decoded_content.decode(detected_encoding)
+            return contents.decoded_content.decode(detected_encoding), detected_encoding
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
 
-            return None
+            return None, "utf-8"
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
         if sha is None:
@@ -349,13 +350,11 @@ class RepoClient:
         elif patch_type == "edit":
             patch_type = "M"
 
-        contents = self.repo.get_contents(path, ref=branch_ref) if patch_type != "A" else None
-        if isinstance(contents, list):
-            raise RuntimeError(f"Expected a single ContentFile but got a list for path {path}")
+        to_apply = None
+        detected_encoding = "utf-8"
+        if patch_type != "A":
+            to_apply, detected_encoding = self.get_file_content(path, sha=branch_ref)
 
-        detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-
-        to_apply = contents.decoded_content.decode(detected_encoding) if contents else None
         new_contents = (
             patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
         )

@@ -49,19 +49,20 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA4xSwYrbMBC9+ysGnePFSTabNLfQ3gotlIUeSjGKNLZnK4+ENMk2LPn3IieNvewW
-        ejFi3pvHe2/8UgAosmoLynRaTB9cudOPH56/nvA7P336bJpQ0ZfHj/7YpGW7+6ZmecPvn9DI3607
-        4/vgUMjzBTYRtWBWna+Xy8VqtXioBqD3Fl1ea4OU977sialcVIv7slqX8811u/NkMKkt/CgAAF6G
-        b/bJFn+rLQxaw6THlHSLansjAajoXZ4onRIl0SxqNoLGsyAP1ncQotdG6Iigw/DuQDwQk5AW4jYT
-        ctAERjMkapkaMprFnQC502wQ/BGjdi5T7SGLkZxAswVi9kedS4Fnko4YBHWf7qZuIjaHpHMjfHDu
-        Oj/f4jnfhuj36Yrf5g0xpa6OqJPnHCWJD2pAzwXAz6HGw6tmVIi+D1KL/4WcBecPq4ueGq83Ra+g
-        eNFuMt/MZ+/o1RZFk0uTQyijTYd2XB2vpg+W/AQoJqnfunlP+5KcuP0f+REwBoOgrUNES+Z14pEW
-        Md/8X7Rby4NhlU5JsK8b4hZjiHT5tZpQV+tqtW82a1Op4lz8AQAA//8DAAJN82doAwAA
+        H4sIAAAAAAAAAwAAAP//jFLBitswEL3nKwad48VO0t2QWw5toYdCoYfSUowsj+1J5ZEqjbObLvn3
+        IieNvXQLvRgx783jvTd+XgAoqtUOlOm0mN7bbF8fPg16/aH6+fS2etx/qd6/G/xH3n+Oh6+/1DJt
+        uOqARv5s3RnXe4tCji+wCagFk2rxsN7k69U2z0egdzXatNZ6yTYu64kpW+WrTZY/ZMX2ut05MhjV
+        Dr4tAACex2/yyTU+qR2MWuOkxxh1i2p3IwGo4GyaKB0jRdEsajmBxrEgj9b34IPTRuiIoP347kAc
+        EJOQFuI2EVLQCEYzRGqZGjKaxZ4AudNsENwRg7Y2UeshiZGcQHMNxOyOOpUCjyQdMQjqPt7N3QRs
+        hqhTIzxYe52fb/Gsa31wVbzit3lDTLErA+roOEWJ4rwa0fMC4PtY4/CiGeWD672U4n4gJ8Hi/s1F
+        T03Xm6NXUJxoO5tvi+UremWNosnG2SGU0abDelqdrqaHmtwMWMxS/+3mNe1LcuL2f+QnwBj0gnXp
+        A9ZkXiaeaAHTzf9Fu7U8GlbxFAX7siFuMfhAl1+r8eV9Y4ocixwrtTgvfgMAAP//AwCeihT2aAMA
+        AA==
     headers:
       CF-Cache-Status:
       - DYNAMIC
       CF-RAY:
-      - 8ec611e37b4c15fb-SJC
+      - 8f1038c8dc7c22ae-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -69,14 +70,14 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Tue, 03 Dec 2024 19:47:41 GMT
+      - Thu, 12 Dec 2024 19:46:40 GMT
       Server:
       - cloudflare
       Set-Cookie:
-      - __cf_bm=LCWkBmiRnQ.hzH7dHMeetZ00HuVce8csxkNfcTAgqsU-1733255261-1.0.1.1-WL6_JlzeaD9P2NdyOBvd8dlCiN31W0j9RudQ7NJGz9iEfqxKAxfLD3wtwXgFs1wvQzwKYJDpx.ZHodQ1qtVvQg;
-        path=/; expires=Tue, 03-Dec-24 20:17:41 GMT; domain=.api.openai.com; HttpOnly;
+      - __cf_bm=dC1iC3QPm3PCDy90PXBWNgjOeycu4NJort8JGd3FZf8-1734032800-1.0.1.1-nvOto7pg3GrQNWnN7awvcLQJOIYvmYTPvuDz_PsW0hjiubxpJ4qmHynJ.h6XES_UVVaHbUA4czYPAORxG8DPLw;
+        path=/; expires=Thu, 12-Dec-24 20:16:40 GMT; domain=.api.openai.com; HttpOnly;
         Secure; SameSite=None
-      - _cfuvid=nhDBSs7EaXMglC2OZTAWVTFclz7qFA049RzAYdfpoQM-1733255261195-0.0.1.1-604800000;
+      - _cfuvid=h_kwvxw34sDV6ZafcSbsdaQ9Q04oFsJkfJ_yify3a9s-1734032800577-0.0.1.1-604800000;
         path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Transfer-Encoding:
       - chunked
@@ -89,7 +90,7 @@ interactions:
       openai-organization:
       - functional-software
       openai-processing-ms:
-      - '394'
+      - '342'
       openai-version:
       - '2020-10-01'
       strict-transport-security:
@@ -107,7 +108,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 0s
       x-request-id:
-      - req_de33d0b67cb2bc3eb53e8e4fb257c05b
+      - req_ce1463d68bb68e1939ced140740ee0eb
     status:
       code: 200
       message: OK
@@ -191,25 +192,25 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA5RU32/TMBB+719h+blFabtS6BsSggEDDWkvaJmii31JvTm2ZV+7VlX/d2QnTTpW
-        gXixkvvux3efz3cYMcaV5CvGxRpINE5PPsDd+93y1+7x2nz7+fm62mUOPv+4Kef19qvi4xhhy0cU
-        dIp6I2zjNJKypoWFRyCMWafL+Xy2WMzeThPQWIk6htWOJld20iijJrNsdjXJlpPpuy56bZXAwFfs
-        fsQYY4d0Rp5G4o6vWDY+WRoMAWrkq96JMe6tjhYOIahAYIiPB1BYQ2gS9UPOcec0GIjMc77K+d0a
-        WUCNglCy5LqjwJTWm0AeCNnaPjPnLQhSW4xfUQemjCKVsjAwkmFVYetACA0TVmsorW8dBBimESQj
-        y1TjvN2ijInkJoYo2qcUyhi7TQFvcj7OubASSwhYdKRyvrp/GOc8EIgn8iBeIbhFQ4W29TlwyDnt
-        HaZeO/LFQL6tBIS19fvkE/kX5+SSS2llC39pQ1Eyg8+9GpWHBp+tf4otBvIIjVYG/9AhCWXWYAS+
-        6lbjFnWqoExlk0kCQQGheAzdVR3yvO8hfq7i8QOf2adT+WgYx0OdaBblvne9i1dzgyB7NwmEPTzL
-        ZvPJNJtk0/h3zPlxfC5eEqZBJGXq17IN/bzU66MKYhMCStaOU60wsMr6CyPVgIEaGzQUVSytDdRN
-        U3xb6S7+U6uObUHWKdH3edtXvu0qf+8r98oAERqJGFLY/WX5btsx6eJ9b/8YCVqHPkU//EXqxUnq
-        h+P5k/VYbQLEtWE2Wnf2Y78DtK2dt2Xo8N5eKaPCuvAIwZr43gNZxxN6HDH2kHbN5sX6iPPUOCrI
-        PqGJCRfzZZuPDytuQKdvTyhZAj0Ay+xqfCFhIZFA6XC2rrgAsUY5hA67DTZS2TNgdNb2azqXcret
-        t3f+z/QDIAS6+FicR6nEy5YHN4+PaU1edutlToR52AfCpqiUqdE7r9oFXLkiW2aLsnq3FBkfHUe/
-        AQAA//8DAANLb/6OBgAA
+        H4sIAAAAAAAAAwAAAP//lFTLbtswELz7Kwie7UCynUd9S5pLUaNo0aAFGgXCmlxLTCiSJdfOw/C/
+        F6QUyUGMor0Q1M7uamZI7m7EGFeSLxgXNZBonJ5cyvtv26urn49L8cMsr+vPZ5C9NN/dr98v546P
+        Y4Vd3aOg16oTYRunkZQ1LSw8AmHsmp/P5tlsepHlCWisRB3LKkeTuZ00yqjJNJvOJ9n5JL/oqmur
+        BAa+YLcjxhjbpTXyNBKf+IJl49dIgyFAhXzRJzHGvdUxwiEEFQgM8fEACmsITaK+Kzg+OQ0GIvOC
+        Lwp+UyMLqFEQSpZSnygwpfUmkAdCVttH5rwFQWqLcRd9YMooUqkLAyMZITRMWK1hZX0bFmCYRpCM
+        LFON83aLMpbLTeyk6DkVKmPsNhWcFHxccGElriBg2VEp+OL2blzwQCAeyIN4h+AWDZXaVofAruD0
+        7DAp7CiXA+X2T0BYWf+cciL/8pBcSllZ2cKf2lKUzOBj70E00ihTMVdDwKgTTQ1G4DE7jonVuEWd
+        fqDM2qaQBIISQnkfuvPZFUUvIW4XcfmCj+xry5YtYWNEHaPjuHQqre+TbyKZJYLscyQQ9vA0m84m
+        eTbJ8vi1L/h+fOhecqZBJGWq974Nit4adq2C2ISAkrW3qFIY2Nr6IzepAQMVNmgoOriyNlDnX3xS
+        6TD+062ObalkLzKfzuanvX4HnpRQDgyFlHIb10utBPY5V3bV7z/W4LVK2N1fDJy+Gni3P3x/Hteb
+        AHEGmI3WXXzfP2htK+ftKnR4H18ro0JdeoRgTXy8gazjCd2PGLtLg2PzZhbEe9I4Ksk+oIkNT2fn
+        bT8+zKsBzc/yDiVLoAfg7MPF+EjDUiKB0uFg9nABokY5lA6DCjZS2QNgdCD7PZ1jvVvp8ST/of0A
+        CIGOUJbOo1TireQhzeN9mnnH03qbE2EengNhU66VqdA7r9ppunbl2VrkGeYZrvhoP/oDAAD//wMA
+        t8E8w1sGAAA=
     headers:
       CF-Cache-Status:
       - DYNAMIC
       CF-RAY:
-      - 8ec611e72e6bf9ed-SJC
+      - 8f1038ccea9fcff5-SJC
       Connection:
       - keep-alive
       Content-Encoding:
@@ -217,14 +218,14 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Tue, 03 Dec 2024 19:47:43 GMT
+      - Thu, 12 Dec 2024 19:46:43 GMT
       Server:
       - cloudflare
       Set-Cookie:
-      - __cf_bm=ghOV2ew8REuZ84e0WUXLyFx3_Wr.j1EBoK13fgOwKXw-1733255263-1.0.1.1-c2l4evCXSYXf0vBR7gQRzq0WzuZ1hq7MZKHx2lv4lrZ06Ny37DsejVz2V7V15eqRrkJQghlEL7WNJ6CWHvBLGg;
-        path=/; expires=Tue, 03-Dec-24 20:17:43 GMT; domain=.api.openai.com; HttpOnly;
+      - __cf_bm=BQFlc0Ghgs.4QPb0KI2YfP18r8oLQKDNqo6nCU5uglc-1734032803-1.0.1.1-dJEQgzG7YZ6srhi5AnxNroEZ0yUR3urslX0UKHaTrNNzac4lSe_fdMC07CfZEidhMOs77UwKMdwAhKIlxhO83Q;
+        path=/; expires=Thu, 12-Dec-24 20:16:43 GMT; domain=.api.openai.com; HttpOnly;
         Secure; SameSite=None
-      - _cfuvid=APSjimw8mid8J.GAGw_WtmzfdwWkHAEQA0sAKctT9eg-1733255263356-0.0.1.1-604800000;
+      - _cfuvid=SPa7JXDeA7FefaXPe5UCYuQlJdOj7TMczEnYxTpjulA-1734032803351-0.0.1.1-604800000;
         path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Transfer-Encoding:
       - chunked
@@ -237,7 +238,7 @@ interactions:
       openai-organization:
       - functional-software
       openai-processing-ms:
-      - '1967'
+      - '2392'
       openai-version:
       - '2020-10-01'
       strict-transport-security:
@@ -255,7 +256,7 @@ interactions:
       x-ratelimit-reset-tokens:
       - 1ms
       x-request-id:
-      - req_7541f71a45a9f80093991362e9c94486
+      - req_5dce227561e33d4e590b62e73f1d8d48
     status:
       code: 200
       message: OK

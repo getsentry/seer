@@ -39,6 +39,6 @@ def format_summary(summary: IssueSummary | None) -> str:
         """
     ).format(
         whats_wrong=summary.whats_wrong,
-        trace=summary.trace,
+        trace=summary.session_related_issues,
         possible_cause=summary.possible_cause,
     )
