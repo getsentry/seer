@@ -1,0 +1,133 @@
+interactions:
+- request:
+    body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '268'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-requests/2.32.2
+      x-goog-api-client:
+      - gl-python/3.11.0rc1 auth/2.37.0 cred-type/u
+    method: POST
+    uri: https://oauth2.googleapis.com/token
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/71UuZajSBD05yv6tb1Sc4gRjIckJEBQNCBOR4+jgOIWN8zbf1/oNsYcb41ysjIj
+        IiPq1e8fb2/vXhDAtn12VQbL919v77NHMHsPYzWLKo7HG9lNdPLzShxz3oTDy9l9ujxOLr2gRml4
+        ceiTaqnk3VxOu+6OjGQ4Lfio5DaOUXbEPlnIpjNzjj+dC8s2HLTip5JCx8gsCLhICuaattAOTceG
+        l3ZJe8boKW+75udIKDHonJsc1eILYycWSq+MlHApmLIaayWj8fRXTdOdK7LeOXburG3orMbpV5W/
+        2YSMmiWSZ1BVZxUgBbVi2Ff6a8Tw4/H9n21rONWoge0TbTuTFMN8VdugquFmQtJ1dfvr42Mcx31c
+        VXEOvRq1+6AqPry+Sz6CvOrDXZ17XVQ1xdvf2ttX3sJmQAHc51WMyr8O9Gs7KqNqDwsP5W+rqhKF
+        38q/gnp287fQE/Qa2HzfoPBPinAWE/8WrLuLurEIOEBCKxRd7Z6Fn0JqEODm5o4FcmdZT6EVjsWR
+        8sJNTppnys0gZULG5DSelJszKw9uBqmKpLOIQZvdMO8mrqJI3a80dUDKW6kKeW0MlmqQiGvqEAzu
+        l9oiFeHgE2Hr6lTqE9gGkcBygxDIFXJULs4IHtwBPNgOlNcZ8CzhkqcaFEm/1oiAVw+uVePBI17c
+        W7aAy7UKbaF37NMYzFTpE0zp30w8IMx55ezDm9mH5z9coaX+X1xLaAkb1yRfYgosq7ELS8mpcZBT
+        dVEe8WqnsPVVXxGUIF/9maFO1f68RWN2jpW3QlqhoGAqxzr0jhUmQRkmPndaXIvCgjLrPYveMHLf
+        utb+lSFcW6zdIs83zJAXcVcfkWNrkXe7Lt5X1KKrEZro5aYomdfWuJ5eQXGtIM8RlsFtWLVjrx6l
+        W/ybTvYAFmPTcwjWefkRrD7IFLioJLCxvVV8HvuLuJoU3v0UzuAyvGreo/MM1d7hiPEU1a1PYOeG
+        VJRF0BtBjcOEyKqskFQWjbvarEfSvoCJ+2R3Js9JdGhyWLbMDXPSOb8eDm2nfTqkJwc5frROpPFq
+        h+d9wUwhKvjY0tjzfZgKcuTzgz2QOuMmwjB6h2fbPjB6pzDcDiricm/CQsJi/vnse/MuMN65OLcS
+        qWaDpt5AbHn3lnZm/9TNr3h2PeaJN0ffx0mz3A2izp8lm+Gg008oqIyT2pj0BBWHfniYezag5+Yq
+        GeB2niBaOH6OPA9I3FSnHBD33mAphDcvXSGZ9elXvK13aUdL4UMFYWTmF3/9+iakH3Bn1ipWvFSK
+        wL7/+Pc/DE0dJosFAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Mon, 16 Dec 2024 23:14:35 GMT
+      Expires:
+      - Mon, 01 Jan 1990 00:00:00 GMT
+      Pragma:
+      - no-cache
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"contents": [{"parts": [{"text": "What year is it?"}], "role": "user"}],
+      "tools": [{"googleSearch": {}}], "generationConfig": {"temperature": 0.0, "responseModalities":
+      ["TEXT"]}}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '180'
+      Content-Type:
+      - application/json
+      authorization:
+      - redacted
+      user-agent:
+      - google-genai-sdk/0.2.2 gl-python/3.11.0rc1
+      x-goog-api-client:
+      - google-genai-sdk/0.2.2 gl-python/3.11.0rc1 cred-type/u
+      x-goog-user-project:
+      - super-big-data
+    method: POST
+    uri: https://us-central1-aiplatform.googleapis.com/v1beta1/projects/ml-ai-420606/locations/us-central1/publishers/google/models/gemini-pro:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/02PsWrDQBBEe33FojqWXKRSZ0gwBtuEEKc1p9NYOjjdObsrETD+96ziFClneG+H
+        vRVEJZgzlw3dLFj0uYOl5/X66VGMEHH90pWn5NoI0kwytWNQYnxNEKUW3k0C2ubcR5wFjv1AQShl
+        NfZ6zazoKCTSwdrRNmJFbxHOpEXs/4tnhnLA7CJdAuLiicJ1VUV7A5L5jIYG1as0de1jnrrqcaHy
+        eaxn2Nr3yoW6RwI7DTOW1GUv9e/2inEBI3kYMoYUyr9nRZ1Osvy6O35u9ruX8+Z9ezq8Hj9KA+7F
+        vfgBsqusvzQBAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Mon, 16 Dec 2024 23:14:36 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 400
+      message: Bad Request
+version: 1

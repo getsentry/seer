@@ -13,8 +13,12 @@ from anthropic.types import (
     ToolResultBlockParam,
     ToolUseBlockParam,
 )
-from google import genai
-from google.genai.types import GenerateContentConfig, GoogleSearch, Tool
+from google import genai  # type: ignore[attr-defined]
+from google.genai.types import (  # type: ignore[import-untyped]
+    GenerateContentConfig,
+    GoogleSearch,
+    Tool,
+)
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
