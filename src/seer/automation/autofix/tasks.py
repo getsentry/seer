@@ -7,7 +7,6 @@ import sentry_sdk
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
-from celery_app.config import CeleryQueues
 from seer.automation.agent.models import Message
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -42,7 +41,9 @@ from seer.automation.autofix.steps.coding_step import AutofixCodingStep, Autofix
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
 from seer.automation.models import InitializationError
 from seer.automation.utils import process_repo_provider, raise_if_no_genai_consent
+from seer.configuration import AppConfig
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
+from seer.dependency_injection import inject, injected
 from seer.rpc import get_sentry_client
 
 logger = logging.getLogger(__name__)
@@ -126,8 +127,10 @@ def check_and_mark_if_timed_out(state: ContinuationState):
             logger.error(f"Autofix run {cur.run_id} has timed out")
 
 
+@inject
 def run_autofix_root_cause(
     request: AutofixRequest,
+    app_config: AppConfig = injected,
 ):
     state = create_initial_autofix_run(request)
 
@@ -142,13 +145,17 @@ def run_autofix_root_cause(
         RootCauseStepRequest(
             run_id=cur_state.run_id,
         ),
-        queue=CeleryQueues.DEFAULT,
+        queue=app_config.CELERY_WORKER_QUEUE,
     ).apply_async()
 
     return cur_state.run_id
 
 
-def run_autofix_execution(request: AutofixUpdateRequest):
+@inject
+def run_autofix_execution(
+    request: AutofixUpdateRequest,
+    app_config: AppConfig = injected,
+):
     state = ContinuationState(request.run_id)
 
     raise_if_no_genai_consent(state.get().request.organization_id)
@@ -174,14 +181,18 @@ def run_autofix_execution(request: AutofixUpdateRequest):
             AutofixCodingStepRequest(
                 run_id=cur.run_id,
             ),
-            queue=CeleryQueues.DEFAULT,
+            queue=app_config.CELERY_WORKER_QUEUE,
         ).apply_async()
     except InitializationError as e:
         sentry_sdk.capture_exception(e)
         raise e
 
 
-def run_autofix_create_pr(request: AutofixUpdateRequest):
+@inject
+def run_autofix_create_pr(
+    request: AutofixUpdateRequest,
+    app_config: AppConfig = injected,
+):
     if not isinstance(request.payload, AutofixCreatePrUpdatePayload):
         raise ValueError("Invalid payload type for create_pr")
 
@@ -200,6 +211,7 @@ def run_autofix_create_pr(request: AutofixUpdateRequest):
     )
 
 
+@inject
 def restart_step_with_user_response(
     state: ContinuationState,
     memory: list[Message],
@@ -208,6 +220,7 @@ def restart_step_with_user_response(
     step_to_restart: Step,
     step_class: Type[AutofixCodingStep | RootCauseStep],
     step_request_class: Type[AutofixCodingStepRequest | RootCauseStepRequest],
+    app_config: AppConfig = injected,
 ):
     cur_state = state.get()
     if memory:
@@ -224,7 +237,7 @@ def restart_step_with_user_response(
                     run_id=cur_state.run_id,
                     initial_memory=memory,
                 ),
-                queue=CeleryQueues.DEFAULT,
+                queue=app_config.CELERY_WORKER_QUEUE,
             ).apply_async()
 
 
@@ -333,7 +346,11 @@ def truncate_memory_to_match_insights(memory: list[Message], step: DefaultStep):
     return truncated_memory if truncated_memory else memory
 
 
-def restart_from_point_with_feedback(request: AutofixUpdateRequest):
+@inject
+def restart_from_point_with_feedback(
+    request: AutofixUpdateRequest,
+    app_config: AppConfig = injected,
+):
     if not isinstance(request.payload, AutofixRestartFromPointPayload):
         raise ValueError("Invalid payload type for restart_from_point_with_feedback")
 
@@ -396,7 +413,7 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
                 run_id=state.get().run_id,
                 initial_memory=memory,
             ),
-            queue=CeleryQueues.DEFAULT,
+            queue=app_config.CELERY_WORKER_QUEUE,
         ).apply_async()
     else:
         RootCauseStep.get_signature(
@@ -404,7 +421,7 @@ def restart_from_point_with_feedback(request: AutofixUpdateRequest):
                 run_id=state.get().run_id,
                 initial_memory=memory,
             ),
-            queue=CeleryQueues.DEFAULT,
+            queue=app_config.CELERY_WORKER_QUEUE,
         ).apply_async()
 
 
@@ -485,7 +502,11 @@ def update_code_change(request: AutofixUpdateRequest):
         cur.steps[-1] = last_step
 
 
-def run_autofix_evaluation(request: AutofixEvaluationRequest):
+@inject
+def run_autofix_evaluation(
+    request: AutofixEvaluationRequest,
+    app_config: AppConfig = injected,
+):
     langfuse = Langfuse()
 
     dataset = langfuse.get_dataset(request.dataset_name)
@@ -521,7 +542,7 @@ def run_autofix_evaluation(request: AutofixEvaluationRequest):
                     item_index=i,
                     item_count=len(items),
                 ),
-                queue=CeleryQueues.DEFAULT,
+                queue=app_config.CELERY_WORKER_QUEUE,
             )
 
 

@@ -87,6 +87,8 @@ class AppConfig(BaseModel):
     GRPC_SERVER_ENABLE: ParseBool = False
     HOSTNAME: str = Field(default_factory=gethostname)
 
+    CELERY_WORKER_QUEUE: str = "seer"
+
     # Test utility that disables deployment conditional behavior.
     # Update this to reflect new kinds of conditional behavior by adding
     # more test coverage and locking them in.
@@ -150,6 +152,11 @@ class AppConfig(BaseModel):
                 logger.warning("GITHUB_SENTRY_APP_ID is missing in production!")
             if not self.DEV and not self.GITHUB_SENTRY_PRIVATE_KEY:
                 logger.warning("GITHUB_SENTRY_PRIVATE_KEY is missing in production!")
+
+            if not self.CELERY_WORKER_QUEUE:
+                logger.warning(
+                    'CELERY_WORKER_QUEUE is not set in production! Will default to "seer"'
+                )
 
 
 @configuration_module.provider

@@ -3,7 +3,6 @@ from typing import Any, Optional, Type
 
 import sentry_sdk
 
-from celery_app.config import CeleryQueues
 from seer.automation.pipeline import (
     PipelineChain,
     PipelineStep,
@@ -11,6 +10,8 @@ from seer.automation.pipeline import (
     SerializedSignature,
 )
 from seer.automation.utils import make_done_signal
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 
 class ConditionalStepRequest(PipelineStepTaskRequest):
@@ -87,7 +88,8 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
     def _get_conditional_step_class() -> Type[ParallelizedChainConditionalStep]:
         pass
 
-    def _invoke(self, **kwargs):
+    @inject
+    def _invoke(self, app_config: AppConfig = injected):
         signatures = [self.instantiate_signature(step) for step in self.request.steps]
 
         expected_signals = [
@@ -105,6 +107,6 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
                         expected_signals=expected_signals,
                         on_success=self.request.on_success,
                     ),
-                    queue=CeleryQueues.DEFAULT,
+                    queue=app_config.CELERY_WORKER_QUEUE,
                 ),
             )

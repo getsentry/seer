@@ -77,6 +77,8 @@ def test_celery_app_configuration():
 
         app.finalize()
         celery_app.finalize()
+
+        assert app.conf.task_default_queue == resolve(CeleryConfig)["task_default_queue"]
         assert app.conf.task_queues == resolve(CeleryConfig)["task_queues"]
         assert celery_app.conf.task_queues == app.conf.task_queues
 
