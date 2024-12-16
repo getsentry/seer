@@ -88,8 +88,11 @@ class ParallelizedChainStep(PipelineChain, PipelineStep):
     def _get_conditional_step_class() -> Type[ParallelizedChainConditionalStep]:
         pass
 
+    def _invoke(self, **kwargs):
+        self._send_signatures()
+
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _send_signatures(self, app_config: AppConfig = injected):
         signatures = [self.instantiate_signature(step) for step in self.request.steps]
 
         expected_signals = [
