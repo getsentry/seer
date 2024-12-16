@@ -2,6 +2,7 @@ from seer.anomaly_detection.detectors import (
     anomaly_detectors,
     mp_scorers,
     mp_utils,
+    noise_reducers,
     normalizers,
     smoothers,
     window_size_selectors,
@@ -24,3 +25,5 @@ MPUtils = mp_utils.MPUtils
 FlagSmoother = smoothers.FlagSmoother
 MajorityVoteBatchFlagSmoother = smoothers.MajorityVoteBatchFlagSmoother
 MajorityVoteStreamFlagSmoother = smoothers.MajorityVoteStreamFlagSmoother
+NoiseReducer = noise_reducers.NoiseReducer
+VarianceNoiseReducer = noise_reducers.VarianceNoiseReducer

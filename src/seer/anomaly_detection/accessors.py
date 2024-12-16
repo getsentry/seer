@@ -1,12 +1,15 @@
 import abc
 import logging
+import os
 import random
+import sys
 from datetime import datetime, timedelta
 from typing import List, Optional
 
 import numpy as np
 import sentry_sdk
-import stumpy  # type: ignore # mypy throws "missing library stubs"
+
+# import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
 
@@ -23,6 +26,10 @@ from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeS
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
+
+stumpy_path_src = "/Users/aayushseth/code/stumpy-noise-reduction"
+sys.path.insert(0, os.path.abspath(stumpy_path_src))
+import stumpy  # type: ignore # mypy throws "missing library stubs"
 
 logger = logging.getLogger(__name__)
 

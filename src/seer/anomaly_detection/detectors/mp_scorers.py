@@ -190,13 +190,13 @@ class MPIQRScorer(MPScorer):
         {
             # High sensitivity = more anomalies + higher false positives
             # Data point outside of bottom 70% of the MP distances considered anomalous
-            "high": [0.3, 0.7],
+            "high": [0.35, 0.65],
             # Medium sensitivity = lesser anomalies + lesser false positives
             # Data point outside of bottom 80% of the MP distances considered anomalous
-            "medium": [0.2, 0.8],
+            "medium": [0.25, 0.75],
             # Low sensitivity = least anomalies + least false positives
             # Data point outside of bottom 90% of the MP distances considered anomalous
-            "low": [0.1, 0.9],
+            "low": [0.15, 0.85],
         },
         description="Lower and upper bounds for high sensitivity",
     )

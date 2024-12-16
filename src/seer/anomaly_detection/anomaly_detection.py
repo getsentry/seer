@@ -1,9 +1,12 @@
 import logging
+import os
+import sys
 from typing import List, Tuple
 
 import numpy as np
 import sentry_sdk
-import stumpy  # type: ignore # mypy throws "missing library stubs"
+
+# import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
@@ -28,6 +31,10 @@ from seer.db import TaskStatus
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError, ServerError
 from seer.tags import AnomalyDetectionModes, AnomalyDetectionTags
+
+stumpy_path_src = "/Users/aayushseth/code/stumpy-noise-reduction"
+sys.path.insert(0, os.path.abspath(stumpy_path_src))
+import stumpy  # type: ignore # mypy throws "missing library stubs"
 
 anomaly_detection_module.enable()
 logger = logging.getLogger(__name__)
