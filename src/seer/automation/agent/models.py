@@ -34,6 +34,7 @@ class Usage(BaseModel):
 class LlmProviderType(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
 
 
 class Message(BaseModel):

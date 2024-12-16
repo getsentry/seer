@@ -6,6 +6,7 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.codebase.code_search import CodeSearcher
@@ -13,6 +14,7 @@ from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.dependency_injection import inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 
 logger = logging.getLogger(__name__)
@@ -271,6 +273,18 @@ class BaseTools:
         if isinstance(self.context, AutofixContext):
             self.context.event_manager.ask_user_question(question)
 
+    @observe(name="Search Google")
+    @ai_track(description="Search Google")
+    @inject
+    def search_google(self, question: str, llm_client: LlmClient = injected):
+        """
+        Searches Google to answer a question.
+        """
+        self.context.event_manager.add_log(f'Googling "{question}"...')
+        return llm_client.generate_text_from_web_search(
+            prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-exp")
+        )
+
     def get_tools(self):
         tools = [
             FunctionTool(
@@ -378,6 +392,19 @@ class BaseTools:
                     },
                 ],
                 required=["pattern"],
+            ),
+            FunctionTool(
+                name="search_google",
+                fn=self.search_google,
+                description="Searches the web with Google and returns the answer to a question.",
+                parameters=[
+                    {
+                        "name": "question",
+                        "type": "string",
+                        "description": "The question you want to answer.",
+                    },
+                ],
+                required=["question"],
             ),
         ]
 

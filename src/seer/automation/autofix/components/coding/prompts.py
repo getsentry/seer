@@ -84,6 +84,7 @@ class CodingPrompts:
             - In your suggested fixes, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
             - You do not need to make changes in test files, someone else will do that.
             {ask_questions_instructions}
+            {search_google_instructions}
             {think_tools_instructions}
             - You also MUST think step-by-step before giving the final answer."""
         ).format(
@@ -118,6 +119,11 @@ class CodingPrompts:
             ),
             ask_questions_instructions=(
                 "- At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis."
+                if has_tools
+                else ""
+            ),
+            search_google_instructions=(
+                "- At any point, please feel free to Google for information that would help you in your analysis, using the tool provided."
                 if has_tools
                 else ""
             ),

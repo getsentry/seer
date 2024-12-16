@@ -80,6 +80,7 @@ If you see a prompt "Reauthentication required. Please insert your security key 
 * Run type checker: `make mypy`
 * Run tests: `make test`
 * Open a shell: `make shell`
+* Update `requirements.txt` based on `requirements-constraints.txt`: `make upgrade-package-versions`
 
 ### Reset Development Environment
 
