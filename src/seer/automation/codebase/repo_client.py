@@ -13,6 +13,7 @@ import sentry_sdk
 from github import (
     Auth,
     Github,
+    GithubObject,
     GithubException,
     GithubIntegration,
     InputGitTreeElement,
@@ -284,7 +285,6 @@ class RepoClient:
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
         return tmp_dir, tmp_repo_dir
-
 
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
@@ -607,8 +607,8 @@ class RepoClient:
             body=comment["body"],
             commit=commit,
             path=comment["path"],
-            line=comment.get("line", None),
-            side=comment.get("side", None),
-            start_line=comment.get("start_line", None),
+            line=comment.get("line", GithubObject.NotSet),
+            side=comment.get("side", GithubObject.NotSet),
+            start_line=comment.get("start_line", GithubObject.NotSet),
         )
         return review_comment.html_url
