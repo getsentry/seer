@@ -502,7 +502,7 @@ def test_construct_message_from_stream_invalid_provider():
 @pytest.mark.vcr()
 def test_gemini_generate_text_from_web_search():
     llm_client = LlmClient()
-    model = GeminiProvider(model_name="gemini-pro")
+    model = GeminiProvider(model_name="gemini-2.0-flash-exp")
 
     response = llm_client.generate_text_from_web_search(
         prompt="What year is it?",
