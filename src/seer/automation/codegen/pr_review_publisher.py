@@ -59,14 +59,15 @@ class PrReviewPublisher:
     ) -> List[GithubPrReviewComment]:
         comments = []
         for comment in pr_review.comments:
-            c = GithubPrReviewComment(
-                commit_id=commit_id,
-                side="RIGHT",
-                path=comment.path,
-                line=comment.line,
-                body=comment.body,
-                start_line=comment.start_line,
+            comments.append(
+                GithubPrReviewComment(
+                    commit_id=commit_id,
+                    side="RIGHT",
+                    path=comment.path,
+                    line=comment.line,
+                    body=comment.body,
+                    start_line=comment.start_line,
+                )
             )
-            comments.append(c)
 
         return comments
