@@ -1,4 +1,4 @@
-from typing import List, Literal, NotRequired, Optional, TypedDict
+from typing import Literal, NotRequired, TypedDict
 from pydantic import BaseModel
 from pydantic_xml import attr
 
