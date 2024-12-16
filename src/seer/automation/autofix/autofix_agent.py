@@ -136,9 +136,10 @@ class AutofixAgent(LlmAgent):
         # log thoughts to the user
         cur = self.context.state.get()
         if (
-            completion.message.content
-            and self.config.interactive
+            completion.message.content  # only if we have something to summarize
+            and self.config.interactive  # only in interactive mode
             and not cur.request.options.disable_interactivity
+            and completion.message.tool_calls  # only if the run is in progress
         ):
             text_before_tag = completion.message.content.split("<")[0]
             text = text_before_tag
@@ -171,7 +172,7 @@ class AutofixAgent(LlmAgent):
     @contextlib.contextmanager
     def manage_run(self):
         self.futures = []
-        self.executor = ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer())
+        self.executor = ThreadPoolExecutor(max_workers=2, initializer=copy_modules_initializer())
         with super().manage_run(), self.executor:
             yield
         for future in self.futures:
