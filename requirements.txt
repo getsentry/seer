@@ -422,7 +422,7 @@ numpy==1.26.1
     #   statsmodels
     #   stumpy
     #   transformers
-onnx==1.16.0
+onnx==1.17.0
     # via -r requirements-constraints.txt
 onnxruntime==1.20.1
     # via chromadb
