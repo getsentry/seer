@@ -21,12 +21,29 @@ pyenv local 3.11
 ```
 3. Install [Docker](https://www.docker.com/get-started). Note that if you want to install Docker from brew instead of Docker Desktop, then you would need to install docker-compose as well.
 4. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) and authenticate.
+
 ### Environment Setup
 
-1. Clone the repository and navigate to the project root
-2. Run `direnv allow` to set up the Python environment
-3. Create a `.env` file based on `.env.example` and set the required values
-4. (Optional) Add `SENTRY_AUTH_TOKEN=<your token>` to your `.env` file
+1. Install [devenv](https://github.com/getsentry/devenv?tab=readme-ov-file#devenv)
+2. Run
+    ```
+    devenv bootstrap
+    ```
+3. Run
+    ```
+    devenv fetch sentry
+    ```
+4. After restarting your shell, run
+    ```
+    devenv fetch getsentry/seer
+    ```
+5. cd to the repo root
+6. Run
+    ```
+    python -m pip install -r requirements-precommit.txt
+    ```
+5. Create a `.env` file based on `.env.example` and set the required values
+6. (Optional) Add `SENTRY_AUTH_TOKEN=<your token>` to your `.env` file
 
 ### Model Artifacts
 
