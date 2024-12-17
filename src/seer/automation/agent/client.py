@@ -7,6 +7,7 @@ from typing import Any, ClassVar, Iterable, Iterator, Type, Union, cast
 import anthropic
 from anthropic import NOT_GIVEN
 from anthropic.types import (
+    CacheControlEphemeralParam,
     MessageParam,
     TextBlockParam,
     ToolParam,
@@ -542,10 +543,22 @@ class AnthropicProvider:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
             message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
+        # Set caching breakpoints for the last message and the 3rd last message
+        if len(message_dicts) > 0 and message_dicts[-1]["content"]:
+            message_dicts[-1]["content"][0]["cache_control"] = CacheControlEphemeralParam(
+                type="ephemeral"
+            )
+        if len(message_dicts) >= 4 and message_dicts[-4]["content"]:
+            message_dicts[-4]["content"][0]["cache_control"] = CacheControlEphemeralParam(
+                type="ephemeral"
+            )
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
         )
+        # set caching breakpoint at end of tools
+        if tool_dicts:
+            tool_dicts[-1]["cache_control"] = CacheControlEphemeralParam(type="ephemeral")
 
         return message_dicts, tool_dicts, system_prompt
 
