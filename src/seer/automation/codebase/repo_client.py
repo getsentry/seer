@@ -280,6 +280,22 @@ class RepoClient:
         if sha is None:
             sha = self.base_commit_sha
         try:
+
+            try:
+                self.repo.get_commit(sha)
+            except GithubException as e:
+                if e.status == 404:
+                    logger.error(
+                        f"Invalid SHA reference: {sha} for repo {self.repo.full_name}",
+                        extra={
+                            "path": path,
+                            "sha": sha,
+                            "repo": self.repo.full_name,
+                        }
+                    )
+                    return None, "utf-8"
+                raise
+
             contents = self.repo.get_contents(path, ref=sha)
 
             if isinstance(contents, list):
@@ -288,8 +304,17 @@ class RepoClient:
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
             return contents.decoded_content.decode(detected_encoding), detected_encoding
         except Exception as e:
-            logger.exception(f"Error getting file contents: {e}")
-
+            logger.exception(
+                f"Error getting file contents: {e}",
+                extra={
+                    "path": path,
+                    "sha": sha,
+                    "repo": self.repo.full_name,
+                    "error": str(e),
+                }
+            )
+            if isinstance(e, GithubException) and e.status == 404:
+                return None, "utf-8"
             return None, "utf-8"
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
