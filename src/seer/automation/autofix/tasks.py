@@ -416,7 +416,11 @@ def restart_from_point_with_feedback(
         ).apply_async()
 
 
-def continue_with_feedback(request: AutofixUpdateRequest):
+@inject
+def continue_with_feedback(
+    request: AutofixUpdateRequest,
+    app_config: AppConfig = injected,
+):
     if not isinstance(request.payload, AutofixContinueWithFeedbackPayload):
         raise ValueError("Invalid payload type for restart_from_point_with_feedback")
 
@@ -447,7 +451,7 @@ def continue_with_feedback(request: AutofixUpdateRequest):
             run_id=state.get().run_id,
             initial_memory=memory,
         ),
-        queue=CeleryQueues.DEFAULT,
+        queue=app_config.CELERY_WORKER_QUEUE,
     ).apply_async()
 
 
