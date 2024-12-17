@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# TODO: Remove debug log level once celery debugging is done
-WORKER_CMD="celery -A src.celery_app.tasks worker --loglevel=info $CELERY_WORKER_OPTIONS"
+# You can set the celery queue name via the CELERY_WORKER_QUEUE environment variable.
+# If not set, the default queue name is "seer".
+QUEUE="seer"
+if [ "$CELERY_WORKER_QUEUE" != "" ]; then
+    QUEUE="$CELERY_WORKER_QUEUE"
+fi
+
+WORKER_CMD="celery -A src.celery_app.tasks worker --loglevel=info -Q $QUEUE $CELERY_WORKER_OPTIONS"
 
 if [ "$CELERY_WORKER_ENABLE" = "true" ]; then
     if [ "$DEV" = "true" ] || [ "$DEV" = "1" ]; then

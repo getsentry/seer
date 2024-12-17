@@ -1,4 +1,3 @@
-from celery_app.config import CeleryQueues
 from seer.automation.codegen.models import (
     CodegenContinuation,
     CodegenPrReviewRequest,
@@ -15,6 +14,8 @@ from seer.automation.codegen.unittest_step import (
     UnittestStepRequest,
 )
 from seer.automation.state import DbState, DbStateRunTypes
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 
 def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[CodegenContinuation]:
@@ -43,7 +44,8 @@ def create_initial_pr_review_run(request: CodegenPrReviewRequest) -> DbState[Cod
     return state
 
 
-def codegen_unittest(request: CodegenUnitTestsRequest):
+@inject
+def codegen_unittest(request: CodegenUnitTestsRequest, app_config: AppConfig = injected):
     state = create_initial_unittest_run(request)
 
     cur_state = state.get()
@@ -57,7 +59,7 @@ def codegen_unittest(request: CodegenUnitTestsRequest):
         pr_id=request.pr_id,
         repo_definition=request.repo,
     )
-    UnittestStep.get_signature(unittest_request, queue=CeleryQueues.DEFAULT).apply_async()
+    UnittestStep.get_signature(unittest_request, queue=app_config.CELERY_WORKER_QUEUE).apply_async()
 
     return CodegenUnitTestsResponse(run_id=cur_state.run_id)
 

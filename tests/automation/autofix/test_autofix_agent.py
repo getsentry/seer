@@ -6,6 +6,7 @@ from johen import generate
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import OpenAiProvider
 from seer.automation.agent.models import Message
+from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
@@ -121,6 +122,20 @@ def test_run_iteration_with_queued_user_messages(
 @pytest.mark.vcr()
 def test_run_iteration_with_insight_sharing(autofix_agent, run_config):
     autofix_agent.config.interactive = True
+    autofix_agent.memory = [
+        Message(
+            role="user",
+            content="My code has a capitalization error, first write an explanation of the error and then use the tools provided to fix it: ```python\nprint('hello World!')\n```",
+        )
+    ]
+    autofix_agent.tools = [
+        FunctionTool(
+            name="fix_capitalization",
+            description="Fix the capitalization of the code",
+            parameters=[],
+            fn=lambda: None,
+        )
+    ]
     with autofix_agent.context.state.update() as state:
         state.request.options.disable_interactivity = False
         state.steps = [
