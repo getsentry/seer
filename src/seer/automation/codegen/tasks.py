@@ -69,7 +69,8 @@ def get_unittest_state(request: CodegenUnitTestsStateRequest):
     return state.get()
 
 
-def codegen_pr_review(request: CodegenPrReviewRequest):
+@inject
+def codegen_pr_review(request: CodegenPrReviewRequest, app_config: AppConfig = injected):
     state = create_initial_pr_review_run(request)
 
     cur_state = state.get()
@@ -80,6 +81,8 @@ def codegen_pr_review(request: CodegenPrReviewRequest):
         repo_definition=request.repo,
     )
 
-    PrReviewStep.get_signature(pr_review_request, queue=CeleryQueues.DEFAULT).apply_async()
+    PrReviewStep.get_signature(
+        pr_review_request, queue=app_config.CELERY_WORKER_QUEUE
+    ).apply_async()
 
     return CodegenPrReviewResponse(run_id=cur_state.run_id)
