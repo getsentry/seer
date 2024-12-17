@@ -13,6 +13,12 @@ from anthropic.types import (
     ToolResultBlockParam,
     ToolUseBlockParam,
 )
+from google import genai  # type: ignore[attr-defined]
+from google.genai.types import (  # type: ignore[import-untyped]
+    GenerateContentConfig,
+    GoogleSearch,
+    Tool,
+)
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
@@ -634,7 +640,46 @@ class AnthropicProvider:
         return message
 
 
-LlmProvider = Union[OpenAiProvider, AnthropicProvider]
+@dataclass
+class GeminiProvider:
+    model_name: str
+    provider_name = LlmProviderType.GEMINI
+    defaults: LlmProviderDefaults | None = None
+
+    default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
+        LlmModelDefaultConfig(
+            match=r".*",
+            defaults=LlmProviderDefaults(temperature=0.0),
+        ),
+    ]
+
+    def get_client(self) -> genai.Client:
+        return genai.Client(
+            vertexai=True,
+            location="us-central1",
+        )
+
+    @observe(as_type="generation", name="Gemini Generation with Grounding")
+    def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
+        client = self.get_client()
+        google_search_tool = Tool(google_search=GoogleSearch())
+
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=GenerateContentConfig(
+                tools=[google_search_tool],
+                response_modalities=["TEXT"],
+                temperature=temperature or 0.0,
+            ),
+        )
+        answer = ""
+        for each in response.candidates[0].content.parts:
+            answer += each.text
+        return answer
+
+
+LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 
 class LlmClient:
@@ -791,6 +836,34 @@ class LlmClient:
         except Exception as e:
             logger.exception(
                 f"Text stream generation failed with provider {model.provider_name}: {e}"
+            )
+            raise e
+
+    @observe(name="Generate Text from Web Search")
+    def generate_text_from_web_search(
+        self,
+        *,
+        prompt: str,
+        model: LlmProvider,
+        temperature: float | None = None,
+        run_name: str | None = None,
+    ) -> str:
+        try:
+            if run_name:
+                langfuse_context.update_current_observation(name=run_name + " - Generate Text")
+                langfuse_context.flush()
+
+            defaults = model.defaults
+            default_temperature = defaults.temperature if defaults else None
+
+            if model.provider_name == LlmProviderType.GEMINI:
+                model = cast(GeminiProvider, model)
+                return model.search_the_web(prompt, temperature or default_temperature)
+            else:
+                raise ValueError(f"Invalid provider: {model.provider_name}")
+        except Exception as e:
+            logger.exception(
+                f"Text generation from web failed with provider {model.provider_name}: {e}"
             )
             raise e
 

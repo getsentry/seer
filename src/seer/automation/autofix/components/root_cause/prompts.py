@@ -28,6 +28,10 @@ class RootCauseAnalysisPrompts:
                 if has_tools
                 else ""
             }
+            {"- At any point, please feel free to Google for information that would help you in your analysis, using the tool provided."
+                if has_tools
+                else ""
+            }
             - If you are not able to find any potential root causes, return only <NO_ROOT_CAUSES> followed by a specific 10-20 word reason for why.
             {"- If multiple searches turn up no viable results, you should conclude the session."
                 if has_tools

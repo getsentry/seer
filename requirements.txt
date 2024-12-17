@@ -4,14 +4,14 @@
 #
 #    pip-compile --output-file=requirements.txt --strip-extras requirements-constraints.txt
 #
-aiohappyeyeballs==2.4.3
+aiohappyeyeballs==2.4.4
     # via aiohttp
-aiohttp==3.11.7
+aiohttp==3.11.10
     # via
     #   -r requirements-constraints.txt
     #   datasets
     #   fsspec
-aiosignal==1.3.1
+aiosignal==1.3.2
     # via aiohttp
 alembic==1.14.0
     # via
@@ -23,7 +23,7 @@ annotated-types==0.7.0
     # via pydantic
 anthropic==0.34.2
     # via -r requirements-constraints.txt
-anyio==4.6.2.post1
+anyio==4.7.0
     # via
     #   anthropic
     #   httpx
@@ -33,7 +33,7 @@ anyio==4.6.2.post1
     #   watchfiles
 asgiref==3.8.1
     # via openapi-core
-attrs==24.2.0
+attrs==24.3.0
     # via
     #   aiohttp
     #   jsonschema
@@ -56,7 +56,7 @@ celery==5.3.6
     # via -r requirements-constraints.txt
 celery-stubs==0.1.3
     # via -r requirements-constraints.txt
-certifi==2024.8.30
+certifi==2024.12.14
     # via
     #   -r requirements-constraints.txt
     #   httpcore
@@ -96,7 +96,7 @@ click-plugins==1.1.1
     # via celery
 click-repl==0.3.0
     # via celery
-cmdstanpy==1.2.4
+cmdstanpy==1.2.5
     # via prophet
 coloredlogs==15.0.1
     # via
@@ -110,7 +110,7 @@ convertdate==2.4.0
     # via -r requirements-constraints.txt
 covdefaults==2.3.0
     # via -r requirements-constraints.txt
-coverage==7.6.8
+coverage==7.6.9
     # via
     #   covdefaults
     #   pytest-cov
@@ -124,7 +124,7 @@ cycler==0.11.0
     #   matplotlib
 cython==3.0.2
     # via -r requirements-constraints.txt
-datasets==3.1.0
+datasets==3.2.0
     # via optimum
 deprecated==1.2.15
     # via pygithub
@@ -142,7 +142,7 @@ ephem==4.1.4
     # via
     #   -r requirements-constraints.txt
     #   lunarcalendar
-fastapi==0.115.5
+fastapi==0.115.6
     # via chromadb
 filelock==3.12.2
     # via
@@ -181,7 +181,7 @@ fsspec==2023.6.0
     #   datasets
     #   huggingface-hub
     #   torch
-google-api-core==2.23.0
+google-api-core==2.24.0
     # via
     #   google-cloud-aiplatform
     #   google-cloud-bigquery
@@ -189,7 +189,7 @@ google-api-core==2.23.0
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-auth==2.36.0
+google-auth==2.37.0
     # via
     #   anthropic
     #   google-api-core
@@ -199,7 +199,8 @@ google-auth==2.36.0
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-cloud-aiplatform==1.73.0
+    #   google-genai
+google-cloud-aiplatform==1.74.0
     # via -r requirements-constraints.txt
 google-cloud-bigquery==3.27.0
     # via google-cloud-aiplatform
@@ -207,11 +208,11 @@ google-cloud-core==2.4.1
     # via
     #   google-cloud-bigquery
     #   google-cloud-storage
-google-cloud-resource-manager==1.13.1
+google-cloud-resource-manager==1.14.0
     # via google-cloud-aiplatform
-google-cloud-secret-manager==2.21.1
+google-cloud-secret-manager==2.22.0
     # via -r requirements-constraints.txt
-google-cloud-storage==2.18.2
+google-cloud-storage==2.19.0
     # via
     #   -r requirements-constraints.txt
     #   google-cloud-aiplatform
@@ -219,6 +220,8 @@ google-crc32c==1.6.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
+google-genai==0.2.2
+    # via -r requirements-constraints.txt
 google-resumable-media==2.7.2
     # via
     #   google-cloud-bigquery
@@ -234,7 +237,7 @@ grpc-google-iam-v1==0.13.1
     #   google-cloud-secret-manager
 grpc-stubs==1.53.0.5
     # via sentry-protos
-grpcio==1.68.0
+grpcio==1.68.1
     # via
     #   chromadb
     #   google-api-core
@@ -245,11 +248,11 @@ grpcio==1.68.0
     #   grpcio-reflection
     #   grpcio-status
     #   sentry-protos
-grpcio-health-checking==1.68.0
+grpcio-health-checking==1.68.1
     # via -r requirements-constraints.txt
-grpcio-reflection==1.68.0
+grpcio-reflection==1.68.1
     # via -r requirements-constraints.txt
-grpcio-status==1.68.0
+grpcio-status==1.68.1
     # via google-api-core
 gunicorn==22.0.0
     # via -r requirements-constraints.txt
@@ -267,10 +270,11 @@ httptools==0.6.4
     # via uvicorn
 httpx==0.27.2
     # via
+    #   -r requirements-constraints.txt
     #   anthropic
     #   langfuse
     #   openai
-huggingface-hub==0.26.2
+huggingface-hub==0.27.0
     # via
     #   datasets
     #   optimum
@@ -305,7 +309,7 @@ jinja2==3.1.4
     #   -r requirements-constraints.txt
     #   flask
     #   torch
-jiter==0.7.1
+jiter==0.8.2
     # via
     #   anthropic
     #   openai
@@ -343,7 +347,7 @@ llvmlite==0.43.0
     # via numba
 lunarcalendar==0.0.9
     # via -r requirements-constraints.txt
-mako==1.3.6
+mako==1.3.8
     # via alembic
 markdown-it-py==3.0.0
     # via rich
@@ -354,7 +358,7 @@ markupsafe==2.1.3
     #   mako
     #   sentry-sdk
     #   werkzeug
-matplotlib==3.9.2
+matplotlib==3.10.0
     # via
     #   prophet
     #   seaborn
@@ -422,7 +426,7 @@ onnx==1.16.0
     # via -r requirements-constraints.txt
 onnxruntime==1.20.1
     # via chromadb
-openai==1.55.0
+openai==1.57.4
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
@@ -477,17 +481,18 @@ pgvector==0.2.4
 pillow==10.3.0
     # via
     #   -r requirements-constraints.txt
+    #   google-genai
     #   matplotlib
     #   sentence-transformers
 pip-tools==7.4.1
     # via -r requirements-constraints.txt
 pluggy==1.5.0
     # via pytest
-posthog==3.7.2
+posthog==3.7.4
     # via chromadb
 prompt-toolkit==3.0.48
     # via click-repl
-propcache==0.2.0
+propcache==0.2.1
     # via
     #   aiohttp
     #   yarl
@@ -500,7 +505,7 @@ proto-plus==1.25.0
     #   google-cloud-aiplatform
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
-protobuf==5.28.3
+protobuf==5.29.1
     # via
     #   -r requirements-constraints.txt
     #   google-api-core
@@ -521,7 +526,7 @@ psycopg==3.1.18
     # via -r requirements-constraints.txt
 pulsar-client==3.5.0
     # via chromadb
-pyarrow==18.0.0
+pyarrow==18.1.0
     # via datasets
 pyasn1==0.6.1
     # via
@@ -538,6 +543,7 @@ pydantic==2.6.4
     #   chromadb
     #   fastapi
     #   google-cloud-aiplatform
+    #   google-genai
     #   langfuse
     #   openai
     #   pydantic-xml
@@ -545,13 +551,13 @@ pydantic-core==2.16.3
     # via
     #   pydantic
     #   pydantic-xml
-pydantic-xml==2.14.0
+pydantic-xml==2.14.1
     # via -r requirements-constraints.txt
 pygithub==2.1.1
     # via -r requirements-constraints.txt
 pygments==2.18.0
     # via rich
-pyjwt==2.10.0
+pyjwt==2.10.1
     # via pygithub
 pymeeus==0.5.12
     # via
@@ -635,6 +641,7 @@ requests==2.32.2
     #   google-api-core
     #   google-cloud-bigquery
     #   google-cloud-storage
+    #   google-genai
     #   huggingface-hub
     #   jsonschema-path
     #   jsonschema-spec
@@ -645,7 +652,7 @@ rfc3339-validator==0.1.4
     # via openapi-schema-validator
 rich==13.9.4
     # via typer
-rpds-py==0.21.0
+rpds-py==0.22.3
     # via
     #   jsonschema
     #   referencing
@@ -672,7 +679,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.37
+sentry-protos==0.1.40
     # via -r requirements-constraints.txt
 sentry-sdk==2.18.0
     # via -r requirements-constraints.txt
@@ -754,11 +761,11 @@ tree-sitter==0.21.3
     #   tree-sitter-languages
 tree-sitter-languages==1.10.2
     # via -r requirements-constraints.txt
-typer==0.13.1
+typer==0.15.1
     # via chromadb
 types-colorama==0.4.15.12
     # via -r requirements-constraints.txt
-types-flask-migrate==4.0.0.20240311
+types-flask-migrate==4.0.0.20241204
     # via -r requirements-constraints.txt
 types-jsonschema==4.20.0.20240105
     # via -r requirements-constraints.txt
@@ -789,6 +796,7 @@ typing-extensions==4.12.2
     #   -r requirements-constraints.txt
     #   alembic
     #   anthropic
+    #   anyio
     #   celery-stubs
     #   chromadb
     #   fastapi
@@ -817,7 +825,7 @@ urllib3==1.26.19
     #   requests
     #   sentry-sdk
     #   vcrpy
-uvicorn==0.32.1
+uvicorn==0.34.0
     # via chromadb
 uvloop==0.21.0
     # via uvicorn
@@ -832,12 +840,14 @@ vine==5.1.0
     #   kombu
 watchdog==6.0.0
     # via -r requirements-constraints.txt
-watchfiles==1.0.0
+watchfiles==1.0.3
     # via uvicorn
 wcwidth==0.2.13
     # via prompt-toolkit
 websockets==14.1
-    # via uvicorn
+    # via
+    #   google-genai
+    #   uvicorn
 werkzeug==3.0.3
     # via
     #   -r requirements-constraints.txt
@@ -852,7 +862,7 @@ wrapt==1.17.0
     #   vcrpy
 xxhash==3.5.0
     # via datasets
-yarl==1.18.0
+yarl==1.18.3
     # via
     #   aiohttp
     #   vcrpy

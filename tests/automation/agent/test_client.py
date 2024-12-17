@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from seer.automation.agent.client import (
     AnthropicProvider,
+    GeminiProvider,
     LlmClient,
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
@@ -496,3 +497,17 @@ def test_construct_message_from_stream_invalid_provider():
             tool_calls=[],
             model=model,
         )
+
+
+@pytest.mark.vcr()
+def test_gemini_generate_text_from_web_search():
+    llm_client = LlmClient()
+    model = GeminiProvider(model_name="gemini-2.0-flash-exp")
+
+    response = llm_client.generate_text_from_web_search(
+        prompt="What year is it?",
+        model=model,
+    )
+
+    assert isinstance(response, str)
+    assert "2024" in response
