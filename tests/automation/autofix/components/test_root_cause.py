@@ -17,6 +17,7 @@ from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
     RootCauseAnalysisItemPrompt,
     RootCauseAnalysisRelevantContext,
+    RootCauseAnalysisItem,
     RootCauseAnalysisRequest,
     RootCauseRelevantCodeSnippet,
     RootCauseRelevantContext,
@@ -329,6 +330,56 @@ class TestRootCauseComponent:
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
 
+    def test_root_cause_analysis_item_validation(self):
+        # Test that model validates without unit_test field
+        item = RootCauseAnalysisItem(
+            id=0,
+            title="Test Title",
+            description="Test Description",
+            code_context=None
+        )
+        assert item.model_dump() == {
+            "id": 0,
+            "title": "Test Title",
+            "description": "Test Description",
+            "code_context": None,
+            "unit_test": None,
+            "reproduction": None
+        }
+
+        # Test that prompt to_model() works without optional fields
+        prompt = RootCauseAnalysisItemPrompt(
+            title="Test Title",
+            description="Test Description",
+            relevant_code=None
+        )
+        model = prompt.to_model()
+        assert model.unit_test is None
+        assert model.reproduction is None
+
+        # Test with all optional fields present
+        snippet = RootCauseRelevantCodeSnippet(
+            file_path="test.py",
+            snippet="def test():\n    pass"
+        )
+        context = RootCauseRelevantContext(
+            id=0,
+            title="Test Context",
+            description="Test Description",
+            snippet=snippet
+        )
+        item = RootCauseAnalysisItem(
+            id=0,
+            title="Test Title",
+            description="Test Description",
+            code_context=[context],
+            unit_test=None,
+            reproduction=None
+        )
+        assert item.model_dump()["code_context"] is not None
+        assert item.model_dump()["unit_test"] is None
+        assert item.model_dump()["reproduction"] is None
+
     def test_root_cause_line_numbers_no_match(self, component, mock_agent):
         mock_agent.return_value.run.side_effect = [
             "Some root cause analysis",
@@ -377,3 +428,53 @@ class TestRootCauseComponent:
         # Verify that the output is still generated but without line numbers
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
+
+    def test_root_cause_analysis_item_validation(self):
+        # Test that model validates without unit_test field
+        item = RootCauseAnalysisItem(
+            id=0,
+            title="Test Title",
+            description="Test Description",
+            code_context=None
+        )
+        assert item.model_dump() == {
+            "id": 0,
+            "title": "Test Title",
+            "description": "Test Description",
+            "code_context": None,
+            "unit_test": None,
+            "reproduction": None
+        }
+
+        # Test that prompt to_model() works without optional fields
+        prompt = RootCauseAnalysisItemPrompt(
+            title="Test Title",
+            description="Test Description",
+            relevant_code=None
+        )
+        model = prompt.to_model()
+        assert model.unit_test is None
+        assert model.reproduction is None
+
+        # Test with all optional fields present
+        snippet = RootCauseRelevantCodeSnippet(
+            file_path="test.py",
+            snippet="def test():\n    pass"
+        )
+        context = RootCauseRelevantContext(
+            id=0,
+            title="Test Context",
+            description="Test Description",
+            snippet=snippet
+        )
+        item = RootCauseAnalysisItem(
+            id=0,
+            title="Test Title",
+            description="Test Description",
+            code_context=[context],
+            unit_test=None,
+            reproduction=None
+        )
+        assert item.model_dump()["code_context"] is not None
+        assert item.model_dump()["unit_test"] is None
+        assert item.model_dump()["reproduction"] is None
