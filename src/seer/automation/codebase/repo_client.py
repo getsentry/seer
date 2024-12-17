@@ -5,15 +5,13 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import List, Literal, Optional
-from typing_extensions import TypedDict
+from typing import Literal
 
 import requests
 import sentry_sdk
 from github import (
     Auth,
     Github,
-    GithubObject,
     GithubException,
     GithubIntegration,
     InputGitTreeElement,
@@ -24,7 +22,6 @@ from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
-from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
@@ -105,7 +102,6 @@ class RepoClientType(str, Enum):
     READ = "read"
     WRITE = "write"
     CODECOV_UNIT_TEST = "codecov_unit_test"
-    CODECOV_PR_REVIEW = "codecov_pr_review"
 
 
 class RepoClient:
@@ -185,20 +181,12 @@ class RepoClient:
 
         return False
 
-    @staticmethod
-    def _extract_id_from_pr_url(pr_url: str):
-        """
-        Extracts the repository path and PR/issue ID from the provided URL.
-        """
-        pr_id = int(pr_url.split("/")[-1])
-        return pr_id
-
     @classmethod
     @functools.cache
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
-        elif type == RepoClientType.CODECOV_UNIT_TEST or type == RepoClientType.CODECOV_PR_REVIEW:
+        elif type == RepoClientType.CODECOV_UNIT_TEST:
             return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
@@ -285,6 +273,7 @@ class RepoClient:
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
         return tmp_dir, tmp_repo_dir
+
 
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
@@ -580,35 +569,3 @@ class RepoClient:
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
         return response.json()["html_url"]
-
-    def post_issue_comment(self, pr_url: str, comment: str):
-        """
-        Create an issue comment on a GitHub issue (all pull requests are issues).
-        This can be used to create an overall PR comment instead of associated with a specific line.
-        See https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
-        Note that expected input is pr_url NOT pr_html_url
-        """
-        pr_id = self._extract_id_from_pr_url(pr_url)
-        issue = self.repo.get_issue(number=pr_id)
-        comment_obj = issue.create_comment(body=comment)
-        return comment_obj.html_url
-
-    def post_pr_review_comment(self, pr_url: str, comment: GithubPrReviewComment):
-        """
-        Create a review comment on a GitHub pull request.
-        See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
-        Note that expected input is pr_url NOT pr_html_url
-        """
-        pr_id = self._extract_id_from_pr_url(pr_url)
-        pr = self.repo.get_pull(number=pr_id)
-        commit = self.repo.get_commit(comment["commit_id"])
-
-        review_comment = pr.create_review_comment(
-            body=comment["body"],
-            commit=commit,
-            path=comment["path"],
-            line=comment.get("line", GithubObject.NotSet),
-            side=comment.get("side", GithubObject.NotSet),
-            start_line=comment.get("start_line", GithubObject.NotSet),
-        )
-        return review_comment.html_url
