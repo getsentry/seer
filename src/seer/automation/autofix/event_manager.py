@@ -1,8 +1,10 @@
 import dataclasses
 import logging
 import time
+from typing import cast
 
 from seer.automation.autofix.components.coding.models import CodingOutput
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -54,14 +56,7 @@ class AutofixEventManager:
         return ChangesStep(
             key="changes",
             title="Code Changes",
-            changes=[],
         )
-
-    def migrate_step_keys(self):
-        # TODO: Remove this we no longer need the backwards compatibility.
-        with self.state.update() as cur:
-            for step in cur.steps:
-                step.ensure_uuid_id()
 
     def restart_step(self, step: Step):
         with self.state.update() as cur:
@@ -132,28 +127,37 @@ class AutofixEventManager:
 
     def send_coding_start(self):
         with self.state.update() as cur:
-            plan_step = cur.find_step(key=self.plan_step.key)
-            if not plan_step or plan_step.status != AutofixStatus.PROCESSING:
-                plan_step = cur.add_step(self.plan_step)
+            latest_planning_step = cur.find_step(key=self.plan_step.key)
+            if (
+                not latest_planning_step
+                or latest_planning_step.status != AutofixStatus.PROCESSING
+                or latest_planning_step.id != cur.steps[-1].id
+            ):
+                latest_planning_step = cur.add_step(self.plan_step)
 
-            plan_step.status = AutofixStatus.PROCESSING
+            latest_planning_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
 
     def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
-            plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+            latest_planning_step = cur.find_or_add(self.plan_step)
+            latest_planning_step.status = (
+                AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+            )
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
-    def send_coding_complete(self, codebase_changes: list[CodebaseChange]):
+    def send_coding_complete(self, codebase_changes: dict[str, CodebaseChange]):
         with self.state.update() as cur:
             cur.mark_running_steps_completed()
 
+            latest_planning_step = cur.find_or_add(self.plan_step)
+            latest_planning_step.status = AutofixStatus.COMPLETED
+
             changes_step = cur.find_or_add(self.changes_step)
             changes_step.status = AutofixStatus.COMPLETED
-            changes_step.changes = codebase_changes
+            changes_step.codebase_changes = codebase_changes
 
             cur.status = AutofixStatus.COMPLETED
 
@@ -161,29 +165,6 @@ class AutofixEventManager:
         with self.state.update() as cur:
             if cur.steps:
                 step = cur.steps[-1]
-
-                # If the current step is the planning step, and an execution step is running, we log it there instead.
-                if step.id == self.plan_step.id and step.progress:
-                    # select the first execution step that is processing
-                    execution_step = next(
-                        (
-                            step
-                            for step in step.progress
-                            if isinstance(step, DefaultStep)
-                            and step.status == AutofixStatus.PROCESSING
-                        ),
-                        None,
-                    )
-
-                    if execution_step:
-                        execution_step.progress.append(
-                            ProgressItem(
-                                message=message,
-                                type=ProgressType.INFO,
-                            )
-                        )
-                        return
-
                 step.progress.append(
                     ProgressItem(
                         message=message,
@@ -203,6 +184,25 @@ class AutofixEventManager:
             )
 
             cur.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
+
+    def add_user_message(self, message: str, memory_index: int):
+        with self.state.update() as cur:
+            last_step = cur.steps[-1]
+            if not isinstance(last_step, DefaultStep):
+                last_step = cur.add_step(self.plan_step)
+
+            last_step = cast(DefaultStep, last_step)
+
+            last_step.insights.append(
+                InsightSharingOutput(
+                    insight=message,
+                    justification="USER",
+                    codebase_context=[],
+                    stacktrace_context=[],
+                    breadcrumb_context=[],
+                    generated_at_memory_index=memory_index,
+                )
+            )
 
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True
