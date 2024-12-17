@@ -169,3 +169,12 @@ VCRs are a way to record and replay HTTP requests.  They are useful for recordin
 To use VCRs, add the `@pytest.mark.vcr()` decorator to your test.
 
 To record new VCRs, delete the existing cassettes and run the test.  Subsequent test runs will use the cassette instead of making requests.
+
+
+# Production
+
+## Celery Worker Queue
+
+You can set the queue that the celery worker listens on via the `CELERY_WORKER_QUEUE` environment variable.
+
+If not set, the default queue name is `"seer"`.

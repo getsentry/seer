@@ -1,4 +1,3 @@
-from enum import StrEnum
 from typing import Any
 
 from seer.bootup import module
@@ -10,11 +9,6 @@ class CeleryConfig(dict[str, Any]):
     pass
 
 
-class CeleryQueues(StrEnum):
-    DEFAULT = "seer"
-    CUDA = "seer-cuda"
-
-
 @module.provider
 def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
     return CeleryConfig(
@@ -23,11 +17,11 @@ def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
         result_serializer="json",
         accept_content=["json"],
         enable_utc=True,
-        task_default_queue=CeleryQueues.DEFAULT,
+        task_default_queue=app_config.CELERY_WORKER_QUEUE,
         task_queues={
-            CeleryQueues.DEFAULT: {
-                "exchange": CeleryQueues.DEFAULT,
-                "routing_key": CeleryQueues.DEFAULT,
+            app_config.CELERY_WORKER_QUEUE: {
+                "exchange": app_config.CELERY_WORKER_QUEUE,
+                "routing_key": app_config.CELERY_WORKER_QUEUE,
             }
         },
         result_backend="rpc://",

@@ -4,7 +4,6 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
-from celery_app.config import CeleryQueues
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.coding.component import CodingComponent
 from seer.automation.autofix.components.coding.models import CodingRequest
@@ -21,6 +20,8 @@ from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.utils import make_kill_signal
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 
 class AutofixCodingStepRequest(PipelineStepTaskRequest):
@@ -54,7 +55,8 @@ class AutofixCodingStep(AutofixPipelineStep):
 
     @observe(name="Autofix - Plan+Code Step")
     @ai_track(description="Autofix - Plan+Code Step")
-    def _invoke(self, **kwargs):
+    @inject
+    def _invoke(self, app_config: AppConfig = injected):
         self.context.event_manager.clear_file_changes()
 
         self.logger.info("Executing Autofix - Plan+Code Step")
@@ -107,5 +109,5 @@ class AutofixCodingStep(AutofixPipelineStep):
                     pr_to_comment_on=pr_to_comment_on,
                 ),
             ),
-            queue=CeleryQueues.DEFAULT,
+            queue=app_config.CELERY_WORKER_QUEUE,
         )
