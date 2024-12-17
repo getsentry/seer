@@ -1,12 +1,10 @@
 import threading
 import time
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
-from seer.automation.state import DbStateRunTypes
 from seer.automation.utils import make_kill_signal
 
 
@@ -20,7 +18,7 @@ class ConcreteAutofixPipelineStep(AutofixPipelineStep):
         return MagicMock()
 
     @staticmethod
-    def _instantiate_context(request, type: Optional["DbStateRunTypes"] = None):
+    def _instantiate_context(request):
         return MagicMock()
 
     def _invoke(self, **kwargs):
@@ -62,10 +60,10 @@ class TestAutofixPipelineStep:
             def get_task(cls):
                 return MagicMock()
 
-            def _instantiate_request(self, request, type: Optional["DbStateRunTypes"] = None):
+            def _instantiate_request(self, request):
                 return MagicMock(**request)
 
-            def _instantiate_context(self, request, type: Optional["DbStateRunTypes"] = None):
+            def _instantiate_context(self, request):
                 return MagicMock()
 
             def _invoke(self, **kwargs):

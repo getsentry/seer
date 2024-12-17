@@ -4,7 +4,6 @@ import pytest
 from github import UnknownObjectException
 from pydantic import ValidationError
 
-from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
 
@@ -115,7 +114,8 @@ class TestRepoClient:
         mock_content = MagicMock()
         mock_content.decoded_content = b"test content"
         # this is a list of contents, so the content returned should be None
-        mock_github.get_repo.return_value.get_contents.return_value = [mock_content, mock_content]
+        mock_github.get_repo.return_value.get_contents\
+            .return_value = [mock_content, mock_content]
 
         content, encoding = repo_client.get_file_content("test_file.py")
 
@@ -499,54 +499,6 @@ class TestRepoClient:
     def test_get_one_file_autofix_change_invalid_input(self, repo_client, patch):
         with pytest.raises(ValueError):
             repo_client.process_one_file_for_git_commit(branch_ref="main", patch=patch)
-
-    def test_post_issue_comment(self, repo_client, mock_github):
-        pr_url = "https://github.com/repos/sentry/sentry/pulls/12345"
-        expected_comment = "No changes requiring review at this time."
-
-        mock_issue = MagicMock()
-        mock_issue.create_comment.return_value.html_url = (
-            "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-        )
-        repo_client.repo.get_issue.return_value = mock_issue
-
-        result = repo_client.post_issue_comment(pr_url, expected_comment)
-
-        mock_issue.create_comment.assert_called_once_with(body=expected_comment)
-        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-
-    def test_post_pr_review_comment(self, repo_client, mock_github):
-        pr_url = "https://github.com/repos/sentry/sentry/pulls/12345"
-        comment = {
-            "path": "file.py",
-            "line": 10,
-            "body": "Please fix this",
-            "start_line": None,
-            "commit_id": "commitsha123",
-        }
-
-        # Mock the pull request and its create_review_comment method
-        mock_pull = MagicMock()
-        mock_commit = MagicMock()
-        mock_commit.sha = comment["commit_id"]
-        repo_client.repo.get_pull.return_value = mock_pull
-        repo_client.repo.get_commit.return_value = mock_commit
-        mock_pull.create_review_comment.return_value.html_url = (
-            "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-        )
-
-        # Call the method under test
-        result = repo_client.post_pr_review_comment(pr_url, comment)
-
-        mock_pull.create_review_comment.assert_called_once_with(
-            body=comment["body"],
-            commit=mock_commit,
-            path=comment["path"],
-            line=comment.get("line", ANY),
-            side=comment.get("side", ANY),
-            start_line=comment.get("start_line", ANY),
-        )
-        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
 
 
 class TestRepoClientIndexFileSet:

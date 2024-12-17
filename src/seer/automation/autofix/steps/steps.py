@@ -15,7 +15,6 @@ from seer.automation.pipeline import (
     PipelineStep,
     PipelineStepTaskRequest,
 )
-from seer.automation.state import DbStateRunTypes
 from seer.automation.steps import (
     ParallelizedChainConditionalStep,
     ParallelizedChainStep,
@@ -46,9 +45,7 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
         )
 
     @staticmethod
-    def _instantiate_context(
-        request: PipelineStepTaskRequest, _: DbStateRunTypes | None = None
-    ) -> PipelineContext:
+    def _instantiate_context(request: PipelineStepTaskRequest) -> PipelineContext:
         return AutofixContext.from_run_id(request.run_id)
 
     def _invoke(self, **kwargs: Any) -> Any:

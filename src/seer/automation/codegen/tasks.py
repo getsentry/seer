@@ -1,18 +1,13 @@
 from seer.automation.codegen.models import (
     CodegenContinuation,
     CodegenPrReviewRequest,
-    CodegenPrReviewResponse,
     CodegenStatus,
     CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
 )
-from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
 from seer.automation.codegen.state import CodegenContinuationState
-from seer.automation.codegen.unittest_step import (
-    UnittestStep,
-    UnittestStepRequest,
-)
+from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.state import DbState, DbStateRunTypes
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -21,19 +16,6 @@ from seer.dependency_injection import inject, injected
 def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.UNIT_TEST
-    )
-
-    with state.update() as cur:
-        cur.status = CodegenStatus.PENDING
-        cur.signals = []
-        cur.mark_triggered()
-
-    return state
-
-
-def create_initial_pr_review_run(request: CodegenPrReviewRequest) -> DbState[CodegenContinuation]:
-    state = CodegenContinuationState.new(
-        CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_REVIEW
     )
 
     with state.update() as cur:
@@ -69,20 +51,5 @@ def get_unittest_state(request: CodegenUnitTestsStateRequest):
     return state.get()
 
 
-@inject
-def codegen_pr_review(request: CodegenPrReviewRequest, app_config: AppConfig = injected):
-    state = create_initial_pr_review_run(request)
-
-    cur_state = state.get()
-
-    pr_review_request = PrReviewStepRequest(
-        run_id=cur_state.run_id,
-        pr_id=request.pr_id,
-        repo_definition=request.repo,
-    )
-
-    PrReviewStep.get_signature(
-        pr_review_request, queue=app_config.CELERY_WORKER_QUEUE
-    ).apply_async()
-
-    return CodegenPrReviewResponse(run_id=cur_state.run_id)
+def codegen_pr_review(request: CodegenPrReviewRequest):
+    raise NotImplementedError("PR Review is not implemented yet.")
