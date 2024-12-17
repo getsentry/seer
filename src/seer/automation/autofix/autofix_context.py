@@ -241,7 +241,6 @@ class AutofixContext(PipelineContext):
 
         repo_definition = self.repos_by_key().get(repo_external_id)
 
-
         if repo_definition is None:
             raise ValueError(f"Repo definition not found for key {repo_external_id}")
 
