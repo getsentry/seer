@@ -267,7 +267,8 @@ class CodingPrompts:
             - No placeholders are allowed, the changes must be clear and detailed.
             - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete changes.
             - Think step-by-step before giving the final answer.
-            - Provide both the high-level plan and the exact code changes needed."""
+            - Provide both the high-level plan and the exact code changes needed.
+            - You may not search the codebase or use any tools at this time."""
         )
 
     @staticmethod
