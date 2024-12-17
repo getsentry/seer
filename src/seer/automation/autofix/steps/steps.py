@@ -47,7 +47,7 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
 
     @staticmethod
     def _instantiate_context(
-        request: PipelineStepTaskRequest, _: DbStateRunTypes | None = None
+        request: PipelineStepTaskRequest, type: DbStateRunTypes | None = None
     ) -> PipelineContext:
         return AutofixContext.from_run_id(request.run_id)
 
