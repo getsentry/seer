@@ -104,6 +104,7 @@ class CodebaseChange(BaseModel):
     diff: list[FilePatch] = []
     diff_str: Optional[str] = None
     pull_request: Optional[CommittedPullRequestDetails] = None
+    file_changes: list[FileChange] = []
 
 
 class StepType(str, enum.Enum):
@@ -116,7 +117,7 @@ class BaseStep(BaseModel):
     # The id is a unique identifier for each individual step.
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     # The key is to determine the kind of step, such as root_cause or changes.
-    key: str | None = None  # TODO: Make this required when we won't be breaking existing runs.
+    key: str
     title: str
     type: StepType = StepType.DEFAULT
 
@@ -208,10 +209,22 @@ class RootCauseStep(BaseStep):
     termination_reason: str | None = None
 
 
+# class CodebaseChanges(BaseModel):
+#     repo_external_id: str
+#     repo_name: str
+#     title: str
+#     description: str
+#     diff: list[FilePatch] = []
+#     diff_str: Optional[str] = None
+
+#     file_changes: list[FileChange] = []
+
+
 class ChangesStep(BaseStep):
     type: Literal[StepType.CHANGES] = StepType.CHANGES
 
-    changes: list[CodebaseChange]
+    file_changes: dict[str, list[FileChange]] = Field(default_factory=dict)
+    codebase_changes: dict[str, CodebaseChange] = Field(default_factory=dict)
 
 
 Step = Union[DefaultStep, RootCauseStep, ChangesStep]
@@ -219,8 +232,9 @@ Step = Union[DefaultStep, RootCauseStep, ChangesStep]
 
 class CodebaseState(BaseModel):
     repo_id: int | None = None
-    namespace_id: int | None = None
     repo_external_id: str | None = None
+
+    # @deprecated, use the changes in the coding step
     file_changes: list[FileChange] = []
 
 
@@ -326,6 +340,7 @@ class AutofixUpdateType(str, enum.Enum):
     CREATE_PR = "create_pr"
     USER_MESSAGE = "user_message"
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
+    CONTINUE_WITH_FEEDBACK = "continue_with_feedback"
     UPDATE_CODE_CHANGE = "update_code_change"
 
 
@@ -338,6 +353,7 @@ class AutofixRootCauseUpdatePayload(BaseModel):
 
 class AutofixCreatePrUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_PR] = AutofixUpdateType.CREATE_PR
+    changes_step_id: str
     repo_external_id: str | None = None
     repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
 
@@ -352,6 +368,11 @@ class AutofixRestartFromPointPayload(BaseModel):
     message: str
     step_index: int
     retain_insight_card_index: int | None = None
+
+
+class AutofixContinueWithFeedbackPayload(BaseModel):
+    type: Literal[AutofixUpdateType.CONTINUE_WITH_FEEDBACK]
+    message: str
 
 
 class AutofixUpdateCodeChangePayload(BaseModel):
@@ -369,6 +390,7 @@ class AutofixUpdateRequest(BaseModel):
         AutofixCreatePrUpdatePayload,
         AutofixUserMessagePayload,
         AutofixRestartFromPointPayload,
+        AutofixContinueWithFeedbackPayload,
         AutofixUpdateCodeChangePayload,
     ] = Field(discriminator="type")
 
@@ -389,6 +411,9 @@ class AutofixContinuation(AutofixGroupState):
     def find_step(
         self, *, id: str | None = None, key: str | None = None, index: int | None = None
     ) -> Step | None:
+        """
+        Find the latest step by id, key, or index.
+        """
         if index is not None and 0 <= index < len(self.steps):
             return self.steps[index]
         for step in self.steps[::-1]:
@@ -495,6 +520,7 @@ class AutofixContinuation(AutofixGroupState):
                 self.updated_at
                 and self.updated_at + datetime.timedelta(seconds=AUTOFIX_UPDATE_TIMEOUT_SECS) <= now
             ):
+                print("timed out due to updated_at")
                 return True
 
             # If an autofix run has been running for more than 10 minutes, we consider it timed out.

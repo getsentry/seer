@@ -29,6 +29,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
+    continue_with_feedback,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
@@ -179,6 +180,8 @@ def autofix_update_endpoint(
         receive_user_message(data)
     elif data.payload.type == AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK:
         restart_from_point_with_feedback(data)
+    elif data.payload.type == AutofixUpdateType.CONTINUE_WITH_FEEDBACK:
+        continue_with_feedback(data)
     elif data.payload.type == AutofixUpdateType.UPDATE_CODE_CHANGE:
         update_code_change(data)
     return AutofixEndpointResponse(started=True, run_id=data.run_id)
@@ -186,6 +189,7 @@ def autofix_update_endpoint(
 
 @json_api(blueprint, "/v1/automation/autofix/state")
 def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
+
     state = get_autofix_state(group_id=data.group_id, run_id=data.run_id)
 
     if state:

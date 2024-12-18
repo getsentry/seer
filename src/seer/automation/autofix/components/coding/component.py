@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import cast
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -24,6 +25,7 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_delete,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.models import ChangesStep
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
@@ -39,7 +41,20 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
     def _append_file_change(self, repo_external_id: str, file_change: FileChange):
         with self.context.state.update() as cur:
-            cur.codebases[repo_external_id].file_changes.append(file_change)
+            # TODO: move this
+            last_changes_step = cur.find_or_add(self.context.event_manager.changes_step)
+            if last_changes_step.id != cur.steps[-1].id:
+                last_changes_step = cur.add_step(self.context.event_manager.changes_step)
+
+            if not last_changes_step:
+                raise ValueError("Last plan step not found")
+
+            last_changes_step = cast(ChangesStep, last_changes_step)
+
+            if repo_external_id not in last_changes_step.file_changes:
+                last_changes_step.file_changes[repo_external_id] = []
+
+            last_changes_step.file_changes[repo_external_id].append(file_change)
 
     @observe(name="Incorrect diff fixer")
     @ai_track(description="Incorrect diff fixer")

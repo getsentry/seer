@@ -22,6 +22,7 @@ from seer.automation.autofix.evaluations import (
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
+    AutofixContinueWithFeedbackPayload,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
@@ -207,7 +208,8 @@ def run_autofix_create_pr(
     context = AutofixContext(state=state, event_manager=event_manager)
 
     context.commit_changes(
-        repo_external_id=request.payload.repo_external_id, repo_id=request.payload.repo_id
+        changes_step_id=request.payload.changes_step_id,
+        repo_external_id=request.payload.repo_external_id,
     )
 
 
@@ -390,18 +392,7 @@ def restart_from_point_with_feedback(
                 break
         memory.append(Message(content=request.payload.message, role="user"))
 
-        with state.update() as cur:
-            if isinstance(cur.steps[-1], DefaultStep):
-                cur.steps[-1].insights.append(
-                    InsightSharingOutput(
-                        insight=request.payload.message,
-                        justification="USER",
-                        codebase_context=[],
-                        stacktrace_context=[],
-                        breadcrumb_context=[],
-                        generated_at_memory_index=len(memory) - 1,
-                    )
-                )
+        event_manager.add_user_message(request.payload.message, memory_index=len(memory) - 1)
     elif memory and memory[-1].role == "assistant":
         memory.append(Message(content=".", role="user"))
 
@@ -425,6 +416,45 @@ def restart_from_point_with_feedback(
         ).apply_async()
 
 
+@inject
+def continue_with_feedback(
+    request: AutofixUpdateRequest,
+    app_config: AppConfig = injected,
+):
+    if not isinstance(request.payload, AutofixContinueWithFeedbackPayload):
+        raise ValueError("Invalid payload type for restart_from_point_with_feedback")
+
+    state = ContinuationState(request.run_id)
+    event_manager = AutofixEventManager(state)
+
+    context = AutofixContext(
+        state=state, sentry_client=get_sentry_client(), event_manager=event_manager
+    )
+
+    memory = context.get_memory("plan_and_code")
+
+    # add feedback to memory and to insights
+    # enforce alternating user/assistant messages
+    for item in reversed(memory):
+        if item.role == "user":
+            memory.append(Message(content=".", role="assistant"))
+            break
+        elif item.role == "assistant":
+            break
+    memory.append(Message(content=request.payload.message, role="user"))
+
+    event_manager.add_user_message(request.payload.message, memory_index=len(memory) - 1)
+
+    # continue the step
+    AutofixCodingStep.get_signature(
+        AutofixCodingStepRequest(
+            run_id=state.get().run_id,
+            initial_memory=memory,
+        ),
+        queue=app_config.CELERY_WORKER_QUEUE,
+    ).apply_async()
+
+
 def update_code_change(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUpdateCodeChangePayload):
         raise ValueError("Invalid payload type for update_code_change")
@@ -432,7 +462,9 @@ def update_code_change(request: AutofixUpdateRequest):
     state = ContinuationState(request.run_id)
     cur_state = state.get()
 
-    repo_id = request.payload.repo_id
+    repo_external_id = request.payload.repo_id
+    if not repo_external_id:
+        raise ValueError("Repo external ID is required")
     hunk_index = request.payload.hunk_index
     lines = request.payload.lines
     file_path = request.payload.file_path
@@ -441,23 +473,13 @@ def update_code_change(request: AutofixUpdateRequest):
     last_step = cur_state.steps[-1]
     if not isinstance(last_step, ChangesStep):
         return
-    changes = last_step.changes
 
-    # find the change with the matching repo_external_id
-    matching_change = None
-    change_index = 0
-    for i, change in enumerate(changes):
-        if change.repo_external_id == repo_id:
-            matching_change = change
-            change_index = i
-            break
-    if not matching_change:
-        raise ValueError("No matching change found")
+    change = last_step.codebase_changes[repo_external_id]
 
     # check that we have a matching file patch in the codebase state using the file path
     matching_file_patch = None
     file_patch_index = 0
-    for i, file_patch in enumerate(matching_change.diff):
+    for i, file_patch in enumerate(change.diff):
         if file_patch.path == file_path:
             file_patch_index = i
             matching_file_patch = file_patch
@@ -497,8 +519,8 @@ def update_code_change(request: AutofixUpdateRequest):
                 if line.target_line_no is not None:
                     line.target_line_no += length_diff
 
-        matching_change.diff[file_patch_index] = matching_file_patch
-        last_step.changes[change_index] = matching_change
+        change.diff[file_patch_index] = matching_file_patch
+        last_step.codebase_changes[repo_external_id] = change
         cur.steps[-1] = last_step
 
 
