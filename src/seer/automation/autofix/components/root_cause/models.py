@@ -64,8 +64,8 @@ class RootCauseAnalysisItem(BaseModel):
     id: int = -1
     title: str
     description: str
-    # unit_test: UnitTestSnippet | None = None
-    # reproduction: str | None = None
+    unit_test: Optional[UnitTestSnippet] = None
+    reproduction: Optional[str] = None
     code_context: Optional[list[RootCauseRelevantContext]] = None
 
     def to_markdown_string(self) -> str:
@@ -91,9 +91,9 @@ class RootCauseAnalysisItem(BaseModel):
 class RootCauseAnalysisItemPrompt(BaseModel):
     title: str
     description: str
-    # reproduction_instructions: str | None = None
-    # unit_test: UnitTestSnippetPrompt | None = None
     relevant_code: Optional[RootCauseAnalysisRelevantContext]
+    reproduction_instructions: Optional[str] = None
+    unit_test: Optional[UnitTestSnippetPrompt] = None
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
@@ -131,16 +131,16 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         return RootCauseAnalysisItem.model_validate(
             {
                 **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
+                "reproduction": self.reproduction_instructions,
+                "unit_test": (
+                    {
+                        "file_path": self.unit_test.file_path,
+                        "snippet": self.unit_test.code_snippet,
+                        "description": self.unit_test.description,
+                    }
+                    if self.unit_test
+                    else None
+                ),
                 "code_context": (
                     self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
                 ),
