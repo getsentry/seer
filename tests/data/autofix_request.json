@@ -1,0 +1,682 @@
+{
+    "organization_id": 1,
+    "project_id": 1,
+    "repos": [
+        {
+            "provider": "github",
+            "owner": "getsentry",
+            "name": "seer",
+            "external_id": "439438299"
+        }
+    ],
+    "issue": {
+        "id": "6042731264",
+        "title": "ValidationError: 1 validation error for RootCauseAnalysisItem",
+        "events": [
+            {
+                "id": "42fecd08b4184ba08e5922362e277dbd",
+                "groupID": "6042731264",
+                "eventID": "42fecd08b4184ba08e5922362e277dbd",
+                "projectID": "6178942",
+                "size": 73443,
+                "entries": [
+                    {
+                        "data": {
+                            "values": [
+                                {
+                                    "type": "ValidationError",
+                                    "value": "1 validation error for RootCauseAnalysisItem\nunit_test.snippet\n  Field required [type=missing, input_value={'file_path': 'src/test/s...d validation behavior.'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing",
+                                    "mechanism": {
+                                        "type": "ai_monitoring",
+                                        "handled": false
+                                    },
+                                    "threadId": null,
+                                    "module": "pydantic_core._pydantic_core",
+                                    "stacktrace": {
+                                        "frames": [
+                                            {
+                                                "filename": "seer/automation/autofix/steps/root_cause_step.py",
+                                                "absPath": "/app/src/seer/automation/autofix/steps/root_cause_step.py",
+                                                "module": "seer.automation.autofix.steps.root_cause_step",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "_invoke",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [64, ""],
+                                                    [
+                                                        65,
+                                                        "        summary = state.request.issue_summary"
+                                                    ],
+                                                    [
+                                                        66,
+                                                        "        if not summary:"
+                                                    ],
+                                                    [
+                                                        67,
+                                                        "            summary = self.context.get_issue_summary()"
+                                                    ],
+                                                    [68, ""],
+                                                    [
+                                                        69,
+                                                        "        root_cause_output = RootCauseAnalysisComponent(self.context).invoke("
+                                                    ],
+                                                    [
+                                                        70,
+                                                        "            RootCauseAnalysisRequest("
+                                                    ],
+                                                    [
+                                                        71,
+                                                        "                event_details=event_details,"
+                                                    ],
+                                                    [
+                                                        72,
+                                                        "                instruction=state.request.instruction,"
+                                                    ],
+                                                    [
+                                                        73,
+                                                        "                summary=summary,"
+                                                    ],
+                                                    [
+                                                        74,
+                                                        "                initial_memory=self.request.initial_memory,"
+                                                    ]
+                                                ],
+                                                "lineNo": 69,
+                                                "colNo": null,
+                                                "inApp": true,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "event_details": "EventDetails(title='ValidationError: 1 validation error for GroupingRequest', exceptions=[ExceptionDetails(type='ValidationError', value=\"1 validation error for GroupingRequest\\nstacktrace\\n  Value error, stacktrace must be provided and not empty. [type=value_error, input_value='', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.6/v/value_error\", stacktrace=Stacktrace(frames=[StacktraceFrame(function='wrapper', filename='src/seer/json_api.py', abs_path='/app/src/seer/json_api.py', line_no=132, col_no=None, context=[(127, '            if not isinstance(data, dict):'), (128, '                sentry_sdk.capture_message(f\"Data is not an object: {type(data)}\")'), (129, '                raise BadRequest(\"Data is not an object\")'), (130, ''), (131, '            try:'), (132, '                result: BaseModel = implementation(request_annotation.model_validate(data))'), (133, '            except ValidationError as e:'), (134, '                sentry_sdk.capture_exception(e)'), (135...",
+                                                    "kwargs": {},
+                                                    "self": "<seer.automation.autofix.steps.root_cause_step.RootCauseStep object at 0x7f8c29a404d0>",
+                                                    "state": "[Filtered]"
+                                                }
+                                            },
+                                            {
+                                                "filename": "langfuse/decorators/langfuse_decorator.py",
+                                                "absPath": "/usr/local/lib/python3.11/dist-packages/langfuse/decorators/langfuse_decorator.py",
+                                                "module": "langfuse.decorators.langfuse_decorator",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "sync_wrapper",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [
+                                                        220,
+                                                        "            result = None"
+                                                    ],
+                                                    [221, ""],
+                                                    [222, "            try:"],
+                                                    [
+                                                        223,
+                                                        "                result = func(*args, **kwargs)"
+                                                    ],
+                                                    [
+                                                        224,
+                                                        "            except Exception as e:"
+                                                    ],
+                                                    [
+                                                        225,
+                                                        "                self._handle_exception(observation, e)"
+                                                    ],
+                                                    [
+                                                        226,
+                                                        "            finally:"
+                                                    ],
+                                                    [
+                                                        227,
+                                                        "                result = self._finalize_call("
+                                                    ],
+                                                    [
+                                                        228,
+                                                        "                    observation, result, capture_output, transform_to_string"
+                                                    ],
+                                                    [229, "                )"],
+                                                    [230, ""]
+                                                ],
+                                                "lineNo": 225,
+                                                "colNo": null,
+                                                "inApp": false,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "args": [
+                                                        "<seer.automation.autofix.components.root_cause.component.RootCauseAnalysisComponent object at 0x7f8a86cb5650>",
+                                                        "RootCauseAnalysisRequest(event_details=EventDetails(title='ValidationError: 1 validation error for GroupingRequest', exceptions=[ExceptionDetails(type='ValidationError', value=\"1 validation error for GroupingRequest\\nstacktrace\\n  Value error, stacktrace must be provided and not empty. [type=value_error, input_value='', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.6/v/value_error\", stacktrace=Stacktrace(frames=[StacktraceFrame(function='wrapper', filename='src/seer/json_api.py', abs_path='/app/src/seer/json_api.py', line_no=132, col_no=None, context=[(127, '            if not isinstance(data, dict):'), (128, '                sentry_sdk.capture_message(f\"Data is not an object: {type(data)}\")'), (129, '                raise BadRequest(\"Data is not an object\")'), (130, ''), (131, '            try:'), (132, '                result: BaseModel = implementation(request_annotation.model_validate(data))'), (133, '            except ValidationError as e:'), (134, '                ..."
+                                                    ],
+                                                    "as_type": "None",
+                                                    "capture_input": "True",
+                                                    "capture_output": "True",
+                                                    "func": "<function RootCauseAnalysisComponent.invoke at 0x7f8a86d8fb00>",
+                                                    "kwargs": {},
+                                                    "name": "'Root Cause Analysis'",
+                                                    "observation": "<langfuse.client.StatefulSpanClient object at 0x7f8c29a9f4d0>",
+                                                    "result": "None",
+                                                    "self": "<langfuse.decorators.langfuse_decorator.LangfuseDecorator object at 0x7f8a8954fa50>"
+                                                }
+                                            },
+                                            {
+                                                "filename": "langfuse/decorators/langfuse_decorator.py",
+                                                "absPath": "/usr/local/lib/python3.11/dist-packages/langfuse/decorators/langfuse_decorator.py",
+                                                "module": "langfuse.decorators.langfuse_decorator",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "_handle_exception",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [426, "    ):"],
+                                                    [
+                                                        427,
+                                                        "        if observation:"
+                                                    ],
+                                                    [
+                                                        428,
+                                                        "            _observation_params_context.get()[observation.id].update("
+                                                    ],
+                                                    [
+                                                        429,
+                                                        "                level=\"ERROR\", status_message=str(e)"
+                                                    ],
+                                                    [430, "            )"],
+                                                    [431, "        raise e"],
+                                                    [432, ""],
+                                                    [
+                                                        433,
+                                                        "    def _wrap_sync_generator_result("
+                                                    ],
+                                                    [434, "        self,"],
+                                                    [
+                                                        435,
+                                                        "        observation: Optional["
+                                                    ],
+                                                    [436, "            Union["]
+                                                ],
+                                                "lineNo": 431,
+                                                "colNo": null,
+                                                "inApp": false,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "e": "1 validation error for RootCauseAnalysisItem\nunit_test.snippet\n  Field required [type=missing, input_value={'file_path': 'src/test/s...d validation behavior.'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing",
+                                                    "observation": "<langfuse.client.StatefulSpanClient object at 0x7f8c29a9f4d0>",
+                                                    "self": "<langfuse.decorators.langfuse_decorator.LangfuseDecorator object at 0x7f8a8954fa50>"
+                                                }
+                                            },
+                                            {
+                                                "filename": "langfuse/decorators/langfuse_decorator.py",
+                                                "absPath": "/usr/local/lib/python3.11/dist-packages/langfuse/decorators/langfuse_decorator.py",
+                                                "module": "langfuse.decorators.langfuse_decorator",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "sync_wrapper",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [
+                                                        218,
+                                                        "                func_kwargs=kwargs,"
+                                                    ],
+                                                    [219, "            )"],
+                                                    [
+                                                        220,
+                                                        "            result = None"
+                                                    ],
+                                                    [221, ""],
+                                                    [222, "            try:"],
+                                                    [
+                                                        223,
+                                                        "                result = func(*args, **kwargs)"
+                                                    ],
+                                                    [
+                                                        224,
+                                                        "            except Exception as e:"
+                                                    ],
+                                                    [
+                                                        225,
+                                                        "                self._handle_exception(observation, e)"
+                                                    ],
+                                                    [
+                                                        226,
+                                                        "            finally:"
+                                                    ],
+                                                    [
+                                                        227,
+                                                        "                result = self._finalize_call("
+                                                    ],
+                                                    [
+                                                        228,
+                                                        "                    observation, result, capture_output, transform_to_string"
+                                                    ]
+                                                ],
+                                                "lineNo": 223,
+                                                "colNo": null,
+                                                "inApp": false,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "args": [
+                                                        "<seer.automation.autofix.components.root_cause.component.RootCauseAnalysisComponent object at 0x7f8a86cb5650>",
+                                                        "RootCauseAnalysisRequest(event_details=EventDetails(title='ValidationError: 1 validation error for GroupingRequest', exceptions=[ExceptionDetails(type='ValidationError', value=\"1 validation error for GroupingRequest\\nstacktrace\\n  Value error, stacktrace must be provided and not empty. [type=value_error, input_value='', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.6/v/value_error\", stacktrace=Stacktrace(frames=[StacktraceFrame(function='wrapper', filename='src/seer/json_api.py', abs_path='/app/src/seer/json_api.py', line_no=132, col_no=None, context=[(127, '            if not isinstance(data, dict):'), (128, '                sentry_sdk.capture_message(f\"Data is not an object: {type(data)}\")'), (129, '                raise BadRequest(\"Data is not an object\")'), (130, ''), (131, '            try:'), (132, '                result: BaseModel = implementation(request_annotation.model_validate(data))'), (133, '            except ValidationError as e:'), (134, '                ..."
+                                                    ],
+                                                    "as_type": "None",
+                                                    "capture_input": "True",
+                                                    "capture_output": "True",
+                                                    "func": "<function RootCauseAnalysisComponent.invoke at 0x7f8a86d8fb00>",
+                                                    "kwargs": {},
+                                                    "name": "'Root Cause Analysis'",
+                                                    "observation": "<langfuse.client.StatefulSpanClient object at 0x7f8c29a9f4d0>",
+                                                    "result": "None",
+                                                    "self": "<langfuse.decorators.langfuse_decorator.LangfuseDecorator object at 0x7f8a8954fa50>"
+                                                }
+                                            },
+                                            {
+                                                "filename": "seer/dependency_injection.py",
+                                                "absPath": "/app/src/seer/dependency_injection.py",
+                                                "module": "seer.dependency_injection",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "wrapper",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [
+                                                        230,
+                                                        "                    try:"
+                                                    ],
+                                                    [
+                                                        231,
+                                                        "                        new_kwds[k] = resolve(argspec.annotations[k])"
+                                                    ],
+                                                    [
+                                                        232,
+                                                        "                    except KeyError:"
+                                                    ],
+                                                    [
+                                                        233,
+                                                        "                        raise AssertionError(f\"Cannot inject argument {k} as it lacks annotations\")"
+                                                    ],
+                                                    [234, ""],
+                                                    [
+                                                        235,
+                                                        "        return c(*args, **new_kwds)  # type: ignore"
+                                                    ],
+                                                    [236, ""],
+                                                    [
+                                                        237,
+                                                        "    if inspect.isclass(original_type):"
+                                                    ],
+                                                    [
+                                                        238,
+                                                        "        return type(original_type.__name__, (original_type,), dict(__init__=wrapper))  # type: ignore"
+                                                    ],
+                                                    [239, ""],
+                                                    [
+                                                        240,
+                                                        "    return wrapper  # type: ignore"
+                                                    ]
+                                                ],
+                                                "lineNo": 235,
+                                                "colNo": null,
+                                                "inApp": true,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "arg_idx": "2",
+                                                    "arg_name": "'llm_client'",
+                                                    "args": [
+                                                        "<seer.automation.autofix.components.root_cause.component.RootCauseAnalysisComponent object at 0x7f8a86cb5650>",
+                                                        "RootCauseAnalysisRequest(event_details=EventDetails(title='ValidationError: 1 validation error for GroupingRequest', exceptions=[ExceptionDetails(type='ValidationError', value=\"1 validation error for GroupingRequest\\nstacktrace\\n  Value error, stacktrace must be provided and not empty. [type=value_error, input_value='', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.6/v/value_error\", stacktrace=Stacktrace(frames=[StacktraceFrame(function='wrapper', filename='src/seer/json_api.py', abs_path='/app/src/seer/json_api.py', line_no=132, col_no=None, context=[(127, '            if not isinstance(data, dict):'), (128, '                sentry_sdk.capture_message(f\"Data is not an object: {type(data)}\")'), (129, '                raise BadRequest(\"Data is not an object\")'), (130, ''), (131, '            try:'), (132, '                result: BaseModel = implementation(request_annotation.model_validate(data))'), (133, '            except ValidationError as e:'), (134, '                ..."
+                                                    ],
+                                                    "argspec": [
+                                                        [
+                                                            "'self'",
+                                                            "'request'",
+                                                            "'llm_client'"
+                                                        ],
+                                                        "None",
+                                                        "None",
+                                                        [
+                                                            "<seer.dependency_injection._Injected object at 0x7f8b44a59210>"
+                                                        ],
+                                                        [],
+                                                        "None",
+                                                        {
+                                                            "llm_client": "<class 'seer.automation.agent.client.LlmClient'>",
+                                                            "request": "<class 'seer.automation.autofix.components.root_cause.models.RootCauseAnalysisRequest'>",
+                                                            "return": "<class 'seer.automation.autofix.components.root_cause.models.RootCauseAnalysisOutput'>"
+                                                        }
+                                                    ],
+                                                    "d": "<seer.dependency_injection._Injected object at 0x7f8b44a59210>",
+                                                    "i": "0",
+                                                    "kwargs": {},
+                                                    "new_kwds": {
+                                                        "llm_client": "<seer.automation.agent.client.LlmClient object at 0x7f8c298ea050>"
+                                                    },
+                                                    "offset": "2",
+                                                    "resolved": "<seer.automation.agent.client.LlmClient object at 0x7f8c298ea050>"
+                                                }
+                                            },
+                                            {
+                                                "filename": "seer/automation/autofix/components/root_cause/component.py",
+                                                "absPath": "/app/src/seer/automation/autofix/components/root_cause/component.py",
+                                                "module": "seer.automation.autofix.components.root_cause.component",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "invoke",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [
+                                                        117,
+                                                        "                    response_format=MultipleRootCauseAnalysisOutputPrompt,"
+                                                    ],
+                                                    [
+                                                        118,
+                                                        "                    run_name=\"Root Cause Extraction & Formatting\","
+                                                    ],
+                                                    [119, "                )"],
+                                                    [120, ""],
+                                                    [
+                                                        121,
+                                                        "                # Assign the ids to be the numerical indices of the causes and relevant code context"
+                                                    ],
+                                                    [
+                                                        122,
+                                                        "                cause_model = formatted_response.parsed.cause.to_model()"
+                                                    ],
+                                                    [
+                                                        123,
+                                                        "                cause_model.id = 0"
+                                                    ],
+                                                    [
+                                                        124,
+                                                        "                if cause_model.code_context:"
+                                                    ],
+                                                    [
+                                                        125,
+                                                        "                    for j, snippet in enumerate(cause_model.code_context):"
+                                                    ],
+                                                    [
+                                                        126,
+                                                        "                        snippet.id = j"
+                                                    ],
+                                                    [127, ""]
+                                                ],
+                                                "lineNo": 122,
+                                                "colNo": null,
+                                                "inApp": true,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "agent": "<seer.automation.autofix.autofix_agent.AutofixAgent object at 0x7f8a84380590>",
+                                                    "cur": "AutofixContinuation(run_id=1395, steps=[DefaultStep(id='29ed661c-6650-4d40-9798-b40d865a20c8', key='root_cause_analysis_processing', title='Analyzing the Issue', type=<StepType.DEFAULT: 'default'>, status=<AutofixStatus.PROCESSING: 'PROCESSING'>, index=0, progress=[ProgressItem(timestamp='2024-11-12T01:47:43.958807', message='Beginning root cause analysis...', type=<ProgressType.INFO: 'INFO'>, data=None)], completedMessage=None, queued_user_messages=[], insights=[InsightSharingOutput(insight='The root cause is that the stacktrace field is incorrectly populated as an empty string, violating validation rules.', codebase_context=[CodeSnippetContext(repo_name='getsentry/seer', file_path='src/seer/json_api.py', snippet='if not isinstance(data, dict):\\n    sentry_sdk.capture_message(f\"Data is not an object: {type(data)}\")\\n    raise BadRequest(\"Data is not an object\")\\n\\ntry:\\n    result: BaseModel = implementation(request_annotation.model_validate(data))  # This line fails because the model validation rejects e...",
+                                                    "formatted_response": "LlmGenerateStructuredResponse(parsed=MultipleRootCauseAnalysisOutputPrompt(cause=RootCauseAnalysisItemPrompt(title='Empty Stacktrace Validation Failure in GroupingRequest Model', description=\"The issue is occurring because the incoming request contains an empty stacktrace value, which violates the Pydantic model validation rules for GroupingRequest. The validation system is explicitly configured to reject empty stacktraces, but the client is sending an empty string ('') instead of a valid stacktrace.\\n\\nThis represents a contract violation between the client and server, where the server expects a non-empty stacktrace for grouping operations, but the client is not providing one. This is likely either a client-side bug where the stacktrace is being lost/cleared before submission, or a misunderstanding of the API requirements by the client implementation.\\n\\nTo fix this, either:\\n1. The client needs to ensure it always sends a ..."
+                                                }
+                                            },
+                                            {
+                                                "filename": "seer/automation/autofix/components/root_cause/models.py",
+                                                "absPath": "/app/src/seer/automation/autofix/components/root_cause/models.py",
+                                                "module": "seer.automation.autofix.components.root_cause.models",
+                                                "package": null,
+                                                "platform": null,
+                                                "instructionAddr": null,
+                                                "symbolAddr": null,
+                                                "function": "to_model",
+                                                "rawFunction": null,
+                                                "symbol": null,
+                                                "context": [
+                                                    [
+                                                        125,
+                                                        "                else None"
+                                                    ],
+                                                    [126, "            ),"],
+                                                    [127, "        )"],
+                                                    [128, ""],
+                                                    [
+                                                        129,
+                                                        "    def to_model(self):"
+                                                    ],
+                                                    [
+                                                        130,
+                                                        "        return RootCauseAnalysisItem.model_validate("
+                                                    ],
+                                                    [131, "            {"],
+                                                    [
+                                                        132,
+                                                        "                **self.model_dump(),"
+                                                    ],
+                                                    [
+                                                        133,
+                                                        "                # \"reproduction\": self.reproduction_instructions,"
+                                                    ],
+                                                    [
+                                                        134,
+                                                        "                # \"unit_test\": ("
+                                                    ],
+                                                    [
+                                                        135,
+                                                        "                #     {"
+                                                    ]
+                                                ],
+                                                "lineNo": 130,
+                                                "colNo": null,
+                                                "inApp": true,
+                                                "trust": null,
+                                                "errors": null,
+                                                "lock": null,
+                                                "sourceLink": null,
+                                                "vars": {
+                                                    "self": "RootCauseAnalysisItemPrompt(title='Empty Stacktrace Validation Failure in GroupingRequest Model', description=\"The issue is occurring because the incoming request contains an empty stacktrace value, which violates the Pydantic model validation rules for GroupingRequest. The validation system is explicitly configured to reject empty stacktraces, but the client is sending an empty string ('') instead of a valid stacktrace.\\n\\nThis represents a contract violation between the client and server, where the server expects a non-empty stacktrace for grouping operations, but the client is not providing one. This is likely either a client-side bug where the stacktrace is being lost/cleared before submission, or a misunderstanding of the API requirements by the client implementation.\\n\\nTo fix this, either:\\n1. The client needs to ensure it always sends a valid stacktrace.\\n2. The validation rules need to be adjusted if empty stacktraces are actually valid in some cases.\\n3. Better error messaging should be added to ..."
+                                                }
+                                            }
+                                        ],
+                                        "framesOmitted": null,
+                                        "registers": null,
+                                        "hasSystemFrames": true
+                                    },
+                                    "rawStacktrace": null
+                                }
+                            ],
+                            "hasSystemFrames": true,
+                            "excOmitted": null
+                        },
+                        "type": "exception"
+                    }
+                ],
+                "dist": null,
+                "message": "",
+                "title": "ValidationError: 1 validation error for RootCauseAnalysisItem",
+                "location": "seer/automation/autofix/components/root_cause/models.py",
+                "user": null,
+                "contexts": {
+                    "runtime": {
+                        "name": "CPython",
+                        "version": "3.11.0",
+                        "build": "3.11.0rc1 (main, Aug 12 2022, 10:02:14) [GCC 11.2.0]",
+                        "type": "runtime"
+                    },
+                    "trace": {
+                        "trace_id": "55563c0f425a4fac89ab3d77fb6b7a83",
+                        "span_id": "b73676cf38cfe148",
+                        "parent_span_id": "be290b413628f463",
+                        "op": "ai.pipeline",
+                        "status": "unknown",
+                        "client_sample_rate": 0.2,
+                        "origin": "manual",
+                        "data": {
+                            "thread.name": "MainThread",
+                            "thread.id": "140240063661184"
+                        },
+                        "description": "Autofix - Root Cause Step",
+                        "type": "trace"
+                    }
+                },
+                "sdk": { "name": "sentry.python.flask", "version": "2.18.0" },
+                "context": {
+                    "celery-job": {
+                        "args": [],
+                        "kwargs": {
+                            "request": {
+                                "initial_memory": [],
+                                "run_id": 1395,
+                                "step_id": 3.1581633495131787e38
+                            }
+                        },
+                        "task_name": "seer.automation.autofix.steps.root_cause_step.root_cause_task"
+                    },
+                    "sys.argv": [
+                        "/usr/local/bin/celery",
+                        "-A",
+                        "src.celery_app.tasks",
+                        "worker",
+                        "--loglevel=info",
+                        "-c",
+                        "16",
+                        "-Q",
+                        "seer",
+                        "-n"
+                    ]
+                },
+                "type": "error",
+                "metadata": {
+                    "filename": "seer/automation/autofix/components/root_cause/models.py",
+                    "function": "to_model",
+                    "in_app_frame_mix": "mixed",
+                    "type": "ValidationError",
+                    "value": "1 validation error for RootCauseAnalysisItem\nunit_test.snippet\n  Field required [type=missing, input_value={'file_path': 'src/test/s...d validation behavior.'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing"
+                },
+                "tags": [
+                    {
+                        "key": "celery_task_id",
+                        "value": "a5915e26-6ea3-4e78-a12f-3b8b8d5fd925"
+                    },
+                    { "key": "environment", "value": "production" },
+                    { "key": "handled", "value": "no" },
+                    { "key": "level", "value": "error" },
+                    { "key": "mechanism", "value": "ai_monitoring" },
+                    {
+                        "key": "release",
+                        "value": "5562d4f9f6b0e5a2f349ce46e4a00c25712f5cf2"
+                    },
+                    { "key": "runtime", "value": "CPython 3.11.0" },
+                    { "key": "runtime.name", "value": "CPython" },
+                    {
+                        "key": "server_name",
+                        "value": "seer-web-autofix-d7b9466df-9qjrn"
+                    },
+                    {
+                        "key": "transaction",
+                        "value": "seer.automation.autofix.steps.root_cause_step.root_cause_task"
+                    }
+                ],
+                "platform": "python",
+                "dateReceived": "2024-11-12T01:48:08.581059Z",
+                "errors": [],
+                "occurrence": null,
+                "crashFile": null,
+                "culprit": "seer.automation.autofix.steps.root_cause_step.root_cause_task",
+                "dateCreated": "2024-11-12T01:48:08Z",
+                "fingerprints": [
+                    "1c4ae6c199074fd548cdceb00432ba24",
+                    "7a12cbe8cabe7dc25509473bb85c5c29"
+                ],
+                "groupingConfig": {
+                    "enhancements": "KLUv_SAYwQAAkwKRs25ld3N0eWxlOjIwMjMtMDEtMTGQ",
+                    "id": "newstyle:2023-01-11"
+                },
+                "release": {
+                    "id": 1275781148,
+                    "version": "5562d4f9f6b0e5a2f349ce46e4a00c25712f5cf2",
+                    "status": "open",
+                    "shortVersion": "5562d4f9f6b0e5a2f349ce46e4a00c25712f5cf2",
+                    "versionInfo": {
+                        "package": null,
+                        "version": {
+                            "raw": "5562d4f9f6b0e5a2f349ce46e4a00c25712f5cf2"
+                        },
+                        "description": "5562d4f9f6b0",
+                        "buildHash": "5562d4f9f6b0e5a2f349ce46e4a00c25712f5cf2"
+                    },
+                    "ref": null,
+                    "url": null,
+                    "dateReleased": "2024-11-11T22:13:10.220575Z",
+                    "dateCreated": "2024-11-11T21:00:00Z",
+                    "data": {},
+                    "newGroups": 6,
+                    "owner": null,
+                    "commitCount": 0,
+                    "lastCommit": null,
+                    "deployCount": 1,
+                    "lastDeploy": {
+                        "id": "61947683",
+                        "environment": "production",
+                        "dateStarted": null,
+                        "dateFinished": "2024-11-11T22:13:09.700644Z",
+                        "name": null,
+                        "url": null
+                    },
+                    "authors": [],
+                    "projects": [
+                        {
+                            "id": 5723503,
+                            "slug": "sentry-dev-env",
+                            "name": "sentry-dev-env",
+                            "newGroups": 1,
+                            "platform": "",
+                            "platforms": ["native", "python"],
+                            "hasHealthData": false
+                        },
+                        {
+                            "id": 6178942,
+                            "slug": "seer",
+                            "name": "seer",
+                            "newGroups": 5,
+                            "platform": "python-flask",
+                            "platforms": ["python"],
+                            "hasHealthData": false
+                        }
+                    ],
+                    "firstEvent": "2024-11-11T22:13:47Z",
+                    "lastEvent": "2024-11-12T23:12:57Z",
+                    "currentProjectMeta": {},
+                    "userAgent": null
+                },
+                "userReport": null,
+                "sdkUpdates": [],
+                "resolvedWith": [],
+                "nextEventID": null,
+                "previousEventID": "d3e3a06632bb4dee8ce3b3dfc1b08cc2"
+            }
+        ]
+    },
+    "invoking_user": { "id": 1, "display_name": "Jenn Mueng" }
+}
