@@ -416,7 +416,7 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ):
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+        message_dicts, tool_dicts, system_message = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -426,7 +426,7 @@ class AnthropicProvider:
         anthropic_client = self.get_client()
 
         completion = anthropic_client.messages.create(
-            system=system_prompt or NOT_GIVEN,
+            system=system_message or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
@@ -539,7 +539,7 @@ class AnthropicProvider:
         prompt: str | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
-    ) -> tuple[list[MessageParam], list[ToolParam] | None, str | None]:
+    ) -> tuple[list[MessageParam], list[ToolParam] | None, list[TextBlockParam] | None]:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
             message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
@@ -548,19 +548,30 @@ class AnthropicProvider:
             message_dicts[-1]["content"][0]["cache_control"] = CacheControlEphemeralParam(
                 type="ephemeral"
             )
-        if len(message_dicts) >= 4 and message_dicts[-4]["content"]:
-            message_dicts[-4]["content"][0]["cache_control"] = CacheControlEphemeralParam(
+        if len(message_dicts) >= 3 and message_dicts[-3]["content"]:
+            message_dicts[-3]["content"][0]["cache_control"] = CacheControlEphemeralParam(
                 type="ephemeral"
             )
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
         )
-        # set caching breakpoint at end of tools
         if tool_dicts:
             tool_dicts[-1]["cache_control"] = CacheControlEphemeralParam(type="ephemeral")
 
-        return message_dicts, tool_dicts, system_prompt
+        system_message = (
+            [
+                TextBlockParam(
+                    type="text",
+                    text=system_prompt,
+                    cache_control=CacheControlEphemeralParam(type="ephemeral"),
+                )
+            ]
+            if system_prompt
+            else []
+        )
+
+        return message_dicts, tool_dicts, system_message
 
     @observe(as_type="generation", name="Anthropic Stream")
     def generate_text_stream(
@@ -574,7 +585,7 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+        message_dicts, tool_dicts, system_message = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -584,7 +595,7 @@ class AnthropicProvider:
         anthropic_client = self.get_client()
 
         stream = anthropic_client.messages.create(
-            system=system_prompt or NOT_GIVEN,
+            system=system_message or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
