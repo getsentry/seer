@@ -40,6 +40,7 @@ class MPScorer(BaseModel, abc.ABC):
     """
 
     @abc.abstractmethod
+    @inject
     def batch_score(
         self,
         values: npt.NDArray[np.float64],
@@ -47,10 +48,12 @@ class MPScorer(BaseModel, abc.ABC):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
 
     @abc.abstractmethod
+    @inject
     def stream_score(
         self,
         streamed_value: np.float64,
@@ -61,6 +64,7 @@ class MPScorer(BaseModel, abc.ABC):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
 
@@ -115,6 +119,7 @@ class LowVarianceScorer(MPScorer):
             return "anomaly_higher_confidence", 0.9, upper_bound, lower_bound
         return "none", 0.0, upper_bound, lower_bound
 
+    @inject
     def batch_score(
         self,
         values: npt.NDArray[np.float64],
@@ -122,6 +127,7 @@ class LowVarianceScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         ts_mean = values.mean()
         scores = []
@@ -145,6 +151,7 @@ class LowVarianceScorer(MPScorer):
             )
         return FlagsAndScores(flags=flags, scores=scores, thresholds=thresholds)
 
+    @inject
     def stream_score(
         self,
         streamed_value: np.float64,
@@ -155,6 +162,7 @@ class LowVarianceScorer(MPScorer):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         context = history_values[-2 * window_size :]
         if context.std() > self.std_threshold:
@@ -201,6 +209,7 @@ class MPIQRScorer(MPScorer):
         description="Lower and upper bounds for high sensitivity",
     )
 
+    @inject
     def batch_score(
         self,
         values: npt.NDArray[np.float64],
@@ -208,6 +217,7 @@ class MPIQRScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         """
         Scores anomalies by computing the distance of the relevant MP distance from quartiles. This approach is not swayed by
@@ -244,6 +254,7 @@ class MPIQRScorer(MPScorer):
                 streamed_timestamp=timestamps[i],
                 history_values=values[0 : i - 1],
                 history_timestamps=timestamps[0 : i - 1],
+                location_detector=location_detector,
             )
 
             flags.append(flag)
@@ -260,6 +271,7 @@ class MPIQRScorer(MPScorer):
             thresholds=thresholds,
         )
 
+    @inject
     def stream_score(
         self,
         streamed_value: np.float64,
@@ -270,6 +282,7 @@ class MPIQRScorer(MPScorer):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         """
         Scores anomalies by computing the distance of the relevant MP distance from quartiles. It also converts the score
@@ -316,6 +329,7 @@ class MPIQRScorer(MPScorer):
             streamed_timestamp=streamed_timestamp,
             history_values=history_values,
             history_timestamps=history_timestamps,
+            location_detector=location_detector,
         )
         thresholds.append(
             Threshold(
@@ -354,7 +368,7 @@ class MPIQRScorer(MPScorer):
         streamed_timestamp: np.float64,
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
-        location_detector: LocationDetector = injected,
+        location_detector: LocationDetector,
     ) -> Tuple[AnomalyFlags, List[Threshold]]:
         """
         Adjusts the anomaly flag based on the specified direction and time series context.
@@ -406,6 +420,7 @@ class MPCascadingScorer(MPScorer):
         [LowVarianceScorer(), MPIQRScorer()], description="The list of scorers to cascade"
     )
 
+    @inject
     def batch_score(
         self,
         values: npt.NDArray[np.float64],
@@ -413,15 +428,17 @@ class MPCascadingScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.batch_score(
-                values, timestamps, mp_dist, ad_config, window_size
+                values, timestamps, mp_dist, ad_config, window_size, location_detector
             )
             if flags_and_scores is not None:
                 return flags_and_scores
         return None
 
+    @inject
     def stream_score(
         self,
         streamed_value: np.float64,
@@ -432,6 +449,7 @@ class MPCascadingScorer(MPScorer):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.stream_score(
@@ -443,6 +461,7 @@ class MPCascadingScorer(MPScorer):
                 history_mp_dist,
                 ad_config,
                 window_size,
+                location_detector,
             )
             if flags_and_scores is not None:
                 return flags_and_scores

@@ -38,3 +38,18 @@ class AlgoConfig(BaseModel):
         10,
         description="Fixed window size for the matrix profile",
     )
+
+    direction_detection_num_timesteps_in_batch_mode: int = Field(
+        12,
+        description="Number of timesteps to do direction detection in batch mode",
+    )
+
+    period_to_smooth_size: dict[int, int] = Field(
+        default={5: 19, 15: 11, 30: 7, 60: 5},
+        description="Flag smoothing window size based on the function smooth_size = floor(43 / sqrt(time_period))",
+    )
+
+    stream_smooth_context_sizes: dict[int, int] = Field(
+        default={5: 17, 15: 11, 30: 7, 60: 5},
+        description="History size for stream smoothing based on the function smooth_size = floor(43 / sqrt(time_period))",
+    )
