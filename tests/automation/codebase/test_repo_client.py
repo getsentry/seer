@@ -1,17 +1,28 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from github import UnknownObjectException
+from github import GithubException, UnknownObjectException
+from johen import generate
 from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import RepoDefinition
+from seer.automation.models import FileChange, RepoDefinition
+from seer.configuration import AppConfig
+from seer.dependency_injection import resolve
 
 
 @pytest.fixture(autouse=True)
 def clear_repo_client_cache():
     """Clear the RepoClient.from_repo_definition cache before each test"""
     RepoClient.from_repo_definition.cache_clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
+def setup_github_app_ids():
+    app_config = resolve(AppConfig)
+    app_config.GITHUB_APP_ID = "123"
+    app_config.GITHUB_PRIVATE_KEY = "456"
     yield
 
 
@@ -114,8 +125,7 @@ class TestRepoClient:
         mock_content = MagicMock()
         mock_content.decoded_content = b"test content"
         # this is a list of contents, so the content returned should be None
-        mock_github.get_repo.return_value.get_contents\
-            .return_value = [mock_content, mock_content]
+        mock_github.get_repo.return_value.get_contents.return_value = [mock_content, mock_content]
 
         content, encoding = repo_client.get_file_content("test_file.py")
 
@@ -408,6 +418,33 @@ class TestRepoClient:
             repo_client.create_branch_from_changes(
                 pr_title="Test PR", file_patches=None, file_changes=None
             )
+
+    @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
+    def test_create_branch_from_changes(self, mock_create_branch, repo_client, mock_github):
+        mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
+        mock_create_branch.return_value = MagicMock(ref="autofix/test-pr")
+
+        result = repo_client.create_branch_from_changes(
+            pr_title="Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+        )
+        assert result is not None
+        mock_create_branch.assert_called_with("autofix/test-pr")
+
+    @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
+    def test_create_branch_from_changes_branch_already_exists(
+        self, mock_create_branch, repo_client, mock_github
+    ):
+        mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
+        mock_create_branch.side_effects = [
+            GithubException(409, "Conflict", None, "Branch already exists"),
+            MagicMock(ref="autofix/test-pr/123456"),
+        ]
+
+        result = repo_client.create_branch_from_changes(
+            pr_title="Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+        )
+        assert result is not None
+        assert mock_create_branch.calls[0].args[0].startswith("autofix/test-pr/")
 
     @pytest.mark.parametrize(
         "input_type,input_data",
