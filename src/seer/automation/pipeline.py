@@ -68,7 +68,7 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
 
     def __init__(self, request: dict[str, Any]):
         self.request = self._instantiate_request(request)
-        self.context = self._instantiate_context(self.request, DbStateRunTypes.PR_REVIEW)
+        self.context = self._instantiate_context(self.request, None)
 
     def invoke(self) -> Any:
         try:
