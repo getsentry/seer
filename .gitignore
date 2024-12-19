@@ -139,7 +139,7 @@ dmypy.json
 .DS_Store
 
 # Evaluation Data
-data/
+/data/
 
 # GoCD
 /gocd/templates/vendor/

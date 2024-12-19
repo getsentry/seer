@@ -274,7 +274,6 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
-
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
@@ -372,10 +371,17 @@ class RepoClient:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
 
-        new_branch_name = (
-            branch_name or f"autofix/{sanitize_branch_name(pr_title)}/{generate_random_string(n=6)}"
-        )
-        branch_ref = self._create_branch(new_branch_name)
+        new_branch_name = branch_name or f"autofix/{sanitize_branch_name(pr_title)}"
+
+        try:
+            branch_ref = self._create_branch(new_branch_name)
+        except GithubException as e:
+            # only use the random suffix if the branch already exists
+            if e.status == 409:
+                new_branch_name = f"{new_branch_name}/{generate_random_string(n=6)}"
+                branch_ref = self._create_branch(new_branch_name)
+            else:
+                raise e
 
         tree_elements = []
         if file_patches:

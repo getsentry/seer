@@ -1,175 +1,229 @@
-from unittest.mock import MagicMock, patch
+from typing import cast
 
 import pytest
 from johen import generate
 
 from seer.automation.autofix.models import (
     AutofixContinuation,
+    AutofixCreatePrUpdatePayload,
     AutofixRequest,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
+    ChangesStep,
+    RootCauseStep,
 )
-from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    run_autofix_create_pr,
     run_autofix_execution,
     run_autofix_root_cause,
 )
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
+from seer.dependency_injection import resolve
+from seer.rpc import DummyRpcClient, RpcClient
 from tests.utils import eager_celery
 
 
-class TestGetAutofixState:
-    def test_get_state_by_group_id(self):
-        state = next(generate(AutofixContinuation))
-        with Session() as session:
-            session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
-            session.commit()
-
-        retrieved_state = get_autofix_state(group_id=100)
-        assert retrieved_state is not None
-        if retrieved_state is not None:
-            assert retrieved_state.get() == state
-
-    def test_get_state_by_run_id(self):
-        state = next(generate(AutofixContinuation))
-        with Session() as session:
-            session.add(DbRunState(id=2, group_id=200, value=state.model_dump(mode="json")))
-            session.commit()
-
-        retrieved_state = get_autofix_state(run_id=2)
-        assert retrieved_state is not None
-        if retrieved_state is not None:
-            assert retrieved_state.get() == state
-
-    def test_get_state_no_matching_group_id(self):
-        retrieved_state = get_autofix_state(group_id=999)
-        assert retrieved_state is None
-
-    def test_get_state_no_matching_run_id(self):
-        retrieved_state = get_autofix_state(run_id=999)
-        assert retrieved_state is None
-
-    def test_get_state_multiple_runs_for_group(self):
-        states = [next(generate(AutofixContinuation)) for _ in range(3)]
-        with Session() as session:
-            for i, state in enumerate(states, start=1):
-                session.add(DbRunState(id=i, group_id=300, value=state.model_dump(mode="json")))
-            session.commit()
-
-        retrieved_state = get_autofix_state(group_id=300)
-        assert retrieved_state is not None
-        if retrieved_state is not None:
-            # Should return the most recent state (highest id)
-            assert retrieved_state.get() == states[-1]
-
-    def test_get_state_no_parameters(self):
-        with pytest.raises(ValueError, match="Either group_id or run_id must be provided"):
-            get_autofix_state()
-
-    def test_get_state_both_parameters(self):
-        with pytest.raises(
-            ValueError, match="Either group_id or run_id must be provided, not both"
-        ):
-            get_autofix_state(group_id=1, run_id=1)
+@pytest.fixture(autouse=True)
+def setup_rpc_client():
+    rpc_client = resolve(RpcClient)
+    if isinstance(rpc_client, DummyRpcClient):
+        rpc_client.dry_run = True
 
 
-class TestGetStateFromPr:
-    def test_successful_state_mapping(self):
-        state = next(generate(AutofixContinuation))
-        with Session() as session:
-            session.add(DbRunState(id=1, group_id=1, value=state.model_dump(mode="json")))
-            session.flush()
-            session.add(DbPrIdToAutofixRunIdMapping(provider="test", pr_id=1, run_id=1))
-            session.commit()
-
-        retrieved_state = get_autofix_state_from_pr_id("test", 1)
-        assert retrieved_state is not None
-        if retrieved_state is not None:
-            assert retrieved_state.get() == state
-
-    def test_no_state_mapping(self):
-        state = next(generate(AutofixContinuation))
-        with Session() as session:
-            session.add(DbRunState(id=1, group_id=1, value=state.model_dump(mode="json")))
-            session.flush()
-            session.add(DbPrIdToAutofixRunIdMapping(provider="test", pr_id=1, run_id=1))
-            session.commit()
-
-        retrieved_state = get_autofix_state_from_pr_id("test", 2)
-        assert retrieved_state is None
+@pytest.fixture
+def autofix_request():
+    with open("tests/data/autofix_request.json") as f:
+        return AutofixRequest.model_validate_json(f.read())
 
 
-class TestRunAutofixRootCause:
-    @patch("seer.automation.autofix.tasks.create_initial_autofix_run")
-    @patch("seer.automation.autofix.tasks.RootCauseStep")
-    def test_happy_path(self, mock_root_cause_step, mock_create_initial_autofix_run):
-        # Setup
-        mock_request = MagicMock(spec=AutofixRequest)
-        mock_state = MagicMock()
-        mock_state.get.return_value = MagicMock(run_id=1, status=AutofixStatus.PROCESSING)
-        mock_create_initial_autofix_run.return_value = mock_state
+@pytest.fixture
+def autofix_full_finished_run():
+    with open("tests/data/autofix_full_finished_run.json") as f:
+        return AutofixContinuation.model_validate_json(f.read())
 
-        mock_signature = MagicMock()
-        mock_root_cause_step.get_signature.return_value = mock_signature
 
-        # Execute
-        result = run_autofix_root_cause(mock_request)
+def test_get_state_by_group_id():
+    state = next(generate(AutofixContinuation))
+    with Session() as session:
+        session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+        session.commit()
 
-        # Assert
-        mock_create_initial_autofix_run.assert_called_once_with(mock_request)
-        mock_root_cause_step.get_signature.assert_called_once()
-        assert mock_root_cause_step.get_signature.call_args[0][0].run_id == 1
-        assert isinstance(mock_root_cause_step.get_signature.call_args[0][0].step_id, int)
-        mock_signature.apply_async.assert_called_once()
-        assert result == 1
+    retrieved_state = get_autofix_state(group_id=100)
+    assert retrieved_state is not None
+    if retrieved_state is not None:
+        assert retrieved_state.get() == state
+
+
+def test_get_state_by_run_id():
+    state = next(generate(AutofixContinuation))
+    with Session() as session:
+        session.add(DbRunState(id=2, group_id=200, value=state.model_dump(mode="json")))
+        session.commit()
+
+    retrieved_state = get_autofix_state(run_id=2)
+    assert retrieved_state is not None
+    if retrieved_state is not None:
+        assert retrieved_state.get() == state
+
+
+def test_get_state_no_matching_group_id():
+    retrieved_state = get_autofix_state(group_id=999)
+    assert retrieved_state is None
+
+
+def test_get_state_no_matching_run_id():
+    retrieved_state = get_autofix_state(run_id=999)
+    assert retrieved_state is None
+
+
+def test_get_state_multiple_runs_for_group():
+    states = [next(generate(AutofixContinuation)) for _ in range(3)]
+    with Session() as session:
+        for i, state in enumerate(states, start=1):
+            session.add(DbRunState(id=i, group_id=300, value=state.model_dump(mode="json")))
+        session.commit()
+
+    retrieved_state = get_autofix_state(group_id=300)
+    assert retrieved_state is not None
+    if retrieved_state is not None:
+        # Should return the most recent state (highest id)
+        assert retrieved_state.get() == states[-1]
+
+
+def test_get_state_no_parameters():
+    with pytest.raises(ValueError, match="Either group_id or run_id must be provided"):
+        get_autofix_state()
+
+
+def test_get_state_both_parameters():
+    with pytest.raises(ValueError, match="Either group_id or run_id must be provided, not both"):
+        get_autofix_state(group_id=1, run_id=1)
+
+
+def test_successful_state_mapping():
+    state = next(generate(AutofixContinuation))
+    with Session() as session:
+        session.add(DbRunState(id=1, group_id=1, value=state.model_dump(mode="json")))
+        session.flush()
+        session.add(DbPrIdToAutofixRunIdMapping(provider="test", pr_id=1, run_id=1))
+        session.commit()
+
+    retrieved_state = get_autofix_state_from_pr_id("test", 1)
+    assert retrieved_state is not None
+    if retrieved_state is not None:
+        assert retrieved_state.get() == state
+
+
+def test_no_state_mapping():
+    state = next(generate(AutofixContinuation))
+    with Session() as session:
+        session.add(DbRunState(id=1, group_id=1, value=state.model_dump(mode="json")))
+        session.flush()
+        session.add(DbPrIdToAutofixRunIdMapping(provider="test", pr_id=1, run_id=1))
+        session.commit()
+
+    retrieved_state = get_autofix_state_from_pr_id("test", 2)
+    assert retrieved_state is None
 
 
 @pytest.mark.vcr()
-def test_autofix_run_happy_path():
-    request = next(generate(AutofixRequest))
-    continuation = create_initial_autofix_run(request)
-
+def test_autofix_run_root_cause_analysis(autofix_request: AutofixRequest):
     with eager_celery():
-        run_autofix_execution(
-            AutofixUpdateRequest(
-                run_id=continuation.id,
-                payload=AutofixRootCauseUpdatePayload(
-                    custom_root_cause="The file index.py is missing variable 'a'."
-                ),
-            )
-        )
+        run_id = run_autofix_root_cause(autofix_request)
+
+    assert run_id is not None
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    root_cause_step = continuation.get().find_step(key="root_cause_analysis")
+
+    assert root_cause_step is not None
+    root_cause_step = cast(RootCauseStep, root_cause_step)
+    assert root_cause_step.status == AutofixStatus.COMPLETED
+    assert root_cause_step.causes is not None
+    assert len(root_cause_step.causes) > 0
 
     assert continuation.get().status not in {AutofixStatus.ERROR}
 
 
-# class TestRunAutofixCreatePr:
-#     @patch("seer.automation.autofix.tasks.ContinuationState")
-#     @patch("seer.automation.autofix.tasks.AutofixEventManager")
-#     @patch("seer.automation.autofix.tasks.AutofixContext")
-#     def test_happy_path(self, mock_autofix_context, mock_event_manager, mock_continuation_state):
-#         # Setup
-#         mock_request = MagicMock(spec=AutofixUpdateRequest, run_id=1)
-#         mock_request.payload = MagicMock(
-#             spec=AutofixCreatePrUpdatePayload, repo_external_id="repo1", repo_id=1
-#         )
-#
-#         mock_state = MagicMock()
-#         mock_continuation_state.from_id.return_value = mock_state
-#
-#         mock_context = MagicMock()
-#         mock_autofix_context.return_value = mock_context
-#
-#         # Execute
-#         run_autofix_create_pr(mock_request)
-#
-#         # Assert
-#         mock_continuation_state.from_id.assert_called_once_with(1, model=AutofixContinuation)
-#         mock_context.commit_changes.assert_called_once_with(repo_external_id="repo1", repo_id=1)
-#
-#
+@pytest.mark.vcr()
+def test_autofix_run_full(autofix_request: AutofixRequest):
+    with eager_celery():
+        run_id = run_autofix_root_cause(autofix_request)
+
+    assert run_id is not None
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    root_cause_step = continuation.get().find_step(key="root_cause_analysis")
+
+    assert root_cause_step is not None
+    root_cause_step = cast(RootCauseStep, root_cause_step)
+    assert root_cause_step.status == AutofixStatus.COMPLETED
+
+    with eager_celery():
+        run_autofix_execution(
+            AutofixUpdateRequest(
+                run_id=run_id,
+                payload=AutofixRootCauseUpdatePayload(
+                    custom_root_cause="we should uncomment out the unit test parts"
+                ),
+            )
+        )
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    changes_step = continuation.get().find_step(key="changes")
+
+    assert changes_step is not None
+    changes_step = cast(ChangesStep, changes_step)
+    assert changes_step.status == AutofixStatus.COMPLETED
+    assert len(changes_step.changes) > 0
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}
+
+
+@pytest.mark.vcr()
+def test_autofix_create_pr(autofix_full_finished_run: AutofixContinuation):
+    with Session() as session:
+        session.add(
+            DbRunState(
+                id=autofix_full_finished_run.run_id,
+                group_id=1,
+                value=autofix_full_finished_run.model_dump(mode="json"),
+            )
+        )
+        session.commit()
+
+    repo_external_id = next(iter(autofix_full_finished_run.codebases.keys()))
+
+    with eager_celery():
+        run_autofix_create_pr(
+            AutofixUpdateRequest(
+                run_id=autofix_full_finished_run.run_id,
+                payload=AutofixCreatePrUpdatePayload(repo_external_id=repo_external_id),
+            )
+        )
+
+    with Session() as session:
+        pr_id_to_run_id_mapping = (
+            session.query(DbPrIdToAutofixRunIdMapping)
+            .filter_by(run_id=autofix_full_finished_run.run_id)
+            .first()
+        )
+        assert pr_id_to_run_id_mapping is not None
+        assert pr_id_to_run_id_mapping.pr_id is not None
+
+
 # class TestCheckAndMarkRecentAutofixRuns:
 #     @patch("seer.automation.autofix.tasks.datetime")
 #     @patch("seer.automation.autofix.tasks.get_all_autofix_runs_after")
