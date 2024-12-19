@@ -20,6 +20,7 @@ AnomalyFlags = external.AnomalyFlags
 Anomaly = external.Anomaly
 AnomalyDetectionConfig = external.AnomalyDetectionConfig
 TimeSeriesPoint = external.TimeSeriesPoint
+Seasonalities = external.Seasonalities
 RelativeLocation = relative_location.RelativeLocation
 Threshold = relative_location.Threshold
 ThresholdType = relative_location.ThresholdType
