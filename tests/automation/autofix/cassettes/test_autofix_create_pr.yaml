@@ -17,37 +17,41 @@ interactions:
   response:
     body:
       string: !!binary |
-        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
-        x/8AqvJqZo0aAAA=
+        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
+        1lKNHAAA
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -65,11 +69,11 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:02 GMT
+      - Thu, 19 Dec 2024 11:03:47 GMT
       ETag:
-      - W/"065c2aa704fa7557873dd45eaf37345f3f654b39aee77a0fbe65ee7048689174"
+      - W/"7ee69fd4bfd1d1c6a694cd66b38540c4a60884efb54dabe466bf67a0b53380da"
       Last-Modified:
-      - Tue, 17 Dec 2024 23:31:29 GMT
+      - Thu, 19 Dec 2024 06:42:47 GMT
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -89,19 +93,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87697:F62D32:6763353D
+      - FB77:E3394:189C13F:1BACF1A:6763FD93
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4999'
+      - '4995'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '1'
+      - '5'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -129,43 +133,47 @@ interactions:
   response:
     body:
       string: !!binary |
-        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
-        45UVAAA=
+        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
+        fbvaf3W+94XDoIifDM/s/PxvLXrMypcXAAA=
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -183,9 +191,9 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:02 GMT
+      - Thu, 19 Dec 2024 11:03:48 GMT
       ETag:
-      - W/"7c042fad34c9572100e8e5696d8ec2ef1cdd4b69afaf5a9785c3cc07f107376c"
+      - W/"65d9e1c35835ff94f3500aac655a4b691c0724a4fa6c9ea70c0694503fa7e460"
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -205,19 +213,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D876D4:F62D7F:6763353E
+      - FB77:E3394:189C1B1:1BACF94:6763FD93
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4998'
+      - '4994'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '2'
+      - '6'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -245,43 +253,47 @@ interactions:
   response:
     body:
       string: !!binary |
-        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
-        45UVAAA=
+        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
+        fbvaf3W+94XDoIifDM/s/PxvLXrMypcXAAA=
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -299,9 +311,9 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:03 GMT
+      - Thu, 19 Dec 2024 11:03:49 GMT
       ETag:
-      - W/"7c042fad34c9572100e8e5696d8ec2ef1cdd4b69afaf5a9785c3cc07f107376c"
+      - W/"65d9e1c35835ff94f3500aac655a4b691c0724a4fa6c9ea70c0694503fa7e460"
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -321,19 +333,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87704:F62DC4:6763353F
+      - FB77:E3394:189C223:1BAD013:6763FD94
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4997'
+      - '4993'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '3'
+      - '7'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -344,7 +356,7 @@ interactions:
       code: 200
       message: OK
 - request:
-    body: '{"ref": "refs/heads/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh",
+    body: '{"ref": "refs/heads/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models",
       "sha": "1338b499724dcf500023f44778c1345b26924761"}'
     headers:
       Accept:
@@ -365,7 +377,7 @@ interactions:
     uri: https://api.github.com/repos/getsentry/seer/git/refs
   response:
     body:
-      string: '{"ref":"refs/heads/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh","node_id":"REF_kwDOGjFL29oAXHJlZnMvaGVhZHMvYXV0b2ZpeC91bmNvbW1lbnRlZC11bml0LXRlc3QtYW5kLXJlcHJvZHVjdGlvbi1maWVsZHMtaW4tcm9vdC1jYXVzZS1tb2RlbHMvanJwOWdo","url":"https://api.github.com/repos/getsentry/seer/git/refs/heads/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh","object":{"sha":"1338b499724dcf500023f44778c1345b26924761","type":"commit","url":"https://api.github.com/repos/getsentry/seer/git/commits/1338b499724dcf500023f44778c1345b26924761"}}'
+      string: '{"ref":"refs/heads/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models","node_id":"REF_kwDOGjFL29oAXHJlZnMvaGVhZHMvYXV0b2ZpeC9haC15ZXMtdW5jb21tZW50ZWQtdW5pdC10ZXN0LWFuZC1yZXByb2R1Y3Rpb24tZmllbGRzLWluLXJvb3QtY2F1c2UtbW9kZWxz","url":"https://api.github.com/repos/getsentry/seer/git/refs/heads/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models","object":{"sha":"1338b499724dcf500023f44778c1345b26924761","type":"commit","url":"https://api.github.com/repos/getsentry/seer/git/commits/1338b499724dcf500023f44778c1345b26924761"}}'
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -383,11 +395,11 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:04 GMT
+      - Thu, 19 Dec 2024 11:03:50 GMT
       ETag:
-      - '"33ba34df00259e1c6f3af03fe58febbba7c806865fe96f22aca5966231614f36"'
+      - '"8af5acbbc449f7ce74feb99cdc1b8632ab3c8433f5e6ae0922a95834095c9521"'
       Location:
-      - https://api.github.com/repos/getsentry/seer/git/refs/heads/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh
+      - https://api.github.com/repos/getsentry/seer/git/refs/heads/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -405,19 +417,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87745:F62E0A:6763353F
+      - FB77:E3394:189C2A7:1BAD0B2:6763FD95
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4996'
+      - '4992'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '4'
+      - '8'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -441,66 +453,66 @@ interactions:
       authorization:
       - redacted
     method: GET
-    uri: https://api.github.com/repos/getsentry/seer/contents/src/seer/automation/autofix/components/root_cause/models.py?ref=refs%2Fheads%2Fautofix%2Funcommented-unit-test-and-reproduction-fields-in-root-cause-models%2Fjrp9gh
+    uri: https://api.github.com/repos/getsentry/seer/contents/src/seer/automation/autofix/components/root_cause/models.py?ref=refs%2Fheads%2Fautofix%2Fah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models
   response:
     body:
       string: !!binary |
-        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
+        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
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -518,7 +530,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:05 GMT
+      - Thu, 19 Dec 2024 11:03:50 GMT
       ETag:
       - W/"2bc5251c52ed8bcbaf46dfd528cf830e9ce40f01"
       Last-Modified:
@@ -542,19 +554,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D8778E:F62E76:67633540
+      - FB77:E3394:189C35C:1BAD176:6763FD96
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4995'
+      - '4991'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '5'
+      - '9'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -651,7 +663,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:06 GMT
+      - Thu, 19 Dec 2024 11:03:51 GMT
       ETag:
       - '"1a20eb6e083de7d40b307d93a3502b060f8f83fd2626d969c0e2a83274187907"'
       Location:
@@ -673,19 +685,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D877D8:F62ED8:67633541
+      - FB77:E3394:189C3F4:1BAD20C:6763FD96
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4994'
+      - '4990'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '6'
+      - '10'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -709,47 +721,52 @@ interactions:
       authorization:
       - redacted
     method: GET
-    uri: https://api.github.com/repos/getsentry/seer/branches/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh
+    uri: https://api.github.com/repos/getsentry/seer/branches/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models
   response:
     body:
       string: !!binary |
-        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
+        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
+        J50YAAA=
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -767,9 +784,9 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:06 GMT
+      - Thu, 19 Dec 2024 11:03:52 GMT
       ETag:
-      - W/"ff2478cfae2c232c49d557f9c85b210b39153c950811a9493dd797fa4821f7a7"
+      - W/"fb9d8d15b5fb35281d9350cc93e0210ae64fb07e3d3a63d59f84fae11ce55627"
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -789,19 +806,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87828:F62F36:67633542
+      - FB77:E3394:189C473:1BAD29F:6763FD97
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4993'
+      - '4989'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '7'
+      - '11'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -872,7 +889,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:07 GMT
+      - Thu, 19 Dec 2024 11:03:52 GMT
       ETag:
       - W/"3736436683b7e8a37e6fdaba67e82488a8cd41506573c17706cafe5cccef0bf3"
       Last-Modified:
@@ -896,19 +913,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D8785F:F62F7C:67633542
+      - FB77:E3394:189C4E6:1BAD32D:6763FD98
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4992'
+      - '4988'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '8'
+      - '12'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -959,7 +976,7 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:08 GMT
+      - Thu, 19 Dec 2024 11:03:53 GMT
       ETag:
       - '"e762c5a9a536b91a039c3cca45c0c803f5aba4413cf97a6759ba49d1213259f6"'
       Location:
@@ -981,19 +998,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D8789D:F62FC7:67633543
+      - FB77:E3394:189C566:1BAD3C1:6763FD98
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4991'
+      - '4987'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '9'
+      - '13'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -1004,8 +1021,9 @@ interactions:
       code: 201
       message: Created
 - request:
-    body: '{"message": "Uncommented Unit Test and Reproduction Fields in Root Cause
-      Models", "tree": "383347c8a8669f72d5ecdc88407d586b76a4c2ff", "parents": ["1338b499724dcf500023f44778c1345b26924761"]}'
+    body: '{"message": "Ah yes Uncommented Unit Test and Reproduction Fields in Root
+      Cause Models", "tree": "383347c8a8669f72d5ecdc88407d586b76a4c2ff", "parents":
+      ["1338b499724dcf500023f44778c1345b26924761"]}'
     headers:
       Accept:
       - '*/*'
@@ -1014,7 +1032,7 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '190'
+      - '197'
       Content-Type:
       - application/json
       User-Agent:
@@ -1025,10 +1043,10 @@ interactions:
     uri: https://api.github.com/repos/getsentry/seer/git/commits
   response:
     body:
-      string: '{"sha":"bc8a2b6316bd3ed1e080f04e0689d20431cb46db","node_id":"C_kwDOGjFL29oAKGJjOGEyYjYzMTZiZDNlZDFlMDgwZjA0ZTA2ODlkMjA0MzFjYjQ2ZGI","url":"https://api.github.com/repos/getsentry/seer/git/commits/bc8a2b6316bd3ed1e080f04e0689d20431cb46db","html_url":"https://github.com/getsentry/seer/commit/bc8a2b6316bd3ed1e080f04e0689d20431cb46db","author":{"name":"Jenn
-        Mueng","email":"30991498+jennmueng@users.noreply.github.com","date":"2024-12-18T20:49:09Z"},"committer":{"name":"Jenn
-        Mueng","email":"30991498+jennmueng@users.noreply.github.com","date":"2024-12-18T20:49:09Z"},"tree":{"sha":"383347c8a8669f72d5ecdc88407d586b76a4c2ff","url":"https://api.github.com/repos/getsentry/seer/git/trees/383347c8a8669f72d5ecdc88407d586b76a4c2ff"},"message":"Uncommented
-        Unit Test and Reproduction Fields in Root Cause Models","parents":[{"sha":"1338b499724dcf500023f44778c1345b26924761","url":"https://api.github.com/repos/getsentry/seer/git/commits/1338b499724dcf500023f44778c1345b26924761","html_url":"https://github.com/getsentry/seer/commit/1338b499724dcf500023f44778c1345b26924761"}],"verification":{"verified":false,"reason":"unsigned","signature":null,"payload":null,"verified_at":null}}'
+      string: '{"sha":"c6a61a3e9fbd9215c2d4a53519de62189d477d14","node_id":"C_kwDOGjFL29oAKGM2YTYxYTNlOWZiZDkyMTVjMmQ0YTUzNTE5ZGU2MjE4OWQ0NzdkMTQ","url":"https://api.github.com/repos/getsentry/seer/git/commits/c6a61a3e9fbd9215c2d4a53519de62189d477d14","html_url":"https://github.com/getsentry/seer/commit/c6a61a3e9fbd9215c2d4a53519de62189d477d14","author":{"name":"Jenn
+        Mueng","email":"30991498+jennmueng@users.noreply.github.com","date":"2024-12-19T11:03:55Z"},"committer":{"name":"Jenn
+        Mueng","email":"30991498+jennmueng@users.noreply.github.com","date":"2024-12-19T11:03:55Z"},"tree":{"sha":"383347c8a8669f72d5ecdc88407d586b76a4c2ff","url":"https://api.github.com/repos/getsentry/seer/git/trees/383347c8a8669f72d5ecdc88407d586b76a4c2ff"},"message":"Ah
+        yes Uncommented Unit Test and Reproduction Fields in Root Cause Models","parents":[{"sha":"1338b499724dcf500023f44778c1345b26924761","url":"https://api.github.com/repos/getsentry/seer/git/commits/1338b499724dcf500023f44778c1345b26924761","html_url":"https://github.com/getsentry/seer/commit/1338b499724dcf500023f44778c1345b26924761"}],"verification":{"verified":false,"reason":"unsigned","signature":null,"payload":null,"verified_at":null}}'
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -1040,17 +1058,17 @@ interactions:
       Cache-Control:
       - private, max-age=60, s-maxage=60
       Content-Length:
-      - '1173'
+      - '1180'
       Content-Security-Policy:
       - default-src 'none'
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:09 GMT
+      - Thu, 19 Dec 2024 11:03:55 GMT
       ETag:
-      - '"a2081a0e611d7a6d46cca4b303f4b257a0529863c0e2540ea65d456703894ca4"'
+      - '"72a86ecb04726f36e91ca6b6dede3f6b51186d68bcc5986fc8935ec5a243f411"'
       Location:
-      - https://api.github.com/repos/getsentry/seer/git/commits/bc8a2b6316bd3ed1e080f04e0689d20431cb46db
+      - https://api.github.com/repos/getsentry/seer/git/commits/c6a61a3e9fbd9215c2d4a53519de62189d477d14
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -1068,19 +1086,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87919:F63055:67633544
+      - FB77:E3394:189C680:1BAD4F4:6763FD99
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4990'
+      - '4986'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '10'
+      - '14'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -1091,7 +1109,7 @@ interactions:
       code: 201
       message: Created
 - request:
-    body: '{"sha": "bc8a2b6316bd3ed1e080f04e0689d20431cb46db"}'
+    body: '{"sha": "c6a61a3e9fbd9215c2d4a53519de62189d477d14"}'
     headers:
       Accept:
       - '*/*'
@@ -1108,17 +1126,17 @@ interactions:
       authorization:
       - redacted
     method: PATCH
-    uri: https://api.github.com/repos/getsentry/seer/git/refs/heads/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh
+    uri: https://api.github.com/repos/getsentry/seer/git/refs/heads/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA7VR22rCQBD9lzx33Wy0YnwrtiqilVowmhfZy2g2bnZDdhJrpf/elf5AKfRl4DCc
-        28wtauAYje/T0wK48pS36I76g7ZWuqoCi6BIazUSBI+EW0UaqBunWonaWXLUYJQn2pLGOSSStx5I
-        5RQYT8umTk9F9BDZgA9aBaPNy/RwvjyvZ+V0maTuaTdfmNyuOj7bFvl81e1321gkeQ2TlInqtRMZ
-        M8JuTD5hAZt4udsY2X/DffZ4Xu4WRs4XXT7flmpmOqFZxbOtDzrIswHKKu3UhJVB8zN/ZyiSjRHB
-        g9vFZZ0pF4K1jQmhCsTajynlte6dNBat6IXuNPR0np4AfbhCc6UeoKFhHxb/ei0nSpAYjW+RL3iI
-        J+SIJ2LYZ0Oh+qAYxKP4GA8gHo5SlcSDPpNiMFQi9MFrDYFx/5zGP/f7oXv6a+Ovr2+RtOBxSQIA
-        AA==
+        H4sIAAAAAAAAA7WR0W7CMAxF/6XPCyGBwsrb1g0Qgk0gjZa8oKQxNFCaqnEZHeLfF7QfmCbtxbJl
+        Xd177GtQwy4Y3aujOUjtqGzQ7syFypy04EhTZvZ0ghJB+94gQXBIZKlJDVVtdZOhsSXZGSi0I6Yk
+        tbVIMtk4ICeroXDBQ1D6Zmu0N1q9jrfHz5f3yWE855F9SqezQpSLs5ysczFdnDfpuqu4qCCOchmz
+        UKQL1El4UJyhSMKuSJb3udIx64r0rTtPxo2IWSvS51bxFdv0VpXifRSnolCT1dc8KZp5Ojur3hI3
+        fMwy/oEqiY4iuXz5YE1d+FA5YuVGlMrKdPYG80Z1PDT1gNbRPaDz+HVLHUBN/d4v/vVaVh0gw2B0
+        DVwufbxsIAdM9iDaKR1xFmZc92XYC1mkYcDZY6T7w6Fmfc+DbQV3hX+ZwT/z/cgd/bXx7fYNjBJV
+        sUkCAAA=
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -1136,9 +1154,9 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:11 GMT
+      - Thu, 19 Dec 2024 11:03:56 GMT
       ETag:
-      - W/"25336d2df9be317f91d04c2821d2d9804ca0551aeef4ba860e5218fac7d9cfdc"
+      - W/"65336854df302a4d967466dfdd612b7c470c5605e4cd711211160a323e6ac803"
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -1158,19 +1176,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87988:F630D3:67633545
+      - FB77:E3394:189C7AB:1BAD63B:6763FD9B
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4989'
+      - '4985'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '11'
+      - '15'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -1198,43 +1216,47 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAAA+1YaW/qSBb9KxajlrqVxTvYqHumIWxhMTsEhhYq7DIUmLLjsjEQvf/et1jySOb1
-        m5DXX0aaiA9xue5Wdc+9x/clRdEap7KpNSI0dZuy/fWaRKnsS4otECzLqmrMNNPMKJpju7okSYrq
-        alomY9iyqukzJW0qWiYtgyj1HTwlDgg9TFdJoVleluqK6edqheK+sV8Qq7DSrf2jNC5ba6uXSxqF
-        x/142Zasva2N9sW9VRiQxnKkN5Zt1VoW3ziD4mjhh9ytk7sdf4GokJujMEEebMXgvwemtYyRllXT
-        vAl9NEe/xwyH7J76IQ683f2cRIt4dg8xgoSDIh63IinanazcyZmeomZVOavo49SX80FE+NJomUSV
-        eHZh7aT492sUrzFjaM5NuxhFP0Nkvku2v2SFnOMIc9+fe1hgGIX2Qoh83xN+/oecVtO/TOiEwg4m
-        oONy5AvRAgu5o7gAGmkEKygSkOf5CRMIPPoCYiuQeI4xi4hPBUSdCQ2xjckGwwP8WIJDYYYYdgR4
-        Xz7a7x7th5jFXsRuhZgROhfKeE0oEZR7aUJLHmKLe+5Ub0GYcNopEJqd0DuwKJsQhO1TR3BCP4B1
-        cCZCnuDBqVN7J8AdBCgEo6c4QF0k4A3sCMEtH/TyhBR+Js5KWPgJGPAImsHRRNwc/CAf4EwOpu51
-        IfAJhE+oHWIIhZubpLhbvh8JNoIsAIMhxB1NUrcCBX1wTqb+01GB8lficC/Yyb4K6MZPcPdRiOHy
-        zvjQEcroqpHBuiOptopdxZR0jA1V0/QMtjXNQLpsYxcE45An6CKKApYVRRSQi3wUIUF9Js5xxOAe
-        w53IMA5FSCuRm2Pih81A5n7OzhH4TLwC8FwEvJ3afkyhZEi3qQ0OiUtsxHONn9HxGUNNiMIY36b4
-        7fA3KbhoqBS3KUbmFEVxyOFwx//yxfKjJbTKLaH7WLZyvX6neFjnmZawkp3P5fIPuVw7367S0Zxa
-        D50HGbUzcaz3F14ul4tMu50rD2asEOeGShWKjDWcLR8GJUqsCX00m1KvIVc86dnvJKrW8satSoM1
-        xol1k9ZsSeq1UClqktzwpqFL1jButd3nwrDYomLJEsv2hM634+dOfte3gnF4k86z0fNg1Q+1G7e6
-        H4w71qzlykYBlwa9jtaMW+VaOU5Glqba3UylvzclQF91tNMGzXV31rVrA3Ndy7MiDTOmVdk84xaS
-        jIcCXdkVajRdJw9VbFZYVYO+sUXD7WYRxLg8oe6ybybK0A4fNWPbqa9yiuNbpcclQ3s549ZHlZsF
-        ER9RaZeuGSUyxIO95xDPbfX84KHVUMGH2KwVatFT1aw9rev7YJ8r7ep6YWS2lad1daxt+quOF5fG
-        ietpN90BMltkKA+L6dayr3W2pChPaNGzpFDVCu2GVu6u/ETcDh+KidbbB5iqSdMT1a7JntYWNir7
-        0nI3cst69enJSurNgRyw2cOE1sL8XsmPW8Hj3LFWaN5diUVt6KsdaALaWHO3OZqrrLX60/pxHrTq
-        z/Ko1wmK8lOk5Pt6rb2c0CEO6xYbWzEdFvuzKPArIZb6dDvKVZJqYquhEg3x3ElXIrWVbztJcRCW
-        jTEx9uZTs70bQj7Q8qqyfFiUVCddtJp5ebaVkKSAz97DeiBbA4U6u0qtL1YbqNPoytTvlnfFzKpp
-        zZ6XMetpE/pckctLmkedUbOOlPVyaa+jaqBZtLorZOqtsBrlajes0qkbkih64X5jDkZOqeYztWrk
-        9cViQklmZ447HdKLKwtlFFCn3uxN6G+7tjiC8sT/ilbhm4gA/ARo5/mI91xeJ4SPlokJ5cUXKqYj
-        G5JjQ8d0TWjvqmzqRtrNaCrSNKTauoukma05GgR67MDCm74r/PrBdvtPQc5ARcwYiqELdxLQiAk9
-        FhxosMKxrQq//mc3fSdncDnI///3zf/BvnnuBVMEveIbtMsA2vWp7vWJzrWI1t70bZ/8SuHed+Gj
-        /k80RvbOxEda/rXBiKcmzKAYfCXJnj8HNp9NHUgwvOGs/AzVS6LeKLTTgyfLs4FyNwujbWO/0rmi
-        DYpQ+N77wyI7kRZOrIHeAZmLOJ8WY/Gs/1+b3zTQMQ9PWg5fBP+N/hx4unh29/vXc97l+pzogtx7
-        R98yqwvV4qsI+HP8H3jtteIg8iL6QL7hhMDtLzxYwqIr3DhsfwF6xyL4YOIKGBwtsOGPu3ISAEcS
-        Cj68HAjkQVM8Y3ZIAk7BrnDpjRio8cM5omR/YHJXqAExnokHNvvxYA7bQQxvIJ2ukDvufxGDkGyQ
-        vePhn75tnOm1ut4JgqpoF3Ba2oc7hid+1dMNwcn0tB7EM4/Y/MRJhKfIgW+jVNZFHsPvvx7PaEzw
-        7M6FlAUZDgrZNNIaNMVvA7KoAyAlq9BWYfunAHnW/wOAvPD4+5i82HgVLM9yn0fmOw0/As5XVT+E
-        z1ctfx9Ev6q8BDfkxdUofdV0LVBfBa/H6qvo3wPXC08OY4wz1H8QsUdCzFLZf58/7T/KjXlxuPrT
-        /tznrzDyfQS+Gx2cSMuH1X/5A6rW1CN0BUcAJ4A998phxQwGN/YCZhWnSSJ390LFX/Mr/uVyFAIX
-        gtCPYEzzdWRwWjgNFDDlQ6CLecJzTHjfBKxFMZuCffsYAKauH9r4MJ/wIPG4K9SnxzrNe82BvGwj
-        fuGpWUw8J/UHLJ7kIQdO70Hs+BaKcBAcxpuyrqYNOK+v3oJz329235zuvDkw6GGHwHmcX/4E2wl0
-        45UVAAA=
+        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
+        fbvaf3W+94XDoIifDM/s/PxvLXrMypcXAAA=
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -1252,9 +1274,9 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:12 GMT
+      - Thu, 19 Dec 2024 11:03:57 GMT
       ETag:
-      - W/"7c042fad34c9572100e8e5696d8ec2ef1cdd4b69afaf5a9785c3cc07f107376c"
+      - W/"65d9e1c35835ff94f3500aac655a4b691c0724a4fa6c9ea70c0694503fa7e460"
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -1274,19 +1296,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D879CE:F63128:67633547
+      - FB77:E3394:189C867:1BAD706:6763FD9C
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4988'
+      - '4984'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '12'
+      - '16'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -1310,73 +1332,79 @@ interactions:
       authorization:
       - redacted
     method: GET
-    uri: https://api.github.com/repos/getsentry/seer/compare/1338b499724dcf500023f44778c1345b26924761...bc8a2b6316bd3ed1e080f04e0689d20431cb46db
+    uri: https://api.github.com/repos/getsentry/seer/compare/1338b499724dcf500023f44778c1345b26924761...c6a61a3e9fbd9215c2d4a53519de62189d477d14
   response:
     body:
       string: !!binary |
-        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
+        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
+        Zku9Fdv195frEByn/wO2i45XUk0AAA==
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -1394,11 +1422,11 @@ interactions:
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:12 GMT
+      - Thu, 19 Dec 2024 11:03:58 GMT
       ETag:
-      - W/"6796f63030eba50c800f075932fb848cbf1e89e973d3308e59e8f0660ac8aae1"
+      - W/"38a60e630e7c91bc3e4a27772dd07ae5063402152139c7869d94275d65758a33"
       Last-Modified:
-      - Wed, 18 Dec 2024 20:49:09 GMT
+      - Thu, 19 Dec 2024 11:03:55 GMT
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -1418,19 +1446,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87A12:F6318F:67633548
+      - FB77:E3394:189C8ED:1BAD795:6763FD9D
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4987'
+      - '4983'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '13'
+      - '17'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
@@ -1441,21 +1469,21 @@ interactions:
       code: 200
       message: OK
 - request:
-    body: '{"base": "main", "head": "refs/heads/autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh",
-      "title": "\ud83e\udd16 Uncommented Unit Test and Reproduction Fields in Root
-      Cause Models", "body": "\ud83d\udc4b Hi there! This PR was automatically generated
-      by Autofix \ud83e\udd16\n\nThis fix was triggered by Jenn Mueng\n\n\nThe changes
-      in `models.py` involve uncommenting the previously commented-out fields `unit_test`,
-      `reproduction`, `reproduction_instructions`, and `unit_test` in both `RootCause`
-      and `RootCauseAnalysisItemPrompt` classes. This indicates that these fields
-      are now active and available for use in the respective data models. Additionally,
-      the code responsible for transforming these fields into the appropriate formats
-      has been updated to reflect the uncommenting, streamlining the data flow between
-      the models and their representations. These changes enhance the model''s functionality
-      by allowing unit tests and reproduction instructions to be stored and handled.\n\nIf
-      you have any questions or feedback for the Sentry team about this fix, please
-      email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: 1.", "draft":
-      true}'
+    body: '{"base": "main", "head": "refs/heads/autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models",
+      "title": "\ud83e\udd16 Ah yes Uncommented Unit Test and Reproduction Fields
+      in Root Cause Models", "body": "\ud83d\udc4b Hi there! This PR was automatically
+      generated by Autofix \ud83e\udd16\n\nThis fix was triggered by Jenn Mueng\n\n\nThe
+      changes in `models.py` involve uncommenting the previously commented-out fields
+      `unit_test`, `reproduction`, `reproduction_instructions`, and `unit_test` in
+      both `RootCause` and `RootCauseAnalysisItemPrompt` classes. This indicates that
+      these fields are now active and available for use in the respective data models.
+      Additionally, the code responsible for transforming these fields into the appropriate
+      formats has been updated to reflect the uncommenting, streamlining the data
+      flow between the models and their representations. These changes enhance the
+      model''s functionality by allowing unit tests and reproduction instructions
+      to be stored and handled.\n\nIf you have any questions or feedback for the Sentry
+      team about this fix, please email [autofix@sentry.io](mailto:autofix@sentry.io)
+      with the Run ID: 1.", "draft": true}'
     headers:
       Accept:
       - '*/*'
@@ -1464,7 +1492,7 @@ interactions:
       Connection:
       - keep-alive
       Content-Length:
-      - '1184'
+      - '1191'
       Content-Type:
       - application/json
       User-Agent:
@@ -1475,8 +1503,8 @@ interactions:
     uri: https://api.github.com/repos/getsentry/seer/pulls
   response:
     body:
-      string: "{\"url\":\"https://api.github.com/repos/getsentry/seer/pulls/1661\",\"id\":2243075772,\"node_id\":\"PR_kwDOGjFL286Fsp68\",\"html_url\":\"https://github.com/getsentry/seer/pull/1661\",\"diff_url\":\"https://github.com/getsentry/seer/pull/1661.diff\",\"patch_url\":\"https://github.com/getsentry/seer/pull/1661.patch\",\"issue_url\":\"https://api.github.com/repos/getsentry/seer/issues/1661\",\"number\":1661,\"state\":\"open\",\"locked\":false,\"title\":\"\U0001F916
-        Uncommented Unit Test and Reproduction Fields in Root Cause Models\",\"user\":{\"login\":\"jennmueng\",\"id\":30991498,\"node_id\":\"MDQ6VXNlcjMwOTkxNDk4\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/30991498?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/jennmueng\",\"html_url\":\"https://github.com/jennmueng\",\"followers_url\":\"https://api.github.com/users/jennmueng/followers\",\"following_url\":\"https://api.github.com/users/jennmueng/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/jennmueng/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/jennmueng/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/jennmueng/subscriptions\",\"organizations_url\":\"https://api.github.com/users/jennmueng/orgs\",\"repos_url\":\"https://api.github.com/users/jennmueng/repos\",\"events_url\":\"https://api.github.com/users/jennmueng/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/jennmueng/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"body\":\"\U0001F44B
+      string: "{\"url\":\"https://api.github.com/repos/getsentry/seer/pulls/1664\",\"id\":2244176994,\"node_id\":\"PR_kwDOGjFL286Fw2xi\",\"html_url\":\"https://github.com/getsentry/seer/pull/1664\",\"diff_url\":\"https://github.com/getsentry/seer/pull/1664.diff\",\"patch_url\":\"https://github.com/getsentry/seer/pull/1664.patch\",\"issue_url\":\"https://api.github.com/repos/getsentry/seer/issues/1664\",\"number\":1664,\"state\":\"open\",\"locked\":false,\"title\":\"\U0001F916
+        Ah yes Uncommented Unit Test and Reproduction Fields in Root Cause Models\",\"user\":{\"login\":\"jennmueng\",\"id\":30991498,\"node_id\":\"MDQ6VXNlcjMwOTkxNDk4\",\"avatar_url\":\"https://private-avatars.githubusercontent.com/u/30991498?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTEiLCJleHAiOjE3MzQ2MDY3MjAsIm5iZiI6MTczNDYwNTUyMCwicGF0aCI6Ii91LzMwOTkxNDk4In0.LvWe3vAkhrB2J1vp5yOACtl0b4xvGsmUWO5ww0WpMGg&v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/jennmueng\",\"html_url\":\"https://github.com/jennmueng\",\"followers_url\":\"https://api.github.com/users/jennmueng/followers\",\"following_url\":\"https://api.github.com/users/jennmueng/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/jennmueng/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/jennmueng/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/jennmueng/subscriptions\",\"organizations_url\":\"https://api.github.com/users/jennmueng/orgs\",\"repos_url\":\"https://api.github.com/users/jennmueng/repos\",\"events_url\":\"https://api.github.com/users/jennmueng/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/jennmueng/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"body\":\"\U0001F44B
         Hi there! This PR was automatically generated by Autofix \U0001F916\\n\\nThis
         fix was triggered by Jenn Mueng\\n\\n\\nThe changes in `models.py` involve
         uncommenting the previously commented-out fields `unit_test`, `reproduction`,
@@ -1488,11 +1516,11 @@ interactions:
         their representations. These changes enhance the model's functionality by
         allowing unit tests and reproduction instructions to be stored and handled.\\n\\nIf
         you have any questions or feedback for the Sentry team about this fix, please
-        email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: 1.\",\"created_at\":\"2024-12-18T20:49:13Z\",\"updated_at\":\"2024-12-18T20:49:13Z\",\"closed_at\":null,\"merged_at\":null,\"merge_commit_sha\":null,\"assignee\":null,\"assignees\":[],\"requested_reviewers\":[],\"requested_teams\":[],\"labels\":[],\"milestone\":null,\"draft\":true,\"commits_url\":\"https://api.github.com/repos/getsentry/seer/pulls/1661/commits\",\"review_comments_url\":\"https://api.github.com/repos/getsentry/seer/pulls/1661/comments\",\"review_comment_url\":\"https://api.github.com/repos/getsentry/seer/pulls/comments{/number}\",\"comments_url\":\"https://api.github.com/repos/getsentry/seer/issues/1661/comments\",\"statuses_url\":\"https://api.github.com/repos/getsentry/seer/statuses/bc8a2b6316bd3ed1e080f04e0689d20431cb46db\",\"head\":{\"label\":\"getsentry:autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh\",\"ref\":\"autofix/uncommented-unit-test-and-reproduction-fields-in-root-cause-models/jrp9gh\",\"sha\":\"bc8a2b6316bd3ed1e080f04e0689d20431cb46db\",\"user\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/1396951?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"repo\":{\"id\":439438299,\"node_id\":\"R_kgDOGjFL2w\",\"name\":\"seer\",\"full_name\":\"getsentry/seer\",\"private\":false,\"owner\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/1396951?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"html_url\":\"https://github.com/getsentry/seer\",\"description\":\"Seer
+        email [autofix@sentry.io](mailto:autofix@sentry.io) with the Run ID: 1.\",\"created_at\":\"2024-12-19T11:03:59Z\",\"updated_at\":\"2024-12-19T11:03:59Z\",\"closed_at\":null,\"merged_at\":null,\"merge_commit_sha\":null,\"assignee\":null,\"assignees\":[],\"requested_reviewers\":[],\"requested_teams\":[],\"labels\":[],\"milestone\":null,\"draft\":true,\"commits_url\":\"https://api.github.com/repos/getsentry/seer/pulls/1664/commits\",\"review_comments_url\":\"https://api.github.com/repos/getsentry/seer/pulls/1664/comments\",\"review_comment_url\":\"https://api.github.com/repos/getsentry/seer/pulls/comments{/number}\",\"comments_url\":\"https://api.github.com/repos/getsentry/seer/issues/1664/comments\",\"statuses_url\":\"https://api.github.com/repos/getsentry/seer/statuses/c6a61a3e9fbd9215c2d4a53519de62189d477d14\",\"head\":{\"label\":\"getsentry:autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models\",\"ref\":\"autofix/ah-yes-uncommented-unit-test-and-reproduction-fields-in-root-cause-models\",\"sha\":\"c6a61a3e9fbd9215c2d4a53519de62189d477d14\",\"user\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://private-avatars.githubusercontent.com/u/1396951?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTEiLCJleHAiOjE3MzQ2MDY3MjAsIm5iZiI6MTczNDYwNTUyMCwicGF0aCI6Ii91LzEzOTY5NTEifQ.8JguODxTLXJqiQzvByTuzrkmgon1LE8AmJxCPRZL-XQ&v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"repo\":{\"id\":439438299,\"node_id\":\"R_kgDOGjFL2w\",\"name\":\"seer\",\"full_name\":\"getsentry/seer\",\"private\":false,\"owner\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://private-avatars.githubusercontent.com/u/1396951?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTEiLCJleHAiOjE3MzQ2MDY3MjAsIm5iZiI6MTczNDYwNTUyMCwicGF0aCI6Ii91LzEzOTY5NTEifQ.8JguODxTLXJqiQzvByTuzrkmgon1LE8AmJxCPRZL-XQ&v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"html_url\":\"https://github.com/getsentry/seer\",\"description\":\"Seer
         is a service that provides AI capabilities to Sentry, running inference on
-        Sentry issues and providing insights to users.\",\"fork\":false,\"url\":\"https://api.github.com/repos/getsentry/seer\",\"forks_url\":\"https://api.github.com/repos/getsentry/seer/forks\",\"keys_url\":\"https://api.github.com/repos/getsentry/seer/keys{/key_id}\",\"collaborators_url\":\"https://api.github.com/repos/getsentry/seer/collaborators{/collaborator}\",\"teams_url\":\"https://api.github.com/repos/getsentry/seer/teams\",\"hooks_url\":\"https://api.github.com/repos/getsentry/seer/hooks\",\"issue_events_url\":\"https://api.github.com/repos/getsentry/seer/issues/events{/number}\",\"events_url\":\"https://api.github.com/repos/getsentry/seer/events\",\"assignees_url\":\"https://api.github.com/repos/getsentry/seer/assignees{/user}\",\"branches_url\":\"https://api.github.com/repos/getsentry/seer/branches{/branch}\",\"tags_url\":\"https://api.github.com/repos/getsentry/seer/tags\",\"blobs_url\":\"https://api.github.com/repos/getsentry/seer/git/blobs{/sha}\",\"git_tags_url\":\"https://api.github.com/repos/getsentry/seer/git/tags{/sha}\",\"git_refs_url\":\"https://api.github.com/repos/getsentry/seer/git/refs{/sha}\",\"trees_url\":\"https://api.github.com/repos/getsentry/seer/git/trees{/sha}\",\"statuses_url\":\"https://api.github.com/repos/getsentry/seer/statuses/{sha}\",\"languages_url\":\"https://api.github.com/repos/getsentry/seer/languages\",\"stargazers_url\":\"https://api.github.com/repos/getsentry/seer/stargazers\",\"contributors_url\":\"https://api.github.com/repos/getsentry/seer/contributors\",\"subscribers_url\":\"https://api.github.com/repos/getsentry/seer/subscribers\",\"subscription_url\":\"https://api.github.com/repos/getsentry/seer/subscription\",\"commits_url\":\"https://api.github.com/repos/getsentry/seer/commits{/sha}\",\"git_commits_url\":\"https://api.github.com/repos/getsentry/seer/git/commits{/sha}\",\"comments_url\":\"https://api.github.com/repos/getsentry/seer/comments{/number}\",\"issue_comment_url\":\"https://api.github.com/repos/getsentry/seer/issues/comments{/number}\",\"contents_url\":\"https://api.github.com/repos/getsentry/seer/contents/{+path}\",\"compare_url\":\"https://api.github.com/repos/getsentry/seer/compare/{base}...{head}\",\"merges_url\":\"https://api.github.com/repos/getsentry/seer/merges\",\"archive_url\":\"https://api.github.com/repos/getsentry/seer/{archive_format}{/ref}\",\"downloads_url\":\"https://api.github.com/repos/getsentry/seer/downloads\",\"issues_url\":\"https://api.github.com/repos/getsentry/seer/issues{/number}\",\"pulls_url\":\"https://api.github.com/repos/getsentry/seer/pulls{/number}\",\"milestones_url\":\"https://api.github.com/repos/getsentry/seer/milestones{/number}\",\"notifications_url\":\"https://api.github.com/repos/getsentry/seer/notifications{?since,all,participating}\",\"labels_url\":\"https://api.github.com/repos/getsentry/seer/labels{/name}\",\"releases_url\":\"https://api.github.com/repos/getsentry/seer/releases{/id}\",\"deployments_url\":\"https://api.github.com/repos/getsentry/seer/deployments\",\"created_at\":\"2021-12-17T19:22:26Z\",\"updated_at\":\"2024-12-17T23:31:29Z\",\"pushed_at\":\"2024-12-18T20:49:11Z\",\"git_url\":\"git://github.com/getsentry/seer.git\",\"ssh_url\":\"git@github.com:getsentry/seer.git\",\"clone_url\":\"https://github.com/getsentry/seer.git\",\"svn_url\":\"https://github.com/getsentry/seer\",\"homepage\":\"https://sentry.io/lp/ai-ml-beta/\",\"size\":12778,\"stargazers_count\":46,\"watchers_count\":46,\"language\":\"Python\",\"has_issues\":true,\"has_projects\":true,\"has_downloads\":true,\"has_wiki\":true,\"has_pages\":false,\"has_discussions\":false,\"forks_count\":1,\"mirror_url\":null,\"archived\":false,\"disabled\":false,\"open_issues_count\":141,\"license\":{\"key\":\"other\",\"name\":\"Other\",\"spdx_id\":\"NOASSERTION\",\"url\":null,\"node_id\":\"MDc6TGljZW5zZTA=\"},\"allow_forking\":true,\"is_template\":false,\"web_commit_signoff_required\":false,\"topics\":[\"tag-production\"],\"visibility\":\"public\",\"forks\":1,\"open_issues\":141,\"watchers\":46,\"default_branch\":\"main\"}},\"base\":{\"label\":\"getsentry:main\",\"ref\":\"main\",\"sha\":\"1338b499724dcf500023f44778c1345b26924761\",\"user\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/1396951?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"repo\":{\"id\":439438299,\"node_id\":\"R_kgDOGjFL2w\",\"name\":\"seer\",\"full_name\":\"getsentry/seer\",\"private\":false,\"owner\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/1396951?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"html_url\":\"https://github.com/getsentry/seer\",\"description\":\"Seer
+        Sentry issues and providing insights to users.\",\"fork\":false,\"url\":\"https://api.github.com/repos/getsentry/seer\",\"forks_url\":\"https://api.github.com/repos/getsentry/seer/forks\",\"keys_url\":\"https://api.github.com/repos/getsentry/seer/keys{/key_id}\",\"collaborators_url\":\"https://api.github.com/repos/getsentry/seer/collaborators{/collaborator}\",\"teams_url\":\"https://api.github.com/repos/getsentry/seer/teams\",\"hooks_url\":\"https://api.github.com/repos/getsentry/seer/hooks\",\"issue_events_url\":\"https://api.github.com/repos/getsentry/seer/issues/events{/number}\",\"events_url\":\"https://api.github.com/repos/getsentry/seer/events\",\"assignees_url\":\"https://api.github.com/repos/getsentry/seer/assignees{/user}\",\"branches_url\":\"https://api.github.com/repos/getsentry/seer/branches{/branch}\",\"tags_url\":\"https://api.github.com/repos/getsentry/seer/tags\",\"blobs_url\":\"https://api.github.com/repos/getsentry/seer/git/blobs{/sha}\",\"git_tags_url\":\"https://api.github.com/repos/getsentry/seer/git/tags{/sha}\",\"git_refs_url\":\"https://api.github.com/repos/getsentry/seer/git/refs{/sha}\",\"trees_url\":\"https://api.github.com/repos/getsentry/seer/git/trees{/sha}\",\"statuses_url\":\"https://api.github.com/repos/getsentry/seer/statuses/{sha}\",\"languages_url\":\"https://api.github.com/repos/getsentry/seer/languages\",\"stargazers_url\":\"https://api.github.com/repos/getsentry/seer/stargazers\",\"contributors_url\":\"https://api.github.com/repos/getsentry/seer/contributors\",\"subscribers_url\":\"https://api.github.com/repos/getsentry/seer/subscribers\",\"subscription_url\":\"https://api.github.com/repos/getsentry/seer/subscription\",\"commits_url\":\"https://api.github.com/repos/getsentry/seer/commits{/sha}\",\"git_commits_url\":\"https://api.github.com/repos/getsentry/seer/git/commits{/sha}\",\"comments_url\":\"https://api.github.com/repos/getsentry/seer/comments{/number}\",\"issue_comment_url\":\"https://api.github.com/repos/getsentry/seer/issues/comments{/number}\",\"contents_url\":\"https://api.github.com/repos/getsentry/seer/contents/{+path}\",\"compare_url\":\"https://api.github.com/repos/getsentry/seer/compare/{base}...{head}\",\"merges_url\":\"https://api.github.com/repos/getsentry/seer/merges\",\"archive_url\":\"https://api.github.com/repos/getsentry/seer/{archive_format}{/ref}\",\"downloads_url\":\"https://api.github.com/repos/getsentry/seer/downloads\",\"issues_url\":\"https://api.github.com/repos/getsentry/seer/issues{/number}\",\"pulls_url\":\"https://api.github.com/repos/getsentry/seer/pulls{/number}\",\"milestones_url\":\"https://api.github.com/repos/getsentry/seer/milestones{/number}\",\"notifications_url\":\"https://api.github.com/repos/getsentry/seer/notifications{?since,all,participating}\",\"labels_url\":\"https://api.github.com/repos/getsentry/seer/labels{/name}\",\"releases_url\":\"https://api.github.com/repos/getsentry/seer/releases{/id}\",\"deployments_url\":\"https://api.github.com/repos/getsentry/seer/deployments\",\"created_at\":\"2021-12-17T19:22:26Z\",\"updated_at\":\"2024-12-19T06:42:47Z\",\"pushed_at\":\"2024-12-19T11:03:56Z\",\"git_url\":\"git://github.com/getsentry/seer.git\",\"ssh_url\":\"git@github.com:getsentry/seer.git\",\"clone_url\":\"https://github.com/getsentry/seer.git\",\"svn_url\":\"https://github.com/getsentry/seer\",\"homepage\":\"https://sentry.io/lp/ai-ml-beta/\",\"size\":13004,\"stargazers_count\":47,\"watchers_count\":47,\"language\":\"Python\",\"has_issues\":true,\"has_projects\":true,\"has_downloads\":true,\"has_wiki\":true,\"has_pages\":false,\"has_discussions\":false,\"forks_count\":1,\"mirror_url\":null,\"archived\":false,\"disabled\":false,\"open_issues_count\":142,\"license\":{\"key\":\"other\",\"name\":\"Other\",\"spdx_id\":\"NOASSERTION\",\"url\":null,\"node_id\":\"MDc6TGljZW5zZTA=\"},\"allow_forking\":true,\"is_template\":false,\"web_commit_signoff_required\":false,\"topics\":[\"tag-production\"],\"visibility\":\"public\",\"forks\":1,\"open_issues\":142,\"watchers\":47,\"default_branch\":\"main\"}},\"base\":{\"label\":\"getsentry:main\",\"ref\":\"main\",\"sha\":\"1338b499724dcf500023f44778c1345b26924761\",\"user\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://private-avatars.githubusercontent.com/u/1396951?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTEiLCJleHAiOjE3MzQ2MDY3MjAsIm5iZiI6MTczNDYwNTUyMCwicGF0aCI6Ii91LzEzOTY5NTEifQ.8JguODxTLXJqiQzvByTuzrkmgon1LE8AmJxCPRZL-XQ&v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"repo\":{\"id\":439438299,\"node_id\":\"R_kgDOGjFL2w\",\"name\":\"seer\",\"full_name\":\"getsentry/seer\",\"private\":false,\"owner\":{\"login\":\"getsentry\",\"id\":1396951,\"node_id\":\"MDEyOk9yZ2FuaXphdGlvbjEzOTY5NTE=\",\"avatar_url\":\"https://private-avatars.githubusercontent.com/u/1396951?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTEiLCJleHAiOjE3MzQ2MDY3MjAsIm5iZiI6MTczNDYwNTUyMCwicGF0aCI6Ii91LzEzOTY5NTEifQ.8JguODxTLXJqiQzvByTuzrkmgon1LE8AmJxCPRZL-XQ&v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/getsentry\",\"html_url\":\"https://github.com/getsentry\",\"followers_url\":\"https://api.github.com/users/getsentry/followers\",\"following_url\":\"https://api.github.com/users/getsentry/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/getsentry/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/getsentry/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/getsentry/subscriptions\",\"organizations_url\":\"https://api.github.com/users/getsentry/orgs\",\"repos_url\":\"https://api.github.com/users/getsentry/repos\",\"events_url\":\"https://api.github.com/users/getsentry/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/getsentry/received_events\",\"type\":\"Organization\",\"user_view_type\":\"public\",\"site_admin\":false},\"html_url\":\"https://github.com/getsentry/seer\",\"description\":\"Seer
         is a service that provides AI capabilities to Sentry, running inference on
-        Sentry issues and providing insights to users.\",\"fork\":false,\"url\":\"https://api.github.com/repos/getsentry/seer\",\"forks_url\":\"https://api.github.com/repos/getsentry/seer/forks\",\"keys_url\":\"https://api.github.com/repos/getsentry/seer/keys{/key_id}\",\"collaborators_url\":\"https://api.github.com/repos/getsentry/seer/collaborators{/collaborator}\",\"teams_url\":\"https://api.github.com/repos/getsentry/seer/teams\",\"hooks_url\":\"https://api.github.com/repos/getsentry/seer/hooks\",\"issue_events_url\":\"https://api.github.com/repos/getsentry/seer/issues/events{/number}\",\"events_url\":\"https://api.github.com/repos/getsentry/seer/events\",\"assignees_url\":\"https://api.github.com/repos/getsentry/seer/assignees{/user}\",\"branches_url\":\"https://api.github.com/repos/getsentry/seer/branches{/branch}\",\"tags_url\":\"https://api.github.com/repos/getsentry/seer/tags\",\"blobs_url\":\"https://api.github.com/repos/getsentry/seer/git/blobs{/sha}\",\"git_tags_url\":\"https://api.github.com/repos/getsentry/seer/git/tags{/sha}\",\"git_refs_url\":\"https://api.github.com/repos/getsentry/seer/git/refs{/sha}\",\"trees_url\":\"https://api.github.com/repos/getsentry/seer/git/trees{/sha}\",\"statuses_url\":\"https://api.github.com/repos/getsentry/seer/statuses/{sha}\",\"languages_url\":\"https://api.github.com/repos/getsentry/seer/languages\",\"stargazers_url\":\"https://api.github.com/repos/getsentry/seer/stargazers\",\"contributors_url\":\"https://api.github.com/repos/getsentry/seer/contributors\",\"subscribers_url\":\"https://api.github.com/repos/getsentry/seer/subscribers\",\"subscription_url\":\"https://api.github.com/repos/getsentry/seer/subscription\",\"commits_url\":\"https://api.github.com/repos/getsentry/seer/commits{/sha}\",\"git_commits_url\":\"https://api.github.com/repos/getsentry/seer/git/commits{/sha}\",\"comments_url\":\"https://api.github.com/repos/getsentry/seer/comments{/number}\",\"issue_comment_url\":\"https://api.github.com/repos/getsentry/seer/issues/comments{/number}\",\"contents_url\":\"https://api.github.com/repos/getsentry/seer/contents/{+path}\",\"compare_url\":\"https://api.github.com/repos/getsentry/seer/compare/{base}...{head}\",\"merges_url\":\"https://api.github.com/repos/getsentry/seer/merges\",\"archive_url\":\"https://api.github.com/repos/getsentry/seer/{archive_format}{/ref}\",\"downloads_url\":\"https://api.github.com/repos/getsentry/seer/downloads\",\"issues_url\":\"https://api.github.com/repos/getsentry/seer/issues{/number}\",\"pulls_url\":\"https://api.github.com/repos/getsentry/seer/pulls{/number}\",\"milestones_url\":\"https://api.github.com/repos/getsentry/seer/milestones{/number}\",\"notifications_url\":\"https://api.github.com/repos/getsentry/seer/notifications{?since,all,participating}\",\"labels_url\":\"https://api.github.com/repos/getsentry/seer/labels{/name}\",\"releases_url\":\"https://api.github.com/repos/getsentry/seer/releases{/id}\",\"deployments_url\":\"https://api.github.com/repos/getsentry/seer/deployments\",\"created_at\":\"2021-12-17T19:22:26Z\",\"updated_at\":\"2024-12-17T23:31:29Z\",\"pushed_at\":\"2024-12-18T20:49:11Z\",\"git_url\":\"git://github.com/getsentry/seer.git\",\"ssh_url\":\"git@github.com:getsentry/seer.git\",\"clone_url\":\"https://github.com/getsentry/seer.git\",\"svn_url\":\"https://github.com/getsentry/seer\",\"homepage\":\"https://sentry.io/lp/ai-ml-beta/\",\"size\":12778,\"stargazers_count\":46,\"watchers_count\":46,\"language\":\"Python\",\"has_issues\":true,\"has_projects\":true,\"has_downloads\":true,\"has_wiki\":true,\"has_pages\":false,\"has_discussions\":false,\"forks_count\":1,\"mirror_url\":null,\"archived\":false,\"disabled\":false,\"open_issues_count\":141,\"license\":{\"key\":\"other\",\"name\":\"Other\",\"spdx_id\":\"NOASSERTION\",\"url\":null,\"node_id\":\"MDc6TGljZW5zZTA=\"},\"allow_forking\":true,\"is_template\":false,\"web_commit_signoff_required\":false,\"topics\":[\"tag-production\"],\"visibility\":\"public\",\"forks\":1,\"open_issues\":141,\"watchers\":46,\"default_branch\":\"main\"}},\"_links\":{\"self\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/1661\"},\"html\":{\"href\":\"https://github.com/getsentry/seer/pull/1661\"},\"issue\":{\"href\":\"https://api.github.com/repos/getsentry/seer/issues/1661\"},\"comments\":{\"href\":\"https://api.github.com/repos/getsentry/seer/issues/1661/comments\"},\"review_comments\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/1661/comments\"},\"review_comment\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/comments{/number}\"},\"commits\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/1661/commits\"},\"statuses\":{\"href\":\"https://api.github.com/repos/getsentry/seer/statuses/bc8a2b6316bd3ed1e080f04e0689d20431cb46db\"}},\"author_association\":\"MEMBER\",\"auto_merge\":null,\"active_lock_reason\":null,\"merged\":false,\"mergeable\":null,\"rebaseable\":null,\"mergeable_state\":\"unknown\",\"merged_by\":null,\"comments\":0,\"review_comments\":0,\"maintainer_can_modify\":false,\"commits\":1,\"additions\":24,\"deletions\":24,\"changed_files\":1}"
+        Sentry issues and providing insights to users.\",\"fork\":false,\"url\":\"https://api.github.com/repos/getsentry/seer\",\"forks_url\":\"https://api.github.com/repos/getsentry/seer/forks\",\"keys_url\":\"https://api.github.com/repos/getsentry/seer/keys{/key_id}\",\"collaborators_url\":\"https://api.github.com/repos/getsentry/seer/collaborators{/collaborator}\",\"teams_url\":\"https://api.github.com/repos/getsentry/seer/teams\",\"hooks_url\":\"https://api.github.com/repos/getsentry/seer/hooks\",\"issue_events_url\":\"https://api.github.com/repos/getsentry/seer/issues/events{/number}\",\"events_url\":\"https://api.github.com/repos/getsentry/seer/events\",\"assignees_url\":\"https://api.github.com/repos/getsentry/seer/assignees{/user}\",\"branches_url\":\"https://api.github.com/repos/getsentry/seer/branches{/branch}\",\"tags_url\":\"https://api.github.com/repos/getsentry/seer/tags\",\"blobs_url\":\"https://api.github.com/repos/getsentry/seer/git/blobs{/sha}\",\"git_tags_url\":\"https://api.github.com/repos/getsentry/seer/git/tags{/sha}\",\"git_refs_url\":\"https://api.github.com/repos/getsentry/seer/git/refs{/sha}\",\"trees_url\":\"https://api.github.com/repos/getsentry/seer/git/trees{/sha}\",\"statuses_url\":\"https://api.github.com/repos/getsentry/seer/statuses/{sha}\",\"languages_url\":\"https://api.github.com/repos/getsentry/seer/languages\",\"stargazers_url\":\"https://api.github.com/repos/getsentry/seer/stargazers\",\"contributors_url\":\"https://api.github.com/repos/getsentry/seer/contributors\",\"subscribers_url\":\"https://api.github.com/repos/getsentry/seer/subscribers\",\"subscription_url\":\"https://api.github.com/repos/getsentry/seer/subscription\",\"commits_url\":\"https://api.github.com/repos/getsentry/seer/commits{/sha}\",\"git_commits_url\":\"https://api.github.com/repos/getsentry/seer/git/commits{/sha}\",\"comments_url\":\"https://api.github.com/repos/getsentry/seer/comments{/number}\",\"issue_comment_url\":\"https://api.github.com/repos/getsentry/seer/issues/comments{/number}\",\"contents_url\":\"https://api.github.com/repos/getsentry/seer/contents/{+path}\",\"compare_url\":\"https://api.github.com/repos/getsentry/seer/compare/{base}...{head}\",\"merges_url\":\"https://api.github.com/repos/getsentry/seer/merges\",\"archive_url\":\"https://api.github.com/repos/getsentry/seer/{archive_format}{/ref}\",\"downloads_url\":\"https://api.github.com/repos/getsentry/seer/downloads\",\"issues_url\":\"https://api.github.com/repos/getsentry/seer/issues{/number}\",\"pulls_url\":\"https://api.github.com/repos/getsentry/seer/pulls{/number}\",\"milestones_url\":\"https://api.github.com/repos/getsentry/seer/milestones{/number}\",\"notifications_url\":\"https://api.github.com/repos/getsentry/seer/notifications{?since,all,participating}\",\"labels_url\":\"https://api.github.com/repos/getsentry/seer/labels{/name}\",\"releases_url\":\"https://api.github.com/repos/getsentry/seer/releases{/id}\",\"deployments_url\":\"https://api.github.com/repos/getsentry/seer/deployments\",\"created_at\":\"2021-12-17T19:22:26Z\",\"updated_at\":\"2024-12-19T06:42:47Z\",\"pushed_at\":\"2024-12-19T11:03:56Z\",\"git_url\":\"git://github.com/getsentry/seer.git\",\"ssh_url\":\"git@github.com:getsentry/seer.git\",\"clone_url\":\"https://github.com/getsentry/seer.git\",\"svn_url\":\"https://github.com/getsentry/seer\",\"homepage\":\"https://sentry.io/lp/ai-ml-beta/\",\"size\":13004,\"stargazers_count\":47,\"watchers_count\":47,\"language\":\"Python\",\"has_issues\":true,\"has_projects\":true,\"has_downloads\":true,\"has_wiki\":true,\"has_pages\":false,\"has_discussions\":false,\"forks_count\":1,\"mirror_url\":null,\"archived\":false,\"disabled\":false,\"open_issues_count\":142,\"license\":{\"key\":\"other\",\"name\":\"Other\",\"spdx_id\":\"NOASSERTION\",\"url\":null,\"node_id\":\"MDc6TGljZW5zZTA=\"},\"allow_forking\":true,\"is_template\":false,\"web_commit_signoff_required\":false,\"topics\":[\"tag-production\"],\"visibility\":\"public\",\"forks\":1,\"open_issues\":142,\"watchers\":47,\"default_branch\":\"main\"}},\"_links\":{\"self\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/1664\"},\"html\":{\"href\":\"https://github.com/getsentry/seer/pull/1664\"},\"issue\":{\"href\":\"https://api.github.com/repos/getsentry/seer/issues/1664\"},\"comments\":{\"href\":\"https://api.github.com/repos/getsentry/seer/issues/1664/comments\"},\"review_comments\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/1664/comments\"},\"review_comment\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/comments{/number}\"},\"commits\":{\"href\":\"https://api.github.com/repos/getsentry/seer/pulls/1664/commits\"},\"statuses\":{\"href\":\"https://api.github.com/repos/getsentry/seer/statuses/c6a61a3e9fbd9215c2d4a53519de62189d477d14\"}},\"author_association\":\"MEMBER\",\"auto_merge\":null,\"active_lock_reason\":null,\"merged\":false,\"mergeable\":null,\"rebaseable\":null,\"mergeable_state\":\"unknown\",\"merged_by\":null,\"comments\":0,\"review_comments\":0,\"maintainer_can_modify\":false,\"commits\":1,\"additions\":24,\"deletions\":24,\"changed_files\":1}"
     headers:
       Access-Control-Allow-Origin:
       - '*'
@@ -1504,17 +1532,17 @@ interactions:
       Cache-Control:
       - private, max-age=60, s-maxage=60
       Content-Length:
-      - '16396'
+      - '17684'
       Content-Security-Policy:
       - default-src 'none'
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Wed, 18 Dec 2024 20:49:14 GMT
+      - Thu, 19 Dec 2024 11:03:59 GMT
       ETag:
-      - '"77c1dcd9265372da983a14c451536a3c89bc2abb2cfd5e37c81c95cd5e2e17be"'
+      - '"8db7f6dfb971b74c3fab70b672b923c4f1aeed3aeef5fd23bae4f40b9a779866"'
       Location:
-      - https://api.github.com/repos/getsentry/seer/pulls/1661
+      - https://api.github.com/repos/getsentry/seer/pulls/1664
       Referrer-Policy:
       - origin-when-cross-origin, strict-origin-when-cross-origin
       Server:
@@ -1532,19 +1560,19 @@ interactions:
       X-GitHub-Media-Type:
       - github.v3; format=json
       X-GitHub-Request-Id:
-      - C067:122BDF:D87A56:F631DF:67633549
+      - FB77:E3394:189C9A3:1BAD859:6763FD9E
       X-OAuth-Scopes:
       - repo
       X-RateLimit-Limit:
       - '5000'
       X-RateLimit-Remaining:
-      - '4986'
+      - '4982'
       X-RateLimit-Reset:
-      - '1734558542'
+      - '1734609677'
       X-RateLimit-Resource:
       - core
       X-RateLimit-Used:
-      - '14'
+      - '18'
       X-XSS-Protection:
       - '0'
       github-authentication-token-expiration:
