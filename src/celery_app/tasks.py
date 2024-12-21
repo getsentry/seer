@@ -4,7 +4,11 @@ from celery.schedules import crontab
 
 import seer.app  # noqa: F401
 from celery_app.app import celery_app as celery  # noqa: F401
-from seer.anomaly_detection.tasks import cleanup_disabled_alerts, cleanup_timeseries  # noqa: F401
+from seer.anomaly_detection.tasks import (  # noqa: F401
+    cleanup_disabled_alerts,
+    cleanup_old_timeseries_history,
+    cleanup_timeseries,
+)
 from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
 from seer.automation.tasks import delete_data_for_ttl
 from seer.configuration import AppConfig
@@ -42,4 +46,10 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             crontab(minute="0", hour="0", day_of_week="0"),  # Run once a week on Sunday
             cleanup_disabled_alerts.signature(kwargs={}, queue=config.CELERY_WORKER_QUEUE),
             name="Clean up old disabled timeseries every week",
+        )
+
+        sender.add_periodic_task(
+            crontab(minute="0", hour="0", day_of_week="0"),  # Run once a week on Sunday
+            cleanup_old_timeseries_history.signature(kwargs={}, queue=config.CELERY_WORKER_QUEUE),
+            name="Clean up old timeseries history every week",
         )

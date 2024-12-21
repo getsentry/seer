@@ -360,3 +360,17 @@ class DbIssueSummary(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
+
+
+class DbDynamicAlertTimeSeriesHistory(Base):
+    __tablename__ = "dynamic_alert_time_series_history"
+
+    alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    anomaly_type: Mapped[str] = mapped_column(String, nullable=False)
+    saved_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )

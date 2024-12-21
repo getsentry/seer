@@ -9,8 +9,18 @@ from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDet
 from seer.anomaly_detection.models import MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.anomaly_detection.models.timeseries import TimeSeries
-from seer.anomaly_detection.tasks import cleanup_disabled_alerts, cleanup_timeseries
-from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
+from seer.anomaly_detection.tasks import (
+    cleanup_disabled_alerts,
+    cleanup_old_timeseries_history,
+    cleanup_timeseries,
+)
+from seer.db import (
+    DbDynamicAlert,
+    DbDynamicAlertTimeSeries,
+    DbDynamicAlertTimeSeriesHistory,
+    Session,
+    TaskStatus,
+)
 
 
 class TestCleanupTasks(unittest.TestCase):
@@ -236,3 +246,19 @@ class TestCleanupTasks(unittest.TestCase):
 
             assert alert is not None
             assert len(alert.timeseries) == 500
+
+    def test_cleanup_old_timeseries_history(self):
+        # Create and save alert with 1000 points (all old)
+        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 0)
+        date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
+        cleanup_timeseries(external_alert_id, date_threshold)
+
+        cleanup_old_timeseries_history()
+
+        with Session() as session:
+            history = (
+                session.query(DbDynamicAlertTimeSeriesHistory)
+                .filter(DbDynamicAlertTimeSeriesHistory.alert_id == external_alert_id)
+                .all()
+            )
+            assert len(history) == 0
