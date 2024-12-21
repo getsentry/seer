@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from operator import and_, or_
+from typing import List
 
 import numpy as np
 import sentry_sdk
@@ -10,7 +11,13 @@ from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
 from seer.anomaly_detection.models import AlgoConfig, TimeSeries
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
-from seer.db import DbDynamicAlert, Session, TaskStatus
+from seer.db import (
+    DbDynamicAlert,
+    DbDynamicAlertTimeSeries,
+    DbDynamicAlertTimeSeriesHistory,
+    Session,
+    TaskStatus,
+)
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
@@ -68,10 +75,27 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
     for ts in alert.timeseries:
         if ts.timestamp.timestamp() < date_threshold:
             to_remove.append(ts)
+
+    # Save history records before removing
+    save_timeseries_history(alert, to_remove)
+
     for ts in to_remove:
         alert.timeseries.remove(ts)
         deleted_count += 1
     return deleted_count
+
+
+def save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAlertTimeSeries]):
+    with Session() as session:
+        for ts in timeseries:
+            history_record = DbDynamicAlertTimeSeriesHistory(
+                alert_id=alert.external_alert_id,
+                timestamp=ts.timestamp,
+                anomaly_type=ts.anomaly_type,
+                saved_at=datetime.datetime.now(datetime.UTC),
+            )
+            session.add(history_record)
+        session.commit()
 
 
 @inject
