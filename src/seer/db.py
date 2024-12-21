@@ -369,8 +369,8 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
+    value: Mapped[float] = mapped_column(Float, nullable=False)
     anomaly_type: Mapped[str] = mapped_column(String, nullable=False)
-    added_at: Mapped[datetime.datetime] = mapped_column(
+    saved_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
-    removed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)

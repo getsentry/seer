@@ -92,6 +92,7 @@ def save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAle
                 alert_id=alert.external_alert_id,
                 timestamp=ts.timestamp,
                 anomaly_type=ts.anomaly_type,
+                value=ts.value,
                 saved_at=datetime.datetime.now(datetime.UTC),
             )
             session.add(history_record)
@@ -187,3 +188,17 @@ def cleanup_disabled_alerts():
 
         session.commit()
         logger.info(f"Deleted {deleted_count} alerts")
+
+
+@celery_app.task
+@sentry_sdk.trace
+def cleanup_old_timeseries_history():
+    date_threshold = datetime.now() - timedelta(days=90)
+    with Session() as session:
+        deleted_count = (
+            session.query(DbDynamicAlertTimeSeriesHistory)
+            .filter(DbDynamicAlertTimeSeriesHistory.saved_at < date_threshold)
+            .delete()
+        )
+        session.commit()
+        logger.info(f"Deleted {deleted_count} timeseries history records older than 90 days")
