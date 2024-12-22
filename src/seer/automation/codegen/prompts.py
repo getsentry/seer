@@ -158,3 +158,57 @@ class CodingUnitTestPrompts:
             test_design_hint=test_design_hint,
             steps_example_str=prompt_obj.to_prompt_str(),
         )
+
+
+class CodingCodeReviewPrompts:
+    @staticmethod
+    def format_system_msg():
+        return textwrap.dedent(
+            """\
+            You are an exceptional principal engineer that provides robust and meaningful pull request comments given a change request against codebases.
+
+            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
+
+            # Guidelines:
+            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            - You also MUST think step-by-step before giving the final answer."""
+        )
+
+    @staticmethod
+    def format_pr_review_plan_step(diff_str: str):
+        return textwrap.dedent(
+            """\
+            You are given the below code changes as a diff:
+            {diff_str}
+
+            # Your goal:
+            Review the code changes in the diff and provide constructive feedback and suggestions for improvement.
+
+            As an exceptional principal engineer, your feedback should be insightful and actionable, focusing on code quality, performance, security, and adherence to best practices.
+
+            # Guidelines:
+            - Carefully analyze the code changes and understand the context.
+            - Provide specific comments on lines or sections where improvements can be made.
+            - Highlight any potential bugs, performance issues, or security vulnerabilities.
+            - Suggest best practices and coding standards that should be followed.
+            - Be respectful and professional in your feedback.
+            - Do not include any placeholders; your feedback should be clear and detailed.
+            - Before giving your final answer, think step-by-step to ensure your review is thorough.
+            - Use the following JSON format for each comment:
+                {{
+                    "path": "{{file_name}}",
+                    "line": The end line line of the code block where you are suggesting changes,
+                    "body": "Your comment text here",
+                    "start_line": The starting line of the code block where you are suggesting changes,
+                    "code_suggestion": "If you have a code suggestion, provide it here. Ensure you are properly escaping special characters"
+                }}
+            - Ensure each comment includes:
+                - The correct file name ("{{file_name}}").
+                - The specific line number requiring the comment.
+                - Clear, professional, and actionable feedback.
+            - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
+            - Wrap the comments in a <comments> and </comments> block.
+            """
+        ).format(
+            diff_str=diff_str,
+        )
