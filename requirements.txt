@@ -304,7 +304,7 @@ itsdangerous==2.1.2
     # via
     #   -r requirements-constraints.txt
     #   flask
-jinja2==3.1.4
+jinja2==3.1.5
     # via
     #   -r requirements-constraints.txt
     #   flask
