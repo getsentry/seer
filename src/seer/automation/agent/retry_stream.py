@@ -7,6 +7,7 @@ previous one left off, i.e., its chunks are streamed and saved.
 import logging
 import time
 from dataclasses import dataclass, field
+from math import ceil
 from typing import Callable, cast
 
 from seer.automation.agent.models import Message, ToolCall, Usage
@@ -72,7 +73,7 @@ class PartialCompletion:
     def update(self, chunk: str | ToolCall | Usage) -> None:
         if isinstance(chunk, str):
             self.content_chunks.append(chunk)
-            num_tokens_approx = round(len(chunk) / self.avg_num_chars_per_token)
+            num_tokens_approx = ceil(len(chunk) / self.avg_num_chars_per_token)
             # A content chunk isn't a single token as of a few months ago,
             # and the event doesn't indicate how many tokens are in the chunk.
             # So there isn't a clean and quick way to exactly calculate the
