@@ -23,6 +23,7 @@ from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 
+from seer.automation.agent import retry_stream
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
@@ -625,6 +626,52 @@ class AnthropicProvider:
             langfuse_context.update_current_observation(model=self.model_name, usage=usage)
             stream.response.close()
 
+    @staticmethod
+    def is_overloaded_error(exception: Exception) -> bool:
+        # I don't know what exactly the overloaded_error looks like b/c
+        # I can't guarantee an accurate local reproduction.
+        #
+        # If it has a response/status_code, we could check exception.status_code == 529
+        # https://sentry.sentry.io/issues/6147057985/?project=6178942
+        # https://docs.anthropic.com/en/api/errors#http-errors
+        #
+        # But I don't think that'd catch:
+        # https://sentry.sentry.io/issues/6147058185/?project=6178942
+        # https://sentry.sentry.io/issues/6152252202/?project=6178942
+        exception_str = str(exception)
+        return isinstance(exception, anthropic.AnthropicError) and (
+            "overloaded_error" in exception_str
+        )
+
+    @observe(as_type="generation", name="Anthropic Stream with retry")
+    def generate_text_stream_retry(
+        self,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
+        max_retries_during_stream: int | None = None,
+        sleep_sec_scaler: retry_stream.SleepSecScaler | None = None,
+    ) -> Iterator[str | ToolCall | Usage]:
+        return retry_stream.generate_text_stream_retry(
+            does_exception_indicate_retry=self.is_overloaded_error,
+            model=self,
+            prompt=prompt,
+            messages=messages,
+            system_prompt=system_prompt,
+            tools=tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            # Retry args
+            max_retries_during_stream=max_retries_during_stream,
+            sleep_sec_scaler=sleep_sec_scaler,
+        )
+
     def construct_message_from_stream(
         self, content_chunks: list[str], tool_calls: list[ToolCall]
     ) -> Message:
@@ -822,7 +869,7 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
-                yield from model.generate_text_stream(
+                yield from model.generate_text_stream_retry(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
