@@ -93,7 +93,7 @@ def save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAle
                 timestamp=ts.timestamp,
                 anomaly_type=ts.anomaly_type,
                 value=ts.value,
-                saved_at=datetime.datetime.now(datetime.UTC),
+                saved_at=datetime.now(),
             )
             session.add(history_record)
         session.commit()

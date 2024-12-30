@@ -253,9 +253,26 @@ class TestCleanupTasks(unittest.TestCase):
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries(external_alert_id, date_threshold)
 
-        cleanup_old_timeseries_history()
+        # Confirm the historical table is populated with 1000 points
 
         with Session() as session:
+            history = (
+                session.query(DbDynamicAlertTimeSeriesHistory)
+                .filter(DbDynamicAlertTimeSeriesHistory.alert_id == external_alert_id)
+                .all()
+            )
+            assert len(history) == 1000
+
+        # Timeseries History should be deleted as these points have been added over 90 days ago
+
+        with Session() as session:
+            session.query(DbDynamicAlertTimeSeriesHistory).update(
+                {DbDynamicAlertTimeSeriesHistory.saved_at: datetime.now() - timedelta(days=91)}
+            )
+            session.commit()
+
+            cleanup_old_timeseries_history()
+
             history = (
                 session.query(DbDynamicAlertTimeSeriesHistory)
                 .filter(DbDynamicAlertTimeSeriesHistory.alert_id == external_alert_id)

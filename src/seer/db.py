@@ -364,7 +364,7 @@ class DbIssueSummary(Base):
 
 class DbDynamicAlertTimeSeriesHistory(Base):
     __tablename__ = "dynamic_alert_time_series_history"
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
