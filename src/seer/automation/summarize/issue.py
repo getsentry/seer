@@ -10,11 +10,6 @@ from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
 
 
-class Step(BaseModel):
-    reasoning: str
-    justification: str
-
-
 class IssueSummary(BaseModel):
     title: str
     whats_wrong: str
