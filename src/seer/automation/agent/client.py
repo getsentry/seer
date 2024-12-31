@@ -15,8 +15,13 @@ from anthropic.types import (
 )
 from google import genai  # type: ignore[attr-defined]
 from google.genai.types import (  # type: ignore[import-untyped]
+    Content,
+    FunctionCall,
+    FunctionDeclaration,
+    FunctionResponse,
     GenerateContentConfig,
     GoogleSearch,
+    Part,
     Tool,
 )
 from langfuse.decorators import langfuse_context, observe
@@ -653,11 +658,27 @@ class GeminiProvider:
         ),
     ]
 
-    def get_client(self) -> genai.Client:
+    @staticmethod
+    def get_client() -> genai.Client:
         return genai.Client(
             vertexai=True,
             location="us-central1",
         )
+
+    @classmethod
+    def model(cls, model_name: str) -> "GeminiProvider":
+        model_config = cls._get_config(model_name)
+        return cls(
+            model_name=model_name,
+            defaults=model_config.defaults if model_config else None,
+        )
+
+    @classmethod
+    def _get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
+                return config
+        return None
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
     def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
@@ -677,6 +698,149 @@ class GeminiProvider:
         for each in response.candidates[0].content.parts:
             answer += each.text
         return answer
+
+    @observe(as_type="generation", name="Gemini Generation")
+    def generate_structured(
+        self,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        temperature: float | None = None,
+        response_format: Type[StructuredOutputType],
+        max_tokens: int | None = None,
+    ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
+        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        client = self.get_client()
+
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=message_dicts,
+            config=GenerateContentConfig(
+                tools=tool_dicts,
+                response_modalities=["TEXT"],
+                temperature=temperature or 0.0,
+                response_mime_type="application/json",
+                max_output_tokens=max_tokens or 8192,
+                response_schema=response_format.model_json_schema(),
+            ),
+        )
+        result = response.text
+        structured_result = response_format.model_validate_json(result)
+
+        usage = Usage(
+            completion_tokens=response.usage_metadata.candidates_token_count,
+            prompt_tokens=response.usage_metadata.prompt_token_count,
+            total_tokens=response.usage_metadata.total_token_count,
+        )
+        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+        return LlmGenerateStructuredResponse(
+            parsed=structured_result,
+            metadata=LlmResponseMetadata(
+                model=self.model_name,
+                provider_name=self.provider_name,
+                usage=usage,
+            ),
+        )
+
+    @classmethod
+    def _prep_message_and_tools(
+        cls,
+        *,
+        messages: list[Message] | None = None,
+        prompt: str | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+    ) -> tuple[list[Content], list[Tool] | None, str | None]:
+        contents = [cls.to_content(message) for message in messages] if messages else []
+        if prompt:
+            contents.append(cls.to_content(Message(role="user", content=prompt)))
+
+        tools = [cls.to_tool(tool) for tool in tools] if tools else []
+
+        return contents, tools, system_prompt
+
+    @staticmethod
+    def to_content(message: Message) -> Content:
+        if message.role == "tool":
+            return Content(
+                role="user",
+                parts=[
+                    Part(
+                        text=message.content or "",
+                        function_response=FunctionResponse(
+                            name=message.tool_calls[0].function if message.tool_calls else "",
+                            response=(
+                                json.loads(message.tool_calls[0].args) if message.tool_calls else {}
+                            ),
+                        ),
+                    )
+                ],
+            )
+        elif message.role == "tool_use":
+            if not message.tool_calls:
+                return Content(
+                    role="model",
+                    parts=[Part(text=message.content or "")],
+                )
+            tool_call = message.tool_calls[0]  # Assuming only one tool call per message
+            return Content(
+                role="model",
+                parts=[
+                    Part(
+                        function_call=FunctionCall(
+                            name=tool_call.function,
+                            args=json.loads(tool_call.args),
+                        ),
+                        text=message.content or "",
+                    )
+                ],
+            )
+        elif message.role == "assistant":
+            return Content(
+                role="model",
+                parts=[Part(text=message.content or "")],
+            )
+        else:
+            return Content(
+                role="user",
+                parts=[Part(text=message.content or "")],
+            )
+
+    @staticmethod
+    def to_tool(tool: FunctionTool) -> Tool:
+        return Tool(
+            function_declarations=[
+                FunctionDeclaration(
+                    name=tool.name,
+                    description=tool.description,
+                    parameters={
+                        "type": "OBJECT",
+                        "properties": {
+                            param["name"]: {
+                                key: value
+                                for key, value in {
+                                    "type": param["type"].upper(),
+                                    "description": param.get("description", ""),
+                                    "items": param.get("items"),
+                                }.items()
+                                if value is not None
+                            }
+                            for param in tool.parameters
+                        },
+                        "required": tool.required,
+                    },
+                )
+            ],
+        )
 
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
@@ -775,6 +939,17 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 raise NotImplementedError("Anthropic structured outputs are not yet supported")
+            elif model.provider_name == LlmProviderType.GEMINI:
+                model = cast(GeminiProvider, model)
+                return model.generate_structured(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    response_format=response_format,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    tools=tools,
+                )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:

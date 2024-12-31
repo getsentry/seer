@@ -3,16 +3,11 @@ import textwrap
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.models import EventDetails
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
-
-
-class Step(BaseModel):
-    reasoning: str
-    justification: str
 
 
 class IssueSummary(BaseModel):
@@ -80,7 +75,7 @@ def summarize_issue(
     )
 
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+        model=GeminiProvider.model("gemini-2.0-flash-exp"),
         prompt=prompt,
         response_format=IssueSummary,
         temperature=0.0,
