@@ -17,17 +17,20 @@ def find_issue_resources(
     event_content = event_details.format_event()
 
     prompt = textwrap.dedent(
-        f"""Please find the most relevant and helpful online resources for the following issue in my code. Please make your answer one very concise paragraph (max 2 lines).
+        f"""I've seen and understood the following issue in my code. Are there any online resources to help me understand and debug the issue, such as forums, tutorials, and documentation?
+        If so, please find the most relevant ones and share them with me. Do not summarize the issue itself, but just the key applicable info you find online.
+        It is possible however that the issue below is unique to my code and online resources you find don't apply. In that case, return nothing.
+        But if you do find useful resources relevant to the issue, please make your answer a very concise paragraph (max 25 words).
 
         {event_content}
         """
     )
 
-    _, resources = llm_client.generate_text_from_web_search(
+    text, resources = llm_client.generate_text_from_web_search(
         prompt=prompt, model=GeminiProvider.model("gemini-2.0-flash-exp")
     )
-
-    return FindIssueResourcesResponse(group_id=request.group_id, resources=resources)
+    print(text)
+    return FindIssueResourcesResponse(group_id=request.group_id, text=text, resources=resources)
 
 
 def run_find_issue_resources(request: FindIssueResourcesRequest):
