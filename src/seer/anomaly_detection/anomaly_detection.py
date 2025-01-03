@@ -248,8 +248,7 @@ class AnomalyDetection(BaseModel):
         except Exception as e:
             # Reset task and capture exception
             alert_data_accessor.reset_cleanup_task(historic.external_alert_id)
-            sentry_sdk.capture_exception(e)
-            logger.exception(e)
+            logger.warning(f"Failed to queue cleanup task: {str(e)}")
 
         return ts_external, streamed_anomalies
 
