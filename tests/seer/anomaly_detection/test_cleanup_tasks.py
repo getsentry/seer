@@ -35,11 +35,11 @@ class TestCleanupTasks(unittest.TestCase):
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
         points_old = [
-            TimeSeriesPoint(timestamp=past_ts + (i * 1000), value=random.randint(1, 100))
+            TimeSeriesPoint(timestamp=past_ts + (i * 100), value=random.randint(1, 100))
             for i in range(num_old_points)
         ]
         points_new = [
-            TimeSeriesPoint(timestamp=cur_ts + (i * 1000), value=random.randint(1, 100))
+            TimeSeriesPoint(timestamp=cur_ts + (i * 100), value=random.randint(1, 100))
             for i in range(num_new_points)
         ]
         points = [*points_old, *points_new]
@@ -266,10 +266,6 @@ class TestCleanupTasks(unittest.TestCase):
         # Timeseries History should be deleted as these points have been added over 90 days ago
 
         with Session() as session:
-            session.query(DbDynamicAlertTimeSeriesHistory).update(
-                {DbDynamicAlertTimeSeriesHistory.saved_at: datetime.now() - timedelta(days=91)}
-            )
-            session.commit()
 
             cleanup_old_timeseries_history()
 

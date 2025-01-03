@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 import sentry_sdk
+from sqlalchemy import delete
 
 from celery_app.app import celery_app
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
@@ -195,10 +196,9 @@ def cleanup_disabled_alerts():
 def cleanup_old_timeseries_history():
     date_threshold = datetime.now() - timedelta(days=90)
     with Session() as session:
-        deleted_count = (
-            session.query(DbDynamicAlertTimeSeriesHistory)
-            .filter(DbDynamicAlertTimeSeriesHistory.saved_at < date_threshold)
-            .delete()
+        stmt = delete(DbDynamicAlertTimeSeriesHistory).where(
+            DbDynamicAlertTimeSeriesHistory.timestamp < date_threshold
         )
+        res = session.execute(stmt)
         session.commit()
-        logger.info(f"Deleted {deleted_count} timeseries history records older than 90 days")
+        logger.info(f"Deleted {res.rowcount} timeseries history records older than 90 days")
