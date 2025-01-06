@@ -113,4 +113,5 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     repo_external_id=repo.external_id,
                     repo_id=None,
                     pr_to_comment_on_url=self.request.pr_to_comment_on,
+                    make_pr=True,
                 )

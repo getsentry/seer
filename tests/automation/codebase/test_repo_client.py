@@ -425,7 +425,7 @@ class TestRepoClient:
         mock_create_branch.return_value = MagicMock(ref="autofix/test-pr")
 
         result = repo_client.create_branch_from_changes(
-            pr_title="Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+            pr_title="autofix/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
         )
         assert result is not None
         mock_create_branch.assert_called_with("autofix/test-pr")
@@ -441,7 +441,7 @@ class TestRepoClient:
         ]
 
         result = repo_client.create_branch_from_changes(
-            pr_title="Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+            pr_title="autofix/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
         )
         assert result is not None
         assert mock_create_branch.calls[0].args[0].startswith("autofix/test-pr/")

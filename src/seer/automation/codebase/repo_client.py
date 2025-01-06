@@ -310,11 +310,16 @@ class RepoClient:
         return valid_file_paths
 
     def _create_branch(self, branch_name):
-        ref = self.repo.create_git_ref(
-            ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
-        )
-
-        return ref
+        try:
+            ref = self.repo.create_git_ref(
+                ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
+            )
+            return ref
+        except GithubException as e:
+            # if reference already exists (422), just fetch and return it
+            if e.status == 422:
+                return self.repo.get_git_ref(f"heads/{branch_name}")
+            raise e
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -371,7 +376,7 @@ class RepoClient:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
 
-        new_branch_name = branch_name or f"autofix/{sanitize_branch_name(pr_title)}"
+        new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
             branch_ref = self._create_branch(new_branch_name)
