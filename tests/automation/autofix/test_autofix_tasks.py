@@ -11,6 +11,7 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     AutofixUpdateRequest,
     ChangesStep,
+    DefaultStep,
     RootCauseStep,
 )
 from seer.automation.autofix.tasks import (
@@ -190,6 +191,30 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
     assert len(changes_step.changes) > 0
 
     assert continuation.get().status not in {AutofixStatus.ERROR}
+
+
+@pytest.mark.vcr()
+def test_autofix_run_question_asking(autofix_request: AutofixRequest):
+    autofix_request.instruction = "The root cause of this is not clear and you must think it through. You MUST use the question asking tool and ask a question."
+    autofix_request.issue.events[0][
+        "title"
+    ] = "The root cause of this is not clear and you must search the codebase for the hidden answer"
+
+    with eager_celery():
+        run_id = run_autofix_root_cause(autofix_request)
+
+    assert run_id is not None
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    root_cause_processing_step = continuation.get().find_step(key="root_cause_analysis_processing")
+
+    assert root_cause_processing_step is not None
+    root_cause_processing_step = cast(DefaultStep, root_cause_processing_step)
+    assert root_cause_processing_step.status == AutofixStatus.WAITING_FOR_USER_RESPONSE
+    assert root_cause_processing_step.insights is not None
 
 
 @pytest.mark.vcr()
