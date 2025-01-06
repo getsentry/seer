@@ -13,9 +13,12 @@ from seer.automation.autofix.models import (
     AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
+    AutofixUpdateCodeChangePayload,
     AutofixUpdateRequest,
     AutofixUpdateType,
+    AutofixUserMessagePayload,
     ChangesStep,
+    CodebaseChange,
     DefaultStep,
     RootCauseStep,
 )
@@ -27,7 +30,9 @@ from seer.automation.autofix.tasks import (
     run_autofix_execution,
     run_autofix_push_changes,
     run_autofix_root_cause,
+    update_code_change,
 )
+from seer.automation.models import FilePatch, Hunk, Line
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import resolve
 from seer.rpc import DummyRpcClient, RpcClient
@@ -695,162 +700,281 @@ def test_check_and_mark_recent_autofix_runs():
 #         assert truncated_memory[-1].content == "User message 2"
 #
 #
-# class TestUpdateCodeChange:
-#     @pytest.fixture
-#     def mock_continuation_state(self):
-#         with patch("seer.automation.autofix.tasks.ContinuationState") as mock_cs:
-#             yield mock_cs
-#
-#     def test(self):
-#         mock_payload = AutofixUserMessagePayload(
-#             type=AutofixUpdateType.USER_MESSAGE, text="Invalid payload"
-#         )
-#         mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
-#
-#         with pytest.raises(ValueError, match="Invalid payload type for update_code_change"):
-#             update_code_change(mock_request)
-#
-#     def test_update_code_change_happy_path(self, mock_continuation_state):
-#         # Setup
-#         mock_payload = AutofixUpdateCodeChangePayload(
-#             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-#             repo_id="repo1",
-#             hunk_index=0,
-#             lines=[
-#                 Line(line_type=" ", value="unchanged line"),
-#                 Line(line_type="+", value="new line"),
-#                 Line(line_type="-", value="removed line"),
-#             ],
-#             file_path="path/to/file.py",
-#         )
-#         mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
-#
-#         mock_state = mock_continuation_state.from_id.return_value
-#         mock_cur_state = MagicMock()
-#         mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
-#         mock_state.get.return_value = mock_cur_state
-#
-#         mock_change = MagicMock()
-#         mock_change.repo_external_id = "repo1"
-#         mock_file_patch = MagicMock(spec=FilePatch)
-#         mock_file_patch.path = "path/to/file.py"
-#         mock_hunk1 = MagicMock(spec=Hunk)
-#         mock_hunk1.target_start = 10
-#         mock_hunk1.target_length = 1
-#         mock_hunk1.lines = [Line(line_type=" ", value="original line")]
-#         mock_hunk2 = MagicMock(spec=Hunk)
-#         mock_hunk2.target_start = 15
-#         mock_hunk2.target_length = 2
-#         mock_hunk2.lines = [Line(line_type=" ", value="another line")]
-#         mock_file_patch.hunks = [mock_hunk1, mock_hunk2]
-#         mock_change.diff = [mock_file_patch]
-#         mock_cur_state.steps[-1].changes = [mock_change]
-#
-#         # Execute
-#         update_code_change(mock_request)
-#
-#         # Assert
-#         mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
-#         mock_state.update.assert_called_once()
-#
-#         # Check if the first hunk was updated correctly
-#         updated_hunk1 = mock_file_patch.hunks[0]
-#         assert updated_hunk1.lines == mock_payload.lines
-#         assert updated_hunk1.target_length == 2  # 1 unchanged + 1 new line
-#
-#         # Check if the second hunk's start was updated correctly
-#         updated_hunk2 = mock_file_patch.hunks[1]
-#         assert updated_hunk2.target_start == 16  # 15 + (2 - 1)
-#
-#         # Verify that the second hunk's length wasn't changed
-#         assert updated_hunk2.target_length == 2
-#
-#     def test_update_code_change_no_matching_change(self, mock_continuation_state):
-#         mock_payload = AutofixUpdateCodeChangePayload(
-#             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-#             repo_id="non_existent_repo",
-#             hunk_index=0,
-#             lines=[],
-#             file_path="path/to/file.py",
-#         )
-#         mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
-#
-#         mock_state = mock_continuation_state.from_id.return_value
-#         mock_cur_state = MagicMock()
-#         mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
-#         mock_state.get.return_value = mock_cur_state
-#         mock_cur_state.steps[-1].changes = []
-#
-#         with pytest.raises(ValueError, match="No matching change found"):
-#             update_code_change(mock_request)
-#
-#     def test_update_code_change_no_matching_file_patch(self, mock_continuation_state):
-#         mock_payload = AutofixUpdateCodeChangePayload(
-#             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-#             repo_id="repo1",
-#             hunk_index=0,
-#             lines=[],
-#             file_path="non_existent_file.py",
-#         )
-#         mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
-#
-#         mock_state = mock_continuation_state.from_id.return_value
-#         mock_cur_state = MagicMock()
-#         mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
-#         mock_state.get.return_value = mock_cur_state
-#
-#         mock_change = MagicMock()
-#         mock_change.repo_external_id = "repo1"
-#         mock_change.diff = []
-#         mock_cur_state.steps[-1].changes = [mock_change]
-#
-#         with pytest.raises(ValueError, match="No matching file patch found"):
-#             update_code_change(mock_request)
-#
-#     def test_update_code_change_invalid_hunk_index(self, mock_continuation_state):
-#         mock_payload = AutofixUpdateCodeChangePayload(
-#             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-#             repo_id="repo1",
-#             hunk_index=99,  # Invalid index
-#             lines=[],
-#             file_path="path/to/file.py",
-#         )
-#         mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
-#
-#         mock_state = mock_continuation_state.from_id.return_value
-#         mock_cur_state = MagicMock()
-#         mock_cur_state.steps = [MagicMock(spec=ChangesStep)]
-#         mock_state.get.return_value = mock_cur_state
-#
-#         mock_change = MagicMock()
-#         mock_change.repo_external_id = "repo1"
-#         mock_file_patch = MagicMock(spec=FilePatch)
-#         mock_file_patch.path = "path/to/file.py"
-#         mock_file_patch.hunks = []
-#         mock_change.diff = [mock_file_patch]
-#         mock_cur_state.steps[-1].changes = [mock_change]
-#
-#         with pytest.raises(ValueError, match="Hunk index is out of range"):
-#             update_code_change(mock_request)
-#
-#     def test_update_code_change_invalid_step_type(self, mock_continuation_state):
-#         mock_payload = AutofixUpdateCodeChangePayload(
-#             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-#             repo_id="repo1",
-#             hunk_index=0,
-#             lines=[],
-#             file_path="path/to/file.py",
-#         )
-#         mock_request = AutofixUpdateRequest(run_id=123, payload=mock_payload)
-#
-#         mock_state = mock_continuation_state.from_id.return_value
-#         mock_cur_state = MagicMock()
-#         mock_cur_state.steps = [MagicMock(spec=DefaultStep)]  # Not a ChangesStep
-#         mock_state.get.return_value = mock_cur_state
-#
-#         # Execute
-#         update_code_change(mock_request)
-#
-#         # Assert
-#         mock_continuation_state.from_id.assert_called_once_with(123, model=AutofixContinuation)
-#         mock_state.update.assert_not_called()  # The function should return early without updating
+
+
+class TestUpdateCodeChange:
+    def test_update_code_change_happy_path(self):
+        # Create initial state with a changes step
+        state = next(generate(AutofixContinuation))
+        file_patch = FilePatch(
+            type="A",
+            added=0,
+            removed=0,
+            source_file="",
+            target_file="",
+            path="test_file.py",
+            hunks=[
+                Hunk(
+                    source_start=0,
+                    source_length=0,
+                    section_header="",
+                    target_start=10,
+                    target_length=3,
+                    lines=[
+                        Line(line_type=" ", value="def test():", target_line_no=10),
+                        Line(line_type="-", value="    return False", target_line_no=11),
+                        Line(line_type=" ", value="    pass", target_line_no=12),
+                    ],
+                ),
+                Hunk(
+                    source_start=0,
+                    source_length=0,
+                    section_header="",
+                    target_start=20,
+                    target_length=2,
+                    lines=[
+                        Line(line_type=" ", value="def another_test():", target_line_no=20),
+                        Line(line_type=" ", value="    pass", target_line_no=21),
+                    ],
+                ),
+            ],
+        )
+        changes_step = ChangesStep(
+            title="Test Change",
+            status=AutofixStatus.COMPLETED,
+            changes=[
+                CodebaseChange(
+                    repo_external_id="test_repo",
+                    repo_name="test/repo",
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[file_patch],
+                )
+            ],
+        )
+        state.steps = [changes_step]
+
+        # Store state in database
+        with Session() as session:
+            session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+            session.commit()
+
+        # Create update request
+        new_lines = [
+            Line(line_type=" ", value="def test():", target_line_no=10),
+            Line(line_type="+", value="    return True", target_line_no=11),
+            Line(line_type=" ", value="    pass", target_line_no=12),
+        ]
+        request = AutofixUpdateRequest(
+            run_id=1,
+            payload=AutofixUpdateCodeChangePayload(
+                type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+                repo_id="test_repo",
+                hunk_index=0,
+                lines=new_lines,
+                file_path="test_file.py",
+            ),
+        )
+
+        # Execute update
+        update_code_change(request)
+
+        # Verify changes
+        updated_state = get_autofix_state(run_id=1)
+        assert updated_state is not None
+        changes_step = updated_state.get().steps[-1]
+        assert isinstance(changes_step, ChangesStep)
+        updated_changes = changes_step.changes[0]
+        updated_hunk = updated_changes.diff[0].hunks[0]
+
+        # Check updated hunk lines
+        assert len(updated_hunk.lines) == 3
+        assert updated_hunk.lines[0].value == "def test():"
+        assert updated_hunk.lines[1].value == "    return True"
+        assert updated_hunk.lines[2].value == "    pass"
+
+        # Check line numbers were updated correctly
+        assert updated_hunk.lines[0].target_line_no == 10
+        assert updated_hunk.lines[1].target_line_no == 11
+        assert updated_hunk.lines[2].target_line_no == 12
+
+        # Check subsequent hunk was not affected
+        subsequent_hunk = updated_changes.diff[0].hunks[1]
+        assert subsequent_hunk.target_start == 20  # Should remain unchanged
+        assert subsequent_hunk.target_length == 2
+
+    def test_update_code_change_invalid_payload_type(self):
+        request = AutofixUpdateRequest(
+            run_id=1,
+            payload=AutofixUserMessagePayload(
+                type=AutofixUpdateType.USER_MESSAGE,
+                text="Invalid payload",
+            ),
+        )
+
+        with pytest.raises(ValueError, match="Invalid payload type for update_code_change"):
+            update_code_change(request)
+
+    def test_update_code_change_no_matching_repo(self):
+        # Create initial state with a changes step but different repo ID
+        state = next(generate(AutofixContinuation))
+        changes_step = ChangesStep(
+            title="Test Change",
+            status=AutofixStatus.COMPLETED,
+            changes=[
+                CodebaseChange(
+                    repo_external_id="different_repo",
+                    repo_name="test/repo",
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[],
+                )
+            ],
+        )
+        state.steps = [changes_step]
+
+        with Session() as session:
+            session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+            session.commit()
+
+        request = AutofixUpdateRequest(
+            run_id=1,
+            payload=AutofixUpdateCodeChangePayload(
+                type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+                repo_id="test_repo",
+                hunk_index=0,
+                lines=[],
+                file_path="test_file.py",
+            ),
+        )
+
+        with pytest.raises(ValueError, match="No matching change found"):
+            update_code_change(request)
+
+    def test_update_code_change_no_matching_file(self):
+        # Create initial state with a changes step but no matching file
+        state = next(generate(AutofixContinuation))
+        changes_step = ChangesStep(
+            title="Test Change",
+            status=AutofixStatus.COMPLETED,
+            changes=[
+                CodebaseChange(
+                    repo_external_id="test_repo",
+                    repo_name="test/repo",
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[
+                        FilePatch(
+                            type="A",
+                            added=0,
+                            removed=0,
+                            source_file="",
+                            target_file="",
+                            path="different_file.py",
+                            hunks=[],
+                        ),
+                    ],
+                )
+            ],
+        )
+        state.steps = [changes_step]
+
+        with Session() as session:
+            session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+            session.commit()
+
+        request = AutofixUpdateRequest(
+            run_id=1,
+            payload=AutofixUpdateCodeChangePayload(
+                type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+                repo_id="test_repo",
+                hunk_index=0,
+                lines=[],
+                file_path="test_file.py",
+            ),
+        )
+
+        with pytest.raises(ValueError, match="No matching file patch found"):
+            update_code_change(request)
+
+    def test_update_code_change_invalid_hunk_index(self):
+        # Create initial state with a changes step but invalid hunk index
+        state = next(generate(AutofixContinuation))
+        file_patch = FilePatch(
+            type="A",
+            added=0,
+            removed=0,
+            source_file="",
+            target_file="",
+            path="test_file.py",
+            hunks=[
+                Hunk(
+                    source_start=0,
+                    source_length=0,
+                    section_header="",
+                    target_start=10,
+                    target_length=1,
+                    lines=[Line(line_type=" ", value="def test():", target_line_no=10)],
+                ),
+            ],
+        )
+        changes_step = ChangesStep(
+            title="Test Change",
+            status=AutofixStatus.COMPLETED,
+            changes=[
+                CodebaseChange(
+                    repo_external_id="test_repo",
+                    repo_name="test/repo",
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[file_patch],
+                )
+            ],
+        )
+        state.steps = [changes_step]
+
+        with Session() as session:
+            session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+            session.commit()
+
+        request = AutofixUpdateRequest(
+            run_id=1,
+            payload=AutofixUpdateCodeChangePayload(
+                type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+                repo_id="test_repo",
+                hunk_index=99,  # Invalid index
+                lines=[],
+                file_path="test_file.py",
+            ),
+        )
+
+        with pytest.raises(ValueError, match="Hunk index is out of range"):
+            update_code_change(request)
+
+    def test_update_code_change_non_changes_step(self):
+        # Create initial state with a non-changes step
+        state = next(generate(AutofixContinuation))
+        state.steps = [DefaultStep(title="Test Step", status=AutofixStatus.COMPLETED)]
+
+        with Session() as session:
+            session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+            session.commit()
+
+        request = AutofixUpdateRequest(
+            run_id=1,
+            payload=AutofixUpdateCodeChangePayload(
+                type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+                repo_id="test_repo",
+                hunk_index=0,
+                lines=[],
+                file_path="test_file.py",
+            ),
+        )
+
+        # Should return silently without making changes
+        update_code_change(request)
+
+        # Verify state wasn't modified
+        updated_state = get_autofix_state(run_id=1)
+        assert updated_state is not None
+        assert isinstance(updated_state.get().steps[-1], DefaultStep)
