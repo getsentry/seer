@@ -262,3 +262,21 @@ def test_run_iteration_no_help_prompt_when_not_needed(
 
     assert len(interactive_autofix_agent.memory) == 1
     assert interactive_autofix_agent.memory[0] == mock_completion.message
+
+
+@pytest.mark.vcr()
+def test_get_completion_interrupts_with_queued_messages(interactive_autofix_agent, run_config):
+    # Set up queued user messages
+    with interactive_autofix_agent.context.state.update() as state:
+        state.steps.append(
+            DefaultStep(
+                status=AutofixStatus.PROCESSING,
+                key="test",
+                title="Test",
+                queued_user_messages=["User interruption"],
+            )
+        )
+
+    # Call get_completion and verify it returns None due to interruption
+    result = interactive_autofix_agent.get_completion(run_config)
+    assert result is None
