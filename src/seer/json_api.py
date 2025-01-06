@@ -124,15 +124,42 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
 
+            request_id = hashlib.sha256(str(data).encode()).hexdigest()[:8]
+            logger_context = {"request_id": request_id}
+
             if not isinstance(data, dict):
-                sentry_sdk.capture_message(f"Data is not an object: {type(data)}")
+                error_msg = f"Data is not an object: {type(data)}"
+                logger.error(error_msg, extra=logger_context)
+                sentry_sdk.capture_message(error_msg)
                 raise BadRequest("Data is not an object")
 
+            # Pre-process data to catch common issues early
+            processed_data = data.copy()
+            if "stacktrace" in processed_data:
+                if processed_data["stacktrace"] is None:
+                    error_msg = "Received null stacktrace in request"
+                    logger.error(error_msg, extra={**logger_context, "project_id": processed_data.get("project_id")})
+                    sentry_sdk.capture_message(error_msg)
+                    raise BadRequest(
+                        "Stacktrace cannot be null. Please provide the complete error stacktrace in the request."
+                    )
+                if isinstance(processed_data["stacktrace"], (list, dict)):
+                    error_msg = f"Invalid stacktrace type: {type(processed_data['stacktrace']).__name__}"
+                    logger.error(error_msg, extra=logger_context)
+                    sentry_sdk.capture_message(error_msg)
+                    raise BadRequest(
+                        "Stacktrace must be a string. Please provide the stacktrace as a properly formatted string."
+                    )
+
             try:
-                result: BaseModel = implementation(request_annotation.model_validate(data))
+                result: BaseModel = implementation(request_annotation.model_validate(processed_data))
             except ValidationError as e:
+                error_msg = str(e)
+                if "stacktrace" in error_msg.lower():
+                    error_msg += "\nPlease ensure you are sending:\n1. A non-empty stacktrace string\n2. The complete error stacktrace\n3. Properly formatted stacktrace text"
+                logger.error(f"Validation error: {error_msg}", extra=logger_context)
                 sentry_sdk.capture_exception(e)
-                raise BadRequest(str(e))
+                raise BadRequest(error_msg)
 
             return result.model_dump()
 

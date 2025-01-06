@@ -39,9 +39,16 @@ class GroupingRequest(BaseModel):
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
+        if not isinstance(v, str):
+            raise ValueError(
+                "Stacktrace must be a string. "
+                f"Got {type(v).__name__} instead."
+            )
         if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
-        return v
+            raise ValueError(
+                "Stacktrace must be provided and cannot be empty. A valid stacktrace is required for grouping functionality. "
+                "Please ensure you are sending the complete error stacktrace in the request.")
+        return v.strip()
 
 
 class GroupingResponse(BaseModel):
@@ -159,6 +166,13 @@ class GroupingLookup:
         :param stacktrace: The stacktrace to encode.
         :return: The embedding of the stacktrace.
         """
+        if not isinstance(stacktrace, str):
+            error_msg = f"Stacktrace must be a string, got {type(stacktrace).__name__}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not stacktrace.strip():
+            raise ValueError("Cannot encode empty stacktrace - a valid stacktrace is required for encoding")
+            
         return self.model.encode(stacktrace)
 
     @sentry_sdk.tracing.trace
