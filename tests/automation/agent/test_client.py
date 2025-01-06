@@ -504,7 +504,7 @@ def test_gemini_generate_text_from_web_search():
     llm_client = LlmClient()
     model = GeminiProvider(model_name="gemini-2.0-flash-exp")
 
-    response = llm_client.generate_text_from_web_search(
+    response, _ = llm_client.generate_text_from_web_search(
         prompt="What year is it?",
         model=model,
     )

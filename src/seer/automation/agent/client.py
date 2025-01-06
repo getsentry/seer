@@ -37,6 +37,7 @@ from seer.automation.agent.models import (
     Usage,
 )
 from seer.automation.agent.tools import FunctionTool
+from seer.automation.resources.models import Citation, Resource
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -659,8 +660,25 @@ class GeminiProvider:
             location="us-central1",
         )
 
+    @classmethod
+    def model(cls, model_name: str) -> "GeminiProvider":
+        model_config = cls._get_config(model_name)
+        return cls(
+            model_name=model_name,
+            defaults=model_config.defaults if model_config else None,
+        )
+
+    @classmethod
+    def _get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
+                return config
+        return None
+
     @observe(as_type="generation", name="Gemini Generation with Grounding")
-    def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
+    def search_the_web(
+        self, prompt: str, temperature: float | None = None
+    ) -> tuple[str, list[Resource]]:
         client = self.get_client()
         google_search_tool = Tool(google_search=GoogleSearch())
 
@@ -676,7 +694,26 @@ class GeminiProvider:
         answer = ""
         for each in response.candidates[0].content.parts:
             answer += each.text
-        return answer
+
+        resources = []
+        sources = response.candidates[0].grounding_metadata.grounding_chunks
+        supports = (
+            getattr(response.candidates[0].grounding_metadata, "grounding_supports", []) or []
+        )
+        for support in supports:
+            resources.append(
+                Resource(
+                    text=support.segment.text,
+                    citations=[
+                        Citation(
+                            title=sources[source_index].web.title, url=sources[source_index].web.uri
+                        )
+                        for source_index in support.grounding_chunk_indices
+                    ],
+                )
+            )
+
+        return answer, resources
 
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
@@ -847,7 +884,7 @@ class LlmClient:
         model: LlmProvider,
         temperature: float | None = None,
         run_name: str | None = None,
-    ) -> str:
+    ) -> tuple[str, list[Resource]]:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")

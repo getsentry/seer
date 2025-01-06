@@ -281,9 +281,10 @@ class BaseTools:
         Searches Google to answer a question.
         """
         self.context.event_manager.add_log(f'Googling "{question}"...')
-        return llm_client.generate_text_from_web_search(
-            prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-exp")
+        text, _ = llm_client.generate_text_from_web_search(
+            prompt=question, model=GeminiProvider.model("gemini-2.0-flash-exp")
         )
+        return text
 
     def get_tools(self):
         tools = [

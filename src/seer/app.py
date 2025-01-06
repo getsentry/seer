@@ -52,6 +52,8 @@ from seer.automation.codegen.models import (
     CodegenUnitTestsStateResponse,
 )
 from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
+from seer.automation.resources.issue import run_find_issue_resources
+from seer.automation.resources.models import FindIssueResourcesRequest, FindIssueResourcesResponse
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import raise_if_no_genai_consent
@@ -268,6 +270,11 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
         raise GatewayTimeout from e
     except Exception as e:
         raise InternalServerError from e
+
+
+@json_api(blueprint, "/v1/automation/resources/issue")
+def find_issue_resources_endpoint(data: FindIssueResourcesRequest) -> FindIssueResourcesResponse:
+    return run_find_issue_resources(data)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/detect")
