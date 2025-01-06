@@ -10,6 +10,11 @@ from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
 
 
+class Step(BaseModel):
+    reasoning: str
+    justification: str
+
+
 class IssueSummary(BaseModel):
     title: str
     whats_wrong: str
@@ -75,7 +80,7 @@ def summarize_issue(
     )
 
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini"),
+        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
         prompt=prompt,
         response_format=IssueSummary,
         temperature=0.0,
