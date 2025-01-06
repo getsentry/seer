@@ -20,6 +20,7 @@ from google.genai.types import (  # type: ignore[import-untyped]
     FunctionDeclaration,
     FunctionResponse,
     GenerateContentConfig,
+    GenerateContentResponse,
     GoogleSearch,
     Part,
     Tool,
@@ -737,11 +738,11 @@ class GeminiProvider:
                 temperature=temperature or 0.0,
                 response_mime_type="application/json",
                 max_output_tokens=max_tokens or 8192,
-                response_schema=response_format.model_json_schema(),
+                response_schema=response_format.model_json_schema(),  # type: ignore[attr-defined]
             ),
         )
         result = response.text
-        structured_result = response_format.model_validate_json(result)
+        structured_result = response_format.model_validate_json(result)  # type: ignore[attr-defined]
 
         usage = Usage(
             completion_tokens=response.usage_metadata.candidates_token_count,
@@ -779,12 +780,16 @@ class GeminiProvider:
 
         client = self.get_client()
 
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+
         try:
             stream = client.models.generate_content_stream(
                 model=self.model_name,
                 contents=message_dicts,
                 config=GenerateContentConfig(
                     tools=tool_dicts,
+                    system_instruction=system_prompt,
                     response_modalities=["TEXT"],
                     temperature=temperature or 0.0,
                     max_output_tokens=max_tokens or 8192,
@@ -792,8 +797,6 @@ class GeminiProvider:
             )
 
             current_tool_call: dict[str, Any] | None = None
-            total_prompt_tokens = 0
-            total_completion_tokens = 0
 
             for chunk in stream:
                 # Handle function calls
@@ -825,6 +828,55 @@ class GeminiProvider:
             )
             yield usage
             langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+    @observe(as_type="generation", name="Gemini Generation")
+    def generate_text(
+        self,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        client = self.get_client()
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=message_dicts,
+            config=GenerateContentConfig(
+                tools=tool_dicts,
+                system_instruction=system_prompt,
+                temperature=temperature or 0.0,
+                max_output_tokens=max_tokens or 8192,
+            ),
+        )
+
+        message = self._format_gemini_response_to_message(response)
+
+        usage = Usage(
+            completion_tokens=response.usage_metadata.candidates_token_count,
+            prompt_tokens=response.usage_metadata.prompt_token_count,
+            total_tokens=response.usage_metadata.total_token_count,
+        )
+
+        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+        return LlmGenerateTextResponse(
+            message=message,
+            metadata=LlmResponseMetadata(
+                model=self.model_name,
+                provider_name=self.provider_name,
+                usage=usage,
+            ),
+        )
 
     @classmethod
     def _prep_message_and_tools(
@@ -906,12 +958,12 @@ class GeminiProvider:
                             param["name"]: {
                                 key: value
                                 for key, value in {
-                                    "type": param["type"].upper(),
+                                    "type": param["type"].upper(),  # type: ignore
                                     "description": param.get("description", ""),
                                     "items": (
                                         {
-                                            **param.get("items", {}),
-                                            "type": param.get("items", {}).get("type", "").upper(),
+                                            **param.get("items", {}),  # type: ignore
+                                            "type": param.get("items", {}).get("type", "").upper(),  # type: ignore
                                         }
                                         if param.get("items") and "type" in param.get("items", {})
                                         else param.get("items")
@@ -938,6 +990,34 @@ class GeminiProvider:
         if tool_calls:
             message.tool_calls = tool_calls
             message.tool_call_id = tool_calls[0].id
+
+        return message
+
+    def _format_gemini_response_to_message(self, response: GenerateContentResponse) -> Message:
+        message = Message(
+            role="assistant",
+            content=(
+                response.candidates[0].content.parts[0].text
+                if response.candidates[0].content.parts[0].text
+                else None
+            ),
+        )
+
+        for part in response.candidates[0].content.parts:
+            if part.function_call:
+                if not message.tool_calls:
+                    message.tool_calls = []
+                message.tool_calls.append(
+                    ToolCall(
+                        id=part.function_call.id,
+                        function=part.function_call.name,
+                        args=json.dumps(part.function_call.args),
+                    )
+                )
+                message.role = "tool_use"
+                message.tool_call_id = part.function_call.id
+            if part.text:
+                message.content = part.text
 
         return message
 
@@ -993,6 +1073,16 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     tools=tools,
                     timeout=timeout,
+                )
+            elif model.provider_name == LlmProviderType.GEMINI:
+                model = cast(GeminiProvider, model)
+                return model.generate_text(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature or default_temperature,
+                    tools=tools,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
