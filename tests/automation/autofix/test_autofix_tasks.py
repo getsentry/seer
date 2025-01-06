@@ -3,13 +3,17 @@ from typing import cast
 import pytest
 from johen import generate
 
+from seer.automation.agent.models import Message
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
     AutofixRequest,
+    AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
     AutofixUpdateRequest,
+    AutofixUpdateType,
     ChangesStep,
     DefaultStep,
     RootCauseStep,
@@ -17,6 +21,7 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    restart_from_point_with_feedback,
     run_autofix_execution,
     run_autofix_push_changes,
     run_autofix_root_cause,
@@ -43,6 +48,12 @@ def autofix_request():
 @pytest.fixture
 def autofix_full_finished_run():
     with open("tests/data/autofix_full_finished_run.json") as f:
+        return AutofixContinuation.model_validate_json(f.read())
+
+
+@pytest.fixture
+def autofix_root_cause_run():
+    with open("tests/data/autofix_root_cause_run.json") as f:
         return AutofixContinuation.model_validate_json(f.read())
 
 
@@ -215,6 +226,99 @@ def test_autofix_run_question_asking(autofix_request: AutofixRequest):
     root_cause_processing_step = cast(DefaultStep, root_cause_processing_step)
     assert root_cause_processing_step.status == AutofixStatus.WAITING_FOR_USER_RESPONSE
     assert root_cause_processing_step.insights is not None
+
+
+@pytest.mark.vcr()
+def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
+    with Session() as session:
+        session.add(
+            DbRunState(
+                id=autofix_root_cause_run.run_id,
+                group_id=1,
+                value=autofix_root_cause_run.model_dump(mode="json"),
+            )
+        )
+        session.commit()
+
+    with eager_celery():
+        run_autofix_execution(
+            AutofixUpdateRequest(
+                run_id=autofix_root_cause_run.run_id,
+                payload=AutofixRootCauseUpdatePayload(
+                    custom_root_cause="we should uncomment out the unit test parts"
+                ),
+            )
+        )
+
+    continuation = get_autofix_state(run_id=autofix_root_cause_run.run_id)
+
+    assert continuation is not None
+
+    changes_step = continuation.get().find_step(key="changes")
+
+    assert changes_step is not None
+    changes_step = cast(ChangesStep, changes_step)
+    assert changes_step.status == AutofixStatus.COMPLETED
+    assert len(changes_step.changes) > 0
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}
+
+
+@pytest.mark.vcr()
+def test_autofix_restart_from_point_with_feedback(autofix_root_cause_run: AutofixContinuation):
+    with Session() as session:
+        session.add(
+            DbRunState(
+                id=autofix_root_cause_run.run_id,
+                group_id=1,
+                value=autofix_root_cause_run.model_dump(mode="json"),
+            )
+        )
+
+        session.commit()
+
+    context = AutofixContext.from_run_id(autofix_root_cause_run.run_id)
+    context.store_memory(
+        "root_cause_analysis",
+        [
+            Message(content="This is message 1", role="user"),
+            Message(content="This is message 2", role="assistant"),
+        ],
+    )
+
+    with eager_celery():
+        restart_from_point_with_feedback(
+            AutofixUpdateRequest(
+                run_id=autofix_root_cause_run.run_id,
+                payload=AutofixRestartFromPointPayload(
+                    type=AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+                    step_index=0,
+                    retain_insight_card_index=0,
+                    message="we should uncomment out the unit test parts",
+                ),
+            )
+        )
+
+    with Session() as session:
+        new_run_memory = context.get_memory("root_cause_analysis")
+
+        assert new_run_memory[0].content == "This is message 1"
+        assert new_run_memory[1].content == "."
+        assert new_run_memory[2].content == "we should uncomment out the unit test parts"
+
+    continuation = get_autofix_state(run_id=autofix_root_cause_run.run_id)
+
+    assert continuation is not None
+
+    root_cause_step = continuation.get().find_step(key="root_cause_analysis")
+
+    assert root_cause_step is not None
+    root_cause_step = cast(RootCauseStep, root_cause_step)
+    assert root_cause_step.status == AutofixStatus.COMPLETED
+    assert root_cause_step.causes is not None
+    assert len(root_cause_step.causes) > 0
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}
 
 
 @pytest.mark.vcr()
