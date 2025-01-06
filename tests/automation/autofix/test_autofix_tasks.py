@@ -1,3 +1,4 @@
+import datetime
 from typing import cast
 
 import pytest
@@ -19,6 +20,7 @@ from seer.automation.autofix.models import (
     RootCauseStep,
 )
 from seer.automation.autofix.tasks import (
+    check_and_mark_recent_autofix_runs,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     restart_from_point_with_feedback,
@@ -353,38 +355,86 @@ def test_autofix_create_pr(autofix_full_finished_run: AutofixContinuation):
         assert pr_id_to_run_id_mapping.pr_id is not None
 
 
-# class TestCheckAndMarkRecentAutofixRuns:
-#     @patch("seer.automation.autofix.tasks.datetime")
-#     @patch("seer.automation.autofix.tasks.get_all_autofix_runs_after")
-#     @patch("seer.automation.autofix.tasks.check_and_mark_if_timed_out")
-#     @patch("seer.automation.autofix.tasks.logger")
-#     def test_check_and_mark_recent_autofix_runs(
-#         self, mock_logger, mock_check_and_mark, mock_get_runs, mock_datetime
-#     ):
-#         # Setup
-#         mock_now = datetime.datetime(2023, 1, 1, 12, 0, 0)
-#         mock_datetime.datetime.now.return_value = mock_now
-#         mock_one_hour_ago = mock_now - datetime.timedelta(hours=1)
-#         mock_datetime.timedelta.return_value = datetime.timedelta(hours=1)
-#
-#         mock_run1 = MagicMock()
-#         mock_run2 = MagicMock()
-#         mock_get_runs.return_value = [mock_run1, mock_run2]
-#
-#         # Execute
-#         check_and_mark_recent_autofix_runs()
-#
-#         # Assert
-#         mock_datetime.datetime.now.assert_called_once()
-#         mock_datetime.timedelta.assert_called_once_with(hours=1, minutes=15)
-#         mock_get_runs.assert_called_once_with(mock_one_hour_ago)
-#         mock_logger.info.assert_any_call("Checking and marking recent autofix runs")
-#         mock_logger.info.assert_any_call(f"Getting all autofix runs after {mock_one_hour_ago}")
-#         mock_logger.info.assert_any_call("Got 2 runs")
-#         mock_check_and_mark.assert_has_calls([call(mock_run1), call(mock_run2)])
-#         assert mock_check_and_mark.call_count == 2
-#
-#
+def make_continuation(
+    run_id: int, last_triggered_at: datetime.datetime, updated_at: datetime.datetime
+):
+    continuation = next(generate(AutofixContinuation))
+    continuation.run_id = run_id
+    continuation.last_triggered_at = last_triggered_at
+    continuation.updated_at = updated_at
+    return continuation.model_dump(mode="json")
+
+
+def test_check_and_mark_recent_autofix_runs():
+    # Get current time for creating relative timestamps
+    now = datetime.datetime.now()
+
+    # Create test runs with different states and timestamps
+    runs_data = [
+        # Run that should timeout due to no updates in 90 seconds
+        {
+            "id": 1,
+            "group_id": 100,
+            "value": make_continuation(
+                1, now - datetime.timedelta(minutes=5), now - datetime.timedelta(seconds=91)
+            ),
+            "last_triggered_at": now - datetime.timedelta(minutes=5),
+            "updated_at": now - datetime.timedelta(seconds=91),
+        },
+        # Run that should timeout due to running for over 10 minutes
+        {
+            "id": 2,
+            "group_id": 200,
+            "value": make_continuation(
+                2, now - datetime.timedelta(minutes=11), now - datetime.timedelta(seconds=30)
+            ),
+            "last_triggered_at": now - datetime.timedelta(minutes=11),
+            "updated_at": now - datetime.timedelta(seconds=30),
+        },
+        # Run that should not timeout (recent activity)
+        {
+            "id": 3,
+            "group_id": 300,
+            "value": make_continuation(
+                3, now - datetime.timedelta(minutes=5), now - datetime.timedelta(seconds=30)
+            ),
+            "last_triggered_at": now - datetime.timedelta(minutes=5),
+            "updated_at": now - datetime.timedelta(seconds=30),
+        },
+    ]
+
+    # Insert runs into database
+    with Session() as session:
+        for run_data in runs_data:
+            run_state = DbRunState(**run_data)
+            # Set the status to PROCESSING for each run
+            state_dict = run_state.value
+            state_dict["status"] = "PROCESSING"
+            run_state.value = state_dict
+            session.add(run_state)
+        session.commit()
+
+    # Execute
+    check_and_mark_recent_autofix_runs()
+
+    # Assert - Check the status of each run
+    with Session() as session:
+        # Run 1 should be marked as ERROR due to no recent updates
+        run1 = session.query(DbRunState).filter_by(id=1).first()
+        assert run1 is not None
+        assert run1.value["status"] == "ERROR"
+
+        # Run 2 should be marked as ERROR due to running too long
+        run2 = session.query(DbRunState).filter_by(id=2).first()
+        assert run2 is not None
+        assert run2.value["status"] == "ERROR"
+
+        # Run 3 should still be PROCESSING
+        run3 = session.query(DbRunState).filter_by(id=3).first()
+        assert run3 is not None
+        assert run3.value["status"] == "PROCESSING"
+
+
 # class TestHandleUserMessages:
 #     @pytest.fixture
 #     def mock_continuation_state(self):
