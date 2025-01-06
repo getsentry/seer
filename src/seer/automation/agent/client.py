@@ -647,6 +647,14 @@ class AnthropicProvider:
 
 @dataclass
 class GeminiProvider:
+    # !!! NOTE THE FOLLOWING LIMITATIONS FOR GEMINI:
+    # - super strict rate limits making it unusable for evals or prod
+    # - no multi-turn tool use
+    # - no nested Pydantic models for structured outputs
+    # - no nullable fields for structured outputs
+    # - no dynamic retrieval for google search
+    # These will likely be changed as the SDK matures. Make sure to keep an eye on updates and update these notes/our implementation as needed.
+
     model_name: str
     provider_name = LlmProviderType.GEMINI
     defaults: LlmProviderDefaults | None = None
