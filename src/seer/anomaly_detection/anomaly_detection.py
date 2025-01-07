@@ -424,6 +424,7 @@ class AnomalyDetection(BaseModel):
                     "external_alert_id": request.alert.id,
                     "num_datapoints": len(request.timeseries),
                     "minimum_required": min_len,
+                    "config": request.config.model_dump(),
                 },
             )
             raise ClientError("Insufficient time series data for alert")
@@ -435,6 +436,7 @@ class AnomalyDetection(BaseModel):
                 "project_id": request.project_id,
                 "external_alert_id": request.alert.id,
                 "num_datapoints": len(request.timeseries),
+                "config": request.config.model_dump(),
             },
         )
         ts, anomalies = self._batch_detect(request.timeseries, request.config)

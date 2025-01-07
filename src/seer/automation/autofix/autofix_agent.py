@@ -87,6 +87,9 @@ class AutofixAgent(LlmAgent):
 
         cleared = False
         for chunk in stream:
+            if self.queued_user_messages:  # user interruption
+                return
+
             if isinstance(chunk, str):
                 with self.context.state.update() as cur:
                     cur_step = cur.steps[-1]
@@ -181,6 +184,9 @@ class AutofixAgent(LlmAgent):
                 raise exc
 
     def use_user_messages(self):
+        cur_step = self.context.state.get().steps[-1]
+        cur_step.clear_output_stream()
+
         # adds any queued user messages to the memory
         user_msgs = self.queued_user_messages
         if user_msgs:
