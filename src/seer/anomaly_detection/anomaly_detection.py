@@ -1,4 +1,5 @@
 import logging
+from sqlite3 import OperationalError
 from typing import List, Tuple
 
 import numpy as np
@@ -245,9 +246,14 @@ class AnomalyDetection(BaseModel):
                 cleanup_timeseries.delay(
                     historic.external_alert_id, cleanup_config.timestamp_threshold
                 )
+        except OperationalError as e:
+            logger.warning(
+                f"Failed to queue cleanup task likely due to transaction timeout: {str(e)}"
+            )
         except Exception as e:
             # Reset task and capture exception
             alert_data_accessor.reset_cleanup_task(historic.external_alert_id)
+            sentry_sdk.capture_exception(e)
             logger.warning(f"Failed to queue cleanup task: {str(e)}")
 
         return ts_external, streamed_anomalies
