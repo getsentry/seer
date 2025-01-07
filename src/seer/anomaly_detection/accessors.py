@@ -8,7 +8,6 @@ import numpy as np
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
-from sqlalchemy import delete
 
 from seer.anomaly_detection.models import (
     AlgoConfig,
@@ -239,10 +238,13 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         "external_alert_id": external_alert_id,
                     },
                 )
-                delete_q = delete(DbDynamicAlert).where(
-                    DbDynamicAlert.external_alert_id == external_alert_id
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter_by(external_alert_id=external_alert_id)
+                    .one()
                 )
-                session.execute(delete_q)
+                session.delete(alert)
+                session.flush()
             algo_data = anomalies.get_anomaly_algo_data(len(timeseries))
             new_record = DbDynamicAlert(
                 organization_id=organization_id,
