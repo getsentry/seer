@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from seer.anomaly_detection.detectors.location_detectors import PointLocation
+from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
 from seer.anomaly_detection.detectors.mp_scorers import (
     LowVarianceScorer,
     MPCascadingScorer,
@@ -11,6 +11,7 @@ from seer.anomaly_detection.detectors.mp_scorers import (
     MPScorer,
 )
 from seer.anomaly_detection.models import AnomalyDetectionConfig, RelativeLocation, ThresholdType
+from seer.dependency_injection import resolve
 from seer.exceptions import ClientError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
@@ -262,6 +263,7 @@ class TestMPIQRScorer(unittest.TestCase):
             1.0,
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
@@ -274,6 +276,7 @@ class TestMPIQRScorer(unittest.TestCase):
             1.0,
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
@@ -286,6 +289,7 @@ class TestMPIQRScorer(unittest.TestCase):
             1.0,
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
@@ -305,6 +309,7 @@ class TestMPIQRScorer(unittest.TestCase):
             1.0,
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
@@ -317,6 +322,7 @@ class TestMPIQRScorer(unittest.TestCase):
             1.0,
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_not_called()
         self.assertEqual(flag, mp_based_flag)
@@ -329,6 +335,7 @@ class TestMPIQRScorer(unittest.TestCase):
             1.0,
             np.array([1.0] * 9),
             np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         # self.assertEqual(mock_location_detector.call_count, 2)
         mock_location_detector.assert_not_called()
@@ -398,7 +405,13 @@ class TestMPIQRScorer(unittest.TestCase):
             mock_location_detector.return_value = location
 
             flag, _ = scorer._adjust_flag_for_direction(
-                mp_based_flag, direction, 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
+                mp_based_flag,
+                direction,
+                1.0,
+                1.0,
+                np.array([1.0] * 9),
+                np.arange(1.0, 10.0),
+                location_detector=resolve(LocationDetector),
             )
             self.assertEqual(mock_location_detector.call_count, i + 1)
             self.assertEqual(flag, expected_flag, msg=combo["name"])
@@ -413,7 +426,13 @@ class TestMPIQRScorer(unittest.TestCase):
 
         mp_based_flag = "anomaly_higher_confidence"
         flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag, "up", 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
+            mp_based_flag,
+            "up",
+            1.0,
+            1.0,
+            np.array([1.0] * 9),
+            np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_called_once()
         self.assertEqual(flag, "none")
@@ -426,7 +445,13 @@ class TestMPIQRScorer(unittest.TestCase):
 
         mp_based_flag = "anomaly_higher_confidence"
         flag, thresholds = scorer._adjust_flag_for_direction(
-            mp_based_flag, "up", 1.0, 1.0, np.array([1.0] * 9), np.arange(1.0, 10.0)
+            mp_based_flag,
+            "up",
+            1.0,
+            1.0,
+            np.array([1.0] * 9),
+            np.arange(1.0, 10.0),
+            location_detector=resolve(LocationDetector),
         )
         mock_location_detector.assert_called_once()
         self.assertEqual(flag, "anomaly_higher_confidence")

@@ -134,6 +134,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         smoothed_flags = batch_flag_smoother.smooth(
             flags=flags_and_scores.flags,
             ad_config=ad_config,
+            algo_config=algo_config,
         )
 
         # Update the flags in flags_and_scores with the smoothed flags
@@ -195,7 +196,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             raise ServerError("History values and timestamps are not of the same length")
 
         if len(self.history_values) - self.window_size + 1 != len(self.history_mp):
-            raise ServerError("Matrix profile is not of the right length.")
+            raise ServerError(
+                f"Matrix profile is not of the right length. expected: {len(self.history_values) - self.window_size + 1}, actual: {len(self.history_mp)}"
+            )
         stream = None
         with sentry_sdk.start_span(description="Initializing MP stream"):
             # Initialize stumpi
@@ -241,6 +244,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 smoothed_flags = stream_flag_smoother.smooth(
                     original_flags=self.original_flags,
                     ad_config=ad_config,
+                    algo_config=algo_config,
                     vote_threshold=0.3,
                     cur_flag=flags_and_scores.flags,
                 )
