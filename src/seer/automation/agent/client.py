@@ -841,6 +841,8 @@ class LlmClient:
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
+        max_retries_during_stream: int | None = None,
+        sleep_sec_scaler: retry_stream.SleepSecScaler | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
         try:
             if run_name:
@@ -869,7 +871,7 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
-                yield from model.generate_text_stream_retry(
+                generate_args = dict(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -878,6 +880,16 @@ class LlmClient:
                     tools=tools,
                     timeout=timeout,
                 )
+                if tools:
+                    # When using tools, pre-filling the assistant response is not supported.
+                    # So retrying during the stream is not possible.
+                    yield from model.generate_text_stream(**generate_args)
+                else:
+                    yield from model.generate_text_stream_retry(
+                        **generate_args,
+                        max_retries_during_stream=max_retries_during_stream,
+                        sleep_sec_scaler=sleep_sec_scaler,
+                    )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:

@@ -98,18 +98,9 @@ class PartialCompletion:
         return bool(self.content_chunks) or bool(self.tool_calls)
 
 
-DoesExceptionIndicateRetry = Callable[[Exception], bool]
-"""
-Whether or not this exception indicates that the streaming request should be retried.
-
-The Anthropic API, e.g., raises an error indicating they're overloaded. They're almost
-always available in a few seconds.
-"""
-
-
 def _generate_text_stream_retry_recursive(
     *,
-    does_exception_indicate_retry: DoesExceptionIndicateRetry,
+    does_exception_indicate_retry: Callable[[Exception], bool],
     backoff: Backoff,
     model,
     messages: list[Message],
@@ -156,7 +147,7 @@ def _generate_text_stream_retry_recursive(
             )
             messages = messages + [partial_message]
             # The Anthropic API will resume generating this last (assistant)
-            # message given the previous ones.
+            # message.
             if messages[-1].content:
                 messages[-1].content = messages[-1].content.rstrip()
                 # Hack to avoid:
@@ -180,7 +171,7 @@ def _generate_text_stream_retry_recursive(
 
 def generate_text_stream_retry(
     *,
-    does_exception_indicate_retry: DoesExceptionIndicateRetry,
+    does_exception_indicate_retry: Callable[[Exception], bool],
     model,
     prompt: str | None = None,
     messages: list[Message] | None = None,
@@ -189,7 +180,6 @@ def generate_text_stream_retry(
     temperature: float | None = None,
     max_tokens: int | None = None,
     timeout: float | None = None,
-    # Retry args
     max_retries_during_stream: int | None = None,
     sleep_sec_scaler: SleepSecScaler | None = None,
 ):
