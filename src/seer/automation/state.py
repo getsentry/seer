@@ -97,7 +97,7 @@ class DbState(State[_State]):
         if db_state is None:
             raise ValueError(f"No state found for id {self.id}")
         if db_state.type != self.type:
-            raise ValueError(
+            raise ValueError(f"Invalid state type: '{db_state.type}', expected: '{self.type}'")
                 f"Invalid state type: '{db_state.type}', expected one of: '{self.type}'"
             )
 
