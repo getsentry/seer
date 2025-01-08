@@ -14,19 +14,37 @@ logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
 
-# This abstract helps tests that want to validate the entry point process.
 def setup_celery_entrypoint(app: Celery):
-    app.on_configure.connect(init_celery_app)
+    """
+    Connect all necessary signals for Celery lifecycle management.
+    Order of execution:
+    1. on_configure - For Celery config only
+    2. celeryd_init - For one-time app initialization
+    3. worker_ready - For setting up periodic tasks
+    """
+    app.on_configure.connect(configure_celery)
+    signals.celeryd_init.connect(initialize_app)
+    signals.worker_ready.connect(setup_tasks)
 
 
 @inject
-def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
+def configure_celery(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
+    """Configure Celery-specific settings only"""
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
-    from celery_app.tasks import setup_periodic_tasks
 
-    sender.on_after_finalize.connect(setup_periodic_tasks)
+
+@inject
+def initialize_app(*args: Any, **kwargs: Any):
+    """One-time initialization of the application"""
+    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+
+
+@inject
+def setup_tasks(sender: Celery, **kwargs: Any):
+    """Set up periodic tasks after worker is ready"""
+    from celery_app.tasks import setup_periodic_tasks
+    setup_periodic_tasks(sender)
 
 
 setup_celery_entrypoint(celery_app)

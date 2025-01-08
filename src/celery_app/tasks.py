@@ -16,7 +16,7 @@ from seer.dependency_injection import inject, injected
 
 
 @inject
-def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
+def setup_periodic_tasks(sender: Celery, config: AppConfig = injected, **kwargs: Any):
     if config.is_autofix_enabled:
         sender.add_periodic_task(
             crontab(minute="0", hour="*"),
