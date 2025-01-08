@@ -1,4 +1,5 @@
 import abc
+import datetime
 import logging
 from typing import Dict, List, Optional, Tuple
 
@@ -19,7 +20,7 @@ from seer.anomaly_detection.models import (
     ThresholdType,
 )
 from seer.dependency_injection import inject, injected
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 from seer.tags import AnomalyDetectionTags
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class MPScorer(BaseModel, abc.ABC):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
@@ -130,6 +132,7 @@ class LowVarianceScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
@@ -222,6 +225,7 @@ class MPIQRScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
@@ -243,16 +247,30 @@ class MPIQRScorer(MPScorer):
             Configuration for anomaly detection
         window_size: int
             Size of the window used for matrix profile computation
+        time_budget_ms: int | None = None,
         """
         scores: List[float] = []
         flags: List[AnomalyFlags] = []
         thresholds: List[List[Threshold]] = []
+        time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
+        time_start = datetime.datetime.now()
         # Compute score and anomaly flags
         mp_dist_threshold = self._get_mp_dist_threshold(mp_dist, ad_config.sensitivity)
         idx_to_detect_location_from = (
             len(mp_dist) - algo_config.direction_detection_num_timesteps_in_batch_mode
         )
+        batch_size = 10 if len(mp_dist) > 10 else 1
         for i, val in enumerate(mp_dist):
+            if time_allocated is not None and i % batch_size == 0:
+                time_elapsed = datetime.datetime.now() - time_start
+                if time_allocated is not None and time_elapsed > time_allocated:
+                    sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
+                    sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
+                    sentry_sdk.capture_message(
+                        "batch_detection_took_too_long",
+                        level="error",
+                    )
+                    raise ServerError("Batch detection took too long")
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - mp_dist_threshold)
             cur_thresholds = [
                 Threshold(
@@ -438,12 +456,20 @@ class MPCascadingScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.batch_score(
-                values, timestamps, mp_dist, ad_config, window_size, algo_config, location_detector
+                values,
+                timestamps,
+                mp_dist,
+                ad_config,
+                window_size,
+                time_budget_ms,
+                algo_config,
+                location_detector,
             )
             if flags_and_scores is not None:
                 return flags_and_scores

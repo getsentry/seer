@@ -83,12 +83,9 @@ class TestAnomalyDetection(unittest.TestCase):
             timeseries=ts,
         )
 
-        # timeseries: List[TimeSeriesPoint],
-        # config: AnomalyDetectionConfig,
-        # window_size: int | None = None,
-        # algo_config: AlgoConfig = injected,
-
-        def slow_function(timeseries, config, window_size=None, algo_config=None):
+        def slow_function(
+            timeseries, config, window_size=None, algo_config=None, time_budget_ms=None
+        ):
             time.sleep(0.2)  # Simulate a 200ms delay
             return timeseries, MPTimeSeriesAnomalies(
                 flags=[],
@@ -108,7 +105,7 @@ class TestAnomalyDetection(unittest.TestCase):
             AnomalyDetection().store_data(
                 request=request,
                 alert_data_accessor=mock_alert_data_accessor,
-                timeout_ms=100,
+                time_budget_ms=100,
             )
         assert "Batch detection took too long" in str(e.exception)
         mock_alert_data_accessor.save_alert.assert_not_called()
@@ -116,7 +113,7 @@ class TestAnomalyDetection(unittest.TestCase):
         response = AnomalyDetection().store_data(
             request=request,
             alert_data_accessor=mock_alert_data_accessor,
-            timeout_ms=300,
+            time_budget_ms=300,
         )
         assert isinstance(response, StoreDataResponse)
         assert response.success is True
