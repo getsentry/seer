@@ -98,8 +98,6 @@ class DbState(State[_State]):
             raise ValueError(f"No state found for id {self.id}")
         if db_state.type != self.type:
             raise ValueError(f"Invalid state type: '{db_state.type}', expected: '{self.type}'")
-                f"Invalid state type: '{db_state.type}', expected one of: '{self.type}'"
-            )
 
     def apply_to_run_state(self, value: _State, run_state: DbRunState):
         """
