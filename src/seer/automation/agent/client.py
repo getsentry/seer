@@ -700,7 +700,6 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
-                langfuse_context.flush()
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -800,7 +799,6 @@ class LlmClient:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Text Stream"
                 )
-                langfuse_context.flush()
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -851,7 +849,6 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
-                langfuse_context.flush()
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
