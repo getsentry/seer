@@ -13,23 +13,23 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
-
-# This abstract helps tests that want to validate the entry point process.
-def setup_celery_entrypoint(app: Celery):
-    app.on_configure.connect(init_celery_app)
-
-
 @inject
-def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
+def configure_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
         setattr(sender.conf, k, v)
+
+
+@signals.worker_init.connect
+@inject
+def initialize_worker(*args: Any, **kwargs: Any):
     bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
     from celery_app.tasks import setup_periodic_tasks
+    celery_app.on_after_finalize.connect(setup_periodic_tasks)
 
-    sender.on_after_finalize.connect(setup_periodic_tasks)
 
-
-setup_celery_entrypoint(celery_app)
+# Connect configuration setup to on_configure signal for config reloading support
+# This won't trigger bootup anymore which prevents SQLAlchemy registration conflicts
+celery_app.on_configure.connect(configure_celery_app)
 
 
 @signals.celeryd_after_setup.connect
