@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import List, Tuple
 
@@ -403,7 +404,10 @@ class AnomalyDetection(BaseModel):
 
     @inject
     def store_data(
-        self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
+        self,
+        request: StoreDataRequest,
+        alert_data_accessor: AlertDataAccessor = injected,
+        timeout_ms: int = 4000,  # Allocating 4 seconds for batch detection as alerting system timesout after 5 seconds
     ) -> StoreDataResponse:
         """
         Main entry point for storing time series data for an alert.
@@ -439,7 +443,21 @@ class AnomalyDetection(BaseModel):
                 "config": request.config.model_dump(),
             },
         )
+        time_start = datetime.datetime.now()
         ts, anomalies = self._batch_detect(request.timeseries, request.config)
+        time_elapsed = datetime.datetime.now() - time_start
+        time_allocated = datetime.timedelta(milliseconds=timeout_ms)
+        if time_elapsed > time_allocated:
+            sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
+            sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
+            sentry_sdk.capture_message(
+                "batch_detection_took_too_long",
+                level="error",
+            )
+            raise ServerError(
+                "Batch detection took too long"
+            )  # Abort without saving to avoid data going out of sync with alerting system.
+
         alert_data_accessor.save_alert(
             organization_id=request.organization_id,
             project_id=request.project_id,
