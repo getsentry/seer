@@ -21,24 +21,9 @@ interactions:
   response:
     body:
       string: !!binary |
-        H4sIAAAAAAAC/72RN5ejSBSF8/kVfTreVgvXEpPhhBEgYYRLOFB4b4WoOfvfF3qCCSfb9Fa9e9+7
-        368fb2/vAQDxOPpTW8bN+8+39zVAyUNwpHSbqE+ESdiBYw53XnYVBHsCGhfurAYfzoRPEspLyQTL
-        p9U8Gn5sMSC0w4PTwOr4dXHOe3IhR8vz0l7vzfZVIJVxf1yerqmfaZpuBHzh8Cqa5/45l8/7dMPn
-        xVAKjB91KESYzor3ryyyrDqyBJ+6mqe+GeEpntR6vDeo8TIllrk6ehowqXulDNygdM64aALvoEre
-        pEYxCMyyriNyc6YLmQWpuByR0+n9n/3q+NXlQzz6+X4zRpDktzqCtov3ErJp6safn5/LshzStk2r
-        OOjy8QDa+jOYp+xzHuMhb5L2ENdBXr397fvYV9vAMwfxoWrTvPnrAKjaOfroqmBK2qF+27Zq8uj3
-        5t+g/Gn9vSgdB0M8/H7Joz8U41XKQh7kt1wyHlBE1FwcxXrqPEb8EouUcNEHVM0Sd6GGKeilVmyp
-        3MDkXu0Sqv1AXZhiCnSPqkmtCrupNZfLjHSMHWr3vFqIlifaYYvpAKbsUhsJ+gJg+5TRS+GiJBI2
-        OpTr6Bmi0egZRBGix90ii5vdQsTUQlturLuoJodvMZPaXFZVoFAPozu1zuZNQ4Gg4Z7dIcBMoceX
-        UGUvbeSIs+vQC1iJJkTJJuQtBKDWumXOEW/NEfMnK7K1/ysLRra4Z70UNiVU6EIVUoRSPHCl0ODN
-        TI9KIe7/2m8EjVpt/ayxQXThuqOxJteuRrFoc1CTrWvjs2tHGWiiLORo6NnEETTlHNjn3aMK7UsX
-        XkjUc6TOq6tq94wECfGMJXcdPQn4Cwz2nJqcA8crQRkRipPRN4tejBKRw/I1B9U30s51to4Kbse9
-        odZQhQX7PjjY5hUTQLUQt+7ERcWOB/UqmTBGGb6BQkuOZ7WeVTdBk4GJBY9ar1yGmexU3Iyot41O
-        yRUGXclFvOPeF0tT/JLQMnNmbAVMJpb1gKHvXOhnrPyoz/7xah99JZCmzl5v42ktytnpb7aaXE/9
-        V3nqpd5tpln84tNBZgWyv6AteS1ymQtLKcnMs3D6claeQV5R9YGyWpdGS3lMJAyJxV4kdf0m8xnH
-        G7hzu9PpmvnweLuaBf60KB5HwcctbfzEGyyCwjMMPUtmxaWugPrnZRymUgGSIqd6sYCzKfRqVhuG
-        +uRd6j7FPgFrQjd60dSuyLCcRqe35ld7n5a5LrFslHmJLJKPgvdncJQHEnJs+KxIneexfiogFqXv
-        P/79D5FtPTmLBQAA
+        H4sIAJWsfmcC/4WPPQ7CMAxGrxJlhmRADO1lqshxW4s0DrFLQYi705aFAYn1+5Hee9oAgCKd8gWz
+        bY2tGAMoRnswFu+FKkpHW3M6N82aCXDBbTiqFmm9X5bFDcxDwlBIHPDkw6yjnwUr5Z4dToGS+TeX
+        a1oPNwJ0iQfKfw+QeI7HkoL2XCezUmXaqXeVTh8fzG8fij88X2+ZUVKkBAEAAA==
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
@@ -101,13 +86,13 @@ interactions:
     uri: https://us-central1-aiplatform.googleapis.com/v1beta1/projects/ml-ai-420606/locations/us-central1/publishers/google/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse
   response:
     body:
-      string: "data: {\"candidates\": [{\"content\": {\"role\": \"model\",\"parts\":
-        [{\"functionCall\": {\"name\": \"test_function\",\"args\": {\"x\": \"i love
-        poetry\"}}}]}}],\"usageMetadata\": {},\"modelVersion\": \"gemini-2.0-flash-exp\"}\r\n\r\ndata:
-        {\"candidates\": [{\"content\": {\"role\": \"model\",\"parts\": [{\"text\":
-        \"\\n\"}]},\"finishReason\": \"STOP\"}],\"usageMetadata\": {\"promptTokenCount\":
-        29,\"candidatesTokenCount\": 8,\"totalTokenCount\": 37},\"modelVersion\":
-        \"gemini-2.0-flash-exp\"}\r\n\r\n"
+      string: "data: {\"candidates\": [{\"content\": {\"role\": \"model\",\"parts\"\
+        : [{\"functionCall\": {\"name\": \"test_function\",\"args\": {\"x\": \"i love\
+        \ poetry\"}}}]}}],\"usageMetadata\": {},\"modelVersion\": \"gemini-2.0-flash-exp\"\
+        }\r\n\r\ndata: {\"candidates\": [{\"content\": {\"role\": \"model\",\"parts\"\
+        : [{\"text\": \"\\n\"}]},\"finishReason\": \"STOP\"}],\"usageMetadata\": {\"\
+        promptTokenCount\": 29,\"candidatesTokenCount\": 8,\"totalTokenCount\": 37},\"\
+        modelVersion\": \"gemini-2.0-flash-exp\"}\r\n\r\n"
     headers:
       Alt-Svc:
       - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
