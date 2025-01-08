@@ -1,5 +1,8 @@
+import gzip
+import json
 import logging
 import os
+from typing import Any
 from urllib.request import Request
 
 import johen
@@ -24,7 +27,8 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(autouse=True, scope="session")
 def configure_environment():
     os.environ["LANGFUSE_HOST"] = ""  # disable Langfuse logging for tests
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/tests/test_gcloud_credentials.json"
+    if os.environ.get("CI"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/app/tests/test_gcloud_credentials.json"
 
 
 @pytest.fixture
@@ -106,13 +110,46 @@ def filter_unrelated_requests(request: Request):
     return request
 
 
+def filter_tokens_and_secrets(redacted_keys: list[str]):
+    def filter_body(response):
+        if "body" in response and "string" in response["body"]:
+            try:
+                # The body could either be a string, bytes, or compressed.
+                body_is_compressed = (
+                    isinstance(response["body"]["string"], bytes)
+                    # string starts with gzip magic number
+                    and response["body"]["string"][:2] == b"\x1f\x8b"
+                )
+
+                body: dict[str, Any] = (
+                    json.loads(gzip.decompress(response["body"]["string"]).decode())
+                    if body_is_compressed
+                    else json.loads(response["body"]["string"].decode())
+                )
+                for key in body.keys():
+                    if any(redacted_key in key.lower() for redacted_key in redacted_keys):
+                        body[key] = "redacted"
+                response["body"]["string"] = (
+                    gzip.compress(json.dumps(body).encode())
+                    if body_is_compressed
+                    else json.dumps(body).encode()
+                )
+            except (json.JSONDecodeError, AttributeError, gzip.BadGzipFile):
+                pass
+        return response
+
+    return filter_body
+
+
 @pytest.fixture(scope="module")
 def vcr_config():
     return {
         "filter_headers": [("authorization", "redacted")],
         "record_mode": "none" if os.environ.get("CI") else "once",
         "before_record_request": filter_unrelated_requests,
-        "filter_post_data_parameters": ["client_secret", "refresh_token"],
+        "before_record_response": filter_tokens_and_secrets(
+            ["token", "secret", "api_key", "password"]
+        ),
         "ignore_hosts": ["169.254.169.254"],
     }
 
