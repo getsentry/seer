@@ -22,6 +22,7 @@ from seer.automation.autofix.evaluations import (
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
+    AutofixCreateBranchUpdatePayload,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
@@ -189,12 +190,14 @@ def run_autofix_execution(
 
 
 @inject
-def run_autofix_create_pr(
+def run_autofix_push_changes(
     request: AutofixUpdateRequest,
     app_config: AppConfig = injected,
 ):
-    if not isinstance(request.payload, AutofixCreatePrUpdatePayload):
-        raise ValueError("Invalid payload type for create_pr")
+    if not isinstance(request.payload, AutofixCreatePrUpdatePayload) and not isinstance(
+        request.payload, AutofixCreateBranchUpdatePayload
+    ):
+        raise ValueError("Invalid payload type for create_pr or create_branch")
 
     state = ContinuationState(request.run_id)
 
@@ -207,7 +210,9 @@ def run_autofix_create_pr(
     context = AutofixContext(state=state, event_manager=event_manager)
 
     context.commit_changes(
-        repo_external_id=request.payload.repo_external_id, repo_id=request.payload.repo_id
+        repo_external_id=request.payload.repo_external_id,
+        repo_id=request.payload.repo_id,
+        make_pr=request.payload.make_pr,
     )
 
 

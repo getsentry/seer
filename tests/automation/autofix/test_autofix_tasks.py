@@ -16,8 +16,8 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
-    run_autofix_create_pr,
     run_autofix_execution,
+    run_autofix_push_changes,
     run_autofix_root_cause,
 )
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
@@ -207,11 +207,11 @@ def test_autofix_create_pr(autofix_full_finished_run: AutofixContinuation):
     repo_external_id = next(iter(autofix_full_finished_run.codebases.keys()))
 
     with eager_celery():
-        run_autofix_create_pr(
+        run_autofix_push_changes(
             AutofixUpdateRequest(
                 run_id=autofix_full_finished_run.run_id,
                 payload=AutofixCreatePrUpdatePayload(repo_external_id=repo_external_id),
-            )
+            ),
         )
 
     with Session() as session:

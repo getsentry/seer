@@ -3,7 +3,7 @@ import random
 from langfuse.decorators import observe
 from rapidfuzz import fuzz, process
 
-VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
+VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/"
 
 
 def get_last_non_empty_line(text: str) -> str:

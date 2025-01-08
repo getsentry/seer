@@ -213,6 +213,7 @@ class AutofixContext(PipelineContext):
         self,
         repo_external_id: str | None = None,
         repo_id: int | None = None,
+        make_pr: bool = False,
         pr_to_comment_on_url: str | None = None,
     ):
         state = self.state.get()
@@ -247,14 +248,24 @@ class AutofixContext(PipelineContext):
                         repo_external_id=repo_definition.external_id, type=RepoClientType.WRITE
                     )
 
+                    branch_name = f"autofix/{change_state.title}"
                     branch_ref = repo_client.create_branch_from_changes(
                         pr_title=change_state.title,
                         file_patches=change_state.diff,
+                        branch_name=branch_name,
                     )
 
                     if branch_ref is None:
                         logger.warning("Failed to create branch from changes")
                         return None
+
+                    with self.state.update() as state:
+                        step = cast(ChangesStep, state.steps[changes_step.index])
+                        step.changes[changes_state_index].branch_name = branch_ref.ref.replace(
+                            "refs/heads/", ""
+                        )
+                    if not make_pr:
+                        return
 
                     pr_title = f"""🤖 {change_state.title}"""
 

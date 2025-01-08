@@ -103,6 +103,7 @@ class CodebaseChange(BaseModel):
     description: str
     diff: list[FilePatch] = []
     diff_str: Optional[str] = None
+    branch_name: str | None = None
     pull_request: Optional[CommittedPullRequestDetails] = None
 
 
@@ -324,6 +325,7 @@ class AutofixRequest(BaseModel):
 class AutofixUpdateType(str, enum.Enum):
     SELECT_ROOT_CAUSE = "select_root_cause"
     CREATE_PR = "create_pr"
+    CREATE_BRANCH = "create_branch"
     USER_MESSAGE = "user_message"
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
     UPDATE_CODE_CHANGE = "update_code_change"
@@ -340,6 +342,14 @@ class AutofixCreatePrUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_PR] = AutofixUpdateType.CREATE_PR
     repo_external_id: str | None = None
     repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
+    make_pr: bool = True
+
+
+class AutofixCreateBranchUpdatePayload(BaseModel):
+    type: Literal[AutofixUpdateType.CREATE_BRANCH] = AutofixUpdateType.CREATE_BRANCH
+    repo_external_id: str | None = None
+    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
+    make_pr: bool = False
 
 
 class AutofixUserMessagePayload(BaseModel):
@@ -367,6 +377,7 @@ class AutofixUpdateRequest(BaseModel):
     payload: Union[
         AutofixRootCauseUpdatePayload,
         AutofixCreatePrUpdatePayload,
+        AutofixCreateBranchUpdatePayload,
         AutofixUserMessagePayload,
         AutofixRestartFromPointPayload,
         AutofixUpdateCodeChangePayload,
