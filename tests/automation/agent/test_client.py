@@ -500,6 +500,208 @@ def test_construct_message_from_stream_invalid_provider():
 
 
 @pytest.mark.vcr()
+def test_gemini_generate_text():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-exp")
+
+    response = llm_client.generate_text(
+        prompt="Say hello",
+        model=model,
+    )
+
+    assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content.strip() == "Hello! How can I help you today?"
+    assert response.message.role == "assistant"
+    assert response.metadata.model == "gemini-2.0-flash-exp"
+    assert response.metadata.provider_name == LlmProviderType.GEMINI
+    assert response.metadata.usage == Usage(completion_tokens=10, prompt_tokens=2, total_tokens=12)
+
+
+@pytest.mark.vcr()
+def test_gemini_generate_text_with_tools():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-exp")
+
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[
+                {
+                    "name": "x",
+                    "type": "string",
+                },
+            ],
+            fn=lambda x: x,
+        )
+    ]
+
+    response = llm_client.generate_text(
+        prompt="Please invoke test_function with x = 'i love poetry' and write a haiku about the night sky.",
+        model=model,
+        tools=tools,
+    )
+
+    assert isinstance(response, LlmGenerateTextResponse)
+    assert len(response.message.content) > 0
+    assert response.message.role == "tool_use"
+    assert response.message.tool_calls == [
+        ToolCall(
+            function="test_function",
+            args='{"x": "i love poetry"}',
+        ),
+    ]
+
+
+@pytest.mark.vcr()
+def test_gemini_generate_structured():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-exp")
+
+    class TestStructure(BaseModel):
+        name: str
+        age: int
+
+    response = llm_client.generate_structured(
+        prompt="Generate a person named John Doe aged 30",
+        model=model,
+        response_format=TestStructure,
+    )
+
+    assert isinstance(response, LlmGenerateStructuredResponse)
+    assert response.parsed == TestStructure(name="John Doe", age=30)
+    assert response.metadata.model == "gemini-2.0-flash-exp"
+    assert response.metadata.provider_name == LlmProviderType.GEMINI
+
+
+def test_gemini_prep_message_and_tools():
+    messages = [
+        Message(role="user", content="Hello"),
+        Message(role="assistant", content="Hi there!"),
+    ]
+    prompt = "How are you?"
+    system_prompt = "You are a helpful assistant."
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[{"name": "x", "type": "string"}],
+            fn=lambda x: x,
+        )
+    ]
+
+    message_dicts, tool_dicts, returned_system_prompt = GeminiProvider._prep_message_and_tools(
+        messages=messages,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        tools=tools,
+    )
+
+    assert len(message_dicts) == 3
+    assert message_dicts[0].role == "user"
+    assert message_dicts[0].parts[0].text == "Hello"
+    assert message_dicts[1].role == "model"
+    assert message_dicts[1].parts[0].text == "Hi there!"
+    assert message_dicts[2].role == "user"
+    assert message_dicts[2].parts[0].text == prompt
+
+    assert tool_dicts
+    if tool_dicts:
+        assert len(tool_dicts) == 1
+        assert tool_dicts[0].function_declarations[0].name == "test_function"
+        assert tool_dicts[0].function_declarations[0].description == "A test function"
+        assert tool_dicts[0].function_declarations[0].parameters.properties["x"].type == "STRING"
+
+
+@pytest.mark.vcr()
+def test_gemini_generate_text_stream():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-exp")
+
+    stream_items = list(
+        llm_client.generate_text_stream(
+            prompt="Say hello",
+            model=model,
+        )
+    )
+
+    # Check that we got content chunks and usage
+    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    usage_items = [item for item in stream_items if isinstance(item, Usage)]
+
+    assert len(content_chunks) > 0
+    assert "".join(content_chunks).strip() == "Hello! How can I help you today?"
+    assert len(usage_items) == 1
+    assert usage_items[0].completion_tokens > 0
+    assert usage_items[0].prompt_tokens > 0
+    assert (
+        usage_items[0].total_tokens
+        == usage_items[0].completion_tokens + usage_items[0].prompt_tokens
+    )
+
+
+@pytest.mark.vcr()
+def test_gemini_generate_text_stream_with_tools():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-exp")
+
+    tools = [
+        FunctionTool(
+            name="test_function",
+            description="A test function",
+            parameters=[
+                {
+                    "name": "x",
+                    "type": "string",
+                },
+            ],
+            fn=lambda x: x,
+        )
+    ]
+
+    stream_items = list(
+        llm_client.generate_text_stream(
+            prompt="Please invoke test_function with x = 'i love poetry' and write a haiku about the night sky.",
+            model=model,
+            tools=tools,
+        )
+    )
+
+    # Check that we got content chunks, tool calls and usage
+    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    tool_calls = [item for item in stream_items if isinstance(item, ToolCall)]
+    usage_items = [item for item in stream_items if isinstance(item, Usage)]
+
+    assert len(content_chunks) > 0
+    assert len(tool_calls) == 1
+    assert tool_calls[0].function == "test_function"
+    assert tool_calls[0].args == '{"x": "i love poetry"}'
+    assert len(usage_items) == 1
+
+
+def test_construct_message_from_stream_gemini():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-exp")
+
+    content_chunks = ["Hello", " world", "!"]
+    tool_calls = [ToolCall(id="123", function="test_function", args='{"x": "test"}')]
+
+    message = llm_client.construct_message_from_stream(
+        content_chunks=content_chunks,
+        tool_calls=tool_calls,
+        model=model,
+    )
+
+    assert message.role == "tool_use"
+    assert message.content == "Hello world!"
+    assert len(message.tool_calls) == 1
+    assert message.tool_calls[0].id == "123"
+    assert message.tool_calls[0].function == "test_function"
+    assert message.tool_calls[0].args == '{"x": "test"}'
+    assert message.tool_call_id == "123"
+
+
+@pytest.mark.vcr()
 def test_gemini_generate_text_from_web_search():
     llm_client = LlmClient()
     model = GeminiProvider(model_name="gemini-2.0-flash-exp")

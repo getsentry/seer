@@ -6,7 +6,7 @@
 #
 aiohappyeyeballs==2.4.4
     # via aiohttp
-aiohttp==3.11.10
+aiohttp==3.11.11
     # via
     #   -r requirements-constraints.txt
     #   datasets
@@ -78,7 +78,7 @@ chroma-hnswlib==0.7.3
     # via chromadb
 chromadb==0.4.14
     # via -r requirements-constraints.txt
-click==8.1.7
+click==8.1.8
     # via
     #   -r requirements-constraints.txt
     #   celery
@@ -110,7 +110,7 @@ convertdate==2.4.0
     # via -r requirements-constraints.txt
 covdefaults==2.3.0
     # via -r requirements-constraints.txt
-coverage==7.6.9
+coverage==7.6.10
     # via
     #   covdefaults
     #   pytest-cov
@@ -165,7 +165,7 @@ flask-sqlalchemy==3.1.1
     #   -r requirements-constraints.txt
     #   flask-migrate
     #   types-flask-migrate
-flatbuffers==24.3.25
+flatbuffers==24.12.23
     # via onnxruntime
 fonttools==4.43.0
     # via
@@ -200,7 +200,7 @@ google-auth==2.37.0
     #   google-cloud-secret-manager
     #   google-cloud-storage
     #   google-genai
-google-cloud-aiplatform==1.74.0
+google-cloud-aiplatform==1.75.0
     # via -r requirements-constraints.txt
 google-cloud-bigquery==3.27.0
     # via google-cloud-aiplatform
@@ -220,7 +220,7 @@ google-crc32c==1.6.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==0.2.2
+google-genai==0.3.0
     # via -r requirements-constraints.txt
 google-resumable-media==2.7.2
     # via
@@ -426,7 +426,7 @@ onnx==1.16.0
     # via -r requirements-constraints.txt
 onnxruntime==1.20.1
     # via chromadb
-openai==1.57.4
+openai==1.58.1
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
@@ -505,7 +505,7 @@ proto-plus==1.25.0
     #   google-cloud-aiplatform
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
-protobuf==5.29.1
+protobuf==5.29.2
     # via
     #   -r requirements-constraints.txt
     #   google-api-core
@@ -679,7 +679,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.40
+sentry-protos==0.1.41
     # via -r requirements-constraints.txt
 sentry-sdk==2.18.0
     # via -r requirements-constraints.txt
