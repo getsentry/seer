@@ -1,8 +1,10 @@
 import json
 import os
+from datetime import timedelta
 from typing import List, Optional
 
 import numpy as np
+import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 from seer.anomaly_detection.models import TimeSeriesPoint
@@ -20,6 +22,35 @@ class LoadedSyntheticData(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
+
+
+def test_data_with_cycles(num_anomalous: int = 5) -> pd.DataFrame:
+    """
+    Creates a time series with daily cycles and adds anomalies to the last num_anomalous points.
+
+    Parameters:
+    num_anomalous: int
+        Number of anomalous points to add to the time series.
+
+    Returns:
+    pd.DataFrame: A DataFrame with the time series data.
+    """
+    date_range = pd.date_range(start="2023-01-01", periods=29, freq="D")
+
+    # Generate daily cycle values
+    daily_cycle = np.sin(2 * np.pi * np.arange(24) / 24)
+
+    # Create a time series with daily cycles
+    data = []
+    for date in date_range:
+        for hour in range(24):
+            value = daily_cycle[hour] + np.random.normal(0, 0.2)  # Add some noise
+            data.append({"timestamp": date + timedelta(hours=hour), "value": value})
+
+    for i in range(1, num_anomalous):
+        data[-i]["value"] = data[-i]["value"] + 1.5  # add anomaly for the last num_anomalous points
+    df = pd.DataFrame(data)
+    return df
 
 
 # Returns timeseries and mp_distances as lists of numpy arrays from the synthetic data

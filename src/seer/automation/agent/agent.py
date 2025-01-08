@@ -108,10 +108,8 @@ class LlmAgent:
     def run(self, run_config: RunConfig):
         if run_config.run_name:
             langfuse_context.update_current_observation(name=run_config.run_name + " - Agent Run")
-            langfuse_context.flush()
         elif self.name:
             langfuse_context.update_current_observation(name=self.name + " - Agent Run")
-            langfuse_context.flush()
 
         if run_config.prompt:
             self.add_user_message(run_config.prompt)

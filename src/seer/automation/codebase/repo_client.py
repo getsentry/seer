@@ -5,13 +5,15 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import Literal
+from typing import List, Literal, Optional
+from typing_extensions import TypedDict
 
 import requests
 import sentry_sdk
 from github import (
     Auth,
     Github,
+    GithubObject,
     GithubException,
     GithubIntegration,
     InputGitTreeElement,
@@ -22,6 +24,7 @@ from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_language_from_path
+from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
@@ -102,6 +105,7 @@ class RepoClientType(str, Enum):
     READ = "read"
     WRITE = "write"
     CODECOV_UNIT_TEST = "codecov_unit_test"
+    CODECOV_PR_REVIEW = "codecov_pr_review"
 
 
 class RepoClient:
@@ -181,12 +185,20 @@ class RepoClient:
 
         return False
 
+    @staticmethod
+    def _extract_id_from_pr_url(pr_url: str):
+        """
+        Extracts the repository path and PR/issue ID from the provided URL.
+        """
+        pr_id = int(pr_url.split("/")[-1])
+        return pr_id
+
     @classmethod
     @functools.cache
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
-        elif type == RepoClientType.CODECOV_UNIT_TEST:
+        elif type == RepoClientType.CODECOV_UNIT_TEST or type == RepoClientType.CODECOV_PR_REVIEW:
             return cls(*get_codecov_unit_test_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
@@ -310,11 +322,16 @@ class RepoClient:
         return valid_file_paths
 
     def _create_branch(self, branch_name):
-        ref = self.repo.create_git_ref(
-            ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
-        )
-
-        return ref
+        try:
+            ref = self.repo.create_git_ref(
+                ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
+            )
+            return ref
+        except GithubException as e:
+            # if reference already exists (422), just fetch and return it
+            if e.status == 422:
+                return self.repo.get_git_ref(f"heads/{branch_name}")
+            raise e
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -371,7 +388,7 @@ class RepoClient:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
 
-        new_branch_name = branch_name or f"autofix/{sanitize_branch_name(pr_title)}"
+        new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
             branch_ref = self._create_branch(new_branch_name)
@@ -575,3 +592,35 @@ class RepoClient:
         response = requests.post(url, headers=headers, json=params)
         response.raise_for_status()
         return response.json()["html_url"]
+
+    def post_issue_comment(self, pr_url: str, comment: str):
+        """
+        Create an issue comment on a GitHub issue (all pull requests are issues).
+        This can be used to create an overall PR comment instead of associated with a specific line.
+        See https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#create-an-issue-comment
+        Note that expected input is pr_url NOT pr_html_url
+        """
+        pr_id = self._extract_id_from_pr_url(pr_url)
+        issue = self.repo.get_issue(number=pr_id)
+        comment_obj = issue.create_comment(body=comment)
+        return comment_obj.html_url
+
+    def post_pr_review_comment(self, pr_url: str, comment: GithubPrReviewComment):
+        """
+        Create a review comment on a GitHub pull request.
+        See https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+        Note that expected input is pr_url NOT pr_html_url
+        """
+        pr_id = self._extract_id_from_pr_url(pr_url)
+        pr = self.repo.get_pull(number=pr_id)
+        commit = self.repo.get_commit(comment["commit_id"])
+
+        review_comment = pr.create_review_comment(
+            body=comment["body"],
+            commit=commit,
+            path=comment["path"],
+            line=comment.get("line", GithubObject.NotSet),
+            side=comment.get("side", GithubObject.NotSet),
+            start_line=comment.get("start_line", GithubObject.NotSet),
+        )
+        return review_comment.html_url

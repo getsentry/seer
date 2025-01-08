@@ -1,6 +1,8 @@
+from typing import Optional
 import unittest
 from unittest.mock import MagicMock
 
+from seer.automation.state import DbStateRunTypes
 from src.seer.automation.steps import (
     ConditionalStep,
     ConditionalStepRequest,
@@ -20,7 +22,7 @@ class ConcreteConditionalStep(ConditionalStep):
         return ConditionalStepRequest(**request)
 
     @staticmethod
-    def _instantiate_context(request):
+    def _instantiate_context(request, type: Optional["DbStateRunTypes"] = None):
         return MagicMock()
 
     def condition(self):
@@ -73,7 +75,7 @@ class ConcreteParallelizedChainStep(ParallelizedChainStep):
         return ParallelizedChainStepRequest(**request)
 
     @staticmethod
-    def _instantiate_context(request):
+    def _instantiate_context(request, type: Optional["DbStateRunTypes"] = None):
         return MagicMock()
 
     @staticmethod

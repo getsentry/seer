@@ -1,13 +1,13 @@
 import abc
 import logging
 import uuid
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 import sentry_sdk
 from celery import Task, signature
 from pydantic import BaseModel, Field
 
-from seer.automation.state import State
+from seer.automation.state import DbStateRunTypes, State
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
 
     def __init__(self, request: dict[str, Any]):
         self.request = self._instantiate_request(request)
-        self.context = self._instantiate_context(self.request)
+        self.context = self._instantiate_context(self.request, None)
 
     def invoke(self) -> Any:
         try:
@@ -128,7 +128,9 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
 
     @staticmethod
     @abc.abstractmethod
-    def _instantiate_context(request: PipelineStepTaskRequest) -> _ContextType:
+    def _instantiate_context(
+        request: PipelineStepTaskRequest, type: DbStateRunTypes | None = None
+    ) -> _ContextType:
         pass
 
     @abc.abstractmethod

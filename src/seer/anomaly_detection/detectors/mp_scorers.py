@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from seer.anomaly_detection.detectors.location_detectors import LocationDetector
 from seer.anomaly_detection.models import (
+    AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
     Directions,
@@ -48,6 +49,7 @@ class MPScorer(BaseModel, abc.ABC):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
@@ -64,6 +66,7 @@ class MPScorer(BaseModel, abc.ABC):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         return NotImplemented
@@ -127,6 +130,7 @@ class LowVarianceScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         ts_mean = values.mean()
@@ -162,6 +166,7 @@ class LowVarianceScorer(MPScorer):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         context = history_values[-2 * window_size :]
@@ -217,6 +222,7 @@ class MPIQRScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         """
@@ -243,28 +249,31 @@ class MPIQRScorer(MPScorer):
         thresholds: List[List[Threshold]] = []
         # Compute score and anomaly flags
         mp_dist_threshold = self._get_mp_dist_threshold(mp_dist, ad_config.sensitivity)
+        idx_to_detect_location_from = (
+            len(mp_dist) - algo_config.direction_detection_num_timesteps_in_batch_mode
+        )
         for i, val in enumerate(mp_dist):
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - mp_dist_threshold)
-            flag = self._to_flag(val, mp_dist_threshold)
-
-            flag, cur_thresholds = self._adjust_flag_for_direction(
-                flag,
-                ad_config.direction,
-                streamed_value=values[i],
-                streamed_timestamp=timestamps[i],
-                history_values=values[0 : i - 1],
-                history_timestamps=timestamps[0 : i - 1],
-                location_detector=location_detector,
-            )
-
-            flags.append(flag)
-            cur_thresholds.append(
+            cur_thresholds = [
                 Threshold(
                     type=ThresholdType.MP_DIST_IQR, upper=mp_dist_threshold, lower=mp_dist_threshold
                 )
-            )
-            if cur_thresholds is not None:
-                thresholds.append(cur_thresholds)
+            ]
+
+            flag = self._to_flag(val, mp_dist_threshold)
+            if i >= idx_to_detect_location_from:
+                flag, location_thresholds = self._adjust_flag_for_direction(
+                    flag,
+                    ad_config.direction,
+                    streamed_value=values[i],
+                    streamed_timestamp=timestamps[i],
+                    history_values=values[0 : i - 1],
+                    history_timestamps=timestamps[0 : i - 1],
+                    location_detector=location_detector,
+                )
+                cur_thresholds.extend(location_thresholds)
+            flags.append(flag)
+            thresholds.append(cur_thresholds)
         return FlagsAndScores(
             flags=flags,
             scores=scores,
@@ -282,6 +291,7 @@ class MPIQRScorer(MPScorer):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         """
@@ -428,11 +438,12 @@ class MPCascadingScorer(MPScorer):
         mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.batch_score(
-                values, timestamps, mp_dist, ad_config, window_size, location_detector
+                values, timestamps, mp_dist, ad_config, window_size, algo_config, location_detector
             )
             if flags_and_scores is not None:
                 return flags_and_scores
@@ -449,6 +460,7 @@ class MPCascadingScorer(MPScorer):
         history_mp_dist: npt.NDArray[np.float64],
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        algo_config: AlgoConfig = injected,
         location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
@@ -461,6 +473,7 @@ class MPCascadingScorer(MPScorer):
                 history_mp_dist,
                 ad_config,
                 window_size,
+                algo_config,
                 location_detector,
             )
             if flags_and_scores is not None:

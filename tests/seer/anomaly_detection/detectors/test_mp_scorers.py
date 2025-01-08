@@ -2,7 +2,9 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
+import stumpy
 
+from seer.anomaly_detection.detectors import MPUtils, WindowSizeSelector
 from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
 from seer.anomaly_detection.detectors.mp_scorers import (
     LowVarianceScorer,
@@ -10,10 +12,15 @@ from seer.anomaly_detection.detectors.mp_scorers import (
     MPIQRScorer,
     MPScorer,
 )
-from seer.anomaly_detection.models import AnomalyDetectionConfig, RelativeLocation, ThresholdType
+from seer.anomaly_detection.models import (
+    AlgoConfig,
+    AnomalyDetectionConfig,
+    RelativeLocation,
+    ThresholdType,
+)
 from seer.dependency_injection import resolve
 from seer.exceptions import ClientError
-from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
+from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts, test_data_with_cycles
 
 
 class TestMPCascadingScorer(unittest.TestCase):
@@ -248,6 +255,50 @@ class TestLowVarianceScorer(unittest.TestCase):
 
 
 class TestMPIQRScorer(unittest.TestCase):
+    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
+    def test_prophet_optimization_for_batch(self, mock_location_detector):
+        scorer = MPIQRScorer()
+        mp_utils = resolve(MPUtils)
+        ws_selector = resolve(WindowSizeSelector)
+        ad_config = AnomalyDetectionConfig(
+            time_period=60, sensitivity="high", direction="up", expected_seasonality="auto"
+        )
+        algo_config = resolve(AlgoConfig)
+        algo_config.direction_detection_num_timesteps_in_batch_mode = 2
+        df = test_data_with_cycles(num_anomalous=5)
+        window_size = ws_selector.optimal_window_size(df["value"].values)
+        # Get the matrix profile for the time series
+        mp = stumpy.stump(
+            df["value"].values,
+            m=max(3, window_size),
+            ignore_trivial=algo_config.mp_ignore_trivial,
+            normalize=False,
+        )
+
+        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(df["value"].values))
+
+        scorer.batch_score(
+            df["value"].values,
+            df["timestamp"].values,
+            mp_dist,
+            ad_config=ad_config,
+            algo_config=algo_config,
+            window_size=window_size,
+        )
+        assert mock_location_detector.call_count == 2
+
+        algo_config.direction_detection_num_timesteps_in_batch_mode = 1
+        scorer.batch_score(
+            df["value"].values,
+            df["timestamp"].values,
+            mp_dist,
+            ad_config=ad_config,
+            algo_config=algo_config,
+            window_size=window_size,
+        )
+        assert mock_location_detector.call_count == 3
+
     @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
     def test_adjust_flag_for_non_anomalous_case(self, mock_location_detector):
         scorer = MPIQRScorer()

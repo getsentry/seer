@@ -15,8 +15,14 @@ from anthropic.types import (
 )
 from google import genai  # type: ignore[attr-defined]
 from google.genai.types import (  # type: ignore[import-untyped]
+    Content,
+    FunctionCall,
+    FunctionDeclaration,
+    FunctionResponse,
     GenerateContentConfig,
+    GenerateContentResponse,
     GoogleSearch,
+    Part,
     Tool,
 )
 from langfuse.decorators import langfuse_context, observe
@@ -689,6 +695,14 @@ class AnthropicProvider:
 
 @dataclass
 class GeminiProvider:
+    # !!! NOTE THE FOLLOWING LIMITATIONS FOR GEMINI:
+    # - super strict rate limits making it unusable for evals or prod
+    # - no multi-turn tool use
+    # - no nested Pydantic models for structured outputs
+    # - no nullable fields for structured outputs
+    # - no dynamic retrieval for google search
+    # These will likely be changed as the SDK matures. Make sure to keep an eye on updates and update these notes/our implementation as needed.
+
     model_name: str
     provider_name = LlmProviderType.GEMINI
     defaults: LlmProviderDefaults | None = None
@@ -700,11 +714,27 @@ class GeminiProvider:
         ),
     ]
 
-    def get_client(self) -> genai.Client:
+    @staticmethod
+    def get_client() -> genai.Client:
         return genai.Client(
             vertexai=True,
             location="us-central1",
         )
+
+    @classmethod
+    def model(cls, model_name: str) -> "GeminiProvider":
+        model_config = cls._get_config(model_name)
+        return cls(
+            model_name=model_name,
+            defaults=model_config.defaults if model_config else None,
+        )
+
+    @classmethod
+    def _get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
+                return config
+        return None
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
     def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
@@ -724,6 +754,319 @@ class GeminiProvider:
         for each in response.candidates[0].content.parts:
             answer += each.text
         return answer
+
+    @observe(as_type="generation", name="Gemini Generation")
+    def generate_structured(
+        self,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        temperature: float | None = None,
+        response_format: Type[StructuredOutputType],
+        max_tokens: int | None = None,
+    ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
+        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        client = self.get_client()
+
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=message_dicts,
+            config=GenerateContentConfig(
+                tools=tool_dicts,
+                response_modalities=["TEXT"],
+                temperature=temperature or 0.0,
+                response_mime_type="application/json",
+                max_output_tokens=max_tokens or 8192,
+                response_schema=response_format.model_json_schema(),  # type: ignore[attr-defined]
+            ),
+        )
+        result = response.text
+        structured_result = response_format.model_validate_json(result)  # type: ignore[attr-defined]
+
+        usage = Usage(
+            completion_tokens=response.usage_metadata.candidates_token_count,
+            prompt_tokens=response.usage_metadata.prompt_token_count,
+            total_tokens=response.usage_metadata.total_token_count,
+        )
+        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+        return LlmGenerateStructuredResponse(
+            parsed=structured_result,
+            metadata=LlmResponseMetadata(
+                model=self.model_name,
+                provider_name=self.provider_name,
+                usage=usage,
+            ),
+        )
+
+    @observe(as_type="generation", name="Gemini Stream")
+    def generate_text_stream(
+        self,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[str | ToolCall | Usage]:
+        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        client = self.get_client()
+
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+
+        try:
+            stream = client.models.generate_content_stream(
+                model=self.model_name,
+                contents=message_dicts,
+                config=GenerateContentConfig(
+                    tools=tool_dicts,
+                    system_instruction=system_prompt,
+                    response_modalities=["TEXT"],
+                    temperature=temperature or 0.0,
+                    max_output_tokens=max_tokens or 8192,
+                ),
+            )
+
+            current_tool_call: dict[str, Any] | None = None
+
+            for chunk in stream:
+                # Handle function calls
+                if chunk.candidates[0].content.parts[0].function_call:
+                    function_call = chunk.candidates[0].content.parts[0].function_call
+                    if not current_tool_call:
+                        current_tool_call = {
+                            "id": str(hash(function_call.name + str(function_call.args))),
+                            "function": function_call.name,
+                            "args": json.dumps(function_call.args),
+                        }
+                        yield ToolCall(**current_tool_call)
+                        current_tool_call = None
+                # Handle text chunks
+                elif chunk.text:
+                    yield chunk.text
+
+                # Update token counts if available
+                if chunk.usage_metadata:
+                    total_prompt_tokens = chunk.usage_metadata.prompt_token_count
+                    total_completion_tokens = chunk.usage_metadata.candidates_token_count
+
+        finally:
+            # Yield final usage statistics
+            usage = Usage(
+                completion_tokens=total_completion_tokens,
+                prompt_tokens=total_prompt_tokens,
+                total_tokens=total_prompt_tokens + total_completion_tokens,
+            )
+            yield usage
+            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+    @observe(as_type="generation", name="Gemini Generation")
+    def generate_text(
+        self,
+        *,
+        prompt: str | None = None,
+        messages: list[Message] | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+            messages=messages,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        client = self.get_client()
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=message_dicts,
+            config=GenerateContentConfig(
+                tools=tool_dicts,
+                system_instruction=system_prompt,
+                temperature=temperature or 0.0,
+                max_output_tokens=max_tokens or 8192,
+            ),
+        )
+
+        message = self._format_gemini_response_to_message(response)
+
+        usage = Usage(
+            completion_tokens=response.usage_metadata.candidates_token_count,
+            prompt_tokens=response.usage_metadata.prompt_token_count,
+            total_tokens=response.usage_metadata.total_token_count,
+        )
+
+        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+        return LlmGenerateTextResponse(
+            message=message,
+            metadata=LlmResponseMetadata(
+                model=self.model_name,
+                provider_name=self.provider_name,
+                usage=usage,
+            ),
+        )
+
+    @classmethod
+    def _prep_message_and_tools(
+        cls,
+        *,
+        messages: list[Message] | None = None,
+        prompt: str | None = None,
+        system_prompt: str | None = None,
+        tools: list[FunctionTool] | None = None,
+    ) -> tuple[list[Content], list[Tool] | None, str | None]:
+        contents = [cls.to_content(message) for message in messages] if messages else []
+        if prompt:
+            contents.append(cls.to_content(Message(role="user", content=prompt)))
+
+        tools = [cls.to_tool(tool) for tool in tools] if tools else []
+
+        return contents, tools, system_prompt
+
+    @staticmethod
+    def to_content(message: Message) -> Content:
+        if message.role == "tool":
+            return Content(
+                role="user",
+                parts=[
+                    Part(
+                        function_response=FunctionResponse(
+                            name=message.tool_calls[0].function if message.tool_calls else "",
+                            response=(
+                                json.loads(message.tool_calls[0].args) if message.tool_calls else {}
+                            ),
+                        ),
+                    )
+                ],
+            )
+        elif message.role == "tool_use":
+            if not message.tool_calls:
+                return Content(
+                    role="model",
+                    parts=[Part(text=message.content or "")],
+                )
+            tool_call = message.tool_calls[0]  # Assuming only one tool call per message
+            parts = []
+            if message.content:
+                parts.append(Part(text=message.content))
+            if tool_call:
+                parts.append(
+                    Part(
+                        function_call=FunctionCall(
+                            name=tool_call.function,
+                            args=json.loads(tool_call.args),
+                        ),
+                    )
+                )
+            return Content(
+                role="model",
+                parts=parts,
+            )
+        elif message.role == "assistant":
+            return Content(
+                role="model",
+                parts=[Part(text=message.content or "")],
+            )
+        else:
+            return Content(
+                role="user",
+                parts=[Part(text=message.content or "")],
+            )
+
+    @staticmethod
+    def to_tool(tool: FunctionTool) -> Tool:
+        return Tool(
+            function_declarations=[
+                FunctionDeclaration(
+                    name=tool.name,
+                    description=tool.description,
+                    parameters={
+                        "type": "OBJECT",
+                        "properties": {
+                            param["name"]: {
+                                key: value
+                                for key, value in {
+                                    "type": param["type"].upper(),  # type: ignore
+                                    "description": param.get("description", ""),
+                                    "items": (
+                                        {
+                                            **param.get("items", {}),  # type: ignore
+                                            "type": param.get("items", {}).get("type", "").upper(),  # type: ignore
+                                        }
+                                        if param.get("items") and "type" in param.get("items", {})
+                                        else param.get("items")
+                                    ),
+                                }.items()
+                                if value is not None
+                            }
+                            for param in tool.parameters
+                        },
+                        "required": tool.required,
+                    },
+                )
+            ],
+        )
+
+    def construct_message_from_stream(
+        self, content_chunks: list[str], tool_calls: list[ToolCall]
+    ) -> Message:
+        message = Message(
+            role="tool_use" if tool_calls else "assistant",
+            content="".join(content_chunks) if content_chunks else None,
+        )
+
+        if tool_calls:
+            message.tool_calls = tool_calls
+            message.tool_call_id = tool_calls[0].id
+
+        return message
+
+    def _format_gemini_response_to_message(self, response: GenerateContentResponse) -> Message:
+        message = Message(
+            role="assistant",
+            content=(
+                response.candidates[0].content.parts[0].text
+                if response.candidates[0].content.parts[0].text
+                else None
+            ),
+        )
+
+        for part in response.candidates[0].content.parts:
+            if part.function_call:
+                if not message.tool_calls:
+                    message.tool_calls = []
+                message.tool_calls.append(
+                    ToolCall(
+                        id=part.function_call.id,
+                        function=part.function_call.name,
+                        args=json.dumps(part.function_call.args),
+                    )
+                )
+                message.role = "tool_use"
+                message.tool_call_id = part.function_call.id
+            if part.text:
+                message.content = part.text
+
+        return message
 
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
@@ -747,7 +1090,6 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
-                langfuse_context.flush()
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -777,6 +1119,16 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     tools=tools,
                     timeout=timeout,
+                )
+            elif model.provider_name == LlmProviderType.GEMINI:
+                model = cast(GeminiProvider, model)
+                return model.generate_text(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature or default_temperature,
+                    tools=tools,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -822,6 +1174,17 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 raise NotImplementedError("Anthropic structured outputs are not yet supported")
+            elif model.provider_name == LlmProviderType.GEMINI:
+                model = cast(GeminiProvider, model)
+                return model.generate_structured(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    response_format=response_format,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    tools=tools,
+                )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
@@ -849,7 +1212,6 @@ class LlmClient:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Text Stream"
                 )
-                langfuse_context.flush()
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -890,6 +1252,16 @@ class LlmClient:
                         max_retries_during_stream=max_retries_during_stream,
                         sleep_sec_scaler=sleep_sec_scaler,
                     )
+            elif model.provider_name == LlmProviderType.GEMINI:
+                model = cast(GeminiProvider, model)
+                yield from model.generate_text_stream(
+                    max_tokens=max_tokens,
+                    messages=messages,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature or default_temperature,
+                    tools=tools,
+                )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
@@ -910,7 +1282,6 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
-                langfuse_context.flush()
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -964,6 +1335,9 @@ class LlmClient:
             return model.construct_message_from_stream(content_chunks, tool_calls)
         elif model.provider_name == LlmProviderType.ANTHROPIC:
             model = cast(AnthropicProvider, model)
+            return model.construct_message_from_stream(content_chunks, tool_calls)
+        elif model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
             return model.construct_message_from_stream(content_chunks, tool_calls)
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")

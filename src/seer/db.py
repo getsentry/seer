@@ -42,7 +42,10 @@ def initialize_database(
     app: Flask = injected,
 ):
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"prepare_threshold": None}}
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {"prepare_threshold": None},
+        "pool_pre_ping": True,
+    }
 
     db.init_app(app)
     migrate.init_app(app, db)

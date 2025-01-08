@@ -243,6 +243,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     DbDynamicAlert.external_alert_id == external_alert_id
                 )
                 session.execute(delete_q)
+                session.flush()
             algo_data = anomalies.get_anomaly_algo_data(len(timeseries))
             new_record = DbDynamicAlert(
                 organization_id=organization_id,

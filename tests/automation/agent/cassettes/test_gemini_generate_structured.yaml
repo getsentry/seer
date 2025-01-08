@@ -1,0 +1,136 @@
+interactions:
+- request:
+    body: grant_type=refresh_token&client_id=764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '268'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-requests/2.32.2
+      x-goog-api-client:
+      - gl-python/3.11.0rc1 auth/2.37.0 cred-type/u
+    method: POST
+    uri: https://oauth2.googleapis.com/token
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/71RuZajSBD05yv6tb2tFqfEeOhAAnEIAYLC4UFRgkJc4hS1b/99YcYYc711IzMj
+        IiP+/vHx8RlCiNo26KonKj9/fnxOIS2swrV4c7lisyETQdy6eZlaZ23Zp523Z2PyVYJMMDKhyioD
+        XW0ez6sNDk2/YS3H2ylhSyGNfUu1vWuaQVGaiKKfW6eCLngLdn/PWO74zAS00Y34ohkbz2Aee6Cd
+        1Ssse34495KyvVpSsA9inisO7lFvk5TQt/otOKPmaEkEb0z41Tu2nUkXM9wn4CKGwBJvR0syzyeP
+        1vC7r7pTc6EMBayNG7NVISsfxjW12Xz+tXyN3jVuUBvg5WeGE4RfaAurGi0hpF1Xtz+/v8dxXCVV
+        leQorHG7glXxHfZd+t2+8hY1A4ZolVcJLj/+66Cf13H5qFaoCHH+n+swr/r4q87D7lE1xcfsqsTx
+        b+e/igq66bfRHQob1Pye4PhPi2hS0ugEsYEVyyEypWO5lYuu9vcyL2cJB2iH6PaTBcRkNFoqNFd5
+        AvuG/QJwuuvQgCSMRsBat8VJO8xoccTqXlkjT1w4L3fKxA9zNcvUkNEWqIrPtxGSalBpKQO0QEXl
+        jahFPER03PoWl0X0eqFIUblQyIyemaNxAKNuH9lZptNLadLPIu0zu1ov0n7GaHg2Wd+tKWgnxD89
+        iX6QqtiTe+DtRjhxZUQLZXS6U5C+T7NmH5/ufbz/oxW75v+lRWJXXrTe2iHhdAKITkROyxxWy0xi
+        2Mlay+Rlr/pVQanncz4Tsrg6mpZq7h1w81bOKgwLoQIu2wM3TmEZp9FxR3yXW8Py2YfuduHII1eq
+        I0mgfU+p/SLPF874rFC+NWLg3R7hSSLhopMLrMbUR9PJgV1CBp1vmePItGanaszAhasG3pxRdlzq
+        nqvWZu/HxQ8L53vNhkTP5FEnDqN565Xa7EbFCGpypbp7WL21uPOUS9VuBABTuJWBmiK9TrPX2+jd
+        xA1FYziFoQKD6+Wh4sHbVkm75pIaapgUwXkb6tbOUNIdHv3gVeUm8fXSR5H8GlKExRd3M7Z78RGn
+        PngpbMw3WMFe/bV+UifOPvpP+HWM7r0bxBXXSoHOnHJ+4tlHhk1HQeTr7G04VhtMI4jEQC8KQJSu
+        eQTzlzfmGm2lzHm0dLq5f9Fewrfw/KC8ysQ6WJviexQfwUXlRm+wGir2A5Thl5TQlVkLga6aesNe
+        G16ABW+8mtDsm4HPrK1iNfzG5ZhyumSjFDUU3tLUburJcw6Eub9RYCh8mliXwd1aNd9kxD37WPz8
+        8c+/fYudvIsFAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Cache-Control:
+      - no-cache, no-store, max-age=0, must-revalidate
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Mon, 06 Jan 2025 22:52:51 GMT
+      Expires:
+      - Mon, 01 Jan 1990 00:00:00 GMT
+      Pragma:
+      - no-cache
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"contents": [{"parts": [{"text": "Generate a person named John Doe aged
+      30"}], "role": "user"}], "tools": [], "generationConfig": {"temperature": 0.0,
+      "maxOutputTokens": 8192, "responseMimeType": "application/json", "responseSchema":
+      {"title": "TestStructure", "type": "object", "properties": {"name": {"title":
+      "Name", "type": "string"}, "age": {"title": "Age", "type": "integer"}}, "required":
+      ["name", "age"]}, "responseModalities": ["TEXT"]}}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '447'
+      Content-Type:
+      - application/json
+      authorization:
+      - redacted
+      user-agent:
+      - google-genai-sdk/0.2.2 gl-python/3.11.0rc1
+      x-goog-api-client:
+      - google-genai-sdk/0.2.2 gl-python/3.11.0rc1 cred-type/u
+      x-goog-user-project:
+      - super-big-data
+    method: POST
+    uri: https://us-central1-aiplatform.googleapis.com/v1beta1/projects/ml-ai-420606/locations/us-central1/publishers/google/models/gemini-2.0-flash-exp:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/1VQTU/DMAy991dEPq9oHxfgChcQCAQTF7KDoV5b0dpVk6Ghqv8dp+m6LofIfs9+
+        eXldYgx8I2dlhp4c3JpPRYzphjtwwp7YK3GCFGylIkWglowqWJyJBlt/Fomnm9U64ukY1KCzbIwF
+        zMlqu1kuYs9YD4CFRynY3It2lnuYifRTvRur/mQB9iWXrngjdMLhlffty+tkEPA3f5K8aeUrmIQH
+        DuP+L4oH2V0YhYNTV8/kUTPB6eege3Xjt/JDfCeHIZPVddSeRXjBr1cj78VjdUFtbpLReIzxg1pX
+        RtM51eorXV8t032Frkjp2EDSJ//xPDeqrQEAAA==
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Mon, 06 Jan 2025 22:52:52 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1
