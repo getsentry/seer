@@ -634,16 +634,12 @@ class AnthropicProvider:
 
     @staticmethod
     def is_overloaded_error(exception: Exception) -> bool:
-        # I don't know what exactly the overloaded_error looks like b/c
-        # I can't guarantee an accurate local reproduction.
-        #
-        # If it has a response/status_code, we could check exception.status_code == 529
-        # https://sentry.sentry.io/issues/6147057985/?project=6178942
-        # https://docs.anthropic.com/en/api/errors#http-errors
-        #
-        # But I don't think that'd catch:
+        # Issues:
         # https://sentry.sentry.io/issues/6147058185/?project=6178942
+        # https://sentry.sentry.io/issues/6147057985/?project=6178942
         # https://sentry.sentry.io/issues/6152252202/?project=6178942
+        # Checking exception.status_code == 529 only works if it's an APIStatusError
+        # https://docs.anthropic.com/en/api/errors#http-errors
         exception_str = str(exception)
         return isinstance(exception, anthropic.AnthropicError) and (
             "overloaded_error" in exception_str
