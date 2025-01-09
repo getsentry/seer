@@ -1,5 +1,6 @@
 import contextlib
 import datetime
+import multiprocessing
 import json
 from enum import StrEnum
 from typing import Any, List, Optional
@@ -35,23 +36,37 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+# Process and thread-safe initialization state tracking
+_db_init_lock = multiprocessing.RLock()
+_db_initialized = multiprocessing.Value('b', False)
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "connect_args": {"prepare_threshold": None},
-        "pool_pre_ping": True,
-    }
+    with _db_init_lock:
+        if _db_initialized.value:
+            return
+            
+        try:
+            app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+            app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                "connect_args": {"prepare_threshold": None},
+                "pool_pre_ping": True,
+            }
+            
+            db.init_app(app)
+            migrate.init_app(app, db)
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+            with app.app_context():
+                Session.configure(bind=db.engine)
 
-    with app.app_context():
-        Session.configure(bind=db.engine)
+            _db_initialized.value = True
+        except RuntimeError as e:
+            if "already registered" not in str(e):
+                raise
+            return
 
 
 class Base(DeclarativeBase):

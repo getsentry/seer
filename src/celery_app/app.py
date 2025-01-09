@@ -4,10 +4,12 @@ from typing import Any
 
 import billiard  # type: ignore[import-untyped]
 from celery import Celery, signals
+from flask import has_app_context
 from sentry_sdk.integrations.celery import CeleryIntegration
 
 from celery_app.config import CeleryConfig
 from seer.bootup import bootup
+from seer.db import initialize_database
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
@@ -23,14 +25,25 @@ def setup_celery_entrypoint(app: Celery):
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+        
+    # Initialize database first regardless of context
+    initialize_database()
+    
+    # Only run full bootup if we're not in a Flask context
+    if not has_app_context():
+        bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
     from celery_app.tasks import setup_periodic_tasks
 
     sender.on_after_finalize.connect(setup_periodic_tasks)
 
 
+
 setup_celery_entrypoint(celery_app)
 
+# Ensure database is initialized in each worker process
+@signals.worker_process_init.connect
+def initialize_worker_process(*args, **kwargs):
+    initialize_database()
 
 @signals.celeryd_after_setup.connect
 def capture_worker_name(sender, instance, **kwargs):
