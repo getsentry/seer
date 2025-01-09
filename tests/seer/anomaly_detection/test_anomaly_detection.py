@@ -1,3 +1,4 @@
+import time
 import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -59,6 +60,64 @@ class TestAnomalyDetection(unittest.TestCase):
         assert "Store Data Response should be successful", response == StoreDataResponse(
             success=True
         )
+
+    @patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection._batch_detect")
+    def test_store_data_batch_detection_timeout(self, mock_batch_detect):
+
+        mock_alert_data_accessor = MagicMock()
+        config = AnomalyDetectionConfig(
+            time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
+        )
+
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+        ts = loaded_synthetic_data.timeseries[0]
+
+        alert = AlertInSeer(id=0)
+        request = StoreDataRequest(
+            organization_id=0,
+            project_id=0,
+            alert=alert,
+            config=config,
+            timeseries=ts,
+        )
+
+        def slow_function(
+            timeseries, config, window_size=None, algo_config=None, time_budget_ms=None
+        ):
+            time.sleep(0.2)  # Simulate a 200ms delay
+            return timeseries, MPTimeSeriesAnomalies(
+                flags=[],
+                scores=[],
+                matrix_profile_suss=np.array([]),
+                matrix_profile_fixed=np.array([]),
+                window_size=0,
+                thresholds=[],
+                original_flags=[],
+                use_suss=[],
+            )
+
+        mock_batch_detect.side_effect = slow_function
+
+        # Lower timeout setting should raise an error
+        with self.assertRaises(ServerError) as e:
+            AnomalyDetection().store_data(
+                request=request,
+                alert_data_accessor=mock_alert_data_accessor,
+                time_budget_ms=100,
+            )
+        assert "Batch detection took too long" in str(e.exception)
+        mock_alert_data_accessor.save_alert.assert_not_called()
+
+        response = AnomalyDetection().store_data(
+            request=request,
+            alert_data_accessor=mock_alert_data_accessor,
+            time_budget_ms=300,
+        )
+        assert isinstance(response, StoreDataResponse)
+        assert response.success is True
+        mock_alert_data_accessor.save_alert.assert_called_once()
 
     def test_detect_anomalies_batch(self):
 

@@ -93,67 +93,64 @@ class DbAlertDataAccessor(AlertDataAccessor):
     ) -> DynamicAlert:
         rand_offset = random.randint(0, 24)
         timestamp_threshold = (datetime.now() - timedelta(days=28, hours=rand_offset)).timestamp()
-        num_old_points = 0
-        window_size = db_alert.anomaly_algo_data.get("window_size")
-        flags = []
-        scores = []
-        mp_suss = []
-        mp_fixed = []
-        ts = []
-        values = []
-        original_flags = []
-        use_suss = []
 
         timeseries = db_alert.timeseries
+        n_points = len(timeseries)
+        ts = np.array([0.0] * n_points)
+        values = np.array([0.0] * n_points)
+        flags = [""] * n_points
+        scores = [0.0] * n_points
+        mp_suss = []
+        mp_fixed = []
+        original_flags = ["none"] * n_points
+        use_suss = [True] * n_points
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
-        only_suss = False
-        if len(timeseries) > 0 and any(
+        only_suss = len(timeseries) > 0 and any(
             point.anomaly_algo_data is not None
             and "mp_suss" not in point.anomaly_algo_data
             and "mp_fixed" not in point.anomaly_algo_data
             for point in timeseries
-        ):
-            only_suss = True
+        )
 
-        for point in timeseries:
-            ts.append(point.timestamp.timestamp())
-            values.append(point.value)
-            flags.append(point.anomaly_type)
-            scores.append(point.anomaly_score)
+        num_old_points = 0
+        window_size = db_alert.anomaly_algo_data.get("window_size")
+
+        for i, point in enumerate(timeseries):
+            ts[i] = point.timestamp.timestamp()
+            values[i] = point.value
+            flags[i] = point.anomaly_type
+            scores[i] = point.anomaly_score
 
             if point.anomaly_algo_data is not None:
                 algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
 
                 if "mp_suss" in algo_data and algo_data["mp_suss"]:
-                    mp_suss_data = [
-                        algo_data["mp_suss"]["dist"],
-                        algo_data["mp_suss"]["idx"],
-                        algo_data["mp_suss"]["l_idx"],
-                        algo_data["mp_suss"]["r_idx"],
-                    ]
-                    mp_suss.append(mp_suss_data)
+                    mp_suss.append(
+                        [
+                            algo_data["mp_suss"]["dist"],
+                            algo_data["mp_suss"]["idx"],
+                            algo_data["mp_suss"]["l_idx"],
+                            algo_data["mp_suss"]["r_idx"],
+                        ]
+                    )
 
                 if "mp_fixed" in algo_data and algo_data["mp_fixed"]:
-                    mp_fixed_data = [
-                        algo_data["mp_fixed"]["dist"],
-                        algo_data["mp_fixed"]["idx"],
-                        algo_data["mp_fixed"]["l_idx"],
-                        algo_data["mp_fixed"]["r_idx"],
-                    ]
-                    mp_fixed.append(mp_fixed_data)
-                use_suss.append(algo_data["use_suss"])
-                original_flags.append(algo_data["original_flag"])
+                    mp_fixed.append(
+                        [
+                            algo_data["mp_fixed"]["dist"],
+                            algo_data["mp_fixed"]["idx"],
+                            algo_data["mp_fixed"]["l_idx"],
+                            algo_data["mp_fixed"]["r_idx"],
+                        ]
+                    )
 
-            if point.timestamp.timestamp() < timestamp_threshold:
+                if i >= n_points - len(algo_data.get("original_flags", [])):
+                    original_flags[i] = algo_data["original_flag"]
+                    use_suss[i] = algo_data["use_suss"]
+
+            if ts[i] < timestamp_threshold:
                 num_old_points += 1
-        # Default value is "none" for original flags
-        if len(original_flags) < len(ts):
-            original_flags = ["none"] * (len(ts) - len(original_flags)) + original_flags
-
-        # Default value is True for use_suss
-        if len(use_suss) < len(ts):
-            use_suss = [True] * (len(ts) - len(use_suss)) + use_suss
 
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
@@ -175,14 +172,15 @@ class DbAlertDataAccessor(AlertDataAccessor):
             original_flags=original_flags,
             use_suss=use_suss,
         )
+
         return DynamicAlert(
             organization_id=db_alert.organization_id,
             project_id=db_alert.project_id,
             external_alert_id=db_alert.external_alert_id,
             config=AnomalyDetectionConfig.model_validate(db_alert.config),
             timeseries=MPTimeSeries(
-                timestamps=np.array(ts),
-                values=np.array(values),
+                timestamps=ts,
+                values=values,
             ),
             anomalies=anomalies,
             cleanup_config=CleanupConfig(

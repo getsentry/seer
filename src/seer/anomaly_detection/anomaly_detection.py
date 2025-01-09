@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import List, Tuple
 
@@ -61,6 +62,7 @@ class AnomalyDetection(BaseModel):
         config: AnomalyDetectionConfig,
         window_size: int | None = None,
         algo_config: AlgoConfig = injected,
+        time_budget_ms: int | None = None,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         """
         Stateless batch anomaly detection on entire timeseries as provided. In batch mode, analysis of a
@@ -84,12 +86,18 @@ class AnomalyDetection(BaseModel):
             config,
             algo_config=algo_config,
             window_size=window_size,
+            time_budget_ms=(
+                time_budget_ms // 2 if time_budget_ms else None
+            ),  # Time budget is split between the two detection calls
         )
         anomalies_fixed = batch_detector.detect(
             convert_external_ts_to_internal(timeseries),
             config,
             algo_config=algo_config,
             window_size=algo_config.mp_fixed_window_size,
+            time_budget_ms=(
+                time_budget_ms // 2 if time_budget_ms else None
+            ),  # Time budget is split between the two detection calls
         )
         anomalies = DbAlertDataAccessor().combine_anomalies(
             anomalies_suss, anomalies_fixed, [True] * len(timeseries)
@@ -261,6 +269,7 @@ class AnomalyDetection(BaseModel):
         self,
         ts_with_history: TimeSeriesWithHistory,
         config: AnomalyDetectionConfig,
+        time_budget_ms: int | None = None,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
         """
         Stateless online anomaly detection for a part of a time series. This function takes two parts of the time series -
@@ -308,8 +317,15 @@ class AnomalyDetection(BaseModel):
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
-        historic_anomalies_suss = batch_detector.detect(historic, config)
-        historic_anomalies_fixed = batch_detector.detect(historic, config, window_size=10)
+        historic_anomalies_suss = batch_detector.detect(
+            historic, config, time_budget_ms=time_budget_ms // 2 if time_budget_ms else None
+        )
+        historic_anomalies_fixed = batch_detector.detect(
+            historic,
+            config,
+            window_size=10,
+            time_budget_ms=time_budget_ms // 2 if time_budget_ms else None,
+        )
 
         # Run stream detection on current data
         # SuSS Window
@@ -395,15 +411,18 @@ class AnomalyDetection(BaseModel):
             sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
             ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
-            ts, anomalies = self._combo_detect(request.context, request.config)
+            ts, anomalies = self._combo_detect(request.context, request.config, time_budget_ms=4500)
         else:
-            ts, anomalies = self._batch_detect(request.context, request.config)
+            ts, anomalies = self._batch_detect(request.context, request.config, time_budget_ms=4500)
         self._update_anomalies(ts, anomalies)
         return DetectAnomaliesResponse(success=True, timeseries=ts)
 
     @inject
     def store_data(
-        self, request: StoreDataRequest, alert_data_accessor: AlertDataAccessor = injected
+        self,
+        request: StoreDataRequest,
+        alert_data_accessor: AlertDataAccessor = injected,
+        time_budget_ms: int = 4500,  # Allocating 4.5 seconds as alerting system timesout after 5 seconds
     ) -> StoreDataResponse:
         """
         Main entry point for storing time series data for an alert.
@@ -439,7 +458,23 @@ class AnomalyDetection(BaseModel):
                 "config": request.config.model_dump(),
             },
         )
-        ts, anomalies = self._batch_detect(request.timeseries, request.config)
+        time_start = datetime.datetime.now()
+        ts, anomalies = self._batch_detect(
+            request.timeseries, request.config, time_budget_ms=time_budget_ms
+        )
+        time_elapsed = datetime.datetime.now() - time_start
+        time_allocated = datetime.timedelta(milliseconds=time_budget_ms)
+        if time_elapsed > time_allocated:
+            sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
+            sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
+            sentry_sdk.capture_message(
+                "batch_detection_took_too_long",
+                level="error",
+            )
+            raise ServerError(
+                "Batch detection took too long"
+            )  # Abort without saving to avoid data going out of sync with alerting system.
+
         alert_data_accessor.save_alert(
             organization_id=request.organization_id,
             project_id=request.project_id,

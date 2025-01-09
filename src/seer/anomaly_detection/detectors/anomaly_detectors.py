@@ -36,7 +36,11 @@ class AnomalyDetector(BaseModel, abc.ABC):
 
     @abc.abstractmethod
     def detect(
-        self, timeseries: TimeSeries, ad_config: AnomalyDetectionConfig, algo_config: AlgoConfig
+        self,
+        timeseries: TimeSeries,
+        ad_config: AnomalyDetectionConfig,
+        algo_config: AlgoConfig,
+        time_budget_ms: int | None = None,
     ) -> TimeSeriesAnomalies:
         return NotImplemented
 
@@ -53,6 +57,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
+        time_budget_ms: int | None = None,
         window_size: int | None = None,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -68,7 +73,9 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         Returns:
         The input timeseries with an anomaly scores and a flag added
         """
-        return self._compute_matrix_profile(timeseries, ad_config, algo_config, window_size)
+        return self._compute_matrix_profile(
+            timeseries, ad_config, algo_config, window_size, time_budget_ms=time_budget_ms
+        )
 
     @inject
     @sentry_sdk.trace
@@ -78,6 +85,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig,
         window_size: int | None = None,
+        time_budget_ms: int | None = None,
         ws_selector: WindowSizeSelector = injected,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
@@ -123,6 +131,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             mp_dist=mp_dist,
             ad_config=ad_config,
             window_size=window_size,
+            time_budget_ms=time_budget_ms,
         )
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
@@ -175,6 +184,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
+        time_budget_ms: int | None = None,
         scorer: MPScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
