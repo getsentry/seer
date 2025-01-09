@@ -322,18 +322,12 @@ class RepoClient:
         return valid_file_paths
 
     def _create_branch(self, branch_name):
-        try:
-            ref = self.repo.create_git_ref(
-                ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
-            )
-            return ref
-        except GithubException as e:
-            # if reference already exists (422), just fetch and return it
-            if e.status == 422:
-                return self.repo.get_git_ref(f"heads/{branch_name}")
-            raise e
+        ref = self.repo.create_git_ref(
+            ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
+        )
+        return ref
 
-    def process_one_file_for_git_commit(
+    def create_branch_from_changes(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
     ) -> InputGitTreeElement | None:
         """
@@ -393,8 +387,8 @@ class RepoClient:
         try:
             branch_ref = self._create_branch(new_branch_name)
         except GithubException as e:
-            # only use the random suffix if the branch already exists
-            if e.status == 409:
+            # Handle both 409 (conflict) and 422 (reference already exists) by generating a new name
+            if e.status in (409, 422):
                 new_branch_name = f"{new_branch_name}/{generate_random_string(n=6)}"
                 branch_ref = self._create_branch(new_branch_name)
             else:

@@ -446,6 +446,25 @@ class TestRepoClient:
         )
         assert result is not None
         assert mock_create_branch.calls[0].args[0].startswith("autofix/test-pr/")
+        
+    @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
+    def test_create_branch_from_changes_reference_already_exists(
+        self, mock_create_branch, repo_client, mock_github
+    ):
+        mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
+        # First call raises 422, second call succeeds with random suffix
+        mock_create_branch.side_effect = [
+            GithubException(422, "Reference already exists", None),
+            MagicMock(ref="autofix/test-pr/123456")
+        ]
+
+        result = repo_client.create_branch_from_changes(
+            pr_title="autofix/Test PR",
+            file_patches=[next(generate(FileChange))],
+            file_changes=[]
+        )
+        assert result is not None
+        assert mock_create_branch.call_args_list[1][0][0].startswith("autofix/test-pr/")
 
     @pytest.mark.parametrize(
         "input_type,input_data",
