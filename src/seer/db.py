@@ -1,8 +1,11 @@
 import contextlib
 import datetime
 import json
+import os
+import fcntl
 from enum import StrEnum
 from typing import Any, List, Optional
+
 
 import sqlalchemy
 from flask import Flask
@@ -35,30 +38,46 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+# Process-safe initialization using file lock
+LOCK_FILE = "/tmp/seer_db.lock"
+
+def _acquire_lock():
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    lock_fd = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        return lock_fd
+    except Exception:
+        lock_fd.close()
+        raise
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "connect_args": {"prepare_threshold": None},
-        "pool_pre_ping": True,
-    }
+    try:
+        with _acquire_lock() as lock:
+            if hasattr(app, '_db_initialized'):
+                return
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+            app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+            app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                "connect_args": {"prepare_threshold": None},
+                "pool_pre_ping": True,
+            }
 
-    with app.app_context():
-        Session.configure(bind=db.engine)
+            db.init_app(app)
+            migrate.init_app(app, db)
 
-
-class Base(DeclarativeBase):
-    pass
-
-
-# Initialized in src/app.run
+            with app.app_context():
+                Session.configure(bind=db.engine)
+                
+            setattr(app, '_db_initialized', True)
+    finally:
+        if 'lock' in locals():
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            lock.close()
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
 Session = sessionmaker(autoflush=False, expire_on_commit=False)
