@@ -24,7 +24,7 @@ class LoadedSyntheticData(BaseModel):
     )
 
 
-def test_data_with_cycles(num_anomalous: int = 5) -> pd.DataFrame:
+def test_data_with_cycles(num_days: int = 29, num_anomalous: int = 5) -> pd.DataFrame:
     """
     Creates a time series with daily cycles and adds anomalies to the last num_anomalous points.
 
@@ -35,7 +35,7 @@ def test_data_with_cycles(num_anomalous: int = 5) -> pd.DataFrame:
     Returns:
     pd.DataFrame: A DataFrame with the time series data.
     """
-    date_range = pd.date_range(start="2023-01-01", periods=29, freq="D")
+    date_range = pd.date_range(start="2023-01-01", periods=num_days, freq="D")
 
     # Generate daily cycle values
     daily_cycle = np.sin(2 * np.pi * np.arange(24) / 24)
