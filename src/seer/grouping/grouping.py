@@ -39,10 +39,24 @@ class GroupingRequest(BaseModel):
     @staticmethod
     def preprocess_stacktrace(stacktrace: str) -> str:
         """Clean and validate stacktrace input."""
-        if not stacktrace:
-            return stacktrace
-        return stacktrace.strip()
+        if not isinstance(v, str):
+            raise ValueError(
+                "stacktrace must be a string containing the error trace information"
+            )
 
+        # Basic preprocessing
+        v = v.strip()
+
+        if not stacktrace:
+            raise ValueError(
+                "stacktrace must be provided and not empty for similarity comparison"
+            )
+            
+        if len(v) < 10:  # Minimum reasonable length for a stacktrace
+            raise ValueError(
+                "stacktrace appears too short - please provide complete error trace information"
+            )
+        return stacktrace.strip()
     @staticmethod
     def preprocess_stacktrace(stacktrace: str) -> str:
         """Clean and validate stacktrace input."""

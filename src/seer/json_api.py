@@ -5,11 +5,30 @@ import inspect
 import logging
 from typing import Any, Callable, Type, TypeVar, get_type_hints
 
-import jwt
 import sentry_sdk
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from flask import Blueprint, request
+from pydantic import BaseModel, ValidationError
+
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
+from flask import jsonify
+
+class ApiErrorResponse(BaseModel):
+    code: str
+    message: str
+    details: dict | None = None
+
+class StructuredBadRequest(BadRequest):
+    def __init__(self, error_code: str, message: str, details: dict | None = None):
+        self.error = ApiErrorResponse(code=error_code, message=message, details=details)
+        super().__init__(message)
+
+    def get_response(self):
+        response = jsonify(self.error.model_dump())
+        response.status_code = 400
+        return response
+
+def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
+    @inject
+    def decorator(
 from google.cloud import secretmanager
 from pydantic import BaseModel, ValidationError
 from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
@@ -126,13 +145,31 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
 
 
 
-            if not isinstance(data, dict):
+
+                raise StructuredBadRequest(
+                    "INVALID_REQUEST_FORMAT",
+                    "Request data must be a JSON object",
+                    {"received_type": str(type(data))}
+                )
                 return ValidationFailureResponse(
                     message="Request data must be a JSON object",
                     details={"received_type": str(type(data))}
                 ).to_response()
                 return ValidationFailureResponse(
-                    message="Request data must be a JSON object",
+                validation_details = {}
+                for error in e.errors():
+                    field = ".".join(str(x) for x in error["loc"])
+                    validation_details[field] = error["msg"]
+                
+                details = {"validation_errors": validation_details}
+                if "stacktrace" in validation_details:
+                    details["help"] = "The stacktrace field is required and must contain valid error trace information for similarity comparison."
+                
+                raise StructuredBadRequest(
+                    "VALIDATION_ERROR",
+                    "Request validation failed",
+                    details
+                )
                     details={"received_type": str(type(data))}
                 ).to_response()
 
