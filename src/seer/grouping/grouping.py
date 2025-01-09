@@ -36,12 +36,26 @@ class GroupingRequest(BaseModel):
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
     use_reranking: bool = False
 
+    @staticmethod
+    def preprocess_stacktrace(stacktrace: str) -> str:
+        """Clean and validate stacktrace input."""
+        if not stacktrace:
+            return stacktrace
+        return stacktrace.strip()
+
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
+        # Preprocess the stacktrace first
+        v = cls.preprocess_stacktrace(v)
+        
         if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
-        return v
+            raise ValueError(
+                f"{info.field_name} must be provided and not empty. This field is required for "
+                "issue grouping. Please ensure you are providing the complete error stacktrace."
+            )
+            
+        return v.strip()
 
 
 class GroupingResponse(BaseModel):
