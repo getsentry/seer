@@ -125,15 +125,32 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             data = request.get_json()
 
 
+
             if not isinstance(data, dict):
-                sentry_sdk.capture_message(f"Data is not an object: {type(data)}")
+                return ValidationFailureResponse(
+                    message="Request data must be a JSON object",
+                    details={"received_type": str(type(data))}
+                ).to_response()
                 return ValidationFailureResponse(
                     message="Request data must be a JSON object",
                     details={"received_type": str(type(data))}
                 ).to_response()
 
-            try:
-                result: BaseModel = implementation(request_annotation.model_validate(data))
+                
+                # Extract validation details
+                validation_details = {}
+                for error in e.errors():
+                    field = error.get("loc", ["unknown"])[0]
+                    validation_details[field] = error.get("msg", "Unknown error")
+                
+                return ValidationFailureResponse(
+                    message="Request validation failed",
+                    details={
+                        "validation_errors": validation_details,
+                        "help": "Please ensure all required fields are provided with valid values"
+                    }
+                ).to_response()
+                
             except ValidationError as e:
                 sentry_sdk.capture_exception(e)
                 
