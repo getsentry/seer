@@ -35,23 +35,68 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+class DatabaseManager:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not self._initialized:
+            self.db = SQLAlchemy(model_class=Base)
+            self.migrate = Migrate(directory="src/migrations")
+            self.Session = sessionmaker(autoflush=False, expire_on_commit=False)
+            self._initialized = True
+            self._app_registry = set()
+
+    def init_app(self, app: Flask, config: AppConfig) -> None:
+        """Initialize the database with the Flask app"""
+        app_id = id(app)
+        if app_id not in self._app_registry:
+            app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+            app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                "connect_args": {"prepare_threshold": None},
+                "pool_pre_ping": True,
+            }
+
+            self.db.init_app(app)
+            self.migrate.init_app(app, self.db)
+
+            with app.app_context():
+                self.Session.configure(bind=self.db.engine)
+
+            self._app_registry.add(app_id)
+
+    @property
+    def engine(self):
+        return self.db.engine
+
+    @property
+    def session(self):
+        return self.Session()
+
+# Create a single instance to be used throughout the application
+db_manager = DatabaseManager()
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "connect_args": {"prepare_threshold": None},
-        "pool_pre_ping": True,
-    }
+    db_manager.init_app(app, config)
 
-    db.init_app(app)
-    migrate.init_app(app, db)
+# Export session for backward compatibility
+Session = db_manager.Session
 
-    with app.app_context():
-        Session.configure(bind=db.engine)
+# Export db for backward compatibility
+db = db_manager.db
+
+# Export migrate for backward compatibility
+migrate = db_manager.migrate
+
 
 
 class Base(DeclarativeBase):
