@@ -35,23 +35,33 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+# Global instance created at module level
+_db_initialized = False
+_initialized_app = None
+db: SQLAlchemy = SQLAlchemy(model_class=Base)
+migrate = Migrate(directory="src/migrations")
+Session = sessionmaker(autoflush=False, expire_on_commit=False)
 
 @inject
-def initialize_database(
-    config: AppConfig = injected,
-    app: Flask = injected,
-):
+def initialize_database(config: AppConfig = injected, app: Flask = injected):
+    global _db_initialized, _initialized_app
+    if _db_initialized:
+        if _initialized_app is not app:
+            raise RuntimeError("SQLAlchemy instance has already been initialized with a different Flask app. Use the existing instance instead.")
+        return
+
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {"prepare_threshold": None},
-        "pool_pre_ping": True,
     }
 
     db.init_app(app)
     migrate.init_app(app, db)
-
     with app.app_context():
         Session.configure(bind=db.engine)
+
+    _db_initialized = True
+    _initialized_app = app
 
 
 class Base(DeclarativeBase):

@@ -13,6 +13,7 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
 
+_celery_initialized = False
 
 # This abstract helps tests that want to validate the entry point process.
 def setup_celery_entrypoint(app: Celery):
@@ -21,12 +22,17 @@ def setup_celery_entrypoint(app: Celery):
 
 @inject
 def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
+    global _celery_initialized
+    if _celery_initialized:
+        return
     for k, v in config.items():
         setattr(sender.conf, k, v)
     bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
     from celery_app.tasks import setup_periodic_tasks
 
+
     sender.on_after_finalize.connect(setup_periodic_tasks)
+    _celery_initialized = True
 
 
 setup_celery_entrypoint(celery_app)
