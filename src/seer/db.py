@@ -2,6 +2,7 @@ import contextlib
 import datetime
 import json
 from enum import StrEnum
+import threading
 from typing import Any, List, Optional
 
 import sqlalchemy
@@ -35,21 +36,38 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship,
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
+_db_init_lock = threading.Lock()
+_db_initialized = False
+
 
 @inject
 def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
+    global _db_initialized
+    
+    with _db_init_lock:
+        if _db_initialized:
+            # Database is already initialized, just ensure session binding is correct
+            with app.app_context():
+                if not Session.kw.get('bind'):
+                    Session.configure(bind=db.engine)
+            return
+
     app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {"prepare_threshold": None},
         "pool_pre_ping": True,
     }
 
-    db.init_app(app)
-    migrate.init_app(app, db)
-
+    try:
+        db.init_app(app)
+        migrate.init_app(app, db)
+        _db_initialized = True
+    except Exception as e:
+        _db_initialized = False
+        raise e
     with app.app_context():
         Session.configure(bind=db.engine)
 
