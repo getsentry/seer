@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 import sentry_sdk
+import stumpy  # type: ignore # mypy throws "missing library stubs"
 from sqlalchemy import delete
 
 from celery_app.app import celery_app
@@ -34,6 +35,18 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
 
     logger.info("Deleting timeseries points over 28 days old and updating matrix profiles")
     toggle_data_purge_flag(alert_id)
+
+    # Perform a dummy call to Stumpy to force compilation
+    dummy_data = np.arange(10.0)
+    dummy_mp = stumpy.stump(dummy_data, m=3, ignore_trivial=True, normalize=False)
+    dummy_stream = stumpy.stumpi(
+        dummy_data,
+        m=3,
+        mp=dummy_mp,
+        normalize=False,
+        egress=False,
+    )
+    dummy_stream.update(6.0)
 
     with Session() as session:
         alert = (
