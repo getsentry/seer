@@ -1,6 +1,7 @@
 import logging
 
 from langfuse.decorators import observe
+from sentry_sdk import capture_exception
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
@@ -121,11 +122,26 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     run_name="Root Cause Extraction & Formatting",
                 )
 
-                # Assign the ids to be the numerical indices of the causes and relevant code context
-                cause_model = formatted_response.parsed.cause.to_model()
-                cause_model.id = 0
+                try:
+                    # Attempt to create the model with validation
+                    cause_model = formatted_response.parsed.cause.to_model()
+                    cause_model.id = 0
+                except ValidationError as e:
+                    logger.error(f"Validation error in root cause analysis: {str(e)}")
+                    capture_exception(e)  # Log to Sentry for monitoring
+                    
+                    # Create a fallback model with required fields
+                    cause_model = RootCauseAnalysisItem(
+                        id=0,
+                        title="Error During Analysis",
+                        description=(
+                            f"An error occurred while processing the root cause analysis: {str(e)}\n\n"
+                            "The system encountered an issue while validating the analysis data structure."
+                        )
+                    )
+
                 if cause_model.code_context:
-                    for i, item in enumerate(cause_model.code_context):
+                    for j, snippet in enumerate(cause_model.code_context):
                         item.id = i
                         # Find line range for the snippet
                         if item.snippet and item.snippet.file_path and item.snippet.snippet:
