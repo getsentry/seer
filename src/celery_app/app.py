@@ -16,17 +16,25 @@ celery_app = Celery("seer")
 
 # This abstract helps tests that want to validate the entry point process.
 def setup_celery_entrypoint(app: Celery):
-    app.on_configure.connect(init_celery_app)
+    app.on_configure.connect(on_configure)
+    app.on_after_finalize.connect(on_after_finalize)
 
 
+# on_configure signal sent when celery app is being configured. This is *also* called when the celery app is imported and a task is scheduled from outside celery as well.
 @inject
-def init_celery_app(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
+def on_configure(*args: Any, sender: Celery, config: CeleryConfig = injected, **kwargs: Any):
     for k, v in config.items():
         setattr(sender.conf, k, v)
-    bootup(start_model_loading=False, integrations=[CeleryIntegration(propagate_traces=True)])
+
+
+# on_after_finalize signal sent after celery app has been finalized. This should only be called from the celery worker and celery beat itself and not from flask or other external sources.
+def on_after_finalize(sender, **kwargs):
+    import traceback
+
+    traceback.print_stack()
     from celery_app.tasks import setup_periodic_tasks
 
-    sender.on_after_finalize.connect(setup_periodic_tasks)
+    setup_periodic_tasks(sender)
 
 
 setup_celery_entrypoint(celery_app)
@@ -35,6 +43,24 @@ setup_celery_entrypoint(celery_app)
 @signals.celeryd_after_setup.connect
 def capture_worker_name(sender, instance, **kwargs):
     os.environ["WORKER_NAME"] = "{0}".format(sender)
+
+
+# celeryd_init signal sent after celery app has been initialized.
+@signals.celeryd_init.connect
+def bootup_celery_worker(sender, **kwargs):
+    bootup(
+        start_model_loading=False,
+        integrations=[CeleryIntegration(propagate_traces=True)],
+    )
+
+
+# celerybeat_init signal sent after celerybeat app has been initialized.
+@signals.beat_init.connect
+def bootup_celery_beat(sender, **kwargs):
+    bootup(
+        start_model_loading=False,
+        integrations=[CeleryIntegration(propagate_traces=True)],
+    )
 
 
 @signals.after_task_publish.connect
