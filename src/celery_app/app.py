@@ -29,9 +29,6 @@ def on_configure(*args: Any, sender: Celery, config: CeleryConfig = injected, **
 
 # on_after_finalize signal sent after celery app has been finalized. This should only be called from the celery worker and celery beat itself and not from flask or other external sources.
 def on_after_finalize(sender, **kwargs):
-    import traceback
-
-    traceback.print_stack()
     from celery_app.tasks import setup_periodic_tasks
 
     setup_periodic_tasks(sender)
