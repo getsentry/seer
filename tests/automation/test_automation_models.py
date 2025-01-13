@@ -436,7 +436,7 @@ def test_profile_format_no_relevant_functions():
         ],
     )
 
-    expected = "→ main [app] (app.py)\n  → helper [utils] (utils.py)"
+    expected = "→ main (app.py)\n  → helper (utils.py)"
     assert profile.format_profile() == expected
 
 
@@ -481,7 +481,9 @@ def test_profile_format_with_relevant_functions():
 
     # Should only show the relevant function with context
     formatted = profile.format_profile(context_before=1, context_after=1)
-    expected = "...\n  → process_data [utils] (utils.py)\n  → relevant_func [core] (core.py)\n  → cleanup [utils] (utils.py)"
+    expected = (
+        "...\n  → process_data (utils.py)\n  → relevant_func (core.py)\n  → cleanup (utils.py)"
+    )
     assert formatted == expected
 
 
@@ -526,7 +528,7 @@ def test_profile_format_with_multiple_relevant_functions():
 
     # Should show both relevant functions with context
     formatted = profile.format_profile(context_before=1, context_after=1)
-    expected = "→ main [app] (app.py)\n  → relevant_func1 [core] (core.py)\n  → process_data [utils] (utils.py)\n  → relevant_func2 [core] (core.py)"
+    expected = "→ main (app.py)\n  → relevant_func1 (core.py)\n  → process_data (utils.py)\n  → relevant_func2 (core.py)"
     assert formatted == expected
 
 
@@ -566,9 +568,7 @@ def test_profile_format_with_nested_relevant_functions():
 
     # Should show the nested structure leading to the relevant function
     formatted = profile.format_profile(context_before=2, context_after=0)
-    expected = (
-        "→ main [app] (app.py)\n  → outer [core] (core.py)\n    → relevant_func [core] (core.py)"
-    )
+    expected = "→ main (app.py)\n  → outer (core.py)\n    → relevant_func (core.py)"
     assert formatted == expected
 
 
@@ -613,11 +613,8 @@ def test_profile_format_with_custom_context():
 
     # Test with minimal context
     minimal_context = profile.format_profile(context_before=0, context_after=0)
-    assert minimal_context == "...\n  → relevant_func [core] (core.py)\n..."
+    assert minimal_context == "...\n  → relevant_func (core.py)\n..."
 
     # Test with asymmetric context
     asymmetric_context = profile.format_profile(context_before=1, context_after=0)
-    assert (
-        asymmetric_context
-        == "...\n  → func1 [utils] (utils.py)\n  → relevant_func [core] (core.py)\n..."
-    )
+    assert asymmetric_context == "...\n  → func1 (utils.py)\n  → relevant_func (core.py)\n..."

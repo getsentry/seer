@@ -571,9 +571,6 @@ class Profile(BaseModel):
             indent_str = "  " * indent
 
             func_line = f"{indent_str}→ {node.function}"
-            if node.module:
-                func_line += f" [{node.module}]"
-
             location = f"{node.filename}"
             func_line += f" ({location})"
 
