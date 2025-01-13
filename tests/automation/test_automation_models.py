@@ -1,6 +1,14 @@
 import pytest
 
-from seer.automation.models import FileChange, FileChangeError, FilePatch, Hunk, Line
+from seer.automation.models import (
+    FileChange,
+    FileChangeError,
+    FilePatch,
+    Hunk,
+    Line,
+    Profile,
+    ProfileFrame,
+)
 
 
 def test_file_patch_apply_add():
@@ -402,3 +410,214 @@ def test_file_change_delete():
 
     with pytest.raises(FileChangeError):
         change.apply(None)
+
+
+def test_profile_format_no_relevant_functions():
+    """Test that profile formatting works without relevant functions"""
+    profile = Profile(
+        profile_matches_issue=True,
+        execution_tree=[
+            ProfileFrame(
+                function="main",
+                module="app",
+                filename="app.py",
+                lineno=1,
+                in_app=True,
+                children=[
+                    ProfileFrame(
+                        function="helper",
+                        module="utils",
+                        filename="utils.py",
+                        lineno=5,
+                        in_app=True,
+                    )
+                ],
+            )
+        ],
+    )
+
+    expected = "→ main [app] (app.py)\n  → helper [utils] (utils.py)"
+    assert profile.format_profile() == expected
+
+
+def test_profile_format_with_relevant_functions():
+    """Test that profile formatting focuses on relevant functions"""
+    profile = Profile(
+        profile_matches_issue=True,
+        execution_tree=[
+            ProfileFrame(
+                function="main",
+                module="app",
+                filename="app.py",
+                lineno=1,
+                in_app=True,
+                children=[
+                    ProfileFrame(
+                        function="process_data",
+                        module="utils",
+                        filename="utils.py",
+                        lineno=5,
+                        in_app=True,
+                    ),
+                    ProfileFrame(
+                        function="relevant_func",
+                        module="core",
+                        filename="core.py",
+                        lineno=10,
+                        in_app=True,
+                    ),
+                    ProfileFrame(
+                        function="cleanup",
+                        module="utils",
+                        filename="utils.py",
+                        lineno=15,
+                        in_app=True,
+                    ),
+                ],
+            )
+        ],
+        relevant_functions={"relevant_func"},
+    )
+
+    # Should only show the relevant function with context
+    formatted = profile.format_profile(context_before=1, context_after=1)
+    expected = "...\n  → process_data [utils] (utils.py)\n  → relevant_func [core] (core.py)\n  → cleanup [utils] (utils.py)"
+    assert formatted == expected
+
+
+def test_profile_format_with_multiple_relevant_functions():
+    """Test that profile formatting handles multiple relevant functions"""
+    profile = Profile(
+        profile_matches_issue=True,
+        execution_tree=[
+            ProfileFrame(
+                function="main",
+                module="app",
+                filename="app.py",
+                lineno=1,
+                in_app=True,
+                children=[
+                    ProfileFrame(
+                        function="relevant_func1",
+                        module="core",
+                        filename="core.py",
+                        lineno=5,
+                        in_app=True,
+                    ),
+                    ProfileFrame(
+                        function="process_data",
+                        module="utils",
+                        filename="utils.py",
+                        lineno=10,
+                        in_app=True,
+                    ),
+                    ProfileFrame(
+                        function="relevant_func2",
+                        module="core",
+                        filename="core.py",
+                        lineno=15,
+                        in_app=True,
+                    ),
+                ],
+            )
+        ],
+        relevant_functions={"relevant_func1", "relevant_func2"},
+    )
+
+    # Should show both relevant functions with context
+    formatted = profile.format_profile(context_before=1, context_after=1)
+    expected = "→ main [app] (app.py)\n  → relevant_func1 [core] (core.py)\n  → process_data [utils] (utils.py)\n  → relevant_func2 [core] (core.py)"
+    assert formatted == expected
+
+
+def test_profile_format_with_nested_relevant_functions():
+    """Test that profile formatting works with nested relevant functions"""
+    profile = Profile(
+        profile_matches_issue=True,
+        execution_tree=[
+            ProfileFrame(
+                function="main",
+                module="app",
+                filename="app.py",
+                lineno=1,
+                in_app=True,
+                children=[
+                    ProfileFrame(
+                        function="outer",
+                        module="core",
+                        filename="core.py",
+                        lineno=5,
+                        in_app=True,
+                        children=[
+                            ProfileFrame(
+                                function="relevant_func",
+                                module="core",
+                                filename="core.py",
+                                lineno=10,
+                                in_app=True,
+                            )
+                        ],
+                    ),
+                ],
+            )
+        ],
+        relevant_functions={"relevant_func"},
+    )
+
+    # Should show the nested structure leading to the relevant function
+    formatted = profile.format_profile(context_before=2, context_after=0)
+    expected = (
+        "→ main [app] (app.py)\n  → outer [core] (core.py)\n    → relevant_func [core] (core.py)"
+    )
+    assert formatted == expected
+
+
+def test_profile_format_with_custom_context():
+    """Test that profile formatting respects custom context sizes"""
+    profile = Profile(
+        profile_matches_issue=True,
+        execution_tree=[
+            ProfileFrame(
+                function="main",
+                module="app",
+                filename="app.py",
+                lineno=1,
+                in_app=True,
+                children=[
+                    ProfileFrame(
+                        function="func1",
+                        module="utils",
+                        filename="utils.py",
+                        lineno=5,
+                        in_app=True,
+                    ),
+                    ProfileFrame(
+                        function="relevant_func",
+                        module="core",
+                        filename="core.py",
+                        lineno=10,
+                        in_app=True,
+                    ),
+                    ProfileFrame(
+                        function="func2",
+                        module="utils",
+                        filename="utils.py",
+                        lineno=15,
+                        in_app=True,
+                    ),
+                ],
+            )
+        ],
+        relevant_functions={"relevant_func"},
+    )
+
+    # Test with minimal context
+    minimal_context = profile.format_profile(context_before=0, context_after=0)
+    assert minimal_context == "...\n  → relevant_func [core] (core.py)\n..."
+
+    # Test with asymmetric context
+    asymmetric_context = profile.format_profile(context_before=1, context_after=0)
+    assert (
+        asymmetric_context
+        == "...\n  → func1 [utils] (utils.py)\n  → relevant_func [core] (core.py)\n..."
+    )

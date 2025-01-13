@@ -477,9 +477,80 @@ class ProfileFrame(BaseModel):
 class Profile(BaseModel):
     profile_matches_issue: bool
     execution_tree: list[ProfileFrame]
+    relevant_functions: set[str] = Field(default_factory=set)
 
-    def format_profile(self, indent: int = 0) -> str:
-        return self._format_profile_helper(self.execution_tree, indent)
+    def format_profile(
+        self,
+        indent: int = 0,
+        context_before: int = 20,
+        context_after: int = 5,
+    ) -> str:
+        """
+        Format the profile tree, focusing on relevant functions from the stacktrace.
+
+        Args:
+            indent: Base indentation level for the tree
+            context_before: Number of lines to include before first relevant function
+            context_after: Number of lines to include after last relevant function
+
+        Returns:
+            str: Formatted profile string, showing relevant sections of the execution tree
+        """
+        full_profile = self._format_profile_helper(self.execution_tree, indent)
+
+        if self.relevant_functions:
+            relevant_window = self._get_relevant_code_window(
+                full_profile, context_before=context_before, context_after=context_after
+            )
+            if relevant_window:
+                return relevant_window
+
+        return full_profile
+
+    def _get_relevant_code_window(
+        self, code: str, context_before: int = 20, context_after: int = 5
+    ) -> str | None:
+        """
+        Find the relevant section of code containing functions from the stacktrace.
+        Expands the selection to include context lines before and after.
+
+        Args:
+            code: Multi-line string of formatted profile to analyze
+            context_before: Number of lines to include before first relevant line
+            context_after: Number of lines to include after last relevant line
+
+        Returns:
+            str | None: Selected profile window with context, or None if no relevant functions found
+        """
+        if not self.relevant_functions or not code:
+            return None
+
+        lines = code.splitlines()
+        first_relevant_line = None
+        last_relevant_line = None
+
+        # Find first and last lines containing relevant functions
+        for i, line in enumerate(lines):
+            if any(func in line for func in self.relevant_functions):
+                if first_relevant_line is None:
+                    first_relevant_line = i
+                last_relevant_line = i
+
+        if first_relevant_line is None:
+            return None
+
+        # Calculate window boundaries with context
+        start_line = max(0, first_relevant_line - context_before)
+        end_line = min(len(lines), last_relevant_line + context_after + 1)
+
+        result = []
+        if start_line > 0:
+            result.append("...")
+        result.extend(lines[start_line:end_line])
+        if end_line < len(lines):
+            result.append("...")
+
+        return "\n".join(result)
 
     def _format_profile_helper(self, tree: list[ProfileFrame], indent: int = 0) -> str:
         """
