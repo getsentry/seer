@@ -465,6 +465,54 @@ class IssueDetails(BaseModel):
     events: list[SentryEventData]
 
 
+class ProfileFrame(BaseModel):
+    function: str
+    module: str
+    filename: str
+    lineno: int
+    in_app: bool
+    children: list["ProfileFrame"] = []
+
+
+class Profile(BaseModel):
+    profile_matches_issue: bool
+    execution_tree: list[ProfileFrame]
+
+    def format_profile(self, indent: int = 0) -> str:
+        return self._format_profile_helper(self.execution_tree, indent)
+
+    def _format_profile_helper(self, tree: list[ProfileFrame], indent: int = 0) -> str:
+        """
+        Returns a pretty-printed string representation of the execution tree with indentation.
+
+        Args:
+            tree: List of dictionaries representing the execution tree
+            indent: Current indentation level (default: 0)
+
+        Returns:
+            str: Formatted string representation of the tree
+        """
+        result = []
+
+        for node in tree:
+            indent_str = "  " * indent
+
+            func_line = f"{indent_str}→ {node.function}"
+            if node.module:
+                func_line += f" [{node.module}]"
+
+            location = f"{node.filename}:{node.lineno}"
+            func_line += f" ({location})"
+
+            result.append(func_line)
+
+            # Recursively format children with increased indentation
+            if node.children:
+                result.append(self._format_profile_helper(node.children, indent + 1))
+
+        return "\n".join(result)
+
+
 class RepoDefinition(BaseModel):
     provider: Annotated[str, Examples(("github", "integrations:github"))]
     owner: str

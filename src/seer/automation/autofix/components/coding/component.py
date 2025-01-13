@@ -287,6 +287,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                                 repo_names=[repo.full_name for repo in state.request.repos],
                                 original_instruction=request.original_instruction,
                                 root_cause_extra_instruction=request.root_cause_extra_instruction,
+                                code_map=request.profile,
                                 has_tools=True,
                             ),
                         ),

@@ -11,7 +11,7 @@ from seer.automation.autofix.components.root_cause.models import (
 )
 from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import EventDetails, PromptXmlModel
+from seer.automation.models import EventDetails, Profile, PromptXmlModel
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -22,6 +22,7 @@ class CodingRequest(BaseComponentRequest):
     root_cause_extra_instruction: str | None = None
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
+    profile: Profile | None = None
 
 
 class SnippetXml(PromptXmlModel, tag="snippet"):

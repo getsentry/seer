@@ -67,6 +67,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
                                 summary=request.summary,
+                                code_map=request.profile,
                                 instruction=request.instruction,
                                 repo_names=[repo.full_name for repo in state.request.repos],
                             )

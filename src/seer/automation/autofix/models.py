@@ -12,7 +12,14 @@ from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
-from seer.automation.models import FileChange, FilePatch, IssueDetails, Line, RepoDefinition
+from seer.automation.models import (
+    FileChange,
+    FilePatch,
+    IssueDetails,
+    Line,
+    Profile,
+    RepoDefinition,
+)
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import make_kill_signal
 from seer.db import DbRunMemory
@@ -295,6 +302,7 @@ class AutofixRequest(BaseModel):
     invoking_user: Optional[AutofixUserDetails] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
     issue_summary: Optional[IssueSummary] = None
+    profile: Profile | None = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 

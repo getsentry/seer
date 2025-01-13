@@ -6,7 +6,7 @@ from pydantic_xml import attr
 from seer.automation.agent.models import Message
 from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import EventDetails, PromptXmlModel
+from seer.automation.models import EventDetails, Profile, PromptXmlModel
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -162,6 +162,7 @@ class RootCauseAnalysisRequest(BaseComponentRequest):
     instruction: Optional[str] = None
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
+    profile: Profile | None = None
 
 
 class RootCauseAnalysisOutput(BaseComponentOutput):
