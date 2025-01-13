@@ -501,7 +501,7 @@ class Profile(BaseModel):
             if node.module:
                 func_line += f" [{node.module}]"
 
-            location = f"{node.filename}:{node.lineno}"
+            location = f"{node.filename}"
             func_line += f" ({location})"
 
             result.append(func_line)
