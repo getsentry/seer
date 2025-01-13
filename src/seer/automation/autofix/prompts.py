@@ -48,4 +48,4 @@ def format_summary(summary: IssueSummary | None) -> str:
 def format_code_map(code_map: Profile | None):
     if not code_map:
         return ""
-    return f"Here's a partial record of the code execution {('at the time of the issue' if code_map.profile_matches_issue else 'as it should generally work')}: \n{code_map.format_profile()}"
+    return f"Here's a partial map of the code{('at the time of the issue' if code_map.profile_matches_issue else 'that may help')}: \n{code_map.format_profile()}"
