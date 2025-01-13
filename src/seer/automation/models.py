@@ -483,7 +483,7 @@ class Profile(BaseModel):
         self,
         indent: int = 0,
         context_before: int = 20,
-        context_after: int = 5,
+        context_after: int = 3,
     ) -> str:
         """
         Format the profile tree, focusing on relevant functions from the stacktrace.
@@ -508,7 +508,7 @@ class Profile(BaseModel):
         return full_profile
 
     def _get_relevant_code_window(
-        self, code: str, context_before: int = 20, context_after: int = 5
+        self, code: str, context_before: int = 20, context_after: int = 3
     ) -> str | None:
         """
         Find the relevant section of code containing functions from the stacktrace.
