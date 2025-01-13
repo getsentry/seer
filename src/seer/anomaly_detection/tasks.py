@@ -21,6 +21,7 @@ from seer.db import (
     TaskStatus,
 )
 from seer.dependency_injection import inject, injected
+from seer.tags import AnomalyDetectionTags
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 @celery_app.task
 @sentry_sdk.trace
 def cleanup_timeseries(alert_id: int, date_threshold: float):
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     span = sentry_sdk.get_current_span()
 
     if span is not None:
@@ -172,7 +174,7 @@ def toggle_data_purge_flag(alert_id: int):
 @celery_app.task
 @sentry_sdk.trace
 def cleanup_disabled_alerts():
-
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     date_threshold = datetime.now() - timedelta(days=28)
 
     logger.info(
@@ -207,6 +209,7 @@ def cleanup_disabled_alerts():
 @celery_app.task
 @sentry_sdk.trace
 def cleanup_old_timeseries_history():
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     date_threshold = datetime.now() - timedelta(days=90)
     with Session() as session:
         stmt = delete(DbDynamicAlertTimeSeriesHistory).where(
