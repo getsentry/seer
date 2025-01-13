@@ -289,7 +289,7 @@ class AnomalyDetection(BaseModel):
 
         min_len = self._min_required_timesteps(config.time_period)
         if len(ts_with_history.history) < min_len:
-            logger.error(
+            logger.warning(
                 "insufficient_history_data",
                 extra={
                     "num_datapoints": len(ts_with_history.history),
