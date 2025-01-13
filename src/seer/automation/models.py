@@ -537,7 +537,9 @@ class Profile(BaseModel):
                 last_relevant_line = i
 
         if first_relevant_line is None:
-            return None
+            first_relevant_line = 0
+        if last_relevant_line is None:
+            last_relevant_line = len(lines) - 1
 
         # Calculate window boundaries with context
         start_line = max(0, first_relevant_line - context_before)
