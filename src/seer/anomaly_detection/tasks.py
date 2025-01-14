@@ -26,19 +26,8 @@ from seer.tags import AnomalyDetectionTags
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task
 @sentry_sdk.trace
-def cleanup_timeseries(alert_id: int, date_threshold: float):
-    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
-    span = sentry_sdk.get_current_span()
-
-    if span is not None:
-        span.set_tag("alert_id", alert_id)
-
-    logger.info("Deleting timeseries points over 28 days old and updating matrix profiles")
-    toggle_data_purge_flag(alert_id)
-
-    # Perform a dummy call to Stumpy to force compilation
+def _init_stumpy():
     dummy_data = np.arange(10.0)
     dummy_mp = stumpy.stump(dummy_data, m=3, ignore_trivial=True, normalize=False)
     dummy_stream = stumpy.stumpi(
@@ -49,6 +38,26 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
         egress=False,
     )
     dummy_stream.update(6.0)
+
+
+@celery_app.task
+@sentry_sdk.trace
+def cleanup_timeseries(alert_id: int, date_threshold: float):
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
+    span = sentry_sdk.get_current_span()
+
+    if span is not None:
+        span.set_tag("alert_id", alert_id)
+
+    logger.info(
+        "Deleting timeseries points over 28 days old and updating matrix profiles",
+        extra={"alert_id": alert_id},
+    )
+
+    # Perform a dummy call to Stumpy to force compilation
+    _init_stumpy()
+
+    _toggle_data_purge_flag(alert_id)
 
     with Session() as session:
         alert = (
@@ -68,9 +77,9 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
                 direction=alert.config["direction"],
                 expected_seasonality=alert.config["expected_seasonality"],
             )
-            deleted_timeseries_points = delete_old_timeseries_points(alert, date_threshold)
+            deleted_timeseries_points = _delete_old_timeseries_points(alert, date_threshold)
             if len(alert.timeseries) > 0:
-                updated_timeseries_points = update_matrix_profiles(alert, config)
+                updated_timeseries_points = _update_matrix_profiles(alert, config)
             else:
                 # Reset the window size to 0 if there are no timeseries points left
                 alert.anomaly_algo_data = {"window_size": 0}
@@ -82,10 +91,11 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
                 f"Updated matrix profiles for {updated_timeseries_points} points in alertd id {alert_id}"
             )
 
-    toggle_data_purge_flag(alert_id)
+    _toggle_data_purge_flag(alert_id)
 
 
-def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
+@sentry_sdk.trace
+def _delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
     deleted_count = 0
     to_remove = []
     for ts in alert.timeseries:
@@ -93,7 +103,7 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
             to_remove.append(ts)
 
     # Save history records before removing
-    save_timeseries_history(alert, to_remove)
+    _save_timeseries_history(alert, to_remove)
 
     for ts in to_remove:
         alert.timeseries.remove(ts)
@@ -101,7 +111,8 @@ def delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
     return deleted_count
 
 
-def save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAlertTimeSeries]):
+@sentry_sdk.trace
+def _save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAlertTimeSeries]):
     with Session() as session:
         for ts in timeseries:
             history_record = DbDynamicAlertTimeSeriesHistory(
@@ -115,8 +126,9 @@ def save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAle
         session.commit()
 
 
+@sentry_sdk.trace
 @inject
-def update_matrix_profiles(
+def _update_matrix_profiles(
     alert: DbDynamicAlert,
     anomaly_detection_config: AnomalyDetectionConfig,
     algo_config: AlgoConfig = injected,
@@ -151,7 +163,8 @@ def update_matrix_profiles(
     return updateed_timeseries_points
 
 
-def toggle_data_purge_flag(alert_id: int):
+@sentry_sdk.trace
+def _toggle_data_purge_flag(alert_id: int):
 
     with Session() as session:
         alert = (
@@ -178,7 +191,8 @@ def cleanup_disabled_alerts():
     date_threshold = datetime.now() - timedelta(days=28)
 
     logger.info(
-        f"Cleaning up timeseries data for alerts that have been inactive (detection has not been run) since {date_threshold}"
+        "Cleaning up alerts inactive since 28 days ago (detection has not been run)",
+        extra={"date_threshold": date_threshold},
     )
 
     with Session() as session:
@@ -203,7 +217,7 @@ def cleanup_disabled_alerts():
             session.delete(alert)
 
         session.commit()
-        logger.info(f"Deleted {deleted_count} alerts")
+        logger.info("Deleted disabled alerts", extra={"count": deleted_count})
 
 
 @celery_app.task
@@ -217,4 +231,7 @@ def cleanup_old_timeseries_history():
         )
         res = session.execute(stmt)
         session.commit()
-        logger.info(f"Deleted {res.rowcount} timeseries history records older than 90 days")
+        logger.info(
+            "Deleted timeseries history records older than 90 days",
+            extra={"count": res.rowcount},
+        )
