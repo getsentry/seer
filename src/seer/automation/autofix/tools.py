@@ -207,6 +207,8 @@ class BaseTools:
         file_names = []
         for result in results:
             for match in result.matches:
+                if len(match.context) > 2000:  # truncate context if it's too long
+                    match.context = match.context[:2000] + "..."
                 match_xml = MatchXml(
                     path=result.relative_path,
                     context=match.context,
