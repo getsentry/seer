@@ -3,6 +3,8 @@ import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Optional
 
+import backoff
+
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
     LlmGenerateTextResponse,
@@ -69,7 +71,7 @@ class AutofixAgent(LlmAgent):
                 "You're taking a while. If you need help, ask me a concrete question using the tool provided."
             )
 
-    def get_completion(self, run_config: RunConfig):
+    def _get_completion(self, run_config: RunConfig):
         """
         Streams the preliminary output to the current step and only returns when output is complete
         """
@@ -117,6 +119,29 @@ class AutofixAgent(LlmAgent):
                 usage=usage,
             ),
         )
+
+    def get_completion(self, run_config: RunConfig, max_tries: int = 4):
+        """
+        Streams the preliminary output to the current step and only returns when output is complete.
+
+        The completion request is tried `max_tries` times if a retryable exception is encountered,
+        e.g, the Anthropic API is overloaded.
+        """
+
+        def giveup(exception: Exception) -> bool:
+            try:
+                return not run_config.model.is_completion_exception_retryable(exception)
+            except Exception:
+                logger.exception(
+                    "Failed to check whether the completion exception is retryable. Giving up."
+                )
+                return True
+
+        retrier = backoff.on_exception(
+            wait_gen=backoff.expo, exception=Exception, giveup=giveup, max_tries=max_tries
+        )
+        get_completion_with_retry = retrier(self._get_completion)
+        return get_completion_with_retry(run_config)
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
