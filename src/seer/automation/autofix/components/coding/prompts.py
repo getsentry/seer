@@ -7,8 +7,13 @@ from seer.automation.autofix.components.coding.models import (
     RootCausePlanTaskPromptXml,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
-from seer.automation.models import EventDetails
+from seer.automation.autofix.prompts import (
+    format_code_map,
+    format_instruction,
+    format_repo_names,
+    format_summary,
+)
+from seer.automation.models import EventDetails, Profile
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -61,6 +66,7 @@ class CodingPrompts:
         root_cause_extra_instruction: str | None,
         summary: Optional[IssueSummary] = None,
         has_tools: bool = True,
+        code_map: Optional[Profile] = None,
     ):
         return textwrap.dedent(
             """\
@@ -68,6 +74,8 @@ class CodingPrompts:
             Given the issue: {summary_str}
             {event_str}{original_instruction}
             {root_cause_str}{root_cause_extra_instruction}
+
+            {code_map_str}
 
             # Your goal:
             Provide the most actionable and effective steps to fix the issue.
@@ -127,6 +135,7 @@ class CodingPrompts:
                 if has_tools
                 else ""
             ),
+            code_map_str=format_code_map(code_map),
         )
 
     @staticmethod
