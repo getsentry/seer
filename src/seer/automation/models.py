@@ -570,7 +570,7 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}â†’ {node.function}"
+            func_line = f"{indent_str}→ {node.function}"
             location = f"{node.filename}"
             func_line += f" ({location})"
 
