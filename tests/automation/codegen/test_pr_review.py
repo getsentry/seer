@@ -15,7 +15,6 @@ class TestPrReview(unittest.TestCase):
         mock_repo_client = MagicMock()
         mock_pr = MagicMock()
         mock_diff_content = "diff content"
-        mock_latest_commit_sha = "latest_commit_sha"
         mock_context = MagicMock()
         mock_context.get_repo_client.return_value = mock_repo_client
         mock_repo_client.repo.get_pull.return_value = mock_pr
@@ -42,7 +41,6 @@ class TestPrReview(unittest.TestCase):
 
         assert isinstance(actual_request, CodePrReviewRequest)
         assert actual_request.diff == mock_diff_content
-
 
     def test_format_response_valid_input(self):
         mock_output = """<comments>
@@ -88,7 +86,7 @@ class TestPrReview(unittest.TestCase):
     def test_format_response_invalid_inputs(self):
         invalid_outputs = [
             "Missing <> wrapper",  # Missing wrapper
-            "<comments>{\"path\": \"src/file.py\", \"line\": 10}</comments>",  # Not a list
+            '<comments>{"path": "src/file.py", "line": 10}</comments>',  # Not a list
             "<comments>[{</comments>",  # Malformed JSON
             "<comments>Not JSON at all</comments>",  # Not JSON
         ]
