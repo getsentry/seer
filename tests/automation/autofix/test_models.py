@@ -47,7 +47,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[(10, "    main()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=True,
             ),
             StacktraceFrame(
@@ -58,7 +57,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=None,
                 context=[(15, "    helper()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=False,
             ),
         ]
@@ -81,7 +79,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=True,
             ),
         ]
@@ -101,7 +98,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[(10, "    unknown()")],
                 repo_name=None,
-                repo_id=None,
                 in_app=True,
             ),
         ]
@@ -119,7 +115,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=None,
                 context=[(i * 10, f"    function_{i}()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=(i % 2 == 0),
             )
             for i in range(20)
@@ -138,12 +133,7 @@ class TestStacktraceHelpers(unittest.TestCase):
     def test_event_multiple_breadcrumbs(self):
         breadcrumbs = [
             BreadcrumbsDetails(
-                type="log",
-                category="category",
-                level="info",
-                message=f"Message {i}",
-                data={},
-                title="title",
+                type="log", category="category", level="info", message=f"Message {i}", data={}
             )
             for i in range(15)
         ]
@@ -191,7 +181,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[(10, "    main()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=True,
             ),
             StacktraceFrame(
@@ -202,7 +191,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=None,
                 context=[(15, "    helper()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=False,
             ),
         ]
@@ -609,8 +597,8 @@ class TestAutofixContinuation(unittest.TestCase):
         self.assertIsNone(self.continuation.find_step(key="step3"))
 
     def test_find_step_by_id(self):
-        step1 = DefaultStep(id="step1", title="test")
-        step2 = DefaultStep(id="step2", title="test")
+        step1 = DefaultStep(id="step1", key="default", title="test")
+        step2 = DefaultStep(id="step2", key="default", title="test")
         self.continuation.steps = [step1, step2]
 
         self.assertEqual(self.continuation.find_step(id="step1"), step1)
@@ -716,9 +704,6 @@ class TestAutofixContinuation(unittest.TestCase):
             id=1,
             title="test",
             description="test",
-            reproduction="test",
-            likelihood=0.5,
-            actionability=0.5,
         )
         root_cause_step.causes = [cause]
 
@@ -772,15 +757,6 @@ class TestAutofixContinuation(unittest.TestCase):
         self.continuation.delete_steps_after(step2, include_current=True)
         self.assertEqual(self.continuation.steps, [step1])
 
-    def test_clear_file_changes(self):
-        codebase1 = Mock()
-        codebase2 = Mock()
-        self.continuation.codebases = {"repo1": codebase1, "repo2": codebase2}
-
-        self.continuation.clear_file_changes()
-        self.assertEqual(codebase1.file_changes, [])
-        self.assertEqual(codebase2.file_changes, [])
-
     def test_is_running(self):
         self.continuation.status = AutofixStatus.PROCESSING
         self.assertTrue(self.continuation.is_running)
@@ -814,7 +790,7 @@ class TestAutofixContinuation(unittest.TestCase):
 
     def test_has_timed_out_no_last_triggered(self):
         self.continuation.status = AutofixStatus.PROCESSING
-        self.continuation.last_triggered_at = None
+        self.continuation.last_triggered_at = None  # type: ignore
         self.assertFalse(self.continuation.has_timed_out)
 
     def test_has_timed_out_with_update(self):
@@ -896,7 +872,7 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
 
     for frame in stacktrace.frames:
         if frame.vars:
-            vars_str = json.dumps(StacktraceFrame._trim_vars(frame.vars), indent=2)
+            vars_str = json.dumps(StacktraceFrame._trim_vars(frame.vars, ""), indent=2)
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str

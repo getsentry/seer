@@ -1,13 +1,16 @@
 import dataclasses
 import logging
 import time
+from typing import cast
 
 from seer.automation.autofix.components.coding.models import CodingOutput
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRootCauseUpdatePayload,
     AutofixStatus,
+    ChangeDetails,
     ChangesStep,
     CodebaseChange,
     CodeContextRootCauseSelection,
@@ -18,6 +21,7 @@ from seer.automation.autofix.models import (
     RootCauseStep,
     Step,
 )
+from seer.automation.models import FileChange
 from seer.automation.state import State
 from seer.automation.utils import make_kill_signal
 
@@ -54,14 +58,7 @@ class AutofixEventManager:
         return ChangesStep(
             key="changes",
             title="Code Changes",
-            changes=[],
         )
-
-    def migrate_step_keys(self):
-        # TODO: Remove this we no longer need the backwards compatibility.
-        with self.state.update() as cur:
-            for step in cur.steps:
-                step.ensure_uuid_id()
 
     def restart_step(self, step: Step):
         with self.state.update() as cur:
@@ -126,34 +123,56 @@ class AutofixEventManager:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
             root_cause_step.selection = root_cause_selection
             cur.delete_steps_after(root_cause_step, include_current=False)
-            cur.clear_file_changes()
 
             cur.status = AutofixStatus.PROCESSING
 
     def send_coding_start(self):
         with self.state.update() as cur:
-            plan_step = cur.find_step(key=self.plan_step.key)
-            if not plan_step or plan_step.status != AutofixStatus.PROCESSING:
-                plan_step = cur.add_step(self.plan_step)
+            latest_changes_step = cur.find_step(key=self.changes_step.key)
+            if (
+                not latest_changes_step
+                or latest_changes_step.status != AutofixStatus.PROCESSING
+                or latest_changes_step.id != cur.steps[-1].id
+            ):
+                latest_changes_step = cur.add_step(self.changes_step)
 
-            plan_step.status = AutofixStatus.PROCESSING
+            latest_changes_step = cast(ChangesStep, latest_changes_step)
+
+            # Create the initial codebase changes for each repo, if not already present
+            for repo in cur.request.repos:
+                if repo.external_id not in latest_changes_step.codebase_changes:
+                    latest_changes_step.codebase_changes[repo.external_id] = CodebaseChange(
+                        repo_name=repo.full_name,
+                        repo_external_id=repo.external_id,
+                        file_changes=[],
+                    )
+
+            latest_changes_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
 
     def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
-            plan_step = cur.find_or_add(self.plan_step)
-            plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+            latest_changes_step = cur.find_or_add(self.changes_step)
+            latest_changes_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
-    def send_coding_complete(self, codebase_changes: list[CodebaseChange]):
+    def set_change_details(self, repo_external_id: str, change_details: ChangeDetails):
+        with self.state.update() as cur:
+            latest_changes_step = cur.find_or_add(self.changes_step)
+            latest_changes_step = cast(ChangesStep, latest_changes_step)
+            latest_changes_step.codebase_changes[repo_external_id].details = change_details
+
+    def send_coding_complete(self):
         with self.state.update() as cur:
             cur.mark_running_steps_completed()
 
-            changes_step = cur.find_or_add(self.changes_step)
+            changes_step = cur.find_step(key=self.changes_step.key)
+            if not changes_step:
+                raise ValueError("Changes step not found")
+
             changes_step.status = AutofixStatus.COMPLETED
-            changes_step.changes = codebase_changes
 
             cur.status = AutofixStatus.COMPLETED
 
@@ -161,29 +180,6 @@ class AutofixEventManager:
         with self.state.update() as cur:
             if cur.steps:
                 step = cur.steps[-1]
-
-                # If the current step is the planning step, and an execution step is running, we log it there instead.
-                if step.id == self.plan_step.id and step.progress:
-                    # select the first execution step that is processing
-                    execution_step = next(
-                        (
-                            step
-                            for step in step.progress
-                            if isinstance(step, DefaultStep)
-                            and step.status == AutofixStatus.PROCESSING
-                        ),
-                        None,
-                    )
-
-                    if execution_step:
-                        execution_step.progress.append(
-                            ProgressItem(
-                                message=message,
-                                type=ProgressType.INFO,
-                            )
-                        )
-                        return
-
                 step.progress.append(
                     ProgressItem(
                         message=message,
@@ -204,6 +200,49 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
 
+    def add_user_message(self, message: str, memory_index: int):
+        with self.state.update() as cur:
+            last_step = cur.steps[-1]
+            if not isinstance(last_step, DefaultStep):
+                last_step = cur.add_step(self.plan_step)
+
+            last_step = cast(DefaultStep, last_step)
+
+            last_step.insights.append(
+                InsightSharingOutput(
+                    insight=message,
+                    justification="USER",
+                    codebase_context=[],
+                    stacktrace_context=[],
+                    breadcrumb_context=[],
+                    generated_at_memory_index=memory_index,
+                )
+            )
+
+    def append_file_change(self, repo_external_id: str, file_change: FileChange):
+        with self.state.update() as cur:
+            last_changes_step = cur.find_or_add(self.changes_step)
+            if last_changes_step.id != cur.steps[-1].id:
+                last_changes_step = cur.add_step(self.changes_step)
+
+            if not last_changes_step:
+                raise ValueError("Last plan step not found")
+
+            last_changes_step = cast(ChangesStep, last_changes_step)
+
+            # For backwards compatibility, we append to the codebase state's file changes too (for now)
+            if (
+                cur.codebases
+                and cur.codebases[repo_external_id]
+                and cur.codebases[repo_external_id].file_changes
+            ):
+                cur.codebases[repo_external_id].file_changes.append(file_change)
+
+            if repo_external_id not in last_changes_step.codebase_changes:
+                raise ValueError(f"Codebase changes for repo {repo_external_id} not found")
+
+            last_changes_step.codebase_changes[repo_external_id].file_changes.append(file_change)
+
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True
     ):
@@ -213,10 +252,6 @@ class AutofixEventManager:
 
             if should_completely_error:
                 cur.status = AutofixStatus.ERROR
-
-    def clear_file_changes(self):
-        with self.state.update() as cur:
-            cur.clear_file_changes()
 
     def reset_steps_to_point(
         self, last_step_to_retain_index: int, last_insight_to_retain_index: int | None

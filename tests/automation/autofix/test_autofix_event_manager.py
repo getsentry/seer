@@ -28,9 +28,15 @@ class TestAutofixEventManager:
 
     def test_on_error_marks_running_steps_errored(self, event_manager, state):
         state.get().steps = [
-            RootCauseStep(id="1", title="Step 1", status=AutofixStatus.PROCESSING),
-            RootCauseStep(id="2", title="Step 2", status=AutofixStatus.COMPLETED),
-            RootCauseStep(id="3", title="Step 3", status=AutofixStatus.PROCESSING),
+            RootCauseStep(
+                id="1", key="root_cause_analysis", title="Step 1", status=AutofixStatus.PROCESSING
+            ),
+            RootCauseStep(
+                id="2", key="root_cause_analysis", title="Step 2", status=AutofixStatus.COMPLETED
+            ),
+            RootCauseStep(
+                id="3", key="root_cause_analysis", title="Step 3", status=AutofixStatus.PROCESSING
+            ),
         ]
 
         event_manager.on_error("Test error message")
@@ -41,7 +47,12 @@ class TestAutofixEventManager:
 
     def test_on_error_sets_last_step_completed_message(self, event_manager, state):
         state.get().steps = [
-            RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING),
+            RootCauseStep(
+                id="1",
+                key="root_cause_analysis",
+                title="Test Step",
+                status=AutofixStatus.PROCESSING,
+            ),
         ]
 
         event_manager.on_error("Test error message")
@@ -61,7 +72,13 @@ class TestAutofixEventManager:
 
     def test_add_log_to_current_step(self, event_manager, state):
         state.get().steps = [
-            RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING, progress=[])
+            RootCauseStep(
+                id="1",
+                key="root_cause_analysis",
+                title="Test Step",
+                status=AutofixStatus.PROCESSING,
+                progress=[],
+            )
         ]
 
         event_manager.add_log("Test log message")
@@ -72,7 +89,13 @@ class TestAutofixEventManager:
 
     def test_add_log_no_processing_step(self, event_manager, state):
         state.get().steps = [
-            RootCauseStep(id="1", title="Test Step", status=AutofixStatus.COMPLETED, progress=[])
+            RootCauseStep(
+                id="1",
+                key="root_cause_analysis",
+                title="Test Step",
+                status=AutofixStatus.COMPLETED,
+                progress=[],
+            )
         ]
 
         event_manager.add_log("Test log message")
@@ -90,9 +113,15 @@ class TestAutofixEventManager:
     def test_reset_steps_to_point(self, mock_time, event_manager, state):
         with state.update() as cur:
             cur.steps = [
-                RootCauseStep(id="1", title="Step 1", status=AutofixStatus.COMPLETED),
+                RootCauseStep(
+                    id="1",
+                    key="root_cause_analysis",
+                    title="Step 1",
+                    status=AutofixStatus.COMPLETED,
+                ),
                 DefaultStep(
                     id="2",
+                    key="default",
                     title="Step 2",
                     status=AutofixStatus.COMPLETED,
                     insights=[
@@ -101,8 +130,13 @@ class TestAutofixEventManager:
                         MagicMock(spec=InsightSharingOutput, id="insight3"),
                     ],
                 ),
-                RootCauseStep(id="3", title="Step 3", status=AutofixStatus.PROCESSING),
-                DefaultStep(id="4", title="Step 4", status=AutofixStatus.PROCESSING),
+                RootCauseStep(
+                    id="3",
+                    key="root_cause_analysis",
+                    title="Step 3",
+                    status=AutofixStatus.PROCESSING,
+                ),
+                DefaultStep(id="4", key="default", title="Step 4", status=AutofixStatus.PROCESSING),
             ]
 
         # Test case 1: Reset to second step, before any insights
@@ -121,9 +155,15 @@ class TestAutofixEventManager:
         # Test case 2: Reset to second step, keep only first insight
         with state.update() as cur:
             cur.steps = [
-                RootCauseStep(id="1", title="Step 1", status=AutofixStatus.COMPLETED),
+                RootCauseStep(
+                    id="1",
+                    key="root_cause_analysis",
+                    title="Step 1",
+                    status=AutofixStatus.COMPLETED,
+                ),
                 DefaultStep(
                     id="2",
+                    key="default",
                     title="Step 2",
                     status=AutofixStatus.COMPLETED,
                     insights=[
@@ -132,7 +172,12 @@ class TestAutofixEventManager:
                         MagicMock(spec=InsightSharingOutput, id="insight3"),
                     ],
                 ),
-                RootCauseStep(id="3", title="Step 3", status=AutofixStatus.PROCESSING),
+                RootCauseStep(
+                    id="3",
+                    key="root_cause_analysis",
+                    title="Step 3",
+                    status=AutofixStatus.PROCESSING,
+                ),
             ]
 
         with patch.object(state, "get", wraps=state.get) as mock_get:
@@ -151,8 +196,13 @@ class TestAutofixEventManager:
         # Test case 3: Reset to first step (RootCauseStep)
         with state.update() as cur:
             cur.steps = [
-                RootCauseStep(id="1", title="Step 1", status=AutofixStatus.COMPLETED),
-                DefaultStep(id="2", title="Step 2", status=AutofixStatus.PROCESSING),
+                RootCauseStep(
+                    id="1",
+                    key="root_cause_analysis",
+                    title="Step 1",
+                    status=AutofixStatus.COMPLETED,
+                ),
+                DefaultStep(id="2", key="default", title="Step 2", status=AutofixStatus.PROCESSING),
             ]
 
         with patch.object(state, "get", wraps=state.get) as mock_get:
@@ -230,9 +280,9 @@ class TestAutofixEventManager:
 
         state_obj = state.get()
         assert len(state_obj.steps) == 1
-        plan_step = state_obj.steps[0]
-        assert plan_step.key == event_manager.plan_step.key
-        assert plan_step.status == AutofixStatus.PROCESSING
+        changes_step = state_obj.steps[0]
+        assert changes_step.key == event_manager.changes_step.key
+        assert changes_step.status == AutofixStatus.PROCESSING
         assert state_obj.status == AutofixStatus.PROCESSING
 
         # Existing plan step with different status
@@ -243,23 +293,29 @@ class TestAutofixEventManager:
 
         state_obj = state.get()
         assert len(state_obj.steps) == 2  # Should add new step
-        plan_step = state_obj.steps[-1]
-        assert plan_step.key == event_manager.plan_step.key
-        assert plan_step.status == AutofixStatus.PROCESSING
+        changes_step = state_obj.steps[-1]
+        assert changes_step.key == event_manager.changes_step.key
+        assert changes_step.status == AutofixStatus.PROCESSING
 
         # Existing processing plan step
         event_manager.send_coding_start()
 
         state_obj = state.get()
         assert len(state_obj.steps) == 2  # Should not add new step
-        plan_step = state_obj.steps[-1]
-        assert plan_step.key == event_manager.plan_step.key
-        assert plan_step.status == AutofixStatus.PROCESSING
+        changes_step = state_obj.steps[-1]
+        assert changes_step.key == event_manager.changes_step.key
+        assert changes_step.status == AutofixStatus.PROCESSING
 
     def test_ask_user_question(self, event_manager, state):
         # Setup initial state with a processing step
         state.get().steps = [
-            RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING, progress=[])
+            RootCauseStep(
+                id="1",
+                key="root_cause_analysis",
+                title="Test Step",
+                status=AutofixStatus.PROCESSING,
+                progress=[],
+            )
         ]
 
         test_question = "Would you like to proceed?"

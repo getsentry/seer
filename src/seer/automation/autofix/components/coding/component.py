@@ -26,7 +26,6 @@ from seer.automation.autofix.components.coding.utils import (
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
-from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
 from seer.dependency_injection import inject, injected
 from seer.langfuse import append_langfuse_observation_metadata, append_langfuse_trace_tags
@@ -36,10 +35,6 @@ logger = logging.getLogger(__name__)
 
 class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     context: AutofixContext
-
-    def _append_file_change(self, repo_external_id: str, file_change: FileChange):
-        with self.context.state.update() as cur:
-            cur.codebases[repo_external_id].file_changes.append(file_change)
 
     @observe(name="Incorrect diff fixer")
     @ai_track(description="Incorrect diff fixer")
@@ -86,7 +81,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             repo_client = self.context.get_repo_client(new_task.repo_name)
             for change in changes:
-                self._append_file_change(repo_client.repo_external_id, change)
+                self.context.event_manager.append_file_change(repo_client.repo_external_id, change)
 
     @observe(name="Simple fixer")
     @ai_track(description="Simple fixer")
@@ -249,7 +244,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     @ai_track(description="Plan+Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
         with BaseTools(self.context) as tools:
-
             memory = request.initial_memory
 
             is_obvious = False
@@ -378,7 +372,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 changes, missing_changes = task_to_file_change(task, file_content)
 
                 for change in changes:
-                    self._append_file_change(repo_client.repo_external_id, change)
+                    self.context.event_manager.append_file_change(
+                        repo_client.repo_external_id, change
+                    )
 
                 if missing_changes:
                     missing_changes_by_file[task.file_path] = FileMissingObj(
@@ -388,12 +384,12 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         task=task,
                     )
             elif task.type == "file_delete":
-                self._append_file_change(
+                self.context.event_manager.append_file_change(
                     repo_client.repo_external_id,
                     task_to_file_delete(task),
                 )
             elif task.type == "file_create":
-                self._append_file_change(
+                self.context.event_manager.append_file_change(
                     repo_client.repo_external_id,
                     task_to_file_create(task),
                 )

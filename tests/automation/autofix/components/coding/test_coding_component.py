@@ -31,8 +31,8 @@ class TestCodingComponent:
         mock_context = MagicMock(spec=AutofixContext)
         mock_context.state = MagicMock()
         mock_context.skip_loading_codebase = True
+        mock_context.event_manager = MagicMock()
         component = CodingComponent(mock_context)
-        component._append_file_change = MagicMock()
         return component
 
     @pytest.fixture
@@ -99,7 +99,7 @@ class TestCodingComponent:
         component.context.state.update.assert_called()
         mock_llm_client.generate_text.assert_called_once()
         mock_task_to_file_change.assert_called_once()
-        component._append_file_change.assert_called_once_with(
+        component.context.event_manager.append_file_change.assert_called_once_with(
             "test_repo_id",
             FileChange(
                 path="file1.py", change_type="edit", reference_snippet="old", new_snippet="new"
@@ -146,7 +146,7 @@ class TestCodingComponent:
 
         component.context.state.update.assert_called()
         mock_llm_client.generate_text.assert_called_once()
-        component._append_file_change.assert_not_called()
+        component.context.event_manager.append_file_change.assert_not_called()
 
     def test_handle_missing_file_changes_with_remaining_missing_changes(
         self, component, mock_llm_client
@@ -219,7 +219,7 @@ class TestCodingComponent:
         component.context.state.update.assert_called()
         mock_llm_client.generate_text.assert_called_once()
         mock_task_to_file_change.assert_called_once()
-        component._append_file_change.assert_called_once_with(
+        component.context.event_manager.append_file_change.assert_called_once_with(
             "test_repo_id",
             FileChange(
                 path="file1.py", change_type="edit", reference_snippet="old", new_snippet="new"

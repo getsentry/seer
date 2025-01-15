@@ -57,11 +57,10 @@ class AutofixCodingStep(AutofixPipelineStep):
     @ai_track(description="Autofix - Plan+Code Step")
     @inject
     def _invoke(self, app_config: AppConfig = injected):
-        self.context.event_manager.clear_file_changes()
-
         self.logger.info("Executing Autofix - Plan+Code Step")
 
         self.context.event_manager.send_coding_start()
+
         if not self.request.initial_memory:
             self.context.event_manager.add_log(
                 "Figuring out a fix for the root cause of this issue..."

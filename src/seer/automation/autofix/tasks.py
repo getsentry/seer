@@ -171,13 +171,13 @@ def run_autofix_execution(
     with state.update() as cur:
         cur.mark_triggered()
 
-    event_manager = AutofixEventManager(state)
-    event_manager.send_coding_start()
-
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
 
     try:
+        event_manager = AutofixEventManager(state)
+        event_manager.send_coding_start()
         event_manager.set_selected_root_cause(payload)
+
         cur = state.get()
 
         # Process has no further work.
@@ -218,7 +218,6 @@ def run_autofix_push_changes(
 
     context.commit_changes(
         repo_external_id=request.payload.repo_external_id,
-        repo_id=request.payload.repo_id,
         make_pr=request.payload.make_pr,
     )
 
@@ -397,15 +396,7 @@ def restart_from_point_with_feedback(
         memory.append(Message(content=request.payload.message, role="user"))
 
         if request.payload.add_to_insights:
-            with state.update() as cur:
-                if isinstance(cur.steps[-1], DefaultStep):
-                    cur.steps[-1].insights.append(
-                        InsightSharingOutput(
-                            insight=request.payload.message,
-                            justification="USER",
-                            generated_at_memory_index=len(memory) - 1,
-                        )
-                    )
+            event_manager.add_user_message(request.payload.message, memory_index=len(memory) - 1)
     elif memory and memory[-1].role == "assistant":
         memory.append(Message(content=".", role="user"))
 
@@ -436,7 +427,9 @@ def update_code_change(request: AutofixUpdateRequest):
     state = ContinuationState(request.run_id)
     cur_state = state.get()
 
-    repo_id = request.payload.repo_id
+    repo_external_id = request.payload.repo_id
+    if not repo_external_id:
+        raise ValueError("Repo external ID is required")
     hunk_index = request.payload.hunk_index
     lines = request.payload.lines
     file_path = request.payload.file_path
@@ -445,23 +438,18 @@ def update_code_change(request: AutofixUpdateRequest):
     last_step = cur_state.steps[-1]
     if not isinstance(last_step, ChangesStep):
         return
-    changes = last_step.changes
 
-    # find the change with the matching repo_external_id
-    matching_change = None
-    change_index = 0
-    for i, change in enumerate(changes):
-        if change.repo_external_id == repo_id:
-            matching_change = change
-            change_index = i
-            break
-    if not matching_change:
-        raise ValueError("No matching change found")
+    if repo_external_id not in last_step.codebase_changes:
+        raise ValueError(f"No matching change found for the repo {repo_external_id}")
+
+    change = last_step.codebase_changes[repo_external_id]
+    if not change.details:
+        raise ValueError("Codebase change details are needed to update a codebase change")
 
     # check that we have a matching file patch in the codebase state using the file path
     matching_file_patch = None
     file_patch_index = 0
-    for i, file_patch in enumerate(matching_change.diff):
+    for i, file_patch in enumerate(change.details.diff):
         if file_patch.path == file_path:
             file_patch_index = i
             matching_file_patch = file_patch
@@ -501,8 +489,8 @@ def update_code_change(request: AutofixUpdateRequest):
                 if line.target_line_no is not None:
                     line.target_line_no += length_diff
 
-        matching_change.diff[file_patch_index] = matching_file_patch
-        last_step.changes[change_index] = matching_change
+        change.details.diff[file_patch_index] = matching_file_patch
+        last_step.codebase_changes[repo_external_id] = change
         cur.steps[-1] = last_step
 
 
