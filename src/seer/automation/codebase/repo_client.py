@@ -5,17 +5,16 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import List, Literal, Optional
-from typing_extensions import TypedDict
+from typing import Literal
 
 import requests
 import sentry_sdk
 from github import (
     Auth,
     Github,
-    GithubObject,
     GithubException,
     GithubIntegration,
+    GithubObject,
     InputGitTreeElement,
     UnknownObjectException,
 )
@@ -23,8 +22,8 @@ from github.GitRef import GitRef
 from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
-from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.codebase.models import GithubPrReviewComment
+from seer.automation.codebase.utils import get_language_from_path
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
