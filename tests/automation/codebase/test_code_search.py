@@ -179,3 +179,30 @@ class TestCodeSearcher(unittest.TestCase):
 
         result = self.code_searcher.search_file(empty_file, "keyword")
         assert result is None, "Should handle empty files gracefully"
+
+    def test_max_context_characters(self):
+        # Create a file with a long content
+        long_content = "prefix " * 100 + "keyword" + " suffix" * 100
+        test_file = os.path.join(self.test_dir, "long.txt")
+        with open(test_file, "w") as f:
+            f.write(long_content)
+
+        # Create searcher with limited context
+        limited_searcher = CodeSearcher(self.test_dir, {".txt"}, max_context_characters=20)
+
+        result = limited_searcher.search_file(test_file, "keyword")
+        assert result is not None, "Should find the keyword"
+        assert len(result.matches) == 1, "Should have one match"
+        assert (
+            len(result.matches[0].context) <= 23
+        ), "Context should be limited to max_context_characters + '...'"
+        assert result.matches[0].context.endswith("..."), "Truncated context should end with ..."
+
+        # Test with larger limit
+        larger_searcher = CodeSearcher(self.test_dir, {".txt"}, max_context_characters=1000)
+        result = larger_searcher.search_file(test_file, "keyword")
+        assert result is not None, "Should find the keyword"
+        assert (
+            len(result.matches[0].context) <= 1003
+        ), "Context should be limited to max_context_characters + '...'"
+        assert "keyword" in result.matches[0].context, "Context should contain the keyword"
