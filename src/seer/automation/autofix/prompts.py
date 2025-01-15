@@ -1,5 +1,6 @@
 import textwrap
 
+from seer.automation.models import Profile
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -42,3 +43,9 @@ def format_summary(summary: IssueSummary | None) -> str:
         trace=summary.session_related_issues,
         possible_cause=summary.possible_cause,
     )
+
+
+def format_code_map(code_map: Profile | None):
+    if not code_map:
+        return ""
+    return f"Here's a partial map of the code{('at the time of the issue' if code_map.profile_matches_issue else 'that may help')}: \n{code_map.format_profile()}"

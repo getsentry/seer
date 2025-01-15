@@ -24,6 +24,8 @@ from seer.automation.autofix.models import (
 from seer.automation.models import (
     BreadcrumbsDetails,
     EventDetails,
+    Profile,
+    ProfileFrame,
     SentryEventData,
     SentryEventEntryDataValue,
     SentryExceptionEntry,
@@ -370,6 +372,153 @@ class TestAutofixRequest(unittest.TestCase):
             issue=issue_details,
         )
         self.assertEqual(len(autofix_request.repos), 2)
+
+    def test_extract_relevant_functions(self):
+        issue = IssueDetails(
+            id=1,
+            title="Test Issue",
+            events=[
+                {
+                    "title": "Error",
+                    "entries": [
+                        {
+                            "type": "exception",
+                            "data": {
+                                "values": [
+                                    {
+                                        "type": "Exception",
+                                        "value": "Test error",
+                                        "stacktrace": {
+                                            "frames": [
+                                                {
+                                                    "function": "not_relevant",
+                                                    "in_app": False,
+                                                    "filename": "external.py",
+                                                },
+                                                {
+                                                    "function": "relevant_func1",
+                                                    "in_app": True,
+                                                    "filename": "app.py",
+                                                },
+                                                {
+                                                    "function": "relevant_func2",
+                                                    "in_app": True,
+                                                    "filename": "utils.py",
+                                                },
+                                                {
+                                                    "function": None,  # Should be skipped
+                                                    "in_app": True,
+                                                    "filename": "app.py",
+                                                },
+                                            ]
+                                        },
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+
+        # Create a profile and request
+        profile = Profile(
+            profile_matches_issue=True,
+            execution_tree=[
+                ProfileFrame(
+                    function="main",
+                    module="app",
+                    filename="app.py",
+                    lineno=1,
+                    in_app=True,
+                    children=[
+                        ProfileFrame(
+                            function="relevant_func1",
+                            module="app",
+                            filename="app.py",
+                            lineno=5,
+                            in_app=True,
+                        ),
+                        ProfileFrame(
+                            function="relevant_func2",
+                            module="utils",
+                            filename="utils.py",
+                            lineno=10,
+                            in_app=True,
+                        ),
+                    ],
+                )
+            ],
+        )
+
+        request = AutofixRequest(
+            organization_id=1,
+            project_id=1,
+            repos=[
+                RepoDefinition(
+                    provider="github",
+                    owner="test",
+                    name="test",
+                    external_id="test",
+                )
+            ],
+            issue=issue,
+            profile=profile,
+        )
+
+        self.assertEqual(request.profile.relevant_functions, {"relevant_func1", "relevant_func2"})
+        self.assertNotIn("not_relevant", request.profile.relevant_functions)
+        self.assertEqual(len(request.profile.relevant_functions), 2)
+
+    def test_extract_relevant_functions_no_profile(self):
+        issue = IssueDetails(
+            id=1,
+            title="Test Issue",
+            events=[
+                {
+                    "title": "Error",
+                    "entries": [
+                        {
+                            "type": "exception",
+                            "data": {
+                                "values": [
+                                    {
+                                        "type": "Exception",
+                                        "value": "Test error",
+                                        "stacktrace": {
+                                            "frames": [
+                                                {
+                                                    "function": "relevant_func",
+                                                    "in_app": True,
+                                                    "filename": "app.py",
+                                                }
+                                            ]
+                                        },
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+
+        request = AutofixRequest(
+            organization_id=1,
+            project_id=1,
+            repos=[
+                RepoDefinition(
+                    provider="github",
+                    owner="test",
+                    name="test",
+                    external_id="test",
+                )
+            ],
+            issue=issue,
+            profile=None,
+        )
+
+        self.assertIsNone(request.profile)
 
 
 class TestAutofixStep(unittest.TestCase):

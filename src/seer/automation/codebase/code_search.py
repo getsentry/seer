@@ -15,6 +15,7 @@ class CodeSearcher:
         supported_extensions: set,
         max_results: int = 16,
         max_file_size_bytes: int = 1_000_000,  # 1 MB by default
+        max_context_characters: int = 2000,
         start_path: Optional[str] = None,
         default_encoding: str = "utf-8",
     ):
@@ -23,6 +24,7 @@ class CodeSearcher:
         self.max_results = max_results
         self.start_path = start_path
         self.max_file_size_bytes = max_file_size_bytes
+        self.max_context_characters = max_context_characters
         self.default_encoding = default_encoding
 
     def calculate_proximity_score(self, file_path: str) -> float:
@@ -110,6 +112,8 @@ class CodeSearcher:
                     start = max(0, i - 8)
                     end = min(len(lines), i + 9)
                     context = "".join(lines[start:end])
+                    if len(context) > self.max_context_characters:
+                        context = context[: self.max_context_characters] + "..."
                     matches.append(Match(line_number=i + 1, context=context))
                     break  # Stop after finding the first match
 

@@ -1,7 +1,13 @@
 import textwrap
 from typing import Optional
 
-from seer.automation.autofix.prompts import format_instruction, format_repo_names, format_summary
+from seer.automation.autofix.prompts import (
+    format_code_map,
+    format_instruction,
+    format_repo_names,
+    format_summary,
+)
+from seer.automation.models import Profile
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -48,6 +54,7 @@ class RootCauseAnalysisPrompts:
         repo_names: list[str],
         instruction: Optional[str] = None,
         summary: Optional[IssueSummary] = None,
+        code_map: Optional[Profile] = None,
     ):
         return textwrap.dedent(
             """\
@@ -69,6 +76,7 @@ class RootCauseAnalysisPrompts:
             repo_names_str=format_repo_names(repo_names),
             instruction_str=format_instruction(instruction),
             summary_str=format_summary(summary),
+            code_map_str=format_code_map(code_map),
         )
 
     @staticmethod

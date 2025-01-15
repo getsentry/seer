@@ -1,18 +1,25 @@
 import datetime
 import enum
 import uuid
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Set, Union
 
 from johen import gen
 from johen.examples import Examples
 from johen.generators import specialized
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
-from seer.automation.models import FileChange, FilePatch, IssueDetails, Line, RepoDefinition
+from seer.automation.models import (
+    FileChange,
+    FilePatch,
+    IssueDetails,
+    Line,
+    Profile,
+    RepoDefinition,
+)
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import make_kill_signal
 from seer.db import DbRunMemory
@@ -295,8 +302,36 @@ class AutofixRequest(BaseModel):
     invoking_user: Optional[AutofixUserDetails] = None
     instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
     issue_summary: Optional[IssueSummary] = None
+    profile: Profile | None = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def extract_relevant_functions(
+        cls, profile: Profile | None, info: ValidationInfo
+    ) -> Profile | None:
+        if profile is not None and "issue" in info.data:
+            issue = info.data["issue"]
+            if not isinstance(issue, IssueDetails):
+                return profile
+
+            relevant_functions: Set[str] = set()
+
+            # Extract functions from exceptions
+            for event in issue.events:
+                for entry in event.get("entries", []):
+                    if entry.get("type") == "exception":
+                        for exception in entry.get("data", {}).get("values", []):
+                            if "stacktrace" in exception:
+                                for frame in exception["stacktrace"].get("frames", []):
+                                    if frame.get("function") and frame.get("in_app", False):
+                                        relevant_functions.add(frame["function"])
+
+            if relevant_functions:
+                profile.relevant_functions = relevant_functions
+
+        return profile
 
     @field_validator("issue_summary", mode="before")
     @classmethod

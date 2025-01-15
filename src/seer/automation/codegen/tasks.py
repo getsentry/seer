@@ -9,10 +9,7 @@ from seer.automation.codegen.models import (
 )
 from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
 from seer.automation.codegen.state import CodegenContinuationState
-from seer.automation.codegen.unittest_step import (
-    UnittestStep,
-    UnittestStepRequest,
-)
+from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.state import DbState, DbStateRunTypes
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
