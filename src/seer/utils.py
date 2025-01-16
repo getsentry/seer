@@ -73,13 +73,13 @@ def closing_queue(*queues: Queue):
 
 
 def backoff_on_exception(
-    does_exception_indicate_retry: Callable[[Exception], bool],
+    is_exception_retryable: Callable[[Exception], bool],
     max_tries: int = 2,
     sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
     jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
 ):
     """
-    Returns a decorator which retries a function on exception iff `does_exception_indicate_retry(exception)`.
+    Returns a decorator which retries a function on exception iff `is_exception_retryable(exception)`.
     Defaults to exponential backoff with random jitter and one retry.
     """
 
@@ -97,7 +97,7 @@ def backoff_on_exception(
                 except Exception as exception:
                     num_tries += 1
                     last_exception = exception
-                    if does_exception_indicate_retry(exception):
+                    if is_exception_retryable(exception):
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
                         time.sleep(sleep_sec)
                     else:
