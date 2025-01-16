@@ -72,6 +72,7 @@ from seer.json_api import json_api
 from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.smoke_test import check_smoke_test
+from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 
 logger = logging.getLogger(__name__)
@@ -275,6 +276,7 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 @json_api(blueprint, "/v1/anomaly-detection/detect")
 @sentry_sdk.trace
 def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
     try:
@@ -287,6 +289,7 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
 @json_api(blueprint, "/v1/anomaly-detection/store")
 @sentry_sdk.trace
 def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
@@ -302,6 +305,7 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
 def delete_alert__data_endpoint(
     data: DeleteAlertDataRequest,
 ) -> DeleteAlertDataResponse:
+    sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     sentry_sdk.set_tag("organization_id", data.organization_id)
     if data.project_id is not None:
         sentry_sdk.set_tag("project_id", data.project_id)

@@ -1,4 +1,5 @@
 from typing import Literal, NotRequired, TypedDict
+
 from pydantic import BaseModel
 from pydantic_xml import attr
 

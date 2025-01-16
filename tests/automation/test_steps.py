@@ -1,5 +1,5 @@
-from typing import Optional
 import unittest
+from typing import Optional
 from unittest.mock import MagicMock
 
 from seer.automation.state import DbStateRunTypes

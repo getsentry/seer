@@ -39,7 +39,7 @@ class StacktraceFrame(BaseModel):
     col_no: Optional[int]
     context: list[tuple[int, Optional[str]]] = []
     repo_name: Optional[str] = None
-    in_app: bool = False
+    in_app: bool | None = False
     vars: Optional[dict[str, Any]] = None
     package: Optional[str] = None
 

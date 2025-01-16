@@ -6,6 +6,7 @@ class AnomalyDetectionTags(StrEnum):
     MODE = "mode"
     LOW_VARIATION_TS = "low_variation_ts"
     WINDOW_SEARCH_FAILED = "window_search_failed"
+    SEER_FUNCTIONALITY = "seer_functionality"
 
 
 class AnomalyDetectionModes(StrEnum):

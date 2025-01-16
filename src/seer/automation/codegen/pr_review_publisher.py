@@ -5,9 +5,7 @@ from github.PullRequest import PullRequest
 
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codegen.models import (
-    CodePrReviewOutput,
-)
+from seer.automation.codegen.models import CodePrReviewOutput
 
 logger = logging.getLogger(__name__)
 
