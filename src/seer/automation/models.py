@@ -471,7 +471,7 @@ class ProfileFrame(TypedDict):
     filename: str
     lineno: int
     in_app: bool
-    children: list["ProfileFrame"]
+    children: NotRequired[list["ProfileFrame"]]
 
 
 class Profile(BaseModel):
