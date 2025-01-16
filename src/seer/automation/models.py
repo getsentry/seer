@@ -471,7 +471,7 @@ class ProfileFrame(TypedDict):
     filename: str
     lineno: int
     in_app: bool
-    children: list["ProfileFrame"] = []
+    children: list["ProfileFrame"]
 
 
 class Profile(BaseModel):
@@ -578,7 +578,7 @@ class Profile(BaseModel):
 
             # Recursively format children with increased indentation
             if node.get("children"):
-                result.append(self._format_profile_helper(node.get("children"), indent + 1))
+                result.append(self._format_profile_helper(node.get("children", []), indent + 1))
 
         return "\n".join(result)
 
