@@ -167,7 +167,7 @@ def test_bad_request_is_not_retried(autofix_agent: AutofixAgent, run_config: Run
 @pytest.mark.vcr()
 def test_provider_without_exception_indicator(autofix_agent: AutofixAgent, run_config: RunConfig):
     """
-    Test that it's ok if a provider doesn't implement `is_completion_exception_retryable`.
+    Test that it's ok if a provider doesn't implement `is_completion_exception_retryable` and the corresponding API is healthy.
     """
     if not isinstance(run_config.model, AnthropicProvider):
         pytest.skip("This test was already ran for Anthropic. Skipping to avoid redundancy.")
@@ -184,7 +184,7 @@ def test_provider_without_exception_indicator(autofix_agent: AutofixAgent, run_c
         finally:
             setattr(obj, method_name, staticmethod(method))
 
-    run_config.model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+    run_config.model = AnthropicProvider.model("claude-3-5-sonnet@20240620")  # healthy API
     with temp_delete_static_method(type(run_config.model), "is_completion_exception_retryable"):
         response = autofix_agent.get_completion(run_config)
         assert EXPECTED_MESSAGE in response.message.content

@@ -1,10 +1,12 @@
 import contextlib
 import functools
 import json
+import random
+import time
 import weakref
 from enum import Enum
 from queue import Empty, Full, Queue
-from typing import Sequence
+from typing import Callable, Sequence
 
 from sqlalchemy.orm import DeclarativeBase, Session
 
@@ -68,3 +70,40 @@ def closing_queue(*queues: Queue):
                 queue.get_nowait()
             except Empty:
                 pass
+
+
+def backoff_on_exception(
+    does_exception_indicate_retry: Callable[[Exception], bool],
+    max_tries: int = 2,
+    sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
+    jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
+):
+    """
+    Returns a decorator which retries a function on exception iff `does_exception_indicate_retry(exception)`.
+    Defaults to exponential backoff with random jitter and one retry.
+    """
+
+    if max_tries < 1:
+        raise ValueError("max_tries must be at least 1")
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapped_func(*args, **kwargs):
+            num_tries = 0
+            last_exception = None
+            while num_tries < max_tries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exception:
+                    num_tries += 1
+                    last_exception = exception
+                    if does_exception_indicate_retry(exception):
+                        sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
+                        time.sleep(sleep_sec)
+                    else:
+                        raise exception
+            raise last_exception
+
+        return wrapped_func
+
+    return decorator
