@@ -465,7 +465,7 @@ class IssueDetails(BaseModel):
     events: list[SentryEventData]
 
 
-class ProfileFrame(BaseModel):
+class ProfileFrame(TypedDict):
     function: str
     module: str
     filename: str
