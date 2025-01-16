@@ -5,7 +5,7 @@ Tests that completions that fail during streaming are retried.
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, TypeVar
 
 import anthropic
 import httpx
@@ -28,6 +28,11 @@ from seer.automation.state import LocalMemoryState
 
 EXPECTED_MESSAGE = "I am an AI language model and I follow instructions"
 
+ANTHROPIC_OVERLOADED_ERROR_DATA = {
+    "type": "error",
+    "error": {"type": "overloaded_error", "message": "Overloaded"},
+}
+
 
 class StreamFlaky:
     def __init__(
@@ -37,65 +42,93 @@ class StreamFlaky:
         num_chunks_before_erroring: int = 2,
     ):
         self._iterator = stream_real
-        self.retryable_exception = retryable_exception
-        self.num_chunks_before_erroring = num_chunks_before_erroring
+        self._retryable_exception = retryable_exception
+        self._num_chunks_before_erroring = num_chunks_before_erroring
         self.response = getattr(stream_real, "response", None)
+        # Need this attribute for Anthropic's stream
 
     def __iter__(self):
         for num_chunks_generated, chunk in enumerate(self._iterator):
-            if num_chunks_generated == self.num_chunks_before_erroring:
-                raise self.retryable_exception
+            if num_chunks_generated == self._num_chunks_before_erroring:
+                raise self._retryable_exception
             yield chunk
 
 
-def flakify(create: Callable[[Any], Iterator], retryable_exception: Exception):
-
-    @wraps(create)
-    def wrapped(*args, **kwargs):
-        stream_real = create(*args, **kwargs)
-        return StreamFlaky(stream_real, retryable_exception)
-
-    return wrapped
+_T = TypeVar("_T", bound=LlmProvider)
 
 
-@dataclass
-class AnthropicProviderFlaky(AnthropicProvider):
+def flakify(
+    provider_class: type[_T],
+    retryable_exception: Exception,
+    get_obj_with_create_stream_method_from_client: Callable,
+    create_stream_method_name: str,
+) -> type[_T]:
     """
-    A provider that returns a flaky client for the first `max_num_flaky_clients`.
-
-    A flaky client raises a retryable exception after generating some chunks.
+    Mock an LLM provider that will return a flaky stream for the first `max_num_flaky_clients` clients.
     """
 
-    num_flaky_clients: int = 0
-    max_num_flaky_clients: int = 2
+    def flakify(create_stream: Callable[[Any], Iterator]):
 
-    def get_client(self) -> anthropic.AnthropicVertex:
-        client = AnthropicProvider.get_client()
-        if self.num_flaky_clients < self.max_num_flaky_clients:
-            # The API is in an overloaded state
-            overloaded_error_data = {
-                "type": "error",
-                "error": {"type": "overloaded_error", "message": "Overloaded"},
-            }
-            retryable_exception = anthropic.APIStatusError(
-                message=str(overloaded_error_data),
-                response=httpx.Response(
-                    status_code=529, request=httpx.Request("POST", "https://moc.ked")
-                ),  # https://docs.anthropic.com/en/api/errors#http-errors
-                body=overloaded_error_data,
-            )
-            self.num_flaky_clients += 1
-            client.messages.create = flakify(client.messages.create, retryable_exception)
-        return client
+        @wraps(create_stream)
+        def wrapped(*args, **kwargs):
+            stream = create_stream(*args, **kwargs)
+            return StreamFlaky(stream, retryable_exception)
+
+        return wrapped
+
+    @dataclass
+    class FlakyProvider(provider_class):
+        num_flaky_clients: int = 0
+        max_num_flaky_clients: int = 2
+
+        def get_client(self):
+            client = provider_class.get_client()
+            if self.num_flaky_clients < self.max_num_flaky_clients:
+                self.num_flaky_clients += 1
+                # Put the client in a unhealthy state, i.e., make all of its streams flaky
+                obj_with_create_stream_method = get_obj_with_create_stream_method_from_client(
+                    client
+                )
+                create_stream_method = getattr(
+                    obj_with_create_stream_method, create_stream_method_name
+                )
+                setattr(
+                    obj_with_create_stream_method,
+                    create_stream_method_name,
+                    flakify(create_stream_method),
+                )
+            return client
+
+    return FlakyProvider
+
+
+# Define your flaky providers here
+AnthropicProviderFlaky = flakify(
+    AnthropicProvider,
+    retryable_exception=anthropic.APIStatusError(
+        message=str(ANTHROPIC_OVERLOADED_ERROR_DATA),
+        response=httpx.Response(
+            status_code=529, request=httpx.Request("POST", "https://mocked.com")
+        ),  # https://docs.anthropic.com/en/api/errors#http-errors
+        body=ANTHROPIC_OVERLOADED_ERROR_DATA,
+    ),
+    get_obj_with_create_stream_method_from_client=lambda client: client.messages,
+    create_stream_method_name="create",
+)
+
+
+# Give this function a name instead of making it a lambda so that the cassette is named
+def create_flaky_anthropic():
+    return AnthropicProviderFlaky.model("claude-3-5-sonnet@20240620")
 
 
 @pytest.fixture(
     scope="module",
     params=[
-        AnthropicProviderFlaky.model("claude-3-5-sonnet@20240620"),
+        create_flaky_anthropic,
     ],
 )
-def flaky_provider(request: pytest.FixtureRequest) -> LlmProvider:
+def create_flaky_provider(request: pytest.FixtureRequest) -> Callable[[], LlmProvider]:
     return request.param
 
 
@@ -122,11 +155,11 @@ def autofix_agent(context: AutofixContext):
 
 
 @pytest.fixture
-def run_config(flaky_provider: LlmProvider):
+def run_config(create_flaky_provider: Callable[[], LlmProvider]):
     return RunConfig(
         system_prompt="You are a helpful assistant for fixing code.",
         prompt="Fix this bug.",
-        model=flaky_provider,
+        model=create_flaky_provider(),
         temperature=0.0,
         run_name="Test Autofix Run",
     )
@@ -160,14 +193,14 @@ def test_bad_request_is_not_retried(autofix_agent: AutofixAgent, run_config: Run
         )
     else:
         raise Exception(
-            f"Unexpected exception type: {type(exception_info.value)}. Handle this here."
+            f"Unexpected exception type: {type(exception_info.value)}. Handle this in an elif block above."
         )
 
 
 @pytest.mark.vcr()
 def test_provider_without_exception_indicator(autofix_agent: AutofixAgent, run_config: RunConfig):
     """
-    Test that it's ok if a provider doesn't implement `is_completion_exception_retryable` and the corresponding API is healthy.
+    Test behavior when a provider doesn't implement `is_completion_exception_retryable`.
     """
     if not isinstance(run_config.model, AnthropicProvider):
         pytest.skip("This test was already ran for Anthropic. Skipping to avoid redundancy.")
@@ -176,24 +209,36 @@ def test_provider_without_exception_indicator(autofix_agent: AutofixAgent, run_c
         state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
 
     @contextmanager
-    def temp_delete_static_method(obj: Any, method_name: str):
+    def temp_delete_static_method(cls: type, method_name: str):
         try:
-            method = getattr(obj, method_name)
-            delattr(obj, method_name)
+            method = getattr(cls, method_name)
+            delattr(cls, method_name)
             yield
         finally:
-            setattr(obj, method_name, staticmethod(method))
+            setattr(cls, method_name, staticmethod(method))
 
+    # Test that if the API is unhealthy and is_completion_exception_retryable isn't implemented, the overload error is raised
+    with temp_delete_static_method(AnthropicProvider, "is_completion_exception_retryable"):
+        assert not hasattr(run_config.model, "is_completion_exception_retryable")
+        with pytest.raises(Exception) as exception_info:
+            _ = autofix_agent.get_completion(run_config)
+    assert hasattr(run_config.model, "is_completion_exception_retryable")
+    assert run_config.model.is_completion_exception_retryable(exception_info.value)
+
+    # Test that if the API is healthy and is_completion_exception_retryable isn't implemented, the completion is returned
     run_config.model = AnthropicProvider.model("claude-3-5-sonnet@20240620")  # healthy API
-    with temp_delete_static_method(type(run_config.model), "is_completion_exception_retryable"):
+    with temp_delete_static_method(AnthropicProvider, "is_completion_exception_retryable"):
+        assert not hasattr(run_config.model, "is_completion_exception_retryable")
         response = autofix_agent.get_completion(run_config)
-        assert EXPECTED_MESSAGE in response.message.content
+    assert EXPECTED_MESSAGE in response.message.content
 
 
 @pytest.mark.vcr()
 def test_retrying_succeeds(autofix_agent: AutofixAgent, run_config: RunConfig):
     with autofix_agent.context.state.update() as state:
         state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
-    run_config.model.is_completion_exception_retryable
+    assert isinstance(run_config.model, AnthropicProviderFlaky)
+    assert run_config.model.num_flaky_clients < run_config.model.max_num_flaky_clients
+    # Sanity check that the API will indeed be flaky
     response = autofix_agent.get_completion(run_config)
     assert EXPECTED_MESSAGE in response.message.content

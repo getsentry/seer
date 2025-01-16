@@ -126,16 +126,9 @@ class AutofixAgent(LlmAgent):
         The completion request is tried `max_tries` times if a retryable exception is encountered,
         e.g, the Anthropic API is overloaded.
         """
-
-        def does_exception_indicate_retry(exception: Exception) -> bool:
-            try:
-                return run_config.model.is_completion_exception_retryable(exception)
-            except Exception:
-                logger.exception(
-                    "Failed to check whether the completion exception is retryable. Giving up."
-                )
-                return False
-
+        does_exception_indicate_retry = getattr(
+            run_config.model, "is_completion_exception_retryable", lambda _: False
+        )
         retrier = backoff_on_exception(does_exception_indicate_retry, max_tries=max_tries)
         get_completion_retryable = retrier(self._get_completion)
         return get_completion_retryable(run_config)
