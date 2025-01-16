@@ -475,8 +475,8 @@ class ProfileFrame(BaseModel):
 
 
 class Profile(BaseModel):
-    profile_matches_issue: bool
-    execution_tree: list[ProfileFrame]
+    profile_matches_issue: bool = Field(default=False)
+    execution_tree: list[ProfileFrame] = Field(default_factory=list)
     relevant_functions: set[str] = Field(default_factory=set)
 
     def format_profile(
