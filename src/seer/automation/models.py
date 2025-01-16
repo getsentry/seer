@@ -465,18 +465,18 @@ class IssueDetails(BaseModel):
     events: list[SentryEventData]
 
 
-class ProfileFrame(BaseModel):
+class ProfileFrame(TypedDict):
     function: str
     module: str
     filename: str
     lineno: int
     in_app: bool
-    children: list["ProfileFrame"] = []
+    children: NotRequired[list["ProfileFrame"]]
 
 
 class Profile(BaseModel):
-    profile_matches_issue: bool
-    execution_tree: list[ProfileFrame]
+    profile_matches_issue: bool = Field(default=False)
+    execution_tree: list[ProfileFrame] = Field(default_factory=list)
     relevant_functions: set[str] = Field(default_factory=set)
 
     def format_profile(
@@ -570,15 +570,15 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}→ {node.function}"
-            location = f"{node.filename}"
+            func_line = f"{indent_str}→ {node.get('function')}"
+            location = f"{node.get('filename')}"
             func_line += f" ({location})"
 
             result.append(func_line)
 
             # Recursively format children with increased indentation
-            if node.children:
-                result.append(self._format_profile_helper(node.children, indent + 1))
+            if node.get("children"):
+                result.append(self._format_profile_helper(node.get("children", []), indent + 1))
 
         return "\n".join(result)
 
