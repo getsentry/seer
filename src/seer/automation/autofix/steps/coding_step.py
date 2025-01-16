@@ -90,6 +90,7 @@ class AutofixCodingStep(AutofixPipelineStep):
                 root_cause_extra_instruction=root_cause_extra_instruction,
                 summary=summary,
                 initial_memory=self.request.initial_memory,
+                profile=state.request.profile,
             )
         )
 

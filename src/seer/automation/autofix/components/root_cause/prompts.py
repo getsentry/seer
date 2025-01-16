@@ -62,6 +62,8 @@ class RootCauseAnalysisPrompts:
             Given the issue: {summary_str}
             {error_str}
 
+            {code_map_str}
+
             {instruction_str}
             When ready with your final answer, detail the potential root cause of the issue.
 
