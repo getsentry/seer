@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 from unittest.mock import patch
 
 import jwt
@@ -165,6 +168,7 @@ def test_json_api_auth_with_real_jwt():
         assert b"Token has expired" in response.data
 
 
+@pytest.mark.skip(reason="Enable auth")
 def test_json_api_signature_strict_mode_ignores_rpcsignature():
     app = Flask(__name__)
     blueprint = Blueprint("blueprint", __name__)
@@ -192,7 +196,6 @@ def test_json_api_signature_strict_mode_ignores_rpcsignature():
         assert changed.result == 200
 
 
-@pytest.mark.skip(reason="Disable auth")
 def test_json_api_signature_strict_mode():
     app = Flask(__name__)
     blueprint = Blueprint("blueprint", __name__)
@@ -221,9 +224,12 @@ def test_json_api_signature_strict_mode():
         assert changed.to_value(401)
 
         with status_code_watcher as changed:
-            headers["Authorization"] = (
-                "Rpcsignature rpc0:96f23d5b3df807a9dc91f090078a46c00e17fe8b0bc7ef08c9391fa8b37a66b5"
-            )
+            signature = hmac.new(
+                "secret-one".encode(),
+                json.dumps(payload, sort_keys=True).encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            headers["Authorization"] = f"Rpcsignature rpc0:{signature}"
         assert changed.to_value(200)
 
         with status_code_watcher as changed:
@@ -231,7 +237,10 @@ def test_json_api_signature_strict_mode():
         assert changed.to_value(401)
 
         with status_code_watcher as changed:
-            headers["Authorization"] = (
-                "Rpcsignature rpc0:487fb810a4e87faf306dc9637cec9aaea2be37247410391b372178ffc15af6a8"
-            )
+            signature = hmac.new(
+                "secret-one".encode(),
+                b"1234:%s" % json.dumps(payload, sort_keys=True).encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            headers["Authorization"] = f"Rpcsignature rpc0:{signature}"
         assert changed.to_value(200)
