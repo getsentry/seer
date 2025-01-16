@@ -570,15 +570,15 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}→ {node.function}"
-            location = f"{node.filename}"
+            func_line = f"{indent_str}→ {node.get('function')}"
+            location = f"{node.get('filename')}"
             func_line += f" ({location})"
 
             result.append(func_line)
 
             # Recursively format children with increased indentation
-            if node.children:
-                result.append(self._format_profile_helper(node.children, indent + 1))
+            if node.get("children"):
+                result.append(self._format_profile_helper(node.get("children"), indent + 1))
 
         return "\n".join(result)
 
