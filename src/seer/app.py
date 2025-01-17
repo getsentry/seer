@@ -3,13 +3,16 @@ import time
 
 import flask
 import sentry_sdk
-from flask import Blueprint, Flask, jsonify
+from flask import Blueprint, Flask, jsonify, request
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
-from integrations.codecov.codecov_auth import CodecovAuthentication
+from integrations.codecov.codecov_auth import (
+    INCOMING_REQUEST_SIGNATURE_HEADER,
+    CodecovAuthentication,
+)
 from seer.anomaly_detection.models.external import (
     DeleteAlertDataRequest,
     DeleteAlertDataResponse,
@@ -44,6 +47,7 @@ from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCh
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
     CodecovTaskRequest,
+    CodegenBaseResponse,
     CodegenPrReviewRequest,
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
@@ -269,8 +273,10 @@ def codegen_pr_review_state_endpoint(
 @json_api(blueprint, "/v1/automation/codecov-request")
 def codecov_request_endpoint(
     data: CodecovTaskRequest,
-) -> CodegenPrReviewResponse | CodegenUnitTestsResponse:
-    CodecovAuthentication.authenticate_incoming_request(data)
+) -> CodegenBaseResponse:
+    print(request.headers)
+    signature = request.headers.get(INCOMING_REQUEST_SIGNATURE_HEADER)
+    CodecovAuthentication.authenticate_incoming_request(signature, data)
 
     is_valid = CodecovAuthentication.authenticate_codecov_app_install(
         data.external_owner_id, data.data.repo.external_id

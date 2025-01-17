@@ -74,8 +74,8 @@ class AppConfig(BaseModel):
 
     # Super access token for developing against, won't be available in final production setup.
     CODECOV_SUPER_TOKEN: str = ""
-    CODECOV_INCOMING_SIGNATURE_SECRET: str = ""
-    CODECOV_OUTGOING_SIGNATURE_SECRET: str = ""
+    CODECOV_INCOMING_SIGNATURE_SECRET: str = "test-incoming"
+    CODECOV_OUTGOING_SIGNATURE_SECRET: str = "test-outgoing"
 
     GRPC_THREAD_POOL_SIZE: ParseInt = 1
     GRPC_SERVICE_PORT: ParseInt = 50051

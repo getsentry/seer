@@ -54,12 +54,16 @@ class CodeUnitTestRequest(BaseComponentRequest):
     codecov_client_params: dict = Field(default_factory=dict)
 
 
-class CodegenUnitTestsResponse(BaseModel):
+class CodegenBaseResponse(BaseModel):
     run_id: int
 
 
-class CodegenPrReviewResponse(BaseModel):
-    run_id: int
+class CodegenPrReviewResponse(CodegenBaseResponse):
+    pass
+
+
+class CodegenUnitTestsResponse(CodegenBaseResponse):
+    pass
 
 
 class CodegenUnitTestsStateRequest(BaseModel):
@@ -102,7 +106,7 @@ class CodePrReviewOutput(BaseComponentOutput):
     comments: List[Comment]
 
 
-class CodecovTaskRequest:
+class CodecovTaskRequest(BaseModel):
     data: CodegenPrReviewRequest | CodegenUnitTestsRequest
     external_owner_id: str
     request_type: Literal["unit-tests", "pr-review"]

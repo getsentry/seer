@@ -66,6 +66,12 @@ services:
             - IGNORE_API_AUTH=1
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
+networks:
+  default:
+    external:
+      name: mynet
+
+
 volumes:
     pgdata:
     pgdata_test:
