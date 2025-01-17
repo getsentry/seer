@@ -150,4 +150,4 @@ dmypy.json
 .artifacts/
 
 # Cassettes
-tests/cassettes/
+tests/**/cassettes/
