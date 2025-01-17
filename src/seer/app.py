@@ -291,6 +291,7 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == DbStateRunTypes.UNIT_TEST:
         return codegen_unit_tests_endpoint(data.data)
+    return CodegenBaseResponse(success=False, message="Invalid request type")
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")
