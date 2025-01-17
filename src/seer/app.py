@@ -274,7 +274,6 @@ def codegen_pr_review_state_endpoint(
 def codecov_request_endpoint(
     data: CodecovTaskRequest,
 ) -> CodegenBaseResponse:
-    print(request.headers)
     signature = request.headers.get(INCOMING_REQUEST_SIGNATURE_HEADER)
     CodecovAuthentication.authenticate_incoming_request(signature, data)
 
