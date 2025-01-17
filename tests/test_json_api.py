@@ -231,16 +231,3 @@ def test_json_api_signature_strict_mode():
             ).hexdigest()
             headers["Authorization"] = f"Rpcsignature rpc0:{signature}"
         assert changed.to_value(200)
-
-        with status_code_watcher as changed:
-            path += "?nonce=1234"
-        assert changed.to_value(401)
-
-        with status_code_watcher as changed:
-            signature = hmac.new(
-                "secret-one".encode(),
-                b"1234:%s" % json.dumps(payload, sort_keys=True).encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
-            headers["Authorization"] = f"Rpcsignature rpc0:{signature}"
-        assert changed.to_value(200)

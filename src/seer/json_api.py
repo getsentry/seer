@@ -88,7 +88,6 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             if auth_header.startswith("Rpcsignature "):
                 parts = auth_header.split()
                 if len(parts) != 2 or not compare_signature(
-                    nonce=request.args.get("nonce", ""),
                     body=raw_data,
                     signature=parts[1],
                 ):
@@ -149,9 +148,7 @@ def is_valid(payload: bytes, key: str, signature_data: str):
 
 
 @inject
-def compare_signature(
-    *, nonce: str, body: bytes, signature: str, config: AppConfig = injected
-) -> bool:
+def compare_signature(*, body: bytes, signature: str, config: AppConfig = injected) -> bool:
     """
     Compare request data + signature signed by one of the shared secrets.
     Once a key has been able to validate the signature other keys will
@@ -167,15 +164,7 @@ def compare_signature(
     _, signature_data = signature.split(":", 2)
 
     for key in secrets:
-        # If nonce is provided, use it in signature verification
-        payload = b"%s:%s" % (nonce.encode(), body) if nonce else body
-
-        # TODO: Verify that the nonce has not been used before?
-
-        if is_valid(payload, key, signature_data):
-            span = sentry_sdk.Hub.current.scope.span
-            if span:
-                span.set_data("rpc_auth_additional_payload", "nonce" if nonce else "body_only")
+        if is_valid(body, key, signature_data):
             return True
 
     sentry_sdk.capture_message("No signature matches found.")
