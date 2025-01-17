@@ -43,7 +43,7 @@ class CodecovAuthentication:
     @inject
     def authenticate_codecov_app_install(
         external_owner_id: str, repo_service_id: str, config: AppConfig = injected
-    ):
+    ) -> bool:
         data = {"external_owner_id": external_owner_id, "repo_service_id": repo_service_id}
         request_data = json.dumps(data).encode("utf-8")
         key = config.CODECOV_OUTGOING_SIGNATURE_SECRET

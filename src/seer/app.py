@@ -7,7 +7,7 @@ from flask import Blueprint, Flask, jsonify, request
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
-from werkzeug.exceptions import GatewayTimeout, InternalServerError
+from werkzeug.exceptions import GatewayTimeout, InternalServerError, Unauthorized
 
 from integrations.codecov.codecov_auth import (
     INCOMING_REQUEST_SIGNATURE_HEADER,
@@ -275,6 +275,9 @@ def codecov_request_endpoint(
     data: CodecovTaskRequest,
 ) -> CodegenBaseResponse:
     signature = request.headers.get(INCOMING_REQUEST_SIGNATURE_HEADER)
+    if not signature:
+        raise Unauthorized("Missing signature")
+
     CodecovAuthentication.authenticate_incoming_request(signature, data)
 
     is_valid = CodecovAuthentication.authenticate_codecov_app_install(
