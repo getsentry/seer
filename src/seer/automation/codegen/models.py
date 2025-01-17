@@ -1,6 +1,6 @@
 import datetime
 from enum import Enum
-from typing import List, Union
+from typing import List, Literal, Union
 
 from pydantic import BaseModel, Field
 
@@ -100,3 +100,9 @@ class CodePrReviewOutput(BaseComponentOutput):
         start_line: int
 
     comments: List[Comment]
+
+
+class CodecovTaskRequest:
+    data: CodegenPrReviewRequest | CodegenUnitTestsRequest
+    external_owner_id: str
+    request_type: Literal["unit-tests", "pr-review"]

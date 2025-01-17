@@ -9,6 +9,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
+from integrations.codecov.codecov_auth import CodecovAuthentication
 from seer.anomaly_detection.models.external import (
     DeleteAlertDataRequest,
     DeleteAlertDataResponse,
@@ -42,6 +43,7 @@ from seer.automation.autofix.tasks import (
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
+    CodecovTaskRequest,
     CodegenPrReviewRequest,
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
@@ -52,9 +54,10 @@ from seer.automation.codegen.models import (
     CodegenUnitTestsStateResponse,
 )
 from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
+from seer.automation.state import DbStateRunTypes
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
-from seer.automation.utils import raise_if_no_genai_consent
+from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected, resolve
@@ -261,6 +264,25 @@ def codegen_pr_review_state_endpoint(
     data: CodegenPrReviewStateRequest,
 ) -> CodegenPrReviewStateResponse:
     raise NotImplementedError("PR Review state is not implemented yet.")
+
+
+@json_api(blueprint, "/v1/automation/codecov-request")
+def codecov_request_endpoint(
+    data: CodecovTaskRequest,
+) -> CodegenPrReviewResponse | CodegenUnitTestsResponse:
+    CodecovAuthentication.authenticate_incoming_request(data)
+
+    is_valid = CodecovAuthentication.authenticate_codecov_app_install(
+        data.external_owner_id, data.data.repo.external_id
+    )
+
+    if not is_valid:
+        raise ConsentError(f"Invalid permissions for org {data.external_owner_id}.")
+
+    if data.request_type == DbStateRunTypes.PR_REVIEW:
+        return codegen_pr_review_endpoint(data.data)
+    elif data.request_type == DbStateRunTypes.UNIT_TEST:
+        return codegen_unit_tests_endpoint(data.data)
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")

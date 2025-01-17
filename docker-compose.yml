@@ -15,7 +15,7 @@ services:
         volumes:
             - pgdata:/var/lib/postgresql/data
         ports:
-            - "5433:5432"
+            - "5434:5432"
     test-db:
         image: pgvector/pgvector:pg14
         restart: always
