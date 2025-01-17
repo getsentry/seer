@@ -15,7 +15,7 @@ services:
         volumes:
             - pgdata:/var/lib/postgresql/data
         ports:
-            - "5434:5432"
+            - "5433:5432"
     test-db:
         image: pgvector/pgvector:pg14
         restart: always
@@ -66,12 +66,6 @@ services:
             - IGNORE_API_AUTH=1
         ports:
             - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
-networks:
-  default:
-    external:
-      name: mynet
-
-
 volumes:
     pgdata:
     pgdata_test:
