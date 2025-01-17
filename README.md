@@ -171,6 +171,26 @@ To use VCRs, add the `@pytest.mark.vcr()` decorator to your test.
 
 To record new VCRs, delete the existing cassettes and run the test.  Subsequent test runs will use the cassette instead of making requests.
 
+#### VCR Encryption
+
+You must not commit the raw VCRs to the repo.  Instead, you must encrypt them using `make vcr-encrypt` and decrypt them using `make vcr-decrypt`.
+
+##### Loading these keys into your GPG keychain from 1Password
+
+Install the 1Password CLI, and follow the setup instructions for [1Password CLI](https://developer.1password.com/docs/cli/get-started/).
+
+Load the keys into your GPG keychain:
+
+```bash
+op read "op://AI ML Team/GPG VCR Private Key/private.key" | gpg --import # Needed for decrypting
+op read "op://AI ML Team/GPG VCR Private Key/public.key" | gpg --import # Needed for encrypting
+```
+
+###### Using encrypted VCRs
+
+Before committing the VCRs, you must run `make vcr-encrypt` to encrypt them.
+
+If you want to run tests with VCRs enabled, you must run `make vcr-decrypt` to decrypt them.
 
 # Production
 

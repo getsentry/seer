@@ -148,3 +148,6 @@ dmypy.json
 
 # Codecov
 .artifacts/
+
+# Cassettes
+tests/cassettes/

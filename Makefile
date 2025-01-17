@@ -110,3 +110,13 @@ push-staging:
 	sentry-cli releases deploys "${SEER_STAGING_VERSION_SHA}" new -e staging
 	sentry-cli releases finalize "${SEER_STAGING_VERSION_SHA}"
 	sentry-cli releases set-commits "${SEER_STAGING_VERSION_SHA}" --auto || true
+
+.PHONY: vcr-encrypt
+vcr-encrypt: # Encrypts all vcr cassettes
+	chmod +x encrypt-vcr.sh
+	./encrypt-vcr.sh
+
+.PHONY: vcr-decrypt
+vcr-decrypt: # Decrypts all vcr cassettes
+	chmod +x decrypt-vcr.sh
+	./decrypt-vcr.sh
