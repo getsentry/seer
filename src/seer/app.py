@@ -287,11 +287,11 @@ def codecov_request_endpoint(
     if not is_valid:
         raise ConsentError(f"Invalid permissions for org {data.external_owner_id}.")
 
-    if data.request_type == DbStateRunTypes.PR_REVIEW:
+    if data.request_type == "pr-review":
         return codegen_pr_review_endpoint(data.data)
-    elif data.request_type == DbStateRunTypes.UNIT_TEST:
+    elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
-    return CodegenBaseResponse(success=False, message="Invalid request type")
+    raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")
