@@ -29,14 +29,17 @@ class CodeUnitTestOutput(BaseComponentOutput):
     diffs: list[FileChange]
 
 
-class CodegenUnitTestsRequest(BaseModel):
+class CodegenBaseRequest(BaseModel):
     repo: RepoDefinition
     pr_id: int  # The PR number
 
 
-class CodegenPrReviewRequest(BaseModel):
-    repo: RepoDefinition
-    pr_id: int  # The PR number
+class CodegenUnitTestsRequest(CodegenBaseRequest):
+    pass
+
+
+class CodegenPrReviewRequest(CodegenBaseRequest):
+    pass
 
 
 class CodegenContinuation(CodegenState):

@@ -47,18 +47,16 @@ from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCh
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
     CodecovTaskRequest,
+    CodegenBaseRequest,
     CodegenBaseResponse,
-    CodegenPrReviewRequest,
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
-    CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
 )
 from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
-from seer.automation.state import DbStateRunTypes
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
@@ -238,7 +236,7 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
 
 
 @json_api(blueprint, "/v1/automation/codegen/unit-tests")
-def codegen_unit_tests_endpoint(data: CodegenUnitTestsRequest) -> CodegenUnitTestsResponse:
+def codegen_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsResponse:
     return codegen_unittest(data)
 
 
@@ -259,7 +257,7 @@ def codegen_unit_tests_state_endpoint(
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")
-def codegen_pr_review_endpoint(data: CodegenPrReviewRequest) -> CodegenPrReviewResponse:
+def codegen_pr_review_endpoint(data: CodegenBaseRequest) -> CodegenPrReviewResponse:
     return codegen_pr_review(data)
 
 
