@@ -1,7 +1,7 @@
 import contextlib
 import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
-from typing import Optional
+from typing import Callable, Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
@@ -119,17 +119,24 @@ class AutofixAgent(LlmAgent):
             ),
         )
 
-    def get_completion(self, run_config: RunConfig, max_tries: int = 4):
+    def get_completion(
+        self,
+        run_config: RunConfig,
+        max_tries: int = 4,
+        sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
+    ):
         """
         Streams the preliminary output to the current step and only returns when output is complete.
 
-        The completion request is tried `max_tries` times if a retryable exception is encountered,
-        e.g, the Anthropic API is overloaded.
+        The completion request is retried `max_tries - 1` times if a retryable exception was just
+        raised, e.g, Anthropic's API is overloaded.
         """
         is_exception_retryable = getattr(
             run_config.model, "is_completion_exception_retryable", lambda _: False
         )
-        retrier = backoff_on_exception(is_exception_retryable, max_tries=max_tries)
+        retrier = backoff_on_exception(
+            is_exception_retryable, max_tries=max_tries, sleep_sec_scaler=sleep_sec_scaler
+        )
         get_completion_retryable = retrier(self._get_completion)
         return get_completion_retryable(run_config)
 
