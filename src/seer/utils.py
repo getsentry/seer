@@ -1,6 +1,7 @@
 import contextlib
 import functools
 import json
+import logging
 import random
 import time
 import weakref
@@ -9,6 +10,8 @@ from queue import Empty, Full, Queue
 from typing import Callable, Sequence
 
 from sqlalchemy.orm import DeclarativeBase, Session
+
+logger = logging.getLogger(__name__)
 
 
 def class_method_lru_cache(*lru_args, **lru_kwargs):
@@ -99,6 +102,10 @@ def backoff_on_exception(
                     last_exception = exception
                     if is_exception_retryable(exception):
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
+                        logger.info(
+                            f"Encountered {type(exception).__name__}: {exception}. Sleeping for "
+                            f"{sleep_sec} seconds before attempting retry {num_tries}/{max_tries}."
+                        )
                         time.sleep(sleep_sec)
                     else:
                         raise exception
