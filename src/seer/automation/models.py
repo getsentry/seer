@@ -570,7 +570,7 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}→ {node.get('function')}"
+            func_line = f"{indent_str}â†’ {node.get('function')}"
             location = f"{node.get('filename')}"
             func_line += f" ({location})"
 
@@ -712,6 +712,10 @@ class FilePatch(BaseModel):
 class FileChangeError(Exception):
     pass
 
+
+class FileNotFoundError(Exception):
+    """Raised when a file cannot be found in the repository at the specified commit."""
+    pass
 
 class FileChange(BaseModel):
     change_type: Literal["create", "edit", "delete"]

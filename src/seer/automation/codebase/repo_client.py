@@ -24,7 +24,8 @@ from github.Repository import Repository
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.utils import get_language_from_path
-from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
+from seer.automation.models import (FileChange, FilePatch, InitializationError, 
+    RepoDefinition, FileNotFoundError)
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -283,23 +284,98 @@ class RepoClient:
 
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
+
         return tmp_dir, tmp_repo_dir
 
+    def _validate_commit_sha(self, sha: str) -> bool:
+        """
+        Validates if a commit SHA exists in the repository.
+        
+        Args:
+            sha: The commit SHA to validate
+            
+        Returns:
+            bool: True if commit exists, False otherwise
+        """
+        try:
+            self.repo.get_commit(sha)
+            return True
+        except UnknownObjectException:
+            logger.warning(f"Commit SHA {sha} does not exist in repository {self.repo.full_name}")
+            return False
+        except GithubException as e:
+            logger.error(f"Error validating commit SHA {sha}: {str(e)}")
+            return False
+
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
-        logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
+        """
+        Gets the content of a file from the repository at the specified commit SHA.
+        
+        Args:
+            path: The path to the file in the repository
+            sha: Optional commit SHA to get the file from. Defaults to base_commit_sha
+            
+        Returns:
+            tuple[str | None, str]: Tuple of (file content, encoding)
+                                  Returns (None, "utf-8") if file not found or error occurs
+        """
         if sha is None:
             sha = self.base_commit_sha
+
+        logger.debug(
+            f"Getting file contents for path={path} in repo={self.repo.full_name} "
+            f"sha={sha} default_branch={self.get_default_branch()}"
+        )
+
+        # Validate commit SHA
+        if not self._validate_commit_sha(sha):
+            return None, "utf-8"
+
+        # Normalize path by removing leading/trailing slashes
+        normalized_path = path.strip('/')
+        
+        # Validate path is not empty after normalization
+        if not normalized_path:
+            logger.error("Invalid empty file path provided")
+            return None, "utf-8"
+
         try:
-            contents = self.repo.get_contents(path, ref=sha)
+            # First check if file exists in the commit
+            try:
+                valid_paths = self.get_valid_file_paths(sha)
+                if normalized_path not in valid_paths:
+                    logger.warning(
+                        f"File {normalized_path} does not exist in commit {sha} "
+                        f"for repository {self.repo.full_name}"
+                    )
+                    return None, "utf-8"
+            except GithubException as e:
+                logger.warning(f"Could not validate file path existence: {str(e)}")
+
+            contents = self.repo.get_contents(normalized_path, ref=sha)
 
             if isinstance(contents, list):
-                raise Exception(f"Expected a single ContentFile but got a list for path {path}")
+                raise Exception(f"Expected a single ContentFile but got a list for path {normalized_path}")
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
             return contents.decoded_content.decode(detected_encoding), detected_encoding
+        except UnknownObjectException as e:
+            logger.warning(
+                f"File not found: {normalized_path} in {self.repo.full_name} at {sha}. "
+                f"Error: {str(e)}"
+            )
+            return None, "utf-8"
+        except GithubException as e:
+            logger.error(
+                f"GitHub API error while getting {normalized_path} in {self.repo.full_name} "
+                f"at {sha}. Status: {e.status}, Error: {str(e)}"
+            )
+            return None, "utf-8"
         except Exception as e:
-            logger.exception(f"Error getting file contents: {e}")
-
+            logger.error(
+                f"Unexpected error getting {normalized_path} in {self.repo.full_name} "
+                f"at {sha}. Error: {str(e)}"
+            )
             return None, "utf-8"
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
