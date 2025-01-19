@@ -29,7 +29,7 @@ from seer.automation.state import LocalMemoryState
 
 class FlakyStream:
     """
-    Stream that raises a `retryable_exception` after `num_chunks_before_erroring`.
+    Stream that raises a `retryable_exception` after generating `num_chunks_before_erroring` chunks.
     """
 
     def __init__(
@@ -200,7 +200,7 @@ def test_bad_request_is_not_retried(autofix_agent: AutofixAgent, run_config: Run
             == "messages: at least one message is required"
         )
     else:
-        raise Exception(
+        raise TypeError(
             f"Unexpected exception type: {type(exception_info.value)}. "
             "Handle this in an elif block above."
         )
@@ -229,7 +229,6 @@ def test_provider_without_exception_indicator(autofix_agent: AutofixAgent, run_c
         assert not hasattr(run_config.model, "is_completion_exception_retryable")
         with pytest.raises(Exception) as exception_info:
             _ = autofix_agent.get_completion(run_config)
-    assert hasattr(run_config.model, "is_completion_exception_retryable")
     assert run_config.model.is_completion_exception_retryable(exception_info.value)
 
     # Test that if the API is unflaky and is_completion_exception_retryable isn't implemented,
