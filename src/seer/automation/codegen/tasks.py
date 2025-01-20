@@ -1,9 +1,8 @@
 from seer.automation.codegen.models import (
+    CodegenBaseRequest,
     CodegenContinuation,
-    CodegenPrReviewRequest,
     CodegenPrReviewResponse,
     CodegenStatus,
-    CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
 )
@@ -15,7 +14,7 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 
-def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[CodegenContinuation]:
+def create_initial_unittest_run(request: CodegenBaseRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.UNIT_TEST
     )
@@ -28,7 +27,7 @@ def create_initial_unittest_run(request: CodegenUnitTestsRequest) -> DbState[Cod
     return state
 
 
-def create_initial_pr_review_run(request: CodegenPrReviewRequest) -> DbState[CodegenContinuation]:
+def create_initial_pr_review_run(request: CodegenBaseRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_REVIEW
     )
@@ -42,7 +41,7 @@ def create_initial_pr_review_run(request: CodegenPrReviewRequest) -> DbState[Cod
 
 
 @inject
-def codegen_unittest(request: CodegenUnitTestsRequest, app_config: AppConfig = injected):
+def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = injected):
     state = create_initial_unittest_run(request)
 
     cur_state = state.get()
@@ -67,7 +66,7 @@ def get_unittest_state(request: CodegenUnitTestsStateRequest):
 
 
 @inject
-def codegen_pr_review(request: CodegenPrReviewRequest, app_config: AppConfig = injected):
+def codegen_pr_review(request: CodegenBaseRequest, app_config: AppConfig = injected):
     state = create_initial_pr_review_run(request)
 
     cur_state = state.get()
