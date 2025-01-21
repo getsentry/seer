@@ -183,7 +183,7 @@ Load the keys into your GPG keychain:
 
 ```bash
 op read "op://AI ML Team/GPG VCR Private Key/private.key" | gpg --import # Needed for decrypting
-op read "op://AI ML Team/GPG VCR Private Key/public.key" | gpg --import # Needed for encrypting
+op read "op://AI ML Team/GPG VCR Public Key/public.key" | gpg --import # Needed for encrypting
 ```
 
 ###### Using encrypted VCRs
