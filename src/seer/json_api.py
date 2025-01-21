@@ -115,6 +115,10 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                 except Exception as e:
                     sentry_sdk.capture_exception(e)
                     raise InternalServerError("Something went wrong with the Bearer token auth")
+            else:
+                sentry_sdk.capture_message(f"No auth header found for request to {request.url}")
+                # TODO: Actually raise unauthorized when we are sure we can enforce auth.
+                # raise Unauthorized("No auth header found")
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
