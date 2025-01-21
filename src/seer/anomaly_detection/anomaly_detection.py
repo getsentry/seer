@@ -314,7 +314,7 @@ class AnomalyDetection(BaseModel):
         ts_external: List[TimeSeriesPoint] = ts_with_history.current
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
-        # We are doing 4 detection operations, allocating 1/4th of the time budget for
+        # We are doing 4 detection operations, so allocating 1/4th of the time budget for each one.
         time_budget_ms = time_budget_ms // 4 if time_budget_ms else None
 
         # Run batch detect on history data
@@ -389,7 +389,9 @@ class AnomalyDetection(BaseModel):
             )
 
     @sentry_sdk.trace
-    def detect_anomalies(self, request: DetectAnomaliesRequest) -> DetectAnomaliesResponse:
+    def detect_anomalies(
+        self, request: DetectAnomaliesRequest, time_budget_ms: int = 4500
+    ) -> DetectAnomaliesResponse:
         """
         Main entry point for anomaly detection.
 
@@ -410,9 +412,13 @@ class AnomalyDetection(BaseModel):
             sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
             ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
-            ts, anomalies = self._combo_detect(request.context, request.config, time_budget_ms=4500)
+            ts, anomalies = self._combo_detect(
+                request.context, request.config, time_budget_ms=time_budget_ms
+            )
         else:
-            ts, anomalies = self._batch_detect(request.context, request.config, time_budget_ms=4500)
+            ts, anomalies = self._batch_detect(
+                request.context, request.config, time_budget_ms=time_budget_ms
+            )
         self._update_anomalies(ts, anomalies)
         return DetectAnomaliesResponse(success=True, timeseries=ts)
 

@@ -240,10 +240,10 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                         sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
                         sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
                         sentry_sdk.capture_message(
-                            "batch_detection_took_too_long",
+                            "stream_detection_took_too_long",
                             level="error",
                         )
-                        raise ServerError("Batch detection took too long")
+                        raise ServerError("Stream detection took too long")
 
                 # Update the stumpi stream processor with new data
                 stream.update(cur_val)
