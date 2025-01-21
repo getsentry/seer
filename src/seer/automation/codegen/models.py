@@ -43,7 +43,7 @@ class CodegenPrReviewRequest(CodegenBaseRequest):
 
 
 class CodegenContinuation(CodegenState):
-    request: Union[CodegenUnitTestsRequest, CodegenPrReviewRequest]
+    request: CodegenBaseRequest
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()
