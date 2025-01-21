@@ -12,21 +12,29 @@ check_gpg_key() {
     echo "Using GPG key: $GPG_KEY_ID"
 }
 
-# Function to get passphrase from 1Password
+# Function to get passphrase from 1Password or environment variable
 get_passphrase() {
-    # Check if op (1Password CLI) is installed
-    if ! command -v op &> /dev/null; then
-        echo "Error: 1Password CLI (op) is not installed. Please install it first."
-        exit 1
+    if [ "$CI" = "1" ]; then
+        if [ -z "$GPG_PASSPHRASE" ]; then
+            echo "Error: GPG_PASSPHRASE environment variable not set in CI"
+            exit 1
+        fi
+        echo "$GPG_PASSPHRASE"
+    else
+        # Check if op (1Password CLI) is installed
+        if ! command -v op &> /dev/null; then
+            echo "Error: 1Password CLI (op) is not installed. Please install it first."
+            exit 1
+        fi
+
+        echo "Reading passphrase from 1Password..."
+        passphrase=$(op read "op://AI ML Team/GPG VCR Passphrase/add more/password")
+
+        if [ -z "$passphrase" ]; then
+            echo "Error: Failed to read passphrase from 1Password"
+            exit 1
+        fi
+
+        echo "$passphrase"
     fi
-
-    echo "Reading passphrase from 1Password..."
-    passphrase=$(op read "op://AI ML Team/GPG VCR Passphrase/add more/password")
-
-    if [ -z "$passphrase" ]; then
-        echo "Error: Failed to read passphrase from 1Password"
-        exit 1
-    fi
-
-    echo "$passphrase"
 }
