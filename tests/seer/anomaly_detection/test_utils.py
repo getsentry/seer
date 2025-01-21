@@ -18,7 +18,7 @@ class LoadedSyntheticData(BaseModel):
     expected_types: Optional[List[str]] = Field(None)
     anomaly_starts: Optional[List[int]] = Field(None)
     anomaly_ends: Optional[List[int]] = Field(None)
-
+    filenames: Optional[List[str]] = Field(None)
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
@@ -81,6 +81,7 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
     anomaly_starts = []
     anomaly_ends = []
     expected_types = []
+    filenames = []
 
     # Load in time series JSON files in test_data
     for filename in os.listdir(directory):
@@ -126,7 +127,7 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
                 anomaly_starts.append(start)
                 anomaly_ends.append(end)
                 expected_types.append(expected_type)
-
+                filenames.append(filename)
     if include_anomaly_range:
         return LoadedSyntheticData(
             expected_types=expected_types,
@@ -136,7 +137,12 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
             window_sizes=window_sizes,
             anomaly_starts=anomaly_starts,
             anomaly_ends=anomaly_ends,
+            filenames=filenames,
         )
     return LoadedSyntheticData(
-        timeseries=timeseries, timestamps=timestamps, mp_dists=mp_dists, window_sizes=window_sizes
+        timeseries=timeseries,
+        timestamps=timestamps,
+        mp_dists=mp_dists,
+        window_sizes=window_sizes,
+        filenames=filenames,
     )

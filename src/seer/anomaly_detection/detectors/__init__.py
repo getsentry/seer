@@ -1,5 +1,7 @@
 from seer.anomaly_detection.detectors import (
     anomaly_detectors,
+    mp_boxcox_scorer,
+    mp_cascading_scorer,
     mp_scorers,
     mp_utils,
     normalizers,
@@ -15,8 +17,10 @@ WindowSizeSelector = window_size_selectors.WindowSizeSelector
 SuSSWindowSizeSelector = window_size_selectors.SuSSWindowSizeSelector
 FlagsAndScores = mp_scorers.FlagsAndScores
 MPScorer = mp_scorers.MPScorer
-MPCascadingScorer = mp_scorers.MPCascadingScorer
-
+MPCascadingScorer = mp_cascading_scorer.MPCascadingScorer
+LowVarianceScorer = mp_scorers.LowVarianceScorer
+MPBoxCoxScorer = mp_boxcox_scorer.MPBoxCoxScorer
+MPIQRScorer = mp_scorers.MPIQRScorer
 Normalizer = normalizers.Normalizer
 MinMaxNormalizer = normalizers.MinMaxNormalizer
 
