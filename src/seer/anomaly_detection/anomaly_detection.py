@@ -314,17 +314,16 @@ class AnomalyDetection(BaseModel):
         ts_external: List[TimeSeriesPoint] = ts_with_history.current
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
+        # We are doing 4 detection operations, allocating 1/4th of the time budget for
+        time_budget_ms = time_budget_ms // 4 if time_budget_ms else None
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
         historic_anomalies_suss = batch_detector.detect(
-            historic, config, time_budget_ms=time_budget_ms // 2 if time_budget_ms else None
+            historic, config, time_budget_ms=time_budget_ms
         )
         historic_anomalies_fixed = batch_detector.detect(
-            historic,
-            config,
-            window_size=10,
-            time_budget_ms=time_budget_ms // 2 if time_budget_ms else None,
+            historic, config, window_size=10, time_budget_ms=time_budget_ms
         )
 
         # Run stream detection on current data
@@ -337,7 +336,7 @@ class AnomalyDetection(BaseModel):
             original_flags=historic_anomalies_suss.original_flags,
         )
         streamed_anomalies_suss = stream_detector_suss.detect(
-            convert_external_ts_to_internal(ts_external), config
+            convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
         )
 
         # Fixed Window
@@ -349,7 +348,7 @@ class AnomalyDetection(BaseModel):
             original_flags=historic_anomalies_fixed.original_flags,
         )
         streamed_anomalies_fixed = stream_detector_fixed.detect(
-            convert_external_ts_to_internal(ts_external), config
+            convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
         )
 
         if trim_current_by > 0:
