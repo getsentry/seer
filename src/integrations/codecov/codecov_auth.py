@@ -7,7 +7,6 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from werkzeug.exceptions import Unauthorized
 
-INCOMING_REQUEST_SIGNATURE_HEADER = "X-HMAC-CODECOV-SIGNATURE"
 OUTGOING_REQUEST_SIGNATURE_HEADER = "HTTP-X-GEN-AI-AUTH-SIGNATURE"
 
 
