@@ -82,20 +82,16 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
 
         @inject
         def wrapper(config: AppConfig = injected) -> Any:
-            # raw_data = request.get_data()
+            raw_data = request.get_data()
             auth_header = request.headers.get("Authorization", "")
 
-            # if auth_header.startswith("Rpcsignature "):
-            # Optional for now during rollout, make this required after rollout.
             if auth_header.startswith("Rpcsignature "):
-                #     parts = auth_header.split()
-                #     if len(parts) != 2 or not compare_signature(
-                #         request.url, request.args.get("nonce", ""), raw_data, parts[1]
-                #     ):
-                #         raise Unauthorized(
-                #             f"Rpcsignature did not match for given url {request.url} and data"
-                #         )
-                pass
+                parts = auth_header.split()
+                if len(parts) != 2 or not compare_signature(
+                    body=raw_data,
+                    signature=parts[1],
+                ):
+                    raise Unauthorized(f"Rpcsignature did not match for call to {request.url}")
             elif auth_header.startswith("Bearer "):
                 token = auth_header.split()[1]
                 try:
@@ -118,8 +114,11 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                     raise Unauthorized("Invalid token")
                 except Exception as e:
                     sentry_sdk.capture_exception(e)
-                    print(e)
                     raise InternalServerError("Something went wrong with the Bearer token auth")
+            else:
+                sentry_sdk.capture_message(f"No auth header found for request to {request.url}")
+                # TODO: Actually raise unauthorized when we are sure we can enforce auth.
+                # raise Unauthorized("No auth header found")
 
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
@@ -150,17 +149,12 @@ def is_valid(payload: bytes, key: str, signature_data: str):
 
 
 @inject
-def compare_signature(
-    url: str, nonce: str, body: bytes, signature: str, config: AppConfig = injected
-) -> bool:
+def compare_signature(*, body: bytes, signature: str, config: AppConfig = injected) -> bool:
     """
     Compare request data + signature signed by one of the shared secrets.
     Once a key has been able to validate the signature other keys will
     not be attempted. We should only have multiple keys during key rotations.
     """
-    # During the transition, support running seer without the shared secrets.
-    if not signature:
-        return True
 
     secrets = config.JSON_API_SHARED_SECRETS
 
@@ -169,28 +163,10 @@ def compare_signature(
         return False
 
     _, signature_data = signature.split(":", 2)
+
     for key in secrets:
-        if nonce:
-            if is_valid(b"%s:%s" % (nonce.encode(), body), key, signature_data):
-                span = sentry_sdk.Hub.current.scope.span
-                if span:
-                    span.set_data("rpc_auth_additional_payload", "nonce")
-                return True
-        elif is_valid(
-            b"%s:%s"
-            % (
-                url.encode(),
-                body,
-            ),
-            key,
-            signature_data,
-        ):
-            span = sentry_sdk.Hub.current.scope.span
-            if span:
-                span.set_data("rpc_auth_additional_payload", "url")
+        if is_valid(body, key, signature_data):
             return True
-        else:
-            sentry_sdk.capture_message("Signature did not match hmac")
 
     sentry_sdk.capture_message("No signature matches found.")
     return False
