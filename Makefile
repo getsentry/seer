@@ -113,10 +113,10 @@ push-staging:
 
 .PHONY: vcr-encrypt
 vcr-encrypt: # Encrypts all vcr cassettes
-	chmod +x encrypt-vcr.sh
-	./encrypt-vcr.sh
+	chmod +x ./scripts/encrypt-vcr.sh
+	./scripts/encrypt-vcr.sh
 
 .PHONY: vcr-decrypt
 vcr-decrypt: # Decrypts all vcr cassettes
-	chmod +x decrypt-vcr.sh
-	./decrypt-vcr.sh
+	chmod +x ./scripts/decrypt-vcr.sh
+	./scripts/decrypt-vcr.sh

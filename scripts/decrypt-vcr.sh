@@ -3,19 +3,19 @@
 # Exit on any error
 set -e
 
-key_id="7360DA708B34E5473FA3133EDFE3D3229D824D99"
+# Source common functions
+source "$(dirname "$0")/vcr-common.sh"
+
+# Check GPG key
+check_gpg_key
+
+# Get passphrase
+passphrase=$(get_passphrase)
 
 # Create a temporary file to store counts
 temp_file=$(mktemp)
 echo "0" > "$temp_file"
 declare -a created_dirs
-
-# Check if GPG key exists
-if ! gpg --list-keys "$key_id" >/dev/null 2>&1; then
-    echo "Error: GPG key $key_id not found, you should follow the setup instructions to setup your GPG keys."
-    exit 1
-fi
-echo "Using GPG key: $key_id"
 
 # Find all _encrypted_cassettes directories under tests/
 find tests -type d -name "_encrypted_cassettes" | while read encrypted_dir; do
@@ -33,7 +33,7 @@ find tests -type d -name "_encrypted_cassettes" | while read encrypted_dir; do
 
         echo "Decrypting $decrypted_file"
         # Decrypt the file using GPG
-        gpg --default-key $key_id --sign-with $key_id --yes --batch --passphrase-file .env --decrypt --output "$decrypted_file" "$gpg_file" 2>/dev/null
+        gpg --default-key $GPG_KEY_ID --sign-with $GPG_KEY_ID --yes --batch --passphrase "$passphrase" --decrypt --output "$decrypted_file" "$gpg_file" 2>/dev/null
 
         # Increment count in temp file
         count=$(cat "$temp_file")

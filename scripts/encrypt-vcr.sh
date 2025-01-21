@@ -3,14 +3,14 @@
 # Exit on any error
 set -e
 
-key_id="7360DA708B34E5473FA3133EDFE3D3229D824D99"
+# Source common functions
+source "$(dirname "$0")/vcr-common.sh"
 
-# Check if GPG key exists
-if ! gpg --list-keys "$key_id" >/dev/null 2>&1; then
-    echo "Error: GPG key $key_id not found, you should follow the setup instructions to setup your GPG keys."
-    exit 1
-fi
-echo "Using GPG key: $key_id"
+# Check GPG key
+check_gpg_key
+
+# Get passphrase
+passphrase=$(get_passphrase)
 
 # Initialize a counter for the number of encrypted files
 encrypted_count=0
@@ -30,7 +30,7 @@ while IFS= read -r -d '' cassette_dir; do
 
         echo "Encrypting $yaml_file"
         # Encrypt the file using GPG with symmetric encryption
-        gpg --default-key $key_id --sign-with $key_id --yes --batch --passphrase-file .env --symmetric --output "$encrypted_file" "$yaml_file"
+        gpg --default-key $GPG_KEY_ID --sign-with $GPG_KEY_ID --yes --batch --passphrase "$passphrase" --symmetric --output "$encrypted_file" "$yaml_file"
 
         # Increment the counter
         ((encrypted_count++))
