@@ -91,9 +91,7 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                     body=raw_data,
                     signature=parts[1],
                 ):
-                    raise Unauthorized(
-                        f"Rpcsignature did not match for given url {request.url} and data"
-                    )
+                    raise Unauthorized(f"Rpcsignature did not match for call to {request.url}")
             elif auth_header.startswith("Bearer "):
                 token = auth_header.split()[1]
                 try:
@@ -116,7 +114,6 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
                     raise Unauthorized("Invalid token")
                 except Exception as e:
                     sentry_sdk.capture_exception(e)
-                    print(e)
                     raise InternalServerError("Something went wrong with the Bearer token auth")
 
             # Cached from ^^, this won't result in double read.
