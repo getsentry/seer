@@ -175,6 +175,8 @@ To record new VCRs, delete the existing cassettes and run the test.  Subsequent 
 
 You must not commit the raw VCRs to the repo.  Instead, you must encrypt them using `make vcr-encrypt` and decrypt them using `make vcr-decrypt`.
 
+If you don't have gpg installed, you can install it using `brew install gnupg`.
+
 ##### Loading these keys into your GPG keychain from 1Password
 
 Install the 1Password CLI, and follow the setup instructions for [1Password CLI](https://developer.1password.com/docs/cli/get-started/).
