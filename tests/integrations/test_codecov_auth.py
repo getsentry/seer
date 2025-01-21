@@ -81,7 +81,3 @@ class TestCodecovAuth(unittest.TestCase):
             external_owner_id, repo_service_id, config=DummyConfigOutgoing()
         )
         self.assertFalse(valid)
-
-
-if __name__ == "__main__":
-    unittest.main()
