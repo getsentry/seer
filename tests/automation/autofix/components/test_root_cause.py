@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import openai
 import pytest
 
 from seer.automation.agent.client import LlmClient
@@ -377,3 +378,51 @@ class TestRootCauseComponent:
         # Verify that the output is still generated but without line numbers
         assert output.causes[0].code_context[0].snippet.start_line is None
         assert output.causes[0].code_context[0].snippet.end_line is None
+
+    def test_root_cause_length_limit_fallback(self, component, mock_agent):
+        mock_agent.return_value.run.side_effect = [
+            "Some root cause analysis",
+        ]
+
+        mock_llm_client = MagicMock()
+        # First call raises LengthFinishReasonError
+        mock_llm_client.generate_structured.side_effect = [
+            openai.LengthFinishReasonError(completion=MagicMock()),
+            # Second call (with gpt-4o-mini) succeeds
+            LlmGenerateStructuredResponse(
+                parsed=MultipleRootCauseAnalysisOutputPrompt(
+                    cause=RootCauseAnalysisItemPrompt(
+                        title="Test Root Cause",
+                        description="Description",
+                        relevant_code=None,
+                    )
+                ),
+                metadata=LlmResponseMetadata(
+                    model="gpt-4o-mini",
+                    provider_name=LlmProviderType.OPENAI,
+                    usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                ),
+            ),
+        ]
+
+        module = Module()
+        module.constant(LlmClient, mock_llm_client)
+
+        with module:
+            output = component.invoke(MagicMock())
+
+        # Verify the output is correct
+        assert output.causes[0].title == "Test Root Cause"
+        assert output.causes[0].description == "Description"
+        assert output.causes[0].code_context is None
+
+        # Verify that generate_structured was called twice
+        assert mock_llm_client.generate_structured.call_count == 2
+
+        # Verify first call used gpt-4o-2024-08-06
+        first_call = mock_llm_client.generate_structured.call_args_list[0]
+        assert first_call[1]["model"].model_name == "gpt-4o-2024-08-06"
+
+        # Verify second call used gpt-4o-mini
+        second_call = mock_llm_client.generate_structured.call_args_list[1]
+        assert second_call[1]["model"].model_name == "gpt-4o-mini"

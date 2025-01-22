@@ -1,5 +1,7 @@
 import logging
 
+import openai
+import sentry_sdk
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
@@ -114,13 +116,26 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 self.context.event_manager.add_log("Cleaning up the findings...")
 
-                formatted_response = llm_client.generate_structured(
-                    messages=agent.memory,
-                    prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                    model=OpenAiProvider.model("gpt-4o-2024-08-06"),
-                    response_format=MultipleRootCauseAnalysisOutputPrompt,
-                    run_name="Root Cause Extraction & Formatting",
-                )
+                try:
+                    formatted_response = llm_client.generate_structured(
+                        messages=agent.memory,
+                        prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
+                        model=OpenAiProvider.model("gpt-4o-2024-08-06"),
+                        response_format=MultipleRootCauseAnalysisOutputPrompt,
+                        run_name="Root Cause Extraction & Formatting",
+                    )
+                except openai.LengthFinishReasonError:
+                    # Fallback to gpt-4o-mini when we hit length limits, as it has a 16k output window vs 4k for gpt-4o
+                    sentry_sdk.capture_message(
+                        "Falling back to smaller model due to length limits..."
+                    )
+                    formatted_response = llm_client.generate_structured(
+                        messages=agent.memory,
+                        prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
+                        model=OpenAiProvider.model("gpt-4o-mini"),
+                        response_format=MultipleRootCauseAnalysisOutputPrompt,
+                        run_name="Root Cause Extraction & Formatting (Fallback)",
+                    )
 
                 # Assign the ids to be the numerical indices of the causes and relevant code context
                 cause_model = formatted_response.parsed.cause.to_model()
