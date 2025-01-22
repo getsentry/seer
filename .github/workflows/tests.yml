@@ -48,7 +48,7 @@ jobs:
       - name: Decrypt VCR cassettes
         run: |
           pip install absl-py tink tink[gcpkms]
-          make vcr-decrypt GCP_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}
+          make vcr-decrypt
       - name: Build image
         run: |
           make update
