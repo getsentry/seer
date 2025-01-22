@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import tink
@@ -16,6 +17,7 @@ def main(argv):
 
     # Initialise Tink
     aead.register()
+    base_directory = os.getcwd()
 
     try:
         # `None` here is to using the default gcloud credentials
@@ -48,7 +50,9 @@ def main(argv):
 
                 # Encrypt the files
                 with open(yaml_file, "rb") as input_file:
-                    encrypted_data = env_aead.encrypt(input_file.read(), b"")
+                    # using the relative path as associated data
+                    associated_data = os.path.relpath(yaml_file, base_directory).encode("utf-8")
+                    encrypted_data = env_aead.encrypt(input_file.read(), associated_data)
 
                 # Write the encrypted data to the output file
                 with open(encrypted_file, "wb") as output_file:
@@ -68,7 +72,14 @@ def main(argv):
 
                 # Decrypt the files
                 with open(encrypted_file, "rb") as input_file:
-                    decrypted_data = env_aead.decrypt(input_file.read(), b"")
+                    # using the relative path of the unencrypted file as associated data
+                    associated_data = (
+                        os.path.relpath(encrypted_file, base_directory)
+                        .replace(".encrypted", "")
+                        .replace("_encrypted_cassettes", "cassettes")
+                        .encode("utf-8")
+                    )
+                    decrypted_data = env_aead.decrypt(input_file.read(), associated_data)
 
                 # Write the decrypted data to the output file
                 with open(decrypted_file, "wb") as output_file:
