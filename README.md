@@ -175,10 +175,9 @@ To record new VCRs, delete the existing cassettes and run the test.  Subsequent 
 
 You must not commit the raw VCRs to the repo.  Instead, you must encrypt them using `make vcr-encrypt` and decrypt them using `make vcr-decrypt`.
 
-Before first time running encryption or decryption, you will need to run `make vcr-encrypt-prep` to install the required library.
+Before first time running encryption or decryption, you will need to run `make vcr-encrypt-prep` to install the required libraries and authenticate with GCP.
 
-
-###### Using encrypted VCRs
+##### Using encrypted VCRs
 
 Before committing the VCRs, you must run `make vcr-encrypt` to encrypt them.
 

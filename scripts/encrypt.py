@@ -9,6 +9,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_enum("mode", None, ["encrypt", "decrypt"], "The operation to perform.")
 flags.DEFINE_string("kek_uri", None, "The Cloud KMS URI of the key encryption key.")
+flags.DEFINE_string("gcp_credentials", None, "The path to the GCP credentials file.")
 
 
 def main(argv):
@@ -19,7 +20,7 @@ def main(argv):
 
     try:
         # Read the GCP credentials and setup client
-        client = gcpkms.GcpKmsClient(FLAGS.kek_uri, None)
+        client = gcpkms.GcpKmsClient(FLAGS.kek_uri, FLAGS.gcp_credentials)
     except tink.TinkError as e:
         logging.exception("Error creating GCP KMS client: %s", e)
         return 1
