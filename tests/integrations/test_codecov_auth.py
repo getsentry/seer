@@ -1,6 +1,9 @@
-import unittest, hashlib, hmac, json, requests
+import hashlib
+import hmac
+import json
+import unittest
 from unittest.mock import MagicMock, patch
-from werkzeug.exceptions import Unauthorized
+
 from integrations.codecov.codecov_auth import CodecovAuthentication
 
 

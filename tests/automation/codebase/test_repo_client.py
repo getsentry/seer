@@ -5,7 +5,6 @@ from github import GithubException, UnknownObjectException
 from johen import generate
 from pydantic import ValidationError
 
-from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FileChange, RepoDefinition
 from seer.configuration import AppConfig

@@ -1,11 +1,11 @@
 import hashlib
 import hmac
 import json
+
 import requests
-from seer.automation.codegen.models import CodecovTaskRequest
+
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
-from werkzeug.exceptions import Unauthorized
 
 OUTGOING_REQUEST_SIGNATURE_HEADER = "HTTP-X-GEN-AI-AUTH-SIGNATURE"
 

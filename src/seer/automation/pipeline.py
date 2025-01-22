@@ -1,7 +1,7 @@
 import abc
 import logging
 import uuid
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 import sentry_sdk
 from celery import Task, signature
