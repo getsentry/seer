@@ -20,6 +20,8 @@ class BaseComponentOutput(BaseModel):
 
 
 BCR = TypeVar("BCR", bound=BaseComponentRequest)
+
+
 BCO = TypeVar("BCO", bound=BaseComponentOutput | BaseComponentXmlOutput)
 
 
