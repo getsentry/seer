@@ -121,8 +121,6 @@ vcr-encrypt-prep:
 vcr-encrypt: # Encrypts all vcr cassettes
 	python3 ./scripts/encrypt.py --mode=encrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption
 
-
 .PHONY: vcr-decrypt
 vcr-decrypt: # Decrypts all vcr cassettes
 	python3 ./scripts/encrypt.py --mode=decrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption
-	
