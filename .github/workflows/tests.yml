@@ -31,7 +31,6 @@ jobs:
           id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
           id_token_include_email: true
           create_credentials_file: true
-          project_id: ml-ai-420606 # explicit project id test
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
       - name: Fetch models
@@ -46,12 +45,6 @@ jobs:
           else
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           fi
-      - name: Decrypt VCR cassettes
-        # env:
-        #   GOOGLE_CLOUD_PROJECT: ml-ai-420606
-        run: |
-          pip install absl-py tink tink[gcpkms]
-          make vcr-decrypt
       - name: Build image
         run: |
           make update
@@ -61,6 +54,10 @@ jobs:
       - name: Validate no pending migrations
         run: |
           make check-no-pending-migrations
+      - name: Decrypt VCR cassettes
+        run: |
+          pip install absl-py tink tink[gcpkms]
+          make vcr-decrypt
       - name: Test with pytest
         run: |
           make test
