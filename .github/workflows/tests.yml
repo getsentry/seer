@@ -58,7 +58,7 @@ jobs:
       - name: Decrypt VCR cassettes
         run: |
           pip install absl-py tink tink[gcpkms]
-          make vcr-decrypt --gcp_credentials=$GOOGLE_APPLICATION_CREDENTIALS
+          make vcr-decrypt --gcp_credentials=$GOOGLE_GHA_CREDS_PATH
       - name: Test with pytest
         run: |
           make test
