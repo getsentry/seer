@@ -30,6 +30,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
+    comment_on_thread,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
@@ -186,6 +187,8 @@ def autofix_update_endpoint(
         restart_from_point_with_feedback(data)
     elif data.payload.type == AutofixUpdateType.UPDATE_CODE_CHANGE:
         update_code_change(data)
+    elif data.payload.type == AutofixUpdateType.COMMENT_THREAD:
+        comment_on_thread(data)
     return AutofixEndpointResponse(started=True, run_id=data.run_id)
 
 

@@ -114,6 +114,13 @@ class CodebaseChange(BaseModel):
     pull_request: Optional[CommittedPullRequestDetails] = None
 
 
+class CommentThread(BaseModel):
+    id: str
+    messages: list[Message] = []
+    is_completed: bool = False
+    selected_text: str | None = None
+
+
 class StepType(str, enum.Enum):
     ROOT_CAUSE_ANALYSIS = "root_cause_analysis"
     CHANGES = "changes"
@@ -136,6 +143,7 @@ class BaseStep(BaseModel):
 
     queued_user_messages: list[str] = []
     output_stream: str | None = None
+    active_comment_thread: CommentThread | None = None
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
@@ -153,18 +161,6 @@ class BaseStep(BaseModel):
             if isinstance(step, (DefaultStep, RootCauseStep, ChangesStep)) and step.id == id:
                 return step
         return None
-
-    @property
-    def description(self) -> str:
-        if self.type == StepType.DEFAULT and self.key == "root_cause_analysis_processing":
-            return "figuring out what is causing the issue (not thinking about solutions yet)"
-        elif self.type == StepType.DEFAULT and self.key == "plan":
-            return "coming up with a fix for the issue"
-        elif self.type == StepType.ROOT_CAUSE_ANALYSIS:
-            return "selecting the final root cause"
-        elif self.type == StepType.CHANGES:
-            return "writing the code changes to fix the issue"
-        return ""
 
     def find_or_add_child(self, base_step: "Step") -> "Step":
         existing = self.find_child(id=base_step.id)
@@ -364,6 +360,7 @@ class AutofixUpdateType(str, enum.Enum):
     USER_MESSAGE = "user_message"
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
     UPDATE_CODE_CHANGE = "update_code_change"
+    COMMENT_THREAD = "comment_thread"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -397,6 +394,7 @@ class AutofixRestartFromPointPayload(BaseModel):
     message: str
     step_index: int
     retain_insight_card_index: int | None = None
+    add_to_insights: bool = True
 
 
 class AutofixUpdateCodeChangePayload(BaseModel):
@@ -405,6 +403,15 @@ class AutofixUpdateCodeChangePayload(BaseModel):
     lines: list[Line]
     file_path: str
     repo_id: str | None = None
+
+
+class AutofixCommentThreadPayload(BaseModel):
+    type: Literal[AutofixUpdateType.COMMENT_THREAD]
+    thread_id: str
+    selected_text: str | None = None
+    message: str
+    step_index: int
+    retain_insight_card_index: int | None = None
 
 
 class AutofixUpdateRequest(BaseModel):
@@ -416,16 +423,12 @@ class AutofixUpdateRequest(BaseModel):
         AutofixUserMessagePayload,
         AutofixRestartFromPointPayload,
         AutofixUpdateCodeChangePayload,
+        AutofixCommentThreadPayload,
     ] = Field(discriminator="type")
 
 
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
-
-    def get_step_description(self) -> str:
-        if not self.steps:
-            return ""
-        return self.steps[-1].description
 
     def kill_all_processing_steps(self):
         for step in self.steps:

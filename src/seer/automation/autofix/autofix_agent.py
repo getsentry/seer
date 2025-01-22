@@ -220,8 +220,8 @@ class AutofixAgent(LlmAgent):
 
         insight_card, usage = create_insight_output(
             latest_thought=text,
-            task_description=step.description,
             past_insights=step.get_all_insights(),
+            step_type=step.key,
             memory=self.memory,
             generated_at_memory_index=generated_at_memory_index,
         )
