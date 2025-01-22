@@ -9,9 +9,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
-from integrations.codecov.codecov_auth import (
-    CodecovAuthentication,
-)
+from integrations.codecov.codecov_auth import CodecovAuthentication
 from seer.anomaly_detection.models.external import (
     DeleteAlertDataRequest,
     DeleteAlertDataResponse,

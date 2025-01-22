@@ -40,6 +40,7 @@ from seer.automation.autofix.tasks import (
     truncate_memory_to_match_insights,
     update_code_change,
 )
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FilePatch, Hunk, Line
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import resolve
@@ -70,6 +71,12 @@ def autofix_full_finished_run():
 def autofix_root_cause_run():
     with open("tests/data/autofix_root_cause_run.json") as f:
         return AutofixContinuation.model_validate_json(f.read())
+
+
+@pytest.fixture(autouse=True)
+def lru_clear():
+    yield
+    RepoClient.from_repo_definition.cache_clear()
 
 
 def test_get_state_by_group_id():
