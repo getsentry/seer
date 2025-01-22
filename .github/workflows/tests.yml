@@ -56,7 +56,7 @@ jobs:
           make check-no-pending-migrations
       - name: Decrypt VCR cassettes
         run: |
-          pip install absl-py tink tink[gcpkms]
+          pip install -r scripts/requirements.txt
           make vcr-decrypt
       - name: Test with pytest
         run: |

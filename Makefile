@@ -114,7 +114,7 @@ push-staging:
 
 .PHONY: vcr-encrypt-prep
 vcr-encrypt-prep:
-	pip install absl-py tink tink[gcpkms]
+	pip install -r scripts/requirements.txt
 	gcloud auth application-default login
 
 .PHONY: vcr-encrypt
