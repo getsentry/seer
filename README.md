@@ -180,8 +180,10 @@ Before first time running encryption or decryption, you will need to run `make v
 ##### Using encrypted VCRs
 
 Before committing the VCRs, you must run `make vcr-encrypt` to encrypt them.
+> By default, the `CLEAN=1` flag is set, so the encrypted cassettes will match exactly what you have in your local. If you want to not overwrite files, run `make vcr-encrypt CLEAN=0`.
 
 If you want to run tests with VCRs enabled, you must run `make vcr-decrypt` to decrypt them.
+> By default, the `CLEAN` flag is not set, so files in your local that don't exist in the repo will not be deleted. If you want your local to match exactly what is in the encrypted cassettes, run with `CLEAN=1`.
 
 # Production
 
