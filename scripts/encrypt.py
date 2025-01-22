@@ -1,3 +1,4 @@
+import hashlib
 import os
 from pathlib import Path
 
@@ -49,6 +50,7 @@ def main(argv):
 
     if FLAGS.mode == "encrypt":
         total_files = 0
+        skipped_files = 0
         # /tests/**/**/cassettes
         for cassette_dir in Path("tests").rglob("cassettes"):
             # Create corresponding _encrypted_cassettes directory if not exists
@@ -63,18 +65,38 @@ def main(argv):
                 encrypted_file = encrypted_dir / f"{yaml_file.name}.encrypted"
                 processed_files.add(encrypted_file.name)
 
-                print(f"Encrypting {yaml_file}")
-
-                # Encrypt the files
+                # Read the new content and calculate its hash
                 with open(yaml_file, "rb") as input_file:
-                    # using the relative path as associated data
+                    new_content = input_file.read()
+                    new_hash = hashlib.sha256(new_content).digest()
                     associated_data = os.path.relpath(yaml_file, base_directory).encode("utf-8")
-                    encrypted_data = env_aead.encrypt(input_file.read(), associated_data)
 
-                # Write the encrypted data to the output file
-                with open(encrypted_file, "wb") as output_file:
-                    output_file.write(encrypted_data)
-                total_files += 1
+                # Check if we need to encrypt by comparing hashes
+                needs_encryption = True
+                if encrypted_file.exists():
+                    try:
+                        # Try to decrypt existing file and compare hashes
+                        with open(encrypted_file, "rb") as existing_file:
+                            existing_decrypted = env_aead.decrypt(
+                                existing_file.read(), associated_data
+                            )
+                            existing_hash = hashlib.sha256(existing_decrypted).digest()
+                            if existing_hash == new_hash:
+                                print(f"Skipping {yaml_file} - content unchanged")
+                                needs_encryption = False
+                                skipped_files += 1
+                    except tink.TinkError:
+                        # If decryption fails, we'll re-encrypt
+                        pass
+
+                if needs_encryption:
+                    print(f"Encrypting {yaml_file}")
+                    # Encrypt the content
+                    encrypted_data = env_aead.encrypt(new_content, associated_data)
+                    # Write the encrypted data to the output file
+                    with open(encrypted_file, "wb") as output_file:
+                        output_file.write(encrypted_data)
+                    total_files += 1
 
             # Clean up orphaned files if --clean is set
             if FLAGS.clean:
@@ -84,9 +106,11 @@ def main(argv):
                         encrypted_file.unlink()
 
         print(f"\nTotal files encrypted: {total_files}")
+        print(f"Total files skipped: {skipped_files}")
 
     elif FLAGS.mode == "decrypt":
         total_files = 0
+        skipped_files = 0
         affected_folders = set()
         # /tests/**/**/_encrypted_cassettes
         for encrypted_dir in Path("tests").rglob("_encrypted_cassettes"):
