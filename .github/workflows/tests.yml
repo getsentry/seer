@@ -23,7 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - id: "auth"
-        if: github.event_name == 'push'
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
@@ -33,7 +32,6 @@ jobs:
           id_token_include_email: true
           create_credentials_file: true
       - name: Set up Cloud SDK
-        if: github.event_name == 'push'
         uses: google-github-actions/setup-gcloud@v1
       - name: Fetch models
         if: github.event_name == 'push'
