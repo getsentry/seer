@@ -41,13 +41,14 @@ def main(argv):
         logging.exception("Error creating primitive: %s", e)
         return 1
 
-    print(f"Encrypting mode: {FLAGS.mode}")
+    print(f"Mode: {FLAGS.mode}")
     if FLAGS.clean:
         print(
             "CLEAN is true. Will clean out the destination directory if files are not present in the source directory."
         )
 
     if FLAGS.mode == "encrypt":
+        total_files = 0
         # /tests/**/**/cassettes
         for cassette_dir in Path("tests").rglob("cassettes"):
             # Create corresponding _encrypted_cassettes directory if not exists
@@ -73,6 +74,7 @@ def main(argv):
                 # Write the encrypted data to the output file
                 with open(encrypted_file, "wb") as output_file:
                     output_file.write(encrypted_data)
+                total_files += 1
 
             # Clean up orphaned files if --clean is set
             if FLAGS.clean:
@@ -81,9 +83,14 @@ def main(argv):
                         print(f"Removing orphaned file {encrypted_file}")
                         encrypted_file.unlink()
 
+        print(f"\nTotal files encrypted: {total_files}")
+
     elif FLAGS.mode == "decrypt":
+        total_files = 0
+        affected_folders = set()
         # /tests/**/**/_encrypted_cassettes
         for encrypted_dir in Path("tests").rglob("_encrypted_cassettes"):
+            affected_folders.add(str(encrypted_dir.parent))
             # Create corresponding decrypted directory if not exists
             decrypted_dir = encrypted_dir.parent / "cassettes"
             decrypted_dir.mkdir(exist_ok=True)
@@ -112,6 +119,7 @@ def main(argv):
                 # Write the decrypted data to the output file
                 with open(decrypted_file, "wb") as output_file:
                     output_file.write(decrypted_data)
+                total_files += 1
 
             # Clean up orphaned files if --clean is set
             if FLAGS.clean:
@@ -119,6 +127,11 @@ def main(argv):
                     if decrypted_file.name not in processed_files:
                         print(f"Removing orphaned file {decrypted_file}")
                         decrypted_file.unlink()
+
+        print(f"\nTotal files decrypted: {total_files}")
+        print("\nAffected folders:")
+        for folder in sorted(affected_folders):
+            print(f"  - {folder}")
 
     else:
         logging.error(

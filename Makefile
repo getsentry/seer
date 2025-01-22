@@ -120,8 +120,8 @@ vcr-encrypt-prep:
 .PHONY: vcr-encrypt
 CLEAN:=1
 vcr-encrypt: # Encrypts all vcr cassettes
-	python3 ./scripts/encrypt.py --mode=encrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption $(if $(CLEAN),--clean,)
+	python3 ./scripts/encrypt.py --mode=encrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption $(if $(filter 0,$(CLEAN)),,--clean)
 
 .PHONY: vcr-decrypt
 vcr-decrypt: # Decrypts all vcr cassettes. Use make vcr-decrypt CLEAN=1 to include --clean flag
-	python3 ./scripts/encrypt.py --mode=decrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption $(if $(CLEAN),--clean,)
+	python3 ./scripts/encrypt.py --mode=decrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption $(if $(CLEAN) = 1,--clean,)
