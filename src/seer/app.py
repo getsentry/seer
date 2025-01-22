@@ -9,6 +9,9 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
+from integrations.codecov.codecov_auth import (
+    CodecovAuthentication,
+)
 from seer.anomaly_detection.models.external import (
     DeleteAlertDataRequest,
     DeleteAlertDataResponse,
@@ -42,11 +45,12 @@ from seer.automation.autofix.tasks import (
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import (
-    CodegenPrReviewRequest,
+    CodecovTaskRequest,
+    CodegenBaseRequest,
+    CodegenBaseResponse,
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
-    CodegenUnitTestsRequest,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
@@ -54,7 +58,7 @@ from seer.automation.codegen.models import (
 from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
-from seer.automation.utils import raise_if_no_genai_consent
+from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected, resolve
@@ -231,7 +235,7 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
 
 
 @json_api(blueprint, "/v1/automation/codegen/unit-tests")
-def codegen_unit_tests_endpoint(data: CodegenUnitTestsRequest) -> CodegenUnitTestsResponse:
+def codegen_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsResponse:
     return codegen_unittest(data)
 
 
@@ -252,7 +256,7 @@ def codegen_unit_tests_state_endpoint(
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")
-def codegen_pr_review_endpoint(data: CodegenPrReviewRequest) -> CodegenPrReviewResponse:
+def codegen_pr_review_endpoint(data: CodegenBaseRequest) -> CodegenPrReviewResponse:
     return codegen_pr_review(data)
 
 
@@ -261,6 +265,24 @@ def codegen_pr_review_state_endpoint(
     data: CodegenPrReviewStateRequest,
 ) -> CodegenPrReviewStateResponse:
     raise NotImplementedError("PR Review state is not implemented yet.")
+
+
+@json_api(blueprint, "/v1/automation/codecov-request")
+def codecov_request_endpoint(
+    data: CodecovTaskRequest,
+) -> CodegenBaseResponse:
+    is_valid = CodecovAuthentication.authenticate_codecov_app_install(
+        data.external_owner_id, data.data.repo.external_id
+    )
+
+    if not is_valid:
+        raise ConsentError(f"Invalid permissions for org {data.external_owner_id}.")
+
+    if data.request_type == "pr-review":
+        return codegen_pr_review_endpoint(data.data)
+    elif data.request_type == "unit-tests":
+        return codegen_unit_tests_endpoint(data.data)
+    raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")

@@ -1,4 +1,5 @@
 import abc
+import datetime
 import logging
 
 import numpy as np
@@ -225,7 +226,25 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             flags: list[AnomalyFlags] = []
             streamed_mp: list[list[float]] = []
             thresholds: list[list[Threshold]] = []
-            for cur_val, cur_timestamp in zip(timeseries.values, timeseries.timestamps):
+            time_allocated = (
+                datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
+            )
+            time_start = datetime.datetime.now()
+            batch_size = 10 if len(timeseries.values) > 10 else 1
+            for i, (cur_val, cur_timestamp) in enumerate(
+                zip(timeseries.values, timeseries.timestamps)
+            ):
+                if time_allocated is not None and i % batch_size == 0:
+                    time_elapsed = datetime.datetime.now() - time_start
+                    if time_allocated is not None and time_elapsed > time_allocated:
+                        sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
+                        sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
+                        sentry_sdk.capture_message(
+                            "stream_detection_took_too_long",
+                            level="error",
+                        )
+                        raise ServerError("Stream detection took too long")
+
                 # Update the stumpi stream processor with new data
                 stream.update(cur_val)
 
