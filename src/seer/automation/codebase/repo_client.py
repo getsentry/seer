@@ -193,7 +193,7 @@ class RepoClient:
         return pr_id
 
     @classmethod
-    @functools.cache
+    @functools.lru_cache(maxsize=8)
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
