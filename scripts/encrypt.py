@@ -10,6 +10,11 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_enum("mode", None, ["encrypt", "decrypt"], "The operation to perform.")
 flags.DEFINE_string("kek_uri", None, "The Cloud KMS URI of the key encryption key.")
+flags.DEFINE_boolean(
+    "clean",
+    False,
+    "Whether to remove files in the destination directory that don't exist in the source directory.",
+)
 
 
 def main(argv):
@@ -36,6 +41,12 @@ def main(argv):
         logging.exception("Error creating primitive: %s", e)
         return 1
 
+    print(f"Encrypting mode: {FLAGS.mode}")
+    if FLAGS.clean:
+        print(
+            "CLEAN is true. Will clean out the destination directory if files are not present in the source directory."
+        )
+
     if FLAGS.mode == "encrypt":
         # /tests/**/**/cassettes
         for cassette_dir in Path("tests").rglob("cassettes"):
@@ -43,10 +54,15 @@ def main(argv):
             encrypted_dir = cassette_dir.parent / "_encrypted_cassettes"
             encrypted_dir.mkdir(exist_ok=True)
 
+            # Keep track of processed files for cleanup
+            processed_files = set()
+
             # Find all yaml files in the cassette directory
             for yaml_file in cassette_dir.glob("*.yaml"):
-                print(f"Encrypting {yaml_file}")
                 encrypted_file = encrypted_dir / f"{yaml_file.name}.encrypted"
+                processed_files.add(encrypted_file.name)
+
+                print(f"Encrypting {yaml_file}")
 
                 # Encrypt the files
                 with open(yaml_file, "rb") as input_file:
@@ -58,17 +74,29 @@ def main(argv):
                 with open(encrypted_file, "wb") as output_file:
                     output_file.write(encrypted_data)
 
+            # Clean up orphaned files if --clean is set
+            if FLAGS.clean:
+                for encrypted_file in encrypted_dir.glob("*.encrypted"):
+                    if encrypted_file.name not in processed_files:
+                        print(f"Removing orphaned file {encrypted_file}")
+                        encrypted_file.unlink()
+
     elif FLAGS.mode == "decrypt":
         # /tests/**/**/_encrypted_cassettes
         for encrypted_dir in Path("tests").rglob("_encrypted_cassettes"):
-            # Create corresponding _decrypted_cassettes directory if not exists
+            # Create corresponding decrypted directory if not exists
             decrypted_dir = encrypted_dir.parent / "cassettes"
             decrypted_dir.mkdir(exist_ok=True)
 
+            # Keep track of processed files for cleanup
+            processed_files = set()
+
             # Find all encrypted files in the encrypted directory
             for encrypted_file in encrypted_dir.glob("*.encrypted"):
-                print(f"Decrypting {encrypted_file}")
                 decrypted_file = decrypted_dir / encrypted_file.name.replace(".encrypted", "")
+                processed_files.add(decrypted_file.name)
+
+                print(f"Decrypting {encrypted_file}")
 
                 # Decrypt the files
                 with open(encrypted_file, "rb") as input_file:
@@ -84,6 +112,14 @@ def main(argv):
                 # Write the decrypted data to the output file
                 with open(decrypted_file, "wb") as output_file:
                     output_file.write(decrypted_data)
+
+            # Clean up orphaned files if --clean is set
+            if FLAGS.clean:
+                for decrypted_file in decrypted_dir.glob("*.yaml"):
+                    if decrypted_file.name not in processed_files:
+                        print(f"Removing orphaned file {decrypted_file}")
+                        decrypted_file.unlink()
+
     else:
         logging.error(
             'Unsupported mode %s. Please choose "encrypt" or "decrypt".',
