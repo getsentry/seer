@@ -46,6 +46,10 @@ jobs:
           else
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           fi
+      - name: Decrypt VCR cassettes
+        run: |
+          pip install absl-py tink tink[gcpkms]
+          make vcr-decrypt GCP_CREDENTIALS=$GOOGLE_GHA_CREDS_PATH
       - name: Build image
         run: |
           make update
@@ -55,10 +59,6 @@ jobs:
       - name: Validate no pending migrations
         run: |
           make check-no-pending-migrations
-      - name: Decrypt VCR cassettes
-        run: |
-          pip install absl-py tink tink[gcpkms]
-          make vcr-decrypt --gcp_credentials=$GOOGLE_GHA_CREDS_PATH
       - name: Test with pytest
         run: |
           make test
