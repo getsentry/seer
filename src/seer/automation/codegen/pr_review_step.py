@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -9,12 +9,13 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
+from seer.automation.codegen.models import CodePrReviewRequest
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
 from seer.automation.codegen.step import CodegenStep
-from seer.automation.models import FileChange, RepoDefinition
+from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
+from seer.automation.state import DbStateRunTypes
 
 
 class PrReviewStepRequest(PipelineStepTaskRequest):
@@ -27,7 +28,7 @@ class PrReviewStepRequest(PipelineStepTaskRequest):
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 def pr_review_task(*args, request: dict[str, Any]):
-    PrReviewStep(request).invoke()
+    PrReviewStep(request, DbStateRunTypes.PR_REVIEW).invoke()
 
 
 class PrReviewStep(CodegenStep):

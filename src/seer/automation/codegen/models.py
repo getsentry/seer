@@ -1,6 +1,6 @@
 import datetime
 from enum import Enum
-from typing import List, Union
+from typing import List, Literal, Union
 
 from pydantic import BaseModel, Field
 
@@ -29,18 +29,21 @@ class CodeUnitTestOutput(BaseComponentOutput):
     diffs: list[FileChange]
 
 
-class CodegenUnitTestsRequest(BaseModel):
+class CodegenBaseRequest(BaseModel):
     repo: RepoDefinition
     pr_id: int  # The PR number
 
 
-class CodegenPrReviewRequest(BaseModel):
-    repo: RepoDefinition
-    pr_id: int  # The PR number
+class CodegenUnitTestsRequest(CodegenBaseRequest):
+    pass
+
+
+class CodegenPrReviewRequest(CodegenBaseRequest):
+    pass
 
 
 class CodegenContinuation(CodegenState):
-    request: Union[CodegenUnitTestsRequest, CodegenPrReviewRequest]
+    request: CodegenBaseRequest
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()
@@ -54,12 +57,16 @@ class CodeUnitTestRequest(BaseComponentRequest):
     codecov_client_params: dict = Field(default_factory=dict)
 
 
-class CodegenUnitTestsResponse(BaseModel):
+class CodegenBaseResponse(BaseModel):
     run_id: int
 
 
-class CodegenPrReviewResponse(BaseModel):
-    run_id: int
+class CodegenPrReviewResponse(CodegenBaseResponse):
+    pass
+
+
+class CodegenUnitTestsResponse(CodegenBaseResponse):
+    pass
 
 
 class CodegenUnitTestsStateRequest(BaseModel):
@@ -100,3 +107,9 @@ class CodePrReviewOutput(BaseComponentOutput):
         start_line: int
 
     comments: List[Comment]
+
+
+class CodecovTaskRequest(BaseModel):
+    data: CodegenPrReviewRequest | CodegenUnitTestsRequest
+    external_owner_id: str
+    request_type: Literal["unit-tests", "pr-review"]
