@@ -55,6 +55,9 @@ jobs:
       - name: Validate no pending migrations
         run: |
           make check-no-pending-migrations
+      - name: Decrypt VCR cassettes
+        run: |
+          make vcr-decrypt
       - name: Test with pytest
         run: |
           make test

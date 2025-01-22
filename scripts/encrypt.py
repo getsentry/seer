@@ -1,0 +1,78 @@
+from pathlib import Path
+
+import tink
+from absl import app, flags, logging
+from tink import aead
+from tink.integration import gcpkms
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_enum("mode", None, ["encrypt", "decrypt"], "The operation to perform.")
+flags.DEFINE_string("kek_uri", None, "The Cloud KMS URI of the key encryption key.")
+
+
+def main(argv):
+    del argv  # Unused.
+
+    # Initialise Tink
+    aead.register()
+
+    try:
+        # Read the GCP credentials and setup client
+        client = gcpkms.GcpKmsClient(FLAGS.kek_uri, None)
+    except tink.TinkError as e:
+        logging.exception("Error creating GCP KMS client: %s", e)
+        return 1
+
+    # Create envelope AEAD primitive using AES256 GCM for encrypting the data
+    try:
+        remote_aead = client.get_aead(FLAGS.kek_uri)
+        env_aead = aead.KmsEnvelopeAead(aead.aead_key_templates.AES256_GCM, remote_aead)
+    except tink.TinkError as e:
+        logging.exception("Error creating primitive: %s", e)
+        return 1
+
+    if FLAGS.mode == "encrypt":
+        for cassette_dir in Path("tests").rglob("cassettes"):
+            # Create corresponding _encrypted_cassettes directory
+            encrypted_dir = cassette_dir.parent / "_encrypted_cassettes"
+            encrypted_dir.mkdir(exist_ok=True)
+
+            # Find all yaml files in the cassette directory
+            for yaml_file in cassette_dir.glob("*.yaml"):
+                print(f"Encrypting {yaml_file}")
+                # Create encrypted file path
+                encrypted_file = encrypted_dir / f"{yaml_file.name}.encrypted"
+
+                with open(yaml_file, "rb") as input_file:
+                    encrypted_data = env_aead.encrypt(input_file.read(), b"")
+                with open(encrypted_file, "wb") as output_file:
+                    output_file.write(encrypted_data)
+
+    elif FLAGS.mode == "decrypt":
+        for encrypted_dir in Path("tests").rglob("_encrypted_cassettes"):
+            # Create corresponding _decrypted_cassettes directory
+
+            decrypted_dir = encrypted_dir.parent / "cassettes"
+            decrypted_dir.mkdir(exist_ok=True)
+
+            # Find all encrypted files in the encrypted directory
+            for encrypted_file in encrypted_dir.glob("*.encrypted"):
+                print(f"Decrypting {encrypted_file}")
+                decrypted_file = decrypted_dir / encrypted_file.name.replace(".encrypted", "")
+                with open(encrypted_file, "rb") as input_file:
+                    decrypted_data = env_aead.decrypt(input_file.read(), b"")
+                with open(decrypted_file, "wb") as output_file:
+                    output_file.write(decrypted_data)
+
+    else:
+        logging.error(
+            'Unsupported mode %s. Please choose "encrypt" or "decrypt".',
+            FLAGS.mode,
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    flags.mark_flags_as_required(["mode", "kek_uri"])
+    app.run(main)

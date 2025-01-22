@@ -111,12 +111,18 @@ push-staging:
 	sentry-cli releases finalize "${SEER_STAGING_VERSION_SHA}"
 	sentry-cli releases set-commits "${SEER_STAGING_VERSION_SHA}" --auto || true
 
+
+.PHONY: vcr-encrypt-prep
+vcr-encrypt-prep:
+	pip install absl-py tink tink[gcpkms]
+	gcloud auth login
+
 .PHONY: vcr-encrypt
 vcr-encrypt: # Encrypts all vcr cassettes
-	chmod +x ./scripts/encrypt-vcr.sh
-	./scripts/encrypt-vcr.sh
+	python3 ./scripts/encrypt.py --mode=encrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption
+
 
 .PHONY: vcr-decrypt
 vcr-decrypt: # Decrypts all vcr cassettes
-	chmod +x ./scripts/decrypt-vcr.sh
-	./scripts/decrypt-vcr.sh
+	python3 ./scripts/encrypt.py --mode=decrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption
+	
