@@ -30,6 +30,7 @@ from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 
 from seer.automation.agent.models import (
+    BaseModel,
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
     LlmModelDefaultConfig,
