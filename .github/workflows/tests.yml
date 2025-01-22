@@ -23,7 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - id: "auth"
-        if: github.event_name == 'push'
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
@@ -31,8 +30,8 @@ jobs:
           token_format: "id_token"
           id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
           id_token_include_email: true
+          create_credentials_file: true
       - name: Set up Cloud SDK
-        if: github.event_name == 'push'
         uses: google-github-actions/setup-gcloud@v1
       - name: Fetch models
         if: github.event_name == 'push'
@@ -55,6 +54,10 @@ jobs:
       - name: Validate no pending migrations
         run: |
           make check-no-pending-migrations
+      - name: Decrypt VCR cassettes
+        run: |
+          pip install -r scripts/requirements.txt
+          make vcr-decrypt
       - name: Test with pytest
         run: |
           make test

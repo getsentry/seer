@@ -171,6 +171,17 @@ To use VCRs, add the `@pytest.mark.vcr()` decorator to your test.
 
 To record new VCRs, delete the existing cassettes and run the test.  Subsequent test runs will use the cassette instead of making requests.
 
+#### VCR Encryption
+
+You must not commit the raw VCRs to the repo.  Instead, you must encrypt them using `make vcr-encrypt` and decrypt them using `make vcr-decrypt`.
+
+Before first time running encryption or decryption, you will need to run `make vcr-encrypt-prep` to install the required libraries and authenticate with GCP.
+
+##### Using encrypted VCRs
+
+Before committing the VCRs, you must run `make vcr-encrypt` to encrypt them.
+
+If you want to run tests with VCRs enabled, you must run `make vcr-decrypt` to decrypt them.
 
 # Production
 

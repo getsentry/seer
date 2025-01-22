@@ -1,0 +1,2 @@
+absl-py==2.1.0
+tink[gcpkms]==1.10.0
