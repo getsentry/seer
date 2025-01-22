@@ -457,12 +457,42 @@ class TestAnomalyDetection(unittest.TestCase):
             organization_id=1, project_id=1, config=config, context=context
         )
 
-        response = AnomalyDetection().detect_anomalies(request=request)
+        response = AnomalyDetection().detect_anomalies(request=request, time_budget_ms=10000)
 
         assert isinstance(response, DetectAnomaliesResponse)
         assert isinstance(response.timeseries, list)
         assert len(response.timeseries) == n
         assert isinstance(response.timeseries[0], TimeSeriesPoint)
+
+    def test_detect_anomalies_combo_large_current_timeout(self):
+
+        config = AnomalyDetectionConfig(
+            time_period=60, sensitivity="low", direction="both", expected_seasonality="auto"
+        )
+
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+        ts_history = loaded_synthetic_data.timeseries[0][:180]
+        n = 400
+
+        # Generate new observation window of n points which are the same as the last point
+        ts_current = []
+        for j in range(1, n + 1):
+            ts_current.append(
+                TimeSeriesPoint(timestamp=len(ts_history) + j, value=ts_history[-1].value)
+            )
+
+        context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
+
+        request = DetectAnomaliesRequest(
+            organization_id=1, project_id=1, config=config, context=context
+        )
+
+        # Test that detection with small time budget raises timeout error
+        with self.assertRaises(ServerError) as e:
+            AnomalyDetection().detect_anomalies(request=request, time_budget_ms=400)
+        assert "Stream detection took too long" in str(e.exception)
 
     def test_detect_anomalies_combo_insufficient_history(self):
 
