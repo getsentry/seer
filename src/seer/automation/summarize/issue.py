@@ -58,7 +58,7 @@ def score_issue_summary(issue_summary: IssueSummary) -> SummarizeIssueScores:
     # Extract the normalized score for the positive confidence
     # This score isn't a calibrated probability, but it's slightly useful with a threshold
 
-    possible_cause_novelty: np.float64 = 1 - scoring.cosine_similarity(
+    possible_cause_novelty = 1 - scoring.cosine_similarity(
         embedding_possible_cause, embedding_whats_wrong
     )
 
