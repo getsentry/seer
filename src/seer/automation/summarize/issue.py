@@ -1,18 +1,21 @@
 import textwrap
+from functools import cache
 
+import numpy as np
+import numpy.typing as npt
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.models import EventDetails
-from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
+from seer.automation.summarize import scoring
+from seer.automation.summarize.models import (
+    SummarizeIssueRequest,
+    SummarizeIssueResponse,
+    SummarizeIssueScores,
+)
 from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
-
-
-class Step(BaseModel):
-    reasoning: str
-    justification: str
 
 
 class IssueSummary(BaseModel):
@@ -22,11 +25,49 @@ class IssueSummary(BaseModel):
     possible_cause: str
 
 
+class IssueSummaryWithScores(IssueSummary):
+    scores: SummarizeIssueScores
+
+
+@cache
+def _confidence_embeddings_cause() -> npt.NDArray[np.float64]:
+    return scoring.embed_texts(["The cause is uncertain.", "The cause is certain."])
+
+
+def score_issue_summary(issue_summary: IssueSummary) -> SummarizeIssueScores:
+    # Embed everything we need once to minimize network requests.
+    embedding_possible_cause_for_confidence, embedding_possible_cause, embedding_whats_wrong = (
+        scoring.embed_texts(
+            [
+                f"Cause: {issue_summary.possible_cause}",
+                issue_summary.possible_cause,
+                issue_summary.whats_wrong,
+            ]
+        )
+    )
+
+    embeddings_confidence = _confidence_embeddings_cause()
+    possible_cause_confidence = scoring.predict_proba(
+        embedding_possible_cause_for_confidence, embeddings_confidence
+    )[..., -1]
+    # Extract the normalized score for the positive confidence
+    # This score isn't a calibrated probability, but it's slightly useful with a threshold
+
+    possible_cause_novelty: np.float64 = 1 - scoring.cosine_similarity(
+        embedding_possible_cause, embedding_whats_wrong
+    )
+
+    return SummarizeIssueScores(
+        possible_cause_confidence=possible_cause_confidence.item(),
+        possible_cause_novelty=possible_cause_novelty,
+    )
+
+
 @observe(name="Summarize Issue")
 @inject
 def summarize_issue(
     request: SummarizeIssueRequest, llm_client: LlmClient = injected
-) -> tuple[SummarizeIssueResponse, IssueSummary]:
+) -> tuple[SummarizeIssueResponse, IssueSummaryWithScores]:
     event_details = EventDetails.from_event(request.issue.events[0])
     connected_event_details = (
         [
@@ -88,15 +129,21 @@ def summarize_issue(
         timeout=7.0,
     )
 
+    issue_summary = completion.parsed
+    issue_summary_with_scores = IssueSummaryWithScores(
+        **issue_summary.model_dump(), scores=score_issue_summary(issue_summary)
+    )
+
     return (
         SummarizeIssueResponse(
             group_id=request.group_id,
-            headline=completion.parsed.title,
-            whats_wrong=completion.parsed.whats_wrong,
-            trace=completion.parsed.session_related_issues,
-            possible_cause=completion.parsed.possible_cause,
+            headline=issue_summary_with_scores.title,
+            whats_wrong=issue_summary_with_scores.whats_wrong,
+            trace=issue_summary_with_scores.session_related_issues,
+            possible_cause=issue_summary_with_scores.possible_cause,
+            scores=issue_summary_with_scores.scores,
         ),
-        completion.parsed,
+        issue_summary_with_scores,
     )
 
 
