@@ -285,7 +285,22 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
+
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
+        """
+        Returns the content and encoding of a single file.
+        
+        Args:
+            path: The file path to get content from
+            sha: Optional commit SHA to get contents from (defaults to base_commit_sha)
+        
+        Returns:
+            Tuple of (file_content, encoding). If file cannot be read, returns (None, 'utf-8')
+        
+        Raises:
+            Exception: If the path points to a directory instead of a file. Use get_directory_contents()
+                      for directory operations.
+        """
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
@@ -293,13 +308,17 @@ class RepoClient:
             contents = self.repo.get_contents(path, ref=sha)
 
             if isinstance(contents, list):
-                raise Exception(f"Expected a single ContentFile but got a list for path {path}")
+                raise Exception(
+                    f"Path '{path}' points to a directory. Use get_directory_contents() to list directory contents."
+                )
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
             return contents.decoded_content.decode(detected_encoding), detected_encoding
         except Exception as e:
-            logger.exception(f"Error getting file contents: {e}")
-
+            if isinstance(e, UnknownObjectException):
+                logger.warning(f"File not found at path {path}")
+            else:
+                logger.exception(f"Error getting file contents: {e}")
             return None, "utf-8"
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
