@@ -192,17 +192,14 @@ def test_bad_request_is_not_retried(autofix_agent: AutofixAgent, run_config: Run
     autofix_agent.memory = []  # bad request b/c there needs to be at least one message
     with pytest.raises(Exception) as exception_info:
         _ = autofix_agent.get_completion(run_config)
-    assert not run_config.model.is_completion_exception_retryable(exception_info.value)
-    if isinstance(exception_info.value, anthropic.BadRequestError):
-        assert exception_info.value.status_code == 400
-        assert (
-            exception_info.value.body["error"]["message"]
-            == "messages: at least one message is required"
-        )
+    exception = exception_info.value
+    assert not run_config.model.is_completion_exception_retryable(exception)
+    if isinstance(exception, anthropic.BadRequestError):
+        assert exception.status_code == 400
+        assert exception.body["error"]["message"] == "messages: at least one message is required"
     else:
         raise TypeError(
-            f"Unexpected exception type: {type(exception_info.value)}. "
-            "Handle this in an elif block above."
+            f"Unexpected exception type: {type(exception)}. Handle this in an elif block above."
         )
 
 
@@ -252,3 +249,20 @@ def test_retrying_succeeds(autofix_agent: AutofixAgent, run_config: RunConfig):
     assert response.message.content.endswith("I am an AI language model and I follow instructions.")
     # Test start of string to ensure the completion doesn't include the chunks from previous
     # completions which failed during streaming.
+
+
+@pytest.mark.vcr()
+def test_max_tries_exceeded(autofix_agent: AutofixAgent, run_config: RunConfig):
+    if not isinstance(run_config.model, AnthropicProvider):
+        pytest.skip("This test was already ran for Anthropic. Skipping to avoid redundancy.")
+
+    assert isinstance(run_config.model, FlakyProvider)
+    run_config.model._max_num_flaky_clients = 3
+
+    with pytest.raises(Exception) as exception_info:
+        _ = autofix_agent.get_completion(
+            run_config,
+            sleep_sec_scaler=lambda _: 0.1,
+            max_tries=run_config.model._max_num_flaky_clients,
+        )
+    assert run_config.model.is_completion_exception_retryable(exception_info.value)
