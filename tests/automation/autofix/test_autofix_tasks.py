@@ -8,6 +8,7 @@ from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
+    AutofixCommentThreadPayload,
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
     AutofixRequest,
@@ -20,6 +21,7 @@ from seer.automation.autofix.models import (
     AutofixUserMessagePayload,
     ChangesStep,
     CodebaseChange,
+    CommentThread,
     DefaultStep,
     InsightSharingOutput,
     RootCauseStep,
@@ -29,6 +31,7 @@ from seer.automation.autofix.steps.root_cause_step import RootCauseStep as RootC
 from seer.automation.autofix.steps.root_cause_step import RootCauseStepRequest
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
+    comment_on_thread,
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
@@ -1003,3 +1006,169 @@ def test_update_code_change_non_changes_step():
     updated_state = get_autofix_state(run_id=1)
     assert updated_state is not None
     assert isinstance(updated_state.get().steps[-1], DefaultStep)
+
+
+@pytest.mark.vcr()
+def test_comment_on_thread_creates_new_thread():
+    # Create initial state with a step
+    state = next(generate(AutofixContinuation))
+    step = DefaultStep(title="Test Step", status=AutofixStatus.COMPLETED)
+    state.steps = [step]
+
+    # Store state in database
+    with Session() as session:
+        session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+        session.commit()
+
+    # Create request with new thread
+    request = AutofixUpdateRequest(
+        run_id=1,
+        payload=AutofixCommentThreadPayload(
+            type=AutofixUpdateType.COMMENT_THREAD,
+            thread_id="new_thread",
+            step_index=0,
+            message="Test comment",
+            selected_text="Test selection",
+        ),
+    )
+
+    comment_on_thread(request)
+
+    # Verify thread was created
+    updated_state = get_autofix_state(run_id=1)
+    assert updated_state is not None
+    updated_step = updated_state.get().steps[0]
+    assert updated_step.active_comment_thread is not None
+    assert updated_step.active_comment_thread.id == "new_thread"
+    assert updated_step.active_comment_thread.selected_text == "Test selection"
+    assert len(updated_step.active_comment_thread.messages) == 2
+    assert updated_step.active_comment_thread.messages[0].content == "Test comment"
+    # Don't assert exact response content since it may vary
+    assert updated_step.active_comment_thread.messages[1].role == "assistant"
+    assert updated_step.active_comment_thread.messages[1].content
+
+
+@pytest.mark.vcr()
+def test_comment_on_thread_updates_existing_thread():
+    # Create initial state with a step that has an existing thread
+    state = next(generate(AutofixContinuation))
+    step = DefaultStep(
+        title="Test Step",
+        status=AutofixStatus.COMPLETED,
+        active_comment_thread=CommentThread(
+            id="existing_thread",
+            selected_text="Original selection",
+            messages=[
+                Message(role="user", content="Previous comment"),
+                Message(role="assistant", content="Previous response"),
+            ],
+        ),
+    )
+    state.steps = [step]
+
+    # Store state in database
+    with Session() as session:
+        session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+        session.commit()
+
+    # Create request for existing thread
+    request = AutofixUpdateRequest(
+        run_id=1,
+        payload=AutofixCommentThreadPayload(
+            type=AutofixUpdateType.COMMENT_THREAD,
+            thread_id="existing_thread",
+            step_index=0,
+            message="New comment",
+            selected_text="Updated selection",
+        ),
+    )
+
+    comment_on_thread(request)
+
+    # Verify thread was updated
+    updated_state = get_autofix_state(run_id=1)
+    assert updated_state is not None
+    updated_step = updated_state.get().steps[0]
+    assert updated_step.active_comment_thread is not None
+    assert updated_step.active_comment_thread.id == "existing_thread"
+    assert updated_step.active_comment_thread.selected_text == "Updated selection"
+    assert len(updated_step.active_comment_thread.messages) == 4
+    assert updated_step.active_comment_thread.messages[-2].content == "New comment"
+    assert updated_step.active_comment_thread.messages[-1].role == "assistant"
+    assert updated_step.active_comment_thread.messages[-1].content
+
+
+@pytest.mark.vcr()
+def test_comment_on_thread_with_action_requested(autofix_root_cause_run: AutofixContinuation):
+    # Set up initial state with a step that has a comment thread
+    autofix_root_cause_run.steps = autofix_root_cause_run.steps[:1]  # Keep only first step
+    step = autofix_root_cause_run.steps[0]
+    step.active_comment_thread = CommentThread(
+        id="thread_with_action",
+        selected_text="Test selection",
+        messages=[],
+    )
+    step.insights = []
+
+    # Store state in database
+    with Session() as session:
+        session.add(
+            DbRunState(
+                id=autofix_root_cause_run.run_id,
+                group_id=1,
+                value=autofix_root_cause_run.model_dump(mode="json"),
+            )
+        )
+        session.commit()
+
+    # Set up memory context
+    context = AutofixContext.from_run_id(autofix_root_cause_run.run_id)
+    context.store_memory(
+        "root_cause_analysis",
+        [
+            Message(content="Initial analysis", role="user"),
+            Message(content="Initial response", role="assistant"),
+        ],
+    )
+
+    # Create request
+    request = AutofixUpdateRequest(
+        run_id=autofix_root_cause_run.run_id,
+        payload=AutofixCommentThreadPayload(
+            type=AutofixUpdateType.COMMENT_THREAD,
+            thread_id="thread_with_action",
+            step_index=0,
+            message="Please revise the analysis based on this feedback. Action is needed.",
+            selected_text="Test selection",
+            retain_insight_card_index=-1,
+        ),
+    )
+
+    with eager_celery():
+        comment_on_thread(request)
+
+    # Verify thread was marked as completed
+    updated_state = get_autofix_state(run_id=autofix_root_cause_run.run_id)
+    assert updated_state is not None
+    updated_step = updated_state.get().steps[0]
+    assert updated_step.active_comment_thread is not None
+    assert updated_step.active_comment_thread.is_completed is True
+
+    # Verify memory was updated correctly
+    new_run_memory = context.get_memory("root_cause_analysis")
+    assert len(new_run_memory) > 2
+    assert "Please revise" in new_run_memory[-2].content
+    assert new_run_memory[-1].role == "assistant"
+
+
+def test_comment_on_thread_invalid_payload():
+    request = AutofixUpdateRequest(
+        run_id=1,
+        payload=AutofixUserMessagePayload(
+            type=AutofixUpdateType.USER_MESSAGE,
+            text="Invalid payload",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Invalid payload type for comment_on_thread"):
+        comment_on_thread(request)

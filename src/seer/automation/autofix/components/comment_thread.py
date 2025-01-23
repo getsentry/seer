@@ -27,7 +27,7 @@ class CommentThreadPrompts:
         return "You were an principle engineer responsible for debugging and fixing an issue in a codebase. You have memory of the previous conversation and analysis. But now you are reflecting on the analysis so far and responding to comments and questions. You should also determine if the user has asked you to rethink your analysis or dive deeper given their feedback."
 
     @staticmethod
-    def format_default_msg(selected_text: str, thread_memory: list[Message]) -> str:
+    def format_default_msg(selected_text: str | None, thread_memory: list[Message]) -> str:
         selected_text = (
             f'the following statement from the analysis so far: "{selected_text}"'
             if selected_text
@@ -66,6 +66,7 @@ class CommentThreadComponent(BaseComponent[CommentThreadRequest, CommentThreadOu
 
         if data is None:
             return CommentThreadOutput(
-                response="Sorry, I'm not sure what to say.", action_for_rethink_determined=False
+                comment_in_response="Sorry, I'm not sure what to say.",
+                action_requested=False,
             )
         return data
