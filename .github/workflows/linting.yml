@@ -1,59 +1,51 @@
-# Our token isn't provisioned with permission to actually commit back CI fixed
-# Run getsentry/action-github-commit@v2.1.0
-#Error: HttpError: Resource not accessible by integration - https://docs.github.com/rest/git/trees#create-a-tree
-#    at /home/runner/work/_actions/getsentry/action-github-commit/v2.1.0/dist/index.js:7748:21
-#    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
-#Error: Resource not accessible by integration - https://docs.github.com/rest/git/trees#create-a-tree
-# TODO: Address this later.
+name: Linting
 
-#name: Linting
-#
-#on:
-#  pull_request:
-#
-#concurrency:
-#  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-#  cancel-in-progress: true
-#
-#jobs:
-#  build:
-#    runs-on: ubuntu-latest
-#    permissions:
-#      pull-requests: read
-#      contents: write
-#      statuses: write
-#
-#    steps:
-#      - uses: actions/checkout@v3
-#      - name: Get changed files
-#        id: changes
-#        uses: dorny/paths-filter@0bc4621a3135347011ad047f9ecf449bf72ce2bd # v3.0.0
-#        with:
-#          # Paths to files will be available in `${FILTER_NAME}_files` output variable.
-#          list-files: json
-#          filters: |
-#            all:
-#              - added|modified: '**/*'
-#
-#      # TODO: split out requirements-dev.txt
-#      - uses: getsentry/action-setup-venv@a133e6fd5fa6abd3f590a1c106abda344f5df69f # v2.1.0
-#        with:
-#          python-version: 3.11.8
-#          cache-dependency-path: |
-#            requirements.txt
-#          install-cmd: pip install -r requirements-precommit.txt
-#      - name: Setup pre-commit
-#        run: |
-#          pre-commit install
-#
-#      - name: Run pre-commit on PR commits
-#        id: pre-commit_results
-#        continue-on-error: true
-#        run: |
-#          jq '.[]' --raw-output <<< '${{steps.changes.outputs.all_files}}' |
-#            # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
-#            xargs pre-commit run --files
-#
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: write
+      statuses: write
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get changed files
+        id: changes
+        uses: dorny/paths-filter@0bc4621a3135347011ad047f9ecf449bf72ce2bd # v3.0.0
+        with:
+          # Paths to files will be available in `${FILTER_NAME}_files` output variable.
+          list-files: json
+          filters: |
+            all:
+              - added|modified: '**/*'
+
+      - uses: getsentry/action-setup-venv@a133e6fd5fa6abd3f590a1c106abda344f5df69f # v2.1.0
+        with:
+          python-version: 3.11.8
+          cache-dependency-path: |
+            requirements.txt
+          install-cmd: pip install -r requirements-precommit.txt
+      - name: Setup pre-commit
+        run: |
+          pre-commit install
+
+      - name: Run pre-commit on PR commits
+        id: pre-commit_results
+        run: |
+          jq '.[]' --raw-output <<< '${{steps.changes.outputs.all_files}}' |
+            # Run pre-commit to check files that were changed (but not deleted) compared to master.
+            # --show-diff-on-failure will display what needs to be fixed without making changes
+            xargs pre-commit run --show-diff-on-failure --files
+
+# TODO: Add this back in when we have write access for the token.
 #      - name: Get auth token
 #        id: token
 #        if: ${{ steps.pre-commit_results.outcome == 'failure' }}
