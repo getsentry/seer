@@ -86,6 +86,7 @@ class TestSummarizeIssue:
             == expected_raw_result.scores.possible_cause_novelty
         )
 
+    @pytest.mark.vcr()
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
     def test_summarize_issue_event_details(self, mock_from_event, mock_llm_client, sample_request):
         mock_event_details = Mock()
