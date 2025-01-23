@@ -139,7 +139,11 @@ def test_run_iteration_with_insight_sharing(autofix_agent, run_config):
     with autofix_agent.context.state.update() as state:
         state.request.options.disable_interactivity = False
         state.steps = [
-            DefaultStep(status=AutofixStatus.NEED_MORE_INFORMATION, key="test", title="Test")
+            DefaultStep(
+                status=AutofixStatus.NEED_MORE_INFORMATION,
+                key="root_cause_analysis_processing",
+                title="Test",
+            )
         ]
 
     with autofix_agent.manage_run():
@@ -176,7 +180,7 @@ def test_share_insights_no_new_insights(autofix_agent):
         state.steps = [
             DefaultStep(
                 status=AutofixStatus.PROCESSING,
-                key="test",
+                key="root_cause_analysis_processing",
                 title="Fixing a bug",
                 insights=[next(generate(InsightSharingOutput))],
             )
