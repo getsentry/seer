@@ -87,7 +87,7 @@ def backoff_on_exception(
     """
 
     if max_tries < 1:
-        raise ValueError("max_tries must be at least 1")
+        raise ValueError("max_tries must be at least 1")  # pragma: no cover
 
     def decorator(func):
         @functools.wraps(func)
