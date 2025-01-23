@@ -570,7 +570,7 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}→ {node.get('function')}"
+            func_line = f"{indent_str}â†’ {node.get('function')}"
             location = f"{node.get('filename')}"
             func_line += f" ({location})"
 
@@ -688,6 +688,15 @@ class FilePatch(BaseModel):
     def _apply_hunks(self, lines: List[str]) -> str:
         result = []
         current_line = 0
+        total_lines = len(lines)
+
+        # Validate all hunks before processing
+        for hunk in self.hunks:
+            if hunk.source_start - 1 + hunk.source_length > total_lines:
+                raise FileChangeError(
+                    f"Invalid hunk: source position {hunk.source_start} + length {hunk.source_length} "
+                    f"exceeds file length of {total_lines} lines"
+                )
 
         for hunk in self.hunks:
             # Add unchanged lines before the hunk
@@ -695,6 +704,13 @@ class FilePatch(BaseModel):
             current_line = hunk.source_start - 1
 
             for line in hunk.lines:
+                # Validate current_line is in bounds before using it
+                if line.line_type in [" ", "-"] and current_line >= total_lines:
+                    raise FileChangeError(
+                        f"Invalid hunk: trying to access line {current_line + 1} "
+                        f"but file only has {total_lines} lines"
+                    )
+
                 if line.line_type == "+":
                     result.append(line.value + ("\n" if not line.value.endswith("\n") else ""))
                 elif line.line_type == " ":
@@ -702,6 +718,12 @@ class FilePatch(BaseModel):
                     current_line += 1
                 elif line.line_type == "-":
                     current_line += 1
+
+        # Validate final position before appending remaining lines
+        if current_line > total_lines:
+            raise FileChangeError(
+                f"Invalid hunk: final position {current_line} exceeds file length of {total_lines} lines"
+            )
 
         # Add any remaining unchanged lines after the last hunk
         result.extend(lines[current_line:])
