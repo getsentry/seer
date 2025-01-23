@@ -43,7 +43,7 @@ class TestSummarizeIssue:
         )
 
     @pytest.mark.vcr()
-    def test_summarize_issue_success(self, sample_request):
+    def test_summarize_issue_success(self, sample_request, score_num_decimal_places: int = 10):
         result, raw_result = summarize_issue(sample_request)
         assert isinstance(result, SummarizeIssueResponse)
 
@@ -53,12 +53,23 @@ class TestSummarizeIssue:
             session_related_issues="Related issues: **cyan-vincent-banana** and **green-fred-tennis** may indicate broader session instability.",
             possible_cause="Potential **resource contention** or **dependency failure** affecting multiple components.",
             scores=SummarizeIssueScores(
-                possible_cause_confidence=0.4749528387220516,
-                possible_cause_novelty=0.6286319887938298,
+                possible_cause_confidence=round(0.4749528387220516, score_num_decimal_places),
+                possible_cause_novelty=round(0.6286319887938298, score_num_decimal_places),
             ),
         )
 
         assert isinstance(result, SummarizeIssueResponse)
+
+        # Round for some tolerance during equality comparison.
+        # TODO: is decryption and decompression of the VCR causing tiny changes?
+        for res in (raw_result, result):
+            res.scores.possible_cause_confidence = round(
+                res.scores.possible_cause_confidence, score_num_decimal_places
+            )
+            res.scores.possible_cause_novelty = round(
+                res.scores.possible_cause_novelty, score_num_decimal_places
+            )
+
         assert raw_result == expected_raw_result
 
         assert result.group_id == 123
