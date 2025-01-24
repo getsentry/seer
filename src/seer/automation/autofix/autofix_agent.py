@@ -1,7 +1,7 @@
 import contextlib
 import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
-from typing import Optional
+from typing import Callable, Optional
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
@@ -17,6 +17,7 @@ from seer.automation.autofix.components.insight_sharing.component import create_
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.dependency_injection import copy_modules_initializer
+from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class AutofixAgent(LlmAgent):
                 "You're taking a while. If you need help, ask me a concrete question using the tool provided."
             )
 
-    def get_completion(self, run_config: RunConfig):
+    def _get_completion(self, run_config: RunConfig):
         """
         Streams the preliminary output to the current step and only returns when output is complete
         """
@@ -117,6 +118,27 @@ class AutofixAgent(LlmAgent):
                 usage=usage,
             ),
         )
+
+    def get_completion(
+        self,
+        run_config: RunConfig,
+        max_tries: int = 4,
+        sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
+    ):
+        """
+        Streams the preliminary output to the current step and only returns when output is complete.
+
+        The completion request is retried `max_tries - 1` times if a retryable exception was just
+        raised, e.g, Anthropic's API is overloaded.
+        """
+        is_exception_retryable = getattr(
+            run_config.model, "is_completion_exception_retryable", lambda _: False
+        )
+        retrier = backoff_on_exception(
+            is_exception_retryable, max_tries=max_tries, sleep_sec_scaler=sleep_sec_scaler
+        )
+        get_completion_retryable = retrier(self._get_completion)
+        return get_completion_retryable(run_config)
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")

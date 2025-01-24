@@ -90,6 +90,10 @@ class OpenAiProvider:
                 return config
         return None
 
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        return False
+
     def generate_text(
         self,
         *,
@@ -408,6 +412,15 @@ class AnthropicProvider:
                 return config
         return None
 
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        if isinstance(exception, anthropic.APIStatusError):
+            return exception.status_code == 529
+            # https://docs.anthropic.com/en/api/errors#http-errors
+        return isinstance(exception, anthropic.AnthropicError) and (
+            "overloaded_error" in str(exception)
+        )
+
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
     def generate_text(
@@ -707,6 +720,10 @@ class GeminiProvider:
         for each in response.candidates[0].content.parts:
             answer += each.text
         return answer
+
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        return False
 
     @observe(as_type="generation", name="Gemini Generation")
     def generate_structured(

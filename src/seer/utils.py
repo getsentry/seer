@@ -1,12 +1,17 @@
 import contextlib
 import functools
 import json
+import logging
+import random
+import time
 import weakref
 from enum import Enum
 from queue import Empty, Full, Queue
-from typing import Sequence
+from typing import Callable, Sequence
 
 from sqlalchemy.orm import DeclarativeBase, Session
+
+logger = logging.getLogger(__name__)
 
 
 def class_method_lru_cache(*lru_args, **lru_kwargs):
@@ -68,3 +73,44 @@ def closing_queue(*queues: Queue):
                 queue.get_nowait()
             except Empty:
                 pass
+
+
+def backoff_on_exception(
+    is_exception_retryable: Callable[[Exception], bool],
+    max_tries: int = 2,
+    sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
+    jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
+):
+    """
+    Returns a decorator which retries a function on exception iff `is_exception_retryable(exception)`.
+    Defaults to exponential backoff with random jitter and one retry.
+    """
+
+    if max_tries < 1:
+        raise ValueError("max_tries must be at least 1")  # pragma: no cover
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapped_func(*args, **kwargs):
+            num_tries = 0
+            last_exception = None
+            while num_tries < max_tries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exception:
+                    num_tries += 1
+                    last_exception = exception
+                    if is_exception_retryable(exception):
+                        sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
+                        logger.info(
+                            f"Encountered {type(exception).__name__}: {exception}. Sleeping for "
+                            f"{sleep_sec} seconds before attempting retry {num_tries}/{max_tries}."
+                        )
+                        time.sleep(sleep_sec)
+                    else:
+                        raise exception
+            raise last_exception
+
+        return wrapped_func
+
+    return decorator
