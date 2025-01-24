@@ -49,12 +49,12 @@ class TestSummarizeIssue:
 
         expected_raw_result = IssueSummaryWithScores(
             title="Critical Issue: red-timothy-sandwich Failure",
-            whats_wrong="**red-timothy-sandwich** encountered **exceptions** during execution, impacting functionality. Check **event logs** for details.",
-            session_related_issues="Related issues: **cyan-vincent-banana** and **green-fred-tennis** may indicate broader session instability.",
-            possible_cause="Potential **resource contention** or **dependency failure** affecting multiple components.",
+            whats_wrong="**Unhandled exceptions** detected in **red-timothy-sandwich**; potential **memory leak** indicated in logs.",
+            session_related_issues="Related issues: **cyan-vincent-banana** and **green-fred-tennis** may share underlying causes.",
+            possible_cause="Possible **resource contention** or **data corruption** affecting multiple components.",
             scores=SummarizeIssueScores(
-                possible_cause_confidence=round(0.4749528387220516, score_num_decimal_places),
-                possible_cause_novelty=round(0.6286319887938298, score_num_decimal_places),
+                possible_cause_confidence=round(0.470738745118689, score_num_decimal_places),
+                possible_cause_novelty=round(0.5800708960415282, score_num_decimal_places),
             ),
         )
 

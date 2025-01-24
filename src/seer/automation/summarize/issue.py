@@ -41,19 +41,16 @@ def _confidence_embeddings_cause() -> npt.NDArray[np.float64]:
 
 def score_issue_summary(issue_summary: IssueSummary) -> SummarizeIssueScores:
     # Embed everything we need once to minimize network requests.
-    embedding_possible_cause_for_confidence, embedding_possible_cause, embedding_whats_wrong = (
-        scoring.embed_texts(
-            [
-                f"Cause: {issue_summary.possible_cause}",
-                issue_summary.possible_cause,
-                issue_summary.whats_wrong,
-            ]
-        )
+    embedding_possible_cause, embedding_whats_wrong = scoring.embed_texts(
+        [
+            f"Cause: {issue_summary.possible_cause}",
+            issue_summary.whats_wrong,
+        ]
     )
 
     embeddings_confidence = _confidence_embeddings_cause()
     possible_cause_confidence = scoring.predict_proba(
-        embedding_possible_cause_for_confidence, embeddings_confidence
+        embedding_possible_cause, embeddings_confidence
     )[..., -1]
     # Extract the normalized score for the positive confidence
     # This score isn't a calibrated probability, but it's slightly useful with a threshold
