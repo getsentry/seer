@@ -414,9 +414,6 @@ class AnthropicProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        if isinstance(exception, anthropic.APIStatusError):
-            return exception.status_code == 529
-            # https://docs.anthropic.com/en/api/errors#http-errors
         return isinstance(exception, anthropic.AnthropicError) and (
             "overloaded_error" in str(exception)
         )
