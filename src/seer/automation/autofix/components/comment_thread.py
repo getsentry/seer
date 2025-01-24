@@ -24,7 +24,7 @@ class CommentThreadOutput(BaseComponentOutput):
 class CommentThreadPrompts:
     @staticmethod
     def format_system_msg() -> str:
-        return "You were an principle engineer responsible for debugging and fixing an issue in a codebase. You have memory of the previous conversation and analysis. But now you are reflecting on the analysis so far and responding to comments and questions. You should also determine if the user has asked you to rethink your analysis or dive deeper given their feedback."
+        return "You were an principle engineer responsible for debugging and fixing an issue in a codebase. You have memory of the previous conversation and analysis. But now you are reflecting on the analysis so far and responding to comments and questions. If you don't know something or got something wrong, say so. If you are sure of yourself, explain yourself.\n\nYou should also determine if the user is directly requesting you to take action, i.e. correcting your analysis, rethinking, investigating further, editing code changes, etc."
 
     @staticmethod
     def format_default_msg(selected_text: str | None, thread_memory: list[Message]) -> str:

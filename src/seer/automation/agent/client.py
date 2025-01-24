@@ -1008,16 +1008,23 @@ class GeminiProvider:
         return message
 
     def _format_gemini_response_to_message(self, response: GenerateContentResponse) -> Message:
-        message = Message(
-            role="assistant",
-            content=(
-                response.candidates[0].content.parts[0].text
-                if response.candidates[0].content.parts[0].text
-                else None
-            ),
+        parts = (
+            response.candidates[0].content.parts
+            if (
+                response.candidates
+                and len(response.candidates) > 0
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            )
+            else []
         )
 
-        for part in response.candidates[0].content.parts:
+        message = Message(
+            role="assistant",
+            content=(parts[0].text if parts and parts[0].text else None),
+        )
+
+        for part in parts:
             if part.function_call:
                 if not message.tool_calls:
                     message.tool_calls = []
