@@ -116,9 +116,7 @@ AnthropicProviderFlaky = flakify(
     AnthropicProvider,
     retryable_exception=anthropic.APIStatusError(
         message=str(anthropic_overloaded_error_data),
-        response=httpx.Response(
-            status_code=529, request=httpx.Request("POST", "dummy_url")
-        ),  # https://docs.anthropic.com/en/api/errors#http-errors
+        response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
         body=anthropic_overloaded_error_data,
     ),
     get_obj_with_create_stream_method_from_client=lambda client: client.messages,
