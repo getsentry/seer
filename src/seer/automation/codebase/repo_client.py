@@ -306,17 +306,21 @@ class RepoClient:
         if sha is None:
             sha = self.base_commit_sha
 
+
         tree = self.repo.get_git_tree(sha, recursive=True)
+
+        # Ensure we check both with and without src/ prefix when validating paths
+        valid_file_paths = {self._normalize_repo_path(file.path) for file in tree.tree}
 
         if tree.raw_data["truncated"]:
             sentry_sdk.capture_message(
                 f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
             )
 
-        valid_file_paths: set[str] = set()
 
+        valid_file_paths: set[str] = set()
         for file in tree.tree:
-            valid_file_paths.add(file.path)
+            valid_file_paths.add(self._normalize_repo_path(file.path))
 
         return valid_file_paths
 
