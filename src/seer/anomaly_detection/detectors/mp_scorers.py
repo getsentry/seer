@@ -219,9 +219,9 @@ class MPIQRScorer(MPScorer):
 
     iqr_scaling_factor: Dict[Sensitivities, float] = Field(
         {
-            "high": 1.5,
+            "high": 1.2,
             "medium": 1.5,
-            "low": 1.5,
+            "low": 2,
         },
         description="Scaling factor for IQR based thresholding",
     )
@@ -391,7 +391,7 @@ class MPIQRScorer(MPScorer):
         variation = np.std(mp_dist_baseline_finite) / median if median > 0 else np.inf
 
         # Apply additional scaling if variation is low
-        scaling = 2.0 if variation < 0.1 else 1.0
+        scaling = 2.0 if variation < 0.2 else 1.0
 
         [Q1, Q3] = np.quantile(mp_dist_baseline_finite, self.percentiles[sensitivity])
         IQR = Q3 - Q1
