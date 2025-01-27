@@ -148,7 +148,25 @@ class RepoClient:
         self.repo_owner = repo_definition.owner
         self.repo_name = repo_definition.name
         self.repo_external_id = repo_definition.external_id
-        self.base_commit_sha = repo_definition.base_commit_sha or self.get_default_branch_head_sha()
+        initial_sha = repo_definition.base_commit_sha or self.get_default_branch_head_sha()
+        
+        # Validate the initial SHA before using it
+        if repo_definition.base_commit_sha and not self._is_valid_commit_sha(initial_sha):
+            logger.warning(
+                f"Invalid base_commit_sha {initial_sha} provided in repo definition, "
+                f"falling back to default branch HEAD"
+            )
+            initial_sha = self.get_default_branch_head_sha()
+        
+        self.base_commit_sha = initial_sha
+
+    def _is_valid_commit_sha(self, sha: str) -> bool:
+        """Validates if a given SHA exists in the repository."""
+        try:
+            self.repo.get_commit(sha)
+            return True
+        except GithubException as e:
+            return False
 
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
@@ -286,9 +304,17 @@ class RepoClient:
         return tmp_dir, tmp_repo_dir
 
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
-        logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
+        original_sha = sha
         if sha is None:
             sha = self.base_commit_sha
+
+        logger.debug(f"Attempting to get file contents for {path} in {self.repo.full_name} using sha {sha}")
+
+        # Validate the SHA before proceeding
+        if not self._is_valid_commit_sha(sha):
+            logger.warning(f"Invalid commit SHA {sha}, falling back to default branch")
+            sha = self.get_default_branch_head_sha()
+
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
@@ -297,9 +323,22 @@ class RepoClient:
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
             return contents.decoded_content.decode(detected_encoding), detected_encoding
+        except GithubException as e:
+            if e.status == 404:
+                # If we're already using the default branch SHA, or if this is a fallback attempt, give up
+                if sha == self.get_default_branch_head_sha() or original_sha is not None:
+                    logger.warning(
+                        f"File {path} not found in repository {self.repo.full_name} at SHA {sha}"
+                    )
+                    return None, "utf-8"
+                
+                # Try falling back to default branch
+                logger.info(f"File not found at SHA {sha}, attempting fallback to default branch")
+                return self.get_file_content(path, sha=self.get_default_branch_head_sha())
+            logger.exception(f"GitHub API error getting file contents: {e}")
+            return None, "utf-8"
         except Exception as e:
-            logger.exception(f"Error getting file contents: {e}")
-
+            logger.exception(f"Unexpected error getting file contents for {path}: {e}")
             return None, "utf-8"
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
