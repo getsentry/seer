@@ -133,7 +133,16 @@ def task_to_file_change(
     file_content (str): The content of the file being changed.
 
     Returns:
-    list[FileChange]: A list of FileChange objects representing the file change tasks.
+    tuple[list[FileChange], list[FuzzyDiffChunk]]: A tuple containing:
+        - List of FileChange objects representing the file change tasks
+        - List of FuzzyDiffChunk objects that couldn't be processed
+
+    Notes:
+        - Empty original chunks are allowed in the following cases:
+          1. When adding new content to the start of a file (@@ -0,0)
+          2. When adding new sections within a file (valid @@ header)
+        - Empty original chunks that don't match these patterns are 
+          considered invalid and will raise ValueError
     """
     if task.type != "file_change":
         raise ValueError(f"Expected file_change task, got: {task.type}")
@@ -145,8 +154,28 @@ def task_to_file_change(
     for chunk in diff_chunks:
         if chunk.original_chunk == chunk.new_chunk:
             continue
+        
+        # Check if this is a valid empty original chunk case
+        is_new_content = (
+            chunk.header.strip().startswith("@@ -0,0")  # Adding to start of file/new file
+            or chunk.header.strip().startswith("@@ -")   # Normal chunk header
+        )
+        
         if chunk.original_chunk.strip() == "":
-            raise ValueError(f"Original chunk is empty for task: {task}")
+            if not is_new_content:
+                raise ValueError(f"Invalid empty original chunk in diff for task: {task}")
+            # Handle as new content addition
+            changes.append(
+                FileChange(
+                    change_type="edit",
+                    path=task.file_path,
+                    reference_snippet="",  # Empty reference since we're adding new content
+                    new_snippet=chunk.new_chunk,
+                    description=task.description,
+                    commit_message=task.commit_message,
+                )
+            )
+            continue
 
         result = find_original_snippet(
             chunk.original_chunk,
@@ -154,9 +183,6 @@ def task_to_file_change(
             threshold=0.75,
             initial_line_threshold=0.95,
         )
-
-        if result:
-            original_snippet = result[0]
             changes.append(
                 FileChange(
                     change_type="edit",
