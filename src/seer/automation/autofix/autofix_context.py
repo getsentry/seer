@@ -70,9 +70,6 @@ class AutofixContext(PipelineContext):
         self.event_manager = event_manager
         self.state = state
 
-        # TODO: Remove this when we no longer need the backwards compatibility.
-        self.event_manager.migrate_step_keys()
-
         logger.info(f"AutofixContext initialized with run_id {self.run_id}")
 
     @classmethod
