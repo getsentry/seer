@@ -128,41 +128,44 @@ class AutofixEventManager:
 
     def send_coding_start(self):
         with self.state.update() as cur:
-            latest_changes_step = cur.find_step(key=self.changes_step.key)
+            changes_step = cur.find_step(key=self.changes_step.key)
             if (
-                not latest_changes_step
-                or latest_changes_step.status != AutofixStatus.PROCESSING
-                or latest_changes_step.id != cur.steps[-1].id
+                not changes_step
+                or changes_step.status != AutofixStatus.PROCESSING
+                or changes_step.id != cur.steps[-1].id
             ):
-                latest_changes_step = cur.add_step(self.changes_step)
+                changes_step = cur.add_step(self.changes_step)
 
-            latest_changes_step = cast(ChangesStep, latest_changes_step)
+            changes_step = cast(ChangesStep, changes_step)
 
             # Create the initial codebase changes for each repo, if not already present
             for repo in cur.request.repos:
-                if repo.external_id not in latest_changes_step.codebase_changes:
-                    latest_changes_step.codebase_changes[repo.external_id] = CodebaseChange(
+                if repo.external_id not in changes_step.codebase_changes:
+                    changes_step.codebase_changes[repo.external_id] = CodebaseChange(
                         repo_name=repo.full_name,
                         repo_external_id=repo.external_id,
                         file_changes=[],
                     )
+                else:
+                    # else clear the file changes for this repo
+                    changes_step.codebase_changes[repo.external_id].file_changes = []
 
-            latest_changes_step.status = AutofixStatus.PROCESSING
+            changes_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
 
     def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
-            latest_changes_step = cur.find_or_add(self.changes_step)
-            latest_changes_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+            changes_step = cur.find_or_add(self.changes_step)
+            changes_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
     def set_change_details(self, repo_external_id: str, change_details: ChangeDetails):
         with self.state.update() as cur:
-            latest_changes_step = cur.find_or_add(self.changes_step)
-            latest_changes_step = cast(ChangesStep, latest_changes_step)
-            latest_changes_step.codebase_changes[repo_external_id].details = change_details
+            changes_step = cur.find_or_add(self.changes_step)
+            changes_step = cast(ChangesStep, changes_step)
+            changes_step.codebase_changes[repo_external_id].details = change_details
 
     def send_coding_complete(self):
         with self.state.update() as cur:
@@ -221,14 +224,14 @@ class AutofixEventManager:
 
     def append_file_change(self, repo_external_id: str, file_change: FileChange):
         with self.state.update() as cur:
-            last_changes_step = cur.find_or_add(self.changes_step)
-            if last_changes_step.id != cur.steps[-1].id:
-                last_changes_step = cur.add_step(self.changes_step)
+            changes_step = cur.find_or_add(self.changes_step)
+            if changes_step.id != cur.steps[-1].id:
+                changes_step = cur.add_step(self.changes_step)
 
-            if not last_changes_step:
+            if not changes_step:
                 raise ValueError("Last plan step not found")
 
-            last_changes_step = cast(ChangesStep, last_changes_step)
+            changes_step = cast(ChangesStep, changes_step)
 
             # For backwards compatibility, we append to the codebase state's file changes too (for now)
             if (
@@ -238,10 +241,10 @@ class AutofixEventManager:
             ):
                 cur.codebases[repo_external_id].file_changes.append(file_change)
 
-            if repo_external_id not in last_changes_step.codebase_changes:
+            if repo_external_id not in changes_step.codebase_changes:
                 raise ValueError(f"Codebase changes for repo {repo_external_id} not found")
 
-            last_changes_step.codebase_changes[repo_external_id].file_changes.append(file_change)
+            changes_step.codebase_changes[repo_external_id].file_changes.append(file_change)
 
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True
