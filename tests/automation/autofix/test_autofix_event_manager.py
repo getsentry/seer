@@ -9,10 +9,13 @@ from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
     AutofixStatus,
+    ChangesStep,
+    CodebaseState,
     DefaultStep,
     ProgressType,
     RootCauseStep,
 )
+from seer.automation.models import FileChange
 from seer.automation.state import LocalMemoryState
 from seer.automation.utils import make_kill_signal
 
@@ -110,6 +113,7 @@ class TestAutofixEventManager:
             mock_get.side_effect = [
                 state.get(),  # First call returns state with kill signal
                 MagicMock(signals=[]),  # Second call returns state without kill signal
+                MagicMock(signals=[]),
             ]
             result = event_manager.reset_steps_to_point(1, None)
 
@@ -139,6 +143,7 @@ class TestAutofixEventManager:
             mock_get.side_effect = [
                 state.get(),  # First call returns state with kill signal
                 MagicMock(signals=[]),  # Second call returns state without kill signal
+                MagicMock(signals=[]),
             ]
             result = event_manager.reset_steps_to_point(1, 0)
 
@@ -159,6 +164,7 @@ class TestAutofixEventManager:
             mock_get.side_effect = [
                 state.get(),  # First call returns state with kill signal
                 MagicMock(signals=[]),  # Second call returns state without kill signal
+                MagicMock(signals=[]),
             ]
             result = event_manager.reset_steps_to_point(0, None)
 
@@ -182,6 +188,7 @@ class TestAutofixEventManager:
                 MagicMock(signals=[make_kill_signal()]),
                 MagicMock(signals=[make_kill_signal()]),
                 MagicMock(signals=[make_kill_signal()]),
+                MagicMock(signals=[make_kill_signal()]),
                 MagicMock(signals=[]),
             ]
             mock_time.reset_mock()
@@ -191,6 +198,41 @@ class TestAutofixEventManager:
         assert result is True
         mock_time.assert_called_with(0.5)
         assert mock_time.call_count == 2  # Called twice before signals are cleared
+
+    @patch("time.sleep")
+    def test_reset_steps_to_point_clears_file_changes(self, mock_time, event_manager, state):
+        with state.update() as cur:
+            cur.steps = [
+                RootCauseStep(id="1", title="Step 1", status=AutofixStatus.COMPLETED),
+                DefaultStep(
+                    id="2",
+                    title="Step 2",
+                    status=AutofixStatus.COMPLETED,
+                    insights=[
+                        MagicMock(spec=InsightSharingOutput, id="insight1"),
+                        MagicMock(spec=InsightSharingOutput, id="insight2"),
+                        MagicMock(spec=InsightSharingOutput, id="insight3"),
+                    ],
+                ),
+                DefaultStep(id="3", title="Step 3", status=AutofixStatus.PROCESSING),
+                ChangesStep(
+                    id="4",
+                    key="changes",
+                    title="Step 4",
+                    status=AutofixStatus.PROCESSING,
+                    changes=[],
+                ),
+            ]
+            cur.codebases = {
+                "repo1": CodebaseState(
+                    repo_id=1, repo_external_id="repo1", file_changes=[next(generate(FileChange))]
+                )
+            }
+
+        event_manager.reset_steps_to_point(1, None)
+
+        assert len(state.get().steps) == 2
+        assert len(state.get().codebases["repo1"].file_changes) == 0
 
     def test_send_root_cause_analysis_start(self, event_manager, state):
         # No existing root cause step
