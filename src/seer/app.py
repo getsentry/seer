@@ -194,7 +194,6 @@ def autofix_update_endpoint(
 
 @json_api(blueprint, "/v1/automation/autofix/state")
 def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateResponse:
-
     state = get_autofix_state(group_id=data.group_id, run_id=data.run_id)
 
     if state:

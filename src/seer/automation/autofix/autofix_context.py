@@ -13,7 +13,6 @@ from seer.automation.autofix.models import (
     AutofixRunMemory,
     ChangesStep,
     CommittedPullRequestDetails,
-    StepType,
 )
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
@@ -139,15 +138,19 @@ class AutofixContext(PipelineContext):
 
         if not ignore_local_changes:
             cur_state = self.state.get()
-            changes_steps = filter(lambda x: x.type == StepType.CHANGES, cur_state.steps)
-            for changes_step in changes_steps:
-                changes_step = cast(ChangesStep, changes_step)
-                repo_file_changes = changes_step.codebase_changes[
-                    repo_client.repo_external_id
-                ].file_changes
-                current_file_changes = list(filter(lambda x: x.path == path, repo_file_changes))
-                for file_change in current_file_changes:
-                    file_contents = file_change.apply(file_contents)
+
+            changes_step = cur_state.find_step(key=self.event_manager.changes_step.key)
+            if not changes_step:
+                return file_contents
+
+            changes_step = cast(ChangesStep, changes_step)
+
+            repo_file_changes = changes_step.codebase_changes[
+                repo_client.repo_external_id
+            ].file_changes
+            current_file_changes = list(filter(lambda x: x.path == path, repo_file_changes))
+            for file_change in current_file_changes:
+                file_contents = file_change.apply(file_contents)
 
         return file_contents
 
