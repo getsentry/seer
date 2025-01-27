@@ -217,7 +217,7 @@ class AutofixContext(PipelineContext):
     ):
         state = self.state.get()
         for codebase_state in state.codebases.values():
-            if (repo_external_id is None) or codebase_state.repo_external_id == repo_external_id:
+            if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
                 changes_step = state.find_step(key="changes")
                 if not changes_step:
                     raise ValueError("Changes step not found")
