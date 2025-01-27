@@ -1028,7 +1028,7 @@ def test_update_code_change_non_changes_step():
 def test_comment_on_thread_creates_new_thread():
     # Create initial state with a step
     state = next(generate(AutofixContinuation))
-    step = DefaultStep(title="Test Step", status=AutofixStatus.COMPLETED)
+    step = DefaultStep(key="test_step", title="Test Step", status=AutofixStatus.COMPLETED)
     state.steps = [step]
 
     # Store state in database
@@ -1069,6 +1069,7 @@ def test_comment_on_thread_updates_existing_thread():
     # Create initial state with a step that has an existing thread
     state = next(generate(AutofixContinuation))
     step = DefaultStep(
+        key="test_step",
         title="Test Step",
         status=AutofixStatus.COMPLETED,
         active_comment_thread=CommentThread(

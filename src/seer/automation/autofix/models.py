@@ -135,7 +135,7 @@ class BaseStep(BaseModel):
     # The id is a unique identifier for each individual step.
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     # The key is to determine the kind of step, such as root_cause or changes.
-    key: str
+    key: str = Field(default="default")  # Default for backwards compatibility
     title: str
     type: StepType = StepType.DEFAULT
 
