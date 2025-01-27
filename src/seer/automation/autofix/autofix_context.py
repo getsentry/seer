@@ -19,7 +19,6 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
-from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
@@ -36,18 +35,6 @@ RepoExternalId = str
 RepoInternalId = int
 RepoKey = RepoExternalId | RepoInternalId
 RepoIdentifiers = tuple[RepoExternalId, RepoInternalId]
-
-
-class AutofixCodebaseStateManager(CodebaseStateManager):
-    state: State[AutofixContinuation]
-
-    def store_file_change(self, file_change: FileChange):
-        with self.state.update() as state:
-            codebase_state = state.codebases[self.repo_external_id]
-            codebase_state.file_changes.append(file_change)
-
-    def get_file_changes(self) -> list[FileChange]:
-        return self.state.get().codebases[self.repo_external_id].file_changes
 
 
 class AutofixContext(PipelineContext):
