@@ -103,7 +103,6 @@ class CommittedPullRequestDetails(BaseModel):
 
 
 class CodebaseChange(BaseModel):
-    repo_id: int | None = None
     repo_external_id: str | None = None
     repo_name: str
     title: str
@@ -222,8 +221,6 @@ Step = Union[DefaultStep, RootCauseStep, ChangesStep]
 
 
 class CodebaseState(BaseModel):
-    repo_id: int | None = None
-    namespace_id: int | None = None
     repo_external_id: str | None = None
     file_changes: list[FileChange] = []
 
@@ -373,14 +370,12 @@ class AutofixRootCauseUpdatePayload(BaseModel):
 class AutofixCreatePrUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_PR] = AutofixUpdateType.CREATE_PR
     repo_external_id: str | None = None
-    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
     make_pr: bool = True
 
 
 class AutofixCreateBranchUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_BRANCH] = AutofixUpdateType.CREATE_BRANCH
     repo_external_id: str | None = None
-    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
     make_pr: bool = False
 
 
@@ -402,7 +397,9 @@ class AutofixUpdateCodeChangePayload(BaseModel):
     hunk_index: int
     lines: list[Line]
     file_path: str
-    repo_id: str | None = None
+    repo_external_id: str | None = Field(default=None, alias="repo_id")
+
+    model_config = ConfigDict(populate_by_name=True)  # Allows both field name and alias
 
 
 class AutofixCommentThreadPayload(BaseModel):

@@ -792,7 +792,7 @@ def test_update_code_change_happy_path():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=new_lines,
             file_path="test_file.py",
@@ -866,7 +866,7 @@ def test_update_code_change_no_matching_repo():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=[],
             file_path="test_file.py",
@@ -913,7 +913,7 @@ def test_update_code_change_no_matching_file():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=[],
             file_path="test_file.py",
@@ -968,7 +968,7 @@ def test_update_code_change_invalid_hunk_index():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=99,  # Invalid index
             lines=[],
             file_path="test_file.py",
@@ -992,7 +992,7 @@ def test_update_code_change_non_changes_step():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=[],
             file_path="test_file.py",

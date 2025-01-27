@@ -47,7 +47,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[(10, "    main()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=True,
             ),
             StacktraceFrame(
@@ -58,7 +57,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=None,
                 context=[(15, "    helper()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=False,
             ),
         ]
@@ -81,7 +79,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=True,
             ),
         ]
@@ -101,7 +98,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[(10, "    unknown()")],
                 repo_name=None,
-                repo_id=None,
                 in_app=True,
             ),
         ]
@@ -119,7 +115,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=None,
                 context=[(i * 10, f"    function_{i}()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=(i % 2 == 0),
             )
             for i in range(20)
@@ -191,7 +186,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=20,
                 context=[(10, "    main()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=True,
             ),
             StacktraceFrame(
@@ -202,7 +196,6 @@ class TestStacktraceHelpers(unittest.TestCase):
                 col_no=None,
                 context=[(15, "    helper()")],
                 repo_name="my_repo",
-                repo_id=1,
                 in_app=False,
             ),
         ]
