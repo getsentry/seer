@@ -792,7 +792,7 @@ def test_update_code_change_happy_path():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=new_lines,
             file_path="test_file.py",
@@ -825,6 +825,94 @@ def test_update_code_change_happy_path():
     subsequent_hunk = updated_changes.diff[0].hunks[1]
     assert subsequent_hunk.target_start == 20  # Should remain unchanged
     assert subsequent_hunk.target_length == 2
+
+
+def test_update_code_change_happy_path_with_old_repo_id():
+    # Create initial state with a changes step
+    state = next(generate(AutofixContinuation))
+    file_patch = FilePatch(
+        type="A",
+        added=0,
+        removed=0,
+        source_file="",
+        target_file="",
+        path="test_file.py",
+        hunks=[
+            Hunk(
+                source_start=0,
+                source_length=0,
+                section_header="",
+                target_start=10,
+                target_length=3,
+                lines=[
+                    Line(line_type=" ", value="def test():", target_line_no=10),
+                    Line(line_type="-", value="    return False", target_line_no=11),
+                    Line(line_type=" ", value="    pass", target_line_no=12),
+                ],
+            ),
+            Hunk(
+                source_start=0,
+                source_length=0,
+                section_header="",
+                target_start=20,
+                target_length=2,
+                lines=[
+                    Line(line_type=" ", value="def another_test():", target_line_no=20),
+                    Line(line_type=" ", value="    pass", target_line_no=21),
+                ],
+            ),
+        ],
+    )
+    changes_step = ChangesStep(
+        title="Test Change",
+        status=AutofixStatus.COMPLETED,
+        changes=[
+            CodebaseChange(
+                repo_external_id="test_repo",
+                repo_name="test/repo",
+                title="Test Change",
+                description="Test Description",
+                diff=[file_patch],
+            )
+        ],
+    )
+    state.steps = [changes_step]
+
+    # Store state in database
+    with Session() as session:
+        session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
+        session.commit()
+
+    # Create update request
+    new_lines = [
+        Line(line_type=" ", value="def test():", target_line_no=10),
+        Line(line_type="+", value="    return True", target_line_no=11),
+        Line(line_type=" ", value="    pass", target_line_no=12),
+    ]
+    request = AutofixUpdateRequest(
+        run_id=1,
+        payload=AutofixUpdateCodeChangePayload(
+            type=AutofixUpdateType.UPDATE_CODE_CHANGE,
+            repo_id="test_repo",
+            hunk_index=0,
+            lines=new_lines,
+            file_path="test_file.py",
+        ),
+    )
+
+    # Execute update
+    update_code_change(request)
+
+    # Verify changes
+    updated_state = get_autofix_state(run_id=1)
+    assert updated_state is not None
+    changes_step = updated_state.get().steps[-1]
+    assert isinstance(changes_step, ChangesStep)
+    updated_changes = changes_step.changes[0]
+    updated_hunk = updated_changes.diff[0].hunks[0]
+
+    # Check that the updated applied
+    assert len(updated_hunk.lines) == 3
 
 
 def test_update_code_change_invalid_payload_type():
@@ -866,7 +954,7 @@ def test_update_code_change_no_matching_repo():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=[],
             file_path="test_file.py",
@@ -913,7 +1001,7 @@ def test_update_code_change_no_matching_file():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=[],
             file_path="test_file.py",
@@ -968,7 +1056,7 @@ def test_update_code_change_invalid_hunk_index():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=99,  # Invalid index
             lines=[],
             file_path="test_file.py",
@@ -992,7 +1080,7 @@ def test_update_code_change_non_changes_step():
         run_id=1,
         payload=AutofixUpdateCodeChangePayload(
             type=AutofixUpdateType.UPDATE_CODE_CHANGE,
-            repo_id="test_repo",
+            repo_external_id="test_repo",
             hunk_index=0,
             lines=[],
             file_path="test_file.py",

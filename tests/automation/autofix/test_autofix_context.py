@@ -324,7 +324,6 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             cur.codebases = {
                 "1": CodebaseState(
                     repo_external_id="1",
-                    namespace_id=1,
                     file_changes=[
                         FileChange(
                             path="test.py",

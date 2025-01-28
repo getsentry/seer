@@ -218,7 +218,6 @@ def run_autofix_push_changes(
 
     context.commit_changes(
         repo_external_id=request.payload.repo_external_id,
-        repo_id=request.payload.repo_id,
         make_pr=request.payload.make_pr,
     )
 
@@ -436,7 +435,7 @@ def update_code_change(request: AutofixUpdateRequest):
     state = ContinuationState(request.run_id)
     cur_state = state.get()
 
-    repo_id = request.payload.repo_id
+    repo_external_id = request.payload.repo_external_id
     hunk_index = request.payload.hunk_index
     lines = request.payload.lines
     file_path = request.payload.file_path
@@ -451,7 +450,7 @@ def update_code_change(request: AutofixUpdateRequest):
     matching_change = None
     change_index = 0
     for i, change in enumerate(changes):
-        if change.repo_external_id == repo_id:
+        if change.repo_external_id == repo_external_id:
             matching_change = change
             change_index = i
             break

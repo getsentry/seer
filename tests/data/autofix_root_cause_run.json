@@ -135,8 +135,6 @@
     "status": "COMPLETED",
     "codebases": {
         "439438299": {
-            "repo_id": null,
-            "namespace_id": null,
             "repo_external_id": "439438299",
             "file_changes": []
         }
