@@ -7,10 +7,12 @@ from johen import generate
 
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
     AutofixStatus,
+    ChangeDetails,
     ChangesStep,
     CodebaseChange,
     CodebaseState,
@@ -28,7 +30,7 @@ from seer.automation.models import (
     StacktraceFrame,
     ThreadDetails,
 )
-from seer.automation.state import DbStateRunTypes, LocalMemoryState
+from seer.automation.state import DbStateRunTypes
 from seer.automation.summarize.issue import IssueSummary
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 
@@ -52,27 +54,6 @@ class TestAutofixContext(unittest.TestCase):
             self.state,
             MagicMock(),
         )
-
-    @patch("seer.automation.autofix.autofix_context.AutofixEventManager")
-    def test_migrate_step_keys_called_in_init(self, mock_AutofixEventManager):
-        mock_event_manager = MagicMock()
-        mock_AutofixEventManager.return_value = mock_event_manager
-
-        error_event = next(generate(SentryEventData))
-        state = LocalMemoryState(
-            AutofixContinuation(
-                request=AutofixRequest(
-                    organization_id=1,
-                    project_id=1,
-                    repos=[],
-                    issue=IssueDetails(id=0, title="", events=[error_event]),
-                )
-            )
-        )
-
-        AutofixContext(state, mock_event_manager)
-
-        mock_event_manager.migrate_step_keys.assert_called_once()
 
     def test_process_event_paths(self):
         mock_event = EventDetails(
@@ -306,7 +287,8 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             ),
             t=DbStateRunTypes.AUTOFIX,
         )
-        self.autofix_context = AutofixContext(self.state, MagicMock())
+        self.event_manager = AutofixEventManager(self.state)
+        self.autofix_context = AutofixContext(self.state, self.event_manager)
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
     @patch("seer.automation.autofix.autofix_context.RepoClient")
@@ -324,7 +306,6 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             cur.codebases = {
                 "1": CodebaseState(
                     repo_external_id="1",
-                    namespace_id=1,
                     file_changes=[
                         FileChange(
                             path="test.py",
@@ -343,14 +324,16 @@ class TestAutofixContextPrCommit(unittest.TestCase):
                     type=StepType.CHANGES,
                     status=AutofixStatus.PROCESSING,
                     index=0,
-                    changes=[
-                        CodebaseChange(
+                    codebase_changes={
+                        "1": CodebaseChange(
                             repo_external_id="1",
                             repo_name="test",
-                            title="This is the title",
-                            description="This is the description",
+                            details=ChangeDetails(
+                                title="This is the title",
+                                description="This is the description",
+                            ),
                         )
-                    ],
+                    },
                 )
             ]
 
@@ -382,11 +365,11 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         state = self.autofix_context.state.get()
         changes_step = cast(ChangesStep, state.find_step(key="changes"))
         self.assertIsNotNone(changes_step)
-        self.assertGreater(len(changes_step.changes), 0)
+        self.assertGreater(len(changes_step.codebase_changes.values()), 0)
 
-        self.assertIsNotNone(changes_step.changes[0].pull_request)
-        if changes_step.changes[0].pull_request:
-            self.assertEqual(changes_step.changes[0].pull_request.pr_number, 1)
+        self.assertIsNotNone(changes_step.codebase_changes["1"].pull_request)
+        if changes_step.codebase_changes["1"].pull_request:
+            self.assertEqual(changes_step.codebase_changes["1"].pull_request.pr_number, 1)
 
 
 if __name__ == "__main__":

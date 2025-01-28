@@ -19,6 +19,7 @@ from seer.automation.autofix.models import (
     AutofixUpdateRequest,
     AutofixUpdateType,
     AutofixUserMessagePayload,
+    ChangeDetails,
     ChangesStep,
     CodebaseChange,
     CommentThread,
@@ -224,7 +225,7 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
     assert changes_step is not None
     changes_step = cast(ChangesStep, changes_step)
     assert changes_step.status == AutofixStatus.COMPLETED
-    assert len(changes_step.changes) > 0
+    assert len(changes_step.codebase_changes.values()) > 0
 
     assert continuation.get().status not in {AutofixStatus.ERROR}
 
@@ -284,7 +285,7 @@ def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
     assert changes_step is not None
     changes_step = cast(ChangesStep, changes_step)
     assert changes_step.status == AutofixStatus.COMPLETED
-    assert len(changes_step.changes) > 0
+    assert len(changes_step.codebase_changes.values()) > 0
 
     assert continuation.get().status not in {AutofixStatus.ERROR}
 
@@ -358,7 +359,7 @@ def test_autofix_create_pr(autofix_full_finished_run: AutofixContinuation):
         )
         session.commit()
 
-    repo_external_id = next(iter(autofix_full_finished_run.codebases.keys()))
+    repo_external_id = autofix_full_finished_run.request.repos[0].external_id
 
     with eager_celery():
         run_autofix_push_changes(
@@ -610,6 +611,7 @@ def test_restart_step_with_user_response(autofix_root_cause_run: AutofixContinua
 def test_truncate_memory_to_match_insights():
     # Create a step with insights
     step = DefaultStep(
+        key="test_step",
         title="Test Step",
         status=AutofixStatus.COMPLETED,
         insights=[
@@ -763,17 +765,20 @@ def test_update_code_change_happy_path():
         ],
     )
     changes_step = ChangesStep(
+        key="test_step",
         title="Test Change",
         status=AutofixStatus.COMPLETED,
-        changes=[
-            CodebaseChange(
+        codebase_changes={
+            "test_repo": CodebaseChange(
                 repo_external_id="test_repo",
                 repo_name="test/repo",
-                title="Test Change",
-                description="Test Description",
-                diff=[file_patch],
+                details=ChangeDetails(
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[file_patch],
+                ),
             )
-        ],
+        },
     )
     state.steps = [changes_step]
 
@@ -807,8 +812,10 @@ def test_update_code_change_happy_path():
     assert updated_state is not None
     changes_step = updated_state.get().steps[-1]
     assert isinstance(changes_step, ChangesStep)
-    updated_changes = changes_step.changes[0]
-    updated_hunk = updated_changes.diff[0].hunks[0]
+    updated_changes = changes_step.codebase_changes["test_repo"]
+    assert isinstance(updated_changes, CodebaseChange)
+    assert isinstance(updated_changes.details, ChangeDetails)
+    updated_hunk = updated_changes.details.diff[0].hunks[0]
 
     # Check updated hunk lines
     assert len(updated_hunk.lines) == 3
@@ -822,7 +829,7 @@ def test_update_code_change_happy_path():
     assert updated_hunk.lines[2].target_line_no == 12
 
     # Check subsequent hunk was not affected
-    subsequent_hunk = updated_changes.diff[0].hunks[1]
+    subsequent_hunk = updated_changes.details.diff[0].hunks[1]
     assert subsequent_hunk.target_start == 20  # Should remain unchanged
     assert subsequent_hunk.target_length == 2
 
@@ -844,17 +851,20 @@ def test_update_code_change_no_matching_repo():
     # Create initial state with a changes step but different repo ID
     state = next(generate(AutofixContinuation))
     changes_step = ChangesStep(
+        key="test_step",
         title="Test Change",
         status=AutofixStatus.COMPLETED,
-        changes=[
-            CodebaseChange(
+        codebase_changes={
+            "different_repo": CodebaseChange(
                 repo_external_id="different_repo",
                 repo_name="test/repo",
-                title="Test Change",
-                description="Test Description",
-                diff=[],
+                details=ChangeDetails(
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[],
+                ),
             )
-        ],
+        },
     )
     state.steps = [changes_step]
 
@@ -873,7 +883,7 @@ def test_update_code_change_no_matching_repo():
         ),
     )
 
-    with pytest.raises(ValueError, match="No matching change found"):
+    with pytest.raises(ValueError, match="No matching change found for the repo test_repo"):
         update_code_change(request)
 
 
@@ -881,27 +891,30 @@ def test_update_code_change_no_matching_file():
     # Create initial state with a changes step but no matching file
     state = next(generate(AutofixContinuation))
     changes_step = ChangesStep(
+        key="test_step",
         title="Test Change",
         status=AutofixStatus.COMPLETED,
-        changes=[
-            CodebaseChange(
+        codebase_changes={
+            "test_repo": CodebaseChange(
                 repo_external_id="test_repo",
                 repo_name="test/repo",
-                title="Test Change",
-                description="Test Description",
-                diff=[
-                    FilePatch(
-                        type="A",
-                        added=0,
-                        removed=0,
-                        source_file="",
-                        target_file="",
-                        path="different_file.py",
-                        hunks=[],
-                    ),
-                ],
+                details=ChangeDetails(
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[
+                        FilePatch(
+                            type="A",
+                            added=0,
+                            removed=0,
+                            source_file="",
+                            target_file="",
+                            path="different_file.py",
+                            hunks=[],
+                        ),
+                    ],
+                ),
             )
-        ],
+        },
     )
     state.steps = [changes_step]
 
@@ -946,17 +959,20 @@ def test_update_code_change_invalid_hunk_index():
         ],
     )
     changes_step = ChangesStep(
+        key="test_step",
         title="Test Change",
         status=AutofixStatus.COMPLETED,
-        changes=[
-            CodebaseChange(
+        codebase_changes={
+            "test_repo": CodebaseChange(
                 repo_external_id="test_repo",
                 repo_name="test/repo",
-                title="Test Change",
-                description="Test Description",
-                diff=[file_patch],
+                details=ChangeDetails(
+                    title="Test Change",
+                    description="Test Description",
+                    diff=[file_patch],
+                ),
             )
-        ],
+        },
     )
     state.steps = [changes_step]
 
@@ -982,7 +998,7 @@ def test_update_code_change_invalid_hunk_index():
 def test_update_code_change_non_changes_step():
     # Create initial state with a non-changes step
     state = next(generate(AutofixContinuation))
-    state.steps = [DefaultStep(title="Test Step", status=AutofixStatus.COMPLETED)]
+    state.steps = [DefaultStep(key="test_step", title="Test Step", status=AutofixStatus.COMPLETED)]
 
     with Session() as session:
         session.add(DbRunState(id=1, group_id=100, value=state.model_dump(mode="json")))
@@ -1012,7 +1028,7 @@ def test_update_code_change_non_changes_step():
 def test_comment_on_thread_creates_new_thread():
     # Create initial state with a step
     state = next(generate(AutofixContinuation))
-    step = DefaultStep(title="Test Step", status=AutofixStatus.COMPLETED)
+    step = DefaultStep(key="test_step", title="Test Step", status=AutofixStatus.COMPLETED)
     state.steps = [step]
 
     # Store state in database
@@ -1053,6 +1069,7 @@ def test_comment_on_thread_updates_existing_thread():
     # Create initial state with a step that has an existing thread
     state = next(generate(AutofixContinuation))
     step = DefaultStep(
+        key="test_step",
         title="Test Step",
         status=AutofixStatus.COMPLETED,
         active_comment_thread=CommentThread(

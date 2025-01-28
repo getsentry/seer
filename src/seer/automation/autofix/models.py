@@ -102,16 +102,20 @@ class CommittedPullRequestDetails(BaseModel):
     pr_id: Optional[int] = None
 
 
-class CodebaseChange(BaseModel):
-    repo_id: int | None = None
-    repo_external_id: str | None = None
-    repo_name: str
+class ChangeDetails(BaseModel):
     title: str
     description: str
     diff: list[FilePatch] = []
     diff_str: Optional[str] = None
+
+
+class CodebaseChange(BaseModel):
+    repo_external_id: str
+    repo_name: str
+    details: ChangeDetails | None = None
     branch_name: str | None = None
     pull_request: Optional[CommittedPullRequestDetails] = None
+    file_changes: list[FileChange] = []
 
 
 class CommentThread(BaseModel):
@@ -131,7 +135,7 @@ class BaseStep(BaseModel):
     # The id is a unique identifier for each individual step.
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     # The key is to determine the kind of step, such as root_cause or changes.
-    key: str | None = None  # TODO: Make this required when we won't be breaking existing runs.
+    key: str = Field(default="default")  # Default for backwards compatibility
     title: str
     type: StepType = StepType.DEFAULT
 
@@ -144,6 +148,16 @@ class BaseStep(BaseModel):
     queued_user_messages: list[str] = []
     output_stream: str | None = None
     active_comment_thread: CommentThread | None = None
+
+    insights: list[InsightSharingOutput] = []
+    initial_memory_length: int = 1
+
+    def get_all_insights(self):
+        insights = []
+        if self.status != AutofixStatus.ERROR and isinstance(self, DefaultStep):
+            for insight in self.insights:
+                insights.append(insight.insight)
+        return insights
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
@@ -193,15 +207,6 @@ class BaseStep(BaseModel):
 
 class DefaultStep(BaseStep):
     type: Literal[StepType.DEFAULT] = StepType.DEFAULT
-    insights: list[InsightSharingOutput] = []
-    initial_memory_length: int = 1
-
-    def get_all_insights(self):
-        insights = []
-        if self.status != AutofixStatus.ERROR and isinstance(self, DefaultStep):
-            for insight in self.insights:
-                insights.append(insight.insight)
-        return insights
 
 
 class RootCauseStep(BaseStep):
@@ -212,10 +217,24 @@ class RootCauseStep(BaseStep):
     termination_reason: str | None = None
 
 
+class DeprecatedCodebaseChange(BaseModel):
+    repo_id: int | None = None
+    repo_external_id: str | None = None
+    repo_name: str
+    title: str
+    description: str
+    diff: list[FilePatch] = []
+    diff_str: str | None = None
+    branch_name: str | None = None
+    pull_request: CommittedPullRequestDetails | None = None
+
+
 class ChangesStep(BaseStep):
     type: Literal[StepType.CHANGES] = StepType.CHANGES
+    codebase_changes: dict[str, CodebaseChange] = Field(default_factory=dict)
 
-    changes: list[CodebaseChange]
+    # @deprecated, use the codebase_changes field
+    changes: list[DeprecatedCodebaseChange] | None = None
 
 
 Step = Union[DefaultStep, RootCauseStep, ChangesStep]
@@ -223,8 +242,8 @@ Step = Union[DefaultStep, RootCauseStep, ChangesStep]
 
 class CodebaseState(BaseModel):
     repo_id: int | None = None
-    namespace_id: int | None = None
     repo_external_id: str | None = None
+
     file_changes: list[FileChange] = []
 
 
@@ -232,7 +251,8 @@ class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
     status: AutofixStatus = AutofixStatus.PROCESSING
-    codebases: dict[str, CodebaseState] = Field(default_factory=dict)
+    # @deprecated, use the changes in the coding step
+    codebases: dict[str, CodebaseState] | None = None
     usage: Usage = Field(default_factory=Usage)
     last_triggered_at: Annotated[
         datetime.datetime, Examples(datetime.datetime.now() for _ in gen)
@@ -438,6 +458,9 @@ class AutofixContinuation(AutofixGroupState):
     def find_step(
         self, *, id: str | None = None, key: str | None = None, index: int | None = None
     ) -> Step | None:
+        """
+        Find the latest step by id, key, or index.
+        """
         if index is not None and 0 <= index < len(self.steps):
             return self.steps[index]
         for step in self.steps[::-1]:
@@ -524,11 +547,6 @@ class AutofixContinuation(AutofixGroupState):
         found_index = next((i for i, s in enumerate(self.steps) if s.id == step.id), -1)
         if found_index != -1:
             self.steps = self.steps[: found_index + (0 if include_current else 1)]
-
-    def clear_file_changes(self):
-        for key, codebase in self.codebases.items():
-            codebase.file_changes = []
-            self.codebases[key] = codebase
 
     @property
     def is_running(self):

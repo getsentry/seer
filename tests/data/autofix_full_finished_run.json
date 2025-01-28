@@ -73,34 +73,20 @@
             "termination_reason": null
         },
         {
-            "id": "50a42915-be6c-4902-8d65-493df00078ab",
-            "key": "plan",
-            "title": "Creating Fix",
-            "type": "default",
+            "id": "b931764b-606b-42a1-ae9d-8087152a1b95",
+            "key": "changes",
+            "title": "Code Changes",
+            "type": "changes",
             "status": "COMPLETED",
             "index": 2,
             "progress": [
                 {
-                    "timestamp": "2024-12-18T16:35:40.433413",
-                    "message": "Figuring out a fix for the root cause of this issue...",
-                    "type": "INFO",
-                    "data": null
-                },
-                {
-                    "timestamp": "2024-12-18T16:35:41.081519",
-                    "message": "Looking at `src/seer/automation/autofix/components/root_cause/models.py` in `getsentry/seer`...",
-                    "type": "INFO",
-                    "data": null
-                },
-                {
-                    "timestamp": "2024-12-18T16:35:42.595663",
-                    "message": "Describing the changes...",
+                    "timestamp": "2024-12-18T16:35:42.839530",
+                    "message": "Here are Autofix's suggested changes to fix the issue.",
                     "type": "INFO",
                     "data": null
                 }
             ],
-            "completedMessage": null,
-            "queued_user_messages": [],
             "output_stream": "Let me plan out the steps:\n\n<plan_steps>\n<step file_path=\"src/seer/automation/autofix/components/root_cause/models.py\" repo_name=\"getsentry/seer\" type=\"file_change\">\n<diff>\n--- a/src/seer/automation/autofix/components/root_cause/models.py\n+++ b/src/seer/automation/autofix/components/root_cause/models.py\n@@ -46,8 +46,8 @@\n class RootCauseAnalysisItem(BaseModel):\n     id: int = -1\n     title: str\n     description: str\n-    # unit_test: UnitTestSnippet | None = None\n-    # reproduction: str | None = None\n+    unit_test: UnitTestSnippet | None = None\n+    reproduction: str | None = None\n     code_context: Optional[list[RootCauseRelevantContext]] = None\n\n     def to_markdown_string(self) -> str:\n@@ -72,8 +72,8 @@\n class RootCauseAnalysisItemPrompt(BaseModel):\n     title: str\n     description: str\n-    # reproduction_instructions: str | None = None\n-    # unit_test: UnitTestSnippetPrompt | None = None\n+    reproduction_instructions: str | None = None\n+    unit_test: UnitTestSnippetPrompt | None = None\n     relevant_code: Optional[RootCauseAnalysisRelevantContext]\n\n     @classmethod\n@@ -81,15 +81,15 @@\n         return cls(\n             title=model.title,\n             description=model.description,\n-            # reproduction_instructions=model.reproduction,\n-            # unit_test=(\n-            #     UnitTestSnippetPrompt(\n-            #         file_path=model.unit_test.file_path,\n-            #         code_snippet=model.unit_test.snippet,\n-            #         description=model.unit_test.description,\n-            #     )\n-            #     if model.unit_test\n-            #     else None\n+            reproduction_instructions=model.reproduction,\n+            unit_test=(\n+                UnitTestSnippetPrompt(\n+                    file_path=model.unit_test.file_path,\n+                    code_snippet=model.unit_test.snippet,\n+                    description=model.unit_test.description,\n+                )\n+                if model.unit_test\n+                else None\n             ),\n             relevant_code=(\n                 RootCauseAnalysisRelevantContext(\n@@ -110,15 +110,15 @@\n         return RootCauseAnalysisItem.model_validate(\n             {\n                 **self.model_dump(),\n-                # \"reproduction\": self.reproduction_instructions,\n-                # \"unit_test\": (\n-                #     {\n-                #         \"file_path\": self.unit_test.file_path,\n-                #         \"snippet\": self.unit_test.code_snippet,\n-                #         \"description\": self.unit_test.description,\n-                #     }\n-                #     if self.unit_test\n-                #     else None\n+                \"reproduction\": self.reproduction_instructions,\n+                \"unit_test\": (\n+                    {\n+                        \"file_path\": self.unit_test.file_path,\n+                        \"snippet\": self.unit_test.code_snippet,\n+                        \"description\": self.unit_test.description,\n+                    }\n+                    if self.unit_test\n+                    else None\n                 ),\n                 \"code_context\": (\n                     self.relevant_code.model_dump()[\"snippets\"] if self.relevant_code else None\n</diff>\n<description>\nThis change uncomments and restores three main sections in the models.py file:\n\n1. In the RootCauseAnalysisItem class:\n   - Restores the unit_test and reproduction fields as optional fields (None by default)\n\n2. In the RootCauseAnalysisItemPrompt class:\n   - Restores the reproduction_instructions and unit_test fields as optional fields\n\n3. In the from_model classmethod and to_model method:\n   - Uncomments the logic that handles the conversion of unit_test and reproduction data between the prompt and model classes\n   - Restores the proper model validation and data transformation logic\n\nThis fix ensures that the models properly handle the unit test and reproduction fields throughout the data conversion process, resolving the validation error that was occurring.\n</description>\n<commit_message>\nfix(root-cause): Restore unit test and reproduction fields in RootCauseAnalysis models\n\n- Uncomment unit_test and reproduction fields in RootCauseAnalysisItem\n- Restore related fields in RootCauseAnalysisItemPrompt\n- Enable data conversion logic in from_model and to_model methods\n</commit_message>\n</step>\n</plan_steps>\n\nThis single step is comprehensive and addresses the entire issue by restoring all the necessary fields and logic in the models.py file. The changes maintain consistency throughout the codebase and ensure that all the model fields are properly handled during data validation and conversion.\n\nThe unified diff shows exactly what needs to be changed, with proper context lines to help locate the changes in the file. The commit message clearly describes what is being changed and why. The description provides detailed information about each part of the change and how it contributes to fixing the validation error.",
             "insights": [
                 {
@@ -133,589 +119,572 @@
                     "generated_at_memory_index": 1
                 }
             ],
-            "initial_memory_length": 1
-        },
-        {
-            "id": "b931764b-606b-42a1-ae9d-8087152a1b95",
-            "key": "changes",
-            "title": "Code Changes",
-            "type": "changes",
-            "status": "COMPLETED",
-            "index": 3,
-            "progress": [
-                {
-                    "timestamp": "2024-12-18T16:35:42.839530",
-                    "message": "Here are Autofix's suggested changes to fix the issue.",
-                    "type": "INFO",
-                    "data": null
-                }
-            ],
             "completedMessage": null,
             "queued_user_messages": [],
-            "output_stream": null,
-            "changes": [
-                {
-                    "repo_id": 1,
+            "codebase_changes": {
+                "439438299": {
                     "repo_external_id": "439438299",
                     "repo_name": "getsentry/seer",
-                    "title": "Ah yes Uncommented Unit Test and Reproduction Fields in Root Cause Models",
-                    "description": "The changes in `models.py` involve uncommenting the previously commented-out fields `unit_test`, `reproduction`, `reproduction_instructions`, and `unit_test` in both `RootCause` and `RootCauseAnalysisItemPrompt` classes. This indicates that these fields are now active and available for use in the respective data models. Additionally, the code responsible for transforming these fields into the appropriate formats has been updated to reflect the uncommenting, streamlining the data flow between the models and their representations. These changes enhance the model's functionality by allowing unit tests and reproduction instructions to be stored and handled.",
-                    "diff": [
-                        {
-                            "type": "M",
-                            "path": "src/seer/automation/autofix/components/root_cause/models.py",
-                            "added": 24,
-                            "removed": 24,
-                            "source_file": "src/seer/automation/autofix/components/root_cause/models.py",
-                            "target_file": "src/seer/automation/autofix/components/root_cause/models.py",
-                            "hunks": [
-                                {
-                                    "source_start": 64,
-                                    "source_length": 8,
-                                    "target_start": 64,
-                                    "target_length": 8,
-                                    "section_header": "class RootCauseAnalysisItem(BaseModel):",
-                                    "lines": [
-                                        {
-                                            "source_line_no": 64,
-                                            "target_line_no": 64,
-                                            "diff_line_no": 4,
-                                            "value": "    id: int = -1\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 65,
-                                            "target_line_no": 65,
-                                            "diff_line_no": 5,
-                                            "value": "    title: str\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 66,
-                                            "target_line_no": 66,
-                                            "diff_line_no": 6,
-                                            "value": "    description: str\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 67,
-                                            "target_line_no": null,
-                                            "diff_line_no": 7,
-                                            "value": "    # unit_test: UnitTestSnippet | None = None\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 68,
-                                            "target_line_no": null,
-                                            "diff_line_no": 8,
-                                            "value": "    # reproduction: str | None = None\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 67,
-                                            "diff_line_no": 9,
-                                            "value": "    unit_test: UnitTestSnippet | None = None\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 68,
-                                            "diff_line_no": 10,
-                                            "value": "    reproduction: str | None = None\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": 69,
-                                            "target_line_no": 69,
-                                            "diff_line_no": 11,
-                                            "value": "    code_context: Optional[list[RootCauseRelevantContext]] = None\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 70,
-                                            "target_line_no": 70,
-                                            "diff_line_no": 12,
-                                            "value": "\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 71,
-                                            "target_line_no": 71,
-                                            "diff_line_no": 13,
-                                            "value": "    def to_markdown_string(self) -> str:\n",
-                                            "line_type": " "
-                                        }
-                                    ]
-                                },
-                                {
-                                    "source_start": 91,
-                                    "source_length": 8,
-                                    "target_start": 91,
-                                    "target_length": 8,
-                                    "section_header": "class RootCauseAnalysisItemPrompt(BaseModel):",
-                                    "lines": [
-                                        {
-                                            "source_line_no": 91,
-                                            "target_line_no": 91,
-                                            "diff_line_no": 15,
-                                            "value": "class RootCauseAnalysisItemPrompt(BaseModel):\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 92,
-                                            "target_line_no": 92,
-                                            "diff_line_no": 16,
-                                            "value": "    title: str\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 93,
-                                            "target_line_no": 93,
-                                            "diff_line_no": 17,
-                                            "value": "    description: str\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 94,
-                                            "target_line_no": null,
-                                            "diff_line_no": 18,
-                                            "value": "    # reproduction_instructions: str | None = None\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 95,
-                                            "target_line_no": null,
-                                            "diff_line_no": 19,
-                                            "value": "    # unit_test: UnitTestSnippetPrompt | None = None\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 94,
-                                            "diff_line_no": 20,
-                                            "value": "    reproduction_instructions: str | None = None\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 95,
-                                            "diff_line_no": 21,
-                                            "value": "    unit_test: UnitTestSnippetPrompt | None = None\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": 96,
-                                            "target_line_no": 96,
-                                            "diff_line_no": 22,
-                                            "value": "    relevant_code: Optional[RootCauseAnalysisRelevantContext]\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 97,
-                                            "target_line_no": 97,
-                                            "diff_line_no": 23,
-                                            "value": "\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 98,
-                                            "target_line_no": 98,
-                                            "diff_line_no": 24,
-                                            "value": "    @classmethod\n",
-                                            "line_type": " "
-                                        }
-                                    ]
-                                },
-                                {
-                                    "source_start": 100,
-                                    "source_length": 16,
-                                    "target_start": 100,
-                                    "target_length": 16,
-                                    "section_header": "def from_model(cls, model: RootCauseAnalysisItem):",
-                                    "lines": [
-                                        {
-                                            "source_line_no": 100,
-                                            "target_line_no": 100,
-                                            "diff_line_no": 26,
-                                            "value": "        return cls(\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 101,
-                                            "target_line_no": 101,
-                                            "diff_line_no": 27,
-                                            "value": "            title=model.title,\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 102,
-                                            "target_line_no": 102,
-                                            "diff_line_no": 28,
-                                            "value": "            description=model.description,\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 103,
-                                            "target_line_no": null,
-                                            "diff_line_no": 29,
-                                            "value": "            # reproduction_instructions=model.reproduction,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 104,
-                                            "target_line_no": null,
-                                            "diff_line_no": 30,
-                                            "value": "            # unit_test=(\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 105,
-                                            "target_line_no": null,
-                                            "diff_line_no": 31,
-                                            "value": "            #     UnitTestSnippetPrompt(\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 106,
-                                            "target_line_no": null,
-                                            "diff_line_no": 32,
-                                            "value": "            #         file_path=model.unit_test.file_path,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 107,
-                                            "target_line_no": null,
-                                            "diff_line_no": 33,
-                                            "value": "            #         code_snippet=model.unit_test.snippet,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 108,
-                                            "target_line_no": null,
-                                            "diff_line_no": 34,
-                                            "value": "            #         description=model.unit_test.description,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 109,
-                                            "target_line_no": null,
-                                            "diff_line_no": 35,
-                                            "value": "            #     )\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 110,
-                                            "target_line_no": null,
-                                            "diff_line_no": 36,
-                                            "value": "            #     if model.unit_test\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 111,
-                                            "target_line_no": null,
-                                            "diff_line_no": 37,
-                                            "value": "            #     else None\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 112,
-                                            "target_line_no": null,
-                                            "diff_line_no": 38,
-                                            "value": "            # ),\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 103,
-                                            "diff_line_no": 39,
-                                            "value": "            reproduction_instructions=model.reproduction,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 104,
-                                            "diff_line_no": 40,
-                                            "value": "            unit_test=(\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 105,
-                                            "diff_line_no": 41,
-                                            "value": "                UnitTestSnippetPrompt(\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 106,
-                                            "diff_line_no": 42,
-                                            "value": "                    file_path=model.unit_test.file_path,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 107,
-                                            "diff_line_no": 43,
-                                            "value": "                    code_snippet=model.unit_test.snippet,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 108,
-                                            "diff_line_no": 44,
-                                            "value": "                    description=model.unit_test.description,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 109,
-                                            "diff_line_no": 45,
-                                            "value": "                )\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 110,
-                                            "diff_line_no": 46,
-                                            "value": "                if model.unit_test\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 111,
-                                            "diff_line_no": 47,
-                                            "value": "                else None\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 112,
-                                            "diff_line_no": 48,
-                                            "value": "            ),\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": 113,
-                                            "target_line_no": 113,
-                                            "diff_line_no": 49,
-                                            "value": "            relevant_code=(\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 114,
-                                            "target_line_no": 114,
-                                            "diff_line_no": 50,
-                                            "value": "                RootCauseAnalysisRelevantContext(\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 115,
-                                            "target_line_no": 115,
-                                            "diff_line_no": 51,
-                                            "value": "                    snippets=[\n",
-                                            "line_type": " "
-                                        }
-                                    ]
-                                },
-                                {
-                                    "source_start": 131,
-                                    "source_length": 16,
-                                    "target_start": 131,
-                                    "target_length": 16,
-                                    "section_header": "",
-                                    "lines": [
-                                        {
-                                            "source_line_no": 131,
-                                            "target_line_no": 131,
-                                            "diff_line_no": 53,
-                                            "value": "        return RootCauseAnalysisItem.model_validate(\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 132,
-                                            "target_line_no": 132,
-                                            "diff_line_no": 54,
-                                            "value": "            {\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 133,
-                                            "target_line_no": 133,
-                                            "diff_line_no": 55,
-                                            "value": "                **self.model_dump(),\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 134,
-                                            "target_line_no": null,
-                                            "diff_line_no": 56,
-                                            "value": "                # \"reproduction\": self.reproduction_instructions,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 135,
-                                            "target_line_no": null,
-                                            "diff_line_no": 57,
-                                            "value": "                # \"unit_test\": (\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 136,
-                                            "target_line_no": null,
-                                            "diff_line_no": 58,
-                                            "value": "                #     {\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 137,
-                                            "target_line_no": null,
-                                            "diff_line_no": 59,
-                                            "value": "                #         \"file_path\": self.unit_test.file_path,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 138,
-                                            "target_line_no": null,
-                                            "diff_line_no": 60,
-                                            "value": "                #         \"snippet\": self.unit_test.code_snippet,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 139,
-                                            "target_line_no": null,
-                                            "diff_line_no": 61,
-                                            "value": "                #         \"description\": self.unit_test.description,\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 140,
-                                            "target_line_no": null,
-                                            "diff_line_no": 62,
-                                            "value": "                #     }\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 141,
-                                            "target_line_no": null,
-                                            "diff_line_no": 63,
-                                            "value": "                #     if self.unit_test\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 142,
-                                            "target_line_no": null,
-                                            "diff_line_no": 64,
-                                            "value": "                #     else None\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": 143,
-                                            "target_line_no": null,
-                                            "diff_line_no": 65,
-                                            "value": "                # ),\n",
-                                            "line_type": "-"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 134,
-                                            "diff_line_no": 66,
-                                            "value": "                \"reproduction\": self.reproduction_instructions,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 135,
-                                            "diff_line_no": 67,
-                                            "value": "                \"unit_test\": (\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 136,
-                                            "diff_line_no": 68,
-                                            "value": "                    {\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 137,
-                                            "diff_line_no": 69,
-                                            "value": "                        \"file_path\": self.unit_test.file_path,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 138,
-                                            "diff_line_no": 70,
-                                            "value": "                        \"snippet\": self.unit_test.code_snippet,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 139,
-                                            "diff_line_no": 71,
-                                            "value": "                        \"description\": self.unit_test.description,\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 140,
-                                            "diff_line_no": 72,
-                                            "value": "                    }\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 141,
-                                            "diff_line_no": 73,
-                                            "value": "                    if self.unit_test\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 142,
-                                            "diff_line_no": 74,
-                                            "value": "                    else None\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": null,
-                                            "target_line_no": 143,
-                                            "diff_line_no": 75,
-                                            "value": "                ),\n",
-                                            "line_type": "+"
-                                        },
-                                        {
-                                            "source_line_no": 144,
-                                            "target_line_no": 144,
-                                            "diff_line_no": 76,
-                                            "value": "                \"code_context\": (\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 145,
-                                            "target_line_no": 145,
-                                            "diff_line_no": 77,
-                                            "value": "                    self.relevant_code.model_dump()[\"snippets\"] if self.relevant_code else None\n",
-                                            "line_type": " "
-                                        },
-                                        {
-                                            "source_line_no": 146,
-                                            "target_line_no": 146,
-                                            "diff_line_no": 78,
-                                            "value": "                ),",
-                                            "line_type": " "
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ],
-                    "diff_str": "--- src/seer/automation/autofix/components/root_cause/models.py\n+++ src/seer/automation/autofix/components/root_cause/models.py\n@@ -64,8 +64,8 @@\n     id: int = -1\n     title: str\n     description: str\n-    # unit_test: UnitTestSnippet | None = None\n-    # reproduction: str | None = None\n+    unit_test: UnitTestSnippet | None = None\n+    reproduction: str | None = None\n     code_context: Optional[list[RootCauseRelevantContext]] = None\n \n     def to_markdown_string(self) -> str:\n@@ -91,8 +91,8 @@\n class RootCauseAnalysisItemPrompt(BaseModel):\n     title: str\n     description: str\n-    # reproduction_instructions: str | None = None\n-    # unit_test: UnitTestSnippetPrompt | None = None\n+    reproduction_instructions: str | None = None\n+    unit_test: UnitTestSnippetPrompt | None = None\n     relevant_code: Optional[RootCauseAnalysisRelevantContext]\n \n     @classmethod\n@@ -100,16 +100,16 @@\n         return cls(\n             title=model.title,\n             description=model.description,\n-            # reproduction_instructions=model.reproduction,\n-            # unit_test=(\n-            #     UnitTestSnippetPrompt(\n-            #         file_path=model.unit_test.file_path,\n-            #         code_snippet=model.unit_test.snippet,\n-            #         description=model.unit_test.description,\n-            #     )\n-            #     if model.unit_test\n-            #     else None\n-            # ),\n+            reproduction_instructions=model.reproduction,\n+            unit_test=(\n+                UnitTestSnippetPrompt(\n+                    file_path=model.unit_test.file_path,\n+                    code_snippet=model.unit_test.snippet,\n+                    description=model.unit_test.description,\n+                )\n+                if model.unit_test\n+                else None\n+            ),\n             relevant_code=(\n                 RootCauseAnalysisRelevantContext(\n                     snippets=[\n@@ -131,16 +131,16 @@\n         return RootCauseAnalysisItem.model_validate(\n             {\n                 **self.model_dump(),\n-                # \"reproduction\": self.reproduction_instructions,\n-                # \"unit_test\": (\n-                #     {\n-                #         \"file_path\": self.unit_test.file_path,\n-                #         \"snippet\": self.unit_test.code_snippet,\n-                #         \"description\": self.unit_test.description,\n-                #     }\n-                #     if self.unit_test\n-                #     else None\n-                # ),\n+                \"reproduction\": self.reproduction_instructions,\n+                \"unit_test\": (\n+                    {\n+                        \"file_path\": self.unit_test.file_path,\n+                        \"snippet\": self.unit_test.code_snippet,\n+                        \"description\": self.unit_test.description,\n+                    }\n+                    if self.unit_test\n+                    else None\n+                ),\n                 \"code_context\": (\n                     self.relevant_code.model_dump()[\"snippets\"] if self.relevant_code else None\n                 ),",
+                    "details": {
+                        "title": "Oops Uncommented Unit Test and Reproduction Fields in Root Cause Models",
+                        "description": "The changes in `models.py` involve uncommenting the previously commented-out fields `unit_test`, `reproduction`, `reproduction_instructions`, and `unit_test` in both `RootCause` and `RootCauseAnalysisItemPrompt` classes. This indicates that these fields are now active and available for use in the respective data models. Additionally, the code responsible for transforming these fields into the appropriate formats has been updated to reflect the uncommenting, streamlining the data flow between the models and their representations. These changes enhance the model's functionality by allowing unit tests and reproduction instructions to be stored and handled.",
+                        "diff": [
+                            {
+                                "type": "M",
+                                "path": "src/seer/automation/autofix/components/root_cause/models.py",
+                                "added": 24,
+                                "removed": 24,
+                                "source_file": "src/seer/automation/autofix/components/root_cause/models.py",
+                                "target_file": "src/seer/automation/autofix/components/root_cause/models.py",
+                                "hunks": [
+                                    {
+                                        "source_start": 64,
+                                        "source_length": 8,
+                                        "target_start": 64,
+                                        "target_length": 8,
+                                        "section_header": "class RootCauseAnalysisItem(BaseModel):",
+                                        "lines": [
+                                            {
+                                                "source_line_no": 64,
+                                                "target_line_no": 64,
+                                                "diff_line_no": 4,
+                                                "value": "    id: int = -1\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 65,
+                                                "target_line_no": 65,
+                                                "diff_line_no": 5,
+                                                "value": "    title: str\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 66,
+                                                "target_line_no": 66,
+                                                "diff_line_no": 6,
+                                                "value": "    description: str\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 67,
+                                                "target_line_no": null,
+                                                "diff_line_no": 7,
+                                                "value": "    # unit_test: UnitTestSnippet | None = None\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 68,
+                                                "target_line_no": null,
+                                                "diff_line_no": 8,
+                                                "value": "    # reproduction: str | None = None\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 67,
+                                                "diff_line_no": 9,
+                                                "value": "    unit_test: UnitTestSnippet | None = None\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 68,
+                                                "diff_line_no": 10,
+                                                "value": "    reproduction: str | None = None\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": 69,
+                                                "target_line_no": 69,
+                                                "diff_line_no": 11,
+                                                "value": "    code_context: Optional[list[RootCauseRelevantContext]] = None\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 70,
+                                                "target_line_no": 70,
+                                                "diff_line_no": 12,
+                                                "value": "\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 71,
+                                                "target_line_no": 71,
+                                                "diff_line_no": 13,
+                                                "value": "    def to_markdown_string(self) -> str:\n",
+                                                "line_type": " "
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "source_start": 91,
+                                        "source_length": 8,
+                                        "target_start": 91,
+                                        "target_length": 8,
+                                        "section_header": "class RootCauseAnalysisItemPrompt(BaseModel):",
+                                        "lines": [
+                                            {
+                                                "source_line_no": 91,
+                                                "target_line_no": 91,
+                                                "diff_line_no": 15,
+                                                "value": "class RootCauseAnalysisItemPrompt(BaseModel):\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 92,
+                                                "target_line_no": 92,
+                                                "diff_line_no": 16,
+                                                "value": "    title: str\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 93,
+                                                "target_line_no": 93,
+                                                "diff_line_no": 17,
+                                                "value": "    description: str\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 94,
+                                                "target_line_no": null,
+                                                "diff_line_no": 18,
+                                                "value": "    # reproduction_instructions: str | None = None\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 95,
+                                                "target_line_no": null,
+                                                "diff_line_no": 19,
+                                                "value": "    # unit_test: UnitTestSnippetPrompt | None = None\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 94,
+                                                "diff_line_no": 20,
+                                                "value": "    reproduction_instructions: str | None = None\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 95,
+                                                "diff_line_no": 21,
+                                                "value": "    unit_test: UnitTestSnippetPrompt | None = None\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": 96,
+                                                "target_line_no": 96,
+                                                "diff_line_no": 22,
+                                                "value": "    relevant_code: Optional[RootCauseAnalysisRelevantContext]\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 97,
+                                                "target_line_no": 97,
+                                                "diff_line_no": 23,
+                                                "value": "\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 98,
+                                                "target_line_no": 98,
+                                                "diff_line_no": 24,
+                                                "value": "    @classmethod\n",
+                                                "line_type": " "
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "source_start": 100,
+                                        "source_length": 16,
+                                        "target_start": 100,
+                                        "target_length": 16,
+                                        "section_header": "def from_model(cls, model: RootCauseAnalysisItem):",
+                                        "lines": [
+                                            {
+                                                "source_line_no": 100,
+                                                "target_line_no": 100,
+                                                "diff_line_no": 26,
+                                                "value": "        return cls(\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 101,
+                                                "target_line_no": 101,
+                                                "diff_line_no": 27,
+                                                "value": "            title=model.title,\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 102,
+                                                "target_line_no": 102,
+                                                "diff_line_no": 28,
+                                                "value": "            description=model.description,\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 103,
+                                                "target_line_no": null,
+                                                "diff_line_no": 29,
+                                                "value": "            # reproduction_instructions=model.reproduction,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 104,
+                                                "target_line_no": null,
+                                                "diff_line_no": 30,
+                                                "value": "            # unit_test=(\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 105,
+                                                "target_line_no": null,
+                                                "diff_line_no": 31,
+                                                "value": "            #     UnitTestSnippetPrompt(\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 106,
+                                                "target_line_no": null,
+                                                "diff_line_no": 32,
+                                                "value": "            #         file_path=model.unit_test.file_path,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 107,
+                                                "target_line_no": null,
+                                                "diff_line_no": 33,
+                                                "value": "            #         code_snippet=model.unit_test.snippet,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 108,
+                                                "target_line_no": null,
+                                                "diff_line_no": 34,
+                                                "value": "            #         description=model.unit_test.description,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 109,
+                                                "target_line_no": null,
+                                                "diff_line_no": 35,
+                                                "value": "            #     )\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 110,
+                                                "target_line_no": null,
+                                                "diff_line_no": 36,
+                                                "value": "            #     if model.unit_test\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 111,
+                                                "target_line_no": null,
+                                                "diff_line_no": 37,
+                                                "value": "            #     else None\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 112,
+                                                "target_line_no": null,
+                                                "diff_line_no": 38,
+                                                "value": "            # ),\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 103,
+                                                "diff_line_no": 39,
+                                                "value": "            reproduction_instructions=model.reproduction,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 104,
+                                                "diff_line_no": 40,
+                                                "value": "            unit_test=(\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 105,
+                                                "diff_line_no": 41,
+                                                "value": "                UnitTestSnippetPrompt(\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 106,
+                                                "diff_line_no": 42,
+                                                "value": "                    file_path=model.unit_test.file_path,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 107,
+                                                "diff_line_no": 43,
+                                                "value": "                    code_snippet=model.unit_test.snippet,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 108,
+                                                "diff_line_no": 44,
+                                                "value": "                    description=model.unit_test.description,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 109,
+                                                "diff_line_no": 45,
+                                                "value": "                )\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 110,
+                                                "diff_line_no": 46,
+                                                "value": "                if model.unit_test\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 111,
+                                                "diff_line_no": 47,
+                                                "value": "                else None\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 112,
+                                                "diff_line_no": 48,
+                                                "value": "            ),\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": 113,
+                                                "target_line_no": 113,
+                                                "diff_line_no": 49,
+                                                "value": "            relevant_code=(\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 114,
+                                                "target_line_no": 114,
+                                                "diff_line_no": 50,
+                                                "value": "                RootCauseAnalysisRelevantContext(\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 115,
+                                                "target_line_no": 115,
+                                                "diff_line_no": 51,
+                                                "value": "                    snippets=[\n",
+                                                "line_type": " "
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "source_start": 131,
+                                        "source_length": 16,
+                                        "target_start": 131,
+                                        "target_length": 16,
+                                        "section_header": "",
+                                        "lines": [
+                                            {
+                                                "source_line_no": 131,
+                                                "target_line_no": 131,
+                                                "diff_line_no": 53,
+                                                "value": "        return RootCauseAnalysisItem.model_validate(\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 132,
+                                                "target_line_no": 132,
+                                                "diff_line_no": 54,
+                                                "value": "            {\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 133,
+                                                "target_line_no": 133,
+                                                "diff_line_no": 55,
+                                                "value": "                **self.model_dump(),\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 134,
+                                                "target_line_no": null,
+                                                "diff_line_no": 56,
+                                                "value": "                # \"reproduction\": self.reproduction_instructions,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 135,
+                                                "target_line_no": null,
+                                                "diff_line_no": 57,
+                                                "value": "                # \"unit_test\": (\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 136,
+                                                "target_line_no": null,
+                                                "diff_line_no": 58,
+                                                "value": "                #     {\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 137,
+                                                "target_line_no": null,
+                                                "diff_line_no": 59,
+                                                "value": "                #         \"file_path\": self.unit_test.file_path,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 138,
+                                                "target_line_no": null,
+                                                "diff_line_no": 60,
+                                                "value": "                #         \"snippet\": self.unit_test.code_snippet,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 139,
+                                                "target_line_no": null,
+                                                "diff_line_no": 61,
+                                                "value": "                #         \"description\": self.unit_test.description,\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 140,
+                                                "target_line_no": null,
+                                                "diff_line_no": 62,
+                                                "value": "                #     }\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 141,
+                                                "target_line_no": null,
+                                                "diff_line_no": 63,
+                                                "value": "                #     if self.unit_test\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 142,
+                                                "target_line_no": null,
+                                                "diff_line_no": 64,
+                                                "value": "                #     else None\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": 143,
+                                                "target_line_no": null,
+                                                "diff_line_no": 65,
+                                                "value": "                # ),\n",
+                                                "line_type": "-"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 134,
+                                                "diff_line_no": 66,
+                                                "value": "                \"reproduction\": self.reproduction_instructions,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 135,
+                                                "diff_line_no": 67,
+                                                "value": "                \"unit_test\": (\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 136,
+                                                "diff_line_no": 68,
+                                                "value": "                    {\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 137,
+                                                "diff_line_no": 69,
+                                                "value": "                        \"file_path\": self.unit_test.file_path,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 138,
+                                                "diff_line_no": 70,
+                                                "value": "                        \"snippet\": self.unit_test.code_snippet,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 139,
+                                                "diff_line_no": 71,
+                                                "value": "                        \"description\": self.unit_test.description,\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 140,
+                                                "diff_line_no": 72,
+                                                "value": "                    }\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 141,
+                                                "diff_line_no": 73,
+                                                "value": "                    if self.unit_test\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 142,
+                                                "diff_line_no": 74,
+                                                "value": "                    else None\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": null,
+                                                "target_line_no": 143,
+                                                "diff_line_no": 75,
+                                                "value": "                ),\n",
+                                                "line_type": "+"
+                                            },
+                                            {
+                                                "source_line_no": 144,
+                                                "target_line_no": 144,
+                                                "diff_line_no": 76,
+                                                "value": "                \"code_context\": (\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 145,
+                                                "target_line_no": 145,
+                                                "diff_line_no": 77,
+                                                "value": "                    self.relevant_code.model_dump()[\"snippets\"] if self.relevant_code else None\n",
+                                                "line_type": " "
+                                            },
+                                            {
+                                                "source_line_no": 146,
+                                                "target_line_no": 146,
+                                                "diff_line_no": 78,
+                                                "value": "                ),",
+                                                "line_type": " "
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ],
+                        "diff_str": "--- src/seer/automation/autofix/components/root_cause/models.py\n+++ src/seer/automation/autofix/components/root_cause/models.py\n@@ -64,8 +64,8 @@\n     id: int = -1\n     title: str\n     description: str\n-    # unit_test: UnitTestSnippet | None = None\n-    # reproduction: str | None = None\n+    unit_test: UnitTestSnippet | None = None\n+    reproduction: str | None = None\n     code_context: Optional[list[RootCauseRelevantContext]] = None\n \n     def to_markdown_string(self) -> str:\n@@ -91,8 +91,8 @@\n class RootCauseAnalysisItemPrompt(BaseModel):\n     title: str\n     description: str\n-    # reproduction_instructions: str | None = None\n-    # unit_test: UnitTestSnippetPrompt | None = None\n+    reproduction_instructions: str | None = None\n+    unit_test: UnitTestSnippetPrompt | None = None\n     relevant_code: Optional[RootCauseAnalysisRelevantContext]\n \n     @classmethod\n@@ -100,16 +100,16 @@\n         return cls(\n             title=model.title,\n             description=model.description,\n-            # reproduction_instructions=model.reproduction,\n-            # unit_test=(\n-            #     UnitTestSnippetPrompt(\n-            #         file_path=model.unit_test.file_path,\n-            #         code_snippet=model.unit_test.snippet,\n-            #         description=model.unit_test.description,\n-            #     )\n-            #     if model.unit_test\n-            #     else None\n-            # ),\n+            reproduction_instructions=model.reproduction,\n+            unit_test=(\n+                UnitTestSnippetPrompt(\n+                    file_path=model.unit_test.file_path,\n+                    code_snippet=model.unit_test.snippet,\n+                    description=model.unit_test.description,\n+                )\n+                if model.unit_test\n+                else None\n+            ),\n             relevant_code=(\n                 RootCauseAnalysisRelevantContext(\n                     snippets=[\n@@ -131,16 +131,16 @@\n         return RootCauseAnalysisItem.model_validate(\n             {\n                 **self.model_dump(),\n-                # \"reproduction\": self.reproduction_instructions,\n-                # \"unit_test\": (\n-                #     {\n-                #         \"file_path\": self.unit_test.file_path,\n-                #         \"snippet\": self.unit_test.code_snippet,\n-                #         \"description\": self.unit_test.description,\n-                #     }\n-                #     if self.unit_test\n-                #     else None\n-                # ),\n+                \"reproduction\": self.reproduction_instructions,\n+                \"unit_test\": (\n+                    {\n+                        \"file_path\": self.unit_test.file_path,\n+                        \"snippet\": self.unit_test.code_snippet,\n+                        \"description\": self.unit_test.description,\n+                    }\n+                    if self.unit_test\n+                    else None\n+                ),\n                 \"code_context\": (\n                     self.relevant_code.model_dump()[\"snippets\"] if self.relevant_code else None\n                 ),"
+                    },
                     "pull_request": null
                 }
-            ]
+            }
         }
     ],
     "status": "COMPLETED",

@@ -222,15 +222,15 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
         if not isinstance(changes_step, ChangesStep):
             return None, root_cause_step.causes
 
-        changes = changes_step.changes
+        changes = list(changes_step.codebase_changes.values())
 
         if not changes:
             return None, root_cause_step.causes
 
         diffs: list[str] = []
         for change in changes:
-            if change.diff_str:
-                diffs.append(change.diff_str)
+            if change.details and change.details.diff_str:
+                diffs.append(change.details.diff_str)
 
         return "\n".join(diffs), root_cause_step.causes
     except Exception as e:

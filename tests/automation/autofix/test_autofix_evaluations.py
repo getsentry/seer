@@ -29,6 +29,7 @@ from seer.automation.autofix.models import (
     AutofixRequest,
     AutofixRequestOptions,
     AutofixUserDetails,
+    ChangeDetails,
     ChangesStep,
     CodebaseChange,
     IssueDetails,
@@ -122,24 +123,28 @@ class TestSyncRunEvaluationOnItem:
         self.mock_root_cause_step_instance.apply.side_effect = root_cause_apply_side_effect
 
         changes_step = next(generate(ChangesStep))
-        changes_step.changes = [
-            CodebaseChange(
+        changes_step.codebase_changes = {
+            "1": CodebaseChange(
                 repo_external_id="1",
                 repo_name="test",
-                title="123",
-                description="123",
-                diff=[],
-                diff_str="diff str 1",
+                details=ChangeDetails(
+                    title="123",
+                    description="123",
+                    diff=[],
+                    diff_str="diff str 1",
+                ),
             ),
-            CodebaseChange(
-                repo_external_id="1",
+            "2": CodebaseChange(
+                repo_external_id="2",
                 repo_name="test",
-                title="123",
-                description="123",
-                diff=[],
-                diff_str="diff str 2",
+                details=ChangeDetails(
+                    title="123",
+                    description="123",
+                    diff=[],
+                    diff_str="diff str 2",
+                ),
             ),
-        ]
+        }
 
         def planning_apply_side_effect():
             with self.test_state.update() as cur:
@@ -202,7 +207,7 @@ class TestSyncRunEvaluationOnItem:
     def test_sync_run_evaluation_on_item_no_code_context(self):
         # Setup state changes for root cause step with causes but no code context, should still work
         root_cause_model = RootCauseStepModel(
-            id="root_cause_analysis",
+            key="root_cause_analysis",
             title="Root Cause Analysis",
             causes=[
                 RootCauseAnalysisItem(
@@ -222,24 +227,28 @@ class TestSyncRunEvaluationOnItem:
         self.mock_root_cause_step_instance.apply.side_effect = root_cause_apply_side_effect
 
         changes_step = next(generate(ChangesStep))
-        changes_step.changes = [
-            CodebaseChange(
+        changes_step.codebase_changes = {
+            "1": CodebaseChange(
                 repo_external_id="1",
                 repo_name="test",
-                title="123",
-                description="123",
-                diff=[],
-                diff_str="diff str 1",
+                details=ChangeDetails(
+                    title="123",
+                    description="123",
+                    diff=[],
+                    diff_str="diff str 1",
+                ),
             ),
-            CodebaseChange(
-                repo_external_id="1",
+            "2": CodebaseChange(
+                repo_external_id="2",
                 repo_name="test",
-                title="123",
-                description="123",
-                diff=[],
-                diff_str="diff str 2",
+                details=ChangeDetails(
+                    title="123",
+                    description="123",
+                    diff=[],
+                    diff_str="diff str 2",
+                ),
             ),
-        ]
+        }
 
         def planning_apply_side_effect():
             with self.test_state.update() as cur:
@@ -311,7 +320,7 @@ class TestSyncRunEvaluationOnItem:
         self.mock_root_cause_step_instance.apply.side_effect = root_cause_apply_side_effect
 
         # Setup state changes for planning step with no changes
-        changes_step = ChangesStep(id="changes", title="Changes", changes=[])
+        changes_step = ChangesStep(key="changes", title="Changes", codebase_changes={})
 
         def planning_apply_side_effect():
             with self.test_state.update() as cur:
@@ -404,7 +413,7 @@ class TestSyncRunRootCause:
 
     def test_sync_run_root_cause_no_causes(self):
         root_cause_model = RootCauseStepModel(
-            id="root_cause_analysis", title="Root Cause Analysis", causes=[]
+            key="root_cause_analysis", title="Root Cause Analysis", causes=[]
         )
 
         def root_cause_apply_side_effect():
