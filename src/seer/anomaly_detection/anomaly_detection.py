@@ -314,16 +314,61 @@ class AnomalyDetection(BaseModel):
         ts_external: List[TimeSeriesPoint] = ts_with_history.current
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
-        # We are doing 4 detection operations, so allocating 1/4th of the time budget for each one.
-        time_budget_ms = time_budget_ms // 4 if time_budget_ms else None
+        def _calculate_dynamic_time_budget(
+            total_points: int,
+            history_points: int,
+            total_budget_ms: int
+        ) -> dict[str, int]:
+            """
+            Calculate dynamic time budgets based on data volumes.
+            
+            Args:
+                total_points: Current points to process
+                history_points: Historical points to process
+                total_budget_ms: Total available time budget
+                
+            Returns:
+                Dictionary with budget allocations for each processing phase
+            """
+            total_data = total_points + history_points
+            
+            # Base allocation ratios
+            HISTORY_RATIO = 0.4  # 40% for history processing
+            STREAM_RATIO = 0.6   # 60% for stream processing
+            
+            # Adjust ratios based on data volume distribution
+            if history_points > total_points * 2:
+                HISTORY_RATIO = 0.6
+                STREAM_RATIO = 0.4
+            
+            history_budget = int(total_budget_ms * HISTORY_RATIO)
+            stream_budget = int(total_budget_ms * STREAM_RATIO)
+            
+            return {
+                'history_suss': history_budget // 2,
+                'history_fixed': history_budget // 2,
+                'stream_suss': stream_budget // 2,
+                'stream_fixed': stream_budget // 2
+            }
+
+        if time_budget_ms is not None:
+            budgets = _calculate_dynamic_time_budget(
+                len(ts_with_history.current),
+                len(ts_with_history.history),
+                time_budget_ms
+            )
+            # Track budget allocation
+            sentry_sdk.set_extra("time_budget_allocation", budgets)
+        else:
+            budgets = {k: None for k in ['history_suss', 'history_fixed', 'stream_suss', 'stream_fixed']}
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
         historic_anomalies_suss = batch_detector.detect(
-            historic, config, time_budget_ms=time_budget_ms
+            historic, config, time_budget_ms=budgets['history_suss']
         )
         historic_anomalies_fixed = batch_detector.detect(
-            historic, config, window_size=10, time_budget_ms=time_budget_ms
+            historic, config, window_size=10, time_budget_ms=budgets['history_fixed']
         )
 
         # Run stream detection on current data
@@ -336,11 +381,11 @@ class AnomalyDetection(BaseModel):
             original_flags=historic_anomalies_suss.original_flags,
         )
         streamed_anomalies_suss = stream_detector_suss.detect(
-            convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
+            convert_external_ts_to_internal(ts_external),
+            config, time_budget_ms=budgets['stream_suss']
         )
 
         # Fixed Window
-        stream_detector_fixed = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
             history_mp=historic_anomalies_fixed.matrix_profile,
@@ -348,10 +393,9 @@ class AnomalyDetection(BaseModel):
             original_flags=historic_anomalies_fixed.original_flags,
         )
         streamed_anomalies_fixed = stream_detector_fixed.detect(
-            convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
+            convert_external_ts_to_internal(ts_external),
+            config, time_budget_ms=budgets['stream_fixed']
         )
-
-        if trim_current_by > 0:
             ts_external = ts_with_history.history[-trim_current_by:] + ts_external
             streamed_anomalies_suss.flags = (
                 historic_anomalies_suss.flags[-trim_current_by:] + streamed_anomalies_suss.flags

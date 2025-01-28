@@ -3,6 +3,7 @@ import datetime
 import logging
 
 import numpy as np
+from dataclasses import dataclass
 import numpy.typing as npt
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
@@ -29,6 +30,13 @@ from seer.exceptions import ServerError
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class ProcessingMetrics:
+    """Metrics for monitoring stream processing performance"""
+    batch_size: int
+    points_processed: int
+    time_per_point_ms: float
+    total_time_ms: float
 
 class AnomalyDetector(BaseModel, abc.ABC):
     """
@@ -177,6 +185,65 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
+    
+    def _calculate_adaptive_batch_size(
+        self,
+        total_points: int,
+        time_budget_ms: int | None,
+        initial_batch_size: int = 10
+    ) -> int:
+        """
+        Calculate optimal batch size based on data volume and time budget.
+        
+        Args:
+            total_points: Total number of points to process
+            time_budget_ms: Available time budget in milliseconds
+            initial_batch_size: Default batch size to start with
+            
+        Returns:
+            Calculated batch size based on constraints
+        """
+        if time_budget_ms is None:
+            return initial_batch_size
+            
+        # Minimum processing time needed per point (measured empirically)
+        MIN_MS_PER_POINT = 2
+        
+        # Calculate theoretical max points that can be processed
+        max_points = time_budget_ms / MIN_MS_PER_POINT
+        
+        # Adjust batch size based on data volume
+        if total_points > max_points:
+            # Use smaller batches for large volumes
+            return max(1, min(5, initial_batch_size))
+        elif total_points < max_points / 2:
+            # Use larger batches for small volumes
+            return min(20, initial_batch_size * 2)
+            
+        return initial_batch_size
+
+    def _optimize_mp_computation(
+        self,
+        stream: stumpy.stumpi,
+        cur_val: float,
+        time_budget_ms: int | None = None
+    ) -> tuple[float, float, float]:
+        """
+        Optimized matrix profile computation with time budget awareness.
+        """
+        if time_budget_ms is None:
+            stream.update(cur_val)
+            return stream.P_[-1], stream.I_[-1], stream.left_I_[-1]
+            
+        start_time = datetime.datetime.now()
+        stream.update(cur_val)
+        
+        # Check if we're close to timeout
+        elapsed = (datetime.datetime.now() - start_time).total_milliseconds()
+        if elapsed > time_budget_ms * 0.8:  # If using >80% of budget
+            return stream.P_[-1], -1, -1  # Skip index computations
+            
+        return stream.P_[-1], stream.I_[-1], stream.left_I_[-1]
 
     @inject
     @sentry_sdk.trace
@@ -230,7 +297,22 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
             )
             time_start = datetime.datetime.now()
-            batch_size = 10 if len(timeseries.values) > 10 else 1
+            
+            # Calculate adaptive batch size
+            batch_size = self._calculate_adaptive_batch_size(
+                total_points=len(timeseries.values),
+                time_budget_ms=time_budget_ms
+            )
+            
+            # Initialize metrics tracking
+            points_processed = 0
+            processing_start = datetime.datetime.now()
+            
+            # Track batch statistics for monitoring
+            sentry_sdk.set_extra("batch_size", batch_size)
+            sentry_sdk.set_extra("total_points", len(timeseries.values))
+            sentry_sdk.set_extra("time_budget_ms", time_budget_ms)
+
             for i, (cur_val, cur_timestamp) in enumerate(
                 zip(timeseries.values, timeseries.timestamps)
             ):
@@ -240,17 +322,34 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                         sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
                         sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
                         sentry_sdk.capture_message(
-                            "stream_detection_took_too_long",
+                            f"stream_detection_timeout_{batch_size}",
                             level="error",
                         )
+                        # Try to recover by processing remaining points with minimal batch size
+                        if batch_size > 1:
+                            batch_size = 1
+                            continue
+                            
                         raise ServerError("Stream detection took too long")
 
-                # Update the stumpi stream processor with new data
-                stream.update(cur_val)
+                # Use optimized matrix profile computation
+                P, I, left_I = self._optimize_mp_computation(stream, cur_val, time_budget_ms)
+                cur_mp = [P, I, left_I, -1]
+                points_processed += 1
 
-                # Get the matrix profile for the new data and score it
-                cur_mp = [stream.P_[-1], stream.I_[-1], stream.left_I_[-1], -1]
                 streamed_mp.append(cur_mp)
+
+            # Record final processing metrics
+            processing_end = datetime.datetime.now()
+            total_time_ms = (processing_end - processing_start).total_seconds() * 1000
+            metrics = ProcessingMetrics(
+                batch_size=batch_size,
+                points_processed=points_processed,
+                time_per_point_ms=total_time_ms / points_processed if points_processed > 0 else 0,
+                total_time_ms=total_time_ms
+            )
+            self._record_metrics(metrics)
+
                 mp_dist_baseline = mp_utils.get_mp_dist_from_mp(self.history_mp, pad_to_len=None)
                 flags_and_scores = scorer.stream_score(
                     streamed_value=cur_val,
@@ -303,3 +402,16 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 thresholds=thresholds if algo_config.return_thresholds else None,
                 original_flags=self.original_flags,
             )
+            
+    def _record_metrics(self, metrics: ProcessingMetrics) -> None:
+        """Record processing metrics for monitoring"""
+        sentry_sdk.set_extra("processing_metrics", {
+            "batch_size": metrics.batch_size,
+            "points_processed": metrics.points_processed,
+            "time_per_point_ms": metrics.time_per_point_ms,
+            "total_time_ms": metrics.total_time_ms,
+            "processing_efficiency": {
+                "points_per_second": 1000 / metrics.time_per_point_ms if metrics.time_per_point_ms > 0 else 0,
+                "batch_processing_overhead": metrics.total_time_ms / metrics.batch_size if metrics.batch_size > 0 else 0
+            }
+        })
