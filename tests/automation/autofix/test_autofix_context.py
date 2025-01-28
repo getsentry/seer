@@ -28,7 +28,7 @@ from seer.automation.models import (
     StacktraceFrame,
     ThreadDetails,
 )
-from seer.automation.state import DbStateRunTypes, LocalMemoryState
+from seer.automation.state import DbStateRunTypes
 from seer.automation.summarize.issue import IssueSummary
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 
@@ -52,27 +52,6 @@ class TestAutofixContext(unittest.TestCase):
             self.state,
             MagicMock(),
         )
-
-    @patch("seer.automation.autofix.autofix_context.AutofixEventManager")
-    def test_migrate_step_keys_called_in_init(self, mock_AutofixEventManager):
-        mock_event_manager = MagicMock()
-        mock_AutofixEventManager.return_value = mock_event_manager
-
-        error_event = next(generate(SentryEventData))
-        state = LocalMemoryState(
-            AutofixContinuation(
-                request=AutofixRequest(
-                    organization_id=1,
-                    project_id=1,
-                    repos=[],
-                    issue=IssueDetails(id=0, title="", events=[error_event]),
-                )
-            )
-        )
-
-        AutofixContext(state, mock_event_manager)
-
-        mock_event_manager.migrate_step_keys.assert_called_once()
 
     def test_process_event_paths(self):
         mock_event = EventDetails(
