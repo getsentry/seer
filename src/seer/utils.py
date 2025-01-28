@@ -78,7 +78,7 @@ def closing_queue(*queues: Queue):
 def backoff_on_exception(
     is_exception_retryable: Callable[[Exception], bool],
     max_tries: int = 2,
-    sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
+    sleep_sec_scaler: Callable[[int], float] | None = None,
     jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
 ):
     """
@@ -88,6 +88,9 @@ def backoff_on_exception(
 
     if max_tries < 1:
         raise ValueError("max_tries must be at least 1")  # pragma: no cover
+
+    if sleep_sec_scaler is None:
+        sleep_sec_scaler = lambda num_tries: min(2**num_tries, 10.0)
 
     def decorator(func):
         @functools.wraps(func)

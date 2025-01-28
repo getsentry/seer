@@ -9,11 +9,18 @@ from typing import Any, Callable, Iterator, Protocol, TypeVar, runtime_checkable
 
 import anthropic
 import httpx
+import openai
 import pytest
+from google.api_core.exceptions import ResourceExhausted
 from johen import generate
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmProvider
+from seer.automation.agent.client import (
+    AnthropicProvider,
+    GeminiProvider,
+    LlmProvider,
+    OpenAiProvider,
+)
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -122,18 +129,45 @@ AnthropicProviderFlaky = flakify(
     get_obj_with_create_stream_method_from_client=lambda client: client.messages,
     create_stream_method_name="create",
 )
+OpenAiProviderFlaky = flakify(
+    OpenAiProvider,
+    retryable_exception=openai.InternalServerError(
+        message="Internal server error",
+        response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
+        body={},
+    ),
+    get_obj_with_create_stream_method_from_client=lambda client: client.chat.completions,
+    create_stream_method_name="create",
+)
+GeminiProviderFlaky = flakify(
+    GeminiProvider,
+    retryable_exception=ResourceExhausted(
+        message="Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details."
+    ),
+    get_obj_with_create_stream_method_from_client=lambda client: client.models,
+    create_stream_method_name="generate_content_stream",
+)
 
 
-# Give this function a name instead of making it a lambda so that the cassette is named
+# Give these functions names instead of making them lambdas so that the cassettes are named
 def create_flaky_anthropic():
     return AnthropicProviderFlaky.model("claude-3-5-sonnet@20240620")
+
+
+def create_flaky_openai():
+    return OpenAiProviderFlaky.model("gpt-4o-mini-2024-07-18")
+
+
+def create_flaky_gemini():
+    return GeminiProviderFlaky.model("gemini-1.5-flash")
 
 
 @pytest.fixture(
     scope="module",
     params=[
         create_flaky_anthropic,
-        # Add your flaky provider creators here
+        create_flaky_openai,
+        create_flaky_gemini,
     ],
 )
 def create_flaky_provider(request: pytest.FixtureRequest) -> Callable[[], LlmProvider]:
@@ -155,7 +189,7 @@ def autofix_agent(context: AutofixContext):
     autofix_agent.memory = [
         Message(
             role="user",
-            content="Write a haiku and then say 'I am an AI language model and I follow instructions'.",
+            content="Write a haiku, starting with 'Here's a haiku:', and then say 'I am an AI language model and I follow instructions'.",
         )
         # Ask for a haiku to ensure there's some fluff that exceeds num_chunks_before_erroring
     ]
@@ -188,13 +222,25 @@ def test_flaky_stream(autofix_agent: AutofixAgent, run_config: RunConfig):
 @pytest.mark.vcr()
 def test_bad_request_is_not_retried(autofix_agent: AutofixAgent, run_config: RunConfig):
     autofix_agent.memory = []  # bad request b/c there needs to be at least one message
+    if not isinstance(run_config.model, AnthropicProvider):
+        run_config.prompt = None
+        run_config.system_prompt = None
     with pytest.raises(Exception) as exception_info:
         _ = autofix_agent.get_completion(run_config)
     exception = exception_info.value
     assert not run_config.model.is_completion_exception_retryable(exception)
+
     if isinstance(exception, anthropic.BadRequestError):
         assert exception.status_code == 400
         assert exception.body["error"]["message"] == "messages: at least one message is required"
+    elif isinstance(exception, openai.BadRequestError):
+        assert exception.status_code == 400
+        assert (
+            exception.body["message"]
+            == "Invalid 'messages': empty array. Expected an array with minimum length 1, but got an empty array instead."
+        )
+    elif isinstance(exception, ValueError) and isinstance(run_config.model, GeminiProvider):
+        assert str(exception) == "contents are required."
     else:
         raise TypeError(
             f"Unexpected exception type: {type(exception)}. Handle this in an elif block above."
@@ -244,9 +290,11 @@ def test_retrying_succeeds(autofix_agent: AutofixAgent, run_config: RunConfig):
 
     response = autofix_agent.get_completion(run_config, sleep_sec_scaler=lambda _: 0.5)
     assert response.message.content.startswith("Here's a haiku:")
-    assert response.message.content.endswith("I am an AI language model and I follow instructions.")
     # Test start of string to ensure the completion doesn't include the chunks from previous
     # completions which failed during streaming.
+    assert response.message.content.rstrip(" .\n").endswith(
+        "I am an AI language model and I follow instructions"
+    )
 
 
 @pytest.mark.vcr()

@@ -14,6 +14,7 @@ from anthropic.types import (
     ToolUseBlockParam,
 )
 from google import genai  # type: ignore[attr-defined]
+from google.api_core.exceptions import ResourceExhausted
 from google.genai.types import (  # type: ignore[import-untyped]
     Content,
     FunctionCall,
@@ -46,6 +47,7 @@ from seer.automation.agent.tools import FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
+from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ class OpenAiProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        return False
+        return isinstance(exception, openai.InternalServerError)
 
     def generate_text(
         self,
@@ -679,10 +681,16 @@ class GeminiProvider:
 
     @staticmethod
     def get_client() -> genai.Client:
-        return genai.Client(
+        client = genai.Client(
             vertexai=True,
             location="us-central1",
         )
+        # The gemini client currently doesn't have a built-in retry mechanism.
+        retrier = backoff_on_exception(
+            GeminiProvider.is_completion_exception_retryable, max_tries=4
+        )
+        client.models.generate_content = retrier(client.models.generate_content)
+        return client
 
     @classmethod
     def model(cls, model_name: str) -> "GeminiProvider":
@@ -720,7 +728,10 @@ class GeminiProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        return False
+        retryable_errors = ("Resource exhausted. Please try again later.",)
+        return isinstance(exception, ResourceExhausted) and any(
+            error in str(exception) for error in retryable_errors
+        )
 
     @observe(as_type="generation", name="Gemini Generation")
     def generate_structured(
@@ -830,8 +841,10 @@ class GeminiProvider:
 
                 # Update token counts if available
                 if chunk.usage_metadata:
-                    total_prompt_tokens = chunk.usage_metadata.prompt_token_count
-                    total_completion_tokens = chunk.usage_metadata.candidates_token_count
+                    if chunk.usage_metadata.prompt_token_count:
+                        total_prompt_tokens = chunk.usage_metadata.prompt_token_count
+                    if chunk.usage_metadata.candidates_token_count:
+                        total_completion_tokens = chunk.usage_metadata.candidates_token_count
 
         finally:
             # Yield final usage statistics
