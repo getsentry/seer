@@ -239,7 +239,7 @@ class AutofixEventManager:
 
             # Clear file changes if the changes step is not present.
             if not next((step for step in cur.steps if step.key == self.changes_step.key), None):
-                self.clear_file_changes()
+                cur.clear_file_changes()
 
         count = 0
         while make_kill_signal() in self.state.get().signals:

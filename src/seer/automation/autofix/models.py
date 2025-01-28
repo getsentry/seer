@@ -526,9 +526,8 @@ class AutofixContinuation(AutofixGroupState):
             self.steps = self.steps[: found_index + (0 if include_current else 1)]
 
     def clear_file_changes(self):
-        for key, codebase in self.codebases.items():
+        for codebase in self.codebases.values():
             codebase.file_changes = []
-            self.codebases[key] = codebase
 
     @property
     def is_running(self):
