@@ -149,7 +149,6 @@ GeminiProviderFlaky = flakify(
 )
 
 
-# Give these functions names instead of making them lambdas so that the cassettes are named
 def create_flaky_anthropic():
     return AnthropicProviderFlaky.model("claude-3-5-sonnet@20240620")
 
