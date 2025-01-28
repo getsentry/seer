@@ -75,7 +75,7 @@ class OpenAiProvider:
 
     @staticmethod
     def get_client() -> openai.Client:
-        return openai.Client()
+        return openai.Client(max_retries=4)
 
     @classmethod
     def model(cls, model_name: str) -> "OpenAiProvider":
