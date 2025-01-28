@@ -188,7 +188,7 @@ class TestAutofixEventManager:
                 MagicMock(signals=[make_kill_signal()]),
                 MagicMock(signals=[make_kill_signal()]),
                 MagicMock(signals=[make_kill_signal()]),
-                MagicMock(signals=[make_kill_signal()]),
+                MagicMock(signals=[]),
                 MagicMock(signals=[]),
             ]
             mock_time.reset_mock()
