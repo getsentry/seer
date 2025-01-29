@@ -28,6 +28,6 @@ class CodecovAuthentication:
             OUTGOING_REQUEST_SIGNATURE_HEADER: signature,
         }
         response = requests.post(
-            "http://api.codecov.io/gen_ai/auth/", headers=headers, data=request_data
+            "https://api.codecov.io/gen_ai/auth/", headers=headers, data=request_data
         )
         return response.json().get("is_valid", False) if response.status_code == 200 else False
