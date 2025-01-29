@@ -39,9 +39,16 @@ class StacktraceFrame(BaseModel):
     col_no: Optional[int]
     context: list[tuple[int, Optional[str]]] = []
     repo_name: Optional[str] = None
-    in_app: bool | None = False
+    in_app: Annotated[bool, Examples((True, False))] = Field(default=False)
     vars: Optional[dict[str, Any]] = None
     package: Optional[str] = None
+
+    @field_validator("in_app", mode="before")
+    @classmethod
+    def validate_in_app(cls, value: Any) -> bool:
+        if value is None or not isinstance(value, bool):
+            return False
+        return value
 
     @field_validator("vars", mode="before")
     @classmethod
@@ -570,7 +577,7 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}→ {node.get('function')}"
+            func_line = f"{indent_str}â†’ {node.get('function')}"
             location = f"{node.get('filename')}"
             func_line += f" ({location})"
 
