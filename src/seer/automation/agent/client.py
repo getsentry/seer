@@ -14,6 +14,7 @@ from anthropic.types import (
     ToolUseBlockParam,
 )
 from google import genai  # type: ignore[attr-defined]
+from google.api_core.exceptions import ResourceExhausted
 from google.genai.types import (  # type: ignore[import-untyped]
     Content,
     FunctionCall,
@@ -46,6 +47,7 @@ from seer.automation.agent.tools import FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
+from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,7 @@ class OpenAiProvider:
 
     @staticmethod
     def get_client() -> openai.Client:
-        return openai.Client()
+        return openai.Client(max_retries=4)
 
     @classmethod
     def model(cls, model_name: str) -> "OpenAiProvider":
@@ -89,6 +91,10 @@ class OpenAiProvider:
             if re.match(config.match, model_name):
                 return config
         return None
+
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        return isinstance(exception, openai.InternalServerError)
 
     def generate_text(
         self,
@@ -408,6 +414,12 @@ class AnthropicProvider:
                 return config
         return None
 
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        return isinstance(exception, anthropic.AnthropicError) and (
+            "overloaded_error" in str(exception)
+        )
+
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
     def generate_text(
@@ -669,10 +681,16 @@ class GeminiProvider:
 
     @staticmethod
     def get_client() -> genai.Client:
-        return genai.Client(
+        client = genai.Client(
             vertexai=True,
             location="us-central1",
         )
+        # The gemini client currently doesn't have a built-in retry mechanism.
+        retrier = backoff_on_exception(
+            GeminiProvider.is_completion_exception_retryable, max_tries=4
+        )
+        client.models.generate_content = retrier(client.models.generate_content)
+        return client
 
     @classmethod
     def model(cls, model_name: str) -> "GeminiProvider":
@@ -707,6 +725,13 @@ class GeminiProvider:
         for each in response.candidates[0].content.parts:
             answer += each.text
         return answer
+
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        retryable_errors = ("Resource exhausted. Please try again later.",)
+        return isinstance(exception, ResourceExhausted) and any(
+            error in str(exception) for error in retryable_errors
+        )
 
     @observe(as_type="generation", name="Gemini Generation")
     def generate_structured(
@@ -816,8 +841,10 @@ class GeminiProvider:
 
                 # Update token counts if available
                 if chunk.usage_metadata:
-                    total_prompt_tokens = chunk.usage_metadata.prompt_token_count
-                    total_completion_tokens = chunk.usage_metadata.candidates_token_count
+                    if chunk.usage_metadata.prompt_token_count:
+                        total_prompt_tokens = chunk.usage_metadata.prompt_token_count
+                    if chunk.usage_metadata.candidates_token_count:
+                        total_completion_tokens = chunk.usage_metadata.candidates_token_count
 
         finally:
             # Yield final usage statistics
@@ -862,9 +889,9 @@ class GeminiProvider:
         message = self._format_gemini_response_to_message(response)
 
         usage = Usage(
-            completion_tokens=response.usage_metadata.candidates_token_count,
-            prompt_tokens=response.usage_metadata.prompt_token_count,
-            total_tokens=response.usage_metadata.total_token_count,
+            completion_tokens=response.usage_metadata.candidates_token_count or 0,
+            prompt_tokens=response.usage_metadata.prompt_token_count or 0,
+            total_tokens=response.usage_metadata.total_token_count or 0,
         )
 
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
@@ -994,16 +1021,23 @@ class GeminiProvider:
         return message
 
     def _format_gemini_response_to_message(self, response: GenerateContentResponse) -> Message:
-        message = Message(
-            role="assistant",
-            content=(
-                response.candidates[0].content.parts[0].text
-                if response.candidates[0].content.parts[0].text
-                else None
-            ),
+        parts = (
+            response.candidates[0].content.parts
+            if (
+                response.candidates
+                and len(response.candidates) > 0
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            )
+            else []
         )
 
-        for part in response.candidates[0].content.parts:
+        message = Message(
+            role="assistant",
+            content=(parts[0].text if parts and parts[0].text else None),
+        )
+
+        for part in parts:
             if part.function_call:
                 if not message.tool_calls:
                     message.tool_calls = []

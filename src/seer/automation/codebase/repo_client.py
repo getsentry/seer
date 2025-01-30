@@ -100,6 +100,19 @@ def get_codecov_unit_test_app_credentials(
     return app_id, private_key
 
 
+@inject
+def get_codecov_pr_review_app_credentials(
+    config: AppConfig = injected,
+) -> tuple[int | str | None, str | None]:
+    app_id = config.GITHUB_CODECOV_PR_REVIEW_APP_ID
+    private_key = config.GITHUB_CODECOV_PR_REVIEW_PRIVATE_KEY
+
+    if not app_id or not private_key:
+        return get_write_app_credentials()
+
+    return app_id, private_key
+
+
 class RepoClientType(str, Enum):
     READ = "read"
     WRITE = "write"
@@ -197,8 +210,10 @@ class RepoClient:
     def from_repo_definition(cls, repo_def: RepoDefinition, type: RepoClientType):
         if type == RepoClientType.WRITE:
             return cls(*get_write_app_credentials(), repo_def)
-        elif type == RepoClientType.CODECOV_UNIT_TEST or type == RepoClientType.CODECOV_PR_REVIEW:
+        elif type == RepoClientType.CODECOV_UNIT_TEST:
             return cls(*get_codecov_unit_test_app_credentials(), repo_def)
+        elif type == RepoClientType.CODECOV_PR_REVIEW:
+            return cls(*get_codecov_pr_review_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
 
@@ -321,16 +336,10 @@ class RepoClient:
         return valid_file_paths
 
     def _create_branch(self, branch_name):
-        try:
-            ref = self.repo.create_git_ref(
-                ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
-            )
-            return ref
-        except GithubException as e:
-            # if reference already exists (422), just fetch and return it
-            if e.status == 422:
-                return self.repo.get_git_ref(f"heads/{branch_name}")
-            raise e
+        ref = self.repo.create_git_ref(
+            ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
+        )
+        return ref
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -393,8 +402,8 @@ class RepoClient:
             branch_ref = self._create_branch(new_branch_name)
         except GithubException as e:
             # only use the random suffix if the branch already exists
-            if e.status == 409:
-                new_branch_name = f"{new_branch_name}/{generate_random_string(n=6)}"
+            if e.status == 409 or e.status == 422:
+                new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
                 branch_ref = self._create_branch(new_branch_name)
             else:
                 raise e

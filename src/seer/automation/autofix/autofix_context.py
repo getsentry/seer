@@ -19,7 +19,6 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
-from seer.automation.codebase.state import CodebaseStateManager
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
@@ -36,18 +35,6 @@ RepoExternalId = str
 RepoInternalId = int
 RepoKey = RepoExternalId | RepoInternalId
 RepoIdentifiers = tuple[RepoExternalId, RepoInternalId]
-
-
-class AutofixCodebaseStateManager(CodebaseStateManager):
-    state: State[AutofixContinuation]
-
-    def store_file_change(self, file_change: FileChange):
-        with self.state.update() as state:
-            codebase_state = state.codebases[self.repo_external_id]
-            codebase_state.file_changes.append(file_change)
-
-    def get_file_changes(self) -> list[FileChange]:
-        return self.state.get().codebases[self.repo_external_id].file_changes
 
 
 class AutofixContext(PipelineContext):
@@ -212,15 +199,12 @@ class AutofixContext(PipelineContext):
     def commit_changes(
         self,
         repo_external_id: str | None = None,
-        repo_id: int | None = None,
         make_pr: bool = False,
         pr_to_comment_on_url: str | None = None,
     ):
         state = self.state.get()
         for codebase_state in state.codebases.values():
-            if (
-                repo_external_id is None and repo_id is None
-            ) or codebase_state.repo_external_id == repo_external_id:
+            if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
                 changes_step = state.find_step(key="changes")
                 if not changes_step:
                     raise ValueError("Changes step not found")
@@ -234,7 +218,7 @@ class AutofixContext(PipelineContext):
                     (None, None),
                 )
                 if codebase_state.file_changes and change_state and changes_state_index is not None:
-                    key = codebase_state.repo_external_id or codebase_state.repo_id
+                    key = codebase_state.repo_external_id
 
                     if key is None:
                         raise ValueError("Repo key not found")

@@ -1,6 +1,6 @@
 import datetime
 from enum import Enum
-from typing import List, Literal, Union
+from typing import List, Literal
 
 from pydantic import BaseModel, Field
 

@@ -488,6 +488,7 @@ class TestSeer(unittest.TestCase):
                 "seer.app.restart_from_point_with_feedback",
             ),
             (AutofixUpdateType.UPDATE_CODE_CHANGE, "seer.app.update_code_change"),
+            (AutofixUpdateType.COMMENT_THREAD, "seer.app.comment_on_thread"),
         ]
 
         for autofix_type, expected_func in test_cases:

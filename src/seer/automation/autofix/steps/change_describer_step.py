@@ -84,7 +84,6 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     )
 
                     change = CodebaseChange(
-                        repo_id=1,
                         repo_external_id=codebase_state.repo_external_id,
                         repo_name=repo_definition.full_name,
                         title=change_description.title if change_description else "Code Changes",
@@ -111,7 +110,6 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
             for repo in cur_state.request.repos:
                 self.context.commit_changes(
                     repo_external_id=repo.external_id,
-                    repo_id=None,
                     pr_to_comment_on_url=self.request.pr_to_comment_on,
                     make_pr=True,
                 )

@@ -237,6 +237,10 @@ class AutofixEventManager:
                 )
                 cur.steps[-1] = step
 
+            # Clear file changes if the changes step is not present.
+            if not next((step for step in cur.steps if step.key == self.changes_step.key), None):
+                cur.clear_file_changes()
+
         count = 0
         while make_kill_signal() in self.state.get().signals:
             time.sleep(0.5)  # wait for all steps to be killed

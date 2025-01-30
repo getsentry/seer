@@ -103,7 +103,6 @@ class CommittedPullRequestDetails(BaseModel):
 
 
 class CodebaseChange(BaseModel):
-    repo_id: int | None = None
     repo_external_id: str | None = None
     repo_name: str
     title: str
@@ -112,6 +111,13 @@ class CodebaseChange(BaseModel):
     diff_str: Optional[str] = None
     branch_name: str | None = None
     pull_request: Optional[CommittedPullRequestDetails] = None
+
+
+class CommentThread(BaseModel):
+    id: str
+    messages: list[Message] = []
+    is_completed: bool = False
+    selected_text: str | None = None
 
 
 class StepType(str, enum.Enum):
@@ -136,6 +142,7 @@ class BaseStep(BaseModel):
 
     queued_user_messages: list[str] = []
     output_stream: str | None = None
+    active_comment_thread: CommentThread | None = None
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
@@ -153,18 +160,6 @@ class BaseStep(BaseModel):
             if isinstance(step, (DefaultStep, RootCauseStep, ChangesStep)) and step.id == id:
                 return step
         return None
-
-    @property
-    def description(self) -> str:
-        if self.type == StepType.DEFAULT and self.key == "root_cause_analysis_processing":
-            return "figuring out what is causing the issue (not thinking about solutions yet)"
-        elif self.type == StepType.DEFAULT and self.key == "plan":
-            return "coming up with a fix for the issue"
-        elif self.type == StepType.ROOT_CAUSE_ANALYSIS:
-            return "selecting the final root cause"
-        elif self.type == StepType.CHANGES:
-            return "writing the code changes to fix the issue"
-        return ""
 
     def find_or_add_child(self, base_step: "Step") -> "Step":
         existing = self.find_child(id=base_step.id)
@@ -226,8 +221,6 @@ Step = Union[DefaultStep, RootCauseStep, ChangesStep]
 
 
 class CodebaseState(BaseModel):
-    repo_id: int | None = None
-    namespace_id: int | None = None
     repo_external_id: str | None = None
     file_changes: list[FileChange] = []
 
@@ -364,6 +357,7 @@ class AutofixUpdateType(str, enum.Enum):
     USER_MESSAGE = "user_message"
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
     UPDATE_CODE_CHANGE = "update_code_change"
+    COMMENT_THREAD = "comment_thread"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -376,14 +370,12 @@ class AutofixRootCauseUpdatePayload(BaseModel):
 class AutofixCreatePrUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_PR] = AutofixUpdateType.CREATE_PR
     repo_external_id: str | None = None
-    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
     make_pr: bool = True
 
 
 class AutofixCreateBranchUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.CREATE_BRANCH] = AutofixUpdateType.CREATE_BRANCH
     repo_external_id: str | None = None
-    repo_id: int | None = None  # TODO: Remove this when we won't be breaking LA customers.
     make_pr: bool = False
 
 
@@ -397,6 +389,7 @@ class AutofixRestartFromPointPayload(BaseModel):
     message: str
     step_index: int
     retain_insight_card_index: int | None = None
+    add_to_insights: bool = True
 
 
 class AutofixUpdateCodeChangePayload(BaseModel):
@@ -404,7 +397,18 @@ class AutofixUpdateCodeChangePayload(BaseModel):
     hunk_index: int
     lines: list[Line]
     file_path: str
-    repo_id: str | None = None
+    repo_external_id: str | None = Field(default=None, alias="repo_id")
+
+    model_config = ConfigDict(populate_by_name=True)  # Allows both field name and alias
+
+
+class AutofixCommentThreadPayload(BaseModel):
+    type: Literal[AutofixUpdateType.COMMENT_THREAD]
+    thread_id: str
+    selected_text: str | None = None
+    message: str
+    step_index: int
+    retain_insight_card_index: int | None = None
 
 
 class AutofixUpdateRequest(BaseModel):
@@ -416,16 +420,12 @@ class AutofixUpdateRequest(BaseModel):
         AutofixUserMessagePayload,
         AutofixRestartFromPointPayload,
         AutofixUpdateCodeChangePayload,
+        AutofixCommentThreadPayload,
     ] = Field(discriminator="type")
 
 
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
-
-    def get_step_description(self) -> str:
-        if not self.steps:
-            return ""
-        return self.steps[-1].description
 
     def kill_all_processing_steps(self):
         for step in self.steps:
@@ -523,9 +523,8 @@ class AutofixContinuation(AutofixGroupState):
             self.steps = self.steps[: found_index + (0 if include_current else 1)]
 
     def clear_file_changes(self):
-        for key, codebase in self.codebases.items():
+        for codebase in self.codebases.values():
             codebase.file_changes = []
-            self.codebases[key] = codebase
 
     @property
     def is_running(self):

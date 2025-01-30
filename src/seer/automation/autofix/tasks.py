@@ -10,6 +10,10 @@ from celery_app.app import celery_app
 from seer.automation.agent.models import Message
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.comment_thread import (
+    CommentThreadComponent,
+    CommentThreadRequest,
+)
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.evaluations import (
@@ -22,6 +26,7 @@ from seer.automation.autofix.evaluations import (
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
+    AutofixCommentThreadPayload,
     AutofixCreateBranchUpdatePayload,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
@@ -31,8 +36,10 @@ from seer.automation.autofix.models import (
     AutofixStatus,
     AutofixUpdateCodeChangePayload,
     AutofixUpdateRequest,
+    AutofixUpdateType,
     AutofixUserMessagePayload,
     ChangesStep,
+    CommentThread,
     DefaultStep,
     Step,
 )
@@ -211,7 +218,6 @@ def run_autofix_push_changes(
 
     context.commit_changes(
         repo_external_id=request.payload.repo_external_id,
-        repo_id=request.payload.repo_id,
         make_pr=request.payload.make_pr,
     )
 
@@ -279,9 +285,6 @@ def receive_user_message(request: AutofixUpdateRequest):
                     InsightSharingOutput(
                         insight=f"_{question}_  {request.payload.text}",
                         justification="USER",
-                        codebase_context=[],
-                        stacktrace_context=[],
-                        breadcrumb_context=[],
                         generated_at_memory_index=len(memory) - 1 if memory else -1,
                     )
                 )
@@ -317,9 +320,6 @@ def receive_user_message(request: AutofixUpdateRequest):
                         InsightSharingOutput(
                             insight=request.payload.text,
                             justification="USER",
-                            codebase_context=[],
-                            stacktrace_context=[],
-                            breadcrumb_context=[],
                             generated_at_memory_index=-1,
                         )
                     )
@@ -395,18 +395,16 @@ def restart_from_point_with_feedback(
                 break
         memory.append(Message(content=request.payload.message, role="user"))
 
-        with state.update() as cur:
-            if isinstance(cur.steps[-1], DefaultStep):
-                cur.steps[-1].insights.append(
-                    InsightSharingOutput(
-                        insight=request.payload.message,
-                        justification="USER",
-                        codebase_context=[],
-                        stacktrace_context=[],
-                        breadcrumb_context=[],
-                        generated_at_memory_index=len(memory) - 1,
+        if request.payload.add_to_insights:
+            with state.update() as cur:
+                if isinstance(cur.steps[-1], DefaultStep):
+                    cur.steps[-1].insights.append(
+                        InsightSharingOutput(
+                            insight=request.payload.message,
+                            justification="USER",
+                            generated_at_memory_index=len(memory) - 1,
+                        )
                     )
-                )
     elif memory and memory[-1].role == "assistant":
         memory.append(Message(content=".", role="user"))
 
@@ -437,7 +435,7 @@ def update_code_change(request: AutofixUpdateRequest):
     state = ContinuationState(request.run_id)
     cur_state = state.get()
 
-    repo_id = request.payload.repo_id
+    repo_external_id = request.payload.repo_external_id
     hunk_index = request.payload.hunk_index
     lines = request.payload.lines
     file_path = request.payload.file_path
@@ -452,7 +450,7 @@ def update_code_change(request: AutofixUpdateRequest):
     matching_change = None
     change_index = 0
     for i, change in enumerate(changes):
-        if change.repo_external_id == repo_id:
+        if change.repo_external_id == repo_external_id:
             matching_change = change
             change_index = i
             break
@@ -505,6 +503,92 @@ def update_code_change(request: AutofixUpdateRequest):
         matching_change.diff[file_patch_index] = matching_file_patch
         last_step.changes[change_index] = matching_change
         cur.steps[-1] = last_step
+
+
+def comment_on_thread(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixCommentThreadPayload):
+        raise ValueError("Invalid payload type for comment_on_thread")
+
+    state = ContinuationState(request.run_id)
+
+    event_manager = AutofixEventManager(state)
+    context = AutofixContext(
+        state=state, event_manager=event_manager, sentry_client=get_sentry_client()
+    )
+
+    step_index = request.payload.step_index
+
+    # create a new thread if needed
+    step = state.get().steps[step_index]
+    if not step.active_comment_thread or step.active_comment_thread.id != request.payload.thread_id:
+        with state.update() as cur:
+            cur.steps[step_index].active_comment_thread = CommentThread(
+                id=request.payload.thread_id,
+                selected_text=request.payload.selected_text,
+            )
+    else:
+        with state.update() as cur:
+            # update the selected text in case it changed
+            cur.steps[step_index].active_comment_thread.selected_text = (
+                request.payload.selected_text
+            )
+
+    # add comment to the thread
+    message = Message(
+        role="user",
+        content=request.payload.message,
+    )
+    with state.update() as cur:
+        cur.steps[step_index].active_comment_thread.messages.append(message)
+
+    # fetch memory from the step
+    is_coding_step = step.key == "plan"
+    memory = (
+        context.get_memory("plan_and_code")
+        if is_coding_step
+        else context.get_memory("root_cause_analysis")
+    )
+
+    # ask LLM for response
+    step = state.get().steps[step_index]
+    comment_thread_component = CommentThreadComponent(context=context)
+    response = comment_thread_component.invoke(
+        CommentThreadRequest(
+            run_memory=memory,
+            thread_memory=step.active_comment_thread.messages,
+            selected_text=step.active_comment_thread.selected_text,
+        )
+    )
+    with state.update() as cur:
+        cur.steps[step_index].active_comment_thread.messages.append(
+            Message(content=response.comment_in_response, role="assistant")
+        )
+        if response.action_requested:
+            cur.steps[step_index].active_comment_thread.is_completed = True
+
+    if response.action_requested:
+        formatted_thread_memory = (
+            "Based on the following conversation, rethink your analysis:\n"
+            + "\n".join(
+                [
+                    f"{message.role}: {message.content}"
+                    for message in step.active_comment_thread.messages
+                ]
+            )
+        )
+        # rethink from correct point
+        restart_from_point_with_feedback(
+            AutofixUpdateRequest(
+                run_id=request.run_id,
+                payload=AutofixRestartFromPointPayload(
+                    type=AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
+                    step_index=step_index,
+                    retain_insight_card_index=request.payload.retain_insight_card_index,
+                    message=formatted_thread_memory,
+                    add_to_insights=False,
+                ),
+            )
+        )
 
 
 @inject

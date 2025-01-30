@@ -155,7 +155,6 @@
             "output_stream": null,
             "changes": [
                 {
-                    "repo_id": 1,
                     "repo_external_id": "439438299",
                     "repo_name": "getsentry/seer",
                     "title": "Ah yes Uncommented Unit Test and Reproduction Fields in Root Cause Models",
@@ -721,8 +720,6 @@
     "status": "COMPLETED",
     "codebases": {
         "439438299": {
-            "repo_id": null,
-            "namespace_id": null,
             "repo_external_id": "439438299",
             "file_changes": [
                 {

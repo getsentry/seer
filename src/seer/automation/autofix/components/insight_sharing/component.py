@@ -1,15 +1,11 @@
-import re
 import textwrap
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.models import Message, Usage
-from seer.automation.autofix.components.insight_sharing.models import (
-    InsightContextOutput,
-    InsightSharingOutput,
-)
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.dependency_injection import inject, injected
 
 
@@ -17,57 +13,48 @@ class InsightSharingPrompts:
     @staticmethod
     def format_step_one(
         *,
-        task_description: str,
         latest_thought: str,
         past_insights: list[str],
-        step_type: str | None = None,
+        step_type: str,
     ):
         no_insight_instruction = (
-            "If there is no clear conclusion that adds a ton of new insight and value, return <NO_INSIGHT/>. If it is similar to a previous conclusion, return <NO_INSIGHT/>."
-            if past_insights
-            else ""
+            "If there is nothing to add, just return <NO_INSIGHT/>" if past_insights else ""
         )
 
-        past_insights = [f"{i + 1}. {insight}" for i, insight in enumerate(past_insights)]
-
-        if step_type == "root_cause_analysis":
+        if step_type == "root_cause_analysis_processing":
             template = """\
-            Given the chain of thought below for {task_description}:
+            We are in the process of writing a small paragraph describing the in-depth root cause of an issue in our codebase. Here it is so far:
+            <PARAGRAPH_SO_FAR>
             {insights}
+            </PARAGRAPH_SO_FAR>
 
-            Write the next under-20-word conclusion in the chain of thought based on the notes below. {no_insight_instruction} The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step. If you can't find a conclusion that meets ALL of these criteria, return <NO_INSIGHT/>.
+            We have a new set of notes and thoughts about the issue:
+            <NOTES>
+            {latest_thought}
+            </NOTES>
 
-            If you do write something, write it so that someone else could immediately understand your point in detail.
-
-            NOTES TO ANALYZE:
-            {latest_thought}"""
+            If there is something new and useful here to extend the root cause analysis, what is the NEXT sentence in the paragraph (write it so it flows nicely; max 15 words)? {no_insight_instruction}
+            """
         elif step_type == "plan":
             template = """\
-            Given the chain of thought below for {task_description}:
+            We are in the process of writing a small paragraph describing how we can fix an issue in our codebase. Here it is so far:
+            <PARAGRAPH_SO_FAR>
             {insights}
+            </PARAGRAPH_SO_FAR>
 
-            Write the next under-20-word conclusion in the chain of thought based on the notes below, focusing specifically on building up to a solution. The conclusion should be a concrete plan or insight about how to fix the issue, not just analysis. {no_insight_instruction} Every item should build off the previous one towards the final solution.
+            We have a new set of notes and thoughts about the issue:
+            <NOTES>
+            {latest_thought}
+            </NOTES>
 
-            If you do write something, write it so that someone else could immediately understand your point in detail.
-
-            NOTES TO ANALYZE:
-            {latest_thought}"""
+            If there is something new and useful here to extend the plan to fix the issue, what is the NEXT sentence in the paragraph (write it so it flows nicely; max 15 words)? {no_insight_instruction}
+            """
         else:
-            template = """\
-            Given the chain of thought below for {task_description}:
-            {insights}
-
-            Write the next under-20-word conclusion in the chain of thought based on the notes below. {no_insight_instruction} The criteria for a good conclusion are that it should be a large, novel jump in insights, not similar to any item in the existing chain of thought, it should be a complete conclusion after some meaty analysis, not a plan of what to analyze next, and it should be valuable for {task_description}. It should also be very concrete, to-the-point, and specific. Every item in the chain of thought should read like a chain that clearly builds off of the previous step.
-
-            If you do write something, write it so that someone else could immediately understand your point in detail.
-
-            NOTES TO ANALYZE:
-            {latest_thought}"""
+            raise NotImplementedError(f"Insight sharing not implemented for step key: {step_type}")
 
         return textwrap.dedent(template).format(
-            task_description=task_description,
             latest_thought=latest_thought,
-            insights="\n".join(past_insights) if past_insights else "not started yet",
+            insights=" ".join(past_insights) if past_insights else "not started yet",
             no_insight_instruction=no_insight_instruction,
         )
 
@@ -75,15 +62,13 @@ class InsightSharingPrompts:
     def format_step_two(*, insight: str, latest_thought: str):
         return textwrap.dedent(
             """\
-            Return the pieces of context from the issue details or the files in the codebase that are directly relevant to the text below:
+            We had this thought:
+            {latest_thought}
+
+            And we concluded this:
             {insight}
 
-            That means choose the most relevant codebase snippets (codebase_context), event logs (breadcrumb_context), or stacktrace/variable data (stacktrace_context), that show specifically what the text mentions. Don't include any repeated information; just include what's needed.
-
-            Also provide a one-line explanation of how the pieces of context directly explain the text.
-
-            To know what's needed, reference these notes:
-            {latest_thought}"""
+            Now write one sentence of evidence backing the conclusion. And add any code, stacktraces, variable values, logs, or other evidence in Markdown code blocks using ```triple backticks``` when relevant to the conclusion."""
         ).format(
             insight=insight,
             latest_thought=latest_thought,
@@ -96,9 +81,8 @@ class InsightSharingPrompts:
 def create_insight_output(
     *,
     latest_thought: str,
-    task_description: str,
     past_insights: list[str],
-    step_type: str | None = None,
+    step_type: str,
     memory: list[Message],
     generated_at_memory_index: int = -1,
     llm_client: LlmClient = injected,
@@ -107,24 +91,19 @@ def create_insight_output(
 
     prompt_one = InsightSharingPrompts.format_step_one(
         step_type=step_type,
-        task_description=task_description,
         latest_thought=latest_thought,
         past_insights=past_insights,
     )
 
     completion = llm_client.generate_text(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+        model=GeminiProvider.model("gemini-1.5-flash"),
         prompt=prompt_one,
         temperature=0.0,
     )
 
     insight = completion.message.content
-    if not insight or insight == "<NO_INSIGHT/>":
+    if not insight or "<NO_INSIGHT/>" in insight:
         return None, usage
-
-    insight = re.sub(
-        r"^\d+\.\s+", "", insight
-    )  # since the model often starts the insight with a number, e.g. "3. Insight..."
 
     prompt_two = InsightSharingPrompts.format_step_two(
         insight=insight,
@@ -133,23 +112,20 @@ def create_insight_output(
 
     memory = [msg for msg in memory if msg.role != "system"]
 
-    completion = llm_client.generate_structured(
+    completion = llm_client.generate_text(
         messages=memory,
         prompt=prompt_two,
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
-        response_format=InsightContextOutput,
+        model=GeminiProvider.model("gemini-1.5-flash"),
         temperature=0.0,
         max_tokens=4096,
     )
+    justification = completion.message.content
 
     usage += completion.metadata.usage
 
     response = InsightSharingOutput(
         insight=insight,
-        justification=completion.parsed.explanation,
-        codebase_context=completion.parsed.codebase_context,
-        stacktrace_context=completion.parsed.stacktrace_context,
-        breadcrumb_context=completion.parsed.event_log_context,
+        justification=justification,
         generated_at_memory_index=generated_at_memory_index,
     )
     return response, usage
