@@ -75,6 +75,14 @@ def closing_queue(*queues: Queue):
                 pass
 
 
+def exception_formatter(exception: Exception) -> str:
+    return f"{type(exception).__name__}: {exception}"
+
+
+class MaxTriesExceeded(Exception):
+    pass
+
+
 def backoff_on_exception(
     is_exception_retryable: Callable[[Exception], bool],
     max_tries: int = 2,
@@ -95,24 +103,30 @@ def backoff_on_exception(
     def decorator(func):
         @functools.wraps(func)
         def wrapped_func(*args, **kwargs):
-            num_tries = 0
             last_exception = None
-            while num_tries < max_tries:
+            for num_tries in range(1, max_tries + 1):
                 try:
-                    return func(*args, **kwargs)
+                    result = func(*args, **kwargs)
                 except Exception as exception:
-                    num_tries += 1
                     last_exception = exception
                     if is_exception_retryable(exception):
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
                         logger.info(
-                            f"Encountered {type(exception).__name__}: {exception}. Sleeping for "
-                            f"{sleep_sec} seconds before attempting retry {num_tries}/{max_tries}."
+                            f"Encountered {exception_formatter(exception)}. Sleeping for "
+                            f"{sleep_sec} seconds before try {num_tries + 1}/{max_tries}."
                         )
                         time.sleep(sleep_sec)
                     else:
                         raise exception
-            raise last_exception
+                else:
+                    if num_tries > 1:
+                        logger.info(f"Retried call successful after {num_tries} tries.")
+                    return result
+
+            raise MaxTriesExceeded(
+                f"Max tries ({max_tries}) exceeded. "
+                f"Last exception: {exception_formatter(last_exception)}"
+            ) from last_exception
 
         return wrapped_func
 
