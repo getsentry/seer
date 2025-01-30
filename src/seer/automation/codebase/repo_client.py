@@ -289,17 +289,29 @@ class RepoClient:
                         shutil.move(
                             s, d
                         )  # move all directories from the root folder to the output directory
+            
                     else:
+            # First check if file exists in the valid paths
+            valid_paths = self.get_valid_file_paths(sha=sha)
+            if path not in valid_paths:
+                logger.info(
+                    f"File {path} not found in repository {self.repo.full_name} at sha {sha}"
+                )
+                return None, "utf-8"
+                
                         # Skipping symlinks to prevent FileNotFoundError.
-                        if not os.path.islink(s):
+            
                             shutil.copy2(
                                 s, d
                             )  # copy all files from the root folder to the output directory
 
                 shutil.rmtree(root_folder_path)  # remove the root folder
+            
+        except UnknownObjectException:
+            logger.info(f"File {path} not found in repository {self.repo.full_name} at sha {sha}")
+            return None, "utf-8"
 
-        return tmp_dir, tmp_repo_dir
-
+            logger.exception(f"Error getting file contents for {path} in {self.repo.full_name}: {e}")
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
