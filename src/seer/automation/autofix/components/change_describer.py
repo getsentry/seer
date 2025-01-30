@@ -3,7 +3,7 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 from seer.dependency_injection import inject, injected
@@ -11,7 +11,7 @@ from seer.dependency_injection import inject, injected
 
 class ChangeDescriptionRequest(BaseComponentRequest):
     change_dump: str
-    hint: str
+    hint: str | None = None
 
 
 class ChangeDescriptionOutput(BaseComponentOutput):
@@ -23,7 +23,7 @@ class ChangeDescriptionPrompts:
     @staticmethod
     def format_default_msg(
         change_dump: str,
-        hint: str,
+        hint: str | None = None,
     ):
         return textwrap.dedent(
             """\
@@ -31,17 +31,15 @@ class ChangeDescriptionPrompts:
 
             {change_dump}
 
-            In the style of:
             {hint}
-
-            You must output a title and description of the changes in the JSON, follow the format of:
+            You must output a title and description of the changes that are quickly readable for other engineers. Follow the format of:
             {{
-                "title": "Title of the change",
-                "description": "Description of the change"
+                "title": "The most important specific change that is being made.",
+                "description": "A brief bulleted list of the changes."
             }}"""
         ).format(
             change_dump=change_dump,
-            hint=hint,
+            hint=f"In the style of: {hint}\n" if hint else "",
         )
 
 
@@ -59,7 +57,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
                 change_dump=request.change_dump,
                 hint=request.hint,
             ),
-            model=OpenAiProvider.model("gpt-4o-mini"),
+            model=GeminiProvider.model("gemini-1.5-flash"),
             response_format=ChangeDescriptionOutput,
         )
         data = output.parsed
