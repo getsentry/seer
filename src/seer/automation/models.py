@@ -103,6 +103,8 @@ class Stacktrace(BaseModel):
             if isinstance(frame, dict):
                 if "function" not in frame:
                     frame["function"] = None
+                if "inApp" not in frame:
+                    frame["inApp"] = False
                 try:
                     stacktrace_frames.append(StacktraceFrame.model_validate(frame))
                 except ValidationError:
@@ -570,7 +572,7 @@ class Profile(BaseModel):
         for node in tree:
             indent_str = "  " * indent
 
-            func_line = f"{indent_str}→ {node.get('function')}"
+            func_line = f"{indent_str}â†’ {node.get('function')}"
             location = f"{node.get('filename')}"
             func_line += f" ({location})"
 
