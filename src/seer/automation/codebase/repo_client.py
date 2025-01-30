@@ -1,5 +1,6 @@
 import functools
 import logging
+import re
 import os
 import shutil
 import tarfile
@@ -30,6 +31,16 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
+
+def validate_sha(sha: str) -> bool:
+    """
+    Validates if a string is a valid git SHA-1 hash.
+    Args:
+        sha: String to validate
+    Returns:
+        bool: True if valid SHA-1, False otherwise
+    """
+    return bool(sha and isinstance(sha, str) and re.match(r'^[0-9a-f]{40}$', sha.lower()))
 
 
 def get_github_app_auth_and_installation(
@@ -141,45 +152,84 @@ class RepoClient:
             raise InitializationError(
                 f"Unsupported repo provider: {repo_definition.provider}, only github is supported."
             )
-
-        if app_id and private_key:
-            self.github = Github(
-                auth=get_github_app_auth_and_installation(
-                    app_id, private_key, repo_definition.owner, repo_definition.name
-                )[0]
-            )
-        else:
-            self.github = Github(auth=get_github_token_auth())
-
-        self.repo = self.github.get_repo(
-            int(repo_definition.external_id)
-            if repo_definition.external_id.isdigit()
-            else repo_definition.full_name
-        )
-
+        
+        # Store the intended repository information first
         self.provider = repo_definition.provider
         self.repo_owner = repo_definition.owner
         self.repo_name = repo_definition.name
         self.repo_external_id = repo_definition.external_id
-        self.base_commit_sha = repo_definition.base_commit_sha or self.get_default_branch_head_sha()
 
-    @staticmethod
-    def check_repo_write_access(repo: RepoDefinition):
-        app_id, pk = get_write_app_credentials()
+        try:
+            if app_id and private_key:
+                self.github = Github(
+                    auth=get_github_app_auth_and_installation(
+                        app_id, private_key, repo_definition.owner, repo_definition.name
+                    )[0]
+                )
+            else:
+                self.github = Github(auth=get_github_token_auth())
 
-        if app_id is None or pk is None:
-            return True if get_github_token_auth() else None
+            # Attempt to get repository with explicit error handling
+            try:
+                if repo_definition.external_id.isdigit():
+                    self.repo = self.github.get_repo(int(repo_definition.external_id))
+                else:
+                    self.repo = self.github.get_repo(f"{repo_definition.owner}/{repo_definition.name}")
+                
+                # Verify the repository matches the expected owner/name
+                if self.repo.owner.login != repo_definition.owner or self.repo.name != repo_definition.name:
+                    raise InitializationError(
+                        f"Repository mismatch: got {self.repo.full_name} but expected {repo_definition.owner}/{repo_definition.name}"
+                    )
+            except UnknownObjectException as e:
+                raise InitializationError(
+                    f"Repository not found or access denied: {repo_definition.owner}/{repo_definition.name}"
+                ) from e
 
-        permissions = get_repo_app_permissions(app_id, pk, repo.owner, repo.name)
+            self.base_commit_sha = repo_definition.base_commit_sha or self.get_default_branch_head_sha()
+        except Exception as e:
+            logger.error(f"Failed to initialize RepoClient: {str(e)}")
+            raise InitializationError(f"Failed to initialize RepoClient: {str(e)}") from e
 
-        if (
-            permissions
-            and permissions.get("contents") == "write"
-            and permissions.get("pull_requests") == "write"
-        ):
-            return True
+    def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
+        logger.info(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
+        if sha is None:
+            sha = self.base_commit_sha
 
-        return False
+        # Validate SHA format
+        if not validate_sha(sha):
+            logger.error(f"Invalid SHA format: {sha}")
+            return None, "utf-8"
+
+        try:
+            # First check if the file exists in the repository at this SHA
+            try:
+                self.repo.get_git_tree(sha, recursive=True)
+            except UnknownObjectException:
+                logger.error(f"SHA {sha} not found in repository {self.repo.full_name}")
+                return None, "utf-8"
+
+            contents = self.repo.get_contents(path, ref=sha)
+
+            if isinstance(contents, list):
+                raise Exception(f"Expected a single ContentFile but got a list for path {path}")
+
+            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
+            return contents.decoded_content.decode(detected_encoding), detected_encoding
+        except UnknownObjectException as e:
+            logger.warning(
+                f"File not found: {path} in {self.repo.full_name} at SHA {sha}",
+                extra={
+                    "path": path,
+                    "repo": self.repo.full_name,
+                    "sha": sha,
+                    "error": str(e)
+                }
+            )
+            return None, "utf-8"
+        except Exception as e:
+            logger.exception(f"Error getting file contents: {e}")
+            return None, "utf-8"
 
     @staticmethod
     def check_repo_read_access(repo: RepoDefinition):
