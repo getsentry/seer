@@ -300,10 +300,22 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
+    @functools.lru_cache(maxsize=128)
+    def _is_valid_file_path(self, path: str, sha: str) -> bool:
+        """Check if a file path exists in the repository at a given SHA."""
+        valid_paths = self.get_valid_file_paths(sha)
+        return path in valid_paths
+
     def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
+            
+        # Pre-validate file existence
+        if not self._is_valid_file_path(path, sha):
+            logger.warning(f"File {path} does not exist in repository {self.repo.full_name} at SHA {sha}")
+            return None, "utf-8"
+            
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
@@ -312,9 +324,11 @@ class RepoClient:
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
             return contents.decoded_content.decode(detected_encoding), detected_encoding
+        except UnknownObjectException as e:
+            logger.warning(f"File {path} not found in repository {self.repo.full_name} at SHA {sha}: {str(e)}")
+            return None, "utf-8"
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
-
             return None, "utf-8"
 
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
