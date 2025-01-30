@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock, Mock, patch
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 from johen import generate
@@ -6,8 +7,17 @@ from johen import generate
 from seer.automation.agent.client import LlmGenerateStructuredResponse, LlmResponseMetadata
 from seer.automation.agent.models import LlmProviderType, Usage
 from seer.automation.models import IssueDetails
-from seer.automation.summarize.issue import IssueSummary, run_summarize_issue, summarize_issue
-from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
+from seer.automation.summarize.issue import (
+    IssueSummary,
+    IssueSummaryWithScores,
+    run_summarize_issue,
+    summarize_issue,
+)
+from seer.automation.summarize.models import (
+    SummarizeIssueRequest,
+    SummarizeIssueResponse,
+    SummarizeIssueScores,
+)
 
 
 class TestSummarizeIssue:
@@ -17,40 +27,66 @@ class TestSummarizeIssue:
 
     @pytest.fixture
     def sample_request(self):
-        iterator = generate(IssueDetails)
+        issues_dir = Path(__file__).parent / "fixtures" / "issues"
+        issues: list[IssueDetails] = []
+        for path in issues_dir.glob("issue_to_summarize*.json"):
+            with path.open() as f:
+                issues.append(IssueDetails.model_validate_json(f.read()))
+        assert len(issues) >= 2, "Need at least 2 issues so that there's a connected issue"
         return SummarizeIssueRequest(
-            group_id=1, issue=next(iterator), connected_issues=[next(iterator), next(iterator)]
+            group_id=123,
+            issue=issues[0],
+            connected_issues=issues[1:],
+            organization_id=456,
+            organization_slug="test-org",
+            project_id=789,
         )
 
-    def test_summarize_issue_success(self, mock_llm_client, sample_request):
-        mock_structured_completion = MagicMock()
-        mock_raw_summary = IssueSummary(
-            title="Test headline",
-            whats_wrong="Test what's wrong",
-            session_related_issues="Test session related issues",
-            possible_cause="Test possible cause",
-        )
-        mock_structured_completion.choices[0].message.parsed = mock_raw_summary
-        mock_structured_completion.choices[0].message.refusal = None
-        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=mock_raw_summary,
-            metadata=LlmResponseMetadata(
-                model="gpt-4o-mini-2024-07-18",
-                provider_name=LlmProviderType.OPENAI,
-                usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+    @pytest.mark.vcr()
+    def test_summarize_issue_success(self, sample_request, score_num_decimal_places: int = 10):
+        result, raw_result = summarize_issue(sample_request)
+        assert isinstance(result, SummarizeIssueResponse)
+
+        expected_raw_result = IssueSummaryWithScores(
+            title="Critical Issue: red-timothy-sandwich Failure",
+            whats_wrong="**Unhandled exceptions** detected in **red-timothy-sandwich**; potential **memory leak** indicated in logs.",
+            session_related_issues="Related issues: **cyan-vincent-banana** and **green-fred-tennis** may share underlying causes.",
+            possible_cause="Possible **resource contention** or **data corruption** affecting multiple components.",
+            scores=SummarizeIssueScores(
+                possible_cause_confidence=round(0.470738745118689, score_num_decimal_places),
+                possible_cause_novelty=round(0.5800708960415282, score_num_decimal_places),
             ),
         )
 
-        result, raw_result = summarize_issue(sample_request, llm_client=mock_llm_client)
-
         assert isinstance(result, SummarizeIssueResponse)
-        assert result.group_id == 1
-        assert result.headline == "Test headline"
-        assert result.whats_wrong == "Test what's wrong"
-        assert result.trace == "Test session related issues"
-        assert result.possible_cause == "Test possible cause"
-        assert raw_result == mock_raw_summary
 
+        # Round for some tolerance during equality comparison.
+        # TODO: is decryption and decompression of the VCR causing tiny changes?
+        for res in (raw_result, result):
+            res.scores.possible_cause_confidence = round(
+                res.scores.possible_cause_confidence, score_num_decimal_places
+            )
+            res.scores.possible_cause_novelty = round(
+                res.scores.possible_cause_novelty, score_num_decimal_places
+            )
+
+        assert raw_result == expected_raw_result
+
+        assert result.group_id == 123
+        assert result.headline == expected_raw_result.title
+        assert result.whats_wrong == expected_raw_result.whats_wrong
+        assert result.trace == expected_raw_result.session_related_issues
+        assert result.possible_cause == expected_raw_result.possible_cause
+        assert (
+            result.scores.possible_cause_confidence
+            == expected_raw_result.scores.possible_cause_confidence
+        )
+        assert (
+            result.scores.possible_cause_novelty
+            == expected_raw_result.scores.possible_cause_novelty
+        )
+
+    @pytest.mark.vcr()
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
     def test_summarize_issue_event_details(self, mock_from_event, mock_llm_client, sample_request):
         mock_event_details = Mock()
@@ -92,6 +128,10 @@ class TestRunSummarizeIssue:
                 whats_wrong="Test what's wrong",
                 trace="Test trace",
                 possible_cause="Test possible cause",
+                scores=SummarizeIssueScores(
+                    possible_cause_confidence=0.5,
+                    possible_cause_novelty=0.5,
+                ),
             ),
             IssueSummary(
                 title="Test headline",
@@ -130,6 +170,10 @@ class TestRunSummarizeIssue:
                 whats_wrong="Test what's wrong",
                 trace="Test trace",
                 possible_cause="Test possible cause",
+                scores=SummarizeIssueScores(
+                    possible_cause_confidence=0.5,
+                    possible_cause_novelty=0.5,
+                ),
             ),
             IssueSummary(
                 title="Test headline",
