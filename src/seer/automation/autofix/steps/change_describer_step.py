@@ -78,7 +78,6 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                 if diff:
                     change_description = change_describer.invoke(
                         ChangeDescriptionRequest(
-                            hint="Describe the code changes in the following branch for a pull request.",
                             change_dump=diff_str,
                         )
                     )
