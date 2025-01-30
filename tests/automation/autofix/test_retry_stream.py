@@ -32,6 +32,7 @@ from seer.automation.autofix.models import (
     DefaultStep,
 )
 from seer.automation.state import LocalMemoryState
+from seer.utils import MaxTriesExceeded
 
 
 class FlakyStream:
@@ -213,9 +214,9 @@ def test_flaky_stream(autofix_agent: AutofixAgent, run_config: RunConfig):
     """
     Repro the error. Meta-test that the flaky provider returns a stream which raises a retryable exception.
     """
-    with pytest.raises(Exception) as exception_info:
+    with pytest.raises(MaxTriesExceeded) as exception_info:
         _ = autofix_agent.get_completion(run_config, max_tries=1)  # prev behavior is don't retry
-    assert run_config.model.is_completion_exception_retryable(exception_info.value)
+    assert run_config.model.is_completion_exception_retryable(exception_info.value.__cause__)
 
 
 @pytest.mark.vcr()
@@ -304,10 +305,10 @@ def test_max_tries_exceeded(autofix_agent: AutofixAgent, run_config: RunConfig):
     assert isinstance(run_config.model, FlakyProvider)
     run_config.model._max_num_flaky_clients = 3
 
-    with pytest.raises(Exception) as exception_info:
+    with pytest.raises(MaxTriesExceeded) as exception_info:
         _ = autofix_agent.get_completion(
             run_config,
             sleep_sec_scaler=lambda _: 0.1,
             max_tries=run_config.model._max_num_flaky_clients,
         )
-    assert run_config.model.is_completion_exception_retryable(exception_info.value)
+    assert run_config.model.is_completion_exception_retryable(exception_info.value.__cause__)
