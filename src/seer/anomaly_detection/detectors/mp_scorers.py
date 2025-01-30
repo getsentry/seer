@@ -217,6 +217,15 @@ class MPIQRScorer(MPScorer):
         description="Lower and upper bounds for high sensitivity",
     )
 
+    iqr_scaling_factor: Dict[Sensitivities, float] = Field(
+        {
+            "high": 1.2,
+            "medium": 1.5,
+            "low": 2,
+        },
+        description="Scaling factor for IQR based thresholding",
+    )
+
     @inject
     def batch_score(
         self,
@@ -373,14 +382,21 @@ class MPIQRScorer(MPScorer):
     def _get_mp_dist_threshold(
         self, mp_dist: npt.NDArray[np.float64], sensitivity: Sensitivities
     ) -> float:
-        if sensitivity not in self.percentiles:
+        if sensitivity not in self.percentiles or sensitivity not in self.iqr_scaling_factor:
             raise ClientError(f"Invalid sensitivity: {sensitivity}")
 
         # Compute the quantiles for threshold level for the sensitivity
         mp_dist_baseline_finite = mp_dist[np.isfinite(mp_dist)]
+        median = np.median(mp_dist_baseline_finite)
+        variation = np.std(mp_dist_baseline_finite) / median if median > 0 else np.inf
+
+        # Apply additional scaling if variation is low
+        scaling = 2.0 if variation < 0.2 else 1.0
+
         [Q1, Q3] = np.quantile(mp_dist_baseline_finite, self.percentiles[sensitivity])
         IQR = Q3 - Q1
-        return Q3 + (1.5 * IQR)
+
+        return Q3 + (scaling * self.iqr_scaling_factor[sensitivity] * IQR)
 
     def _to_flag(self, mp_dist: np.float64, threshold: float):
         if np.isnan(mp_dist) or mp_dist <= threshold:
