@@ -125,7 +125,7 @@ def create_insight_output(
 
     response = InsightSharingOutput(
         insight=insight,
-        justification=justification,
+        justification=justification or "",
         generated_at_memory_index=generated_at_memory_index,
     )
     return response, usage
