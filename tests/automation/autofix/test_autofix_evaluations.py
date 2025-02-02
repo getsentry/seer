@@ -12,9 +12,9 @@ from seer.automation.agent.models import (
     Usage,
 )
 from seer.automation.autofix.components.root_cause.models import (
+    RelevantCodeFile,
     RootCauseAnalysisItem,
-    RootCauseRelevantCodeSnippet,
-    RootCauseRelevantContext,
+    TimelineEvent,
 )
 from seer.automation.autofix.evaluations import (
     score_fix_single_it,
@@ -97,18 +97,16 @@ class TestSyncRunEvaluationOnItem:
         root_cause_model.causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Test Cause",
-                description="Test Description",
-                code_context=[
-                    RootCauseRelevantContext(
-                        id=2,
-                        title="Test Fix",
-                        description="Test fix description",
-                        snippet=RootCauseRelevantCodeSnippet(
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
-                            snippet="def test():\n    pass",
                             repo_name="owner/repo",
                         ),
+                        is_most_important_event=True,
                     )
                 ],
             )
@@ -199,83 +197,6 @@ class TestSyncRunEvaluationOnItem:
         assert result == (None, None)
         assert not self.mock_planning_step.get_signature.called
 
-    def test_sync_run_evaluation_on_item_no_code_context(self):
-        # Setup state changes for root cause step with causes but no code context, should still work
-        root_cause_model = RootCauseStepModel(
-            id="root_cause_analysis",
-            title="Root Cause Analysis",
-            causes=[
-                RootCauseAnalysisItem(
-                    id=1,
-                    title="Test Cause",
-                    description="Test cause description",
-                    code_context=[],
-                )
-            ],
-        )
-
-        def root_cause_apply_side_effect():
-            with self.test_state.update() as cur:
-                cur.steps.append(root_cause_model)
-            return self.test_state
-
-        self.mock_root_cause_step_instance.apply.side_effect = root_cause_apply_side_effect
-
-        changes_step = next(generate(ChangesStep))
-        changes_step.changes = [
-            CodebaseChange(
-                repo_external_id="1",
-                repo_name="test",
-                title="123",
-                description="123",
-                diff=[],
-                diff_str="diff str 1",
-            ),
-            CodebaseChange(
-                repo_external_id="1",
-                repo_name="test",
-                title="123",
-                description="123",
-                diff=[],
-                diff_str="diff str 2",
-            ),
-        ]
-
-        def planning_apply_side_effect():
-            with self.test_state.update() as cur:
-                cur.steps.append(changes_step)
-            return self.test_state
-
-        self.mock_planning_step_instance.apply.side_effect = planning_apply_side_effect
-
-        # Run the function
-        result_diff, result_root_causes = sync_run_evaluation_on_item(self.mock_dataset_item)
-
-        # Assertions
-        assert self.mock_create_initial_run.called
-        request_copy = self.autofix_request.model_copy()
-        request_copy.options = request_copy.options.model_copy()
-        request_copy.options.disable_codebase_indexing = True
-        request_copy.options.disable_interactivity = True
-        self.mock_create_initial_run.assert_called_once_with(request_copy)
-
-        assert self.mock_root_cause_step.get_signature.called
-        assert self.mock_root_cause_step_instance.apply.called
-
-        self.mock_event_manager.return_value.set_selected_root_cause.assert_called_once()
-
-        assert self.mock_planning_step.get_signature.called
-        assert self.mock_planning_step_instance.apply.called
-
-        # Check that the state was updated
-        final_state = self.test_state.get()
-        assert len(final_state.steps) == 2
-        assert isinstance(final_state.steps[0], RootCauseStepModel)
-        assert isinstance(final_state.steps[1], ChangesStep)
-
-        assert result_diff == "diff str 1\ndiff str 2"
-        assert result_root_causes == root_cause_model.causes
-
     def test_sync_run_evaluation_on_item_no_changes(self):
         # Setup state changes for root cause step
         root_cause_model = RootCauseStepModel(
@@ -285,18 +206,16 @@ class TestSyncRunEvaluationOnItem:
             causes=[
                 RootCauseAnalysisItem(
                     id=1,
-                    title="Test Cause",
-                    description="Test cause description",
-                    code_context=[
-                        RootCauseRelevantContext(
-                            id=2,
-                            title="Test Fix",
-                            description="Test fix description",
-                            snippet=RootCauseRelevantCodeSnippet(
+                    root_cause_reproduction=[
+                        TimelineEvent(
+                            title="Test Cause",
+                            code_snippet_and_analysis="The root cause of the issue is ...",
+                            timeline_item_type="code",
+                            relevant_code_file=RelevantCodeFile(
                                 file_path="test.py",
-                                snippet="def test():\n    pass",
                                 repo_name="owner/repo",
                             ),
+                            is_most_important_event=True,
                         )
                     ],
                 )
@@ -371,18 +290,16 @@ class TestSyncRunRootCause:
         root_cause_model.causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Test Cause",
-                description="Test Description",
-                code_context=[
-                    RootCauseRelevantContext(
-                        id=2,
-                        title="Test Fix",
-                        description="Test fix description",
-                        snippet=RootCauseRelevantCodeSnippet(
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
-                            snippet="def test():\n    pass",
                             repo_name="owner/repo",
                         ),
+                        is_most_important_event=True,
                     )
                 ],
             )
@@ -462,8 +379,18 @@ class TestScoreRootCauseSingleIt:
         causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Cause 1",
-                description="Description 1",
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
+                            file_path="test.py",
+                            repo_name="owner/repo",
+                        ),
+                        is_most_important_event=True,
+                    )
+                ],
             )
         ]
 
@@ -488,8 +415,18 @@ class TestScoreRootCauseSingleIt:
         causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Cause 1",
-                description="Description 1",
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
+                            file_path="test.py",
+                            repo_name="owner/repo",
+                        ),
+                        is_most_important_event=True,
+                    )
+                ],
             )
         ]
 
@@ -503,8 +440,18 @@ class TestScoreRootCauseSingleIt:
         causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Cause 1",
-                description="Description 1",
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
+                            file_path="test.py",
+                            repo_name="owner/repo",
+                        ),
+                        is_most_important_event=True,
+                    )
+                ],
             )
         ]
 
@@ -524,8 +471,18 @@ class TestScoreRootCauses:
         causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Cause 1",
-                description="Description 1",
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
+                            file_path="test.py",
+                            repo_name="owner/repo",
+                        ),
+                        is_most_important_event=True,
+                    )
+                ],
             )
         ]
 
@@ -544,8 +501,18 @@ class TestScoreRootCauses:
         causes = [
             RootCauseAnalysisItem(
                 id=1,
-                title="Cause 1",
-                description="Description 1",
+                root_cause_reproduction=[
+                    TimelineEvent(
+                        title="Test Cause",
+                        code_snippet_and_analysis="The root cause of the issue is ...",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
+                            file_path="test.py",
+                            repo_name="owner/repo",
+                        ),
+                        is_most_important_event=True,
+                    )
+                ],
             )
         ]
 

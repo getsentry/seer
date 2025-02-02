@@ -144,15 +144,20 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
             expanded_files_messages = []
-            relevant_files = [
-                {"file_path": context.snippet.file_path, "repo_name": context.snippet.repo_name}
-                for context in (
-                    request.root_cause_and_fix.code_context
-                    if request.root_cause_and_fix.code_context
-                    else []
-                )
-                if context.snippet
-            ]
+            relevant_files = list(
+                {
+                    (event.relevant_code_file.file_path, event.relevant_code_file.repo_name): {
+                        "file_path": event.relevant_code_file.file_path,
+                        "repo_name": event.relevant_code_file.repo_name,
+                    }
+                    for event in (
+                        request.root_cause_and_fix.root_cause_reproduction
+                        if request.root_cause_and_fix.root_cause_reproduction
+                        else []
+                    )
+                    if event.relevant_code_file
+                }.values()
+            )
 
             for i, file in enumerate(relevant_files):
                 file_content = (

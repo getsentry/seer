@@ -15,11 +15,10 @@ from seer.automation.autofix.components.is_root_cause_obvious import IsRootCause
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
+    RelevantCodeFile,
     RootCauseAnalysisItemPrompt,
-    RootCauseAnalysisRelevantContext,
     RootCauseAnalysisRequest,
-    RootCauseRelevantCodeSnippet,
-    RootCauseRelevantContext,
+    TimelineEvent,
 )
 from seer.automation.models import EventDetails
 from seer.dependency_injection import Module
@@ -55,9 +54,18 @@ class TestRootCauseComponent:
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=MultipleRootCauseAnalysisOutputPrompt(
                 cause=RootCauseAnalysisItemPrompt(
-                    title="Missing Null Check",
-                    description="The root cause of the issue is ...",
-                    relevant_code=None,
+                    root_cause_reproduction=[
+                        TimelineEvent(
+                            title="Missing Null Check",
+                            code_snippet_and_analysis="The root cause of the issue is ...",
+                            timeline_item_type="code",
+                            relevant_code_file=RelevantCodeFile(
+                                file_path="test.py",
+                                repo_name="owner/repo",
+                            ),
+                            is_most_important_event=True,
+                        )
+                    ],
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -75,9 +83,15 @@ class TestRootCauseComponent:
 
         assert output is not None
         assert len(output.causes) == 1
-        assert output.causes[0].title == "Missing Null Check"
-        assert output.causes[0].description == "The root cause of the issue is ..."
-        assert output.causes[0].code_context is None
+        assert output.causes[0].root_cause_reproduction is not None
+        assert len(output.causes[0].root_cause_reproduction) == 1
+        assert output.causes[0].root_cause_reproduction[0].title == "Missing Null Check"
+        assert (
+            output.causes[0].root_cause_reproduction[0].code_snippet_and_analysis
+            == "The root cause of the issue is ..."
+        )
+        assert output.causes[0].root_cause_reproduction[0].timeline_item_type == "code"
+        assert output.causes[0].root_cause_reproduction[0].relevant_code_file is not None
 
     def test_no_root_causes_response(self, component, mock_agent):
         mock_agent.return_value.run.return_value = "<NO_ROOT_CAUSES> this is too hard, I give up"
@@ -124,9 +138,18 @@ class TestRootCauseComponent:
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=MultipleRootCauseAnalysisOutputPrompt(
                 cause=RootCauseAnalysisItemPrompt(
-                    title="Test Root Cause",
-                    description="Description",
-                    relevant_code=None,
+                    root_cause_reproduction=[
+                        TimelineEvent(
+                            title="Test Cause",
+                            code_snippet_and_analysis="The root cause of the issue is ...",
+                            timeline_item_type="code",
+                            relevant_code_file=RelevantCodeFile(
+                                file_path="test.py",
+                                repo_name="owner/repo",
+                            ),
+                            is_most_important_event=True,
+                        )
+                    ],
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -163,9 +186,18 @@ class TestRootCauseComponent:
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=MultipleRootCauseAnalysisOutputPrompt(
                 cause=RootCauseAnalysisItemPrompt(
-                    title="Test Root Cause",
-                    description="Description",
-                    relevant_code=None,
+                    root_cause_reproduction=[
+                        TimelineEvent(
+                            title="Test Cause",
+                            code_snippet_and_analysis="The root cause of the issue is ...",
+                            timeline_item_type="code",
+                            relevant_code_file=RelevantCodeFile(
+                                file_path="test.py",
+                                repo_name="owner/repo",
+                            ),
+                            is_most_important_event=True,
+                        )
+                    ],
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -201,9 +233,18 @@ class TestRootCauseComponent:
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=MultipleRootCauseAnalysisOutputPrompt(
                 cause=RootCauseAnalysisItemPrompt(
-                    title="Test Root Cause",
-                    description="Description",
-                    relevant_code=None,
+                    root_cause_reproduction=[
+                        TimelineEvent(
+                            title="Test Cause",
+                            code_snippet_and_analysis="The root cause of the issue is ...",
+                            timeline_item_type="code",
+                            relevant_code_file=RelevantCodeFile(
+                                file_path="test.py",
+                                repo_name="owner/repo",
+                            ),
+                            is_most_important_event=True,
+                        )
+                    ],
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -230,150 +271,3 @@ class TestRootCauseComponent:
         mock_agent.assert_called_once()
         tools_arg = mock_agent.call_args[1]["tools"]
         assert tools_arg is not None
-
-    def test_root_cause_with_line_numbers(self, component, mock_agent):
-        mock_agent.return_value.run.side_effect = [
-            "Some root cause analysis",
-            "Formatter",
-        ]
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=MultipleRootCauseAnalysisOutputPrompt(
-                cause=RootCauseAnalysisItemPrompt(
-                    title="Test Root Cause",
-                    description="Description",
-                    relevant_code=RootCauseAnalysisRelevantContext(
-                        snippets=[
-                            RootCauseRelevantContext(
-                                id=0,
-                                title="Test Context",
-                                description="Test function",
-                                snippet=RootCauseRelevantCodeSnippet(
-                                    file_path="test.py",
-                                    snippet="def test_function():\n    return True",
-                                    repo_name=None,
-                                ),
-                            )
-                        ]
-                    ),
-                )
-            ),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.OPENAI,
-                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-            ),
-        )
-
-        # Mock file contents
-        file_contents = (
-            "# Some comment\n" "def test_function():\n" "    return True\n" "# More code\n"
-        )
-        component.context.get_file_contents = MagicMock(return_value=file_contents)
-
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-
-        with module:
-            output = component.invoke(MagicMock())
-
-        assert output.causes[0].code_context[0].snippet.start_line == 1
-        assert output.causes[0].code_context[0].snippet.end_line == 3
-
-    def test_root_cause_line_numbers_file_not_found(self, component, mock_agent):
-        mock_agent.return_value.run.side_effect = [
-            "Some root cause analysis",
-            "Formatter",
-        ]
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=MultipleRootCauseAnalysisOutputPrompt(
-                cause=RootCauseAnalysisItemPrompt(
-                    title="Test Root Cause",
-                    description="Description",
-                    relevant_code=RootCauseAnalysisRelevantContext(
-                        snippets=[
-                            RootCauseRelevantContext(
-                                id=0,
-                                title="Test Context",
-                                description="Test function",
-                                snippet=RootCauseRelevantCodeSnippet(
-                                    file_path="nonexistent.py",
-                                    snippet="def test_function():\n    return True",
-                                    repo_name=None,
-                                ),
-                            )
-                        ]
-                    ),
-                )
-            ),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.OPENAI,
-                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-            ),
-        )
-
-        # Mock file contents to raise an exception
-        component.context.get_file_contents = MagicMock(side_effect=FileNotFoundError)
-
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-
-        with module:
-            output = component.invoke(MagicMock())
-
-        # Verify that the output is still generated but without line numbers
-        assert output.causes[0].code_context[0].snippet.start_line is None
-        assert output.causes[0].code_context[0].snippet.end_line is None
-
-    def test_root_cause_line_numbers_no_match(self, component, mock_agent):
-        mock_agent.return_value.run.side_effect = [
-            "Some root cause analysis",
-            "Formatter",
-        ]
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=MultipleRootCauseAnalysisOutputPrompt(
-                cause=RootCauseAnalysisItemPrompt(
-                    title="Test Root Cause",
-                    description="Description",
-                    relevant_code=RootCauseAnalysisRelevantContext(
-                        snippets=[
-                            RootCauseRelevantContext(
-                                id=0,
-                                title="Test Context",
-                                description="Test function",
-                                snippet=RootCauseRelevantCodeSnippet(
-                                    file_path="test.py",
-                                    snippet="def test_function():\n    return True",
-                                    repo_name=None,
-                                ),
-                            )
-                        ]
-                    ),
-                )
-            ),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.OPENAI,
-                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-            ),
-        )
-
-        # Mock file contents with different code
-        file_contents = "def different_function():\n    return False"
-        component.context.get_file_contents = MagicMock(return_value=file_contents)
-
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-
-        with module:
-            output = component.invoke(MagicMock())
-
-        # Verify that the output is still generated but without line numbers
-        assert output.causes[0].code_context[0].snippet.start_line is None
-        assert output.causes[0].code_context[0].snippet.end_line is None

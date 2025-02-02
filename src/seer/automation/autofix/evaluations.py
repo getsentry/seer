@@ -9,9 +9,9 @@ from pydantic_xml import attr, element
 from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
+    RelevantCodeFile,
     RootCauseAnalysisItem,
-    RootCauseRelevantCodeSnippet,
-    RootCauseRelevantContext,
+    TimelineEvent,
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
@@ -130,16 +130,16 @@ def sync_run_execution(item: DatasetItemClient):
             RootCauseAnalysisItem(
                 title=expected_output.root_cause,
                 description="",
-                code_context=[
-                    RootCauseRelevantContext(
-                        id=-1,
+                root_cause_reproduction=[
+                    TimelineEvent(
                         title=expected_output.solution_summary,
-                        description="",
-                        snippet=RootCauseRelevantCodeSnippet(
+                        code_snippet_and_analysis="",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
                             file_path=expected_output.diff.file_path,
-                            snippet=expected_output.diff.code_diff,
                             repo_name="",
                         ),
+                        is_most_important_event=False,
                     )
                 ],
             )

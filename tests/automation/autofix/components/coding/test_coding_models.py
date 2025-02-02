@@ -1,8 +1,8 @@
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import (
+    RelevantCodeFile,
     RootCauseAnalysisItem,
-    RootCauseRelevantCodeSnippet,
-    RootCauseRelevantContext,
+    TimelineEvent,
 )
 
 
@@ -11,26 +11,22 @@ class TestPlannerModels:
         prompt_xml = RootCausePlanTaskPromptXml.from_root_cause(
             RootCauseAnalysisItem(
                 id=1,
-                title="title",
-                description="description",
-                code_context=[
-                    RootCauseRelevantContext(
-                        id=2,
+                root_cause_reproduction=[
+                    TimelineEvent(
                         title="fix_title",
-                        description="fix_description",
-                        snippet=RootCauseRelevantCodeSnippet(
-                            file_path="file_path", snippet="snippet", repo_name="owner/repo"
+                        code_snippet_and_analysis="fix_description",
+                        timeline_item_type="code",
+                        relevant_code_file=RelevantCodeFile(
+                            file_path="file_path",
+                            repo_name="owner/repo",
                         ),
+                        is_most_important_event=True,
                     )
                 ],
             )
         )
 
-        assert prompt_xml.title == "title"
-        assert prompt_xml.description == "description"
         assert prompt_xml.contexts[0].title == "fix_title"
         assert prompt_xml.contexts[0].description == "fix_description"
-        assert prompt_xml.contexts[0].snippet is not None
-        if prompt_xml.contexts[0].snippet is not None:
-            assert prompt_xml.contexts[0].snippet.file_path == "file_path"
-            assert prompt_xml.contexts[0].snippet.snippet == "snippet"
+        assert prompt_xml.contexts[0].relevant_code_file_path == "file_path"
+        assert prompt_xml.contexts[0].relevant_code_repo_name == "owner/repo"
