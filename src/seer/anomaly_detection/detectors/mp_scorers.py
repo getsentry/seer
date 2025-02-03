@@ -385,6 +385,30 @@ class MPIQRScorer(MPScorer):
         if sensitivity not in self.percentiles or sensitivity not in self.iqr_scaling_factor:
             raise ClientError(f"Invalid sensitivity: {sensitivity}")
 
+        # mp_dist = mp_dist[len(mp_dist) // 2 :]
+
+        # # Apply exponential weighting to give more importance to recent values
+        # weights = np.exp(np.linspace(0, 1, len(mp_dist)))
+        # mp_dist = mp_dist * weights
+
+        # Apply exponential weighting to give more importance to recent values
+        weights = np.power(np.linspace(0.625, 1, len(mp_dist)), 2)
+
+        # # Store original range before weighting
+        # original_min = np.min(mp_dist[np.isfinite(mp_dist)])
+        # original_max = np.max(mp_dist[np.isfinite(mp_dist)])
+
+        # Apply weights
+        mp_dist = mp_dist * weights
+
+        # # Scale back to original range
+        # weighted_min = np.min(weighted_mp_dist[np.isfinite(weighted_mp_dist)])
+        # weighted_max = np.max(weighted_mp_dist[np.isfinite(weighted_mp_dist)])
+
+        # if weighted_max - weighted_min != 0:
+        #     mp_dist = (weighted_mp_dist - weighted_min) / (weighted_max - weighted_min)
+        #     mp_dist = mp_dist * (original_max - original_min) + original_min
+
         # Compute the quantiles for threshold level for the sensitivity
         mp_dist_baseline_finite = mp_dist[np.isfinite(mp_dist)]
         median = np.median(mp_dist_baseline_finite)
@@ -397,6 +421,14 @@ class MPIQRScorer(MPScorer):
         IQR = Q3 - Q1
 
         return Q3 + (scaling * self.iqr_scaling_factor[sensitivity] * IQR)
+
+        # percentiles = {
+        #     "high": 90,
+        #     "medium": 95,
+        #     "low": 98,
+        # }
+
+        # return np.percentile(mp_dist, percentiles[sensitivity])
 
     def _to_flag(self, mp_dist: np.float64, threshold: float):
         if np.isnan(mp_dist) or mp_dist <= threshold:
