@@ -20,7 +20,10 @@ from seer.automation.autofix.components.coding.models import (
     FuzzyDiffChunk,
     PlanTaskPromptXml,
 )
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.components.root_cause.models import (
+    RelevantCodeFile,
+    RootCauseAnalysisItem,
+)
 from seer.automation.models import EventDetails, FileChange
 from seer.dependency_injection import Module
 
@@ -321,15 +324,13 @@ class TestCodingComponent:
         # Setup
         mock_request = MagicMock()
         mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
-        mock_request.root_cause_and_fix.title = "Test Error"
-        mock_request.root_cause_and_fix.description = "Test Description"
-        mock_request.root_cause_and_fix.code_context = [
+        mock_request.root_cause_and_fix.root_cause_reproduction = [
             MagicMock(
-                title="Test Context",
-                description="Test Context Description",
-                snippet=MagicMock(
-                    file_path="test.py", repo_name="test-repo", snippet="test snippet"
-                ),
+                title="Test title",
+                code_snippet_and_analysis="Test description",
+                timeline_item_type="code",
+                relevant_code_file=RelevantCodeFile(file_path="test.py", repo_name="test-repo"),
+                is_most_important_event=True,
             )
         ]
         mock_request.event_details = EventDetails(
@@ -376,15 +377,13 @@ class TestCodingComponent:
         # Setup
         mock_request = MagicMock()
         mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
-        mock_request.root_cause_and_fix.title = "Test Error"
-        mock_request.root_cause_and_fix.description = "Test Description"
-        mock_request.root_cause_and_fix.code_context = [
+        mock_request.root_cause_and_fix.root_cause_reproduction = [
             MagicMock(
-                title="Test Context",
-                description="Test Context Description",
-                snippet=MagicMock(
-                    file_path="test.py", repo_name="test-repo", snippet="test snippet"
-                ),
+                title="Test title",
+                code_snippet_and_analysis="Test description",
+                timeline_item_type="code",
+                relevant_code_file=RelevantCodeFile(file_path="test.py", repo_name="test-repo"),
+                is_most_important_event=True,
             )
         ]
         mock_request.event_details = EventDetails(

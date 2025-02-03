@@ -45,7 +45,7 @@ class RootCauseAnalysisPrompts:
             }
             - At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK.
 
-            It is important that we find the potential root causes of the issue."""
+            It is important that you trace the true root cause of this issue, from the entry point of the code to the error."""
         )
 
     @staticmethod
@@ -85,23 +85,12 @@ class RootCauseAnalysisPrompts:
     def root_cause_formatter_msg():
         return textwrap.dedent(
             """\
-            Please format the output properly.
+            Write a reproduction timeline to illustrate how exactly the issue occurred and why.
 
-            Note: If the provided root cause analysis is not formatted properly, such as code snippets missing descriptions, you can derive them from the provided root cause analysis.
-
-            Return only the formatted root cause analysis:"""
-        )
-
-    @staticmethod
-    def reproduction_prompt_msg():
-        return textwrap.dedent(
-            """\
-            Given all the above potential root causes you just gave, please provide 1-2 sentence instructions on how to reproduce the issue, then turn it into a concise unit test that tests for the issue for each root cause.
-            - This test should intentionally fail if the issue is not fixed. It will pass if the issue is fixed.
-            - Look through the codebase to find the most relevant tests to the root cause. Make sure you follow any existing testing framework and patterns.
-            - For the reproduction instructions, assume the user is an experienced developer well-versed in the codebase, simply give a concise explanation of how to reproduce the issue.
-            - Do not mention the unit test in the reproduction instructions, they are separate.
-            - You must use the local variables provided to you in the stacktrace to give your reproduction steps.
-            - Try to be open ended to allow for the most flexibility in reproducing the issue. Avoid being too confident.
-            - This step is optional, if you're not sure about the reproduction steps for a root cause, just skip it."""
+            For each event:
+              - Title: a complete sentence describing what happened and why it matters to the root cause of the issue. (a summary of the description)
+              - Code Snippet and Analysis: any extra analysis needed and a small relevant code snippet if this is an important event. All Markdown formatted.
+              - Event type: logic in the code, a human interaction, an API call, data from the database, or an environment/infra factor.
+              - Is most important event: whether this event is the MOST important and insightfulone in the timeline to pay attention to.
+            As a whole, this timeline should tell the precise story of the root cause of the issue. Starts at the entry point of the code, ends at the error."""
         )

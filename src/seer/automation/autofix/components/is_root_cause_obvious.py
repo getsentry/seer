@@ -26,7 +26,7 @@ class IsRootCauseObviousPrompts:
         return (
             textwrap.dedent(
                 """\
-            You are an exceptional principal engineer that is amazing at finding the root cause of any issue. We have an issue in our codebase described below. Is the root cause of the issue clear from the details below? Or does it require searching for more information around the codebase?
+            You are an exceptional principal engineer that is amazing at finding the root cause of any issue. We have an issue in our codebase described below. Is the true, deepest root cause of the issue clear from the details below? Or does it require searching for more information around the codebase?
 
             {event_details}"""
             )

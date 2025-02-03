@@ -1,151 +1,53 @@
-from typing import Annotated, Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, StringConstraints, field_validator
-from pydantic_xml import attr
+from pydantic import BaseModel
 
 from seer.automation.agent.models import Message
-from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import EventDetails, Profile, PromptXmlModel
+from seer.automation.models import EventDetails, Profile
 from seer.automation.summarize.issue import IssueSummary
 
 
-class SnippetPromptXml(PromptXmlModel, tag="code"):
-    file_path: str = attr()
-    repo_name: Optional[str] = attr()
-    snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
-
-    @classmethod
-    def get_example(cls):
-        return cls(
-            file_path="path/to/file.py",
-            repo_name="owner/repo",
-            snippet="def foo():\n    return 'bar'\n",
-        )
-
-
-class RootCauseRelevantCodeSnippet(BaseModel):
+class RelevantCodeFile(BaseModel):
     file_path: str
-    repo_name: Optional[str]
-    snippet: str
-    start_line: int | None = None
-    end_line: int | None = None
+    repo_name: str
 
 
-class RootCauseRelevantContext(BaseModel):
-    id: int
+class TimelineEvent(BaseModel):
     title: str
-    description: str
-    snippet: Optional[RootCauseRelevantCodeSnippet]
-
-
-class RootCauseAnalysisRelevantContext(BaseModel):
-    snippets: list[RootCauseRelevantContext]
-
-
-class UnitTestSnippetPrompt(BaseModel):
-    file_path: str
-    code_snippet: str
-    description: str
-
-    @field_validator("code_snippet")
-    @classmethod
-    def clean_code_snippet(cls, v: str) -> str:
-        return remove_code_backticks(v)
-
-
-class UnitTestSnippet(BaseModel):
-    file_path: str
-    snippet: str
-    description: str
+    code_snippet_and_analysis: str
+    timeline_item_type: Literal["environment", "database", "code", "api_request", "human_action"]
+    relevant_code_file: RelevantCodeFile | None
+    is_most_important_event: bool
 
 
 class RootCauseAnalysisItem(BaseModel):
     id: int = -1
-    title: str
-    description: str
-    # unit_test: UnitTestSnippet | None = None
-    # reproduction: str | None = None
-    code_context: Optional[list[RootCauseRelevantContext]] = None
+    root_cause_reproduction: list[TimelineEvent] | None = None
+    description: str | None = (
+        None  # TODO: this is for backwards compatability with old runs, should remove soon
+    )
 
     def to_markdown_string(self) -> str:
-        markdown = f"# {self.title}\n\n"
-        markdown += f"## Description\n{self.description}\n\n" if self.description else ""
+        markdown = "# Root Cause\n\n"
 
-        if self.code_context:
-            markdown += "## Relevant Code Context\n\n"
-            for context in self.code_context:
-                markdown += f"### {context.title}\n"
-                markdown += f"{context.description}\n\n"
-                if context.snippet:
-                    markdown += f"**File:** {context.snippet.file_path}\n"
-                    if context.snippet.repo_name:
-                        markdown += f"**Repository:** {context.snippet.repo_name}\n"
-                    markdown += "```\n"
-                    markdown += f"{context.snippet.snippet}\n"
-                    markdown += "```\n\n"
+        if self.root_cause_reproduction:
+            for event in self.root_cause_reproduction:
+                markdown += f"### {event.title}\n"
+                markdown += f"{event.code_snippet_and_analysis}\n\n"
 
         return markdown.strip()
 
 
 class RootCauseAnalysisItemPrompt(BaseModel):
-    title: str
-    description: str
-    # reproduction_instructions: str | None = None
-    # unit_test: UnitTestSnippetPrompt | None = None
-    relevant_code: Optional[RootCauseAnalysisRelevantContext]
+    root_cause_reproduction: list[TimelineEvent] | None = None
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
-        return cls(
-            title=model.title,
-            description=model.description,
-            # reproduction_instructions=model.reproduction,
-            # unit_test=(
-            #     UnitTestSnippetPrompt(
-            #         file_path=model.unit_test.file_path,
-            #         code_snippet=model.unit_test.snippet,
-            #         description=model.unit_test.description,
-            #     )
-            #     if model.unit_test
-            #     else None
-            # ),
-            relevant_code=(
-                RootCauseAnalysisRelevantContext(
-                    snippets=[
-                        RootCauseRelevantContext(
-                            id=snippet.id,
-                            title=snippet.title,
-                            description=snippet.description,
-                            snippet=snippet.snippet,
-                        )
-                        for snippet in model.code_context
-                    ]
-                )
-                if model.code_context
-                else None
-            ),
-        )
+        return cls(root_cause_reproduction=model.root_cause_reproduction)
 
     def to_model(self):
-        return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                # "reproduction": self.reproduction_instructions,
-                # "unit_test": (
-                #     {
-                #         "file_path": self.unit_test.file_path,
-                #         "snippet": self.unit_test.code_snippet,
-                #         "description": self.unit_test.description,
-                #     }
-                #     if self.unit_test
-                #     else None
-                # ),
-                "code_context": (
-                    self.relevant_code.model_dump()["snippets"] if self.relevant_code else None
-                ),
-            }
-        )
+        return RootCauseAnalysisItem.model_validate(self.model_dump())
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):

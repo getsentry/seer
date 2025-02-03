@@ -7,7 +7,7 @@ from pydantic_xml import attr, element
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
-    RootCauseRelevantContext,
+    TimelineEvent,
 )
 from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -30,42 +30,40 @@ class SnippetXml(PromptXmlModel, tag="snippet"):
     snippet: Annotated[str, StringConstraints(strip_whitespace=True)]
 
 
-class CodeContextXml(PromptXmlModel, tag="code_context"):
+class TimelineEventXml(PromptXmlModel, tag="step"):
     title: str = element()
     description: str = element()
-    snippet: SnippetXml | None = element(default=None)
+    relevant_code_file_path: str | None = element(default=None)
+    relevant_code_repo_name: str | None = element(default=None)
 
     @classmethod
-    def from_root_cause_context(cls, context: RootCauseRelevantContext):
+    def from_root_cause_context(cls, event: TimelineEvent):
         return cls(
-            title=context.title,
-            description=context.description,
-            snippet=(
-                SnippetXml(file_path=context.snippet.file_path, snippet=context.snippet.snippet)
-                if context.snippet
-                else None
+            title=event.title,
+            description=event.code_snippet_and_analysis,
+            relevant_code_file_path=(
+                event.relevant_code_file.file_path if event.relevant_code_file else None
+            ),
+            relevant_code_repo_name=(
+                event.relevant_code_file.repo_name if event.relevant_code_file else None
             ),
         )
 
 
 class RootCausePlanTaskPromptXml(PromptXmlModel, tag="root_cause", skip_empty=True):
-    title: str = element()
-    description: str = element()
-    contexts: list[CodeContextXml]
+    contexts: list[TimelineEventXml]
 
     @classmethod
     def from_root_cause(cls, root_cause: RootCauseAnalysisItem):
         return cls(
-            title=root_cause.title,
-            description=root_cause.description,
             contexts=(
                 [
-                    CodeContextXml.from_root_cause_context(context)
-                    for context in root_cause.code_context
+                    TimelineEventXml.from_root_cause_context(event)
+                    for event in root_cause.root_cause_reproduction
                 ]
-                if root_cause.code_context
+                if root_cause.root_cause_reproduction
                 else []
-            ),
+            )
         )
 
 

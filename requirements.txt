@@ -13,7 +13,7 @@ aiohttp==3.11.11
     #   fsspec
 aiosignal==1.3.2
     # via aiohttp
-alembic==1.14.0
+alembic==1.14.1
     # via
     #   flask-migrate
     #   pytest-alembic
@@ -23,7 +23,7 @@ annotated-types==0.7.0
     # via pydantic
 anthropic==0.34.2
     # via -r requirements-constraints.txt
-anyio==4.7.0
+anyio==4.8.0
     # via
     #   anthropic
     #   httpx
@@ -33,7 +33,7 @@ anyio==4.7.0
     #   watchfiles
 asgiref==3.8.1
     # via openapi-core
-attrs==24.3.0
+attrs==25.1.0
     # via
     #   aiohttp
     #   jsonschema
@@ -50,13 +50,13 @@ blinker==1.9.0
     # via sentry-sdk
 build==1.2.2.post1
     # via pip-tools
-cachetools==5.5.0
+cachetools==5.5.1
     # via google-auth
 celery==5.3.6
     # via -r requirements-constraints.txt
 celery-stubs==0.1.3
     # via -r requirements-constraints.txt
-certifi==2024.12.14
+certifi==2025.1.31
     # via
     #   -r requirements-constraints.txt
     #   httpcore
@@ -126,7 +126,7 @@ cython==3.0.2
     # via -r requirements-constraints.txt
 datasets==3.2.0
     # via optimum
-deprecated==1.2.15
+deprecated==1.2.18
     # via pygithub
 dill==0.3.8
     # via
@@ -142,7 +142,7 @@ ephem==4.1.4
     # via
     #   -r requirements-constraints.txt
     #   lunarcalendar
-fastapi==0.115.6
+fastapi==0.115.8
     # via chromadb
 filelock==3.12.2
     # via
@@ -158,14 +158,14 @@ flask==2.2.5
     #   flask-sqlalchemy
     #   sentry-sdk
     #   types-flask-migrate
-flask-migrate==4.0.7
+flask-migrate==4.1.0
     # via -r requirements-constraints.txt
 flask-sqlalchemy==3.1.1
     # via
     #   -r requirements-constraints.txt
     #   flask-migrate
     #   types-flask-migrate
-flatbuffers==24.12.23
+flatbuffers==25.1.24
     # via onnxruntime
 fonttools==4.43.0
     # via
@@ -181,7 +181,7 @@ fsspec==2023.6.0
     #   datasets
     #   huggingface-hub
     #   torch
-google-api-core==2.24.0
+google-api-core==2.24.1
     # via
     #   google-cloud-aiplatform
     #   google-cloud-bigquery
@@ -189,7 +189,7 @@ google-api-core==2.24.0
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-auth==2.37.0
+google-auth==2.38.0
     # via
     #   anthropic
     #   google-api-core
@@ -200,9 +200,9 @@ google-auth==2.37.0
     #   google-cloud-secret-manager
     #   google-cloud-storage
     #   google-genai
-google-cloud-aiplatform==1.75.0
+google-cloud-aiplatform==1.79.0
     # via -r requirements-constraints.txt
-google-cloud-bigquery==3.27.0
+google-cloud-bigquery==3.29.0
     # via google-cloud-aiplatform
 google-cloud-core==2.4.1
     # via
@@ -210,7 +210,7 @@ google-cloud-core==2.4.1
     #   google-cloud-storage
 google-cloud-resource-manager==1.14.0
     # via google-cloud-aiplatform
-google-cloud-secret-manager==2.22.0
+google-cloud-secret-manager==2.22.1
     # via -r requirements-constraints.txt
 google-cloud-storage==2.19.0
     # via
@@ -220,7 +220,7 @@ google-crc32c==1.6.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==0.3.0
+google-genai==0.8.0
     # via -r requirements-constraints.txt
 google-resumable-media==2.7.2
     # via
@@ -231,13 +231,13 @@ googleapis-common-protos==1.66.0
     #   google-api-core
     #   grpc-google-iam-v1
     #   grpcio-status
-grpc-google-iam-v1==0.13.1
+grpc-google-iam-v1==0.14.0
     # via
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
 grpc-stubs==1.53.0.5
     # via sentry-protos
-grpcio==1.68.1
+grpcio==1.70.0
     # via
     #   chromadb
     #   google-api-core
@@ -248,11 +248,11 @@ grpcio==1.68.1
     #   grpcio-reflection
     #   grpcio-status
     #   sentry-protos
-grpcio-health-checking==1.68.1
+grpcio-health-checking==1.70.0
     # via -r requirements-constraints.txt
-grpcio-reflection==1.68.1
+grpcio-reflection==1.70.0
     # via -r requirements-constraints.txt
-grpcio-status==1.68.1
+grpcio-status==1.70.0
     # via google-api-core
 gunicorn==22.0.0
     # via -r requirements-constraints.txt
@@ -274,7 +274,7 @@ httpx==0.27.2
     #   anthropic
     #   langfuse
     #   openai
-huggingface-hub==0.27.0
+huggingface-hub==0.28.1
     # via
     #   datasets
     #   optimum
@@ -325,7 +325,7 @@ jsonschema==4.23.0
     #   openapi-core
     #   openapi-schema-validator
     #   openapi-spec-validator
-jsonschema-path==0.3.3
+jsonschema-path==0.3.4
     # via openapi-spec-validator
 jsonschema-spec==0.2.4
     # via openapi-core
@@ -343,7 +343,7 @@ langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa
     # via -r requirements-constraints.txt
 lazy-object-proxy==1.10.0
     # via openapi-spec-validator
-llvmlite==0.43.0
+llvmlite==0.44.0
     # via numba
 lunarcalendar==0.0.9
     # via -r requirements-constraints.txt
@@ -366,7 +366,7 @@ mdurl==0.1.2
     # via markdown-it-py
 monotonic==1.6
     # via posthog
-more-itertools==10.5.0
+more-itertools==10.6.0
     # via openapi-core
 mpmath==1.3.0
     # via
@@ -392,7 +392,7 @@ networkx==3.1
     #   torch
 nltk==3.9.1
     # via sentence-transformers
-numba==0.60.0
+numba==0.61.0
     # via stumpy
 numpy==1.26.1
     # via
@@ -426,11 +426,11 @@ onnx==1.16.0
     # via -r requirements-constraints.txt
 onnxruntime==1.20.1
     # via chromadb
-openai==1.58.1
+openai==1.61.0
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
-openapi-schema-validator==0.6.2
+openapi-schema-validator==0.6.3
     # via
     #   openapi-core
     #   openapi-spec-validator
@@ -468,7 +468,7 @@ pandas-stubs==2.1.4.231227
     # via -r requirements-constraints.txt
 parse==1.20.2
     # via openapi-core
-pathable==0.4.3
+pathable==0.4.4
     # via
     #   jsonschema-path
     #   jsonschema-spec
@@ -481,16 +481,15 @@ pgvector==0.2.4
 pillow==10.3.0
     # via
     #   -r requirements-constraints.txt
-    #   google-genai
     #   matplotlib
     #   sentence-transformers
 pip-tools==7.4.1
     # via -r requirements-constraints.txt
 pluggy==1.5.0
     # via pytest
-posthog==3.7.4
+posthog==3.11.0
     # via chromadb
-prompt-toolkit==3.0.48
+prompt-toolkit==3.0.50
     # via click-repl
 propcache==0.2.1
     # via
@@ -498,14 +497,14 @@ propcache==0.2.1
     #   yarl
 prophet==1.1.6
     # via -r requirements-constraints.txt
-proto-plus==1.25.0
+proto-plus==1.26.0
     # via
     #   -r requirements-constraints.txt
     #   google-api-core
     #   google-cloud-aiplatform
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
-protobuf==5.29.2
+protobuf==5.29.3
     # via
     #   -r requirements-constraints.txt
     #   google-api-core
@@ -524,9 +523,9 @@ protobuf==5.29.2
     #   transformers
 psycopg==3.1.18
     # via -r requirements-constraints.txt
-pulsar-client==3.5.0
+pulsar-client==3.6.0
     # via chromadb
-pyarrow==18.1.0
+pyarrow==19.0.0
     # via datasets
 pyasn1==0.6.1
     # via
@@ -555,7 +554,7 @@ pydantic-xml==2.14.1
     # via -r requirements-constraints.txt
 pygithub==2.1.1
     # via -r requirements-constraints.txt
-pygments==2.18.0
+pygments==2.19.1
     # via rich
 pyjwt==2.10.1
     # via pygithub
@@ -658,7 +657,7 @@ rpds-py==0.22.3
     #   referencing
 rsa==4.9
     # via google-auth
-safetensors==0.4.5
+safetensors==0.5.2
     # via transformers
 scikit-learn==1.3.0
     # via
@@ -679,11 +678,11 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.41
+sentry-protos==0.1.58
     # via -r requirements-constraints.txt
 sentry-sdk==2.18.0
     # via -r requirements-constraints.txt
-shapely==2.0.6
+shapely==2.0.7
     # via google-cloud-aiplatform
 shellingham==1.5.4
     # via typer
@@ -710,11 +709,11 @@ sqlalchemy==2.0.25
     #   pytest-alembic
 stanio==0.5.1
     # via cmdstanpy
-starlette==0.41.3
+starlette==0.45.3
     # via fastapi
 statsmodels==0.14.0
     # via -r requirements-constraints.txt
-structlog==24.4.0
+structlog==25.1.0
     # via -r requirements-constraints.txt
 stumpy==1.13.0
     # via -r requirements-constraints.txt
@@ -765,7 +764,7 @@ typer==0.15.1
     # via chromadb
 types-colorama==0.4.15.12
     # via -r requirements-constraints.txt
-types-flask-migrate==4.0.0.20241204
+types-flask-migrate==4.1.0.20250112
     # via -r requirements-constraints.txt
 types-jsonschema==4.20.0.20240105
     # via -r requirements-constraints.txt
@@ -800,6 +799,7 @@ typing-extensions==4.12.2
     #   celery-stubs
     #   chromadb
     #   fastapi
+    #   google-cloud-aiplatform
     #   huggingface-hub
     #   mypy
     #   openai
@@ -840,11 +840,11 @@ vine==5.1.0
     #   kombu
 watchdog==6.0.0
     # via -r requirements-constraints.txt
-watchfiles==1.0.3
+watchfiles==1.0.4
     # via uvicorn
 wcwidth==0.2.13
     # via prompt-toolkit
-websockets==14.1
+websockets==14.2
     # via
     #   google-genai
     #   uvicorn
@@ -855,7 +855,7 @@ werkzeug==3.0.3
     #   openapi-core
 wheel==0.45.1
     # via pip-tools
-wrapt==1.17.0
+wrapt==1.17.2
     # via
     #   deprecated
     #   langfuse

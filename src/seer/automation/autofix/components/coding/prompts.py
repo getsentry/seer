@@ -51,7 +51,7 @@ class CodingPrompts:
     @staticmethod
     def format_root_cause(root_cause: RootCauseAnalysisItem | str):
         if isinstance(root_cause, RootCauseAnalysisItem):
-            return f"""The root cause of the issue has been identified and context about the issue has been provided: {RootCausePlanTaskPromptXml.from_root_cause(
+            return f"""The steps to reproduce the root cause of the issue have been identified: {RootCausePlanTaskPromptXml.from_root_cause(
                     root_cause
                 ).to_prompt_str()}"""
         else:
@@ -126,7 +126,7 @@ class CodingPrompts:
                 else ""
             ),
             ask_questions_instructions=(
-                "- At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis."
+                "- At any point, please feel free to ask your teammates any specific questions that would help you in your analysis that you cannot answer from analyzing the code."
                 if has_tools
                 else ""
             ),

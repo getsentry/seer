@@ -4,8 +4,10 @@ from unittest.mock import MagicMock, patch
 from johen import generate
 
 from seer.automation.autofix.components.root_cause.models import (
+    RelevantCodeFile,
     RootCauseAnalysisItem,
     RootCauseAnalysisOutput,
+    TimelineEvent,
 )
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -81,10 +83,24 @@ class TestRootCauseStep(unittest.TestCase):
         )
 
         mock_root_cause_output = RootCauseAnalysisOutput(
-            causes=[RootCauseAnalysisItem(description="Test root cause", id=0, title="Test title")]
+            causes=[
+                RootCauseAnalysisItem(
+                    id=0,
+                    root_cause_reproduction=[
+                        TimelineEvent(
+                            title="Test title",
+                            code_snippet_and_analysis="Test root cause",
+                            timeline_item_type="code",
+                            relevant_code_file=RelevantCodeFile(
+                                file_path="test.py", repo_name="owner/repo"
+                            ),
+                            is_most_important_event=True,
+                        )
+                    ],
+                )
+            ]
         )
         mock_root_cause_component.return_value.invoke.return_value = mock_root_cause_output
-
         step = RootCauseStep({"run_id": 1, "step_id": 1})
 
         step.invoke()
@@ -93,7 +109,7 @@ class TestRootCauseStep(unittest.TestCase):
         mock_context.comment_root_cause_on_pr.assert_called_once_with(
             pr_url=pr_url,
             repo_definition=repo,
-            root_cause="# Test title\n\n## Description\nTest root cause",
+            root_cause="# Root Cause\n\n### Test title\nTest root cause",
         )
 
         # Assert that other expected methods were called
