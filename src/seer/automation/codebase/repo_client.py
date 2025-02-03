@@ -108,6 +108,11 @@ def get_codecov_pr_review_app_credentials(
     app_id = config.GITHUB_CODECOV_PR_REVIEW_APP_ID
     private_key = config.GITHUB_CODECOV_PR_REVIEW_PRIVATE_KEY
 
+    if not app_id:
+        logger.warning("No key set GITHUB_CODECOV_PR_REVIEW_APP_ID")
+    if not private_key:
+        logger.warning("No key set GITHUB_CODECOV_PR_REVIEW_PRIVATE_KEY")
+
     if not app_id or not private_key:
         sentry_sdk.capture_message("Invalid credentials for codecov pr review app.")
         return get_write_app_credentials()
