@@ -44,18 +44,7 @@ class RootCauseAnalysisItemPrompt(BaseModel):
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
-        return cls(
-            root_cause_reproduction=[
-                TimelineEvent(
-                    title=event.title,
-                    code_snippet_and_analysis=event.code_snippet_and_analysis,
-                    timeline_item_type=event.timeline_item_type,
-                    relevant_code_file=event.relevant_code_file,
-                    is_most_important_event=event.is_most_important_event,
-                )
-                for event in (model.root_cause_reproduction or [])
-            ],
-        )
+        return cls(root_cause_reproduction=model.root_cause_reproduction)
 
     def to_model(self):
         return RootCauseAnalysisItem.model_validate(
