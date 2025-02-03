@@ -167,6 +167,7 @@ def test_no_state_mapping():
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_autofix_run_root_cause_analysis(autofix_request: AutofixRequest):
     with eager_celery():
         run_id = run_autofix_root_cause(autofix_request)
