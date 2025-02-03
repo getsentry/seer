@@ -47,21 +47,7 @@ class RootCauseAnalysisItemPrompt(BaseModel):
         return cls(root_cause_reproduction=model.root_cause_reproduction)
 
     def to_model(self):
-        return RootCauseAnalysisItem.model_validate(
-            {
-                **self.model_dump(),
-                "root_cause_reproduction": [
-                    {
-                        "title": event.title,
-                        "code_snippet_and_analysis": event.code_snippet_and_analysis,
-                        "timeline_item_type": event.timeline_item_type,
-                        "relevant_code_file": event.relevant_code_file,
-                        "is_most_important_event": event.is_most_important_event,
-                    }
-                    for event in self.root_cause_reproduction
-                ],
-            }
-        )
+        return RootCauseAnalysisItem.model_validate(self.model_dump())
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):
