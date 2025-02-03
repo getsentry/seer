@@ -54,7 +54,7 @@ class InsightSharingPrompts:
 
         return textwrap.dedent(template).format(
             latest_thought=latest_thought,
-            insights=" ".join(past_insights) if past_insights else "not started yet",
+            insights=" ".join(past_insights) if past_insights else "[paragraph is empty]",
             no_insight_instruction=no_insight_instruction,
         )
 
@@ -88,6 +88,9 @@ def create_insight_output(
     llm_client: LlmClient = injected,
 ) -> tuple[InsightSharingOutput | None, Usage]:
     usage = Usage()
+
+    if not latest_thought or len(latest_thought.strip()) < 10:
+        return None, usage
 
     prompt_one = InsightSharingPrompts.format_step_one(
         step_type=step_type,
