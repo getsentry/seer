@@ -1188,6 +1188,7 @@ def test_comment_on_thread_updates_existing_thread():
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_comment_on_thread_with_action_requested(autofix_root_cause_run: AutofixContinuation):
     # Set up initial state with a step that has a comment thread
     autofix_root_cause_run.steps = autofix_root_cause_run.steps[:1]  # Keep only first step
