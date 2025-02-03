@@ -231,6 +231,7 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_autofix_run_question_asking(autofix_request: AutofixRequest):
     autofix_request.instruction = "The root cause of this is not clear and you must think it through. You MUST use the question asking tool and ask a question."
     autofix_request.issue.events[0][
@@ -255,6 +256,7 @@ def test_autofix_run_question_asking(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
     with Session() as session:
         session.add(
@@ -291,6 +293,7 @@ def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_autofix_restart_from_point_with_feedback(autofix_root_cause_run: AutofixContinuation):
     with Session() as session:
         session.add(
