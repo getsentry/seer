@@ -68,6 +68,10 @@ class OpenAiProvider:
             defaults=LlmProviderDefaults(temperature=1.0),
         ),
         LlmModelDefaultConfig(
+            match=r"^o3-mini.*",
+            defaults=LlmProviderDefaults(temperature=1.0),
+        ),
+        LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
         ),
@@ -375,6 +379,20 @@ class OpenAiProvider:
             content="".join(content_chunks) if content_chunks else None,
             tool_calls=tool_calls if tool_calls else None,
         )
+
+    async def arun(self, prompt: str) -> str:
+        """Async version of run method"""
+        # Add async implementation here based on your agent client
+        # This will depend on your specific agent implementation
+        response = await self._acall_agent(prompt)
+        return response
+
+    async def _acall_agent(self, prompt: str) -> str:
+        """Async implementation of agent call"""
+        # Implement based on your agent client
+        # Example:
+        # return await self.client.acomplete(prompt)
+        raise NotImplementedError("Please implement async agent calls")
 
 
 @dataclass

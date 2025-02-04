@@ -654,7 +654,7 @@ def run_autofix_evaluation_on_item(
     )
 
     scoring_n_panel = 5
-    scoring_model = "o1-mini-2024-09-12"
+    scoring_model = "o3-mini-2025-01-31"
 
     diff: str | None = None
     causes: list[RootCauseAnalysisItem] | None = None

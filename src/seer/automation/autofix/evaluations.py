@@ -325,23 +325,32 @@ def score_root_cause_single_it(
 
             Given the above issue, we know the correct root cause of the issue is:
 
+            <true_root_cause>
             {expected_output}
 
-            The model outputted the following possible root causes and solutions:
+            The solution to this root cause is:
+            {expected_solution_description}
+            {expected_solution_diff}
+            </true_root_cause>
 
-            <predicted_solutions>
+            We have an AI model say that the root cause of the issue is:
+
+            <predicted_root_cause>
             {predicted_solution}
-            </predicted_solutions>
+            </predicted_root_cause>
 
-            Score how well the predicted root cause and solution matches the expected root cause and solution with a float score from 0 to 1, where 1 means the solution fully fixes the issue and 0 means the solution does not fix the issue at all.
-            - The model will return multiple predicted root causes and solutions, ordered from most likely to least likely.
+            Score how well the AI model's predicted root cause aligns with the true known root cause with a float score from 0 to 1, where 1 means the predicted root cause is the correct root cause and 0 means the predicted root cause is completely incorrect.
 
-            Think step-by-step inside a <thoughts> tag before giving scores.
-            Score each solution inside a <score> tag, such as <score>0.5</score>.
-            Also, return your verdict of whether the predicted solution is the correct root cause of the issue with a boolean value inside a <verdict> tag, such as <verdict>True</verdict> or <verdict>False</verdict>."""
+            Provide your reasoning of why you gave this score inside a <reasoning> tag.
+
+            Place the score inside a <score> tag, such as <score>0.5</score>.
+            Also, return your verdict of whether the predicted root cause accurately represents the true root cause of the issue with a boolean value inside a <verdict> tag, such as <verdict>True</verdict> or <verdict>False</verdict>.
+            You should also grade whether the model's predicted root cause would be helpful to the developer in fixing the issue with a boolean value inside a <helpful> tag, such as <helpful>True</helpful> or <helpful>False</helpful>."""
     ).format(
         event_details=event_details.format_event(),
         expected_output=root_cause_expected_str,
+        expected_solution_description=expected_output["solution_diff"]["description"],
+        expected_solution_diff=expected_output["solution_diff"]["unified_diff"],
         predicted_solution=cause_xml.to_prompt_str(),
     )
     response = LlmClient().generate_text(
