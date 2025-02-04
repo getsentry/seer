@@ -306,7 +306,7 @@ def score_fix_single_it(
 @observe(name="Score root cause iteration")
 def score_root_cause_single_it(
     dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], model: str
-) -> tuple[float, bool]:
+) -> tuple[float, bool, bool]:
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
 
@@ -325,23 +325,32 @@ def score_root_cause_single_it(
 
             Given the above issue, we know the correct root cause of the issue is:
 
+            <true_root_cause>
             {expected_output}
 
-            The model outputted the following possible root causes and solutions:
+            The solution to this root cause is:
+            {expected_solution_description}
+            {expected_solution_diff}
+            </true_root_cause>
 
-            <predicted_solutions>
+            We have an AI model say that the root cause of the issue is:
+
+            <predicted_root_cause>
             {predicted_solution}
-            </predicted_solutions>
+            </predicted_root_cause>
 
-            Score how well the predicted root cause and solution matches the expected root cause and solution with a float score from 0 to 1, where 1 means the solution fully fixes the issue and 0 means the solution does not fix the issue at all.
-            - The model will return multiple predicted root causes and solutions, ordered from most likely to least likely.
+            Score how well the AI model's predicted root cause aligns with the true known root cause with a float score from 0 to 1, where 1 means the predicted root cause is the correct root cause and 0 means the predicted root cause is completely incorrect.
 
-            Think step-by-step inside a <thoughts> tag before giving scores.
-            Score each solution inside a <score> tag, such as <score>0.5</score>.
-            Also, return your verdict of whether the predicted solution is the correct root cause of the issue with a boolean value inside a <verdict> tag, such as <verdict>True</verdict> or <verdict>False</verdict>."""
+            Provide your reasoning of why you gave this score inside a <reasoning> tag.
+
+            Place the score inside a <score> tag, such as <score>0.5</score>.
+            Also, return your verdict of whether the predicted root cause accurately represents the true root cause of the issue with a boolean value inside a <verdict> tag, such as <verdict>True</verdict> or <verdict>False</verdict>.
+            You should also grade whether the model's predicted root cause would be helpful to the developer in fixing the issue with a boolean value inside a <helpful> tag, such as <helpful>True</helpful> or <helpful>False</helpful>."""
     ).format(
         event_details=event_details.format_event(),
         expected_output=root_cause_expected_str,
+        expected_solution_description=expected_output["solution_diff"]["description"],
+        expected_solution_diff=expected_output["solution_diff"]["unified_diff"],
         predicted_solution=cause_xml.to_prompt_str(),
     )
     response = LlmClient().generate_text(
@@ -357,7 +366,10 @@ def score_root_cause_single_it(
     verdict_str = extract_text_inside_tags(response.message.content, "verdict")
     verdict_bool = (verdict_str or "False").lower() == "true"
 
-    return score, verdict_bool
+    helpful_str = extract_text_inside_tags(response.message.content, "helpful")
+    helpful_bool = (helpful_str or "False").lower() == "true"
+
+    return score, verdict_bool, helpful_bool
 
 
 @observe(name="Score one")
@@ -377,7 +389,7 @@ def score_one(
 @observe(name="Score root cause")
 def score_root_causes(
     dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], n_panel: int, model: str
-) -> tuple[float, bool]:
+) -> tuple[float, bool, bool]:
     results = [score_root_cause_single_it(dataset_item, causes, model) for _ in range(n_panel)]
 
     mean_score = round(sum([result[0] for result in results]) / len(results), 2)
@@ -385,7 +397,9 @@ def score_root_causes(
     # If at least half of the panel says the fix is correct, then the fix is correct.
     verdict = sum(1 for result in results if result[1]) >= len(results) / 2
 
-    return mean_score, verdict
+    helpful = sum(1 for result in results if result[2]) >= len(results) / 2
+
+    return mean_score, verdict, helpful
 
 
 def make_score_name(model: str, n_panel: int, name: str) -> str:

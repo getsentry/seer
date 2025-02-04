@@ -68,6 +68,10 @@ class OpenAiProvider:
             defaults=LlmProviderDefaults(temperature=1.0),
         ),
         LlmModelDefaultConfig(
+            match=r"^o3-mini.*",
+            defaults=LlmProviderDefaults(temperature=1.0),
+        ),
+        LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
         ),

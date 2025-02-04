@@ -654,7 +654,7 @@ def run_autofix_evaluation_on_item(
     )
 
     scoring_n_panel = 5
-    scoring_model = "o1-mini-2024-09-12"
+    scoring_model = "o3-mini-2025-01-31"
 
     diff: str | None = None
     causes: list[RootCauseAnalysisItem] | None = None
@@ -802,7 +802,7 @@ def run_autofix_evaluation_on_item(
                 )
 
             if causes:
-                root_cause_score, root_cause_verdict = score_root_causes(
+                root_cause_score, root_cause_verdict, root_cause_helpful = score_root_causes(
                     dataset_item,
                     causes,
                     n_panel=scoring_n_panel,
@@ -820,6 +820,13 @@ def run_autofix_evaluation_on_item(
                         model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
                     ),
                     value=1 if root_cause_verdict else 0,
+                )
+                langfuse.score(
+                    trace_id=trace_id,
+                    name=make_score_name(
+                        model=scoring_model, n_panel=scoring_n_panel, name="rc_is_helpful"
+                    ),
+                    value=1 if root_cause_helpful else 0,
                 )
                 langfuse.score(
                     trace_id=trace_id,
