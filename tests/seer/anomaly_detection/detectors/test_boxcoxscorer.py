@@ -1,7 +1,9 @@
+from unittest import mock
 from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from scipy import stats
 
 from seer.anomaly_detection.detectors.mp_boxcox_scorer import MPBoxCoxScorer
 from seer.anomaly_detection.models import (
@@ -40,12 +42,33 @@ def basic_ad_config():
 
 
 class TestBoxCoxScorer:
+    @mock.patch("scipy.stats.boxcox")
+    def test_box_cox_log_transform(self, mock_boxcox, box_cox_scorer):
+        # Test with positive values
+        mock_boxcox.return_value = (np.array([1.0, 2.0, 3.0, 4.0, 5.0]), 0.0)
+        x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        transformed, _, _ = box_cox_scorer._box_cox_transform(x)
+        assert len(transformed) == len(x)
+        expected = np.log(x)
+        np.testing.assert_array_almost_equal(transformed, expected)
+        assert mock_boxcox.call_count == 1
+
+        # Test with negative values (should shift to positive)
+        x = np.array([-1.0, 0.0, 1.0, 2.0])
+        transformed, _, _ = box_cox_scorer._box_cox_transform(x)
+        assert len(transformed) == len(x)
+
+        # Should shift by min + 1 before transform
+        expected = np.log(x - np.min(x) + 1)
+        np.testing.assert_array_almost_equal(transformed, expected)
+        assert mock_boxcox.call_count == 2
+
     def test_box_cox_transform(self, box_cox_scorer):
         # Test with positive values
         x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
         transformed, _, _ = box_cox_scorer._box_cox_transform(x)
         assert len(transformed) == len(x)
-        expected = np.log(x)
+        expected, bc_lambda = stats.boxcox(x)
         np.testing.assert_array_almost_equal(transformed, expected)
 
         # Test with negative values (should shift to positive)
@@ -55,7 +78,8 @@ class TestBoxCoxScorer:
 
         # Should shift by min + 1 before transform
 
-        expected = np.log(x - np.min(x) + 1)
+        # expected = np.log(x - np.min(x) + 1)
+        expected, bc_lambda = stats.boxcox(x - np.min(x) + 1)
         np.testing.assert_array_almost_equal(transformed, expected)
 
     def test_get_z_scores(self, box_cox_scorer):
@@ -103,16 +127,16 @@ class TestBoxCoxScorer:
         timestamps = np.arange(len(mp_dist), dtype=np.float64)
         values = np.ones(100)
 
-        result = box_cox_scorer.batch_score(
-            values=values,
-            timestamps=timestamps,
-            mp_dist=mp_dist,
-            ad_config=basic_ad_config,
-            window_size=10,
-            location_detector=mock_location_detector,
-        )
-        assert result.flags[-1] == "none"
-        assert result.scores[-1] == 0.0
+        with pytest.raises(ValueError) as ex:
+            box_cox_scorer.batch_score(
+                values=values,
+                timestamps=timestamps,
+                mp_dist=mp_dist,
+                ad_config=basic_ad_config,
+                window_size=10,
+                location_detector=mock_location_detector,
+            )
+        assert str(ex.value) == "Data must not be constant."
 
     def test_stream_score(self, box_cox_scorer, mock_location_detector, basic_ad_config):
         # Test streaming with normal history and anomalous new point
