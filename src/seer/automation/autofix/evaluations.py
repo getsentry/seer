@@ -306,7 +306,7 @@ def score_fix_single_it(
 @observe(name="Score root cause iteration")
 def score_root_cause_single_it(
     dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], model: str
-) -> tuple[float, bool]:
+) -> tuple[float, bool, bool]:
     if not dataset_item.expected_output:
         raise ValueError("Expected output is missing from dataset item")
 
@@ -366,7 +366,10 @@ def score_root_cause_single_it(
     verdict_str = extract_text_inside_tags(response.message.content, "verdict")
     verdict_bool = (verdict_str or "False").lower() == "true"
 
-    return score, verdict_bool
+    helpful_str = extract_text_inside_tags(response.message.content, "helpful")
+    helpful_bool = (helpful_str or "False").lower() == "true"
+
+    return score, verdict_bool, helpful_bool
 
 
 @observe(name="Score one")
@@ -386,7 +389,7 @@ def score_one(
 @observe(name="Score root cause")
 def score_root_causes(
     dataset_item: DatasetItemClient, causes: list[RootCauseAnalysisItem], n_panel: int, model: str
-) -> tuple[float, bool]:
+) -> tuple[float, bool, bool]:
     results = [score_root_cause_single_it(dataset_item, causes, model) for _ in range(n_panel)]
 
     mean_score = round(sum([result[0] for result in results]) / len(results), 2)
@@ -394,7 +397,9 @@ def score_root_causes(
     # If at least half of the panel says the fix is correct, then the fix is correct.
     verdict = sum(1 for result in results if result[1]) >= len(results) / 2
 
-    return mean_score, verdict
+    helpful = sum(1 for result in results if result[2]) >= len(results) / 2
+
+    return mean_score, verdict, helpful
 
 
 def make_score_name(model: str, n_panel: int, name: str) -> str:
