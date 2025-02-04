@@ -53,27 +53,28 @@ class AutofixCodingStep(AutofixPipelineStep):
     def get_task():
         return autofix_coding_task
 
-    @observe(name="Autofix - Plan+Code Step")
-    @ai_track(description="Autofix - Plan+Code Step")
+    @observe(name="Autofix - Coding Step")
+    @ai_track(description="Autofix - Coding Step")
     @inject
     def _invoke(self, app_config: AppConfig = injected):
         self.context.event_manager.clear_file_changes()
 
-        self.logger.info("Executing Autofix - Plan+Code Step")
+        self.logger.info("Executing Autofix - Coding Step")
 
         self.context.event_manager.send_coding_start()
         if not self.request.initial_memory:
-            self.context.event_manager.add_log(
-                "Figuring out a fix for the root cause of this issue..."
-            )
+            self.context.event_manager.add_log("Coding up a fix for this issue...")
         else:
-            self.context.event_manager.add_log("Continuing to analyze...")
+            self.context.event_manager.add_log("Continuing to code...")
 
         state = self.context.state.get()
-        root_cause_and_fix, root_cause_extra_instruction = state.get_selected_root_cause_and_fix()
-
-        if not root_cause_and_fix:
+        root_cause, root_cause_extra_instruction = state.get_selected_root_cause()
+        if not root_cause:
             raise ValueError("Root cause analysis must be performed before coding")
+
+        solution = state.get_selected_solution()
+        if not solution:
+            raise ValueError("Solution must be found before coding")
 
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
@@ -85,7 +86,8 @@ class AutofixCodingStep(AutofixPipelineStep):
         coding_output = CodingComponent(self.context).invoke(
             CodingRequest(
                 event_details=event_details,
-                root_cause_and_fix=root_cause_and_fix,
+                root_cause=root_cause,
+                solution=solution,
                 original_instruction=state.request.instruction,
                 root_cause_extra_instruction=root_cause_extra_instruction,
                 summary=summary,

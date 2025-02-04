@@ -18,6 +18,7 @@ from seer.automation.autofix.models import (
     AutofixRequest,
     AutofixRequestOptions,
     AutofixRootCauseUpdatePayload,
+    AutofixSolutionUpdatePayload,
     AutofixUpdateType,
     ChangesStep,
 )
@@ -153,6 +154,13 @@ def sync_run_execution(item: DatasetItemClient):
             cause_id=-1,
         )
     )
+    event_manager.set_selected_solution(
+        AutofixSolutionUpdatePayload(
+            type=AutofixUpdateType.SELECT_SOLUTION,
+            custom_solution=None,
+            solution_selected=True,
+        )
+    )
 
     AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
 
@@ -198,23 +206,21 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     ).apply()
 
     state_after_root_cause = state.get()
-    root_cause_step = state_after_root_cause.steps[-1]
+    root_cause_step = state_after_root_cause.steps[-3]
 
     if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
         return None, None
 
-    try:
-        cause = root_cause_step.causes[0]
-        cause_id = cause.id
-
-        event_manager = AutofixEventManager(state)
-        event_manager.set_selected_root_cause(
-            AutofixRootCauseUpdatePayload(
-                type=AutofixUpdateType.SELECT_ROOT_CAUSE,
-                cause_id=cause_id,
-            )
+    event_manager = AutofixEventManager(state)
+    event_manager.set_selected_solution(
+        AutofixSolutionUpdatePayload(
+            type=AutofixUpdateType.SELECT_SOLUTION,
+            custom_solution=None,
+            solution_selected=True,
         )
+    )
 
+    try:
         AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
 
         state_after_execution = state.get()

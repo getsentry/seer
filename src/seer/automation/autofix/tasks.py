@@ -33,6 +33,7 @@ from seer.automation.autofix.models import (
     AutofixRequest,
     AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
+    AutofixSolutionUpdatePayload,
     AutofixStatus,
     AutofixUpdateCodeChangePayload,
     AutofixUpdateRequest,
@@ -47,6 +48,10 @@ from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
+from seer.automation.autofix.steps.solution_step import (
+    AutofixSolutionStep,
+    AutofixSolutionStepRequest,
+)
 from seer.automation.models import InitializationError
 from seer.automation.utils import process_repo_provider, raise_if_no_genai_consent
 from seer.configuration import AppConfig
@@ -172,12 +177,71 @@ def run_autofix_execution(
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
-    event_manager.send_coding_start()
+
+    # delete all steps after root cause step
+    root_cause_step_index = next(
+        (i for i, step in enumerate(cur.steps) if step.key == "root_cause_analysis"),
+        None,
+    )
+    if root_cause_step_index is not None:
+        event_manager.reset_steps_to_point(root_cause_step_index, None)
+
+    # start the solution step
+    event_manager.send_solution_start()
 
     payload = cast(AutofixRootCauseUpdatePayload, request.payload)
 
     try:
         event_manager.set_selected_root_cause(payload)
+        cur = state.get()
+
+        # Process has no further work.
+        if cur.status in AutofixStatus.terminal():
+            logger.warning(f"Ignoring job, state {cur.status}")
+            return
+
+        AutofixSolutionStep.get_signature(
+            AutofixSolutionStepRequest(
+                run_id=cur.run_id,
+            ),
+            queue=app_config.CELERY_WORKER_QUEUE,
+        ).apply_async()
+    except InitializationError as e:
+        sentry_sdk.capture_exception(e)
+        raise e
+
+
+@inject
+def run_autofix_coding(
+    request: AutofixUpdateRequest,
+    app_config: AppConfig = injected,
+):
+    if not isinstance(request.payload, AutofixSolutionUpdatePayload):
+        raise ValueError("Invalid payload type for select_solution")
+
+    state = ContinuationState(request.run_id)
+
+    raise_if_no_genai_consent(state.get().request.organization_id)
+
+    with state.update() as cur:
+        cur.mark_triggered()
+
+    event_manager = AutofixEventManager(state)
+
+    # delete all steps after solution step
+    solution_step_index = next(
+        (i for i, step in enumerate(cur.steps) if step.key == "solution"),
+        None,
+    )
+    if solution_step_index is not None:
+        event_manager.reset_steps_to_point(solution_step_index, None)
+
+    event_manager.send_coding_start()
+
+    payload = cast(AutofixSolutionUpdatePayload, request.payload)
+
+    try:
+        event_manager.set_selected_solution(payload)
         cur = state.get()
 
         # Process has no further work.
@@ -229,8 +293,10 @@ def restart_step_with_user_response(
     text: str,
     event_manager: AutofixEventManager,
     step_to_restart: Step,
-    step_class: Type[AutofixCodingStep | RootCauseStep],
-    step_request_class: Type[AutofixCodingStepRequest | RootCauseStepRequest],
+    step_class: Type[AutofixCodingStep | RootCauseStep | AutofixSolutionStep],
+    step_request_class: Type[
+        AutofixCodingStepRequest | RootCauseStepRequest | AutofixSolutionStepRequest
+    ],
     app_config: AppConfig = injected,
 ):
     cur_state = state.get()
@@ -269,10 +335,16 @@ def receive_user_message(request: AutofixUpdateRequest):
         context = AutofixContext(state=state, event_manager=event_manager)
 
         is_coding_step = step_to_restart.key == "plan"
+        is_solution_step = step_to_restart.key == "solution_processing"
+        is_root_cause_step = step_to_restart.key == "root_cause_analysis_processing"
         memory = (
             context.get_memory("plan_and_code")
             if is_coding_step
-            else context.get_memory("root_cause_analysis")
+            else (
+                context.get_memory("root_cause_analysis")
+                if is_root_cause_step
+                else context.get_memory("solution")
+            )
         )
 
         question = ""
@@ -299,7 +371,17 @@ def receive_user_message(request: AutofixUpdateRequest):
                 AutofixCodingStep,
                 AutofixCodingStepRequest,
             )
-        else:
+        elif is_solution_step:
+            restart_step_with_user_response(
+                state,
+                memory,
+                request.payload.text,
+                event_manager,
+                step_to_restart,
+                AutofixSolutionStep,
+                AutofixSolutionStepRequest,
+            )
+        elif is_root_cause_step:
             restart_step_with_user_response(
                 state,
                 memory,
@@ -377,10 +459,16 @@ def restart_from_point_with_feedback(
         raise ValueError("No DefaultStep found in steps")
 
     is_coding_step = step_to_restart.key == "plan"
+    is_solution_step = step_to_restart.key == "solution_processing"
+    is_root_cause_step = step_to_restart.key == "root_cause_analysis_processing"
     memory = (
         context.get_memory("plan_and_code")
         if is_coding_step
-        else context.get_memory("root_cause_analysis")
+        else (
+            context.get_memory("root_cause_analysis")
+            if is_root_cause_step
+            else context.get_memory("solution")
+        )
     )
     memory = truncate_memory_to_match_insights(memory, step_to_restart)
 
@@ -413,6 +501,14 @@ def restart_from_point_with_feedback(
     if is_coding_step:
         AutofixCodingStep.get_signature(
             AutofixCodingStepRequest(
+                run_id=state.get().run_id,
+                initial_memory=memory,
+            ),
+            queue=app_config.CELERY_WORKER_QUEUE,
+        ).apply_async()
+    elif is_solution_step:
+        AutofixSolutionStep.get_signature(
+            AutofixSolutionStepRequest(
                 run_id=state.get().run_id,
                 initial_memory=memory,
             ),
@@ -543,10 +639,15 @@ def comment_on_thread(request: AutofixUpdateRequest):
 
     # fetch memory from the step
     is_coding_step = step.key == "plan"
+    is_root_cause_step = step.key == "root_cause_analysis_processing"
     memory = (
         context.get_memory("plan_and_code")
         if is_coding_step
-        else context.get_memory("root_cause_analysis")
+        else (
+            context.get_memory("root_cause_analysis")
+            if is_root_cause_step
+            else context.get_memory("solution")
+        )
     )
 
     # ask LLM for response

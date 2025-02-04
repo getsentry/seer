@@ -4,9 +4,11 @@ import time
 
 from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
+from seer.automation.autofix.components.solution.models import SolutionOutput
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRootCauseUpdatePayload,
+    AutofixSolutionUpdatePayload,
     AutofixStatus,
     ChangesStep,
     CodebaseChange,
@@ -16,6 +18,7 @@ from seer.automation.autofix.models import (
     ProgressItem,
     ProgressType,
     RootCauseStep,
+    SolutionStep,
     Step,
 )
 from seer.automation.state import State
@@ -40,6 +43,20 @@ class AutofixEventManager:
         return RootCauseStep(
             key="root_cause_analysis",
             title="Root Cause Analysis",
+        )
+
+    @property
+    def solution_processing_step(self) -> DefaultStep:
+        return DefaultStep(
+            key="solution_processing",
+            title="Planning Solution",
+        )
+
+    @property
+    def solution_step(self) -> SolutionStep:
+        return SolutionStep(
+            key="solution",
+            title="Solution",
         )
 
     @property
@@ -100,8 +117,7 @@ class AutofixEventManager:
             if root_cause_output.causes:
                 root_cause_step.status = AutofixStatus.COMPLETED
                 root_cause_step.causes = root_cause_output.causes
-
-                cur.status = AutofixStatus.NEED_MORE_INFORMATION
+                cur.status = AutofixStatus.COMPLETED
             else:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
@@ -126,6 +142,37 @@ class AutofixEventManager:
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
             root_cause_step.selection = root_cause_selection
             cur.delete_steps_after(root_cause_step, include_current=False)
+            cur.clear_file_changes()
+
+            cur.status = AutofixStatus.PROCESSING
+
+    def send_solution_start(self):
+        with self.state.update() as cur:
+            solution_step = cur.find_step(key=self.solution_processing_step.key)
+            if not solution_step or solution_step.status != AutofixStatus.PROCESSING:
+                solution_step = cur.add_step(self.solution_processing_step)
+
+            solution_step.status = AutofixStatus.PROCESSING
+            cur.make_step_latest(solution_step)
+            cur.status = AutofixStatus.PROCESSING
+
+    def send_solution_result(self, solution_output: SolutionOutput):
+        with self.state.update() as cur:
+            solution_processing_step = cur.find_or_add(self.solution_processing_step)
+            solution_processing_step.status = AutofixStatus.COMPLETED
+            solution_step = cur.find_or_add(self.solution_step)
+            solution_step.status = AutofixStatus.COMPLETED
+            solution_step.solution = solution_output.modified_timeline
+            cur.status = AutofixStatus.NEED_MORE_INFORMATION
+
+    def set_selected_solution(self, payload: AutofixSolutionUpdatePayload):
+        with self.state.update() as cur:
+            solution_step = cur.find_or_add(self.solution_step)
+            solution_step.custom_solution = (
+                payload.custom_solution if payload.custom_solution else None
+            )
+            solution_step.solution_selected = True
+            cur.delete_steps_after(solution_step, include_current=False)
             cur.clear_file_changes()
 
             cur.status = AutofixStatus.PROCESSING

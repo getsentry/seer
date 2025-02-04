@@ -35,6 +35,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state_from_pr_id,
     receive_user_message,
     restart_from_point_with_feedback,
+    run_autofix_coding,
     run_autofix_evaluation,
     run_autofix_execution,
     run_autofix_push_changes,
@@ -177,6 +178,8 @@ def autofix_update_endpoint(
 ) -> AutofixEndpointResponse:
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
         run_autofix_execution(data)
+    elif data.payload.type == AutofixUpdateType.SELECT_SOLUTION:
+        run_autofix_coding(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
         run_autofix_push_changes(data)
     elif data.payload.type == AutofixUpdateType.CREATE_BRANCH:

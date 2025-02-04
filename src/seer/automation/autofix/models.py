@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
+from seer.automation.autofix.components.solution.models import SolutionTimelineEvent
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import (
     FileChange,
@@ -122,6 +123,7 @@ class CommentThread(BaseModel):
 
 class StepType(str, enum.Enum):
     ROOT_CAUSE_ANALYSIS = "root_cause_analysis"
+    SOLUTION = "solution"
     CHANGES = "changes"
     DEFAULT = "default"
 
@@ -211,13 +213,21 @@ class RootCauseStep(BaseStep):
     termination_reason: str | None = None
 
 
+class SolutionStep(BaseStep):
+    type: Literal[StepType.SOLUTION] = StepType.SOLUTION
+
+    solution: list[SolutionTimelineEvent] = []
+    custom_solution: str | None = None
+    solution_selected: bool = False
+
+
 class ChangesStep(BaseStep):
     type: Literal[StepType.CHANGES] = StepType.CHANGES
 
     changes: list[CodebaseChange]
 
 
-Step = Union[DefaultStep, RootCauseStep, ChangesStep]
+Step = Union[DefaultStep, RootCauseStep, ChangesStep, SolutionStep]
 
 
 class CodebaseState(BaseModel):
@@ -352,6 +362,7 @@ class AutofixRequest(BaseModel):
 
 class AutofixUpdateType(str, enum.Enum):
     SELECT_ROOT_CAUSE = "select_root_cause"
+    SELECT_SOLUTION = "select_solution"
     CREATE_PR = "create_pr"
     CREATE_BRANCH = "create_branch"
     USER_MESSAGE = "user_message"
@@ -365,6 +376,12 @@ class AutofixRootCauseUpdatePayload(BaseModel):
     cause_id: int | None = None
     custom_root_cause: str | None = None
     instruction: str | None = None
+
+
+class AutofixSolutionUpdatePayload(BaseModel):
+    type: Literal[AutofixUpdateType.SELECT_SOLUTION] = AutofixUpdateType.SELECT_SOLUTION
+    custom_solution: str | None = None
+    solution_selected: bool = False
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
@@ -415,6 +432,7 @@ class AutofixUpdateRequest(BaseModel):
     run_id: int
     payload: Union[
         AutofixRootCauseUpdatePayload,
+        AutofixSolutionUpdatePayload,
         AutofixCreatePrUpdatePayload,
         AutofixCreateBranchUpdatePayload,
         AutofixUserMessagePayload,
@@ -494,7 +512,7 @@ class AutofixContinuation(AutofixGroupState):
         if self.steps:
             self.steps[-1].completedMessage = message
 
-    def get_selected_root_cause_and_fix(
+    def get_selected_root_cause(
         self,
     ) -> tuple[RootCauseAnalysisItem | str | None, str | None]:
         root_cause_step = self.find_step(key="root_cause_analysis")
@@ -510,6 +528,16 @@ class AutofixContinuation(AutofixGroupState):
                 elif isinstance(root_cause_step.selection, CustomRootCauseSelection):
                     return root_cause_step.selection.custom_root_cause, None
         return None, None
+
+    def get_selected_solution(self) -> list[SolutionTimelineEvent] | str | None:
+        solution_step = self.find_step(key="solution")
+        if solution_step and isinstance(solution_step, SolutionStep):
+            if solution_step.solution_selected:
+                if solution_step.custom_solution:
+                    return solution_step.custom_solution
+                else:
+                    return solution_step.solution
+        return None
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()

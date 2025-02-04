@@ -717,19 +717,19 @@ class TestAutofixContinuation(unittest.TestCase):
 
         root_cause_step.selection = CodeContextRootCauseSelection(cause_id=1, instruction="test")
         self.continuation.steps = [root_cause_step]
-        result, instruction = self.continuation.get_selected_root_cause_and_fix()
+        result, instruction = self.continuation.get_selected_root_cause()
         self.assertEqual(result, cause)
         self.assertEqual(instruction, "test")
 
         root_cause_step.selection = CustomRootCauseSelection(custom_root_cause="root cause")
         self.continuation.steps = [root_cause_step]
-        result, instruction = self.continuation.get_selected_root_cause_and_fix()
+        result, instruction = self.continuation.get_selected_root_cause()
         self.assertEqual(result, "root cause")
         self.assertIsNone(instruction)
 
         root_cause_step.selection = None
         self.continuation.steps = [root_cause_step]
-        result, instruction = self.continuation.get_selected_root_cause_and_fix()
+        result, instruction = self.continuation.get_selected_root_cause()
         self.assertEqual(result, None)
         self.assertIsNone(instruction)
 
