@@ -43,14 +43,18 @@ class TestBoxCoxScorer:
     def test_box_cox_transform(self, box_cox_scorer):
         # Test with positive values
         x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        transformed = box_cox_scorer._box_cox_transform(x)
+        transformed, _, _ = box_cox_scorer._box_cox_transform(x)
         assert len(transformed) == len(x)
+        expected = np.log(x)
+        np.testing.assert_array_almost_equal(transformed, expected)
 
         # Test with negative values (should shift to positive)
         x = np.array([-1.0, 0.0, 1.0, 2.0])
-        transformed = box_cox_scorer._box_cox_transform(x)
+        transformed, _, _ = box_cox_scorer._box_cox_transform(x)
         assert len(transformed) == len(x)
+
         # Should shift by min + 1 before transform
+
         expected = np.log(x - np.min(x) + 1)
         np.testing.assert_array_almost_equal(transformed, expected)
 
@@ -97,7 +101,7 @@ class TestBoxCoxScorer:
         # Test with constant data (std = 0)
         mp_dist = np.ones(100)
         timestamps = np.arange(len(mp_dist), dtype=np.float64)
-        values = np.zeros_like(mp_dist)
+        values = np.ones(100)
 
         result = box_cox_scorer.batch_score(
             values=values,
