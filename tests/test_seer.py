@@ -480,6 +480,7 @@ class TestSeer(unittest.TestCase):
     def test_autofix_update_endpoint(self):
         test_cases = [
             (AutofixUpdateType.SELECT_ROOT_CAUSE, "seer.app.run_autofix_execution"),
+            (AutofixUpdateType.SELECT_SOLUTION, "seer.app.run_autofix_coding"),
             (AutofixUpdateType.CREATE_PR, "seer.app.run_autofix_push_changes"),
             (AutofixUpdateType.CREATE_BRANCH, "seer.app.run_autofix_push_changes"),
             (AutofixUpdateType.USER_MESSAGE, "seer.app.receive_user_message"),
