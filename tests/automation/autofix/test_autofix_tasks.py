@@ -12,8 +12,10 @@ from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
     AutofixRequest,
+    AutofixRequestOptions,
     AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
+    AutofixSolutionUpdatePayload,
     AutofixStatus,
     AutofixUpdateCodeChangePayload,
     AutofixUpdateRequest,
@@ -29,6 +31,7 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep as RootCausePipelineStep
 from seer.automation.autofix.steps.root_cause_step import RootCauseStepRequest
+from seer.automation.autofix.steps.solution_step import AutofixSolutionStep
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
     comment_on_thread,
@@ -37,6 +40,7 @@ from seer.automation.autofix.tasks import (
     receive_user_message,
     restart_from_point_with_feedback,
     restart_step_with_user_response,
+    run_autofix_coding,
     run_autofix_execution,
     run_autofix_push_changes,
     run_autofix_root_cause,
@@ -191,6 +195,7 @@ def test_autofix_run_root_cause_analysis(autofix_request: AutofixRequest):
 
 @pytest.mark.vcr()
 def test_autofix_run_full(autofix_request: AutofixRequest):
+    autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
     with eager_celery():
         run_id = run_autofix_root_cause(autofix_request)
 
@@ -201,17 +206,21 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
     assert continuation is not None
 
     root_cause_step = continuation.get().find_step(key="root_cause_analysis")
-
     assert root_cause_step is not None
     root_cause_step = cast(RootCauseStep, root_cause_step)
     assert root_cause_step.status == AutofixStatus.COMPLETED
 
+    solution_step = continuation.get().find_step(key="solution")
+    assert solution_step is not None
+    solution_step = cast(AutofixSolutionStep, solution_step)
+    assert solution_step.status == AutofixStatus.COMPLETED
+
     with eager_celery():
-        run_autofix_execution(
+        run_autofix_coding(
             AutofixUpdateRequest(
                 run_id=run_id,
-                payload=AutofixRootCauseUpdatePayload(
-                    custom_root_cause="we should uncomment out the unit test parts"
+                payload=AutofixSolutionUpdatePayload(
+                    custom_solution="we should uncomment out the unit test parts"
                 ),
             )
         )

@@ -58,7 +58,7 @@ class TestRootCauseComponent:
                         TimelineEvent(
                             title="Missing Null Check",
                             code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="code",
+                            timeline_item_type="internal_code",
                             relevant_code_file=RelevantCodeFile(
                                 file_path="test.py",
                                 repo_name="owner/repo",
@@ -90,7 +90,7 @@ class TestRootCauseComponent:
             output.causes[0].root_cause_reproduction[0].code_snippet_and_analysis
             == "The root cause of the issue is ..."
         )
-        assert output.causes[0].root_cause_reproduction[0].timeline_item_type == "code"
+        assert output.causes[0].root_cause_reproduction[0].timeline_item_type == "internal_code"
         assert output.causes[0].root_cause_reproduction[0].relevant_code_file is not None
 
     def test_no_root_causes_response(self, component, mock_agent):
@@ -142,7 +142,7 @@ class TestRootCauseComponent:
                         TimelineEvent(
                             title="Test Cause",
                             code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="code",
+                            timeline_item_type="internal_code",
                             relevant_code_file=RelevantCodeFile(
                                 file_path="test.py",
                                 repo_name="owner/repo",
@@ -190,7 +190,7 @@ class TestRootCauseComponent:
                         TimelineEvent(
                             title="Test Cause",
                             code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="code",
+                            timeline_item_type="internal_code",
                             relevant_code_file=RelevantCodeFile(
                                 file_path="test.py",
                                 repo_name="owner/repo",
@@ -237,7 +237,7 @@ class TestRootCauseComponent:
                         TimelineEvent(
                             title="Test Cause",
                             code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="code",
+                            timeline_item_type="internal_code",
                             relevant_code_file=RelevantCodeFile(
                                 file_path="test.py",
                                 repo_name="owner/repo",

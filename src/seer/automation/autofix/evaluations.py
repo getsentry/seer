@@ -206,7 +206,7 @@ def sync_run_evaluation_on_item(item: DatasetItemClient):
     ).apply()
 
     state_after_root_cause = state.get()
-    root_cause_step = state_after_root_cause.steps[-3]
+    root_cause_step = state_after_root_cause.find_step(key="root_cause_analysis")
 
     if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
         return None, None

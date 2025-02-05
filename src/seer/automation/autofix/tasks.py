@@ -238,10 +238,8 @@ def run_autofix_coding(
 
     event_manager.send_coding_start()
 
-    payload = cast(AutofixSolutionUpdatePayload, request.payload)
-
     try:
-        event_manager.set_selected_solution(payload)
+        event_manager.set_selected_solution(request.payload)
         cur = state.get()
 
         # Process has no further work.

@@ -15,7 +15,7 @@ class TestPlannerModels:
                     TimelineEvent(
                         title="fix_title",
                         code_snippet_and_analysis="fix_description",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="file_path",
                             repo_name="owner/repo",

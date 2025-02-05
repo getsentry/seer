@@ -113,7 +113,9 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
     @observe(name="Solution")
     @ai_track(description="Solution")
     @inject
-    def invoke(self, request: SolutionRequest, llm_client: LlmClient = injected) -> SolutionOutput:
+    def invoke(
+        self, request: SolutionRequest, llm_client: LlmClient = injected
+    ) -> SolutionOutput | None:
 
         with BaseTools(self.context) as tools:
             memory = request.initial_memory
