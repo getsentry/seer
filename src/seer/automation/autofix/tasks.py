@@ -165,7 +165,7 @@ def run_autofix_root_cause(
 
 
 @inject
-def run_autofix_execution(
+def run_autofix_solution(
     request: AutofixUpdateRequest,
     app_config: AppConfig = injected,
 ):

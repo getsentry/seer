@@ -53,6 +53,10 @@ class CodingPrompts:
             return f"The user has provided the following instruction for the fix: {root_cause}"
 
     @staticmethod
+    def format_custom_solution(custom_solution: str):
+        return f"The user has provided the following solution idea: {custom_solution}"
+
+    @staticmethod
     def format_fix_msg(has_tools: bool = True, custom_solution: str | None = None):
         return textwrap.dedent(
             """\
@@ -83,11 +87,7 @@ class CodingPrompts:
                 if has_tools
                 else ""
             ),
-            custom_solution_str=(
-                f"The user has provided the following solution idea: {custom_solution}"
-                if custom_solution
-                else ""
-            ),
+            custom_solution_str=CodingPrompts.format_custom_solution(custom_solution),
         )
 
     @staticmethod
@@ -161,11 +161,7 @@ class CodingPrompts:
                     if root_cause_extra_instruction
                     else ""
                 ),
-                custom_solution_str=(
-                    f"The user has provided the following solution idea: {custom_solution}"
-                    if custom_solution
-                    else ""
-                ),
+                custom_solution_str=CodingPrompts.format_custom_solution(custom_solution),
             )
             .strip()
         )

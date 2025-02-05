@@ -41,9 +41,9 @@ from seer.automation.autofix.tasks import (
     restart_from_point_with_feedback,
     restart_step_with_user_response,
     run_autofix_coding,
-    run_autofix_execution,
     run_autofix_push_changes,
     run_autofix_root_cause,
+    run_autofix_solution,
     truncate_memory_to_match_insights,
     update_code_change,
 )
@@ -278,7 +278,7 @@ def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
         session.commit()
 
     with eager_celery():
-        run_autofix_execution(
+        run_autofix_solution(
             AutofixUpdateRequest(
                 run_id=autofix_root_cause_run.run_id,
                 payload=AutofixRootCauseUpdatePayload(
