@@ -4,10 +4,12 @@ import pytest
 from johen import generate
 
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
+from seer.automation.autofix.components.solution.models import SolutionOutput
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
+    AutofixSolutionUpdatePayload,
     AutofixStatus,
     ChangesStep,
     CodebaseState,
@@ -317,3 +319,116 @@ class TestAutofixEventManager:
 
         # Check overall state status
         assert state.get().status == AutofixStatus.WAITING_FOR_USER_RESPONSE
+
+    def test_send_solution_start(self, event_manager, state):
+        # No existing solution step
+        event_manager.send_solution_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 1
+        solution_step = state_obj.steps[0]
+        assert solution_step.key == event_manager.solution_processing_step.key
+        assert solution_step.status == AutofixStatus.PROCESSING
+        assert state_obj.status == AutofixStatus.PROCESSING
+
+        # Existing solution step with different status
+        with state.update() as cur:
+            cur.steps[0].status = AutofixStatus.COMPLETED
+
+        event_manager.send_solution_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 2  # Should add new step
+        solution_step = state_obj.steps[-1]
+        assert solution_step.key == event_manager.solution_processing_step.key
+        assert solution_step.status == AutofixStatus.PROCESSING
+
+        # Existing processing solution step
+        event_manager.send_solution_start()
+
+        state_obj = state.get()
+        assert len(state_obj.steps) == 2  # Should not add new step
+        solution_step = state_obj.steps[-1]
+        assert solution_step.key == event_manager.solution_processing_step.key
+        assert solution_step.status == AutofixStatus.PROCESSING
+
+    def test_send_solution_result(self, event_manager, state):
+        # Create a mock solution output
+        mock_solution_output = MagicMock(spec=SolutionOutput)
+        mock_solution_output.modified_timeline = ["Step 1", "Step 2"]
+
+        event_manager.send_solution_result(mock_solution_output)
+
+        state_obj = state.get()
+        # Check solution processing step
+        solution_processing_step = next(
+            (
+                step
+                for step in state_obj.steps
+                if step.key == event_manager.solution_processing_step.key
+            ),
+            None,
+        )
+        assert solution_processing_step is not None
+        assert solution_processing_step.status == AutofixStatus.COMPLETED
+
+        # Check solution step
+        solution_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.solution_step.key),
+            None,
+        )
+        assert solution_step is not None
+        assert solution_step.status == AutofixStatus.COMPLETED
+        assert solution_step.solution == mock_solution_output.modified_timeline
+        assert state_obj.status == AutofixStatus.NEED_MORE_INFORMATION
+
+    def test_set_selected_solution(self, event_manager, state):
+        # Test with custom solution
+        custom_solution = "Custom solution text"
+        payload = AutofixSolutionUpdatePayload(custom_solution=custom_solution)
+
+        event_manager.set_selected_solution(payload)
+
+        state_obj = state.get()
+        solution_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.solution_step.key),
+            None,
+        )
+        assert solution_step is not None
+        assert solution_step.custom_solution == custom_solution
+        assert solution_step.solution_selected is True
+        assert state_obj.status == AutofixStatus.PROCESSING
+
+        # Test without custom solution
+        payload = AutofixSolutionUpdatePayload(custom_solution=None)
+
+        event_manager.set_selected_solution(payload)
+
+        state_obj = state.get()
+        solution_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.solution_step.key),
+            None,
+        )
+        assert solution_step is not None
+        assert solution_step.custom_solution is None
+        assert solution_step.solution_selected is True
+        assert state_obj.status == AutofixStatus.PROCESSING
+
+        # Verify file changes are cleared
+        with state.update() as cur:
+            cur.codebases = {
+                "repo1": CodebaseState(
+                    repo_id=1, repo_external_id="repo1", file_changes=[next(generate(FileChange))]
+                )
+            }
+
+        event_manager.set_selected_solution(payload)
+        assert len(state.get().codebases["repo1"].file_changes) == 0
+
+        # Verify steps after solution step are deleted
+        with state.update() as cur:
+            cur.steps.append(DefaultStep(id="after_solution", title="After Solution"))
+
+        event_manager.set_selected_solution(payload)
+        assert len(state.get().steps) == 1
+        assert state.get().steps[0].key == event_manager.solution_step.key

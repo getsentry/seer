@@ -1,4 +1,3 @@
-import textwrap
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -312,66 +311,13 @@ class TestCodingComponent:
             result = component.invoke(request)
 
         # Assert
-        assert mock_agent.run.call_count == 3
-        assert "missing_file1.py" in mock_agent.run.call_args_list[2][0][0].prompt
-        assert "missing_file2.py" in mock_agent.run.call_args_list[2][0][0].prompt
-        assert "existing_file.py" in mock_agent.run.call_args_list[2][0][0].prompt
+        assert mock_agent.run.call_count == 2
+        assert "missing_file1.py" in mock_agent.run.call_args_list[1][0][0].prompt
+        assert "missing_file2.py" in mock_agent.run.call_args_list[1][0][0].prompt
+        assert "existing_file.py" in mock_agent.run.call_args_list[1][0][0].prompt
 
         # Ensure the result is as expected
         assert result == mock_coding_output
-
-    def test_invoke_with_root_cause_analysis_obvious_fix(self, component):
-        # Setup
-        mock_request = MagicMock()
-        mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
-        mock_request.root_cause_and_fix.root_cause_reproduction = [
-            MagicMock(
-                title="Test title",
-                code_snippet_and_analysis="Test description",
-                timeline_item_type="code",
-                relevant_code_file=RelevantCodeFile(file_path="test.py", repo_name="test-repo"),
-                is_most_important_event=True,
-            )
-        ]
-        mock_request.event_details = EventDetails(
-            title="Test Error",
-        )
-        mock_request.fix_instruction = "Fix the code"
-        mock_request.initial_memory = None
-
-        # Mock file content retrieval
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_file_content.return_value = "test content"
-        component.context.get_file_contents.return_value = "test content"
-        component.context.get_repo_client.return_value = mock_repo_client
-
-        # Mock is_obvious and handle_simple_fix
-        component._is_obvious = MagicMock(return_value=True)
-        component._handle_simple_fix = MagicMock(return_value=MagicMock())
-
-        # Mock agent
-        mock_agent = MagicMock()
-        mock_agent.run.return_value = "<plan_steps>test plan</plan_steps>"
-        mock_agent.usage = MagicMock()
-
-        # Execute
-        with (
-            patch(
-                "seer.automation.autofix.components.coding.component.AutofixAgent",
-                return_value=mock_agent,
-            ),
-            patch(
-                "seer.automation.autofix.components.coding.component.PlanStepsPromptXml"
-            ) as mock_plan_steps,
-        ):
-            mock_plan_steps.from_xml.return_value.to_model.return_value = MagicMock()
-            component.invoke(mock_request)
-
-        # Assert
-        component._is_obvious.assert_called_once()
-        component._handle_simple_fix.assert_called_once()
-
-        mock_agent.run.assert_not_called()
 
     def test_invoke_with_root_cause_analysis_non_obvious_fix(self, component):
         # Setup
@@ -381,7 +327,7 @@ class TestCodingComponent:
             MagicMock(
                 title="Test title",
                 code_snippet_and_analysis="Test description",
-                timeline_item_type="code",
+                timeline_item_type="internal_code",
                 relevant_code_file=RelevantCodeFile(file_path="test.py", repo_name="test-repo"),
                 is_most_important_event=True,
             )
@@ -392,15 +338,12 @@ class TestCodingComponent:
         mock_request.fix_instruction = "Fix the code"
         mock_request.initial_memory = None
 
-        # Mock file content retrieval
         mock_repo_client = MagicMock()
         mock_repo_client.get_file_content.return_value = "test content"
         component.context.get_file_contents.return_value = "test content"
         component.context.get_repo_client.return_value = mock_repo_client
 
-        # Mock is_obvious and handle_simple_fix
         component._is_obvious = MagicMock(return_value=False)
-        component._handle_simple_fix = MagicMock(return_value=MagicMock())
 
         # Mock agent
         mock_agent = MagicMock()
@@ -424,116 +367,5 @@ class TestCodingComponent:
 
         # Assert
         component._is_obvious.assert_called_once()
-        component._handle_simple_fix.assert_not_called()
-        assert mock_agent.run.call_count == 2
         # Verify agent keeps its tools when fix is not obvious
         assert mock_agent.tools == mock_tools
-
-    def test_invoke_with_obvious_feedback(self, component):
-        # Setup
-        request = next(generate(CodingRequest))
-        request.initial_memory = [Message(role="user", content="test message")]
-
-        # Mock is_obvious and handle_simple_fix
-        component._is_feedback_obvious = MagicMock(return_value=True)
-        component._handle_simple_fix = MagicMock(return_value=MagicMock())
-
-        # Mock agent
-        mock_agent = MagicMock()
-
-        # Execute
-        with (
-            patch(
-                "seer.automation.autofix.components.coding.component.AutofixAgent",
-                return_value=mock_agent,
-            ),
-            patch(
-                "seer.automation.autofix.components.coding.component.PlanStepsPromptXml"
-            ) as mock_plan_steps,
-        ):
-            mock_plan_steps.from_xml.return_value.to_model.return_value = MagicMock()
-            component.invoke(request)
-
-        # Assert
-        component._is_feedback_obvious.assert_called_once()
-        component._handle_simple_fix.assert_called_once()
-
-        mock_agent.run.assert_not_called()
-
-    def test_invoke_with_non_obvious_feedback(self, component):
-        # Setup
-        request = next(generate(CodingRequest))
-        request.initial_memory = [Message(role="user", content="test message")]
-
-        # Mock is_obvious and handle_simple_fix
-        component._is_feedback_obvious = MagicMock(return_value=False)
-        component._handle_simple_fix = MagicMock(return_value=MagicMock())
-
-        # Mock agent
-        mock_agent = MagicMock()
-        mock_agent.run.return_value = "<plan_steps>test plan</plan_steps>"
-        mock_agent.usage = MagicMock()
-        mock_tools = ["tool1", "tool2"]
-        mock_agent.tools = mock_tools
-
-        # Execute
-        with (
-            patch(
-                "seer.automation.autofix.components.coding.component.AutofixAgent",
-                return_value=mock_agent,
-            ),
-            patch(
-                "seer.automation.autofix.components.coding.component.PlanStepsPromptXml"
-            ) as mock_plan_steps,
-        ):
-            mock_plan_steps.from_xml.return_value.to_model.return_value = MagicMock()
-            component.invoke(request)
-
-        # Assert
-        component._is_feedback_obvious.assert_called_once()
-        component._handle_simple_fix.assert_not_called()
-
-        assert mock_agent.run.call_count == 2
-
-    def test_simple_fixer(self, component: CodingComponent):
-        # Setup
-        request = next(generate(CodingRequest))
-        request.initial_memory = []
-
-        mock_agent = MagicMock()
-        mock_agent.run.return_value = textwrap.dedent(
-            """\
-            Ok here is some code for you:
-            <file_change file_path="test.py" repo_name="test-repo">
-            <commit_message>Fix the code</commit_message>
-            <description>FixING the code</description>
-            <unified_diff>
-            @@ -1,3 +1,3 @@
-            def foo()
-            -    return 'Hello'
-            +    return 'Hello, World!'
-            </unified_diff>
-            </file_change>
-            """
-        )
-        mock_agent.usage = MagicMock()
-        mock_tools = ["tool1", "tool2"]
-        mock_agent.tools = mock_tools
-
-        with patch(
-            "seer.automation.autofix.components.coding.component.AutofixAgent",
-            return_value=mock_agent,
-        ):
-            # Execute
-            coding_output = component._handle_simple_fix(request, request.initial_memory)
-
-        # Assert
-        assert coding_output is not None
-        assert coding_output.tasks[0] == PlanTaskPromptXml(
-            file_path="test.py",
-            repo_name="test-repo",
-            type="file_change",
-            diff="@@ -1,3 +1,3 @@\ndef foo()\n-    return 'Hello'\n+    return 'Hello, World!'",
-            description="FixING the code",
-            commit_message="Fix the code",
-        )

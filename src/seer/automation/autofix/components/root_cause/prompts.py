@@ -90,7 +90,7 @@ class RootCauseAnalysisPrompts:
             For each event:
               - Title: a complete sentence describing what happened and why it matters to the root cause of the issue. (a summary of the description)
               - Code Snippet and Analysis: any extra analysis needed and a small relevant code snippet if this is an important event. All Markdown formatted.
-              - Event type: logic in the code, a human interaction, an API call, data from the database, or an environment/infra factor.
+              - Event type: logic in the code, a human interaction, or an external system like a database, API, etc.
               - Is most important event: whether this event is the MOST important and insightfulone in the timeline to pay attention to.
             As a whole, this timeline should tell the precise story of the root cause of the issue. Starts at the entry point of the code, ends at the error."""
         )

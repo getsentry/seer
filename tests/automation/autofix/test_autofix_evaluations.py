@@ -101,7 +101,7 @@ class TestSyncRunEvaluationOnItem:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",
@@ -160,8 +160,6 @@ class TestSyncRunEvaluationOnItem:
         assert self.mock_root_cause_step.get_signature.called
         assert self.mock_root_cause_step_instance.apply.called
 
-        self.mock_event_manager.return_value.set_selected_root_cause.assert_called_once()
-
         assert self.mock_planning_step.get_signature.called
         assert self.mock_planning_step_instance.apply.called
 
@@ -210,7 +208,7 @@ class TestSyncRunEvaluationOnItem:
                         TimelineEvent(
                             title="Test Cause",
                             code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="code",
+                            timeline_item_type="internal_code",
                             relevant_code_file=RelevantCodeFile(
                                 file_path="test.py",
                                 repo_name="owner/repo",
@@ -294,7 +292,7 @@ class TestSyncRunRootCause:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",
@@ -390,7 +388,7 @@ class TestScoreRootCauseSingleIt:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",
@@ -426,7 +424,7 @@ class TestScoreRootCauseSingleIt:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",
@@ -451,7 +449,7 @@ class TestScoreRootCauseSingleIt:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",
@@ -486,7 +484,7 @@ class TestScoreRootCauses:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",
@@ -519,7 +517,7 @@ class TestScoreRootCauses:
                     TimelineEvent(
                         title="Test Cause",
                         code_snippet_and_analysis="The root cause of the issue is ...",
-                        timeline_item_type="code",
+                        timeline_item_type="internal_code",
                         relevant_code_file=RelevantCodeFile(
                             file_path="test.py",
                             repo_name="owner/repo",

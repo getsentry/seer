@@ -9,6 +9,7 @@ from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisItem,
     TimelineEvent,
 )
+from seer.automation.autofix.components.solution.models import SolutionTimelineEvent
 from seer.automation.autofix.utils import remove_code_backticks
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails, Profile, PromptXmlModel
@@ -17,7 +18,8 @@ from seer.automation.summarize.issue import IssueSummary
 
 class CodingRequest(BaseComponentRequest):
     event_details: EventDetails
-    root_cause_and_fix: RootCauseAnalysisItem | str
+    root_cause: RootCauseAnalysisItem | str
+    solution: list[SolutionTimelineEvent] | str
     original_instruction: str | None = None
     root_cause_extra_instruction: str | None = None
     summary: Optional[IssueSummary] = None

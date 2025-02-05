@@ -90,7 +90,7 @@ class TestRootCauseStep(unittest.TestCase):
                         TimelineEvent(
                             title="Test title",
                             code_snippet_and_analysis="Test root cause",
-                            timeline_item_type="code",
+                            timeline_item_type="internal_code",
                             relevant_code_file=RelevantCodeFile(
                                 file_path="test.py", repo_name="owner/repo"
                             ),

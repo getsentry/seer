@@ -37,7 +37,7 @@ class InsightSharingPrompts:
             """
         elif step_type == "plan":
             template = """\
-            We are in the process of writing a small paragraph describing how we can fix an issue in our codebase. Here it is so far:
+            We are in the process of writing a small paragraph describing the code changes we need to make to fix an issue in our codebase. Here it is so far:
             <PARAGRAPH_SO_FAR>
             {insights}
             </PARAGRAPH_SO_FAR>
@@ -47,7 +47,21 @@ class InsightSharingPrompts:
             {latest_thought}
             </NOTES>
 
-            If there is something new and useful here to extend the plan to fix the issue, what is the NEXT sentence in the paragraph (write it so it flows nicely; max 15 words)? {no_insight_instruction}
+            If there is something new and useful here to extend the discussion on the code changes, what is the NEXT sentence in the paragraph (write it so it flows nicely; max 15 words)? {no_insight_instruction}
+            """
+        elif step_type == "solution_processing":
+            template = """\
+            We are in the process of writing a small paragraph describing a solution to an issue in our codebase. Here it is so far:
+            <PARAGRAPH_SO_FAR>
+            {insights}
+            </PARAGRAPH_SO_FAR>
+
+            We have a new set of notes and thoughts about the issue:
+            <NOTES>
+            {latest_thought}
+            </NOTES>
+
+            If there is something new and useful here to extend the plan on how to fix the issue, what is the NEXT sentence in the paragraph (write it so it flows nicely; max 15 words)? {no_insight_instruction}
             """
         else:
             raise NotImplementedError(f"Insight sharing not implemented for step key: {step_type}")

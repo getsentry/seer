@@ -11,11 +11,17 @@ from seer.automation.autofix.config import (
     AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
 )
-from seer.automation.autofix.models import AutofixStatus
+from seer.automation.autofix.models import AutofixRootCauseUpdatePayload, AutofixStatus
+from seer.automation.autofix.steps.solution_step import (
+    AutofixSolutionStep,
+    AutofixSolutionStepRequest,
+)
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.utils import make_kill_signal
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 
 class RootCauseStepRequest(PipelineStepTaskRequest):
@@ -50,7 +56,8 @@ class RootCauseStep(AutofixPipelineStep):
 
     @observe(name="Autofix - Root Cause Step")
     @ai_track(description="Autofix - Root Cause Step")
-    def _invoke(self, **kwargs):
+    @inject
+    def _invoke(self, app_config: AppConfig = injected):
         self.context.event_manager.send_root_cause_analysis_start()
 
         if not self.request.initial_memory:
@@ -103,3 +110,19 @@ class RootCauseStep(AutofixPipelineStep):
                     self.context.comment_root_cause_on_pr(
                         pr_url=pr_to_comment_on, repo_definition=repo, root_cause=cause_string
                     )
+
+        # automatically start solution step here
+        self.context.event_manager.set_selected_root_cause(
+            AutofixRootCauseUpdatePayload(
+                cause_id=root_cause_output.causes[0].id,
+            )
+        )
+        self.next(
+            AutofixSolutionStep.get_signature(
+                AutofixSolutionStepRequest(
+                    **self.step_request_fields,
+                    initial_memory=[],
+                ),
+            ),
+            queue=app_config.CELERY_WORKER_QUEUE,
+        )

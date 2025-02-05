@@ -18,6 +18,7 @@ def test_detected_celery_jobs():
                 "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
                 "seer.automation.autofix.steps.coding_step.autofix_coding_task",
                 "seer.automation.autofix.steps.root_cause_step.root_cause_task",
+                "seer.automation.autofix.steps.solution_step.autofix_solution_task",
                 "seer.automation.autofix.steps.steps.autofix_parallelized_chain_step_task",
                 "seer.automation.autofix.steps.steps.autofix_parallelized_conditional_step_task",
                 "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
