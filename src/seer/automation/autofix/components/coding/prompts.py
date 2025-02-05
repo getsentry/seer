@@ -53,7 +53,10 @@ class CodingPrompts:
             return f"The user has provided the following instruction for the fix: {root_cause}"
 
     @staticmethod
-    def format_custom_solution(custom_solution: str):
+    def format_custom_solution(custom_solution: str | None):
+        if not custom_solution:
+            return ""
+
         return f"The user has provided the following solution idea: {custom_solution}"
 
     @staticmethod
