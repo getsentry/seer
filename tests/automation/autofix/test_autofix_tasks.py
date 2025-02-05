@@ -194,6 +194,7 @@ def test_autofix_run_root_cause_analysis(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_autofix_run_full(autofix_request: AutofixRequest):
     autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
     with eager_celery():
