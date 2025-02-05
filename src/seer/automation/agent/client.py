@@ -49,7 +49,36 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.utils import backoff_on_exception
 
+
 logger = logging.getLogger(__name__)
+
+def clean_json_response(response: str) -> str:
+    """
+    Cleans a JSON response by:
+    1. Removing markdown code block markers
+    2. Extracting JSON content from code blocks
+    3. Removing any trailing control characters
+    
+    Args:
+        response: The raw response string that may contain JSON
+    Returns:
+        Cleaned JSON string
+    """
+    # Remove markdown code block markers if present
+    response = re.sub(r'^```\s*json\s*\n', '', response, flags=re.MULTILINE)
+    response = re.sub(r'\n```\s*$', '', response, flags=re.MULTILINE)
+    
+    # Trim any whitespace and control characters from start and end
+    response = response.strip()
+    
+    # Ensure the response starts with { and ends with }
+    if not response.startswith('{') or not response.endswith('}'):
+        first_brace = response.find('{')
+        last_brace = response.rfind('}')
+        if first_brace != -1 and last_brace != -1:
+            response = response[first_brace:last_brace + 1]
+    
+    return response
 
 
 @dataclass
@@ -184,9 +213,11 @@ class OpenAiProvider:
             tools=tools,
         )
 
+
         openai_client = self.get_client()
 
-        completion = openai_client.beta.chat.completions.parse(
+        # First get raw completion
+        completion = openai_client.chat.completions.create(
             model=self.model_name,
             messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
             temperature=temperature,
@@ -195,21 +226,35 @@ class OpenAiProvider:
                 if tool_dicts
                 else openai.NotGiven()
             ),
-            response_format=response_format,
+            response_format={"type": "json_object"},
             max_tokens=max_tokens or openai.NotGiven(),
             timeout=timeout or openai.NotGiven(),
         )
 
-        openai_message = completion.choices[0].message
-        if openai_message.refusal:
-            raise LlmRefusalError(completion.choices[0].message.refusal)
+        # Extract and clean the response content
+        content = completion.choices[0].message.content
+        if not content:
+            raise ValueError("Empty response from OpenAI")
+            
+        cleaned_json = clean_json_response(content)
+        
+        try:
+            # Parse the cleaned JSON into the response format
+            structured_result = response_format.model_validate_json(cleaned_json)
+        except Exception as e:
+            logger.error(f"Failed to parse cleaned JSON: {cleaned_json}")
+            raise ValueError(f"Invalid JSON structure: {str(e)}") from e
 
-        parsed = cast(StructuredOutputType, completion.choices[0].message.parsed)
+        if completion.choices[0].finish_reason == "content_filter":
+            raise LlmRefusalError("Response was filtered")
+
+        parsed = cast(StructuredOutputType, structured_result)
 
         usage = Usage(
             completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
             prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
             total_tokens=completion.usage.total_tokens if completion.usage else 0,
+        )
         )
 
         return LlmGenerateStructuredResponse(
@@ -1120,11 +1165,19 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=tools,
+                    timeout=timeout,
                 )
-            else:
-                raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
-            logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            logger.exception(
+                "Structured generation failed",
+                extra={
+                    "provider": model.provider_name,
+                    "model": model.model_name,
+                    "error": str(e),
+                    "response_format": response_format.__name__ if response_format else None,
+                }
+            )
+            raise e
             raise e
 
     @observe(name="Generate Structured")
@@ -1175,11 +1228,19 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature,
                     tools=tools,
+                    timeout=timeout,
                 )
-            else:
-                raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
-            logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            logger.exception(
+                "Structured generation failed",
+                extra={
+                    "provider": model.provider_name,
+                    "model": model.model_name,
+                    "error": str(e),
+                    "response_format": response_format.__name__ if response_format else None,
+                }
+            )
+            raise e
             raise e
 
     @observe(name="Generate Text Stream")
