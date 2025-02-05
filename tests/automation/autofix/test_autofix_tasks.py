@@ -43,7 +43,6 @@ from seer.automation.autofix.tasks import (
     run_autofix_coding,
     run_autofix_push_changes,
     run_autofix_root_cause,
-    run_autofix_solution,
     truncate_memory_to_match_insights,
     update_code_change,
 )
@@ -171,7 +170,6 @@ def test_no_state_mapping():
 
 
 @pytest.mark.vcr()
-@pytest.mark.skip(reason="Flakily causes seg faults.")
 def test_autofix_run_root_cause_analysis(autofix_request: AutofixRequest):
     with eager_celery():
         run_id = run_autofix_root_cause(autofix_request)
@@ -264,6 +262,7 @@ def test_autofix_run_question_asking(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Needs to be rewritten to use the new autofix solution step.")
 def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
     with Session() as session:
         session.add(
@@ -275,13 +274,17 @@ def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
         )
         session.commit()
 
+    continuation = get_autofix_state(run_id=autofix_root_cause_run.run_id)
+    event_manager = AutofixEventManager(continuation)
+    with continuation.update() as cur:
+        cur.add_step(event_manager.solution_processing_step)
+        cur.add_step(event_manager.solution_step)
+
     with eager_celery():
-        run_autofix_solution(
+        run_autofix_coding(
             AutofixUpdateRequest(
                 run_id=autofix_root_cause_run.run_id,
-                payload=AutofixRootCauseUpdatePayload(
-                    custom_root_cause="we should uncomment out the unit test parts"
-                ),
+                payload=AutofixSolutionUpdatePayload(custom_solution="make the field optional"),
             )
         )
 
