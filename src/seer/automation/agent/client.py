@@ -560,13 +560,20 @@ class AnthropicProvider:
         prompt: str | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
-    ) -> tuple[list[MessageParam], list[ToolParam] | None, str | None]:
+    ) -> tuple[list[MessageParam], list[ToolParam] | None, list[TextBlockParam] | None]:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
             message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
+        message_dicts[-1]["content"][0]["cache_control"] = {"type": "ephemeral"}
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
+        )
+
+        system_prompt = (
+            [TextBlockParam(type="text", text=system_prompt, cache_control={"type": "ephemeral"})]
+            if system_prompt
+            else None
         )
 
         return message_dicts, tool_dicts, system_prompt
