@@ -91,7 +91,8 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
             if not os.path.isfile(f):
                 raise Exception("Path provided is not a valid file")
             if filename.split(".")[-1] != "json":
-                raise Exception("File is not a JSON file")
+                # raise Exception("File is not a JSON file")
+                continue
 
             # Parse file name
             file_params = filename.split(".")[0].split("_")

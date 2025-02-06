@@ -3,7 +3,6 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
-import pytest
 import stumpy
 
 from seer.anomaly_detection.detectors import (
@@ -34,7 +33,7 @@ class TestMPCascadingScorer(unittest.TestCase):
         # self.scorer = MPIQRScorer()
         self.scorer = MPBoxCoxScorer()
 
-    @pytest.mark.skip(reason="Skipping test, test data needs fixing")
+    # @pytest.mark.skip(reason="Skipping test, test data needs fixing")
     def test_batch_score_synthetic_data(self):
 
         loaded_synthetic_data = convert_synthetic_ts(
@@ -88,7 +87,7 @@ class TestMPCascadingScorer(unittest.TestCase):
                 result == expected_type
             ), f"Expected for {filename}: {expected_type}, got {result}"
 
-    @pytest.mark.skip(reason="Skipping test, test data needs fixing")
+    # @pytest.mark.skip(reason="Skipping test, test data needs fixing")
     def test_stream_score(self):
 
         test_ts_mp_mulipliers = [1000, -1000, 1]
@@ -128,9 +127,11 @@ class TestMPCascadingScorer(unittest.TestCase):
                 actual_flags = flags_and_scores.flags
 
                 assert actual_flags[0] == expected_flags[i]
-                self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.MP_DIST_IQR)
+                self.assertEqual(
+                    flags_and_scores.thresholds[0][0].type, ThresholdType.BOX_COX_THRESHOLD
+                )
 
-    @pytest.mark.skip(reason="Skipping test, test data needs fixing")
+    # @pytest.mark.skip(reason="Skipping test, test data needs fixing")
     def test_stream_score_with_thresholds(self):
 
         expected_flag = "anomaly_higher_confidence"
@@ -167,11 +168,11 @@ class TestMPCascadingScorer(unittest.TestCase):
         assert actual_flags[0] == expected_flag
         self.assertEqual(len(flags_and_scores.thresholds), 1)
         self.assertEqual(len(flags_and_scores.thresholds[0]), 1)
-        self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.MP_DIST_IQR)
-        self.assertGreater(flags_and_scores.thresholds[0][0].lower, 0.0)
+        self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.BOX_COX_THRESHOLD)
+        self.assertLess(flags_and_scores.thresholds[0][0].lower, 0.0)
         self.assertAlmostEqual(
             flags_and_scores.thresholds[0][0].upper,
-            flags_and_scores.thresholds[0][0].lower,
+            -flags_and_scores.thresholds[0][0].lower,
             places=2,
         )
 

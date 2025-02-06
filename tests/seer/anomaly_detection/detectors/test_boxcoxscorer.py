@@ -94,6 +94,7 @@ class TestBoxCoxScorer:
         assert len(transformed) == len(x)
 
         # Should shift by min + 1 before transform
+        expected, _ = stats.boxcox(np.array([1.0, 2.0, 3.0, 4.0]))
 
         # expected = np.log(x - np.min(x) + 1)
         expected, bc_lambda = stats.boxcox(x - np.min(x) + 1)
