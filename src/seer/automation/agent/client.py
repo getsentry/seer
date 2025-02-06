@@ -437,7 +437,7 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ):
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+        message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -447,7 +447,7 @@ class AnthropicProvider:
         anthropic_client = self.get_client()
 
         completion = anthropic_client.messages.create(
-            system=system_prompt or NOT_GIVEN,
+            system=system_prompt_block or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
@@ -560,16 +560,24 @@ class AnthropicProvider:
         prompt: str | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
-    ) -> tuple[list[MessageParam], list[ToolParam] | None, str | None]:
+    ) -> tuple[list[MessageParam], list[ToolParam] | None, list[TextBlockParam] | None]:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
             message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
+        if message_dicts:
+            message_dicts[-1]["content"][0]["cache_control"] = {"type": "ephemeral"}  # type: ignore[index]
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
         )
 
-        return message_dicts, tool_dicts, system_prompt
+        system_prompt_block = (
+            [TextBlockParam(type="text", text=system_prompt, cache_control={"type": "ephemeral"})]
+            if system_prompt
+            else None
+        )
+
+        return message_dicts, tool_dicts, system_prompt_block
 
     @observe(as_type="generation", name="Anthropic Stream")
     def generate_text_stream(
@@ -583,7 +591,7 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+        message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -593,7 +601,7 @@ class AnthropicProvider:
         anthropic_client = self.get_client()
 
         stream = anthropic_client.messages.create(
-            system=system_prompt or NOT_GIVEN,
+            system=system_prompt_block or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),

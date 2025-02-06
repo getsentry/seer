@@ -21,7 +21,7 @@ amqp==5.3.1
     # via kombu
 annotated-types==0.7.0
     # via pydantic
-anthropic==0.34.2
+anthropic==0.45.2
     # via -r requirements-constraints.txt
 anyio==4.8.0
     # via
@@ -729,7 +729,6 @@ threadpoolctl==3.2.0
     #   scikit-learn
 tokenizers==0.15.2
     # via
-    #   anthropic
     #   chromadb
     #   transformers
 torch==2.2.0
