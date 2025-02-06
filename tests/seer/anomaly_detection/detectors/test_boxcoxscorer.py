@@ -145,16 +145,22 @@ class TestBoxCoxScorer:
         timestamps = np.arange(len(mp_dist), dtype=np.float64)
         values = np.ones(100)
 
-        with pytest.raises(ValueError) as ex:
-            box_cox_scorer.batch_score(
-                values=values,
-                timestamps=timestamps,
-                mp_dist=mp_dist,
-                ad_config=basic_ad_config,
-                window_size=10,
-                location_detector=mock_location_detector,
-            )
-        assert str(ex.value) == "Data must not be constant."
+        result = box_cox_scorer.batch_score(
+            values=values,
+            timestamps=timestamps,
+            mp_dist=mp_dist,
+            ad_config=basic_ad_config,
+            window_size=10,
+            location_detector=mock_location_detector,
+        )
+
+        assert len(result.flags) == len(values)
+        assert len(result.scores) == len(values)
+        assert len(result.thresholds) == len(values)
+
+        # Last point should be flagged as anomaly
+        assert result.flags[-1] == "none"
+        assert result.scores[-1] == 0
 
     def test_stream_score(self, box_cox_scorer, mock_location_detector, basic_ad_config):
         # Test streaming with normal history and anomalous new point

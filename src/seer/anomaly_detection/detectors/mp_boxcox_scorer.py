@@ -49,8 +49,8 @@ class MPBoxCoxScorer(MPScorer):
 
     z_score_thresholds: Dict[Sensitivities, float] = Field(
         {
-            # "high": 1.28,  # 90% confidence interval
-            "high": 1.04,  # 85% confidence interval
+            "high": 1.28,  # 90% confidence interval
+            # "high": 1.04,  # 85% confidence interval
             "medium": 1.64,  # 95% confidence interval
             "low": 2.32,  # 99% confidence interval
         },
@@ -131,23 +131,24 @@ class MPBoxCoxScorer(MPScorer):
         if sensitivity not in self.z_score_thresholds:
             raise ClientError(f"Invalid sensitivity: {sensitivity}")
 
-        transformed, bc_lambda, min_val = self._box_cox_transform(values)
-        # print("transformed")
-        # print(transformed)
-        mean = np.mean(transformed[~np.isnan(transformed)])
-        # print("mean")
-        # print(mean)
-        std = float(np.std(transformed[~np.isnan(transformed)]))
-        # print("std")
-        # print(std)
+        # Get indices of nan values to restore them later
+        nan_indices = np.isnan(values)
+        values_no_nan = values[~nan_indices]
+
+        transformed, bc_lambda, min_val = self._box_cox_transform(values_no_nan)
+        mean = np.mean(transformed)
+        std = float(np.std(transformed))
         z_scores = (transformed - mean) / std if std > 0 else np.zeros_like(transformed)
 
         threshold = self.z_score_thresholds[sensitivity]
         threshold_transformed = self._inverse_box_cox_transform(threshold, bc_lambda, min_val)
 
-        # print("z_scores")
-        # print(z_scores)
-        return z_scores, threshold, std, threshold_transformed
+        # Add nans back in the same positions
+        z_scores_with_nans = np.empty(len(values))
+        z_scores_with_nans[~nan_indices] = z_scores
+        z_scores_with_nans[nan_indices] = np.nan
+
+        return z_scores_with_nans, threshold, std, threshold_transformed
 
     @inject
     def batch_score(
@@ -164,10 +165,6 @@ class MPBoxCoxScorer(MPScorer):
         z_scores, threshold, std, threshold_transformed = self._get_z_scores(
             mp_dist, ad_config.sensitivity
         )
-
-        # print("z_scores")
-        # print(z_scores)
-
         scores = []
         flags = []
         thresholds = []
@@ -191,15 +188,6 @@ class MPBoxCoxScorer(MPScorer):
             flag: AnomalyFlags = "none"
             location_thresholds: List[Threshold] = []
 
-            # if score > 0:
-            #     print("score")
-            #     print(score)
-            #     print("threshold")
-            #     print(threshold)
-            #     print("std")
-            #     print(std)
-            #     print()
-            #     print()
             if std != 0 and score > threshold:
                 flag = "anomaly_higher_confidence"
                 if i >= idx_to_detect_location_from:
@@ -249,7 +237,6 @@ class MPBoxCoxScorer(MPScorer):
 
         # Get z-score for streamed value
         score = z_scores[-1]
-        # score = abs(z_score)
 
         if std == 0 or score < threshold:
             flag: AnomalyFlags = "none"
