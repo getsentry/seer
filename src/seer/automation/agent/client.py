@@ -770,7 +770,6 @@ class GeminiProvider:
                 response_schema=response_format,
             ),
         )
-        structured_result = response.parsed
 
         usage = Usage(
             completion_tokens=response.usage_metadata.candidates_token_count,
@@ -780,7 +779,7 @@ class GeminiProvider:
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
         return LlmGenerateStructuredResponse(
-            parsed=structured_result,
+            parsed=response.parsed,
             metadata=LlmResponseMetadata(
                 model=self.model_name,
                 provider_name=self.provider_name,
