@@ -219,9 +219,7 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
         run_autofix_coding(
             AutofixUpdateRequest(
                 run_id=run_id,
-                payload=AutofixSolutionUpdatePayload(
-                    custom_solution="we should uncomment out the unit test parts"
-                ),
+                payload=AutofixSolutionUpdatePayload(custom_solution="fix it however you see fit"),
             )
         )
 

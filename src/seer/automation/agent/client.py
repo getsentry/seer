@@ -767,11 +767,9 @@ class GeminiProvider:
                 temperature=temperature or 0.0,
                 response_mime_type="application/json",
                 max_output_tokens=max_tokens or 8192,
-                response_schema=response_format.model_json_schema(),  # type: ignore[attr-defined]
+                response_schema=response_format,
             ),
         )
-        result = response.text
-        structured_result = response_format.model_validate_json(result)  # type: ignore[attr-defined]
 
         usage = Usage(
             completion_tokens=response.usage_metadata.candidates_token_count,
@@ -781,7 +779,7 @@ class GeminiProvider:
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
         return LlmGenerateStructuredResponse(
-            parsed=structured_result,
+            parsed=response.parsed,
             metadata=LlmResponseMetadata(
                 model=self.model_name,
                 provider_name=self.provider_name,

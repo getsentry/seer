@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -102,7 +102,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     root_cause=request.root_cause_and_fix,
                     original_instruction=request.original_instruction,
                 ),
-                model=OpenAiProvider.model("gpt-4o-mini"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=IsObviousOutput,
             )
 
@@ -172,7 +172,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             formatted_response = llm_client.generate_structured(
                 messages=agent.memory,
                 prompt=SolutionPrompts.solution_formatter_msg(request.root_cause_and_fix),
-                model=OpenAiProvider.model("gpt-4o-mini"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=SolutionOutput,
                 run_name="Solution Extraction & Formatting",
                 max_tokens=4096,

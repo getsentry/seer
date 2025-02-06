@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -122,7 +122,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     custom_solution=request.solution if isinstance(request.solution, str) else None,
                     mode=request.mode,
                 ),
-                model=OpenAiProvider.model("gpt-4o-mini"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=IsObviousOutput,
             )
 
@@ -142,7 +142,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             output = llm_client.generate_structured(
                 messages=memory,
                 prompt="Given the above instruction, do you need to search the codebase for more context or have an immediate answer?",
-                model=OpenAiProvider.model("gpt-4o-mini"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=NeedToSearchCodebaseOutput,
             )
 
