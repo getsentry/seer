@@ -10,8 +10,16 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.models import SentryIssue, StaticAnalysisWarning
-from seer.automation.codegen.models import CodeRelevantWarningsOutput, CodeRelevantWarningsRequest
-from seer.automation.codegen.relevant_warnings_component import RelevantWarningsComponent
+from seer.automation.codegen.models import (
+    CodeAreIssuesFixableOutput,
+    CodeAreIssuesFixableRequest,
+    CodeRelevantWarningsOutput,
+    CodeRelevantWarningsRequest,
+)
+from seer.automation.codegen.relevant_warnings_component import (
+    AreIssuesFixableComponent,
+    RelevantWarningsComponent,
+)
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -33,8 +41,7 @@ def relevant_warnings_task(*args, request: dict[str, Any]):
 
 class RelevantWarningsStep(CodegenStep):
     """
-    This class represents the Relevant Warnings step in the codegen pipeline. It is responsible for
-    predicting which static analysis warnings in a pull request are relevant to a past Sentry issue.
+    Predicts which static analysis warnings in a pull request are relevant to a past Sentry issue.
     """
 
     name = "RelevantWarningsStep"
@@ -54,12 +61,14 @@ class RelevantWarningsStep(CodegenStep):
     ):
         return product(warnings, issue)
 
+    # TODO: is this @observe doing anything useful? This method doesn't return anything.
     @observe(name="Codegen - Relevant Warnings")
     @ai_track(description="Codegen - Relevant Warnings Step")
     def _invoke(self, **kwargs):
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
 
+        # 1. Fetch warnings and issues for the PR.
         # TODO (important): ask codecov how we'll get this data.
         # client = self.context.warnings_and_issues_client()
         # candidate_warnings, candidate_issues = client.warnings_and_issues(self.request.pr_id)
@@ -83,9 +92,26 @@ class RelevantWarningsStep(CodegenStep):
             )
             for association in associations
         ]
-        request = CodeRelevantWarningsRequest(candidate_associations=associations)
 
+        # 2. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
+        #    will fix the issue.
+        filterer = AreIssuesFixableComponent(self.context)
+        is_fixable_output: CodeAreIssuesFixableOutput = filterer.invoke(
+            CodeAreIssuesFixableRequest(candidate_issues=[issue for _, issue in associations])
+        )
+        associations_with_fixable_issues = [
+            association
+            for association, is_fixable in zip(
+                associations, is_fixable_output.is_fixable, strict=True
+            )
+            if is_fixable
+        ]
+
+        # 3. Match warnings with issues if fixing the warning will fix the issue.
         matcher = RelevantWarningsComponent(self.context)
+        request = CodeRelevantWarningsRequest(
+            candidate_associations=associations_with_fixable_issues
+        )
         relevant_warnings_output: CodeRelevantWarningsOutput = matcher.invoke(request)
 
         self.context.event_manager.mark_completed_and_extend_relevant_warning_results(

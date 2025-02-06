@@ -325,6 +325,8 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
+    elif data.request_type == "relevant-warnings":
+        return codegen_relevant_warnings_endpoint(data.data)
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 

@@ -1,22 +1,85 @@
 import logging
 
+from cachetools import LRUCache, cached
+from cachetools.keys import hashkey
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 from tqdm.autonotebook import tqdm
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider
-from seer.automation.codebase.models import SentryIssue, StaticAnalysisWarning
+from seer.automation.codebase.models import SentryIssue
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
+    CodeAreIssuesFixableOutput,
+    CodeAreIssuesFixableRequest,
     CodeRelevantWarningsOutput,
     CodeRelevantWarningsRequest,
     RelevantWarningResult,
 )
-from seer.automation.codegen.prompts import ReleventWarningsPrompts
+from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
+
+
+def _is_issue_fixable_cache_key(llm_client: LlmClient, issue: SentryIssue) -> tuple[str]:
+    return hashkey(issue.group_id)
+
+
+@cached(cache=LRUCache(maxsize=1000), key=_is_issue_fixable_cache_key)
+def is_issue_fixable(llm_client: LlmClient, issue: SentryIssue) -> bool:
+    """
+    Given an issue, predict whether it is fixable.
+    LRU-cached by the `issue.group_id` in case the same issue is analyzed across many requests.
+    """
+    completion = llm_client.generate_structured(
+        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+        system_prompt=IsFixableIssuePrompts.format_system_msg(),
+        prompt=IsFixableIssuePrompts.format_prompt(
+            formatted_error=issue.format_error(),
+        ),
+        response_format=IsFixableIssuePrompts.IsIssueFixable,
+        temperature=0.0,
+        max_tokens=2048,
+        timeout=7.0,
+    )
+    return completion.parsed.is_fixable
+
+
+class AreIssuesFixableComponent(
+    BaseComponent[CodeAreIssuesFixableRequest, CodeAreIssuesFixableOutput]
+):
+    """
+    Given a list of issues, predict whether each is fixable.
+    """
+
+    context: CodegenContext
+    _max_issues_analyzed: int = 10
+
+    @observe(name="Predict Issue Fixability")
+    @ai_track(description="Predict Issue Fixability")
+    @inject
+    def invoke(
+        self, request: CodeAreIssuesFixableRequest, llm_client: LlmClient = injected
+    ) -> CodeAreIssuesFixableOutput:
+        """
+        It's fine if there are duplicate issues in the request. That can happen if issues were
+        passed in from a list of warning-issue associations.
+        """
+        # TODO: batch / send uncached issues in one prompt and ask for a list of fixable issue group ids
+        issue_group_id_to_issue = {issue.group_id: issue for issue in request.candidate_issues}
+        issue_group_ids = list(issue_group_id_to_issue.keys())[: self._max_issues_analyzed]
+        issue_group_id_to_is_fixable = {
+            issue_group_id: is_issue_fixable(llm_client, issue_group_id_to_issue[issue_group_id])
+            for issue_group_id in tqdm(issue_group_ids, desc="Predicting issue fixability")
+        }
+        return CodeAreIssuesFixableOutput(
+            is_fixable=[
+                issue_group_id_to_is_fixable.get(issue.group_id)
+                for issue in request.candidate_issues
+            ]
+        )
 
 
 class RelevantWarningsComponent(
@@ -29,23 +92,7 @@ class RelevantWarningsComponent(
     """
 
     context: CodegenContext
-    _max_warning_issue_pairs_analyzed: int = 10
-
-    @staticmethod
-    def _format_warnings(warnings: list[StaticAnalysisWarning]) -> dict[int, str]:
-        warning_id_to_formatted_warning: dict[int, str] = {}
-        for warning in warnings:
-            if warning.id not in warning_id_to_formatted_warning:
-                warning_id_to_formatted_warning[warning.id] = warning.format_warning()
-        return warning_id_to_formatted_warning
-
-    @staticmethod
-    def _format_issues(issues: list[SentryIssue]) -> dict[int, str]:
-        issue_group_id_to_formatted_error: dict[int, str] = {}
-        for issue in issues:
-            if issue.group_id not in issue_group_id_to_formatted_error:
-                issue_group_id_to_formatted_error[issue.group_id] = issue.format_error()
-        return issue_group_id_to_formatted_error
+    _max_associations_analyzed: int = 10
 
     @observe(name="Predict Relevant Warnings")
     @ai_track(description="Predict Relevant Warnings")
@@ -53,29 +100,19 @@ class RelevantWarningsComponent(
     def invoke(
         self, request: CodeRelevantWarningsRequest, llm_client: LlmClient = injected
     ) -> CodeRelevantWarningsOutput:
-        candidate_warnings = [warning for warning, _ in request.candidate_associations]
-        candidate_issues = [issue for _, issue in request.candidate_associations]
-
-        # Format all events and warnings once since each could be part of multiple associations
-        warning_id_to_formatted_warning = self._format_warnings(candidate_warnings)
-        issue_group_id_to_formatted_error = self._format_issues(candidate_issues)
-
-        # TODO (important): filter out unfixable issues
-
         # TODO: instead of looking at every association, probably faster and cheaper to input one
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         #
         # TODO: handle LLM API errors in this loop by moving on
         relevant_warning_results: list[RelevantWarningResult] = []
-        for warning, issue in tqdm(
-            request.candidate_associations, desc="Predicting warning-issue relevance"
-        ):
+        candidate_associations = request.candidate_associations[: self._max_associations_analyzed]
+        for warning, issue in tqdm(candidate_associations, desc="Predicting relevance"):
             completion = llm_client.generate_structured(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
-                    formatted_warning=warning_id_to_formatted_warning[warning.id],
-                    formatted_error=issue_group_id_to_formatted_error[issue.group_id],
+                    formatted_warning=warning.format_warning(),
+                    formatted_error=issue.format_error(),
                 ),
                 response_format=ReleventWarningsPrompts.DoesFixingWarningFixIssue,
                 temperature=0.0,

@@ -132,8 +132,16 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
+class CodeAreIssuesFixableRequest(BaseComponentRequest):
+    candidate_issues: list[SentryIssue]
+
+
 class CodeRelevantWarningsRequest(BaseComponentRequest):
     candidate_associations: list[tuple[StaticAnalysisWarning, SentryIssue]]
+
+
+class CodeAreIssuesFixableOutput(BaseComponentOutput):
+    is_fixable: list[bool | None]  # None means the issue was not analyzed
 
 
 class CodeRelevantWarningsOutput(BaseComponentOutput):

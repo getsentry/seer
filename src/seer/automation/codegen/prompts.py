@@ -216,7 +216,11 @@ class CodingCodeReviewPrompts:
         )
 
 
-class ReleventWarningsPrompts:
+class _RelevantWarningsPromptPrefix:
+    """
+    Stores common prompt prefixes to maximize prompt cache hits (for OpenAI calls).
+    """
+
     @staticmethod
     def format_system_msg():
         # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L79-L81
@@ -228,6 +232,48 @@ class ReleventWarningsPrompts:
             """
         )
 
+    @staticmethod
+    def format_prompt_error(formatted_error: str):
+        """
+        The error makes up the bulk of the prompt b/c of the stacktrace.
+        Put it right after the system message so that the system message and error are cached
+        together.
+        """
+        return textwrap.dedent(
+            f"""\
+            Here is an issue we had in our codebase:
+
+            {formatted_error}
+            """
+        )
+
+
+class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
+
+    class IsIssueFixable(BaseModel):
+        # TODO: add reasoning?
+        # For now, leaning against it due to the number of LLM calls involved in the pipeline, and
+        # b/c this should be an easier task.
+        is_fixable: bool
+
+    @staticmethod
+    def format_prompt(formatted_error: str):
+        # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L86
+        return textwrap.dedent(
+            f"""\
+            {_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error)}
+
+            Carefully analyze the issue above. Focus on the error, the stacktrace.
+            Think about the context in which the error occurs. What are possible causes to it? How do you fix it?
+            Answer "does this issue originate from within the application or is it caused from an external service not behaving well?"
+            For example a TypeError or ValueError is likely to be caused by the application, while a 500 error is likely to be caused by an external service.
+            You should have a somewhat high bar for answering that the issue is unfixable.
+            """
+        )
+
+
+class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
+
     class DoesFixingWarningFixIssue(BaseModel):
         reasoning: str
         does_fixing_warning_fix_issue: bool
@@ -237,13 +283,11 @@ class ReleventWarningsPrompts:
     def format_prompt(formatted_warning: str, formatted_error: str):
         return textwrap.dedent(
             f"""\
+            {_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error)}
+
             Here is a warning that just surfaced in our codebase:
 
             {formatted_warning}
-
-            Here is a past issue we had in our codebase:
-
-            {formatted_error}
 
             We don't know if the warning is directly relevant to the issue.
             Would fixing this warning prevent the issue from surfacing again?

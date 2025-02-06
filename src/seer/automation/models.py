@@ -748,7 +748,7 @@ class FileChange(BaseModel):
 
 class RelevantWarningResult(BaseModel):
     warning_id: int
-    issue_group_id: int
+    issue_group_id: str
     does_fixing_warning_fix_issue: bool
     relevance_probability: float
     reasoning: str

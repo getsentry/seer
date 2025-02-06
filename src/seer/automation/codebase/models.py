@@ -62,7 +62,7 @@ class GithubPrReviewComment(TypedDict):
     in_reply_to: NotRequired[str]
 
 
-# Copied fromhttps://github.com/codecov/bug-prediction-research/blob/main/src/core/typings.py
+# Copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/typings.py
 class Location(BaseModel):
     filename: str
     start_line: str
@@ -165,6 +165,6 @@ class StaticAnalysisWarning(BaseModel):
                 start_line: {location.start_line}
                 end_line: {location.end_line}
             ----------
-            {"Rule: " + self.rule if self.rule else ""}
             """
+            + ("Rule:\n\t" + self.rule.model_dump_json(indent=2) if self.rule else "")
         )
