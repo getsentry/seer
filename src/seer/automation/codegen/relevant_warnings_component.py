@@ -30,7 +30,7 @@ def _is_issue_fixable_cache_key(llm_client: LlmClient, issue: SentryIssue) -> tu
 @cached(cache=LRUCache(maxsize=1000), key=_is_issue_fixable_cache_key)
 def is_issue_fixable(llm_client: LlmClient, issue: SentryIssue) -> bool:
     """
-    Given an issue, predict whether it is fixable.
+    Given an issue, predict whether it's fixable.
     LRU-cached by the `issue.group_id` in case the same issue is analyzed across many requests.
     """
     completion = llm_client.generate_structured(

@@ -138,9 +138,21 @@ class StaticAnalysisRule(BaseModel):
     id: int
     code: str
     tool: str
-    is_autofixable: bool | None  # refers to "Quick fix" not seer autofix
+    is_autofixable: bool | None  # refers to "Quick fix"?
     is_stable: bool | None
     category: str
+
+    def format_rule(self) -> str:
+        return textwrap.dedent(
+            f"""\
+            Static Analysis Rule:
+                Rule: {self.code}
+                Tool: {self.tool}
+                Is auto-fixable: {self.is_autofixable}
+                Is stable: {self.is_stable}
+                Category: {self.category}
+            """
+        )
 
 
 class StaticAnalysisWarning(BaseModel):
@@ -165,6 +177,6 @@ class StaticAnalysisWarning(BaseModel):
                 start_line: {location.start_line}
                 end_line: {location.end_line}
             ----------
+            {self.rule.format_rule() if self.rule else ""}
             """
-            + ("Rule:\n\t" + self.rule.model_dump_json(indent=2) if self.rule else "")
         )
