@@ -564,7 +564,8 @@ class AnthropicProvider:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
             message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
-        message_dicts[-1]["content"][0]["cache_control"] = {"type": "ephemeral"}  # type: ignore[index]
+        if message_dicts:
+            message_dicts[-1]["content"][0]["cache_control"] = {"type": "ephemeral"}  # type: ignore[index]
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
