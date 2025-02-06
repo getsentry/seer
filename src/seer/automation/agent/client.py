@@ -564,19 +564,19 @@ class AnthropicProvider:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
             message_dicts.append(cls.to_message_param(Message(role="user", content=prompt)))
-        message_dicts[-1]["content"][0]["cache_control"] = {"type": "ephemeral"}
+        message_dicts[-1]["content"][0]["cache_control"] = {"type": "ephemeral"}  # type: ignore[index]
 
         tool_dicts = (
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
         )
 
-        system_prompt = (
-            [TextBlockParam(type="text", text=system_prompt, cache_control={"type": "ephemeral"})]
+        system_prompt_block = (
+            [TextBlockParam(type="text", text=system_prompt, cache_control={"type": "ephemeral"})]  # type: ignore[typeddict-unknown-key]
             if system_prompt
             else None
         )
 
-        return message_dicts, tool_dicts, system_prompt
+        return message_dicts, tool_dicts, system_prompt_block
 
     @observe(as_type="generation", name="Anthropic Stream")
     def generate_text_stream(
