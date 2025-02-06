@@ -1,7 +1,7 @@
 import logging
 
-from cachetools import LRUCache, cached
-from cachetools.keys import hashkey
+from cachetools import LRUCache, cached  # type: ignore[import-untyped]
+from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 from tqdm.autonotebook import tqdm
@@ -14,10 +14,10 @@ from seer.automation.codegen.models import (
     CodeAreIssuesFixableRequest,
     CodeRelevantWarningsOutput,
     CodeRelevantWarningsRequest,
-    RelevantWarningResult,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.component import BaseComponent
+from seer.automation.models import RelevantWarningResult
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
