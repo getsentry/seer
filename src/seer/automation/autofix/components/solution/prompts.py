@@ -156,13 +156,13 @@ class SolutionPrompts:
             Given the root cause of the issue:
             {root_cause_str}
 
-            Rewrite this timeline exactly as is, but remove/replace/add items, so that the final timeline illustrates the ideal flow of the code once the issue is fixed.
+            Rewrite this timeline exactly as is, but remove/replace/add items, so that the final timeline illustrates the planned solution to this issue: how the code SHOULD operate step by step.
 
             For each event:
               - Title: a complete sentence describing what happened and why it matters to the root cause of the issue. (a summary of the description)
               - Code Snippet and Analysis: any extra analysis needed and a small relevant code snippet if this is an important event. All Markdown formatted.
               - Event type: logic in the code, a human interaction, or an external system like a database, API, etc.
-              - Is new event: whether this event is a new addition/edit from the way the code currently is as described in the root cause.
+              - Is new event: whether this item in the timeline is a proposed code change, part of the solution.
             As a whole, this timeline should tell the precise story of how the code should work to fix the issue. Starts at the entry point of the code, and end at the ideal outcome.
             """
         ).format(root_cause_str=SolutionPrompts.format_root_cause(root_cause))
