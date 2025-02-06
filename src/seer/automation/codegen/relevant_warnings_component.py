@@ -106,6 +106,8 @@ class RelevantWarningsComponent(
         # TODO: handle LLM API errors in this loop by moving on
         relevant_warning_results: list[RelevantWarningResult] = []
         candidate_associations = request.candidate_associations[: self._max_associations_analyzed]
+        # The time limit for OpenAI prompt caching is 5-10 minutes, so no point in sorting by
+        # issue.group_id
         for warning, issue in tqdm(candidate_associations, desc="Predicting relevance"):
             completion = llm_client.generate_structured(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
