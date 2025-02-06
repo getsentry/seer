@@ -744,3 +744,11 @@ class FileChange(BaseModel):
             return None
 
         return file_contents.replace(self.reference_snippet, "")
+
+
+class RelevantWarningResult(BaseModel):
+    warning_id: int
+    issue_group_id: int
+    does_fixing_warning_fix_issue: bool
+    relevance_probability: float
+    reasoning: str

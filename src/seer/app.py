@@ -51,11 +51,21 @@ from seer.automation.codegen.models import (
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
+    CodegenRelevantWarningsResponse,
+    CodegenRelevantWarningsStateRequest,
+    CodegenRelevantWarningsStateResponse,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
+    CodeRelevantWarningsOutput,
 )
-from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
+from seer.automation.codegen.tasks import (
+    codegen_pr_review,
+    codegen_relevant_warnings,
+    codegen_unittest,
+    get_relevant_warnings_state,
+    get_unittest_state,
+)
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
@@ -257,6 +267,35 @@ def codegen_unit_tests_state_endpoint(
         updated_at=state.updated_at,
         completed_at=state.completed_at,
     )
+
+
+@json_api(blueprint, "/v1/automation/codegen/relevant-warnings")
+def codegen_relevant_warnings_endpoint(data: CodegenBaseRequest) -> CodegenRelevantWarningsResponse:
+    return codegen_relevant_warnings(data)
+
+
+@json_api(blueprint, "/v1/automation/codegen/relevant-warnings/state")
+def codegen_relevant_warnings_state_endpoint(
+    data: CodegenRelevantWarningsStateRequest,
+) -> CodegenRelevantWarningsStateResponse:
+    state = get_relevant_warnings_state(data)
+
+    return CodegenRelevantWarningsStateResponse(
+        run_id=state.run_id,
+        status=state.status,
+        relevant_warning_results=state.relevant_warning_results,
+        triggered_at=state.last_triggered_at,
+        updated_at=state.updated_at,
+        completed_at=state.completed_at,
+    )
+
+
+@json_api(blueprint, "/v1/automation/codegen/relevant-warnings/results")
+def codegen_relevant_warnings_results_endpoint(
+    data: CodegenRelevantWarningsStateRequest,
+) -> CodeRelevantWarningsOutput:
+    state = get_relevant_warnings_state(data)
+    return CodeRelevantWarningsOutput(relevant_warning_results=state.relevant_warning_results)
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")

@@ -1,5 +1,7 @@
 import textwrap
 
+from pydantic import BaseModel
+
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
 
 
@@ -211,4 +213,48 @@ class CodingCodeReviewPrompts:
             """
         ).format(
             diff_str=diff_str,
+        )
+
+
+class ReleventWarningsPrompts:
+    @staticmethod
+    def format_system_msg():
+        # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L79-L81
+        return textwrap.dedent(
+            """\
+            You are a senior developer with extensive knowledge about code and static analysis warnings.
+            You always consider carefully the context of the code and the error before making a decision.
+            You are tasked with analyzing a single issue and providing a detailed explanation of the issue and the context in which it occurs.
+            """
+        )
+
+    class DoesFixingWarningFixIssue(BaseModel):
+        reasoning: str
+        does_fixing_warning_fix_issue: bool
+        relevance_probability: float
+
+    @staticmethod
+    def format_prompt(formatted_warning: str, formatted_error: str):
+        return textwrap.dedent(
+            f"""\
+            Here is a warning that just surfaced in our codebase:
+
+            {formatted_warning}
+
+            Here is a past issue we had in our codebase:
+
+            {formatted_error}
+
+            We don't know if the warning is directly relevant to the issue.
+            Would fixing this warning prevent the issue from surfacing again?
+            We're not simply deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
+            We're not looking for warnings which vaguely relate to the issue. The relationship should be somewhat direct.
+            Make sure to consider the locations of the warning and issue in the codebase—if the warning is in a different file than the issue, it may not be relevant.
+
+            Before giving your final answer, think about the context in which the error occurs. What are its possible causes? How would it be fixed? Your reasoning should be at most 100 words.
+            Next think about how the warning is related or unrelated to the issue.
+            And then give your final answer.
+
+            Also, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue. This score, the `relevance_probability`, can be very granular, e.g., 0.32.
+            """
         )
