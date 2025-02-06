@@ -301,7 +301,7 @@ def test_anthropic_prep_message_and_tools():
         assert "description" in tool_dicts[0]
         assert "input_schema" in tool_dicts[0]
 
-    assert returned_system_prompt == system_prompt
+    assert returned_system_prompt[0].text == system_prompt
 
 
 @pytest.mark.vcr()
