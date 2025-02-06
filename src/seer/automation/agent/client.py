@@ -437,7 +437,7 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ):
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+        message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -447,7 +447,7 @@ class AnthropicProvider:
         anthropic_client = self.get_client()
 
         completion = anthropic_client.messages.create(
-            system=system_prompt or NOT_GIVEN,
+            system=system_prompt_block or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
@@ -590,7 +590,7 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
+        message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -600,7 +600,7 @@ class AnthropicProvider:
         anthropic_client = self.get_client()
 
         stream = anthropic_client.messages.create(
-            system=system_prompt or NOT_GIVEN,
+            system=system_prompt_block or NOT_GIVEN,
             model=self.model_name,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
