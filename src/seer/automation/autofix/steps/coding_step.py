@@ -62,19 +62,22 @@ class AutofixCodingStep(AutofixPipelineStep):
         self.logger.info("Executing Autofix - Coding Step")
 
         self.context.event_manager.send_coding_start()
-        if not self.request.initial_memory:
-            self.context.event_manager.add_log("Coding up a fix for this issue...")
-        else:
-            self.context.event_manager.add_log("Continuing to code...")
 
         state = self.context.state.get()
         root_cause, root_cause_extra_instruction = state.get_selected_root_cause()
         if not root_cause:
             raise ValueError("Root cause analysis must be performed before coding")
 
-        solution = state.get_selected_solution()
+        solution, coding_mode = state.get_selected_solution()
         if not solution:
             raise ValueError("Solution must be found before coding")
+
+        if not self.request.initial_memory:
+            self.context.event_manager.add_log(
+                f"Coding up a {'fix' if coding_mode == 'fix' else 'test' if coding_mode == 'test' else 'fix and a test'} for this issue..."
+            )
+        else:
+            self.context.event_manager.add_log("Continuing to code...")
 
         event_details = EventDetails.from_event(state.request.issue.events[0])
         self.context.process_event_paths(event_details)
@@ -93,6 +96,7 @@ class AutofixCodingStep(AutofixPipelineStep):
                 summary=summary,
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
+                mode=coding_mode,
             )
         )
 
