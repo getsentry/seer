@@ -19,7 +19,7 @@ class TimelineEvent(BaseModel):
     timeline_item_type: (
         Literal["internal_code", "external_system", "human_action"] | str
     )  # TODO put back to literal only when not breaking anything
-    relevant_code_file: RelevantCodeFile | None
+    relevant_code_file: RelevantCodeFile
     is_most_important_event: bool
 
 
@@ -42,7 +42,7 @@ class RootCauseAnalysisItem(BaseModel):
 
 
 class RootCauseAnalysisItemPrompt(BaseModel):
-    root_cause_reproduction: list[TimelineEvent] | None = None
+    root_cause_reproduction: list[TimelineEvent]
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):
