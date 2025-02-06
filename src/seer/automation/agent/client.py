@@ -571,7 +571,7 @@ class AnthropicProvider:
         )
 
         system_prompt_block = (
-            [TextBlockParam(type="text", text=system_prompt, cache_control={"type": "ephemeral"})]  # type: ignore[typeddict-unknown-key]
+            [TextBlockParam(type="text", text=system_prompt, cache_control={"type": "ephemeral"})]
             if system_prompt
             else None
         )
