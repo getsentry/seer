@@ -250,6 +250,7 @@ def run_autofix_coding(
         AutofixCodingStep.get_signature(
             AutofixCodingStepRequest(
                 run_id=cur.run_id,
+                mode=request.payload.mode,
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
         ).apply_async()

@@ -1,5 +1,5 @@
 import textwrap
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
@@ -25,6 +25,7 @@ class CodingRequest(BaseComponentRequest):
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
     profile: Profile | None = None
+    mode: Literal["all", "fix", "test"] = "fix"
 
 
 class SnippetXml(PromptXmlModel, tag="snippet"):

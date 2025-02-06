@@ -219,6 +219,7 @@ class SolutionStep(BaseStep):
     solution: list[SolutionTimelineEvent] = []
     custom_solution: str | None = None
     solution_selected: bool = False
+    selected_mode: Literal["all", "fix", "test"] | None = None
 
 
 class ChangesStep(BaseStep):
@@ -382,6 +383,7 @@ class AutofixSolutionUpdatePayload(BaseModel):
     type: Literal[AutofixUpdateType.SELECT_SOLUTION] = AutofixUpdateType.SELECT_SOLUTION
     custom_solution: str | None = None
     solution_selected: bool = False
+    mode: Literal["all", "fix", "test"] = "fix"
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
@@ -529,15 +531,17 @@ class AutofixContinuation(AutofixGroupState):
                     return root_cause_step.selection.custom_root_cause, None
         return None, None
 
-    def get_selected_solution(self) -> list[SolutionTimelineEvent] | str | None:
+    def get_selected_solution(
+        self,
+    ) -> tuple[list[SolutionTimelineEvent] | str | None, Literal["all", "fix", "test"] | None]:
         solution_step = self.find_step(key="solution")
         if solution_step and isinstance(solution_step, SolutionStep):
             if solution_step.solution_selected:
                 if solution_step.custom_solution:
-                    return solution_step.custom_solution
+                    return solution_step.custom_solution, solution_step.selected_mode
                 else:
-                    return solution_step.solution
-        return None
+                    return solution_step.solution, solution_step.selected_mode
+        return None, None
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()
