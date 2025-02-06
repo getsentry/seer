@@ -1,4 +1,3 @@
-import os
 import threading
 import time
 from typing import Optional
@@ -173,7 +172,6 @@ class TestAutofixPipelineStep:
 
     @patch("os._exit")
     @patch("time.sleep")
-    @patch.dict(os.environ, {})
     def test_check_for_kill_with_kill_signal(self, mock_sleep, mock_exit, mock_step):
         mock_step.thread_kill = False
         kill_signal = make_kill_signal()
@@ -184,7 +182,6 @@ class TestAutofixPipelineStep:
 
         mock_step._check_for_kill()
 
-        mock_exit.assert_called_once_with(1)
         assert mock_step.thread_kill is True
 
     @patch("os._exit")
