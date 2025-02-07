@@ -38,6 +38,7 @@
         "unidiff",
         "tree_sitter_languages",
         "tree_sitter",
+        "google",
         "google.cloud.*",
         "google.genai.*",
         "langfuse.*",
