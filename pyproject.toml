@@ -39,6 +39,7 @@
         "tree_sitter_languages",
         "tree_sitter",
         "google.cloud.*",
+        "google.genai.*",
         "langfuse.*",
         "langfuse",
         "sklearn.dummy",
