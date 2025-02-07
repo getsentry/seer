@@ -15,17 +15,15 @@ from anthropic.types import (
 )
 from google import genai  # type: ignore[attr-defined]
 from google.api_core.exceptions import ResourceExhausted
-from google.genai.types import (  # type: ignore[import-untyped]
+from google.genai.types import (
     Content,
-    FunctionCall,
     FunctionDeclaration,
-    FunctionResponse,
     GenerateContentConfig,
     GenerateContentResponse,
     GoogleSearch,
     Part,
-    Tool,
 )
+from google.genai.types import Tool as GeminiTool
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
@@ -722,7 +720,7 @@ class GeminiProvider:
     @observe(as_type="generation", name="Gemini Generation with Grounding")
     def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
         client = self.get_client()
-        google_search_tool = Tool(google_search=GoogleSearch())
+        google_search_tool = GeminiTool(google_search=GoogleSearch())
 
         response = client.models.generate_content(
             model=self.model_name,
@@ -734,8 +732,14 @@ class GeminiProvider:
             ),
         )
         answer = ""
-        for each in response.candidates[0].content.parts:
-            answer += each.text
+        if (
+            response.candidates
+            and response.candidates[0].content
+            and response.candidates[0].content.parts
+        ):
+            for each in response.candidates[0].content.parts:
+                if each.text:
+                    answer += each.text
         return answer
 
     @staticmethod
@@ -923,54 +927,74 @@ class GeminiProvider:
         prompt: str | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
-    ) -> tuple[list[Content], list[Tool] | None, str | None]:
-        contents = [cls.to_content(message) for message in messages] if messages else []
+    ) -> tuple[list[Content], list[GeminiTool] | None, str | None]:
+        contents: list[Content] = []
+
+        if messages:
+            # Group consecutive tool messages together
+            grouped_messages: list[list[Message]] = []
+            current_group: list[Message] = []
+
+            for message in messages:
+                if message.role == "tool":
+                    current_group.append(message)
+                else:
+                    if current_group:
+                        grouped_messages.append(current_group)
+                        current_group = []
+                    grouped_messages.append([message])
+
+            if current_group:
+                grouped_messages.append(current_group)
+
+            # Convert each group into a Content object
+            for group in grouped_messages:
+                if len(group) == 1 and group[0].role != "tool":
+                    contents.append(cls.to_content(group[0]))
+                elif group[0].role == "tool":
+                    # Combine multiple tool messages into a single Content
+                    parts = [
+                        Part.from_function_response(
+                            name=msg.tool_call_function or "",
+                            response={"response": msg.content},
+                        )
+                        for msg in group
+                    ]
+                    contents.append(Content(role="user", parts=parts))
+
         if prompt:
-            contents.append(cls.to_content(Message(role="user", content=prompt)))
+            contents.append(
+                Content(
+                    role="user",
+                    parts=[Part(text=prompt)],
+                )
+            )
 
-        tools = [cls.to_tool(tool) for tool in tools] if tools else []
+        processed_tools = [cls.to_tool(tool) for tool in tools] if tools else []
 
-        return contents, tools, system_prompt
+        return contents, processed_tools, system_prompt
 
     @staticmethod
     def to_content(message: Message) -> Content:
-        if message.role == "tool":
-            return Content(
-                role="user",
-                parts=[
-                    Part(
-                        function_response=FunctionResponse(
-                            name=message.tool_calls[0].function if message.tool_calls else "",
-                            response=(
-                                json.loads(message.tool_calls[0].args) if message.tool_calls else {}
-                            ),
-                        ),
-                    )
-                ],
-            )
-        elif message.role == "tool_use":
+        if message.role == "tool_use":
             if not message.tool_calls:
                 return Content(
                     role="model",
                     parts=[Part(text=message.content or "")],
                 )
-            tool_call = message.tool_calls[0]  # Assuming only one tool call per message
+
             parts = []
             if message.content:
                 parts.append(Part(text=message.content))
-            if tool_call:
+            for tool_call in message.tool_calls:
                 parts.append(
-                    Part(
-                        function_call=FunctionCall(
-                            name=tool_call.function,
-                            args=json.loads(tool_call.args),
-                        ),
+                    Part.from_function_call(
+                        name=tool_call.function,
+                        args=json.loads(tool_call.args),
                     )
                 )
-            return Content(
-                role="model",
-                parts=parts,
-            )
+            return Content(role="model", parts=parts)
+
         elif message.role == "assistant":
             return Content(
                 role="model",
@@ -983,8 +1007,8 @@ class GeminiProvider:
             )
 
     @staticmethod
-    def to_tool(tool: FunctionTool) -> Tool:
-        return Tool(
+    def to_tool(tool: FunctionTool) -> GeminiTool:
+        return GeminiTool(
             function_declarations=[
                 FunctionDeclaration(
                     name=tool.name,
@@ -1054,7 +1078,7 @@ class GeminiProvider:
                 message.tool_calls.append(
                     ToolCall(
                         id=part.function_call.id,
-                        function=part.function_call.name,
+                        function=part.function_call.name or "",
                         args=json.dumps(part.function_call.args),
                     )
                 )

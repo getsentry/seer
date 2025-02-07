@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file=requirements.txt --strip-extras requirements-constraints.txt
 #
-aiohappyeyeballs==2.4.4
+aiohappyeyeballs==2.4.6
     # via aiohttp
 aiohttp==3.11.12
     # via
@@ -220,7 +220,7 @@ google-crc32c==1.6.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==0.8.0
+google-genai==1.0.0
     # via -r requirements-constraints.txt
 google-resumable-media==2.7.2
     # via
@@ -678,7 +678,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.59
+sentry-protos==0.1.60
     # via -r requirements-constraints.txt
 sentry-sdk==2.18.0
     # via -r requirements-constraints.txt
