@@ -39,7 +39,7 @@ class CommentThreadPrompts:
             prefix = "User said: " if message.role == "user" else "You said: "
             msg += f"{prefix}{message.content}\n"
 
-        msg += "\n Now you respond very briefly:"
+        msg += "\n Now you respond briefly:"
         return textwrap.dedent(msg)
 
 
