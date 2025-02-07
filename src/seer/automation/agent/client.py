@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+import time
 from typing import Any, ClassVar, Iterable, Iterator, Type, Union, cast
 
 import anthropic
@@ -397,10 +398,19 @@ class AnthropicProvider:
     @staticmethod
     @inject
     def get_client(app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
+        # Configure retries with exponential backoff and jitter
+        retry_config = anthropic.RetryConfig(
+            max_retries=8,
+            initial_delay=1.0,
+            max_delay=30.0,
+            exponential_base=2,
+            jitter=True
+        )
+        
         return anthropic.AnthropicVertex(
             project_id=app_config.GOOGLE_CLOUD_PROJECT,
             region="europe-west1" if app_config.USE_EU_REGION else "us-east5",
-            max_retries=8,
+            retry_config=retry_config,
         )
 
     @classmethod
@@ -420,9 +430,20 @@ class AnthropicProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        return isinstance(exception, anthropic.AnthropicError) and (
-            "overloaded_error" in str(exception)
-        )
+        if not isinstance(exception, anthropic.AnthropicError):
+            return False
+            
+        error_str = str(exception).lower()
+        retryable_conditions = [
+            "overloaded_error",
+            "internal server error", 
+            "status_code=500",
+            "connection reset",
+            "timeout",
+            "service unavailable"
+        ]
+        
+        return any(condition in error_str for condition in retryable_conditions)
 
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
@@ -437,6 +458,9 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ):
+        DEFAULT_TIMEOUT = 120.0  # 2 minute default timeout
+        start_time = time.time()
+        num_retries = 0
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
@@ -445,18 +469,47 @@ class AnthropicProvider:
         )
 
         anthropic_client = self.get_client()
+        
+        def log_attempt_metrics():
+            duration = time.time() - start_time
+            logger.info(
+                "Anthropic API metrics",
+                extra={
+                    "duration_ms": int(duration * 1000),
+                    "retries": num_retries,
+                    "model": self.model_name,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                }
+            )
 
-        completion = anthropic_client.messages.create(
-            system=system_prompt_block or NOT_GIVEN,
-            model=self.model_name,
-            tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
-            messages=cast(Iterable[MessageParam], message_dicts),
-            max_tokens=max_tokens or 8192,
-            temperature=temperature or NOT_GIVEN,
-            timeout=timeout or NOT_GIVEN,
-        )
-
-        message = self._format_claude_response_to_message(completion)
+        try:
+            completion = anthropic_client.messages.create(
+                system=system_prompt_block or NOT_GIVEN,
+                model=self.model_name,
+                tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
+                messages=cast(Iterable[MessageParam], message_dicts),
+                max_tokens=max_tokens or 8192,
+                temperature=temperature or NOT_GIVEN,
+                timeout=timeout or DEFAULT_TIMEOUT,
+            )
+            log_attempt_metrics()
+            message = self._format_claude_response_to_message(completion)
+        except anthropic.AnthropicError as e:
+            num_retries += 1
+            logger.error(
+                "Anthropic API error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "retryable": self.is_completion_exception_retryable(e),
+                    "model": self.model_name,
+                    "num_retries": num_retries,
+                }
+            )
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during text generation: {str(e)}")
+            raise
 
         usage = Usage(
             completion_tokens=completion.usage.output_tokens,
