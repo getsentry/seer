@@ -13,7 +13,7 @@ from anthropic.types import (
     ToolResultBlockParam,
     ToolUseBlockParam,
 )
-from google import genai
+from google import genai  # type: ignore[attr-defined]
 from google.api_core.exceptions import ResourceExhausted
 from google.genai.types import (
     Content,
