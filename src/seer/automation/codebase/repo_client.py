@@ -311,6 +311,27 @@ class RepoClient:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
+
+        # Remove leading slash if present for consistency
+        path = path.lstrip("/")
+
+        # Get valid paths for this SHA
+        valid_paths = self.get_valid_file_paths(sha)
+
+        # Check for exact match first
+        if path not in valid_paths:
+            # Look for partial matches if no exact match
+            partial_matches = [valid_path for valid_path in valid_paths if path in valid_path]
+            if partial_matches:
+                # Sort by length to get closest match (shortest containing path)
+                closest_match = sorted(partial_matches, key=len)[0]
+                logger.warning(
+                    f"Path '{path}' not found exactly, using closest match: '{closest_match}'"
+                )
+                path = closest_match
+            else:
+                raise ValueError(f"No matching file found for path: {path}")
+
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
@@ -321,9 +342,9 @@ class RepoClient:
             return contents.decoded_content.decode(detected_encoding), detected_encoding
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
-
             return None, "utf-8"
 
+    @functools.lru_cache(maxsize=8)
     def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
         if sha is None:
             sha = self.base_commit_sha
