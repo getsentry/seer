@@ -38,9 +38,7 @@
         "unidiff",
         "tree_sitter_languages",
         "tree_sitter",
-        "google",
         "google.cloud.*",
-        "google.genai.*",
         "langfuse.*",
         "langfuse",
         "sklearn.dummy",
@@ -49,3 +47,8 @@
         "urllib.*",
     ]
     ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+    module = ["google", "google.genai"]
+    ignore_missing_imports = true
+    disable_error_code = ["attr-defined"]
