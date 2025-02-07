@@ -59,7 +59,7 @@ class CommentThreadComponent(BaseComponent[CommentThreadRequest, CommentThreadOu
             ),
             messages=request.run_memory,
             system_prompt=CommentThreadPrompts.format_system_msg(),
-            model=GeminiProvider.model("gemini-1.5-flash"),
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=CommentThreadOutput,
         )
         data = output.parsed

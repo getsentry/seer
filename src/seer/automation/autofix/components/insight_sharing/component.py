@@ -17,10 +17,6 @@ class InsightSharingPrompts:
         past_insights: list[str],
         step_type: str,
     ):
-        no_insight_instruction = (
-            "If there is nothing to add, just return <NO_INSIGHT/>" if past_insights else ""
-        )
-
         if step_type == "root_cause_analysis_processing":
             template = """\
             We have a new set of notes and thoughts:
@@ -69,7 +65,7 @@ class InsightSharingPrompts:
         return textwrap.dedent(template).format(
             latest_thought=latest_thought,
             insights=" ".join(past_insights) if past_insights else "[paragraph is empty]",
-            no_insight_instruction=no_insight_instruction,
+            no_insight_instruction="If there is nothing to add, just return <NO_INSIGHT/>",
         )
 
     @staticmethod
