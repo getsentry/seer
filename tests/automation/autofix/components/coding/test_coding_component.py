@@ -256,7 +256,7 @@ class TestCodingComponent:
         component._is_obvious = MagicMock(return_value=False)
 
         # Simulate file content for different scenarios
-        def mock_get_file_content(file_path):
+        def mock_get_file_content(file_path, autocorrect=False):
             if file_path in ["missing_file1.py", "missing_file2.py"]:
                 return None, "utf-8"
             elif file_path == "existing_file.py":
