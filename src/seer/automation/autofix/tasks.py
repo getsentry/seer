@@ -301,8 +301,14 @@ def restart_step_with_user_response(
     cur_state = state.get()
     if memory:
         tool_call_id = memory[-1].tool_call_id
+        tool_call_function = memory[-1].tool_call_function
         if tool_call_id:
-            user_response = Message(role="tool", content=text, tool_call_id=tool_call_id)
+            user_response = Message(
+                role="tool",
+                content=text,
+                tool_call_id=tool_call_id,
+                tool_call_function=tool_call_function,
+            )
             if memory[-1].role == "tool":
                 memory[-1] = user_response
             else:
