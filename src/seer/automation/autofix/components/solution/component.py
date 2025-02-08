@@ -44,13 +44,19 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             )
 
             for i, file in enumerate(relevant_files):
-                file_content = (
-                    self.context.get_file_contents(
-                        path=file["file_path"], repo_name=file["repo_name"]
+                file_content = None
+                try:
+                    file_content = (
+                        self.context.get_file_contents(
+                            path=file["file_path"], repo_name=file["repo_name"]
+                        )
+                        if file["file_path"]
+                        else None
                     )
-                    if file["file_path"]
-                    else None
-                )
+                except Exception as e:
+                    logger.exception(f"Error getting file contents in memory prefill: {e}")
+                    file_content = None
+
                 if file_content:
                     agent_message = Message(
                         role="tool_use",

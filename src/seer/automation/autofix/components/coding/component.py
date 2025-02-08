@@ -208,7 +208,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             file_exist_errors = []
             for task in coding_output.tasks:
                 repo_client = self.context.get_repo_client(task.repo_name)
-                file_content, _ = repo_client.get_file_content(task.file_path)
+                file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
                 if task.type == "file_change" and not file_content:
                     missing_files_errors.append(task.file_path)
                 elif task.type == "file_delete" and not file_content:
@@ -239,7 +239,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         for task in coding_output.tasks:
             repo_client = self.context.get_repo_client(task.repo_name)
             if task.type == "file_change":
-                file_content, _ = repo_client.get_file_content(task.file_path)
+                file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
 
                 if not file_content:
                     logger.warning(f"Failed to get content for {task.file_path}")
