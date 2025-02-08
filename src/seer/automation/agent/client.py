@@ -1179,10 +1179,10 @@ class LlmClient:
                 )
 
             messages = LlmClient.clean_message_content(messages if messages else [])
-            messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+                messages = LlmClient.clean_tool_call_assistant_messages(messages)
                 return model.generate_structured(
                     max_tokens=max_tokens,
                     messages=messages,

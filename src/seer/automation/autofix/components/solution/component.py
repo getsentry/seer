@@ -75,6 +75,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         role="tool",
                         content=file_content,
                         tool_call_id=str(i),
+                        tool_call_function="expand_document",
                     )
                     memory.append(agent_message)
                     memory.append(user_message)
