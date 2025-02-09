@@ -337,7 +337,7 @@ def receive_user_message(request: AutofixUpdateRequest):
         is_solution_step = step_to_restart.key == "solution_processing"
         is_root_cause_step = step_to_restart.key == "root_cause_analysis_processing"
         memory = (
-            context.get_memory("plan_and_code")
+            context.get_memory("code")
             if is_coding_step
             else (
                 context.get_memory("root_cause_analysis")
@@ -461,7 +461,7 @@ def restart_from_point_with_feedback(
     is_solution_step = step_to_restart.key == "solution_processing"
     is_root_cause_step = step_to_restart.key == "root_cause_analysis_processing"
     memory = (
-        context.get_memory("plan_and_code")
+        context.get_memory("code")
         if is_coding_step
         else (
             context.get_memory("root_cause_analysis")
