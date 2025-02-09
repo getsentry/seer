@@ -108,6 +108,7 @@ class OpenAiProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        predicted_output: str | None = None,
     ):
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
@@ -129,6 +130,14 @@ class OpenAiProvider:
             ),
             max_tokens=max_tokens or openai.NotGiven(),
             timeout=timeout or openai.NotGiven(),
+            prediction=(
+                {
+                    "type": "content",
+                    "content": predicted_output,
+                }
+                if predicted_output
+                else openai.NotGiven()
+            ),
         )
 
         openai_message = completion.choices[0].message
@@ -1107,6 +1116,7 @@ class LlmClient:
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
+        predicted_output: str | None = None,
     ) -> LlmGenerateTextResponse:
         try:
             if run_name:
@@ -1129,6 +1139,7 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     tools=tools,
                     timeout=timeout,
+                    predicted_output=predicted_output,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
