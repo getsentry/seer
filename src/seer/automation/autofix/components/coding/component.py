@@ -5,6 +5,8 @@ import textwrap
 
 import sentry_sdk
 from langfuse.decorators import observe
+from openai import BadRequestError as OpenAiBadRequestError
+from openai import LengthFinishReasonError as OpenAiLengthFinishReasonError
 from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
@@ -103,22 +105,22 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 model=OpenAiProvider.model("gpt-4o-mini"),
                 predicted_output=predicted_output,
             )
-        except Exception as e:
-            if e.code == 400:  # too much content, fallback to model with bigger input/output limit
-                sentry_sdk.capture_message(
-                    f"Failed to apply code suggestion to file with gpt-4o-mini, falling back to o3-mini. Error message: {str(e)}"
+        except (
+            OpenAiBadRequestError,
+            OpenAiLengthFinishReasonError,
+        ) as e:  # too much content, fallback to model with bigger input/output limit
+            sentry_sdk.capture_message(
+                f"Failed to apply code suggestion to file with gpt-4o-mini, falling back to o3-mini. Error message: {str(e)}"
+            )
+            try:
+                output = llm_client.generate_text(
+                    system_prompt=system_prompt,
+                    messages=[Message(role="user", content=prompt)],
+                    model=OpenAiProvider.model("o3-mini"),
                 )
-                try:
-                    output = llm_client.generate_text(
-                        system_prompt=system_prompt,
-                        messages=[Message(role="user", content=prompt)],
-                        model=OpenAiProvider.model("o3-mini"),
-                    )
-                except Exception as e2:
-                    sentry_sdk.capture_exception(e2)
-                    return None
-            else:
-                raise e
+            except Exception as e2:
+                sentry_sdk.capture_exception(e2)
+                return None
 
         text = output.message.content
         updated_content = extract_text_inside_tags(text, "updated_code")
