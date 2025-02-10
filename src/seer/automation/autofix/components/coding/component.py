@@ -177,12 +177,22 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             custom_solution = request.solution if isinstance(request.solution, str) else None
 
+            if not request.initial_memory:
+                agent.memory.insert(
+                    0,
+                    Message(
+                        role="user",
+                        content=CodingPrompts.format_fix_msg(
+                            has_tools=not is_obvious,
+                            custom_solution=custom_solution,
+                            mode=request.mode,
+                        ),
+                    ),
+                )
+
             response = agent.run(
                 RunConfig(
                     system_prompt=CodingPrompts.format_system_msg(has_tools=not is_obvious),
-                    prompt=CodingPrompts.format_fix_msg(
-                        has_tools=not is_obvious, custom_solution=custom_solution, mode=request.mode
-                    ),
                     model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="code",
                     run_name="Code",
