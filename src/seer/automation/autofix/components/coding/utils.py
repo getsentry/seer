@@ -16,11 +16,11 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
     Extract chunks from a diff using the hunk headers (@@ .. @@) as delimiters.
 
     Args:
-    diff_text (str): The full diff text.
+        diff_text (str): The full diff text.
 
     Returns:
-    List[DiffChunk]: A list of DiffChunk objects, each containing the hunk header,
-                     the original chunk before the diff is applied, and the new chunk after the diff is applied.
+        List[FuzzyDiffChunk]: A list of DiffChunk objects, each containing the hunk header,
+                               the original chunk before the diff is applied, and the new chunk after the diff is applied.
     """
     chunks = []
     current_original: list[str] = []
@@ -34,7 +34,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
     while lines and not lines[0].startswith("@@"):
         lines = lines[1:]
 
-    for line in lines:
+    for idx, line in enumerate(lines):
         if line.startswith("@@"):
             if current_original or current_new:
                 chunks.append(
@@ -47,8 +47,19 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
                 )
                 current_original = []
                 current_new = []
+                current_diff_contents = []  # reset the diff contents for the new chunk
             current_header = line
-        elif line.startswith("-"):
+            current_diff_contents.append(line)
+            continue
+
+        # Skip empty lines that are immediately before or after a header as they are not part of the chunk
+        if line.strip() == "":
+            if (idx > 0 and lines[idx - 1].startswith("@@")) or (
+                idx < len(lines) - 1 and lines[idx + 1].startswith("@@")
+            ):
+                continue
+
+        if line.startswith("-"):
             current_original.append(line[1:])
         elif line.startswith("+"):
             current_new.append(line[1:])

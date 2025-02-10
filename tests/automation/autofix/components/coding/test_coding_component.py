@@ -4,27 +4,14 @@ import pytest
 from johen import generate
 
 from seer.automation.agent.client import LlmClient
-from seer.automation.agent.models import (
-    LlmGenerateTextResponse,
-    LlmProviderType,
-    LlmResponseMetadata,
-    Message,
-    Usage,
-)
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.component import CodingComponent
-from seer.automation.autofix.components.coding.models import (
-    CodingRequest,
-    FileMissingObj,
-    FuzzyDiffChunk,
-    PlanTaskPromptXml,
-)
+from seer.automation.autofix.components.coding.models import CodeChangeXml, CodingRequest
 from seer.automation.autofix.components.root_cause.models import (
     RelevantCodeFile,
     RootCauseAnalysisItem,
 )
-from seer.automation.models import EventDetails, FileChange
-from seer.dependency_injection import Module
+from seer.automation.models import EventDetails
 
 
 class TestCodingComponent:
@@ -41,202 +28,13 @@ class TestCodingComponent:
     def mock_llm_client(self):
         return MagicMock(spec=LlmClient)
 
-    def test_handle_missing_file_changes_success(self, component, mock_llm_client):
-        missing_changes = {
-            "file1.py": FileMissingObj(
-                file_path="file1.py",
-                file_content="original content",
-                diff_chunks=[
-                    FuzzyDiffChunk(
-                        header="chunk1",
-                        original_chunk="original content",
-                        new_chunk="new content",
-                        diff_content="diff content",
-                    )
-                ],
-                task=PlanTaskPromptXml(
-                    description="description",
-                    commit_message="commit message",
-                    file_path="file1.py",
-                    repo_name="test_repo",
-                    type="file_change",
-                    diff="old diff",
-                ),
-            )
-        }
-
-        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
-            message=Message(content="new diff"),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.ANTHROPIC,
-                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
-            ),
-        )
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.repo_external_id = "test_repo_id"
-        component.context.get_repo_client.return_value = mock_repo_client
-
-        with patch(
-            "seer.automation.autofix.components.coding.component.task_to_file_change"
-        ) as mock_task_to_file_change:
-            mock_task_to_file_change.return_value = (
-                [
-                    FileChange(
-                        path="file1.py",
-                        change_type="edit",
-                        reference_snippet="old",
-                        new_snippet="new",
-                    )
-                ],
-                [],
-            )
-
-            module = Module()
-            module.constant(LlmClient, mock_llm_client)
-            with module:
-                component._handle_missing_file_changes(missing_changes)
-
-        component.context.state.update.assert_called()
-        mock_llm_client.generate_text.assert_called_once()
-        mock_task_to_file_change.assert_called_once()
-        component._append_file_change.assert_called_once_with(
-            "test_repo_id",
-            FileChange(
-                path="file1.py", change_type="edit", reference_snippet="old", new_snippet="new"
-            ),
-        )
-
-    def test_handle_missing_file_changes_no_content(self, component, mock_llm_client):
-        missing_changes = {
-            "file1.py": FileMissingObj(
-                file_path="file1.py",
-                file_content="original content",
-                diff_chunks=[
-                    FuzzyDiffChunk(
-                        header="chunk1",
-                        original_chunk="original content",
-                        new_chunk="new content",
-                        diff_content="diff content",
-                    )
-                ],
-                task=PlanTaskPromptXml(
-                    description="description",
-                    commit_message="commit message",
-                    file_path="file1.py",
-                    repo_name="test_repo",
-                    type="file_change",
-                    diff="old diff",
-                ),
-            )
-        }
-
-        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
-            message=Message(content=None),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.ANTHROPIC,
-                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
-            ),
-        )
-
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-        with module:
-            component._handle_missing_file_changes(missing_changes)
-
-        component.context.state.update.assert_called()
-        mock_llm_client.generate_text.assert_called_once()
-        component._append_file_change.assert_not_called()
-
-    def test_handle_missing_file_changes_with_remaining_missing_changes(
-        self, component, mock_llm_client
-    ):
-        missing_changes = {
-            "file1.py": FileMissingObj(
-                file_path="file1.py",
-                file_content="original content",
-                diff_chunks=[
-                    FuzzyDiffChunk(
-                        header="chunk1",
-                        original_chunk="original content",
-                        new_chunk="new content",
-                        diff_content="diff content",
-                    )
-                ],
-                task=PlanTaskPromptXml(
-                    description="description",
-                    commit_message="commit message",
-                    file_path="file1.py",
-                    repo_name="test_repo",
-                    type="file_change",
-                    diff="old diff",
-                ),
-            )
-        }
-
-        mock_llm_client.generate_text.return_value = LlmGenerateTextResponse(
-            message=Message(content="<corrected_diffs>new diff</corrected_diffs>"),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.ANTHROPIC,
-                usage=Usage(completion_tokens=10, prompt_tokens=20, total_tokens=30),
-            ),
-        )
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.repo_external_id = "test_repo_id"
-        component.context.get_repo_client.return_value = mock_repo_client
-
-        with (
-            patch(
-                "seer.automation.autofix.components.coding.component.task_to_file_change"
-            ) as mock_task_to_file_change,
-            patch(
-                "seer.automation.autofix.components.coding.component.append_langfuse_observation_metadata"
-            ) as mock_append_metadata,
-            patch(
-                "seer.automation.autofix.components.coding.component.append_langfuse_trace_tags"
-            ) as mock_append_tags,
-        ):
-
-            mock_task_to_file_change.return_value = (
-                [
-                    FileChange(
-                        path="file1.py",
-                        change_type="edit",
-                        reference_snippet="old",
-                        new_snippet="new",
-                    )
-                ],
-                ["remaining_chunk"],
-            )
-
-            module = Module()
-            module.constant(LlmClient, mock_llm_client)
-            with module:
-                component._handle_missing_file_changes(missing_changes)
-
-        component.context.state.update.assert_called()
-        mock_llm_client.generate_text.assert_called_once()
-        mock_task_to_file_change.assert_called_once()
-        component._append_file_change.assert_called_once_with(
-            "test_repo_id",
-            FileChange(
-                path="file1.py", change_type="edit", reference_snippet="old", new_snippet="new"
-            ),
-        )
-        mock_append_metadata.assert_called_once_with({"missing_changes_count": 1})
-        mock_append_tags.assert_called_once_with(["missing_changes_count:1"])
-
     @patch(
         "seer.automation.autofix.components.coding.component.extract_text_inside_tags",
-        side_effect=["First plan steps", "Updated plan steps"],
+        side_effect=["", "First code changes", "Updated code changes"],
     )
-    @patch("seer.automation.autofix.components.coding.component.PlanStepsPromptXml")
+    @patch("seer.automation.autofix.components.coding.component.CodeChangesPromptXml")
     def test_invoke_with_missing_and_existing_files(
-        self, mock_plan_steps_prompt_xml, mock_extract_text, component, mock_llm_client
+        self, mock_code_changes_prompt_xml, mock_extract_text, component, mock_llm_client
     ):
         # Setup
         request = next(generate(CodingRequest))
@@ -245,14 +43,14 @@ class TestCodingComponent:
         mock_agent = MagicMock()
         mock_agent.run.side_effect = [
             "Initial response",
-            "<plan_steps>First plan steps</plan_steps>",
-            "<plan_steps>Updated plan steps</plan_steps>",
+            "<code_changes>First code changes</code_changes>",
+            "<code_changes>Updated code changes</code_changes>",
         ]
         mock_agent.usage = MagicMock()
 
         mock_repo_client = MagicMock()
         component.context.get_repo_client.return_value = mock_repo_client
-        component._handle_missing_file_changes = MagicMock()
+        component.context.event_manager = MagicMock()
         component._is_obvious = MagicMock(return_value=False)
 
         # Simulate file content for different scenarios
@@ -267,41 +65,32 @@ class TestCodingComponent:
 
         mock_coding_output = MagicMock()
         mock_coding_output.tasks = [
-            PlanTaskPromptXml(
+            CodeChangeXml(
                 type="file_change",
                 file_path="missing_file1.py",
                 repo_name="repo1",
-                diff="@@ -1,3 +1,3 @@\n def foo():\n-    return 'Hello'\n+    return 'Hello, World!'",
-                description="",
+                code="return 'Hello, World!",
                 commit_message="",
             ),
-            PlanTaskPromptXml(
+            CodeChangeXml(
                 type="file_delete",
                 file_path="missing_file2.py",
                 repo_name="repo1",
-                diff="@@ -1,3 +1,3 @@\n def foo():\n-    return 'Hello'",
-                description="",
+                code="return 'Hello, World!",
                 commit_message="",
             ),
-            PlanTaskPromptXml(
+            CodeChangeXml(
                 type="file_create",
                 file_path="existing_file.py",
                 repo_name="repo1",
-                diff="@@ -1,3 +1,3 @@\n+ def foo():\n+    return 'Hello, World!'",
-                description="",
-                commit_message="",
-            ),
-            PlanTaskPromptXml(
-                type="file_change",
-                file_path="valid_file.py",
-                repo_name="repo1",
-                diff="@@ -1,3 +1,3 @@\n def foo():\n-    return 'Hello'\n+    return 'Hello, World!'",
-                description="",
+                code="return 'Hello, World!",
                 commit_message="",
             ),
         ]
 
-        mock_plan_steps_prompt_xml.from_xml.return_value.to_model.return_value = mock_coding_output
+        mock_code_changes_prompt_xml.from_xml.return_value.to_model.return_value = (
+            mock_coding_output
+        )
 
         # Execute
         with patch(
@@ -317,7 +106,11 @@ class TestCodingComponent:
         assert "existing_file.py" in mock_agent.run.call_args_list[1][0][0].prompt
 
         # Ensure the result is as expected
-        assert result == mock_coding_output
+        for task in result.tasks:
+            assert task.type in ["file_change", "file_delete", "file_create"]
+            assert task.file_path in ["missing_file1.py", "missing_file2.py", "existing_file.py"]
+            assert task.repo_name == "repo1"
+            assert task.commit_message == ""
 
     def test_invoke_with_root_cause_analysis_non_obvious_fix(self, component):
         # Setup
@@ -344,10 +137,11 @@ class TestCodingComponent:
         component.context.get_repo_client.return_value = mock_repo_client
 
         component._is_obvious = MagicMock(return_value=False)
+        component.context.event_manager = MagicMock()
 
         # Mock agent
         mock_agent = MagicMock()
-        mock_agent.run.return_value = "<plan_steps>test plan</plan_steps>"
+        mock_agent.run.return_value = "<code_changes>test plan</code_changes>"
         mock_agent.usage = MagicMock()
         mock_tools = ["tool1", "tool2"]
         mock_agent.tools = mock_tools
@@ -359,10 +153,10 @@ class TestCodingComponent:
                 return_value=mock_agent,
             ),
             patch(
-                "seer.automation.autofix.components.coding.component.PlanStepsPromptXml"
-            ) as mock_plan_steps,
+                "seer.automation.autofix.components.coding.component.CodeChangesPromptXml"
+            ) as mock_code_changes,
         ):
-            mock_plan_steps.from_xml.return_value.to_model.return_value = MagicMock()
+            mock_code_changes.from_xml.return_value.to_model.return_value = MagicMock()
             component.invoke(mock_request)
 
         # Assert
