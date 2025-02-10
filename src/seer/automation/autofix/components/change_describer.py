@@ -57,7 +57,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
                 change_dump=request.change_dump,
                 hint=request.hint,
             ),
-            model=GeminiProvider.model("gemini-1.5-flash"),
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=ChangeDescriptionOutput,
         )
         data = output.parsed

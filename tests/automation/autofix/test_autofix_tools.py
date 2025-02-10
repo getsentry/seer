@@ -120,3 +120,86 @@ class TestFileSystem:
             tools.cleanup()
 
         mock_cleanup_dir.assert_not_called()
+
+
+class TestSemanticFileSearch:
+    def test_semantic_file_search_found(self, autofix_tools: BaseTools):
+        mock_repo_client = MagicMock()
+        mock_repo_client.repo_name = "test_repo"
+        mock_repo_client.get_valid_file_paths.return_value = [
+            "src/file1.py",
+            "tests/test_file1.py",
+            "src/subfolder/file2.py",
+        ]
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.get_file_contents.return_value = "test file contents"
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value.parsed.file_path = "src/file1.py"
+
+        result = autofix_tools.semantic_file_search(
+            "find the main file", llm_client=mock_llm_client
+        )
+        assert (
+            result
+            == "This file might be what you're looking for: `src/file1.py`. Contents:\n\ntest file contents"
+        )
+
+    def test_semantic_file_search_not_found_no_file_path(self, autofix_tools: BaseTools):
+        mock_repo_client = MagicMock()
+        mock_repo_client.repo_name = "test_repo"
+        mock_repo_client.get_valid_file_paths.return_value = [
+            "src/file1.py",
+            "tests/test_file1.py",
+        ]
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value.parsed = None
+
+        result = autofix_tools.semantic_file_search(
+            "find nonexistent file", llm_client=mock_llm_client
+        )
+        assert (
+            result
+            == "Could not figure out which file matches what you were looking for. You'll have to try yourself."
+        )
+
+    def test_semantic_file_search_not_found_no_contents(self, autofix_tools: BaseTools):
+        mock_repo_client = MagicMock()
+        mock_repo_client.repo_name = "test_repo"
+        mock_repo_client.get_valid_file_paths.return_value = [
+            "src/file1.py",
+            "tests/test_file1.py",
+        ]
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.get_file_contents.return_value = None
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value.parsed.file_path = "src/file1.py"
+
+        result = autofix_tools.semantic_file_search(
+            "find file with no contents", llm_client=mock_llm_client
+        )
+        assert (
+            result
+            == "Could not figure out which file matches what you were looking for. You'll have to try yourself."
+        )
+
+    def test_semantic_file_search_with_repo_name(self, autofix_tools: BaseTools):
+        mock_repo_client = MagicMock()
+        mock_repo_client.repo_name = "specific_repo"
+        mock_repo_client.get_valid_file_paths.return_value = ["src/file1.py"]
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.get_file_contents.return_value = "test file contents"
+        autofix_tools.repo_client_type = RepoClientType.READ
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value.parsed.file_path = "src/file1.py"
+
+        autofix_tools.semantic_file_search(
+            "find file", repo_name="specific_repo", llm_client=mock_llm_client
+        )
+        autofix_tools.context.get_repo_client.assert_called_once_with(
+            repo_name="specific_repo", type=RepoClientType.READ
+        )

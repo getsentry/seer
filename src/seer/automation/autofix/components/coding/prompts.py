@@ -2,8 +2,8 @@ import textwrap
 from typing import Literal, Optional
 
 from seer.automation.autofix.components.coding.models import (
+    CodeChangesPromptXml,
     FuzzyDiffChunk,
-    PlanStepsPromptXml,
     RootCausePlanTaskPromptXml,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
@@ -67,18 +67,17 @@ class CodingPrompts:
     ):
         return textwrap.dedent(
             """\
-            Break down the task of {mode_str} into steps. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution. {custom_solution_str}
+            Break down the task of {mode_str} into a list of code changes to make. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution. {custom_solution_str}
 
-            Enclose this plan between <plan_steps> and </plan_steps> tags. Make sure to strictly follow this format and include all necessary details within the tags. Your output must follow the format properly according to the following guidelines:
+            Enclose this plan between <code_changes> and </code_changes> tags. Your output must follow the format properly according to the following guidelines:
 
             {steps_example_str}
 
             # Guidelines:
             - Each file change must be a separate step and be explicit and clear.
               - You MUST include exact file paths for each step you provide. If you cannot, find the correct path.
-            - No placeholders are allowed, the steps must be clear and detailed.
             {use_tools_instructions}
-            - The plan must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
+            - The changes must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
             - Make sure any new files you create don't already exist, if they do, modify the existing file.
             {think_tools_instructions}
             - You also MUST think step-by-step before giving the final answer."""
@@ -92,7 +91,7 @@ class CodingPrompts:
                     else "writing a unit test to reproduce the issue and assert the planned solution (following test-driven development) and then fixing the issue"
                 )
             ),
-            steps_example_str=PlanStepsPromptXml.get_example().to_prompt_str(),
+            steps_example_str=CodeChangesPromptXml.get_example().to_prompt_str(),
             use_tools_instructions=(
                 "- Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps."
                 if has_tools
