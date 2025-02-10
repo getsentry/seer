@@ -3,6 +3,7 @@ import difflib
 import logging
 import textwrap
 
+import sentry_sdk
 from langfuse.decorators import observe
 from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
@@ -66,7 +67,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         new_content: str,
         file_path: str,
         llm_client: LlmClient = injected,
-    ) -> str:
+    ) -> str | None:
         if original_content is None:
             # For new files, create a simple diff showing the entire file as added
             lines = new_content.splitlines()
@@ -95,12 +96,30 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         # use predicted output for faster response
         predicted_output = f"<updated_code>{original_content}</updated_code>"
-        output = llm_client.generate_text(
-            system_prompt=system_prompt,
-            messages=[Message(role="user", content=prompt)],
-            model=OpenAiProvider.model("gpt-4o-mini"),
-            predicted_output=predicted_output,
-        )
+        try:
+            output = llm_client.generate_text(
+                system_prompt=system_prompt,
+                messages=[Message(role="user", content=prompt)],
+                model=OpenAiProvider.model("gpt-4o-mini"),
+                predicted_output=predicted_output,
+            )
+        except Exception as e:
+            if e.code == 400:  # too much content, fallback to model with bigger input/output limit
+                sentry_sdk.capture_message(
+                    f"Failed to apply code suggestion to file with gpt-4o-mini, falling back to o3-mini. Error message: {str(e)}"
+                )
+                try:
+                    output = llm_client.generate_text(
+                        system_prompt=system_prompt,
+                        messages=[Message(role="user", content=prompt)],
+                        model=OpenAiProvider.model("o3-mini"),
+                    )
+                except Exception as e2:
+                    sentry_sdk.capture_exception(e2)
+                    return None
+            else:
+                raise e
+
         text = output.message.content
         updated_content = extract_text_inside_tags(text, "updated_code")
 
@@ -273,6 +292,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 diff = self.apply_code_suggestion_to_file(
                     file_content, task.code, task.file_path, llm_client=llm_client
                 )
+                if not diff:
+                    return None
                 task_with_diff = PlanTaskPromptXml(
                     file_path=task.file_path,
                     repo_name=task.repo_name,
@@ -301,6 +322,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 diff = self.apply_code_suggestion_to_file(
                     None, task.code, task.file_path, llm_client=llm_client
                 )
+                if not diff:
+                    return None
                 task_with_diff = PlanTaskPromptXml(
                     file_path=task.file_path,
                     repo_name=task.repo_name,
@@ -329,5 +352,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     tasks_with_diffs.append(task_with_diff)
                     for repo_external_id, file_change in updates:
                         self._append_file_change(repo_external_id, file_change)
+                else:
+                    sentry_sdk.capture_message("Failed to apply code changes.")
 
         return CodingOutput(tasks=tasks_with_diffs)
