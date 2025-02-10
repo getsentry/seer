@@ -110,7 +110,7 @@ convertdate==2.4.0
     # via -r requirements-constraints.txt
 covdefaults==2.3.0
     # via -r requirements-constraints.txt
-coverage==7.6.10
+coverage==7.6.11
     # via
     #   covdefaults
     #   pytest-cov
@@ -220,7 +220,7 @@ google-crc32c==1.6.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==1.0.0
+google-genai==1.1.0
     # via -r requirements-constraints.txt
 google-resumable-media==2.7.2
     # via
@@ -678,7 +678,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.60
+sentry-protos==0.1.61
     # via -r requirements-constraints.txt
 sentry-sdk==2.18.0
     # via -r requirements-constraints.txt

@@ -19,7 +19,7 @@ class TimelineEvent(BaseModel):
     timeline_item_type: (
         Literal["internal_code", "external_system", "human_action"] | str
     )  # TODO put back to literal only when not breaking anything
-    relevant_code_file: RelevantCodeFile
+    relevant_code_file: RelevantCodeFile | None
     is_most_important_event: bool
 
 
