@@ -75,7 +75,7 @@ class AreIssuesFixableComponent(
             for issue_group_id in tqdm(issue_group_ids, desc="Predicting issue fixability")
         }
         return CodeAreIssuesFixableOutput(
-            is_fixable=[
+            are_fixable=[
                 issue_group_id_to_is_fixable.get(issue.group_id)
                 for issue in request.candidate_issues
             ]

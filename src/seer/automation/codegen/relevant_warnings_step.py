@@ -96,13 +96,13 @@ class RelevantWarningsStep(CodegenStep):
         # 2. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
         #    will fix the issue.
         filterer = AreIssuesFixableComponent(self.context)
-        is_fixable_output: CodeAreIssuesFixableOutput = filterer.invoke(
+        are_fixable_output: CodeAreIssuesFixableOutput = filterer.invoke(
             CodeAreIssuesFixableRequest(candidate_issues=[issue for _, issue in associations])
         )
         associations_with_fixable_issues = [
             association
             for association, is_fixable in zip(
-                associations, is_fixable_output.is_fixable, strict=True
+                associations, are_fixable_output.are_fixable, strict=True
             )
             if is_fixable
         ]

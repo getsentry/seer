@@ -141,7 +141,7 @@ class CodeRelevantWarningsRequest(BaseComponentRequest):
 
 
 class CodeAreIssuesFixableOutput(BaseComponentOutput):
-    is_fixable: list[bool | None]  # None means the issue was not analyzed
+    are_fixable: list[bool | None]  # None means the issue was not analyzed
 
 
 class CodeRelevantWarningsOutput(BaseComponentOutput):
