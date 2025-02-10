@@ -4,6 +4,7 @@ import os
 import textwrap
 
 from langfuse.decorators import observe
+from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
@@ -42,6 +43,45 @@ class BaseTools:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cleanup()
+
+    @observe(name="Semantic File Search")
+    @ai_track(description="Semantic File Search")
+    @inject
+    def semantic_file_search(
+        self, query: str, repo_name: str | None = None, llm_client: LlmClient = injected
+    ):
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
+        repo_name = repo_client.repo_name
+        valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
+
+        self.context.event_manager.add_log(f"Searching for {query}...")
+
+        class FilePath(BaseModel):
+            file_path: str
+
+        prompt = textwrap.dedent(
+            """
+            I'm searching for the file in this codebase that contains {query}. Please pick the most relevant file from the following list:
+            {valid_file_paths}
+            """
+        ).format(query=query, valid_file_paths="\n".join(sorted(valid_file_paths)))
+
+        response = llm_client.generate_structured(
+            prompt=prompt,
+            model=GeminiProvider(model_name="gemini-2.0-flash-001"),
+            response_format=FilePath,
+        )
+        result = response.parsed
+        file_path = result.file_path if result else None
+        if file_path is None:
+            return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
+
+        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
+
+        if file_contents is None:
+            return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
+
+        return f"This file might be what you're looking for: `{file_path}`. Contents:\n\n{file_contents}"
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
@@ -392,6 +432,24 @@ class BaseTools:
                     },
                 ],
                 required=["pattern"],
+            ),
+            FunctionTool(
+                name="semantic_file_search",
+                fn=self.semantic_file_search,
+                description="Tries to find the file in the codebase that contains what you're looking for.",
+                parameters=[
+                    {
+                        "name": "query",
+                        "type": "string",
+                        "description": "Describe what file you're looking for.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
+                ],
+                required=["query"],
             ),
             FunctionTool(
                 name="search_google",

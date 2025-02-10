@@ -352,7 +352,7 @@ class RepoClient:
             return None, "utf-8"
 
     @functools.lru_cache(maxsize=8)
-    def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
+    def get_valid_file_paths(self, sha: str | None = None, files_only=False) -> set[str]:
         if sha is None:
             sha = self.base_commit_sha
 
@@ -366,6 +366,8 @@ class RepoClient:
         valid_file_paths: set[str] = set()
 
         for file in tree.tree:
+            if files_only and "." not in file.path:
+                continue
             valid_file_paths.add(file.path)
 
         return valid_file_paths
