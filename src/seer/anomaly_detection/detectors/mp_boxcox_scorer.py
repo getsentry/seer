@@ -29,28 +29,9 @@ class MPBoxCoxScorer(MPScorer):
     The Box-Cox transformation is applied to normalize the data, followed by z-score based anomaly detection.
     """
 
-    # z_score_thresholds: Dict[Sensitivities, float] = Field(
-    #     {
-    #         "high": 1.7,  # 95.54% confidence interval
-    #         "medium": 2.0,  # 97.72% confidence interval
-    #         "low": 2.8,  # 99.74% confidence interval
-    #     },
-    #     description="Z-score thresholds for different sensitivity levels",
-    # )
-
-    # z_score_thresholds: Dict[Sensitivities, float] = Field(
-    #     {
-    #         "high": 2.0,  # 95.4% confidence interval
-    #         "medium": 2.5,  # 98.8% confidence interval
-    #         "low": 3.0,  # 99.7% confidence interval
-    #     },
-    #     description="Z-score thresholds for different sensitivity levels",
-    # )
-
     z_score_thresholds: Dict[Sensitivities, float] = Field(
         {
             "high": 1.28,  # 90% confidence interval
-            # "high": 1.04,  # 85% confidence interval
             "medium": 1.64,  # 95% confidence interval
             "low": 2.32,  # 99% confidence interval
         },
@@ -67,15 +48,6 @@ class MPBoxCoxScorer(MPScorer):
         Returns:
             The inverse transformed data in the original scale
         """
-
-        # if min_val <= 0:
-        #     x_positive = x - min_val + 1
-        # else:
-        #     x_positive = x
-        # transformed, bc_lambda = stats.boxcox(x_positive)
-        # if bc_lambda <= 0:
-        #     transformed = np.log(x_positive)
-        # return transformed, bc_lambda
 
         if bc_lambda <= 0:
             converted = np.exp([x])[0]
