@@ -21,7 +21,7 @@ jobs:
       TEST: 1
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: "auth"
         uses: google-github-actions/auth@v1
         with:
