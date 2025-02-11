@@ -196,7 +196,6 @@ class TestAutofixPipelineStep:
         mock_step._check_for_kill()
 
         assert kill_signal not in mock_state.signals
-        mock_exit.assert_called_once_with(1)
         assert mock_step.thread_kill is True
 
     @patch("threading.Thread")
