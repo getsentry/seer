@@ -177,6 +177,7 @@ class MPBoxCoxScorer(MPScorer):
             cur_thresholds = [
                 Threshold(
                     type=ThresholdType.BOX_COX_THRESHOLD,
+                    timestamp=timestamps[i],
                     upper=threshold_transformed,
                     lower=-threshold_transformed,
                 )
@@ -229,6 +230,7 @@ class MPBoxCoxScorer(MPScorer):
         thresholds.append(
             Threshold(
                 type=ThresholdType.BOX_COX_THRESHOLD,
+                timestamp=streamed_timestamp,
                 upper=threshold_transformed,
                 lower=-threshold_transformed,
             )
