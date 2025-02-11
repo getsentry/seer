@@ -145,14 +145,17 @@ class LowVarianceScorer(MPScorer):
             return None
 
         sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 1)
-        for val in values:
+        for i, val in enumerate(values):
             flag, score, pred_up, pred_down = self._to_flag_and_score(val, ts_mean, ad_config)
             flags.append(flag)
             scores.append(score)
             thresholds.append(
                 [
                     Threshold(
-                        type=ThresholdType.LOW_VARIANCE_THRESHOLD, upper=pred_up, lower=pred_down
+                        type=ThresholdType.LOW_VARIANCE_THRESHOLD,
+                        timestamp=timestamps[i],
+                        upper=pred_up,
+                        lower=pred_down,
                     )
                 ]
             )
@@ -179,7 +182,10 @@ class LowVarianceScorer(MPScorer):
             streamed_value, context.mean(), ad_config
         )
         threshold = Threshold(
-            type=ThresholdType.LOW_VARIANCE_THRESHOLD, upper=pred_up, lower=pred_up
+            type=ThresholdType.LOW_VARIANCE_THRESHOLD,
+            timestamp=streamed_timestamp,
+            upper=pred_up,
+            lower=pred_down,
         )
 
         return FlagsAndScores(
@@ -283,7 +289,10 @@ class MPIQRScorer(MPScorer):
             scores.append(0.0 if np.isnan(val) or np.isinf(val) else val - mp_dist_threshold)
             cur_thresholds = [
                 Threshold(
-                    type=ThresholdType.MP_DIST_IQR, upper=mp_dist_threshold, lower=mp_dist_threshold
+                    type=ThresholdType.MP_DIST_IQR,
+                    timestamp=timestamps[i],
+                    upper=mp_dist_threshold,
+                    lower=mp_dist_threshold,
                 )
             ]
 
@@ -370,7 +379,10 @@ class MPIQRScorer(MPScorer):
         )
         thresholds.append(
             Threshold(
-                type=ThresholdType.MP_DIST_IQR, upper=mp_dist_threshold, lower=mp_dist_threshold
+                type=ThresholdType.MP_DIST_IQR,
+                timestamp=streamed_timestamp,
+                upper=mp_dist_threshold,
+                lower=mp_dist_threshold,
             )
         )
         return FlagsAndScores(
