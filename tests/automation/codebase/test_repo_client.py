@@ -585,6 +585,56 @@ class TestRepoClient:
         )
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
 
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_file_content_with_autocorrect(self, mock_requests, repo_client, mock_github):
+        # Mock get_valid_file_paths to return lowercase version
+        repo_client.get_valid_file_paths = MagicMock(return_value={"src/test_file.py"})
+
+        # Mock the content retrieval
+        mock_content = MagicMock(decoded_content=b"test content")
+        mock_github.get_repo.return_value.get_contents.return_value = mock_content
+
+        # Test with a path that needs correction (wrong case)
+        content, _ = repo_client.get_file_content("SRC/test_file.py", autocorrect=True)
+
+        assert content == "test content"
+
+        # Verify get_contents was called with corrected path
+        mock_github.get_repo.return_value.get_contents.assert_called_once_with(
+            "src/test_file.py", ref="test_sha"
+        )
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_file_content_without_autocorrect(self, mock_requests, repo_client, mock_github):
+        # Mock get_valid_file_paths to return lowercase version
+        repo_client.get_valid_file_paths = MagicMock(return_value={"src/test_file.py"})
+
+        # Mock failure with original path
+        mock_github.get_repo.return_value.get_contents.return_value = None
+
+        # Test with a path that would need correction but autocorrect is False
+        content, _ = repo_client.get_file_content("SRC/test_file.py", autocorrect=False)
+
+        assert content is None
+
+        # Verify get_contents was called with original path
+        mock_github.get_repo.return_value.get_contents.assert_called_once_with(
+            "SRC/test_file.py", ref="test_sha"
+        )
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_file_content_path_not_found(self, mock_requests, repo_client, mock_github):
+        # Mock get_valid_file_paths to return empty set (no matching files)
+        repo_client.get_valid_file_paths = MagicMock(return_value=set())
+
+        # Test with a non-existent path with autocorrect
+        content, _ = repo_client.get_file_content("nonexistent/path.py", autocorrect=True)
+
+        assert content is None
+
+        # Verify get_contents was never called
+        mock_github.get_repo.return_value.get_contents.assert_not_called()
+
 
 class TestRepoClientIndexFileSet:
     @patch("seer.automation.codebase.repo_client.Github")

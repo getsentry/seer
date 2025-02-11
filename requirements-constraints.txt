@@ -99,7 +99,7 @@ chromadb==0.4.14
 google-cloud-storage==2.*
 google-cloud-aiplatform==1.*
 google-cloud-secret-manager==2.*
-anthropic[vertex]==0.34.2
+anthropic[vertex]==0.45.*
 langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
 watchdog
 stumpy==1.13.0
@@ -116,5 +116,5 @@ rapidfuzz==3.10.*
 pytest-vcr==1.*
 vcrpy==6.*
 chardet==5.2.*
-google-genai==0.*
+google-genai==1.*
 httpx==0.27.2 # v0.28 is breaking OpenAI and Anthropic as of Dec 16 2024

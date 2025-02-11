@@ -250,6 +250,7 @@ def run_autofix_coding(
         AutofixCodingStep.get_signature(
             AutofixCodingStepRequest(
                 run_id=cur.run_id,
+                mode=request.payload.mode,
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
         ).apply_async()
@@ -300,8 +301,14 @@ def restart_step_with_user_response(
     cur_state = state.get()
     if memory:
         tool_call_id = memory[-1].tool_call_id
+        tool_call_function = memory[-1].tool_call_function
         if tool_call_id:
-            user_response = Message(role="tool", content=text, tool_call_id=tool_call_id)
+            user_response = Message(
+                role="tool",
+                content=text,
+                tool_call_id=tool_call_id,
+                tool_call_function=tool_call_function,
+            )
             if memory[-1].role == "tool":
                 memory[-1] = user_response
             else:
@@ -336,7 +343,7 @@ def receive_user_message(request: AutofixUpdateRequest):
         is_solution_step = step_to_restart.key == "solution_processing"
         is_root_cause_step = step_to_restart.key == "root_cause_analysis_processing"
         memory = (
-            context.get_memory("plan_and_code")
+            context.get_memory("code")
             if is_coding_step
             else (
                 context.get_memory("root_cause_analysis")
@@ -460,7 +467,7 @@ def restart_from_point_with_feedback(
     is_solution_step = step_to_restart.key == "solution_processing"
     is_root_cause_step = step_to_restart.key == "root_cause_analysis_processing"
     memory = (
-        context.get_memory("plan_and_code")
+        context.get_memory("code")
         if is_coding_step
         else (
             context.get_memory("root_cause_analysis")

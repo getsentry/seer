@@ -1,5 +1,5 @@
 import textwrap
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, StringConstraints, field_validator
 from pydantic_xml import attr, element
@@ -25,6 +25,7 @@ class CodingRequest(BaseComponentRequest):
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
     profile: Profile | None = None
+    mode: Literal["all", "fix", "test"] = "fix"
 
 
 class SnippetXml(PromptXmlModel, tag="snippet"):
@@ -136,30 +137,53 @@ class PlanStepsPromptXml(PromptXmlModel, tag="plan_steps"):
         return CodingOutput.model_validate(self.model_dump())
 
 
-class SimpleChangeXml(PromptXmlModel, tag="file_change"):
+class CodingOutput(BaseComponentOutput):
+    tasks: list[PlanTaskPromptXml]
+
+
+class CodeChangeXml(PromptXmlModel, tag="code_change"):
     file_path: str = attr()
     repo_name: str = attr()
+    type: str = attr()
+    code: str = element()
     commit_message: str = element()
-    description: str = element()
-    unified_diff: str = element()
 
-    def to_plan_task_model(self):
-        return PlanTaskPromptXml(
-            file_path=self.file_path,
-            repo_name=self.repo_name,
-            type="file_change",
-            diff=self.unified_diff,
-            description=self.description,
-            commit_message=self.commit_message,
+    @field_validator("code")
+    @classmethod
+    def clean_code(cls, v: str) -> str:
+        return remove_code_backticks(v)
+
+    @classmethod
+    def get_example(
+        cls,
+    ):
+        return cls(
+            file_path="path/to/file.py",
+            repo_name="owner/repo",
+            type="Either 'file_change', 'file_create', or 'file_delete'",
+            code="Provide the exact code change you are making",
+            commit_message="Provide a commit message that describes the change you are making",
         )
 
 
-class SimpleChangeOutputXml(PromptXmlModel, tag="output"):
-    file_changes: list[SimpleChangeXml]
+class CodeChangesPromptXml(PromptXmlModel, tag="code_changes"):
+    tasks: list[CodeChangeXml]
+
+    @classmethod
+    def get_example(cls):
+        return cls(
+            tasks=[
+                CodeChangeXml.get_example(),
+                CodeChangeXml.get_example(),
+            ]
+        )
+
+    def to_model(self):
+        return CodeChangesOutput.model_validate(self.model_dump())
 
 
-class CodingOutput(BaseComponentOutput):
-    tasks: list[PlanTaskPromptXml]
+class CodeChangesOutput(BaseComponentOutput):
+    tasks: list[CodeChangeXml]
 
 
 class FuzzyDiffChunk(BaseModel):

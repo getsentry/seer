@@ -124,7 +124,7 @@ class TestExtractDiffChunks:
         assert len(result) == 0
 
     def test_diff_with_empty_lines(self):
-        diff = "@@ -1,4 +1,4 @@\n \n-Removed line\n+Added line\n \n No change"
+        diff = "@@ -1,4 +1,4 @@\n\n \n-Removed line\n+Added line\n \n No change"
         result = extract_diff_chunks(diff)
         assert len(result) == 1
         assert result[0].original_chunk == "\nRemoved line\n\nNo change"

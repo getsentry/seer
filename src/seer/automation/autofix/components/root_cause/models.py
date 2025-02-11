@@ -42,7 +42,7 @@ class RootCauseAnalysisItem(BaseModel):
 
 
 class RootCauseAnalysisItemPrompt(BaseModel):
-    root_cause_reproduction: list[TimelineEvent] | None = None
+    root_cause_reproduction: list[TimelineEvent]
 
     @classmethod
     def from_model(cls, model: RootCauseAnalysisItem):

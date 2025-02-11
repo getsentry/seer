@@ -4,7 +4,7 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.is_root_cause_obvious import (
@@ -100,7 +100,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
                     prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                    model=OpenAiProvider.model("gpt-4o-mini"),
+                    model=GeminiProvider.model("gemini-2.0-flash-001"),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
                     run_name="Root Cause Extraction & Formatting",
                     max_tokens=4096,

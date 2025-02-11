@@ -301,7 +301,7 @@ def test_anthropic_prep_message_and_tools():
         assert "description" in tool_dicts[0]
         assert "input_schema" in tool_dicts[0]
 
-    assert returned_system_prompt == system_prompt
+    assert returned_system_prompt[0]["text"] == system_prompt
 
 
 @pytest.mark.vcr()
@@ -510,6 +510,7 @@ def test_gemini_generate_text():
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content is not None
     assert response.message.content.strip() == "Hello! How can I help you today?"
     assert response.message.role == "assistant"
     assert response.metadata.model == "gemini-2.0-flash-exp"
@@ -543,8 +544,10 @@ def test_gemini_generate_text_with_tools():
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
+    assert response.message.content is not None
     assert len(response.message.content) > 0
     assert response.message.role == "tool_use"
+    assert response.message.tool_calls is not None
     assert response.message.tool_calls == [
         ToolCall(
             function="test_function",
@@ -599,18 +602,34 @@ def test_gemini_prep_message_and_tools():
 
     assert len(message_dicts) == 3
     assert message_dicts[0].role == "user"
+    assert message_dicts[0].parts is not None
+    assert len(message_dicts[0].parts) > 0
     assert message_dicts[0].parts[0].text == "Hello"
     assert message_dicts[1].role == "model"
+    assert message_dicts[1].parts is not None
+    assert len(message_dicts[1].parts) > 0
     assert message_dicts[1].parts[0].text == "Hi there!"
     assert message_dicts[2].role == "user"
+    assert message_dicts[2].parts is not None
+    assert len(message_dicts[2].parts) > 0
     assert message_dicts[2].parts[0].text == prompt
 
-    assert tool_dicts
+    assert tool_dicts is not None
+    assert len(tool_dicts) == 1
     if tool_dicts:
-        assert len(tool_dicts) == 1
-        assert tool_dicts[0].function_declarations[0].name == "test_function"
-        assert tool_dicts[0].function_declarations[0].description == "A test function"
-        assert tool_dicts[0].function_declarations[0].parameters.properties["x"].type == "STRING"
+        assert tool_dicts[0].function_declarations
+        if tool_dicts[0].function_declarations:
+            assert len(tool_dicts[0].function_declarations) > 0
+            assert tool_dicts[0].function_declarations[0].name == "test_function"
+            assert tool_dicts[0].function_declarations[0].description == "A test function"
+            assert tool_dicts[0].function_declarations[0].parameters
+            if tool_dicts[0].function_declarations[0].parameters:
+                assert tool_dicts[0].function_declarations[0].parameters.type == "OBJECT"
+                assert "x" in tool_dicts[0].function_declarations[0].parameters.properties
+                assert (
+                    tool_dicts[0].function_declarations[0].parameters.properties["x"].type
+                    == "STRING"
+                )
 
 
 @pytest.mark.vcr()
@@ -680,20 +699,16 @@ def test_gemini_generate_text_stream_with_tools():
 
 
 def test_construct_message_from_stream_gemini():
-    llm_client = LlmClient()
     model = GeminiProvider.model("gemini-2.0-flash-exp")
 
     content_chunks = ["Hello", " world", "!"]
     tool_calls = [ToolCall(id="123", function="test_function", args='{"x": "test"}')]
 
-    message = llm_client.construct_message_from_stream(
-        content_chunks=content_chunks,
-        tool_calls=tool_calls,
-        model=model,
-    )
+    message = model.construct_message_from_stream(content_chunks, tool_calls)
 
-    assert message.role == "tool_use"
+    assert message.role == ("tool_use" if tool_calls else "assistant")
     assert message.content == "Hello world!"
+    assert message.tool_calls is not None
     assert len(message.tool_calls) == 1
     assert message.tool_calls[0].id == "123"
     assert message.tool_calls[0].function == "test_function"

@@ -147,7 +147,12 @@ class LlmAgent:
         kwargs = self.parse_tool_arguments(tool, tool_call.args)
         tool_result = tool.call(**kwargs)
 
-        return Message(role="tool", content=tool_result, tool_call_id=tool_call.id)
+        return Message(
+            role="tool",
+            content=tool_result,
+            tool_call_id=tool_call.id,
+            tool_call_function=tool_call.function,
+        )
 
     def get_tool_by_name(self, name: str) -> FunctionTool:
         try:

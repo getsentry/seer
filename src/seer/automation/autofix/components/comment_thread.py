@@ -39,7 +39,7 @@ class CommentThreadPrompts:
             prefix = "User said: " if message.role == "user" else "You said: "
             msg += f"{prefix}{message.content}\n"
 
-        msg += "\n Now you respond very briefly:"
+        msg += "\n Now you respond briefly:"
         return textwrap.dedent(msg)
 
 
@@ -59,7 +59,7 @@ class CommentThreadComponent(BaseComponent[CommentThreadRequest, CommentThreadOu
             ),
             messages=request.run_memory,
             system_prompt=CommentThreadPrompts.format_system_msg(),
-            model=GeminiProvider.model("gemini-1.5-flash"),
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=CommentThreadOutput,
         )
         data = output.parsed

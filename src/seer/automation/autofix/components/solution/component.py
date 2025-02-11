@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -44,13 +44,19 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             )
 
             for i, file in enumerate(relevant_files):
-                file_content = (
-                    self.context.get_file_contents(
-                        path=file["file_path"], repo_name=file["repo_name"]
+                file_content = None
+                try:
+                    file_content = (
+                        self.context.get_file_contents(
+                            path=file["file_path"], repo_name=file["repo_name"]
+                        )
+                        if file["file_path"]
+                        else None
                     )
-                    if file["file_path"]
-                    else None
-                )
+                except Exception as e:
+                    logger.exception(f"Error getting file contents in memory prefill: {e}")
+                    file_content = None
+
                 if file_content:
                     agent_message = Message(
                         role="tool_use",
@@ -69,6 +75,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         role="tool",
                         content=file_content,
                         tool_call_id=str(i),
+                        tool_call_function="expand_document",
                     )
                     memory.append(agent_message)
                     memory.append(user_message)
@@ -102,7 +109,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     root_cause=request.root_cause_and_fix,
                     original_instruction=request.original_instruction,
                 ),
-                model=OpenAiProvider.model("gpt-4o-mini"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=IsObviousOutput,
             )
 
@@ -172,7 +179,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             formatted_response = llm_client.generate_structured(
                 messages=agent.memory,
                 prompt=SolutionPrompts.solution_formatter_msg(request.root_cause_and_fix),
-                model=OpenAiProvider.model("gpt-4o-mini"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=SolutionOutput,
                 run_name="Solution Extraction & Formatting",
                 max_tokens=4096,

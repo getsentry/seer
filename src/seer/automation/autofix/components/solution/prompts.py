@@ -101,16 +101,12 @@ class SolutionPrompts:
             # Your goal:
             Provide the most actionable and effective steps to fix the issue.
 
-            Since you are an exceptional principal engineer, your solution should not just add logs or throw more errors, but should meaningfully fix the issue. Your list of steps to fix the problem should be detailed enough so that following it exactly will lead to a fully complete solution.
+            Since you are an exceptional principal engineer, your solution should not add logs or throw more errors, but should meaningfully fix the issue. Your list of steps to fix the problem should be detailed enough so that following it exactly will lead to a fully complete solution. Each step should include the needed code changes.
 
             When ready with your final answer, detail the precise plan to fix the issue.
 
             # Guidelines:
-            - No placeholders are allowed, the fix must be clear and detailed.
             {use_tools_instructions}
-            - The fix must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
-            - If the issue occurs in multiple places or files, make sure to provide a fix for each occurrence, no matter how many there are.
-            - In your suggested fixes, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
             - You do not need to make changes in test files, someone else will do that.
             {ask_questions_instructions}
             {search_google_instructions}

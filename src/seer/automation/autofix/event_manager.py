@@ -171,6 +171,7 @@ class AutofixEventManager:
             solution_step.custom_solution = (
                 payload.custom_solution if payload.custom_solution else None
             )
+            solution_step.selected_mode = payload.mode
             solution_step.solution_selected = True
             cur.delete_steps_after(solution_step, include_current=False)
             cur.clear_file_changes()
@@ -179,6 +180,7 @@ class AutofixEventManager:
 
     def send_coding_start(self):
         with self.state.update() as cur:
+            cur.clear_file_changes()
             plan_step = cur.find_step(key=self.plan_step.key)
             if not plan_step or plan_step.status != AutofixStatus.PROCESSING:
                 plan_step = cur.add_step(self.plan_step)

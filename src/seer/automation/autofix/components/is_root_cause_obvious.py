@@ -3,7 +3,7 @@ import textwrap
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.component import BaseComponent, BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import EventDetails
@@ -52,7 +52,7 @@ class IsRootCauseObviousComponent(
             prompt=IsRootCauseObviousPrompts.format_default_msg(
                 event_details=request.event_details,
             ),
-            model=OpenAiProvider.model("gpt-4o-mini"),
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=IsRootCauseObviousOutput,
         )
         data = output.parsed

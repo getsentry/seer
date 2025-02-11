@@ -185,6 +185,7 @@ class TestAutofixContext(unittest.TestCase):
                                     "content": "Test message",
                                     "tool_call_id": None,
                                     "tool_calls": None,
+                                    "tool_call_function": None,
                                 }
                             ]
                         },
