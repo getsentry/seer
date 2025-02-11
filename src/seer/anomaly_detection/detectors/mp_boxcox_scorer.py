@@ -108,12 +108,14 @@ class MPBoxCoxScorer(MPScorer):
         values_no_nan = values[~nan_indices]
 
         transformed, bc_lambda, min_val = self._box_cox_transform(values_no_nan)
-        mean = np.mean(transformed)
+        mean = float(np.mean(transformed))
         std = float(np.std(transformed))
         z_scores = (transformed - mean) / std if std > 0 else np.zeros_like(transformed)
 
         threshold = self.z_score_thresholds[sensitivity]
-        threshold_transformed = self._inverse_box_cox_transform(threshold, bc_lambda, min_val)
+        threshold_transformed = self._inverse_box_cox_transform(
+            (threshold * std) + mean, bc_lambda, min_val
+        )
 
         # Add nans back in the same positions
         z_scores_with_nans = np.empty(len(values))
@@ -210,7 +212,7 @@ class MPBoxCoxScorer(MPScorer):
         # Get z-score for streamed value
         score = z_scores[-1]
 
-        if std == 0 or score < threshold:
+        if std == 0 or score <= threshold:
             flag: AnomalyFlags = "none"
             thresholds: List[Threshold] = []
         else:

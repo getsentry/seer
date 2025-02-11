@@ -17,7 +17,7 @@ class MPCascadingScorer(MPScorer):
     It applies multiple scorers in sequence, returning the result of the first scorer that produces a valid output.
     This approach allows for fallback strategies and potentially more robust anomaly detection.
 
-    The default implementation uses the LowVarianceScorer and the MPIQRScorer.
+    The default implementation uses the LowVarianceScorer and the MPBoxCoxScorer.
     """
 
     scorers: list[MPScorer] = Field(

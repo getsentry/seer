@@ -7,7 +7,6 @@ import stumpy
 
 from seer.anomaly_detection.detectors import (
     LowVarianceScorer,
-    MPBoxCoxScorer,
     MPCascadingScorer,
     MPIQRScorer,
     MPScorer,
@@ -29,11 +28,8 @@ from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts, test_d
 class TestMPCascadingScorer(unittest.TestCase):
 
     def setUp(self):
-        # self.scorer = MPCascadingScorer()
-        # self.scorer = MPIQRScorer()
-        self.scorer = MPBoxCoxScorer()
+        self.scorer = MPCascadingScorer()
 
-    # @pytest.mark.skip(reason="Skipping test, test data needs fixing")
     def test_batch_score_synthetic_data(self):
 
         loaded_synthetic_data = convert_synthetic_ts(
@@ -87,7 +83,6 @@ class TestMPCascadingScorer(unittest.TestCase):
                 result == expected_type
             ), f"Expected for {filename}: {expected_type}, got {result}"
 
-    # @pytest.mark.skip(reason="Skipping test, test data needs fixing")
     def test_stream_score(self):
 
         test_ts_mp_mulipliers = [1000, -1000, 1]
@@ -131,7 +126,6 @@ class TestMPCascadingScorer(unittest.TestCase):
                     flags_and_scores.thresholds[0][0].type, ThresholdType.BOX_COX_THRESHOLD
                 )
 
-    # @pytest.mark.skip(reason="Skipping test, test data needs fixing")
     def test_stream_score_with_thresholds(self):
 
         expected_flag = "anomaly_higher_confidence"
