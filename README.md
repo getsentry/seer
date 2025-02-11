@@ -92,6 +92,17 @@ docker compose down --volumes
 make update && make dev
 ```
 
+## Running Multiple Instances of Seer
+
+To run multiple instances of Seer, you should set unique port values for each instance in the `.env` file.
+
+```
+RABBITMQ_PORT=...
+RABBITMQ_CONFIG_PORT=...
+DB_PORT=...
+APP_PORT=...
+```
+
 ## Langfuse Integration
 
 To enable Langfuse tracing, set these environment variables:
