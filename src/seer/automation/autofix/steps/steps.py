@@ -130,6 +130,8 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
                 self.thread_kill = True
                 if not os.environ.get("CI"):  # don't kill threads in CI
                     os._exit(1)  # kills the thread and the whole step
+                else:
+                    return
             time.sleep(0.1)
 
     def _handle_exception(self, exception: Exception):
