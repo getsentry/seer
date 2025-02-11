@@ -142,19 +142,15 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
             state = self.context.state.get()
             if not request.initial_memory:
-                agent.memory.insert(
-                    0,
-                    Message(
-                        role="user",
-                        content=SolutionPrompts.format_default_msg(
-                            event=request.event_details.format_event(),
-                            root_cause=request.root_cause_and_fix,
-                            summary=request.summary,
-                            repo_names=[repo.full_name for repo in state.request.repos],
-                            original_instruction=request.original_instruction,
-                            code_map=request.profile,
-                            has_tools=not is_obvious,
-                        ),
+                agent.add_user_message(
+                    SolutionPrompts.format_default_msg(
+                        event=request.event_details.format_event(),
+                        root_cause=request.root_cause_and_fix,
+                        summary=request.summary,
+                        repo_names=[repo.full_name for repo in state.request.repos],
+                        original_instruction=request.original_instruction,
+                        code_map=request.profile,
+                        has_tools=not is_obvious,
                     ),
                 )
 
