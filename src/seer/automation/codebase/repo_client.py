@@ -333,7 +333,9 @@ class RepoClient:
                     )
                     path = closest_match
                 else:
-                    logger.error(f"No matching file found for path: {path}")
+                    logger.exception(
+                        "No matching file found for provided file path", extra={"path": path}
+                    )
                     return None, "utf-8"
 
         try:
@@ -366,9 +368,8 @@ class RepoClient:
         valid_file_paths: set[str] = set()
 
         for file in tree.tree:
-            if files_only and "." not in file.path:
-                continue
-            valid_file_paths.add(file.path)
+            if file.type == "blob":
+                valid_file_paths.add(file.path)
 
         return valid_file_paths
 

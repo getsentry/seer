@@ -223,15 +223,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             custom_solution = request.solution if isinstance(request.solution, str) else None
 
             if not request.initial_memory:
-                agent.memory.insert(
-                    0,
-                    Message(
-                        role="user",
-                        content=CodingPrompts.format_fix_msg(
-                            has_tools=not is_obvious,
-                            custom_solution=custom_solution,
-                            mode=request.mode,
-                        ),
+                agent.add_user_message(
+                    CodingPrompts.format_fix_msg(
+                        has_tools=not is_obvious,
+                        custom_solution=custom_solution,
+                        mode=request.mode,
                     ),
                 )
 

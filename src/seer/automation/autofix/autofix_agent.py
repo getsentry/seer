@@ -84,6 +84,7 @@ class AutofixAgent(LlmAgent):
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,
+            reasoning_effort=run_config.reasoning_effort,
         )
 
         cleared = False
