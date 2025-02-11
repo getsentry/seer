@@ -16,7 +16,7 @@ jobs:
       statuses: write
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get changed files
         id: changes
         uses: dorny/paths-filter@0bc4621a3135347011ad047f9ecf449bf72ce2bd # v3.0.0
@@ -27,7 +27,7 @@ jobs:
             all:
               - added|modified: '**/*'
 
-      - uses: getsentry/action-setup-venv@a133e6fd5fa6abd3f590a1c106abda344f5df69f # v2.1.0
+      - uses: getsentry/action-setup-venv@3a832a9604b3e1a4202ae559248f26867b467cc7 # v2.1.1
         with:
           python-version: 3.11.8
           cache-dependency-path: |
