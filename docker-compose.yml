@@ -27,6 +27,7 @@ services:
     app:
         build:
             context: .
+            dockerfile: Lightweight.Dockerfile
         working_dir: /app
         volumes:
             - ./pyproject.toml:/app/pyproject.toml
