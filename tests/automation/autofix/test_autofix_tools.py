@@ -2,13 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 
 
 @pytest.fixture
 def autofix_tools():
-    context = MagicMock()
+    context = MagicMock(type=AutofixContext)
     return BaseTools(context)
 
 
