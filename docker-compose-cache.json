@@ -1,0 +1,9 @@
+{
+    "target": {
+        "service-name": {
+            "cache-from": ["type=registry,ref=ghcr.io/getsentry/seer:cache"],
+            "cache-to": ["type=registry,ref=ghcr.io/getsentry/seer:cache"],
+            "output": ["type=docker"]
+        }
+    }
+}
