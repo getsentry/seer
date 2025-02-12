@@ -180,6 +180,9 @@ jobs:
       contents: "read"
       id-token: "write"
       packages: "read"
+    env:
+      TEST: 1
+      IMAGE_TAG: cache-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
