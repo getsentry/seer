@@ -28,6 +28,8 @@ RUN curl -L https://storage.googleapis.com/traffic-director/td-grpc-bootstrap-0.
 # Install dependencies
 COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
+# pytorch without gpu
+RUN pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install -r requirements.txt --no-cache-dir
 
 # Copy model files (assuming they are in the 'models' directory)
