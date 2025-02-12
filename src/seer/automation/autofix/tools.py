@@ -100,12 +100,8 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str | None = None):
+    def expand_document(self, file_path: str, repo_name: str):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
-
-        if repo_name is None:
-            client = self.context.get_repo_client(repo_name, self.repo_client_type)
-            repo_name = client.repo_name
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
 
