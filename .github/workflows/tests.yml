@@ -31,11 +31,12 @@ jobs:
       - name: Build and push Docker image
         run: |
           make .env
-          docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load \
-            -t ghcr.io/your_org/your_repo:${{ github.sha }} \
-            -t ghcr.io/your_org/your_repo:latest
-          docker push ghcr.io/your_org/your_repo:${{ github.sha }}
-          docker push ghcr.io/your_org/your_repo:latest
+          docker buildx bake --file docker-compose.yml --file docker-compose-cache.json \
+            --cache-to type=registry,ref=ghcr.io/getsentry/seer:cache,mode=max \
+            --cache-from type=registry,ref=ghcr.io/getsentry/seer:cache \
+            --load \
+            --set *.tags=ghcr.io/getsentry/seer:cache:${{ github.sha }}
+          docker push ghcr.io/getsentry/seer:cache:${{ github.sha }}
 
   typecheck:
     needs: [build_and_push]
@@ -48,7 +49,7 @@ jobs:
 
       - name: Pull pre-built Docker image
         run: |
-          docker pull ghcr.io/your_org/your_repo:${{ github.sha }}
+          docker pull ghcr.io/getsentry/seer:cache:${{ github.sha }}
 
       - name: Typecheck with mypy
         run: |
@@ -83,7 +84,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
       - name: Pull pre-built Docker image
         run: |
-          docker pull ghcr.io/your_org/your_repo:${{ github.sha }}
+          docker pull ghcr.io/getsentry/seer:cache:${{ github.sha }}
       - name: Migrate database
         run: |
           docker compose run app flask db history
