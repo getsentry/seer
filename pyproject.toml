@@ -17,7 +17,7 @@
     mypy_path = []
     plugins = ["pydantic.mypy"]
     files = ["src/"]
-    disable_error_code = ["no-untyped-def"]
+    disable_error_code = ["no-untyped-def", "unused-ignore"]
     # minimal strictness settings
     no_implicit_reexport = true
     warn_unreachable = true
