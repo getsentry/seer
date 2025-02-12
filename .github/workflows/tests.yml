@@ -11,7 +11,6 @@ concurrency:
 
 jobs:
   typecheck:
-    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -35,7 +34,6 @@ jobs:
           make mypy
 
   test:
-    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
