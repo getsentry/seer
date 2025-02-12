@@ -165,3 +165,11 @@ jobs:
           override_commit: ${{ github.event.pull_request.head.sha }}
           plugin: noop
           verbose: true
+
+  finish:
+    name: Finish Tests
+    needs: [test, typecheck]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tests completed
+        run: echo "All tests completed successfully"
