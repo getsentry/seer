@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4, 5]
+        group: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
 
@@ -89,6 +89,7 @@ jobs:
       - name: Pull pre-built Docker image
         run: |
           docker pull ghcr.io/getsentry/seer:cache-${{ github.sha }}
+          cp docker-compose.ci.yml docker-compose.override.yml
       - name: Create blank .env
         run: |
           make .env
@@ -114,7 +115,8 @@ jobs:
       - name: Test with pytest
         run: |
           docker compose up -d test-db
-          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app bash -c "pip install pytest-split && pytest --splits 5 --group ${{ matrix.group }} --cov . --cov-report=\"xml:.artifacts/coverage.xml\" -vv"
+          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app bash -c "pip install pytest-split && pytest --splits 8 --group ${{ matrix.group }} --cov . --cov-report=\"xml:.artifacts/coverage.xml\" -vv"
+
       - name: Upload to codecov
         if: ${{ always() }}
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
