@@ -44,12 +44,14 @@ jobs:
     permissions:
       contents: "read"
       id-token: "write"
+    env:
+      IMAGE_TAG: cache-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Pull pre-built Docker image
         run: |
-          docker pull ghcr.io/getsentry/seer:cache-${{ github.sha }}
+          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
           cp docker-compose.ci.yml docker-compose.override.yml
 
       - name: Create blank .env
@@ -58,7 +60,7 @@ jobs:
 
       - name: Typecheck with mypy
         run: |
-          IMAGE_TAG=cache-${{ github.sha }} docker compose run app mypy
+          docker compose run app mypy
 
   test:
     needs: [build_and_push]
@@ -68,6 +70,7 @@ jobs:
       id-token: "write"
     env:
       TEST: 1
+      IMAGE_TAG: cache-${{ github.sha }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,7 +91,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
       - name: Pull pre-built Docker image
         run: |
-          docker pull ghcr.io/getsentry/seer:cache-${{ github.sha }}
+          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
           cp docker-compose.ci.yml docker-compose.override.yml
       - name: Create blank .env
         run: |
