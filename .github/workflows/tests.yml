@@ -29,6 +29,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - id: "auth"
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
+          service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
+          token_format: "id_token"
+          id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
+          id_token_include_email: true
+          create_credentials_file: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Fetch models
+        # if: github.event_name == 'push'
+        run: |
+          rm -rf ./models
+          gcloud storage cp -r gs://sentry-ml/seer/models ./
+
       - name: Build and push Docker image
         run: |
           make .env
@@ -102,9 +121,6 @@ jobs:
           id_token_include_email: true
           create_credentials_file: true
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-
       - name: Pull pre-built Docker image
         run: |
           docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
@@ -135,9 +151,9 @@ jobs:
       - name: Restore test durations cache
         uses: actions/cache@v4
         with:
-          path: .pytest_cache
-          key: ${{ runner.os }}-pytest-split-cache-${{ hashFiles('requirements*.txt') }}
-          restore-keys: ${{ runner.os }}-pytest-split-cache-
+          path: test-durations.json
+          key: ${{ runner.os }}-test-durations-cache-${{ hashFiles('requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-test-durations-cache-
 
       - name: Test with pytest
         run: |
@@ -145,13 +161,6 @@ jobs:
           docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app bash -c "\
             pip install pytest-split && \
             pytest --splits 8 --group ${{ matrix.group }} --cov . --cov-report=\"xml:.artifacts/coverage.xml\" -vv"
-
-      - name: Save updated test durations cache
-        uses: actions/cache@v4
-        with:
-          path: .pytest_cache
-          key: ${{ runner.os }}-pytest-split-cache-${{ hashFiles('requirements*.txt') }}
-          restore-keys: ${{ runner.os }}-pytest-split-cache-
 
       - name: Upload to codecov
         if: ${{ always() }}
@@ -162,3 +171,79 @@ jobs:
           override_commit: ${{ github.event.pull_request.head.sha }}
           plugin: noop
           verbose: true
+
+  test_durations:
+    needs: [build_and_push]
+    runs-on: ubuntu-latest
+    # if: github.event_name == 'push'
+    permissions:
+      contents: "read"
+      id-token: "write"
+      packages: "read"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: "auth"
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
+          service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
+          token_format: "id_token"
+          id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
+          id_token_include_email: true
+          create_credentials_file: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Pull pre-built Docker image
+        run: |
+          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
+          cp docker-compose.ci.yml docker-compose.override.yml
+
+      - name: Create blank .env
+        run: make .env
+
+      - name: Migrate database
+        run: docker compose run app flask db upgrade
+
+      - name: Decrypt VCR cassettes
+        run: |
+          pip install -r scripts/requirements.txt
+          make vcr-decrypt
+
+      - name: Set test environment flags
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          else
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          fi
+
+      - name: Restore test durations cache
+        uses: actions/cache@v4
+        with:
+          path: test-durations.json
+          key: ${{ runner.os }}-test-durations-cache-${{ hashFiles('requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-test-durations-cache-
+
+      - name: Test with pytest
+        run: |
+          docker compose up -d test-db
+          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app bash -c "\
+            pip install pytest-split && \
+            pytest --store-durations --durations-path=test-durations.json -vv"
+
+      - name: Save updated test durations cache
+        uses: actions/cache@v4
+        with:
+          path: test-durations.json
+          key: ${{ runner.os }}-test-durations-cache-${{ hashFiles('requirements*.txt') }}
+          restore-keys: ${{ runner.os }}-test-durations-cache-
