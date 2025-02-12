@@ -293,7 +293,7 @@ class BaseTools:
                 repo_name=repo_name, type=self.repo_client_type
             )
             all_paths = repo_client.get_index_file_set()
-            found = [path for path in all_paths if os.path.basename(path) == filename]
+            found = [path for path in all_paths if os.path.basename(path).lower() == filename.lower()]
             if found:
                 found_files += f"\n FILES IN REPO {repo_name}:\n"
                 found_files += "\n".join([f"  {path}" for path in sorted(found)])
