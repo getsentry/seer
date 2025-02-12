@@ -45,7 +45,12 @@ class BaseTools:
         self.cleanup()
 
     def _get_repo_names(self) -> list[str]:
-        return [f"{repo.owner}/{repo.name}" for repo in self.context.repos]
+        if isinstance(self.context, AutofixContext):
+            return [f"{repo.owner}/{repo.name}" for repo in self.context.repos]
+        elif isinstance(self.context, CodegenContext):
+            return [f"{self.context.repo.owner}/{self.context.repo.name}"]
+        else:
+            raise ValueError(f"Unsupported context type: {type(self.context)}")
 
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
