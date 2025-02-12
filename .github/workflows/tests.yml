@@ -102,10 +102,21 @@ jobs:
         run: |
           pip install -r scripts/requirements.txt
           make vcr-decrypt
+
+      - name: Set test environment flags
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          else
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          fi
+
       - name: Test with pytest
         run: |
           docker compose up -d test-db
-          docker compose run app pip install pytest-split && pytest --splits 5 --group ${{ matrix.group }} --cov . --cov-report="xml:.artifacts/coverage.xml" -vv \
+          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app \
+            pip install pytest-split && \
+            pytest --splits 5 --group ${{ matrix.group }} --cov . --cov-report="xml:.artifacts/coverage.xml" -vv
       - name: Upload to codecov
         if: ${{ always() }}
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
