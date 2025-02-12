@@ -36,7 +36,6 @@ services:
             - ./models:/app/models
             - ./data/chroma:/app/data/chroma
             - ~/.config/gcloud:/root/.config/gcloud
-            - ./test-durations.json:/app/test-durations.json
             # Codecov test artifacts
             - ./.artifacts:/app/.artifacts
         healthcheck:
