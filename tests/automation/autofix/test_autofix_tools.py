@@ -9,7 +9,8 @@ from seer.automation.codebase.repo_client import RepoClientType
 
 @pytest.fixture
 def autofix_tools():
-    context = MagicMock(type=AutofixContext)
+    context = MagicMock(AutofixContext)
+    context.event_manager = MagicMock()
     return BaseTools(context)
 
 
