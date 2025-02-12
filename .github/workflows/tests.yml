@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: "read"
       id-token: "write"
+      packages: "write"
 
     env:
       TEST: 1
@@ -52,18 +53,9 @@ jobs:
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load
           docker compose run app flask db history
           docker compose run app flask db upgrade
-      - name: Save Docker images
+      - name: Push Docker images
         run: |
-          mkdir -p /tmp/docker-images
-          docker compose config --format json | jq -r '.services[].image' | while read -r image; do
-            docker save "$image" > "/tmp/docker-images/$(echo $image | tr '/:' '_').tar"
-          done
-      - name: Upload Docker images
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-images
-          path: /tmp/docker-images/*.tar
-          retention-days: 1
+          docker compose push
 
   test:
     needs: build
@@ -95,16 +87,9 @@ jobs:
           else
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           fi
-      - name: Download Docker images
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-images
-          path: /tmp/docker-images
-      - name: Load Docker images
+      - name: Pull Docker images
         run: |
-          for image in /tmp/docker-images/*.tar; do
-            docker load < "$image"
-          done
+          docker compose pull
       - name: Typecheck with mypy
         run: |
           make mypy
