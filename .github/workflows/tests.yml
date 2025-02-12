@@ -74,16 +74,9 @@ jobs:
         run: |
           make .env
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load
-      - name: Migrate database
-        run: |
-          docker compose run app flask db history
-          docker compose run app flask db upgrade
       - name: Typecheck with mypy
         run: |
           make mypy
-      - name: Validate no pending migrations
-        run: |
-          make check-no-pending-migrations
 
   test:
     needs: build
@@ -118,9 +111,6 @@ jobs:
         run: |
           docker compose run app flask db history
           docker compose run app flask db upgrade
-      - name: Typecheck with mypy
-        run: |
-          make mypy
       - name: Validate no pending migrations
         run: |
           make check-no-pending-migrations
