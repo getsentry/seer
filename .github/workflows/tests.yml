@@ -41,6 +41,10 @@ jobs:
       packages: "write"
     env:
       TEST: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - id: "auth"
@@ -91,10 +95,12 @@ jobs:
           make vcr-decrypt
       - name: Test with pytest
         run: |
-          make test
+          docker compose run app pip install pytest-split
+          docker compose up -d test-db
+          docker compose run $(EXTRA_COMPOSE_TEST_OPTIONS) app pytest --cov . --cov-report="xml:.artifacts/coverage.xml" -vv  --splits 5 --group ${{ matrix.group }}
       - name: Upload to codecov
         if: ${{ always() }}
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4.0.1
+        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ".artifacts/coverage.xml"
