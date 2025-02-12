@@ -49,8 +49,10 @@ jobs:
           fi
       - name: Build image
         run: |
+          make .env
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json
-          make update
+          docker compose run app flask db history
+          docker compose run app flask db upgrade
       - name: Typecheck with mypy
         run: |
           make mypy
