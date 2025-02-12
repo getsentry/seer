@@ -79,6 +79,7 @@ jobs:
         run: docker compose run app mypy
 
   test:
+    name: Parallelized Tests
     needs: [build_and_push]
     runs-on: ubuntu-latest
     permissions:
