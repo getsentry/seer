@@ -91,6 +91,7 @@ class StacktraceFrame(BaseModel):
             return filtered_list if filtered_list else None
         return None if StacktraceFrame._contains_filtered(value) else value
 
+    @staticmethod
     def _contains_filtered(value: Any) -> bool:
         return isinstance(value, str) and "[Filtered]" in value
 
