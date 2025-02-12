@@ -111,7 +111,11 @@ class RootCauseStep(AutofixPipelineStep):
                         pr_url=pr_to_comment_on, repo_definition=repo, root_cause=cause_string
                     )
 
-        # automatically start solution step here
+        # Early return if no causes were found
+        if not root_cause_output.causes:
+            return
+
+        # Only proceed with solution step if we have root causes
         self.context.event_manager.set_selected_root_cause(
             AutofixRootCauseUpdatePayload(
                 cause_id=root_cause_output.causes[0].id,
