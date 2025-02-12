@@ -89,6 +89,7 @@ jobs:
           fi
       - name: Pull Docker images
         run: |
+          make .env
           docker compose pull
       - name: Typecheck with mypy
         run: |
