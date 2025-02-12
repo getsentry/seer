@@ -55,12 +55,10 @@ jobs:
           cp docker-compose.ci.yml docker-compose.override.yml
 
       - name: Create blank .env
-        run: |
-          make .env
+        run: make .env
 
       - name: Typecheck with mypy
-        run: |
-          docker compose run app mypy
+        run: docker compose run app mypy
 
   test:
     needs: [build_and_push]
@@ -87,21 +85,24 @@ jobs:
           id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
           id_token_include_email: true
           create_credentials_file: true
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
+
       - name: Pull pre-built Docker image
         run: |
           docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
           cp docker-compose.ci.yml docker-compose.override.yml
+
       - name: Create blank .env
-        run: |
-          make .env
+        run: make .env
+
       - name: Migrate database
-        run: |
-          docker compose run app flask db upgrade
+        run: docker compose run app flask db upgrade
+
       - name: Validate no pending migrations
-        run: |
-          make check-no-pending-migrations
+        run: make check-no-pending-migrations
+
       - name: Decrypt VCR cassettes
         run: |
           pip install -r scripts/requirements.txt
