@@ -50,7 +50,7 @@ jobs:
       - name: Check if Docker image is cached
         id: cache_check
         run: |
-          IMAGE_TAG="ghcr.io/${{ github.repository }}:latest"
+          IMAGE_TAG="ghcr.io/getsentry/seer:cache"
           if docker pull "$IMAGE_TAG"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -63,10 +63,16 @@ jobs:
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load
           docker compose run app flask db history
           docker compose run app flask db upgrade
-      - name: Push Docker images
-        if: steps.cache_check.outputs.exists == 'false'
+      - name: Save images to tarball
         run: |
-          docker compose --file docker-compose.yml --file docker-compose-cache.json push
+          mkdir -p ./image-cache
+          docker save $(docker compose config --images) -o ./image-cache/images.tar
+
+      - name: Upload image cache
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-images
+          path: ./image-cache/images.tar
 
   test:
     needs: build
@@ -89,8 +95,6 @@ jobs:
           create_credentials_file: true
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Set EXTRA_COMPOSE_TEST_OPTIONS
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -98,10 +102,12 @@ jobs:
           else
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           fi
-      - name: Pull Docker images
-        run: |
-          make .env
-          docker compose --file docker-compose.yml --file docker-compose-cache.json pull
+      - name: Download image cache
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-images
+      - name: Load cached images
+        run: docker load -i images.tar
       - name: Typecheck with mypy
         run: |
           make mypy
