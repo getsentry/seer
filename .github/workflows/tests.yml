@@ -32,9 +32,9 @@ jobs:
         run: |
           make .env
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json \
-            --cache-to type=registry,ref=ghcr.io/getsentry/seer:cache,mode=max \
-            --cache-from type=registry,ref=ghcr.io/getsentry/seer:cache \
-            --load \
+            --set *.cache-to=type=registry,ref=ghcr.io/getsentry/seer:cache,mode=max \
+            --set *.cache-from=type=registry,ref=ghcr.io/getsentry/seer:cache \
+            --set *.load=true \
             --set *.tags=ghcr.io/getsentry/seer:cache:${{ github.sha }}
           docker push ghcr.io/getsentry/seer:cache:${{ github.sha }}
 
