@@ -55,7 +55,7 @@ jobs:
           docker compose run app flask db upgrade
       - name: Push Docker images
         run: |
-          docker compose push
+          docker compose --file docker-compose.yml --file docker-compose-cache.json push
 
   test:
     needs: build
@@ -90,7 +90,7 @@ jobs:
       - name: Pull Docker images
         run: |
           make .env
-          docker compose pull
+          docker compose --file docker-compose.yml --file docker-compose-cache.json pull
       - name: Typecheck with mypy
         run: |
           make mypy
