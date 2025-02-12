@@ -35,9 +35,8 @@ jobs:
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json \
             --set *.cache-to=type=registry,ref=ghcr.io/getsentry/seer:cache,mode=max \
             --set *.cache-from=type=registry,ref=ghcr.io/getsentry/seer:cache \
-            --set *.load=true \
+            --set *.output=type=registry \
             --set *.tags=ghcr.io/getsentry/seer:cache-${{ github.sha }}
-          docker push ghcr.io/getsentry/seer:cache-${{ github.sha }}
 
   typecheck:
     needs: [build_and_push]
@@ -115,7 +114,7 @@ jobs:
       - name: Test with pytest
         run: |
           docker compose up -d test-db
-          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app pip install pytest-split && pytest --splits 5 --group ${{ matrix.group }} --cov . --cov-report="xml:.artifacts/coverage.xml" -vv
+          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app bash -c "pip install pytest-split && pytest --splits 5 --group ${{ matrix.group }} --cov . --cov-report=\"xml:.artifacts/coverage.xml\" -vv"
       - name: Upload to codecov
         if: ${{ always() }}
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
