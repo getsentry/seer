@@ -113,7 +113,7 @@ jobs:
           fi
 
       - name: Restore test durations cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .pytest_cache
           key: ${{ runner.os }}-pytest-split-cache-${{ hashFiles('requirements*.txt') }}
@@ -127,7 +127,7 @@ jobs:
             pytest --splits 8 --group ${{ matrix.group }} --cov . --cov-report=\"xml:.artifacts/coverage.xml\" -vv"
 
       - name: Save updated test durations cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .pytest_cache
           key: ${{ runner.os }}-pytest-split-cache-${{ hashFiles('requirements*.txt') }}
