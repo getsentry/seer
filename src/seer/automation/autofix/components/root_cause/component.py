@@ -35,7 +35,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     ) -> RootCauseAnalysisOutput:
         is_obvious = (
             IsRootCauseObviousComponent(self.context).invoke(
-                IsRootCauseObviousRequest(event_details=request.event_details)
+                IsRootCauseObviousRequest(
+                    event_details=request.event_details,
+                    instruction=request.instruction,
+                )
             )
             if not request.initial_memory
             else None
