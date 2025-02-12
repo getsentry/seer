@@ -112,6 +112,9 @@ jobs:
           id_token_include_email: true
           create_credentials_file: true
 
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
       - name: Pull pre-built Docker image
         run: |
           docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
@@ -131,9 +134,6 @@ jobs:
           pip install -r scripts/requirements.txt
           make vcr-decrypt
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-
       - name: Fetch models
         if: github.event_name == 'push'
         run: |
@@ -142,7 +142,11 @@ jobs:
 
       - name: Set test environment flags
         run: |
-          echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          else
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          fi
 
       # - name: Restore test durations cache
       #   uses: actions/cache@v4
