@@ -97,7 +97,7 @@ jobs:
         run: |
           docker compose run app pip install pytest-split
           docker compose up -d test-db
-          docker compose run $(EXTRA_COMPOSE_TEST_OPTIONS) app pytest --cov . --cov-report="xml:.artifacts/coverage.xml" -vv  --splits 5 --group ${{ matrix.group }}
+          docker compose run $EXTRA_COMPOSE_TEST_OPTIONS app pytest --cov . --cov-report="xml:.artifacts/coverage.xml" -vv  --splits 5 --group ${{ matrix.group }}
       - name: Upload to codecov
         if: ${{ always() }}
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
