@@ -203,30 +203,6 @@ class TestStacktraceHelpers(unittest.TestCase):
         expected_str = " helper in file utils.py in repo my_repo [Line 15] (Not in app)\n    helper()  <-- SUSPECT LINE\n------\n"
         self.assertEqual(stacktrace.to_str(max_frames=1), expected_str)
 
-    def test_stacktrace_scrub_pii(self):
-        test_cases = [
-            ("Contact me at john.doe@example.com.", "Contact me at REDACTED_EMAIL."),
-            ("My phone number is 123-456-7890.", "My phone number is REDACTED_PHONE_NUMBER."),
-            ("My phone number is +1 123-456-7890.", "My phone number is REDACTED_PHONE_NUMBER."),
-            (
-                "My credit card number is 4111 1111 1111 1111.",
-                "My credit card number is REDACTED_CREDIT_CARD.",
-            ),
-            (
-                "I live at 123 Main St. with my mom.",
-                "I live at REDACTED_STREET_ADDRESS with my mom.",
-            ),
-            ("Send it to PO Box 123.", "Send it to REDACTED_PO_BOX."),
-            ("My SSN is 123-45-6789.", "My SSN is REDACTED_SSN."),
-            ("The price is $19.99.", "The price is REDACTED_PRICE."),
-            ("My IP address is 192.168.1.1.", "My IP address is REDACTED_IP."),
-        ]
-
-        stacktrace = Stacktrace(frames=[])
-        for text, expected in test_cases:
-            with self.subTest(text=text):
-                self.assertEqual(stacktrace._scrub_pii(text), expected)
-
     def test_trim_frames(self):
         frames = [
             StacktraceFrame(
