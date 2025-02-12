@@ -94,7 +94,6 @@ jobs:
           make .env
       - name: Migrate database
         run: |
-          docker compose run app flask db history
           docker compose run app flask db upgrade
       - name: Validate no pending migrations
         run: |
