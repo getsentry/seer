@@ -47,13 +47,24 @@ jobs:
         run: |
           rm -rf ./models
           gcloud storage cp -r gs://sentry-ml/seer/models ./
+      - name: Check if Docker image is cached
+        id: cache_check
+        run: |
+          IMAGE_TAG="ghcr.io/${{ github.repository }}:latest"
+          if docker pull "$IMAGE_TAG"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build image
+        if: steps.cache_check.outputs.exists == 'false'
         run: |
           make .env
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load
           docker compose run app flask db history
           docker compose run app flask db upgrade
       - name: Push Docker images
+        if: steps.cache_check.outputs.exists == 'false'
         run: |
           docker compose --file docker-compose.yml --file docker-compose-cache.json push
 
