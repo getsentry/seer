@@ -10,30 +10,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  typecheck:
+  build_and_push:
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build image
+
+      - name: Build and push Docker image
         run: |
           make .env
-          docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load
+          docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load \
+            -t ghcr.io/your_org/your_repo:${{ github.sha }} \
+            -t ghcr.io/your_org/your_repo:latest
+          docker push ghcr.io/your_org/your_repo:${{ github.sha }}
+          docker push ghcr.io/your_org/your_repo:latest
+
+  typecheck:
+    needs: [build_and_push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull pre-built Docker image
+        run: |
+          docker pull ghcr.io/your_org/your_repo:${{ github.sha }}
+
       - name: Typecheck with mypy
         run: |
           make mypy
 
   test:
+    needs: [build_and_push]
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -47,6 +69,7 @@ jobs:
         group: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
+
       - id: "auth"
         uses: google-github-actions/auth@v1
         with:
@@ -58,30 +81,9 @@ jobs:
           create_credentials_file: true
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Fetch models
-        if: github.event_name == 'push'
+      - name: Pull pre-built Docker image
         run: |
-          rm -rf ./models
-          gcloud storage cp -r gs://sentry-ml/seer/models ./
-      - name: Build image
-        run: |
-          make .env
-          docker buildx bake --file docker-compose.yml --file docker-compose-cache.json --load
-      - name: Set EXTRA_COMPOSE_TEST_OPTIONS
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
-          else
-            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
-          fi
+          docker pull ghcr.io/your_org/your_repo:${{ github.sha }}
       - name: Migrate database
         run: |
           docker compose run app flask db history
@@ -97,7 +99,8 @@ jobs:
         run: |
           docker compose run app pip install pytest-split
           docker compose up -d test-db
-          docker compose run $EXTRA_COMPOSE_TEST_OPTIONS app pytest --cov . --cov-report="xml:.artifacts/coverage.xml" -vv  --splits 5 --group ${{ matrix.group }}
+          docker compose run app pytest --cov . --cov-report="xml:.artifacts/coverage.xml" -vv \
+            --splits 5 --group ${{ matrix.group }}
       - name: Upload to codecov
         if: ${{ always() }}
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
