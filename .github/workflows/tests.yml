@@ -52,6 +52,10 @@ jobs:
         run: |
           docker pull ghcr.io/getsentry/seer:cache-${{ github.sha }}
 
+      - name: Create blank .env
+        run: |
+          make .env
+
       - name: Typecheck with mypy
         run: |
           make mypy
@@ -85,6 +89,9 @@ jobs:
       - name: Pull pre-built Docker image
         run: |
           docker pull ghcr.io/getsentry/seer:cache-${{ github.sha }}
+      - name: Create blank .env
+        run: |
+          make .env
       - name: Migrate database
         run: |
           docker compose run app flask db history
