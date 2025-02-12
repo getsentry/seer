@@ -51,6 +51,7 @@ jobs:
       - name: Pull pre-built Docker image
         run: |
           docker pull ghcr.io/getsentry/seer:cache-${{ github.sha }}
+          cp docker-compose.ci.yml docker-compose.override.yml
 
       - name: Create blank .env
         run: |
@@ -58,7 +59,7 @@ jobs:
 
       - name: Typecheck with mypy
         run: |
-          make mypy
+          IMAGE_TAG=cache-${{ github.sha }} docker compose run app mypy
 
   test:
     needs: [build_and_push]
