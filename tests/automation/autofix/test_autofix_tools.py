@@ -17,9 +17,7 @@ def autofix_tools():
 class TestFileSearch:
     def test_file_search_found(self, autofix_tools: BaseTools):
         # Set up a dummy repo so that _get_repo_names() returns "testowner/testrepo"
-        dummy_repo = MagicMock(owner="testowner", name="testrepo")
-        dummy_repo.owner = "testowner"
-        dummy_repo.name = "testrepo"
+        dummy_repo = MagicMock(full_name="testowner/testrepo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -39,9 +37,7 @@ class TestFileSearch:
         assert result == expected
 
     def test_file_search_not_found(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="testowner", name="testrepo")
-        dummy_repo.owner = "testowner"
-        dummy_repo.name = "testrepo"
+        dummy_repo = MagicMock(full_name="testowner/testrepo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -57,10 +53,7 @@ class TestFileSearch:
         assert result == expected
 
     def test_file_search_with_repo_name(self, autofix_tools: BaseTools):
-        # Instead of passing repo_name directly, set the context's repos.
-        dummy_repo = MagicMock(owner="owner", name="test_repo")
-        dummy_repo.owner = "owner"
-        dummy_repo.name = "test_repo"
+        dummy_repo = MagicMock(full_name="owner/test_repo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -68,18 +61,80 @@ class TestFileSearch:
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
         autofix_tools.repo_client_type = RepoClientType.READ
 
-        # Call file_search without a repo_name parameter.
         autofix_tools.file_search("file1.py")
         autofix_tools.context.get_repo_client.assert_any_call(
             repo_name="owner/test_repo", type=RepoClientType.READ
         )
 
+    def test_file_search_multi_repo_overlapping(self, autofix_tools: BaseTools):
+        # Set up two dummy repositories with overlapping filenames
+        dummy_repo1 = MagicMock(full_name="ownerA/repoA")
+        dummy_repo2 = MagicMock(full_name="ownerB/repoB")
+        autofix_tools.context.repos = [dummy_repo1, dummy_repo2]
+
+        # Prepare repo clients with overlapping file names
+        client_repo1 = MagicMock()
+        client_repo1.get_index_file_set.return_value = {"common/overlap.py", "unique/file1.py"}
+        client_repo2 = MagicMock()
+        client_repo2.get_index_file_set.return_value = {"lib/overlap.py", "unique/file2.py"}
+
+        # Return a specific client based on the repository name
+        def get_repo_client_side_effect(repo_name, type):
+            if repo_name == "ownerA/repoA":
+                return client_repo1
+            elif repo_name == "ownerB/repoB":
+                return client_repo2
+            return MagicMock()
+
+        autofix_tools.context.get_repo_client.side_effect = get_repo_client_side_effect
+
+        result = autofix_tools.file_search("overlap.py")
+        expected = (
+            "\n FILES IN REPO ownerA/repoA:\n  common/overlap.py"
+            "\n FILES IN REPO ownerB/repoB:\n  lib/overlap.py"
+        )
+        assert result == expected
+
+    def test_file_search_multi_repo(self, autofix_tools: BaseTools):
+        # Set up two dummy repositories.
+        dummy_repo1 = MagicMock(full_name="owner/repo1")
+        dummy_repo2 = MagicMock(full_name="owner/repo2")
+        autofix_tools.context.repos = [dummy_repo1, dummy_repo2]
+
+        client_repo1 = MagicMock()
+        client_repo1.get_index_file_set.return_value = {
+            "src/app/file.py",
+            "docs/file.py",
+            "README.md",
+        }
+        client_repo2 = MagicMock()
+        client_repo2.get_index_file_set.return_value = {
+            "src/file.py",
+            "file.py",
+            "test/test_file.py",
+        }
+
+        # Return the appropriate repo client based on the repository name.
+        def get_repo_client_side_effect(repo_name, type):
+            if repo_name == "owner/repo1":
+                return client_repo1
+            elif repo_name == "owner/repo2":
+                return client_repo2
+            return MagicMock()
+
+        autofix_tools.context.get_repo_client.side_effect = get_repo_client_side_effect
+
+        result = autofix_tools.file_search("file.py")
+        expected = (
+            "\n FILES IN REPO owner/repo1:\n  docs/file.py\n  src/app/file.py"
+            "\n FILES IN REPO owner/repo2:\n  file.py\n  src/file.py"
+        )
+        assert result == expected
+
 
 class TestFileSearchWildcard:
     def test_file_search_wildcard_found(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="testowner", name="testrepo")
-        dummy_repo.owner = "testowner"
-        dummy_repo.name = "testrepo"
+        dummy_repo = MagicMock(full_name="testowner/testrepo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -95,9 +150,7 @@ class TestFileSearchWildcard:
         assert result == expected
 
     def test_file_search_wildcard_not_found(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="testowner", name="testrepo")
-        dummy_repo.owner = "testowner"
-        dummy_repo.name = "testrepo"
+        dummy_repo = MagicMock(full_name="testowner/testrepo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -113,9 +166,7 @@ class TestFileSearchWildcard:
         assert result == expected
 
     def test_file_search_wildcard_with_repo_name(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="owner", name="test_repo")
-        dummy_repo.owner = "owner"
-        dummy_repo.name = "test_repo"
+        dummy_repo = MagicMock(full_name="owner/test_repo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -127,6 +178,35 @@ class TestFileSearchWildcard:
         autofix_tools.context.get_repo_client.assert_any_call(
             repo_name="owner/test_repo", type=RepoClientType.READ
         )
+
+    def test_file_search_wildcard_multi_repo(self, autofix_tools: BaseTools):
+        # Set up two dummy repositories.
+        dummy_repo1 = MagicMock(full_name="owner/repo1")
+        dummy_repo2 = MagicMock(full_name="owner/repo2")
+        autofix_tools.context.repos = [dummy_repo1, dummy_repo2]
+
+        # Prepare each repo client with its own file index.
+        client_repo1 = MagicMock()
+        client_repo1.get_index_file_set.return_value = {"src/app/file.py", "docs/readme.txt"}
+        client_repo2 = MagicMock()
+        client_repo2.get_index_file_set.return_value = {"src/file.py", "test/test_file.py"}
+
+        # Return the appropriate repo client based on the repository name.
+        def get_repo_client_side_effect(repo_name, type):
+            if repo_name == "owner/repo1":
+                return client_repo1
+            elif repo_name == "owner/repo2":
+                return client_repo2
+            return MagicMock()
+
+        autofix_tools.context.get_repo_client.side_effect = get_repo_client_side_effect
+
+        result = autofix_tools.file_search_wildcard("*file.py")
+        expected = (
+            "\n FILES IN REPO owner/repo1:\n  src/app/file.py"
+            "\n FILES IN REPO owner/repo2:\n  src/file.py\n  test/test_file.py"
+        )
+        assert result == expected
 
 
 class TestFileSystem:
@@ -170,9 +250,7 @@ class TestFileSystem:
 
 class TestSemanticFileSearch:
     def test_semantic_file_search_found(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="owner", name="test_repo")
-        dummy_repo.owner = "owner"
-        dummy_repo.name = "test_repo"
+        dummy_repo = MagicMock(full_name="owner/test_repo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -198,9 +276,7 @@ class TestSemanticFileSearch:
         assert result == expected
 
     def test_semantic_file_search_not_found_no_file_path(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="owner", name="test_repo")
-        dummy_repo.owner = "owner"
-        dummy_repo.name = "test_repo"
+        dummy_repo = MagicMock(full_name="owner/test_repo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -220,9 +296,7 @@ class TestSemanticFileSearch:
         assert result == expected
 
     def test_semantic_file_search_not_found_no_contents(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(owner="owner", name="test_repo")
-        dummy_repo.owner = "owner"
-        dummy_repo.name = "test_repo"
+        dummy_repo = MagicMock(full_name="owner/test_repo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -247,9 +321,7 @@ class TestSemanticFileSearch:
     def test_semantic_file_search_with_repo_name(self, autofix_tools: BaseTools):
         # Instead of passing repo_name directly as an argument,
         # set context.repos so that _get_repo_names() returns "owner/specific_repo"
-        dummy_repo = MagicMock(owner="owner", name="specific_repo")
-        dummy_repo.owner = "owner"
-        dummy_repo.name = "specific_repo"
+        dummy_repo = MagicMock(full_name="owner/specific_repo")
         autofix_tools.context.repos = [dummy_repo]
 
         mock_repo_client = MagicMock()
@@ -267,3 +339,38 @@ class TestSemanticFileSearch:
         autofix_tools.context.get_repo_client.assert_any_call(
             repo_name="owner/specific_repo", type=RepoClientType.READ
         )
+
+    def test_semantic_file_search_multi_repo(self, autofix_tools: BaseTools):
+        # Create two dummy repos
+        dummy_repo1 = MagicMock(full_name="owner/repo1")
+        dummy_repo2 = MagicMock(full_name="owner/repo2")
+        autofix_tools.context.repos = [dummy_repo1, dummy_repo2]
+
+        # Each repo returns a different set of valid file paths.
+        client_repo1 = MagicMock()
+        client_repo1.get_valid_file_paths.return_value = ["src/main.py", "src/helper.py"]
+        client_repo2 = MagicMock()
+        client_repo2.get_valid_file_paths.return_value = ["src/main.py", "README.md"]
+
+        # Use a side effect to return the proper client for each repo.
+        def get_repo_client_side_effect(repo_name, type):
+            if repo_name == "owner/repo1":
+                return client_repo1
+            elif repo_name == "owner/repo2":
+                return client_repo2
+            return MagicMock()
+
+        autofix_tools.context.get_repo_client.side_effect = get_repo_client_side_effect
+
+        # Simulate file contents for a file in repo2.
+        autofix_tools.context.get_file_contents.return_value = "print('Hello from repo2')"
+
+        # Create a dummy LLM client which returns that for the query 'find main'
+        response = MagicMock()
+        response.parsed = MagicMock(file_path="src/main.py", repo_name="owner/repo2")
+        mock_llm_client = MagicMock()
+        mock_llm_client.generate_structured.return_value = response
+
+        result = autofix_tools.semantic_file_search("find main", llm_client=mock_llm_client)
+        expected = "This file might be what you're looking for: `src/main.py`. Contents:\n\nprint('Hello from repo2')"
+        assert result == expected

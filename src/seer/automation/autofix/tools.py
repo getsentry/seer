@@ -46,9 +46,9 @@ class BaseTools:
 
     def _get_repo_names(self) -> list[str]:
         if isinstance(self.context, AutofixContext):
-            return [f"{repo.owner}/{repo.name}" for repo in self.context.repos]
+            return [repo.full_name for repo in self.context.repos]
         elif isinstance(self.context, CodegenContext):
-            return [f"{self.context.repo.owner}/{self.context.repo.name}"]
+            return [self.context.repo.full_name]
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
@@ -293,7 +293,9 @@ class BaseTools:
                 repo_name=repo_name, type=self.repo_client_type
             )
             all_paths = repo_client.get_index_file_set()
-            found = [path for path in all_paths if os.path.basename(path).lower() == filename.lower()]
+            found = [
+                path for path in all_paths if os.path.basename(path).lower() == filename.lower()
+            ]
             if found:
                 found_files += f"\n FILES IN REPO {repo_name}:\n"
                 found_files += "\n".join([f"  {path}" for path in sorted(found)])
