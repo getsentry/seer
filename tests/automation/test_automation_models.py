@@ -618,3 +618,64 @@ def test_profile_format_with_custom_context():
     # Test with asymmetric context
     asymmetric_context = profile.format_profile(context_before=1, context_after=0)
     assert asymmetric_context == "...\n  → func1 (utils.py)\n  → relevant_func (core.py)\n..."
+
+
+def test_stacktraceframe_filtering():
+    from seer.automation.models import StacktraceFrame
+
+    # Test _contains_filtered
+    assert not StacktraceFrame._contains_filtered("This is safe")
+    assert StacktraceFrame._contains_filtered("This is [Filtered] content")
+
+    # Test _filter_nested_value with a nested dict and list structure
+    sample_dict = {
+        "key1": "safe value",
+        "key2": "this is [Filtered] value",
+        "key3": {
+            "subkey1": "another [Filtered] test",
+            "subkey2": "clean value",
+        },
+        "key4": [
+            "value1",
+            "value2",
+            "value [Filtered] extra",
+            {
+                "list_key": "normal",
+                "filter": "[Filtered]",
+            },
+        ],
+    }
+    filtered_dict = StacktraceFrame._filter_nested_value(sample_dict)
+    expected_filtered_dict = {
+        "key1": "safe value",
+        "key3": {"subkey2": "clean value"},
+        "key4": ["value1", "value2", {"list_key": "normal"}],
+    }
+    assert filtered_dict == expected_filtered_dict
+
+    # Test _trim_vars which should only keep keys mentioned in code_context and also apply filtering
+    vars_input = {
+        "key1": "safe value",
+        "key2": "this is [Filtered] value",
+        "key3": {
+            "subkey1": "another [Filtered] test",
+            "subkey2": "clean value",
+            "subkey3": "extra value",
+        },
+        "key4": [
+            "value1",
+            "value2",
+            "value [Filtered] extra",
+            {"list_key": "normal", "filter": "[Filtered]"},
+        ],
+        "key5": "not mentioned",
+    }
+    # Only keys "key1", "key3", and "key4" are mentioned in the code context.
+    code_context = "key1 key3 key4"
+    trimmed_vars = StacktraceFrame._trim_vars(vars_input, code_context)
+    expected_trimmed_vars = {
+        "key1": "safe value",
+        "key3": {"subkey2": "clean value", "subkey3": "extra value"},
+        "key4": ["value1", "value2", {"list_key": "normal"}],
+    }
+    assert trimmed_vars == expected_trimmed_vars
