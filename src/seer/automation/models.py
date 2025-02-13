@@ -1,5 +1,4 @@
 import json
-import re
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
@@ -56,11 +55,45 @@ class StacktraceFrame(BaseModel):
     @staticmethod
     def _trim_vars(vars: dict[str, Any], code_context: str):
         # only keep variables mentioned in the context of the stacktrace frame
+        # and filter out any values containing "[Filtered]"
         trimmed_vars = {}
         for key, val in vars.items():
             if key in code_context:
-                trimmed_vars[key] = val
+                if isinstance(val, (dict, list)):
+                    filtered_val = StacktraceFrame._filter_nested_value(val)
+                    if filtered_val is not None:
+                        trimmed_vars[key] = filtered_val
+                elif not StacktraceFrame._contains_filtered(val):
+                    trimmed_vars[key] = val
         return trimmed_vars
+
+    @staticmethod
+    def _filter_nested_value(value: Any) -> Any:
+        if isinstance(value, dict):
+            filtered_dict = {}
+            for k, v in value.items():
+                if isinstance(v, (dict, list)):
+                    filtered_v = StacktraceFrame._filter_nested_value(v)
+                    if filtered_v is not None:
+                        filtered_dict[k] = filtered_v
+                elif not StacktraceFrame._contains_filtered(v):
+                    filtered_dict[k] = v
+            return filtered_dict if filtered_dict else None
+        elif isinstance(value, list):
+            filtered_list = []
+            for item in value:
+                if isinstance(item, (dict, list)):
+                    filtered_item = StacktraceFrame._filter_nested_value(item)
+                    if filtered_item is not None:
+                        filtered_list.append(filtered_item)
+                elif not StacktraceFrame._contains_filtered(item):
+                    filtered_list.append(item)
+            return filtered_list if filtered_list else None
+        return None if StacktraceFrame._contains_filtered(value) else value
+
+    @staticmethod
+    def _contains_filtered(value: Any) -> bool:
+        return isinstance(value, str) and "[Filtered]" in value
 
 
 class SentryFrame(TypedDict):
@@ -153,69 +186,7 @@ class Stacktrace(BaseModel):
             )
             stack_str += "------\n"
 
-        stack_str = self._scrub_pii(stack_str)
         return stack_str
-
-    def _scrub_pii(self, text: str) -> str:
-        """
-        Remove any personally identifiable identification from the given text.
-        Not perfect, and is US/English-centric. Sometimes unintended strings get caught in the regex, too, so be careful.
-        """
-        checks = [
-            (
-                re.compile(
-                    r"([a-z0-9!#$%&'*+\/=?^_`{|.}~-]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)",
-                    re.IGNORECASE,
-                ),
-                "REDACTED_EMAIL",
-            ),
-            (
-                re.compile(
-                    r"((?:(?<![\d-])(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s])\d{3}[-.\s]\d{4}(?![\d-]))|(?:(?<![\d-])(?:(?:\(\+?\d{2}\))|(?:\+?\d{2}))\s\d{2}\s\d{3}\s\d{4}(?![\d-])))"
-                ),
-                "REDACTED_PHONE_NUMBER",
-            ),
-            (
-                re.compile(
-                    r"((?:(?:\+?1\s*(?:[.-]\s*)?)?(?:\(\s*(?:[2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9])\s*\)|(?:[2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9]))\s*(?:[.-]\s*)?)?(?:[2-9]1[02-9]|[2-9][02-9]1|[2-9][02-9]{2})\s*(?:[.-]\s*)?(?:[0-9]{4})(?:\s*(?:#|x\.?|ext\.?|extension)\s*(?:\d+)?))",
-                    re.IGNORECASE,
-                ),
-                "REDACTED_PHONE_NUMBER",
-            ),
-            (
-                re.compile("((?:(?:\\d{4}[- ]?){3}\\d{4}|\\d{15,16}))(?![\\d])"),
-                "REDACTED_CREDIT_CARD",
-            ),
-            (
-                re.compile(
-                    r"\d{1,4} [\w\s]{1,20}(?:street|st|avenue|ave|road|rd|highway|hwy|square|sq|trail|trl|drive|dr|court|ct|park|parkway|pkwy|circle|cir|boulevard|blvd)\W?(?=\s|$)",
-                    re.IGNORECASE,
-                ),
-                "REDACTED_STREET_ADDRESS",
-            ),
-            (re.compile(r"P\.? ?O\.? Box \d+", re.IGNORECASE), "REDACTED_PO_BOX"),
-            (
-                re.compile(
-                    r"(?!000|666|333)0*(?:[0-6][0-9][0-9]|[0-7][0-6][0-9]|[0-7][0-7][0-2])[- ](?!00)[0-9]{2}[- ](?!0000)[0-9]{4}"
-                ),
-                "REDACTED_SSN",
-            ),
-            (
-                re.compile(r"[$]\s?[+-]?[0-9]{1,3}(?:(?:,?[0-9]{3}))*(?:\.[0-9]{1,2})?"),
-                "REDACTED_PRICE",
-            ),
-            (
-                re.compile(
-                    r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
-                    re.IGNORECASE,
-                ),
-                "REDACTED_IP",
-            ),
-        ]
-        for check in checks:
-            pattern, replacement = check
-            text = re.sub(pattern, replacement, text)
-        return text
 
     @staticmethod
     def _trim_frames(frames: list[StacktraceFrame], frame_allowance=16):
@@ -351,11 +322,12 @@ class EventDetails(BaseModel):
             elif entry.get("type") == "breadcrumbs":
                 all_breadcrumbs = entry.get("data", {}).get("values", [])
                 for breadcrumb in all_breadcrumbs[-10:]:  # only look at the most recent breadcrumbs
-                    crumb_details = BreadcrumbsDetails.model_validate(breadcrumb)
-                    if "[Filtered]" in (crumb_details.message or "") or "[Filtered]" in (
-                        str(crumb_details.data) or ""
-                    ):
+                    # Skip breadcrumbs with filtered content in message or data
+                    if StacktraceFrame._contains_filtered(
+                        breadcrumb.get("message")
+                    ) or StacktraceFrame._contains_filtered(str(breadcrumb.get("data"))):
                         continue
+                    crumb_details = BreadcrumbsDetails.model_validate(breadcrumb)
                     breadcrumbs.append(crumb_details)
 
         return cls(

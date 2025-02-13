@@ -1,10 +1,9 @@
 services:
     rabbitmq:
         image: rabbitmq:3.8-alpine
-        container_name: "rabbitmq_lightweight"
         ports:
-            - "5672:5672"
-            - "15672:15672"
+            - "${RABBITMQ_PORT:-5672}:5672"
+            - "${RABBITMQ_CONFIG_PORT:-15672}:15672"
     db:
         image: pgvector/pgvector:pg14
         restart: always
@@ -15,7 +14,7 @@ services:
         volumes:
             - pgdata:/var/lib/postgresql/data
         ports:
-            - "5433:5432"
+            - "${DB_PORT:-5433}:5432"
     test-db:
         image: pgvector/pgvector:pg14
         restart: always
@@ -28,6 +27,7 @@ services:
     app:
         build:
             context: .
+            dockerfile: Lightweight.Dockerfile
         working_dir: /app
         volumes:
             - ./pyproject.toml:/app/pyproject.toml
@@ -65,7 +65,7 @@ services:
             - USE_EU_REGION=0
             - IGNORE_API_AUTH=1
         ports:
-            - "9091:9091" # Local dev sentry app looks for port 9091 for the seer service.
+            - "${APP_PORT:-9091}:9091" # Local dev sentry app looks for port 9091 for the seer service.
 volumes:
     pgdata:
     pgdata_test:

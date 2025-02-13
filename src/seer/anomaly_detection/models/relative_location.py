@@ -15,6 +15,7 @@ class ThresholdType(Enum):
     PREDICTION = 2
     MP_DIST_IQR = 3
     LOW_VARIANCE_THRESHOLD = 4
+    BOX_COX_THRESHOLD = 5
 
 
 class Threshold(BaseModel):

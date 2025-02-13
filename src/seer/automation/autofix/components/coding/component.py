@@ -4,7 +4,7 @@ import logging
 import textwrap
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from openai import BadRequestError as OpenAiBadRequestError
 from openai import LengthFinishReasonError as OpenAiLengthFinishReasonError
 from pydantic import BaseModel
@@ -223,15 +223,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             custom_solution = request.solution if isinstance(request.solution, str) else None
 
             if not request.initial_memory:
-                agent.memory.insert(
-                    0,
-                    Message(
-                        role="user",
-                        content=CodingPrompts.format_fix_msg(
-                            has_tools=not is_obvious,
-                            custom_solution=custom_solution,
-                            mode=request.mode,
-                        ),
+                agent.add_user_message(
+                    CodingPrompts.format_fix_msg(
+                        has_tools=not is_obvious,
+                        custom_solution=custom_solution,
+                        mode=request.mode,
                     ),
                 )
 
@@ -294,6 +290,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         # Resolve LlmClient once in the main thread
         resolved_llm_client = self._get_llm_client()
 
+        @observe(name="Process Change Task")
+        @ai_track(description="Process Change Task")
         def process_task(task, llm_client):
             repo_client = self.context.get_repo_client(task.repo_name)
             if task.type == "file_change":
@@ -353,8 +351,17 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         # apply change tasks in parallel
         with concurrent.futures.ThreadPoolExecutor() as executor:
+            trace_id = langfuse_context.get_current_trace_id()
+            observation_id = langfuse_context.get_current_observation_id()
+
             futures = [
-                executor.submit(process_task, task, resolved_llm_client)
+                executor.submit(
+                    process_task,
+                    task,
+                    resolved_llm_client,
+                    langfuse_parent_trace_id=trace_id,  # type: ignore
+                    langfuse_parent_observation_id=observation_id,  # type: ignore
+                )
                 for task in code_changes_output.tasks
             ]
             for future in concurrent.futures.as_completed(futures):

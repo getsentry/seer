@@ -3,6 +3,9 @@ import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Callable, Optional
 
+from langfuse.decorators import langfuse_context, observe
+from sentry_sdk.ai.monitoring import ai_track
+
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
     LlmGenerateTextResponse,
@@ -84,6 +87,7 @@ class AutofixAgent(LlmAgent):
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,
+            reasoning_effort=run_config.reasoning_effort,
         )
 
         cleared = False
@@ -166,6 +170,9 @@ class AutofixAgent(LlmAgent):
             and not cur.request.options.disable_interactivity
             and completion.message.tool_calls  # only if the run is in progress
         ):
+            trace_id = langfuse_context.get_current_trace_id()
+            observation_id = langfuse_context.get_current_observation_id()
+
             text_before_tag = completion.message.content.split("<")[0]
             text = text_before_tag
             if text:
@@ -177,6 +184,8 @@ class AutofixAgent(LlmAgent):
                         cur_step_idx,
                         self.context.state,
                         len(self.memory) - 1,
+                        langfuse_parent_trace_id=trace_id,  # type: ignore
+                        langfuse_parent_observation_id=observation_id,  # type: ignore
                     )
                 )
 
@@ -225,6 +234,8 @@ class AutofixAgent(LlmAgent):
             self.queued_user_messages = []
             self.context.event_manager.add_log("Thanks for the input. Thinking through it now...")
 
+    @observe(name="Share Insights in parallel")
+    @ai_track(description="Share Insights in parallel")
     def share_insights(
         self,
         text: str,

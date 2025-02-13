@@ -5,14 +5,15 @@ from unittest.mock import patch
 import numpy as np
 import stumpy
 
-from seer.anomaly_detection.detectors import MPUtils, WindowSizeSelector
-from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
-from seer.anomaly_detection.detectors.mp_scorers import (
+from seer.anomaly_detection.detectors import (
     LowVarianceScorer,
     MPCascadingScorer,
     MPIQRScorer,
     MPScorer,
+    MPUtils,
+    WindowSizeSelector,
 )
+from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
 from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
@@ -44,10 +45,10 @@ class TestMPCascadingScorer(unittest.TestCase):
         window_sizes = loaded_synthetic_data.window_sizes
         window_starts = loaded_synthetic_data.anomaly_starts
         window_ends = loaded_synthetic_data.anomaly_ends
-
+        filenames = loaded_synthetic_data.filenames
         threshold = 0.1
 
-        for expected_type, ts, ts_timestamps, mp_dist, window_size, start, end in zip(
+        for expected_type, ts, ts_timestamps, mp_dist, window_size, start, end, filename in zip(
             expected_types,
             timeseries,
             timestamps,
@@ -55,6 +56,7 @@ class TestMPCascadingScorer(unittest.TestCase):
             window_sizes,
             window_starts,
             window_ends,
+            filenames,
         ):
             ad_config = AnomalyDetectionConfig(
                 time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
@@ -77,8 +79,9 @@ class TestMPCascadingScorer(unittest.TestCase):
                 if (num_anomalies_detected / (end - start + 1)) >= threshold
                 else "noanomaly"
             )
-
-            assert result == expected_type
+            assert (
+                result == expected_type
+            ), f"Expected for {filename}: {expected_type}, got {result}"
 
     def test_stream_score(self):
 
@@ -119,7 +122,9 @@ class TestMPCascadingScorer(unittest.TestCase):
                 actual_flags = flags_and_scores.flags
 
                 assert actual_flags[0] == expected_flags[i]
-                self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.MP_DIST_IQR)
+                self.assertEqual(
+                    flags_and_scores.thresholds[0][0].type, ThresholdType.BOX_COX_THRESHOLD
+                )
 
     def test_stream_score_with_thresholds(self):
 
@@ -157,11 +162,11 @@ class TestMPCascadingScorer(unittest.TestCase):
         assert actual_flags[0] == expected_flag
         self.assertEqual(len(flags_and_scores.thresholds), 1)
         self.assertEqual(len(flags_and_scores.thresholds[0]), 1)
-        self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.MP_DIST_IQR)
-        self.assertGreater(flags_and_scores.thresholds[0][0].lower, 0.0)
+        self.assertEqual(flags_and_scores.thresholds[0][0].type, ThresholdType.BOX_COX_THRESHOLD)
+        self.assertLess(flags_and_scores.thresholds[0][0].lower, 0.0)
         self.assertAlmostEqual(
             flags_and_scores.thresholds[0][0].upper,
-            flags_and_scores.thresholds[0][0].lower,
+            -flags_and_scores.thresholds[0][0].lower,
             places=2,
         )
 

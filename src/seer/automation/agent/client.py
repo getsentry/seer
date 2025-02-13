@@ -109,12 +109,14 @@ class OpenAiProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         predicted_output: str | None = None,
+        reasoning_effort: str | None = None,
     ):
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
             tools=tools,
+            reasoning_effort=reasoning_effort,
         )
 
         openai_client = self.get_client()
@@ -138,6 +140,7 @@ class OpenAiProvider:
                 if predicted_output
                 else openai.NotGiven()
             ),
+            reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
         )
 
         openai_message = completion.choices[0].message
@@ -183,12 +186,14 @@ class OpenAiProvider:
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
             tools=tools,
+            reasoning_effort=reasoning_effort,
         )
 
         openai_client = self.get_client()
@@ -205,6 +210,7 @@ class OpenAiProvider:
             response_format=response_format,
             max_tokens=max_tokens or openai.NotGiven(),
             timeout=timeout or openai.NotGiven(),
+            reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
         )
 
         openai_message = completion.choices[0].message
@@ -244,6 +250,7 @@ class OpenAiProvider:
                 new_item["type"] = "function"
                 parsed_tool_calls.append(new_item)
             message_dict["tool_calls"] = parsed_tool_calls
+            message_dict["role"] = "assistant"
 
         if message.tool_call_id:
             message_dict["tool_call_id"] = message.tool_call_id
@@ -284,11 +291,18 @@ class OpenAiProvider:
         prompt: str | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
+        reasoning_effort: str | None = None,
     ):
         message_dicts = [cls.to_message_dict(message) for message in messages] if messages else []
         if system_prompt:
             message_dicts.insert(
-                0, cls.to_message_dict(Message(role="system", content=system_prompt))
+                0,
+                cls.to_message_dict(
+                    Message(
+                        role="system" if not reasoning_effort else "developer",
+                        content=system_prompt,
+                    )
+                ),
             )
         if prompt:
             message_dicts.append(cls.to_message_dict(Message(role="user", content=prompt)))
@@ -310,12 +324,14 @@ class OpenAiProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
             system_prompt=system_prompt,
             tools=tools,
+            reasoning_effort=reasoning_effort,
         )
 
         openai_client = self.get_client()
@@ -333,6 +349,7 @@ class OpenAiProvider:
             timeout=timeout or openai.NotGiven(),
             stream=True,
             stream_options={"include_usage": True},
+            reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
         )
 
         try:
@@ -515,7 +532,7 @@ class AnthropicProvider:
                     )
                 ],
             )
-        elif message.role == "tool_use":
+        elif message.role == "tool_use" or (message.role == "assistant" and message.tool_calls):
             if not message.tool_calls:
                 return MessageParam(role="assistant", content=[])
             tool_call = message.tool_calls[0]  # Assuming only one tool call per message
@@ -679,14 +696,6 @@ class AnthropicProvider:
 
 @dataclass
 class GeminiProvider:
-    # !!! NOTE THE FOLLOWING LIMITATIONS FOR GEMINI:
-    # - super strict rate limits making it unusable for evals or prod
-    # - no multi-turn tool use
-    # - no nested Pydantic models for structured outputs
-    # - no nullable fields for structured outputs
-    # - no dynamic retrieval for google search
-    # These will likely be changed as the SDK matures. Make sure to keep an eye on updates and update these notes/our implementation as needed.
-
     model_name: str
     provider_name = LlmProviderType.GEMINI
     defaults: LlmProviderDefaults | None = None
@@ -985,7 +994,7 @@ class GeminiProvider:
 
     @staticmethod
     def to_content(message: Message) -> Content:
-        if message.role == "tool_use":
+        if message.role == "tool_use" or (message.role == "assistant" and message.tool_calls):
             if not message.tool_calls:
                 return Content(
                     role="model",
@@ -1117,6 +1126,7 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         predicted_output: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> LlmGenerateTextResponse:
         try:
             if run_name:
@@ -1140,6 +1150,7 @@ class LlmClient:
                     tools=tools,
                     timeout=timeout,
                     predicted_output=predicted_output,
+                    reasoning_effort=reasoning_effort,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
@@ -1182,6 +1193,7 @@ class LlmClient:
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         try:
             if run_name:
@@ -1203,6 +1215,7 @@ class LlmClient:
                     temperature=temperature,
                     tools=tools,
                     timeout=timeout,
+                    reasoning_effort=reasoning_effort,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 raise NotImplementedError("Anthropic structured outputs are not yet supported")
@@ -1236,6 +1249,7 @@ class LlmClient:
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
         try:
             if run_name:
@@ -1260,6 +1274,7 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     tools=tools,
                     timeout=timeout,
+                    reasoning_effort=reasoning_effort,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)

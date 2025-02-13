@@ -52,7 +52,7 @@ statsmodels==0.14.0
 structlog>=22
 sympy==1.12
 threadpoolctl==3.2.0
-torch==2.2.0
+torch==2.2.0 # in Lightweight.Dockerfile, we have a specific command to install torch, update it there too.
 tqdm==4.66.3
 typing_extensions
 tzdata==2023.3
@@ -100,7 +100,7 @@ google-cloud-storage==2.*
 google-cloud-aiplatform==1.*
 google-cloud-secret-manager==2.*
 anthropic[vertex]==0.45.*
-langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
+langfuse @ git+https://github.com/jennmueng/langfuse-python.git@d7c0127682ddb20f73c5cf4fbb396cdfa8961fc3
 watchdog
 stumpy==1.13.0
 pytest_alembic==0.11.1

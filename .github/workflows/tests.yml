@@ -10,18 +10,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build_and_push:
     runs-on: ubuntu-latest
-    # required for google auth
     permissions:
       contents: "read"
       id-token: "write"
-
-    env:
-      TEST: 1
-
+      packages: "write"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - id: "auth"
         uses: google-github-actions/auth@v1
         with:
@@ -31,42 +38,138 @@ jobs:
           id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
           id_token_include_email: true
           create_credentials_file: true
+
+      - name: Build and push Docker image
+        run: |
+          make .env
+          docker buildx bake --file docker-compose.yml --file docker-compose-cache.json \
+            --set *.cache-to=type=registry,ref=ghcr.io/getsentry/seer:cache,mode=max \
+            --set *.cache-from=type=registry,ref=ghcr.io/getsentry/seer:cache \
+            --set *.output=type=registry \
+            --set *.tags=ghcr.io/getsentry/seer:cache-${{ github.sha }}
+
+  typecheck:
+    needs: [build_and_push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+      packages: "read"
+    env:
+      IMAGE_TAG: cache-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull pre-built Docker image
+        run: |
+          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
+          cp docker-compose.ci.yml docker-compose.override.yml
+
+      - name: Create blank .env
+        run: make .env
+
+      - name: Typecheck with mypy
+        run: docker compose run app mypy
+
+  test:
+    name: Parallelized Tests
+    needs: [build_and_push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+      packages: "read"
+    env:
+      TEST: 1
+      IMAGE_TAG: cache-${{ github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: "auth"
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
+          service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
+          token_format: "id_token"
+          id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
+          id_token_include_email: true
+          create_credentials_file: true
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
+
+      - name: Pull pre-built Docker image
+        run: |
+          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
+          cp docker-compose.ci.yml docker-compose.override.yml
+
+      - name: Create blank .env
+        run: make .env
+
+      - name: Migrate database
+        run: docker compose run app flask db upgrade
+
+      - name: Validate no pending migrations
+        run: make check-no-pending-migrations
+
+      - name: Decrypt VCR cassettes
+        run: |
+          pip install -r scripts/requirements.txt
+          make vcr-decrypt
+
       - name: Fetch models
         if: github.event_name == 'push'
         run: |
           rm -rf ./models
           gcloud storage cp -r gs://sentry-ml/seer/models ./
-      - name: Set EXTRA_COMPOSE_TEST_OPTIONS
+
+      - name: Set test environment flags
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           else
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           fi
-      - name: Build image
-        run: |
-          make update
-      - name: Typecheck with mypy
-        run: |
-          make mypy
-      - name: Validate no pending migrations
-        run: |
-          make check-no-pending-migrations
-      - name: Decrypt VCR cassettes
-        run: |
-          pip install -r scripts/requirements.txt
-          make vcr-decrypt
+
       - name: Test with pytest
         run: |
-          make test
+          docker compose up -d test-db
+          docker compose run ${{ env.EXTRA_COMPOSE_TEST_OPTIONS }} app bash -c "\
+            pip install pytest-split && \
+            pytest --splits 8 --group ${{ matrix.group }} --cov . --cov-report=\"xml:.artifacts/coverage.xml\" -vv"
+
       - name: Upload to codecov
         if: ${{ always() }}
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4.0.1
+        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ".artifacts/coverage.xml"
           override_commit: ${{ github.event.pull_request.head.sha }}
           plugin: noop
           verbose: true
+
+  finish:
+    name: Finish Tests
+    needs: [test, typecheck]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tests completed
+        run: echo "All tests completed successfully"

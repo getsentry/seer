@@ -110,7 +110,7 @@ convertdate==2.4.0
     # via -r requirements-constraints.txt
 covdefaults==2.3.0
     # via -r requirements-constraints.txt
-coverage==7.6.11
+coverage==7.6.12
     # via
     #   covdefaults
     #   pytest-cov
@@ -165,7 +165,7 @@ flask-sqlalchemy==3.1.1
     #   -r requirements-constraints.txt
     #   flask-migrate
     #   types-flask-migrate
-flatbuffers==25.1.24
+flatbuffers==25.2.10
     # via onnxruntime
 fonttools==4.43.0
     # via
@@ -200,7 +200,7 @@ google-auth==2.38.0
     #   google-cloud-secret-manager
     #   google-cloud-storage
     #   google-genai
-google-cloud-aiplatform==1.79.0
+google-cloud-aiplatform==1.80.0
     # via -r requirements-constraints.txt
 google-cloud-bigquery==3.29.0
     # via google-cloud-aiplatform
@@ -339,7 +339,7 @@ kiwisolver==1.4.5
     #   matplotlib
 kombu==5.4.2
     # via celery
-langfuse @ git+https://github.com/jennmueng/langfuse-python.git@9d9350de1e4e84fa548fe84f82c1b826be17956e
+langfuse @ git+https://github.com/jennmueng/langfuse-python.git@d7c0127682ddb20f73c5cf4fbb396cdfa8961fc3
     # via -r requirements-constraints.txt
 lazy-object-proxy==1.10.0
     # via openapi-spec-validator
@@ -440,7 +440,7 @@ optimum==1.16.2
     # via -r requirements-constraints.txt
 overrides==7.7.0
     # via chromadb
-packaging==23.2
+packaging==24.2
     # via
     #   -r requirements-constraints.txt
     #   build
@@ -487,7 +487,7 @@ pip-tools==7.4.1
     # via -r requirements-constraints.txt
 pluggy==1.5.0
     # via pytest
-posthog==3.11.0
+posthog==3.12.1
     # via chromadb
 prompt-toolkit==3.0.50
     # via click-repl
@@ -644,6 +644,7 @@ requests==2.32.2
     #   huggingface-hub
     #   jsonschema-path
     #   jsonschema-spec
+    #   langfuse
     #   posthog
     #   pygithub
     #   transformers

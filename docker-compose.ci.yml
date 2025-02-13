@@ -1,0 +1,4 @@
+services:
+    app:
+        image: ghcr.io/getsentry/seer:${IMAGE_TAG}
+        build: {}
