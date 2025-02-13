@@ -112,7 +112,8 @@ class CodePrReviewOutput(BaseComponentOutput):
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
-    pass
+    organization_id: int
+    warnings: list[StaticAnalysisWarning]
 
 
 class CodegenRelevantWarningsResponse(CodegenBaseResponse):
