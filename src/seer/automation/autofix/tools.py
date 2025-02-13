@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    tmp_dir: str | None = None
+    tmp_dir: dict[str, tuple[str, str]] | None = None  # Maps repo_name to (tmp_dir, tmp_repo_dir)
     tmp_repo_dir: str | None = None
     repo_client_type: RepoClientType = RepoClientType.READ
 
@@ -44,27 +44,46 @@ class BaseTools:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cleanup()
 
+    def _get_repo_names(self) -> list[str]:
+        if isinstance(self.context, AutofixContext):
+            return [repo.full_name for repo in self.context.repos]
+        elif isinstance(self.context, CodegenContext):
+            return [self.context.repo.full_name]
+        else:
+            raise ValueError(f"Unsupported context type: {type(self.context)}")
+
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
     @inject
-    def semantic_file_search(
-        self, query: str, repo_name: str | None = None, llm_client: LlmClient = injected
-    ):
-        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        repo_name = repo_client.repo_name
-        valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
+    def semantic_file_search(self, query: str, llm_client: LlmClient = injected):
+        repo_names = self._get_repo_names()
+        files_per_repo = {}
+        for repo_name in repo_names:
+            repo_client = self.context.get_repo_client(
+                repo_name=repo_name, type=self.repo_client_type
+            )
+            valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
+            files_per_repo[repo_name] = "\n".join(sorted(valid_file_paths))
 
         self.context.event_manager.add_log(f"Searching for {query}...")
 
         class FilePath(BaseModel):
             file_path: str
+            repo_name: str
 
+        all_valid_paths = "\n".join(
+            [
+                f"FILES IN REPO {repo_name}:\n{files_per_repo[repo_name]}\n------------"
+                for repo_name in repo_names
+            ]
+        )
         prompt = textwrap.dedent(
             """
             I'm searching for the file in this codebase that contains {query}. Please pick the most relevant file from the following list:
+            ------------
             {valid_file_paths}
             """
-        ).format(query=query, valid_file_paths="\n".join(sorted(valid_file_paths)))
+        ).format(query=query, valid_file_paths=all_valid_paths)
 
         response = llm_client.generate_structured(
             prompt=prompt,
@@ -73,7 +92,8 @@ class BaseTools:
         )
         result = response.parsed
         file_path = result.file_path if result else None
-        if file_path is None:
+        repo_name = result.repo_name if result else None
+        if file_path is None or repo_name is None:
             return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
 
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
@@ -85,12 +105,8 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str | None = None):
+    def expand_document(self, file_path: str, repo_name: str):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
-
-        if repo_name is None:
-            client = self.context.get_repo_client(repo_name, self.repo_client_type)
-            repo_name = client.repo_name
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
 
@@ -196,9 +212,10 @@ class BaseTools:
 
     def cleanup(self):
         if self.tmp_dir:
-            cleanup_dir(self.tmp_dir)
+            # Clean up all tmp dirs
+            for tmp_dir, _ in self.tmp_dir.values():
+                cleanup_dir(tmp_dir)
             self.tmp_dir = None
-            self.tmp_repo_dir = None
 
     @observe(name="Keyword Search")
     @ai_track(description="Keyword Search")
@@ -206,103 +223,118 @@ class BaseTools:
         self,
         keyword: str,
         supported_extensions: list[str],
-        repo_name: str | None = None,
         in_proximity_to: str | None = None,
     ):
         """
         Searches for a keyword in the codebase.
         """
+        repo_names = self._get_repo_names()
+        all_results = []
 
-        if self.tmp_dir is None or self.tmp_repo_dir is None:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+        if self.tmp_dir is None:
+            tmp_dirs = {}
+            for repo_name in repo_names:
+                repo_client = self.context.get_repo_client(
+                    repo_name=repo_name, type=self.repo_client_type
+                )
+                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                tmp_dirs[repo_name] = (tmp_dir, tmp_repo_dir)
 
-            self.tmp_dir = tmp_dir
-            self.tmp_repo_dir = tmp_repo_dir
+            self.tmp_dir = tmp_dirs  # Store all tmp dirs
             append_langfuse_observation_metadata({"keyword_search_download": True})
         else:
             append_langfuse_observation_metadata({"keyword_search_download": False})
 
-        if not self.tmp_repo_dir:
-            raise ValueError("tmp_repo_dir is not set")
+        for repo_name in repo_names:
+            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
+            if not tmp_repo_dir:
+                continue
 
-        searcher = CodeSearcher(
-            directory=self.tmp_repo_dir,
-            supported_extensions=set(supported_extensions),
-            start_path=in_proximity_to,
-        )
+            searcher = CodeSearcher(
+                directory=tmp_repo_dir,
+                supported_extensions=set(supported_extensions),
+                start_path=in_proximity_to,
+            )
 
-        results = searcher.search(keyword)
+            results = searcher.search(keyword)
+            if results:
+                for result in results:
+                    for match in result.matches:
+                        match_xml = MatchXml(
+                            path=result.relative_path,
+                            repo_name=repo_name,
+                            context=match.context,
+                        )
+                        all_results.append(match_xml.to_prompt_str())
 
         self.context.event_manager.add_log(
-            f"Searched codebase for `{keyword}`, found {len(results)} result(s)."
+            f"Searched codebase for `{keyword}`, found {len(all_results)} result(s)."
         )
 
-        if not results:
+        if not all_results:
             return "No results found."
 
-        result_str = ""
-        file_names = []
-        for result in results:
-            for match in result.matches:
-                match_xml = MatchXml(
-                    path=result.relative_path,
-                    context=match.context,
-                )
-                file_names.append(f"`{result.relative_path}`")
-                result_str += f"{match_xml.to_prompt_str()}\n\n"
-
-        return result_str
+        return "\n\n".join(all_results)
 
     @observe(name="File Search")
     @ai_track(description="File Search")
     def file_search(
         self,
         filename: str,
-        repo_name: str | None = None,
     ):
         """
         Given a filename with extension returns the list of locations where a file with the name is found.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_paths = repo_client.get_index_file_set()
-        found = [path for path in all_paths if os.path.basename(path) == filename]
+        repo_names = self._get_repo_names()
+        found_files = ""
 
-        self.context.event_manager.add_log(f"Searching for file `{filename}` in `{repo_name}`...")
+        for repo_name in repo_names:
+            repo_client = self.context.get_repo_client(
+                repo_name=repo_name, type=self.repo_client_type
+            )
+            all_paths = repo_client.get_index_file_set()
+            found = [
+                path for path in all_paths if os.path.basename(path).lower() == filename.lower()
+            ]
+            if found:
+                found_files += f"\n FILES IN REPO {repo_name}:\n"
+                found_files += "\n".join([f"  {path}" for path in sorted(found)])
 
-        if len(found) == 0:
-            return f"no file with name {filename} found in repository"
+        self.context.event_manager.add_log(f"Searching for file `{filename}`...")
 
-        found = sorted(found)
+        if len(found_files) == 0:
+            return f"no file with name {filename} found in any repository"
 
-        return ",".join(found)
+        return found_files
 
     @observe(name="File Search Wildcard")
     @ai_track(description="File Search Wildcard")
     def file_search_wildcard(
         self,
         pattern: str,
-        repo_name: str | None = None,
     ):
         """
         Given a filename pattern with wildcards, returns the list of file paths that match the pattern.
         """
-        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_paths = repo_client.get_index_file_set()
-        found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
+        repo_names = self._get_repo_names()
+        found_files = ""
 
-        self.context.event_manager.add_log(
-            f"Searching for files with pattern `{pattern}` in `{repo_name}`..."
-        )
+        for repo_name in repo_names:
+            repo_client = self.context.get_repo_client(
+                repo_name=repo_name, type=self.repo_client_type
+            )
+            all_paths = repo_client.get_index_file_set()
+            found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
+            if found:
+                found_files += f"\n FILES IN REPO {repo_name}:\n"
+                found_files += "\n".join([f"  {path}" for path in sorted(found)])
 
-        if len(found) == 0:
-            return f"No files matching pattern '{pattern}' found in repository"
+        self.context.event_manager.add_log(f"Searching for files with pattern `{pattern}`...")
 
-        found = sorted(found)
+        if len(found_files) == 0:
+            return f"No files matching pattern '{pattern}' found in any repository"
 
-        return "\n".join(found)
+        return found_files
 
     @observe(name="Ask User Question")
     @ai_track(description="Ask User Question")
@@ -322,7 +354,7 @@ class BaseTools:
         """
         self.context.event_manager.add_log(f'Googling "{question}"...')
         return llm_client.generate_text_from_web_search(
-            prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-exp")
+            prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-001")
         )
 
     def get_tools(self):
@@ -363,10 +395,10 @@ class BaseTools:
                     {
                         "name": "repo_name",
                         "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
+                        "description": "Name of the repository containing the file.",
                     },
                 ],
-                required=["file_path"],
+                required=["file_path", "repo_name"],
             ),
             FunctionTool(
                 name="keyword_search",
@@ -383,11 +415,6 @@ class BaseTools:
                         "type": "array",
                         "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
                         "items": {"type": "string"},
-                    },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
                     },
                     {
                         "name": "in_proximity_to",
@@ -407,11 +434,6 @@ class BaseTools:
                         "type": "string",
                         "description": "The file to search for.",
                     },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
-                    },
                 ],
                 required=["filename"],
             ),
@@ -425,11 +447,6 @@ class BaseTools:
                         "type": "string",
                         "description": "The wildcard pattern to match files.",
                     },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
-                    },
                 ],
                 required=["pattern"],
             ),
@@ -442,11 +459,6 @@ class BaseTools:
                         "name": "query",
                         "type": "string",
                         "description": "Describe what file you're looking for.",
-                    },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
                     },
                 ],
                 required=["query"],

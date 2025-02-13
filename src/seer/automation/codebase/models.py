@@ -34,6 +34,7 @@ class RepoAccessCheckResponse(BaseModel):
 
 class MatchXml(PromptXmlModel, tag="result"):
     path: str = attr()
+    repo_name: str = attr()
     context: str
 
 
