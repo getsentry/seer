@@ -170,7 +170,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 self.context.store_memory("solution", agent.memory)
                 return None
 
-            self.context.event_manager.add_log("Cleaning up the findings...")
+            self.context.event_manager.add_log("Arranging data in a way that looks intentional...")
 
             formatted_response = llm_client.generate_structured(
                 messages=agent.memory,

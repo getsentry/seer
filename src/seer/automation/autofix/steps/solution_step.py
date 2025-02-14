@@ -57,7 +57,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
         if not self.request.initial_memory:
             self.context.event_manager.add_log("Figuring out a solution...")
         else:
-            self.context.event_manager.add_log("Continuing to analyze...")
+            self.context.event_manager.add_log("Going back to the drawing board...")
 
         state = self.context.state.get()
         root_cause_and_fix, _ = state.get_selected_root_cause()

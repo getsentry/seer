@@ -61,9 +61,9 @@ class RootCauseStep(AutofixPipelineStep):
         self.context.event_manager.send_root_cause_analysis_start()
 
         if not self.request.initial_memory:
-            self.context.event_manager.add_log("Beginning root cause analysis...")
+            self.context.event_manager.add_log("Figuring out the root cause...")
         else:
-            self.context.event_manager.add_log("Continuing to analyze...")
+            self.context.event_manager.add_log("Going back to the drawing board...")
 
         state = self.context.state.get()
         event_details = EventDetails.from_event(state.request.issue.events[0])

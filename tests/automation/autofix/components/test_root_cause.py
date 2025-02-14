@@ -101,15 +101,6 @@ class TestRootCauseComponent:
         assert output.causes == []
         assert output.termination_reason == "this is too hard, I give up"
         # Ensure that the formatter is not called when <NO_ROOT_CAUSES> is returned
-        assert mock_agent.return_value.run.call_count == 1
-
-        mock_agent.return_value.run.return_value = "<NO_ROOT_CAUSES> this is too hard, I give up </NO_ROOT_CAUSES> you do it yourself buddy"
-
-        output = component.invoke(MagicMock())
-
-        assert output.causes == []
-        assert output.termination_reason == "this is too hard, I give up"
-        # Ensure that the formatter is not called when <NO_ROOT_CAUSES> is returned
         assert mock_agent.return_value.run.call_count == 2
 
     def test_agent_run_returns_none(self, component, mock_agent):

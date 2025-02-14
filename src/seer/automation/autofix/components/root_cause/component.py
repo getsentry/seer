@@ -4,7 +4,7 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
+from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.is_root_cause_obvious import (
@@ -64,7 +64,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             try:
                 response = agent.run(
                     run_config=RunConfig(
-                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                        model=GeminiProvider.model("gemini-2.0-flash-001"),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
@@ -92,13 +92,37 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         termination_reason="Something went wrong when Autofix was running.",
                     )
 
+                self.context.event_manager.add_log("Simulating profound thought...")
+
+                agent.tools = []
+                agent.memory = LlmClient.clean_assistant_messages(agent.memory)
+                response = agent.run(
+                    run_config=RunConfig(
+                        model=OpenAiProvider.model("o3-mini"),
+                        prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
+                        memory_storage_key="root_cause_analysis",
+                        run_name="Root Cause Proposal",
+                        temperature=1.0,
+                        reasoning_effort="high",
+                    )
+                )
+
+                if not response:
+                    self.context.store_memory("root_cause_analysis", agent.memory)
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
+
                 if "<NO_ROOT_CAUSES>" in response:
                     reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
                     if "</NO_ROOT_CAUSES>" in reason:
                         reason = reason.split("</NO_ROOT_CAUSES>")[0].strip()
                     return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
 
-                self.context.event_manager.add_log("Cleaning up the findings...")
+                self.context.event_manager.add_log(
+                    "Arranging data in a way that looks intentional..."
+                )
 
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,

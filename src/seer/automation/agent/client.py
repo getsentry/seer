@@ -1351,6 +1351,17 @@ class LlmClient:
         return new_messages
 
     @staticmethod
+    def clean_assistant_messages(messages: list[Message]) -> list[Message]:
+        new_messages = []
+        for message in messages:
+            if message.role == "assistant" or message.role == "tool_use":
+                message.content = "."
+                new_messages.append(message)
+            else:
+                new_messages.append(message)
+        return new_messages
+
+    @staticmethod
     def clean_message_content(messages: list[Message]) -> list[Message]:
         new_messages = []
         for message in messages:

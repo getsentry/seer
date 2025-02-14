@@ -284,7 +284,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         f"<code_changes>{escape_multi_xml(extract_text_inside_tags(new_response, 'code_changes'), ['code', 'commit_message'])}</code_changes>"
                     ).to_model()
 
-        self.context.event_manager.add_log("Applying changes...")
+        self.context.event_manager.add_log("Rewriting your unfortunate code...")
         tasks_with_diffs: list[PlanTaskPromptXml] = []
 
         # Resolve LlmClient once in the main thread

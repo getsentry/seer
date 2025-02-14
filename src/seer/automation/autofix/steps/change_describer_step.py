@@ -54,7 +54,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
     @observe(name="Autofix – Change Describer Step")
     @ai_track(description="Autofix - Change Describer Step")
     def _invoke(self, **kwargs):
-        self.context.event_manager.add_log("Describing the changes...")
+        self.context.event_manager.add_log("Writing a commit message, of course...")
         # Get the diff and PR details for each codebase.
         change_describer = ChangeDescriptionComponent(self.context)
         codebase_changes: list[CodebaseChange] = []
