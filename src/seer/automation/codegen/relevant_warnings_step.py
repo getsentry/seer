@@ -45,18 +45,18 @@ def _fetch_issues(
     external_id: str,
     filename_to_patch: dict[str, str],
     client: RpcClient = injected,
-) -> dict[str, list[dict[str, Any]]] | None:
+) -> dict[str, list[dict[str, Any]]]:
     """
     Makes a call to seer_rpc (in getsentry/sentry) to get issues related to each file.
     """
-    response = client.call(
+    file_to_issues = client.call(
         "get_issues_related_to_file_patches",  # TODO: land this in sentry
         organization_id=organization_id,
         provider=provider,
         external_id=external_id,
         filename_to_patch=filename_to_patch,
     )
-    return response
+    return file_to_issues
 
 
 class RelevantWarningsStepRequest(PipelineStepTaskRequest, CodegenRelevantWarningsRequest):
@@ -101,7 +101,7 @@ class RelevantWarningsStep(CodegenStep[RelevantWarningsStepRequest, CodegenConte
             # TODO: is this filename the same format as what open_pr_comment uses?
             # Need to ensure matchability wrt sentry stacktrace frame filenames
             for pr_file in pr.get_files()
-            # TODO: limit the number of files we process
+            # TODO: limit the number of files we process and lines changed
             if pr_file.status == "modified"
             # If it's added or deleted, there won't be past issues for it.
         }
