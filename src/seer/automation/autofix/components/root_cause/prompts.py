@@ -16,10 +16,10 @@ class RootCauseAnalysisPrompts:
     def format_system_msg(has_tools: bool = True):
         return textwrap.dedent(
             f"""\
-            You are an exceptional principal engineer that is amazing at finding the root cause of any issue.
+            You are an exceptional principal engineer that is amazing at researching bugs in codebases.
 
             {
-                "You have tools to search a codebase to find the root cause of an issue. Please use the tools as many times as you want to find the root cause of the issue."
+                "You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information."
                 if has_tools
                 else ""
             }
@@ -30,7 +30,7 @@ class RootCauseAnalysisPrompts:
                 if has_tools
                 else ""
             }
-            {"- At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis."
+            {"- At any point, please feel free to ask your teammates (who are much more familiar with the codebase) any specific questions that would help you in your analysis that can't be answered from searching the codebase."
                 if has_tools
                 else ""
             }
@@ -45,7 +45,7 @@ class RootCauseAnalysisPrompts:
             }
             - At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK.
 
-            It is important that you trace the true root cause of this issue, from the entry point of the code to the error."""
+            It is important that you gather all information needed to understand what happened, from the entry point of the code to the error."""
         )
 
     @staticmethod
@@ -65,20 +65,22 @@ class RootCauseAnalysisPrompts:
             {code_map_str}
 
             {instruction_str}
-            When ready with your final answer, detail the potential root cause of the issue.
-
-            # Guidelines:
-            - The root cause should be inside its own <root_cause> block.
-            - Include a title and description in the root cause. Your description may be as long as you need to help your team understand the issue, explaining the issue, the root cause, why this is happening, and how you came to your conclusion.
-            - In the root cause, provide snippets of the original code, each with their own titles and descriptions, to highlight where and why the issue is occurring so that your colleagues fully understand the root cause. Provide as many snippets as you want. Within your snippets, you may highlight specific lines with a comment beginning with ***.
-            - You MUST include the EXACT file name and repository name in the code snippets you provide. If you cannot, do not provide a code snippet.
-            - At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK."""
+            Gather all information needed to understand what happened.
+            At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK."""
         ).format(
             error_str=event,
             repo_names_str=format_repo_names(repo_names),
             instruction_str=format_instruction(instruction),
             summary_str=format_summary(summary),
             code_map_str=format_code_map(code_map),
+        )
+
+    @staticmethod
+    def root_cause_proposal_msg():
+        return textwrap.dedent(
+            """\
+            Based on all the information you've learned, detail the true root cause of the issue.
+            """
         )
 
     @staticmethod
