@@ -36,7 +36,8 @@ from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
-from seer.dependency_injection import inject, injected
+from seer.configuration import AppConfig
+from seer.dependency_injection import Module, inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         try:
             output = llm_client.generate_text(
                 system_prompt=system_prompt,
-                messages=[Message(role="user", content=prompt)],
+                prompt=prompt,
                 model=OpenAiProvider.model("gpt-4o-mini"),
                 predicted_output=predicted_output,
             )
@@ -115,8 +116,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             try:
                 output = llm_client.generate_text(
                     system_prompt=system_prompt,
-                    messages=[Message(role="user", content=prompt)],
+                    prompt=prompt,
                     model=OpenAiProvider.model("o3-mini"),
+                    reasoning_effort="low",
+                    temperature=1.0,
                 )
             except Exception as e2:
                 sentry_sdk.capture_exception(e2)
@@ -124,19 +127,57 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         text = output.message.content
         updated_content = extract_text_inside_tags(text, "updated_code")
-
-        # Generate unified diff between original_content and updated_content
-        original_lines = original_content.splitlines()
-        updated_lines = updated_content.splitlines()
-        diff = "\n".join(
-            difflib.unified_diff(
-                original_lines,
-                updated_lines,
-                fromfile=f"a/{file_path}",
-                tofile=f"b/{file_path}",
+        if updated_content:
+            # Generate unified diff between original_content and updated_content
+            original_lines = original_content.splitlines()
+            updated_lines = updated_content.splitlines()
+            diff = "\n".join(
+                difflib.unified_diff(
+                    original_lines,
+                    updated_lines,
+                    fromfile=f"a/{file_path}",
+                    tofile=f"b/{file_path}",
+                )
             )
+            return diff
+
+        # fallback to writing a unified diff directly
+        fallback_prompt = textwrap.dedent(
+            """
+            You are an expert software engineer. You are given a code snippet and a proposed update to the code.
+            You need to generate the exact unified diff that shows the changes to the code, but only specific portions. You do NOT need to include the entire file in the diff, but you should include up to 3 lines of unchanged lines before and after the changes for context. Please preserve indentation.
+
+            Here is an example of a unified diff format:
+            <example>
+            --- a/path/to/file.py
+
+            +++ b/path/to/file.py
+
+            @@ -1,3 +1,3 @@
+
+            x = 1
+            y = 2
+            -for i in range(10):
+            -    print(x + y)
+            +for i in range(20):
+            +    print(x * y)
+            </example>
+
+            Here is the original code:
+            <code>{original_content}</code>
+
+            Here is the proposed update:
+            <update>{new_content}</update>
+
+            Provide the exact unified diff that covers the changes and no other text.
+            """
+        ).format(original_content=original_content, new_content=new_content)
+        diff = llm_client.generate_text(
+            system_prompt=system_prompt,
+            prompt=fallback_prompt,
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
         )
-        return diff
+        return diff.message.content + "\n"
 
     @observe(name="Is Obvious")
     @ai_track(description="Is Obvious")
@@ -197,6 +238,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     @inject
     def _get_llm_client(self, llm_client: LlmClient = injected) -> LlmClient:
         return llm_client
+
+    @inject
+    def _get_app_config(self, app_config: AppConfig = injected) -> AppConfig:
+        return app_config
 
     @observe(name="Code")
     @ai_track(description="Code")
@@ -289,19 +334,29 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         # Resolve LlmClient once in the main thread
         resolved_llm_client = self._get_llm_client()
+        resolved_app_config = self._get_app_config()
 
         @observe(name="Process Change Task")
         @ai_track(description="Process Change Task")
-        def process_task(task, llm_client):
+        def process_task(task: PlanTaskPromptXml, llm_client: LlmClient, app_config: AppConfig):
+            module = Module()
+            module.enable()
+
+            @module.provider
+            def provide_llm_client() -> LlmClient:
+                return llm_client
+
+            @module.provider
+            def provide_app_config() -> AppConfig:
+                return app_config
+
             repo_client = self.context.get_repo_client(task.repo_name)
             if task.type == "file_change":
                 file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
                 if not file_content:
                     logger.warning(f"Failed to get content for {task.file_path}")
                     return None
-                diff = self.apply_code_suggestion_to_file(
-                    file_content, task.code, task.file_path, llm_client=llm_client
-                )
+                diff = self.apply_code_suggestion_to_file(file_content, task.code, task.file_path)
                 if not diff:
                     return None
                 task_with_diff = PlanTaskPromptXml(
@@ -329,9 +384,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 return task_with_diff, [update]
 
             elif task.type == "file_create":
-                diff = self.apply_code_suggestion_to_file(
-                    None, task.code, task.file_path, llm_client=llm_client
-                )
+                diff = self.apply_code_suggestion_to_file(None, task.code, task.file_path)
                 if not diff:
                     return None
                 task_with_diff = PlanTaskPromptXml(
@@ -359,6 +412,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     process_task,
                     task,
                     resolved_llm_client,
+                    resolved_app_config,
                     langfuse_parent_trace_id=trace_id,  # type: ignore
                     langfuse_parent_observation_id=observation_id,  # type: ignore
                 )
