@@ -14,7 +14,7 @@ from anthropic.types import (
     ToolUseBlockParam,
 )
 from google import genai  # type: ignore[attr-defined]
-from google.api_core.exceptions import ResourceExhausted
+from google.api_core.exceptions import ClientError
 from google.genai.types import (
     Content,
     FunctionDeclaration,
@@ -444,6 +444,7 @@ class AnthropicProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
+        # https://sentry.sentry.io/issues/6267320373/
         return isinstance(exception, anthropic.AnthropicError) and (
             "overloaded_error" in str(exception)
         )
@@ -762,8 +763,9 @@ class GeminiProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        retryable_errors = ("Resource exhausted. Please try again later.",)
-        return isinstance(exception, ResourceExhausted) and any(
+        # https://sentry.sentry.io/issues/6301072208
+        retryable_errors = ("429 RESOURCE_EXHAUSTED",)
+        return isinstance(exception, ClientError) and any(
             error in str(exception) for error in retryable_errors
         )
 
