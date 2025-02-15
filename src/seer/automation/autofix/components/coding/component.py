@@ -173,12 +173,14 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             Provide the exact unified diff that covers the changes and no other text.
             """
         ).format(original_content=original_content, new_content=new_content)
-        diff = llm_client.generate_text(
+        response = llm_client.generate_text(
             system_prompt=system_prompt,
             prompt=fallback_prompt,
             model=GeminiProvider.model("gemini-2.0-flash-001"),
         )
-        return diff.message.content + "\n"
+        if not response.message.content:
+            return None
+        return response.message.content + "\n"
 
     @observe(name="Is Obvious")
     @ai_track(description="Is Obvious")
