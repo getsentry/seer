@@ -11,7 +11,7 @@ import anthropic
 import httpx
 import openai
 import pytest
-from google.api_core.exceptions import ResourceExhausted
+from google.api_core.exceptions import ClientError
 from johen import generate
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
@@ -127,6 +127,7 @@ AnthropicProviderFlaky = flakify(
         response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
         body=anthropic_overloaded_error_data,
     ),
+    # https://sentry.sentry.io/issues/6267320373/
     get_obj_with_create_stream_method_from_client=lambda client: client.messages,
     create_stream_method_name="create",
 )
@@ -142,9 +143,8 @@ OpenAiProviderFlaky = flakify(
 )
 GeminiProviderFlaky = flakify(
     GeminiProvider,
-    retryable_exception=ResourceExhausted(
-        message="Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details."
-    ),
+    retryable_exception=ClientError(message="429 RESOURCE_EXHAUSTED."),
+    # https://sentry.sentry.io/issues/6301072208
     get_obj_with_create_stream_method_from_client=lambda client: client.models,
     create_stream_method_name="generate_content_stream",
 )
