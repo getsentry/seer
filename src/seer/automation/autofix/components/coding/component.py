@@ -22,6 +22,7 @@ from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
     CodeChangesPromptXml,
+    CodeChangeXml,
     CodingOutput,
     CodingRequest,
     PlanTaskPromptXml,
@@ -338,7 +339,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         @observe(name="Process Change Task")
         @ai_track(description="Process Change Task")
-        def process_task(task: PlanTaskPromptXml, llm_client: LlmClient, app_config: AppConfig):
+        def process_task(task: CodeChangeXml, llm_client: LlmClient, app_config: AppConfig):
             module = Module()
             module.enable()
 
