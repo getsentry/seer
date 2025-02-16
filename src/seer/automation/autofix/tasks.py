@@ -412,27 +412,24 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def truncate_memory_to_match_insights(memory: list[Message], step: DefaultStep):
+def truncate_memory_to_match_insights(
+    memory: list[Message], memory_index: int | None, step: DefaultStep
+):
+    if memory_index is None:
+        return memory
+
+    memory_index = max(memory_index, step.initial_memory_length)
     truncated_memory = []
-    for insight in step.insights[::-1]:
-        if insight.generated_at_memory_index >= 0:
-            new_memory = memory[: insight.generated_at_memory_index + 1]
-            # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
-            if new_memory and new_memory[-1].tool_calls:
-                num_tool_calls = len(new_memory[-1].tool_calls)
-                if insight.generated_at_memory_index + num_tool_calls < len(memory):
-                    new_memory.extend(
-                        memory[
-                            insight.generated_at_memory_index
-                            + 1 : insight.generated_at_memory_index
-                            + num_tool_calls
-                            + 1
-                        ]
-                    )
-                else:
-                    new_memory = new_memory[:-1]
-            truncated_memory = new_memory
-            break
+    if step.insights:
+        new_memory = memory[: memory_index + 1]
+        # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
+        if new_memory and new_memory[-1].tool_calls:
+            num_tool_calls = len(new_memory[-1].tool_calls)
+            if memory_index + num_tool_calls < len(memory):
+                new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
+            else:
+                new_memory = new_memory[:-1]
+        truncated_memory = new_memory
     if not step.insights:
         truncated_memory = memory[: step.initial_memory_length]
     return truncated_memory if truncated_memory else memory
@@ -451,6 +448,18 @@ def restart_from_point_with_feedback(
 
     step_index = request.payload.step_index
     insight_card_index = request.payload.retain_insight_card_index
+
+    step = state.get().find_step(index=step_index)
+    memory_index_of_insight_to_rethink = (
+        step.insights[insight_card_index].generated_at_memory_index
+        if isinstance(step, DefaultStep)
+        and insight_card_index is not None
+        and step.insights
+        and insight_card_index < len(step.insights)
+        else None
+    )
+    if (insight_card_index is not None and insight_card_index < 0) or insight_card_index is None:
+        memory_index_of_insight_to_rethink = 0
 
     event_manager.reset_steps_to_point(step_index, insight_card_index)
 
@@ -475,7 +484,9 @@ def restart_from_point_with_feedback(
             else context.get_memory("solution")
         )
     )
-    memory = truncate_memory_to_match_insights(memory, step_to_restart)
+    memory = truncate_memory_to_match_insights(
+        memory, memory_index_of_insight_to_rethink, step_to_restart
+    )
 
     # add feedback to memory and to insights
     if request.payload.message:
@@ -495,7 +506,11 @@ def restart_from_point_with_feedback(
                         InsightSharingOutput(
                             insight=request.payload.message,
                             justification="USER",
-                            generated_at_memory_index=len(memory) - 1,
+                            generated_at_memory_index=(
+                                memory_index_of_insight_to_rethink
+                                if memory_index_of_insight_to_rethink is not None
+                                else len(memory) - 1
+                            ),
                         )
                     )
     elif memory and memory[-1].role == "assistant":
@@ -673,8 +688,11 @@ def comment_on_thread(request: AutofixUpdateRequest):
             cur.steps[step_index].active_comment_thread.is_completed = True
 
     if response.action_requested:
+        text = request.payload.selected_text[:100] + (
+            "..." if len(request.payload.selected_text) > 100 else ""
+        )
         formatted_thread_memory = (
-            "Based on the following conversation, rethink your analysis:\n"
+            f"Regarding the statement'{text}', rethink your analysis based on the following conversation:\n"
             + "\n".join(
                 [
                     f"{message.role}: {message.content}"
