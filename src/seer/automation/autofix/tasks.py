@@ -688,11 +688,18 @@ def comment_on_thread(request: AutofixUpdateRequest):
             cur.steps[step_index].active_comment_thread.is_completed = True
 
     if response.action_requested:
-        text = request.payload.selected_text[:100] + (
-            "..." if len(request.payload.selected_text) > 100 else ""
+        text = (
+            (
+                "Regarding the statement '"
+                + request.payload.selected_text[:100]
+                + ("..." if len(request.payload.selected_text) > 100 else "")
+                + "',"
+            )
+            if request.payload.selected_text
+            else None
         )
         formatted_thread_memory = (
-            f"Regarding the statement'{text}', rethink your analysis based on the following conversation:\n"
+            f"{text if text else ''}rethink your analysis based on the following conversation:\n"
             + "\n".join(
                 [
                     f"{message.role}: {message.content}"
