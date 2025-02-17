@@ -75,6 +75,8 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             external_id=external_id,
             pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
         )
+        if filename_to_issues is None:
+            return {}
         return {
             filename: [IssueDetails.model_validate(issue) for issue in issues]
             for filename, issues in filename_to_issues.items()

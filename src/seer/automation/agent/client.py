@@ -30,7 +30,10 @@ from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from more_itertools import chunked
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
-from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
+from vertexai.language_models import (  # type: ignore[import-untyped]
+    TextEmbeddingInput,
+    TextEmbeddingModel,
+)
 
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,

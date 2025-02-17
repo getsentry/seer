@@ -51,6 +51,7 @@ from seer.automation.codegen.models import (
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
+    CodegenRelevantWarningsRequest,
     CodegenRelevantWarningsResponse,
     CodegenRelevantWarningsStateRequest,
     CodegenRelevantWarningsStateResponse,
@@ -270,7 +271,9 @@ def codegen_unit_tests_state_endpoint(
 
 
 @json_api(blueprint, "/v1/automation/codegen/relevant-warnings")
-def codegen_relevant_warnings_endpoint(data: CodegenBaseRequest) -> CodegenRelevantWarningsResponse:
+def codegen_relevant_warnings_endpoint(
+    data: CodegenRelevantWarningsRequest,
+) -> CodegenRelevantWarningsResponse:
     return codegen_relevant_warnings(data)
 
 
@@ -328,6 +331,11 @@ def codecov_request_endpoint(
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
     elif data.request_type == "relevant-warnings":
+        if not isinstance(data.data, CodegenRelevantWarningsRequest):
+            raise TypeError(
+                f"Invalid request data type: {type(data.data)}. "
+                "Expected CodegenRelevantWarningsRequest."
+            )
         return codegen_relevant_warnings_endpoint(data.data)
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 

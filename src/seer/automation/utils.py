@@ -276,8 +276,8 @@ def batch_texts_by_token_count(
     """
 
     # TODO: write really good unit test
-    batch = []
-    num_tokens_batch = 0
+    batch: list[str] = []
+    num_tokens_batch_estimate = 0.0
     for text in texts:
         num_tokens_text_estimate = len(text) / avg_num_chars_per_token
 
@@ -287,15 +287,15 @@ def batch_texts_by_token_count(
                 yield batch
             yield [text]
             batch = []
-            num_tokens_batch = 0
+            num_tokens_batch_estimate = 0
             continue
 
-        if num_tokens_batch + num_tokens_text_estimate > max_tokens:
+        if num_tokens_batch_estimate + num_tokens_text_estimate > max_tokens:
             yield batch
             batch = []
-            num_tokens_batch = 0
+            num_tokens_batch_estimate = 0
         batch.append(text)
-        num_tokens_batch += num_tokens_text_estimate
+        num_tokens_batch_estimate += num_tokens_text_estimate
 
     if batch:
         # The last batch didn't hit max_tokens. It needs to be yielded.

@@ -2,6 +2,7 @@ from seer.automation.codegen.models import (
     CodegenBaseRequest,
     CodegenContinuation,
     CodegenPrReviewResponse,
+    CodegenRelevantWarningsRequest,
     CodegenRelevantWarningsResponse,
     CodegenRelevantWarningsStateRequest,
     CodegenStatus,
@@ -47,7 +48,7 @@ def create_initial_pr_review_run(request: CodegenBaseRequest) -> DbState[Codegen
 
 
 def create_initial_relevant_warnings_run(
-    request: CodegenBaseRequest,
+    request: CodegenRelevantWarningsRequest,
 ) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request),
@@ -108,15 +109,19 @@ def codegen_pr_review(request: CodegenBaseRequest, app_config: AppConfig = injec
 
 
 @inject
-def codegen_relevant_warnings(request: CodegenBaseRequest, app_config: AppConfig = injected):
+def codegen_relevant_warnings(
+    request: CodegenRelevantWarningsRequest, app_config: AppConfig = injected
+):
     state = create_initial_relevant_warnings_run(request)
 
     cur_state = state.get()
 
     relevant_warnings_request = RelevantWarningsStepRequest(
-        run_id=cur_state.run_id,
+        repo=request.repo,
         pr_id=request.pr_id,
-        repo_definition=request.repo,
+        organization_id=request.organization_id,
+        warnings=request.warnings,
+        run_id=cur_state.run_id,
     )
 
     RelevantWarningsStep.get_signature(
