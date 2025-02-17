@@ -103,8 +103,8 @@ class RelevantWarningsStep(CodegenStep):
 
         # 3. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
         #    will fix the issue.
-        filterer = AreIssuesFixableComponent(self.context)
-        are_fixable_output: CodeAreIssuesFixableOutput = filterer.invoke(
+        are_issues_fixable_component = AreIssuesFixableComponent(self.context)
+        are_fixable_output: CodeAreIssuesFixableOutput = are_issues_fixable_component.invoke(
             CodeAreIssuesFixableRequest(
                 candidate_issues=[issue for _, issue in associations], max_issues_analyzed=10
             )
@@ -118,11 +118,13 @@ class RelevantWarningsStep(CodegenStep):
         ]
 
         # 4. Match warnings with issues if fixing the warning will fix the issue.
-        matcher = PredictRelevantWarningsComponent(self.context)
+        prediction_component = PredictRelevantWarningsComponent(self.context)
         request = CodePredictRelevantWarningsRequest(
             candidate_associations=associations_with_fixable_issues
         )
-        relevant_warnings_output: CodePredictRelevantWarningsOutput = matcher.invoke(request)
+        relevant_warnings_output: CodePredictRelevantWarningsOutput = prediction_component.invoke(
+            request
+        )
 
         # TODO: POST relevant warnings to overwatch
 

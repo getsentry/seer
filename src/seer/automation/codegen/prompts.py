@@ -275,8 +275,10 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
     class DoesFixingWarningFixIssue(BaseModel):
         reasoning: str
-        does_fixing_warning_fix_issue: bool
         relevance_probability: float
+        does_fixing_warning_fix_issue: bool
+        short_description: str | None = None
+        short_justification: str | None = None
 
     @staticmethod
     def format_prompt(formatted_warning: str, formatted_error: str):
@@ -288,16 +290,20 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
             {formatted_warning}
 
-            We don't know if the warning is directly relevant to the issue.
-            Would fixing this warning prevent the issue from surfacing again?
-            We're not simply deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
-            We're not looking for warnings which vaguely relate to the issue. The relationship should be somewhat direct.
-            Make sure to consider the locations of the warning and issue in the codebase—if the warning is in a different file than the issue, it may not be relevant.
+            We need to know if this warning is directly relevant to the issue.
+            By relevant, we mean that fixing the warning would prevent the issue.
+            We're not deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
+            We're not looking for warnings which vaguely relate to the issue. The relationship should be clear and explainable.
 
-            Before giving your final answer, think about the context in which the error occurs. What are its possible causes? How would it be fixed? Your reasoning should be at most 100 words.
-            Next think about how the warning is related or unrelated to the issue.
-            And then give your final answer.
-
+            Before giving your final answer, think about the context in which the error occurs.
+            What are its possible causes? How would it be fixed? Next think about how the warning is related or unrelated to the issue.
+            Your `reasoning` should be at most 200 words.
             Also, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue. This score, the `relevance_probability`, can be very granular, e.g., 0.32.
+            Then give your final answer in `does_fixing_warning_fix_issue`.
+
+            Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
+              - `short_description`: a short and sweet description of the problem caused by not addressing the warning.
+                This description must focus on the problem and not the warning itself. It should be at most 10 words.
+              - `short_justification`: a short summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 10 words.
             """
         )

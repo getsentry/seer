@@ -115,7 +115,7 @@ class AssociateWarningsWithIssuesComponent(
             {event_details.title}
             ----------
             Exceptions:
-            {event_details.format_exceptions()}
+            {event_details.format_exceptions(include_context=False, include_var_values=False)}
             ----------
             This file, in particular, contained function(s) that overlapped with the exceptions: {related_filename}
             """
@@ -264,6 +264,8 @@ class PredictRelevantWarningsComponent(
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
                     reasoning=completion.parsed.reasoning,
+                    short_description=completion.parsed.short_description or "",
+                    short_justification=completion.parsed.short_justification or "",
                 )
             )
 
