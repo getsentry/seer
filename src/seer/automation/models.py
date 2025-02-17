@@ -354,6 +354,15 @@ class EventDetails(BaseModel):
             breadcrumbs=self.format_breadcrumbs(),
         )
 
+    def format_event_without_breadcrumbs(self):
+        return textwrap.dedent(
+            f"""\
+            {self.title}
+            Exceptions:
+            {self.format_exceptions()}
+            """
+        )
+
     def format_exceptions(self):
         return "\n".join(
             textwrap.dedent(

@@ -263,3 +263,40 @@ def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
         encoding = fallback_encoding
 
     return encoding
+
+
+def batch_texts_by_token_count(
+    texts: list[str], max_tokens: int, avg_num_chars_per_token: float = 4.0
+):
+    """
+    Generate batches of texts with at most `max_tokens` per batch.
+    Tokens are roughly counted according to `avg_num_chars_per_token`.
+
+    If a text exceeds `max_tokens`, it's in its own batch. **It isn't truncated.**
+    """
+
+    # TODO: write really good unit test
+    batch = []
+    num_tokens_batch = 0
+    for text in texts:
+        num_tokens_text_estimate = len(text) / avg_num_chars_per_token
+
+        if num_tokens_text_estimate > max_tokens:
+            if batch:
+                # Yield existing batch first to maintain the order of texts.
+                yield batch
+            yield [text]
+            batch = []
+            num_tokens_batch = 0
+            continue
+
+        if num_tokens_batch + num_tokens_text_estimate > max_tokens:
+            yield batch
+            batch = []
+            num_tokens_batch = 0
+        batch.append(text)
+        num_tokens_batch += num_tokens_text_estimate
+
+    if batch:
+        # The last batch didn't hit max_tokens. It needs to be yielded.
+        yield batch

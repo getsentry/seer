@@ -4,9 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from seer.automation.codebase.models import SentryIssue, StaticAnalysisWarning
+from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import FileChange, RelevantWarningResult, RepoDefinition
+from seer.automation.models import FileChange, IssueDetails, RelevantWarningResult, RepoDefinition
 
 
 class CodegenStatus(str, Enum):
@@ -133,19 +133,55 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
+class PrFile(BaseModel):
+    # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28
+    filename: str
+    patch: str
+    status: Literal[
+        "added",
+        "removed",
+        "modified",
+        "renamed",
+        "copied",
+        "changed",
+        "unchanged",
+    ]
+    changes: int
+
+
+class CodeFetchIssuesRequest(BaseComponentRequest):
+    organization_id: int
+    pr_files: list[PrFile]
+
+
+class CodeFetchIssuesOutput(BaseComponentOutput):
+    filename_to_issues: dict[str, list[IssueDetails]]
+
+
+class AssociateWarningsWithIssuesRequest(BaseComponentRequest):
+    warnings: list[StaticAnalysisWarning]
+    filename_to_issues: dict[str, list[IssueDetails]]
+    max_num_associations: int
+
+
+class AssociateWarningsWithIssuesOutput(BaseComponentOutput):
+    candidate_associations: list[tuple[StaticAnalysisWarning, IssueDetails]]
+
+
 class CodeAreIssuesFixableRequest(BaseComponentRequest):
-    candidate_issues: list[SentryIssue]
+    candidate_issues: list[IssueDetails]
+    max_issues_analyzed: int
 
 
-class CodeRelevantWarningsRequest(BaseComponentRequest):
-    candidate_associations: list[tuple[StaticAnalysisWarning, SentryIssue]]
+class CodePredictRelevantWarningsRequest(BaseComponentRequest):
+    candidate_associations: list[tuple[StaticAnalysisWarning, IssueDetails]]
 
 
 class CodeAreIssuesFixableOutput(BaseComponentOutput):
     are_fixable: list[bool | None]  # None means the issue was not analyzed
 
 
-class CodeRelevantWarningsOutput(BaseComponentOutput):
+class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     """
     A list of results for all pairs of warnings and issues.
     Includes both relevant and irrelevant warnings.

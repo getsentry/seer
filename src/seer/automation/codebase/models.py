@@ -1,4 +1,3 @@
-import json
 import re
 import textwrap
 from typing import Any, Literal, NotRequired, TypedDict
@@ -101,40 +100,6 @@ class Location(BaseModel):
 
 
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py
-class SentryIssue(BaseModel):
-    group_id: str
-    commit_id: str
-    title: str
-    json_encoded_stacktraces: list[dict]
-    error_location: str
-    encoded_error_snippet: str | None
-    encoded_local_context: str | None
-    encoded_non_local_context: str | None
-    project_name: str
-
-    def format_error(self) -> str:
-        return textwrap.dedent(
-            f"""\
-            Issue: {self.title}
-            ----------
-            Location:
-            {self.error_location}
-            ----------
-            Error Snippet:
-            {self.encoded_error_snippet}
-            ----------
-            Local Context:
-            {self.encoded_local_context}
-            ----------
-            Non-Local Context:
-            {self.encoded_non_local_context}
-            ----------
-            Stacktrace:
-            {json.dumps(self.json_encoded_stacktraces, indent=2)}
-            """
-        )
-
-
 class StaticAnalysisRule(BaseModel):
     id: int
     code: str

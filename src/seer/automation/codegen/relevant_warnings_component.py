@@ -1,43 +1,183 @@
 import logging
+import textwrap
 
+import numpy as np
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
 from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 from tqdm.autonotebook import tqdm
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
-from seer.automation.codebase.models import SentryIssue
+from seer.automation.agent.client import GoogleProviderEmbeddings, LlmClient, OpenAiProvider
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
+    AssociateWarningsWithIssuesOutput,
+    AssociateWarningsWithIssuesRequest,
     CodeAreIssuesFixableOutput,
     CodeAreIssuesFixableRequest,
-    CodeRelevantWarningsOutput,
-    CodeRelevantWarningsRequest,
+    CodeFetchIssuesOutput,
+    CodeFetchIssuesRequest,
+    CodePredictRelevantWarningsOutput,
+    CodePredictRelevantWarningsRequest,
+    PrFile,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.component import BaseComponent
-from seer.automation.models import RelevantWarningResult
+from seer.automation.models import EventDetails, IssueDetails, RelevantWarningResult
 from seer.dependency_injection import inject, injected
+from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
 
-def _is_issue_fixable_cache_key(llm_client: LlmClient, issue: SentryIssue) -> tuple[str]:
-    return hashkey(issue.group_id)
+class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
+    """
+    Fetch issues related to the files in a PR by analyzing stacktrace frames in the issue.
+    """
+
+    context: CodegenContext
+
+    @staticmethod
+    @inject
+    def _fetch_issues(
+        organization_id: int,
+        provider: str,
+        external_id: str,
+        pr_files: list[PrFile],
+        max_files_analyzed: int = 7,
+        max_lines_analyzed: int = 500,
+        client: RpcClient = injected,
+    ) -> dict[str, list[IssueDetails]]:
+        """
+        Returns a dict mapping file names in the PR to issues related to the file.
+        They're related if the functions and filenames in the issue's stacktrace overlap with those
+        modified in the PR.
+
+        The `max_files_analyzed` and `max_lines_analyzed` ensure that the payload we send to
+        seer_rpc doesn't get too large.
+        They're roughly like the qualification checks in [Open PR Comments](https://sentry.engineering/blog/how-open-pr-comments-work#qualification-checks).
+        """
+        pr_files_eligible = [
+            pr_file
+            for pr_file in pr_files
+            if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
+            # If it's added or deleted, there won't be past issues for it.
+        ]
+        if not pr_files_eligible:
+            logger.info("No eligible files in PR.")
+            return {}
+
+        pr_files_eligible[:max_files_analyzed]
+        filename_to_issues = client.call(
+            "get_issues_related_to_file_patches",
+            organization_id=organization_id,
+            provider=provider,
+            external_id=external_id,
+            pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
+        )
+        return {
+            filename: [IssueDetails.model_validate(issue) for issue in issues]
+            for filename, issues in filename_to_issues.items()
+        }
+
+    @observe(name="Fetch Issues")
+    @ai_track(description="Fetch Issues")
+    def invoke(self, request: CodeFetchIssuesRequest) -> CodeFetchIssuesOutput:
+        # TODO: is this filename the same format as what open_pr_comment uses?
+        # Need to ensure matchability wrt sentry stacktrace frame filenames
+        filename_to_issues = self._fetch_issues(
+            organization_id=request.organization_id,
+            provider=self.context.repo.provider,
+            external_id=self.context.repo.external_id,
+            pr_files=request.pr_files,
+        )
+        return CodeFetchIssuesOutput(filename_to_issues=filename_to_issues)
 
 
-@cached(cache=LRUCache(maxsize=1000), key=_is_issue_fixable_cache_key)
-def is_issue_fixable(llm_client: LlmClient, issue: SentryIssue) -> bool:
+def _format_issue_with_related_filename(issue: IssueDetails, related_filename: str) -> str:
+    event_details = EventDetails.from_event(issue.events[0])
+    return textwrap.dedent(
+        f"""\
+        {event_details.title}
+        ----------
+        Exceptions:
+        {event_details.format_exceptions()}
+        ----------
+        This file, in particular, contained function(s) that overlapped with the exceptions: {related_filename}
+        """
+    )
+
+
+class AssociateWarningsWithIssuesComponent(
+    BaseComponent[AssociateWarningsWithIssuesRequest, AssociateWarningsWithIssuesOutput]
+):
     """
-    Given an issue, predict whether it's fixable.
-    LRU-cached by the `issue.group_id` in case the same issue is analyzed across many requests.
+    Given a list of warnings and a list of issues, return warning-issue pairs which should be
+    analyzed by an LLM.
+
+    The purpose of this step is to reduce LLM calls. If we have n warnings and m issues,
+    we can reduce the number of pairs to consider from n * m to the top k, which is configurable.
     """
+
+    context: CodegenContext
+
+    @staticmethod
+    def _top_k_indices(distances: np.ndarray, k: int) -> list[tuple[int, ...]]:
+        flat_indices_sorted_by_distance = distances.argsort(axis=None)
+        top_k_indices = np.unravel_index(flat_indices_sorted_by_distance[:k], distances.shape)
+        return list(zip(*top_k_indices))
+
+    @observe(name="Associate Warnings With Issues")
+    @ai_track(description="Associate Warnings With Issues")
+    def invoke(
+        self, request: AssociateWarningsWithIssuesRequest
+    ) -> AssociateWarningsWithIssuesOutput:
+
+        warnings_formatted = [warning.format_warning() for warning in request.warnings]
+        issues_with_pr_filename = [
+            (issue, filename)
+            for filename, issues in request.filename_to_issues.items()
+            for issue in issues
+        ]
+        issues_formatted = [
+            _format_issue_with_related_filename(issue, pr_filename)
+            for issue, pr_filename in issues_with_pr_filename
+        ]
+
+        model = GoogleProviderEmbeddings.model(
+            "text-embedding-005", task_type="CODE_RETRIEVAL_QUERY"
+        )
+        embeddings_warnings = model.encode(warnings_formatted)
+        embeddings_issues = model.encode(issues_formatted)
+
+        warning_issue_similarities = embeddings_warnings @ embeddings_issues.T
+        # Embeddings are already normalized.
+        warning_issue_distances = 1 - warning_issue_similarities
+        warning_issue_indices = self._top_k_indices(
+            warning_issue_distances, request.max_num_associations
+        )
+        candidate_associations = [
+            (request.warnings[warning_idx], issues_with_pr_filename[issue_idx][0])
+            for warning_idx, issue_idx in warning_issue_indices
+        ]
+        return AssociateWarningsWithIssuesOutput(candidate_associations=candidate_associations)
+
+
+def _is_issue_fixable_cache_key(llm_client: LlmClient, issue: IssueDetails) -> tuple[str]:
+    return hashkey(issue.id)
+
+
+@cached(cache=LRUCache(maxsize=2048), key=_is_issue_fixable_cache_key)
+def _is_issue_fixable(llm_client: LlmClient, issue: IssueDetails) -> bool:
+    # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
+    # a repo has a set of files which are frequently used to handle and raise exceptions.
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),  # TODO: use flash?
         system_prompt=IsFixableIssuePrompts.format_system_msg(),
         prompt=IsFixableIssuePrompts.format_prompt(
-            formatted_error=issue.format_error(),
+            formatted_error=EventDetails.from_event(
+                issue.events[0]
+            ).format_event_without_breadcrumbs(),
         ),
         response_format=IsFixableIssuePrompts.IsIssueFixable,
         temperature=0.0,
@@ -55,7 +195,6 @@ class AreIssuesFixableComponent(
     """
 
     context: CodegenContext
-    _max_issues_analyzed: int = 10
 
     @observe(name="Predict Issue Fixability")
     @ai_track(description="Predict Issue Fixability")
@@ -68,22 +207,19 @@ class AreIssuesFixableComponent(
         passed in from a list of warning-issue associations.
         """
         # TODO: batch / send uncached issues in one prompt and ask for a list of fixable issue group ids
-        issue_group_id_to_issue = {issue.group_id: issue for issue in request.candidate_issues}
-        issue_group_ids = list(issue_group_id_to_issue.keys())[: self._max_issues_analyzed]
-        issue_group_id_to_is_fixable = {
-            issue_group_id: is_issue_fixable(llm_client, issue_group_id_to_issue[issue_group_id])
-            for issue_group_id in tqdm(issue_group_ids, desc="Predicting issue fixability")
+        issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
+        issue_ids = list(issue_id_to_issue.keys())[: request.max_issues_analyzed]
+        issue_id_to_is_fixable = {
+            issue_id: _is_issue_fixable(llm_client, issue_id_to_issue[issue_id])
+            for issue_id in tqdm(issue_ids, desc="Predicting issue fixability")
         }
         return CodeAreIssuesFixableOutput(
-            are_fixable=[
-                issue_group_id_to_is_fixable.get(issue.group_id)
-                for issue in request.candidate_issues
-            ]
+            are_fixable=[issue_id_to_is_fixable.get(issue.id) for issue in request.candidate_issues]
         )
 
 
-class RelevantWarningsComponent(
-    BaseComponent[CodeRelevantWarningsRequest, CodeRelevantWarningsOutput]
+class PredictRelevantWarningsComponent(
+    BaseComponent[CodePredictRelevantWarningsRequest, CodePredictRelevantWarningsOutput]
 ):
     """
     Given a list of warning-issue associations, predict whether each is relevant.
@@ -98,8 +234,8 @@ class RelevantWarningsComponent(
     @ai_track(description="Predict Relevant Warnings")
     @inject
     def invoke(
-        self, request: CodeRelevantWarningsRequest, llm_client: LlmClient = injected
-    ) -> CodeRelevantWarningsOutput:
+        self, request: CodePredictRelevantWarningsRequest, llm_client: LlmClient = injected
+    ) -> CodePredictRelevantWarningsOutput:
         # TODO: instead of looking at every association, probably faster and cheaper to input one
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         #
@@ -107,7 +243,7 @@ class RelevantWarningsComponent(
         relevant_warning_results: list[RelevantWarningResult] = []
         candidate_associations = request.candidate_associations[: self._max_associations_analyzed]
         # The time limit for OpenAI prompt caching is 5-10 minutes, so no point in sorting by
-        # issue.group_id
+        # issue.id
         for warning, issue in tqdm(candidate_associations, desc="Predicting relevance"):
             completion = llm_client.generate_structured(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
@@ -124,11 +260,11 @@ class RelevantWarningsComponent(
             relevant_warning_results.append(
                 RelevantWarningResult(
                     warning_id=warning.id,
-                    issue_group_id=issue.group_id,
+                    issue_group_id=str(issue.id),
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
                     reasoning=completion.parsed.reasoning,
                 )
             )
 
-        return CodeRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)
+        return CodePredictRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)
