@@ -105,7 +105,9 @@ class RelevantWarningsStep(CodegenStep):
         #    will fix the issue.
         filterer = AreIssuesFixableComponent(self.context)
         are_fixable_output: CodeAreIssuesFixableOutput = filterer.invoke(
-            CodeAreIssuesFixableRequest(candidate_issues=[issue for _, issue in associations])
+            CodeAreIssuesFixableRequest(
+                candidate_issues=[issue for _, issue in associations], max_issues_analyzed=10
+            )
         )
         associations_with_fixable_issues = [
             association

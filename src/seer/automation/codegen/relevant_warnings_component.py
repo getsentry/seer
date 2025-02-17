@@ -49,11 +49,11 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         client: RpcClient = injected,
     ) -> dict[str, list[IssueDetails]]:
         """
-        Returns a dict mapping file names in the PR to issues related to the file.
+        Returns a dict mapping a subset of file names in the PR to issues related to the file.
         They're related if the functions and filenames in the issue's stacktrace overlap with those
         modified in the PR.
 
-        The `max_files_analyzed` and `max_lines_analyzed` ensure that the payload we send to
+        The `max_files_analyzed` and `max_lines_analyzed` checks ensure that the payload we send to
         seer_rpc doesn't get too large.
         They're roughly like the qualification checks in [Open PR Comments](https://sentry.engineering/blog/how-open-pr-comments-work#qualification-checks).
         """
@@ -94,20 +94,6 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         return CodeFetchIssuesOutput(filename_to_issues=filename_to_issues)
 
 
-def _format_issue_with_related_filename(issue: IssueDetails, related_filename: str) -> str:
-    event_details = EventDetails.from_event(issue.events[0])
-    return textwrap.dedent(
-        f"""\
-        {event_details.title}
-        ----------
-        Exceptions:
-        {event_details.format_exceptions()}
-        ----------
-        This file, in particular, contained function(s) that overlapped with the exceptions: {related_filename}
-        """
-    )
-
-
 class AssociateWarningsWithIssuesComponent(
     BaseComponent[AssociateWarningsWithIssuesRequest, AssociateWarningsWithIssuesOutput]
 ):
@@ -120,6 +106,20 @@ class AssociateWarningsWithIssuesComponent(
     """
 
     context: CodegenContext
+
+    @staticmethod
+    def _format_issue_with_related_filename(issue: IssueDetails, related_filename: str) -> str:
+        event_details = EventDetails.from_event(issue.events[0])
+        return textwrap.dedent(
+            f"""\
+            {event_details.title}
+            ----------
+            Exceptions:
+            {event_details.format_exceptions()}
+            ----------
+            This file, in particular, contained function(s) that overlapped with the exceptions: {related_filename}
+            """
+        )
 
     @staticmethod
     def _top_k_indices(distances: np.ndarray, k: int) -> list[tuple[int, ...]]:
@@ -140,7 +140,7 @@ class AssociateWarningsWithIssuesComponent(
             for issue in issues
         ]
         issues_formatted = [
-            _format_issue_with_related_filename(issue, pr_filename)
+            self._format_issue_with_related_filename(issue, pr_filename)
             for issue, pr_filename in issues_with_pr_filename
         ]
 
@@ -150,11 +150,11 @@ class AssociateWarningsWithIssuesComponent(
         embeddings_warnings = model.encode(warnings_formatted)
         embeddings_issues = model.encode(issues_formatted)
 
-        warning_issue_similarities = embeddings_warnings @ embeddings_issues.T
+        warning_issue_cosine_similarities = embeddings_warnings @ embeddings_issues.T
         # Embeddings are already normalized.
-        warning_issue_distances = 1 - warning_issue_similarities
+        warning_issue_cosine_distances = 1 - warning_issue_cosine_similarities
         warning_issue_indices = self._top_k_indices(
-            warning_issue_distances, request.max_num_associations
+            warning_issue_cosine_distances, request.max_num_associations
         )
         candidate_associations = [
             (request.warnings[warning_idx], issues_with_pr_filename[issue_idx][0])
