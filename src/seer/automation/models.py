@@ -196,7 +196,7 @@ class Stacktrace(BaseModel):
                     {vars_str}
                     """
                 ).format(vars_title=vars_title, vars_str=vars_str)
-                stack_str += "------\n"
+            stack_str += "------\n"
 
         return stack_str
 
