@@ -251,9 +251,8 @@ class _RelevantWarningsPromptPrefix:
 class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
 
     class IsIssueFixable(BaseModel):
-        # TODO: add reasoning?
-        # For now, leaning against it due to the number of LLM calls involved in the pipeline, and
-        # b/c this should be an easier task.
+        # No reasoning due to the number of LLM calls involved in the pipeline.
+        # This should be an easier task.
         is_fixable: bool
 
     @staticmethod

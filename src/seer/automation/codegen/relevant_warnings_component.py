@@ -228,7 +228,6 @@ class PredictRelevantWarningsComponent(
     """
 
     context: CodegenContext
-    _max_associations_analyzed: int = 10
 
     @observe(name="Predict Relevant Warnings")
     @ai_track(description="Predict Relevant Warnings")
@@ -241,16 +240,17 @@ class PredictRelevantWarningsComponent(
         #
         # TODO: handle LLM API errors in this loop by moving on
         relevant_warning_results: list[RelevantWarningResult] = []
-        candidate_associations = request.candidate_associations[: self._max_associations_analyzed]
         # The time limit for OpenAI prompt caching is 5-10 minutes, so no point in sorting by
         # issue.id
-        for warning, issue in tqdm(candidate_associations, desc="Predicting relevance"):
+        for warning, issue in tqdm(request.candidate_associations, desc="Predicting relevance"):
             completion = llm_client.generate_structured(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
                     formatted_warning=warning.format_warning(),
-                    formatted_error=issue.format_error(),
+                    formatted_error=EventDetails.from_event(
+                        issue.events[0]
+                    ).format_event_without_breadcrumbs(),
                 ),
                 response_format=ReleventWarningsPrompts.DoesFixingWarningFixIssue,
                 temperature=0.0,
