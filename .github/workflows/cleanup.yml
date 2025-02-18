@@ -16,8 +16,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/delete-package-versions@v5
+      - uses: snok/container-retention-policy@v3.0.0
         with:
-          package-name: "seer"
-          package-type: "container"
-          min-versions-to-keep: 64 # Keep the latest 64 versions
+          account: snok
+          image-names: "seer"
+          cut-off: 4d # TODO
+          dry-run: true
