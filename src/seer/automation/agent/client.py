@@ -863,7 +863,10 @@ class GeminiProvider:
 
             for chunk in stream:
                 # Handle function calls
-                if chunk.candidates[0].content.parts[0].function_call:
+                if (
+                    chunk.candidates[0].content
+                    and chunk.candidates[0].content.parts[0].function_call
+                ):
                     function_call = chunk.candidates[0].content.parts[0].function_call
                     if not current_tool_call:
                         current_tool_call = {

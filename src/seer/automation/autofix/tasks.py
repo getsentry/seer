@@ -1,6 +1,7 @@
 import datetime
 import logging
 import random
+import textwrap
 from typing import Literal, Type, cast
 
 import sentry_sdk
@@ -412,13 +413,9 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def truncate_memory_to_match_insights(
-    memory: list[Message], memory_index: int | None, step: DefaultStep
-):
-    if memory_index is None:
+def truncate_memory_to_match_insights(memory: list[Message], memory_index: int, step: DefaultStep):
+    if memory_index >= len(memory):
         return memory
-
-    memory_index = max(memory_index, step.initial_memory_length)
     truncated_memory = []
     if step.insights:
         new_memory = memory[: memory_index + 1]
@@ -447,21 +444,26 @@ def restart_from_point_with_feedback(
     event_manager = AutofixEventManager(state)
 
     step_index = request.payload.step_index
-    insight_card_index = request.payload.retain_insight_card_index
+    insight_card_index = (
+        request.payload.retain_insight_card_index
+    )  # this is the index of the insight that triggered the rethink. If it's None, it was triggered when there were no insights. If it's greater than the last insight index, it was triggered on a final output (e.g. root cause, solution, etc.) or by adding an insight to the end of the chain.
 
     step = state.get().find_step(index=step_index)
-    memory_index_of_insight_to_rethink = (
-        step.insights[insight_card_index].generated_at_memory_index
-        if isinstance(step, DefaultStep)
-        and insight_card_index is not None
-        and step.insights
-        and insight_card_index < len(step.insights)
-        else None
-    )
-    if (insight_card_index is not None and insight_card_index < 0) or insight_card_index is None:
-        memory_index_of_insight_to_rethink = 0
+    if not isinstance(step, DefaultStep):
+        raise ValueError("Cannot rethink steps without insights.")
 
-    event_manager.reset_steps_to_point(step_index, insight_card_index)
+    memory_index_of_insight_to_rethink = (
+        step.initial_memory_length
+    )  # by default, reset to beginning of memory
+    if insight_card_index is not None:
+        if insight_card_index >= 0 and insight_card_index < len(step.insights):
+            memory_index_of_insight_to_rethink = step.insights[
+                insight_card_index
+            ].generated_at_memory_index  # reset to the memory at the time of the insight
+        else:
+            memory_index_of_insight_to_rethink = float("inf")  # retain all memoruy
+
+    event_manager.reset_steps_to_point(step_index, insight_card_index - 1)
 
     context = AutofixContext(
         state=state, sentry_client=get_sentry_client(), event_manager=event_manager
@@ -509,6 +511,7 @@ def restart_from_point_with_feedback(
                             generated_at_memory_index=(
                                 memory_index_of_insight_to_rethink
                                 if memory_index_of_insight_to_rethink is not None
+                                and isinstance(memory_index_of_insight_to_rethink, int)
                                 else len(memory) - 1
                             ),
                         )
