@@ -38,7 +38,7 @@ from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
 from seer.automation.utils import escape_multi_xml, extract_text_inside_tags
 from seer.configuration import AppConfig
-from seer.dependency_injection import Module, inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -342,17 +342,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         @observe(name="Process Change Task")
         @ai_track(description="Process Change Task")
         def process_task(task: CodeChangeXml, llm_client: LlmClient, app_config: AppConfig):
-            module = Module()
-            module.enable()
-
-            @module.provider
-            def provide_llm_client() -> LlmClient:
-                return llm_client
-
-            @module.provider
-            def provide_app_config() -> AppConfig:
-                return app_config
-
             repo_client = self.context.get_repo_client(task.repo_name)
             if task.type == "file_change":
                 file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
@@ -406,7 +395,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 return None
 
         # apply change tasks in parallel
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            initializer=copy_modules_initializer()
+        ) as executor:
             trace_id = langfuse_context.get_current_trace_id()
             observation_id = langfuse_context.get_current_observation_id()
 
