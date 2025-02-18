@@ -12,16 +12,10 @@ jobs:
     permissions:
       packages: "write"
     steps:
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: snok/container-retention-policy@v3.0.0
         with:
           account: getsentry
           token: ${{ secrets.GITHUB_TOKEN }}
           image-names: "seer"
-          cut-off: 4d # TODO
-          dry-run: true
+          cut-off: 14d # Keep images up to 14 days old
+          keep-n-most-recent: 16 # Keep 16 most recent regardless of age
