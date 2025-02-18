@@ -691,8 +691,7 @@ def comment_on_thread(request: AutofixUpdateRequest):
         text = (
             (
                 "Regarding the statement '"
-                + request.payload.selected_text[:100]
-                + ("..." if len(request.payload.selected_text) > 100 else "")
+                + textwrap.shorten(request.payload.selected_text, width=100, placeholder="...")
                 + "',"
             )
             if request.payload.selected_text
