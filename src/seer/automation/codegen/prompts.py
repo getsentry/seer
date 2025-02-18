@@ -293,7 +293,7 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             We need to know if this warning is directly relevant to the issue.
             By relevant, we mean that fixing the warning would prevent the issue.
             We're not deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
-            We're not looking for warnings which vaguely relate to the issue. The relationship should be clear and explainable.
+            We're not looking for warnings which vaguely relate to the issue. The relationship should be somewhat direct.
 
             Before giving your final answer, think about the context in which the error occurs.
             What are its possible causes? How would it be fixed? Next think about how the warning is related or unrelated to the issue.
