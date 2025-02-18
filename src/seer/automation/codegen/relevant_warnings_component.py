@@ -19,10 +19,11 @@ from seer.automation.codegen.models import (
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
     PrFile,
+    RelevantWarningResult,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.component import BaseComponent
-from seer.automation.models import EventDetails, IssueDetails, RelevantWarningResult
+from seer.automation.models import EventDetails, IssueDetails
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
@@ -84,7 +85,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
     @observe(name="Fetch Issues")
     @ai_track(description="Fetch Issues")
     def invoke(self, request: CodeFetchIssuesRequest) -> CodeFetchIssuesOutput:
-        # TODO: is this filename the same format as what open_pr_comment uses?
+        # TODO(kddubey): is this filename the same format as what open_pr_comment uses?
         # Need to ensure matchability wrt sentry stacktrace frame filenames
         filename_to_issues = self._fetch_issues(
             organization_id=request.organization_id,
@@ -173,7 +174,7 @@ def _is_issue_fixable(llm_client: LlmClient, issue: IssueDetails) -> bool:
     # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
     # a repo has a set of files which are frequently used to handle and raise exceptions.
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),  # TODO: use flash?
+        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),  # TODO(kddubey): use flash?
         system_prompt=IsFixableIssuePrompts.format_system_msg(),
         prompt=IsFixableIssuePrompts.format_prompt(
             formatted_error=EventDetails.from_event(
@@ -236,13 +237,11 @@ class PredictRelevantWarningsComponent(
     def invoke(
         self, request: CodePredictRelevantWarningsRequest, llm_client: LlmClient = injected
     ) -> CodePredictRelevantWarningsOutput:
-        # TODO: instead of looking at every association, probably faster and cheaper to input one
+        # TODO(kddubey): instead of looking at every association, probably faster and cheaper to input one
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         #
-        # TODO: handle LLM API errors in this loop by moving on
+        # TODO(kddubey): handle LLM API errors in this loop by moving on
         relevant_warning_results: list[RelevantWarningResult] = []
-        # The time limit for OpenAI prompt caching is 5-10 minutes, so no point in sorting by
-        # issue.id
         for warning, issue in request.candidate_associations:
             completion = llm_client.generate_structured(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
@@ -261,12 +260,13 @@ class PredictRelevantWarningsComponent(
             relevant_warning_results.append(
                 RelevantWarningResult(
                     warning_id=warning.id,
-                    issue_group_id=str(issue.id),
+                    issue_group_id=issue.id,
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
                     reasoning=completion.parsed.reasoning,
                     short_description=completion.parsed.short_description or "",
                     short_justification=completion.parsed.short_justification or "",
+                    warning=warning,
                 )
             )
 

@@ -64,7 +64,7 @@ class RelevantWarningsStep(CodegenStep):
     def get_task():
         return relevant_warnings_task
 
-    # TODO: is this @observe doing anything useful? This method doesn't return anything.
+    # TODO(kddubey): is this @observe doing anything useful? This method doesn't return anything.
     @observe(name="Codegen - Relevant Warnings")
     @ai_track(description="Codegen - Relevant Warnings Step")
     def _invoke(self, **kwargs):
@@ -129,7 +129,14 @@ class RelevantWarningsStep(CodegenStep):
             request
         )
 
-        # TODO: POST relevant warnings to overwatch
+        # TODO(kddubey): POST relevant warnings to overwatch
+        # requests.post(
+        #     "https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
+        #     json={
+        #         "run_id": self.context.run_id,
+        #         "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
+        #     },
+        # )
 
         self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
             relevant_warnings_output.relevant_warning_results

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import FileChange, IssueDetails, RelevantWarningResult, RepoDefinition
+from seer.automation.models import FileChange, IssueDetails, RepoDefinition
 
 
 class CodegenStatus(str, Enum):
@@ -14,6 +14,17 @@ class CodegenStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     ERRORED = "errored"
+
+
+class RelevantWarningResult(BaseModel):
+    warning_id: int
+    issue_group_id: int
+    does_fixing_warning_fix_issue: bool
+    relevance_probability: float
+    reasoning: str
+    short_description: str
+    short_justification: str
+    warning: StaticAnalysisWarning
 
 
 class CodegenState(BaseModel):

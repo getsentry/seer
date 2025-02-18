@@ -1,9 +1,9 @@
 import dataclasses
 from datetime import datetime
 
-from seer.automation.codegen.models import CodegenStatus
+from seer.automation.codegen.models import CodegenStatus, RelevantWarningResult
 from seer.automation.codegen.state import CodegenContinuationState
-from seer.automation.models import FileChange, RelevantWarningResult
+from seer.automation.models import FileChange
 
 
 @dataclasses.dataclass

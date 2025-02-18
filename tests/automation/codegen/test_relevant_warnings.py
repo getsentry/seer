@@ -18,6 +18,7 @@ from seer.automation.codegen.models import (
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
     PrFile,
+    RelevantWarningResult,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.codegen.relevant_warnings_component import (
@@ -30,12 +31,7 @@ from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStep,
     RelevantWarningsStepRequest,
 )
-from seer.automation.models import (
-    IssueDetails,
-    RelevantWarningResult,
-    RepoDefinition,
-    SentryEventData,
-)
+from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
 
 
 @patch("seer.rpc.DummyRpcClient.call")
@@ -230,7 +226,7 @@ class TestPredictRelevantWarningsComponent:
             candidate_associations, output.relevant_warning_results, strict=True
         ):
             assert warning.id == result.warning_id
-            assert str(issue.id) == result.issue_group_id
+            assert issue.id == result.issue_group_id
 
 
 @patch("seer.automation.codegen.relevant_warnings_component.FetchIssuesComponent.invoke")
