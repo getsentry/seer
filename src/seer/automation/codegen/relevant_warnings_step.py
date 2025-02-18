@@ -81,7 +81,9 @@ class RelevantWarningsStep(CodegenStep):
             )
             for file in pr.get_files()
         ]
-        fetch_issues_request = CodeFetchIssuesRequest(pr_files=pr_files)
+        fetch_issues_request = CodeFetchIssuesRequest(
+            organization_id=self.request.organization_id, pr_files=pr_files
+        )
         fetch_issues_output: CodeFetchIssuesOutput = fetch_issues_component.invoke(
             fetch_issues_request
         )
@@ -94,7 +96,7 @@ class RelevantWarningsStep(CodegenStep):
         associations_request = AssociateWarningsWithIssuesRequest(
             warnings=self.request.warnings,
             filename_to_issues=fetch_issues_output.filename_to_issues,
-            max_num_associations=10,
+            max_num_associations=self.request.max_num_associations,
         )
         associations_output: AssociateWarningsWithIssuesOutput = association_component.invoke(
             associations_request
@@ -106,7 +108,8 @@ class RelevantWarningsStep(CodegenStep):
         are_issues_fixable_component = AreIssuesFixableComponent(self.context)
         are_fixable_output: CodeAreIssuesFixableOutput = are_issues_fixable_component.invoke(
             CodeAreIssuesFixableRequest(
-                candidate_issues=[issue for _, issue in associations], max_issues_analyzed=10
+                candidate_issues=[issue for _, issue in associations],
+                max_num_issues_analyzed=self.request.max_num_issues_analyzed,
             )
         )
         associations_with_fixable_issues = [

@@ -114,6 +114,8 @@ class CodePrReviewOutput(BaseComponentOutput):
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
     organization_id: int
     warnings: list[StaticAnalysisWarning]
+    max_num_associations: int = 10
+    max_num_issues_analyzed: int = 10
 
 
 class CodegenRelevantWarningsResponse(CodegenBaseResponse):
@@ -170,7 +172,7 @@ class AssociateWarningsWithIssuesOutput(BaseComponentOutput):
 
 class CodeAreIssuesFixableRequest(BaseComponentRequest):
     candidate_issues: list[IssueDetails]
-    max_issues_analyzed: int
+    max_num_issues_analyzed: int
 
 
 class CodePredictRelevantWarningsRequest(BaseComponentRequest):

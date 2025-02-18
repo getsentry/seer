@@ -210,7 +210,7 @@ class AreIssuesFixableComponent(
         """
         # TODO: batch / send uncached issues in one prompt and ask for a list of fixable issue group ids
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
-        issue_ids = list(issue_id_to_issue.keys())[: request.max_issues_analyzed]
+        issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
         issue_id_to_is_fixable = {
             issue_id: _is_issue_fixable(llm_client, issue_id_to_issue[issue_id])
             for issue_id in tqdm(issue_ids, desc="Predicting issue fixability")

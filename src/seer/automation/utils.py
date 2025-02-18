@@ -2,7 +2,8 @@ import functools
 import logging
 import os
 import re
-from typing import TypeVar
+from math import ceil
+from typing import Iterable, TypeVar
 from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
@@ -266,7 +267,7 @@ def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
 
 
 def batch_texts_by_token_count(
-    texts: list[str], max_tokens: int, avg_num_chars_per_token: float = 4.0
+    texts: Iterable[str], max_tokens: int, avg_num_chars_per_token: float = 4.0
 ):
     """
     Generate batches of texts with at most `max_tokens` per batch.
@@ -275,11 +276,10 @@ def batch_texts_by_token_count(
     If a text exceeds `max_tokens`, it's in its own batch. **It isn't truncated.**
     """
 
-    # TODO: write really good unit test
     batch: list[str] = []
-    num_tokens_batch_estimate = 0.0
+    num_tokens_batch_estimate = 0
     for text in texts:
-        num_tokens_text_estimate = len(text) / avg_num_chars_per_token
+        num_tokens_text_estimate = ceil(len(text) / avg_num_chars_per_token)
 
         if num_tokens_text_estimate > max_tokens:
             if batch:
