@@ -151,11 +151,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             Here is an example of a unified diff format:
             <example>
             --- a/path/to/file.py
-
             +++ b/path/to/file.py
-
             @@ -1,3 +1,3 @@
-
             x = 1
             y = 2
             -for i in range(10):
