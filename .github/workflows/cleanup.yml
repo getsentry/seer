@@ -1,0 +1,23 @@
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *" # at 6:00 PM UTC every day
+  pull_request: # TODO: Remove this once we have tested.
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: "write"
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: "seer"
+          package-type: "container"
+          min-versions-to-keep: 64 # Keep the latest 64 versions
