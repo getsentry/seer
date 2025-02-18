@@ -6,7 +6,6 @@ from cachetools import LRUCache, cached  # type: ignore[import-untyped]
 from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
-from tqdm.autonotebook import tqdm
 
 from seer.automation.agent.client import GoogleProviderEmbeddings, LlmClient, OpenAiProvider
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -208,12 +207,12 @@ class AreIssuesFixableComponent(
         It's fine if there are duplicate issues in the request. That can happen if issues were
         passed in from a list of warning-issue associations.
         """
-        # TODO: batch / send uncached issues in one prompt and ask for a list of fixable issue group ids
+        # Can instead batch and send uncached issues in one prompt.
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
         issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
         issue_id_to_is_fixable = {
             issue_id: _is_issue_fixable(llm_client, issue_id_to_issue[issue_id])
-            for issue_id in tqdm(issue_ids, desc="Predicting issue fixability")
+            for issue_id in issue_ids
         }
         return CodeAreIssuesFixableOutput(
             are_fixable=[issue_id_to_is_fixable.get(issue.id) for issue in request.candidate_issues]
@@ -244,7 +243,7 @@ class PredictRelevantWarningsComponent(
         relevant_warning_results: list[RelevantWarningResult] = []
         # The time limit for OpenAI prompt caching is 5-10 minutes, so no point in sorting by
         # issue.id
-        for warning, issue in tqdm(request.candidate_associations, desc="Predicting relevance"):
+        for warning, issue in request.candidate_associations:
             completion = llm_client.generate_structured(
                 model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),

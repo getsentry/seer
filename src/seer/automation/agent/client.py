@@ -1457,7 +1457,7 @@ class GoogleProviderEmbeddings:
         By default, texts are truncated to 2048 tokens.
         Setting `auto_truncate=False` to disables truncation, but can result in API errors if a text exceeds this limit.
         """
-
+        raise ValueError("Not supposed to be hit")
         model = self.get_client()
         text_to_embedding: dict[str, list[float]] = {}
         texts_unique = list({text: None for text in texts})
