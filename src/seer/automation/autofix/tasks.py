@@ -413,10 +413,8 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def truncate_memory_to_match_insights(
-    memory: list[Message], memory_index: int | float, step: DefaultStep
-):
-    if memory_index >= len(memory):
+def truncate_memory_to_match_insights(memory: list[Message], memory_index: int, step: DefaultStep):
+    if memory_index >= len(memory) or memory_index == -1:
         return memory
     truncated_memory = []
     if step.insights:
@@ -454,7 +452,7 @@ def restart_from_point_with_feedback(
     if not isinstance(step, DefaultStep):
         raise ValueError("Cannot rethink steps without insights.")
 
-    memory_index_of_insight_to_rethink: int | float = (
+    memory_index_of_insight_to_rethink = (
         step.initial_memory_length
     )  # by default, reset to beginning of memory
     if insight_card_index is not None:
@@ -463,7 +461,7 @@ def restart_from_point_with_feedback(
                 insight_card_index
             ].generated_at_memory_index  # reset to the memory at the time of the insight
         else:
-            memory_index_of_insight_to_rethink = float("inf")  # retain all memory
+            memory_index_of_insight_to_rethink = -1  # retain all memory
 
     event_manager.reset_steps_to_point(
         step_index,

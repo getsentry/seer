@@ -727,6 +727,11 @@ def test_truncate_memory_to_match_insights():
     assert len(truncated_memory) == len(memory)  # Should return full memory
     assert truncated_memory[-1].content == "Final message"
 
+    # Test case 7: Memory index is -1
+    truncated_memory = truncate_memory_to_match_insights(memory, -1, step)
+    assert len(truncated_memory) == len(memory)  # Should return full memory
+    assert truncated_memory[-1].content == "Final message"
+
 
 def test_update_code_change_happy_path():
     # Create initial state with a changes step
