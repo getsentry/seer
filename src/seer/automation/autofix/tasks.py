@@ -684,10 +684,10 @@ def comment_on_thread(request: AutofixUpdateRequest):
         cur.steps[step_index].active_comment_thread.messages.append(
             Message(content=response.comment_in_response, role="assistant")
         )
-        if response.action_requested:
+        if response.asked_to_do_something:
             cur.steps[step_index].active_comment_thread.is_completed = True
 
-    if response.action_requested:
+    if response.asked_to_do_something:
         text = (
             (
                 "Regarding the statement '"

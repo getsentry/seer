@@ -5,6 +5,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.is_root_cause_obvious import (
@@ -62,40 +63,62 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             state = self.context.state.get()
 
             try:
-                response = agent.run(
-                    run_config=RunConfig(
-                        model=GeminiProvider.model("gemini-2.0-flash-001"),
-                        prompt=(
-                            RootCauseAnalysisPrompts.format_default_msg(
-                                event=request.event_details.format_event(),
-                                summary=request.summary,
-                                code_map=request.profile,
-                                instruction=request.instruction,
-                                repo_names=[repo.full_name for repo in state.request.repos],
-                            )
-                            if not request.initial_memory
-                            else None
+                has_tools = not (is_obvious and is_obvious.is_root_cause_clear)
+                if has_tools:  # run context gatherer if not obvious
+                    response = agent.run(
+                        run_config=RunConfig(
+                            model=GeminiProvider.model("gemini-2.0-flash-001"),
+                            prompt=(
+                                RootCauseAnalysisPrompts.format_default_msg(
+                                    event=request.event_details.format_event(),
+                                    summary=request.summary,
+                                    code_map=request.profile,
+                                    instruction=request.instruction,
+                                    repo_names=[repo.full_name for repo in state.request.repos],
+                                )
+                                if not request.initial_memory
+                                else None
+                            ),
+                            system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                                has_tools=True
+                            ),
+                            max_iterations=24,
+                            memory_storage_key="root_cause_analysis",
+                            run_name="Root Cause Discovery",
                         ),
-                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
-                            has_tools=not (is_obvious and is_obvious.is_root_cause_clear)
-                        ),
-                        max_iterations=24,
-                        memory_storage_key="root_cause_analysis",
-                        run_name="Root Cause Discovery",
-                    ),
-                )
-
-                if not response:
-                    self.context.store_memory("root_cause_analysis", agent.memory)
-                    return RootCauseAnalysisOutput(
-                        causes=[],
-                        termination_reason="Something went wrong when Autofix was running.",
                     )
+
+                    if not response:
+                        self.context.store_memory("root_cause_analysis", agent.memory)
+                        return RootCauseAnalysisOutput(
+                            causes=[],
+                            termination_reason="Something went wrong when Autofix was running.",
+                        )
 
                 self.context.event_manager.add_log("Simulating profound thought...")
 
+                # reason to propose final root cause
                 agent.tools = []
-                agent.memory = LlmClient.clean_assistant_messages(agent.memory)
+                agent.memory = (
+                    LlmClient.clean_assistant_messages(agent.memory)
+                    if has_tools
+                    else (
+                        [
+                            Message(
+                                role="user",
+                                content=RootCauseAnalysisPrompts.format_default_msg(
+                                    event=request.event_details.format_event(),
+                                    summary=request.summary,
+                                    code_map=request.profile,
+                                    instruction=request.instruction,
+                                    repo_names=[repo.full_name for repo in state.request.repos],
+                                ),
+                            )
+                        ]
+                        if not request.initial_memory
+                        else request.initial_memory
+                    )
+                )
                 response = agent.run(
                     run_config=RunConfig(
                         model=OpenAiProvider.model("o3-mini"),
