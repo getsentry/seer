@@ -144,7 +144,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         # fallback to writing a unified diff directly
         fallback_prompt = textwrap.dedent(
-            """
+            """\
             You are an expert software engineer. You are given a code snippet and a proposed update to the code.
             You need to generate the exact unified diff that shows the changes to the code, but only specific portions. You do NOT need to include the entire file in the diff, but you should include up to 3 lines of unchanged lines before and after the changes for context. Please preserve indentation.
 
