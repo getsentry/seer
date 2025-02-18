@@ -21,6 +21,7 @@ jobs:
       - uses: snok/container-retention-policy@v3.0.0
         with:
           account: snok
+          token: ${{ secrets.GITHUB_TOKEN }}
           image-names: "seer"
           cut-off: 4d # TODO
           dry-run: true
