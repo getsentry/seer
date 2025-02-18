@@ -452,7 +452,7 @@ def restart_from_point_with_feedback(
     if not isinstance(step, DefaultStep):
         raise ValueError("Cannot rethink steps without insights.")
 
-    memory_index_of_insight_to_rethink = (
+    memory_index_of_insight_to_rethink: int | float = (
         step.initial_memory_length
     )  # by default, reset to beginning of memory
     if insight_card_index is not None:
@@ -461,9 +461,12 @@ def restart_from_point_with_feedback(
                 insight_card_index
             ].generated_at_memory_index  # reset to the memory at the time of the insight
         else:
-            memory_index_of_insight_to_rethink = float("inf")  # retain all memoruy
+            memory_index_of_insight_to_rethink = float("inf")  # retain all memory
 
-    event_manager.reset_steps_to_point(step_index, insight_card_index - 1)
+    event_manager.reset_steps_to_point(
+        step_index,
+        (insight_card_index - 1) if insight_card_index is not None else None,
+    )
 
     context = AutofixContext(
         state=state, sentry_client=get_sentry_client(), event_manager=event_manager
