@@ -282,6 +282,7 @@ class AutofixEventManager:
                 step.insights = (
                     step.insights[: last_insight_to_retain_index + 1]
                     if last_insight_to_retain_index is not None
+                    and last_insight_to_retain_index >= 0
                     else []
                 )
                 cur.steps[-1] = step

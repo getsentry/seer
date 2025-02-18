@@ -1,6 +1,7 @@
 import datetime
 import logging
 import random
+import textwrap
 from typing import Literal, Type, cast
 
 import sentry_sdk
@@ -412,27 +413,20 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def truncate_memory_to_match_insights(memory: list[Message], step: DefaultStep):
+def truncate_memory_to_match_insights(memory: list[Message], memory_index: int, step: DefaultStep):
+    if memory_index >= len(memory) or memory_index == -1:
+        return memory
     truncated_memory = []
-    for insight in step.insights[::-1]:
-        if insight.generated_at_memory_index >= 0:
-            new_memory = memory[: insight.generated_at_memory_index + 1]
-            # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
-            if new_memory and new_memory[-1].tool_calls:
-                num_tool_calls = len(new_memory[-1].tool_calls)
-                if insight.generated_at_memory_index + num_tool_calls < len(memory):
-                    new_memory.extend(
-                        memory[
-                            insight.generated_at_memory_index
-                            + 1 : insight.generated_at_memory_index
-                            + num_tool_calls
-                            + 1
-                        ]
-                    )
-                else:
-                    new_memory = new_memory[:-1]
-            truncated_memory = new_memory
-            break
+    if step.insights:
+        new_memory = memory[: memory_index + 1]
+        # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
+        if new_memory and new_memory[-1].tool_calls:
+            num_tool_calls = len(new_memory[-1].tool_calls)
+            if memory_index + num_tool_calls < len(memory):
+                new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
+            else:
+                new_memory = new_memory[:-1]
+        truncated_memory = new_memory
     if not step.insights:
         truncated_memory = memory[: step.initial_memory_length]
     return truncated_memory if truncated_memory else memory
@@ -450,9 +444,29 @@ def restart_from_point_with_feedback(
     event_manager = AutofixEventManager(state)
 
     step_index = request.payload.step_index
-    insight_card_index = request.payload.retain_insight_card_index
+    insight_card_index = (
+        request.payload.retain_insight_card_index
+    )  # this is the index of the insight that triggered the rethink. If it's None, it was triggered when there were no insights. If it's greater than the last insight index, it was triggered on a final output (e.g. root cause, solution, etc.) or by adding an insight to the end of the chain.
 
-    event_manager.reset_steps_to_point(step_index, insight_card_index)
+    step = state.get().find_step(index=step_index)
+    if not isinstance(step, DefaultStep):
+        raise ValueError("Cannot rethink steps without insights.")
+
+    memory_index_of_insight_to_rethink = (
+        step.initial_memory_length
+    )  # by default, reset to beginning of memory
+    if insight_card_index is not None:
+        if insight_card_index >= 0 and insight_card_index < len(step.insights):
+            memory_index_of_insight_to_rethink = step.insights[
+                insight_card_index
+            ].generated_at_memory_index  # reset to the memory at the time of the insight
+        else:
+            memory_index_of_insight_to_rethink = -1  # retain all memory
+
+    event_manager.reset_steps_to_point(
+        step_index,
+        (insight_card_index - 1) if insight_card_index is not None else None,
+    )
 
     context = AutofixContext(
         state=state, sentry_client=get_sentry_client(), event_manager=event_manager
@@ -475,7 +489,9 @@ def restart_from_point_with_feedback(
             else context.get_memory("solution")
         )
     )
-    memory = truncate_memory_to_match_insights(memory, step_to_restart)
+    memory = truncate_memory_to_match_insights(
+        memory, memory_index_of_insight_to_rethink, step_to_restart
+    )
 
     # add feedback to memory and to insights
     if request.payload.message:
@@ -495,7 +511,12 @@ def restart_from_point_with_feedback(
                         InsightSharingOutput(
                             insight=request.payload.message,
                             justification="USER",
-                            generated_at_memory_index=len(memory) - 1,
+                            generated_at_memory_index=(
+                                memory_index_of_insight_to_rethink
+                                if memory_index_of_insight_to_rethink is not None
+                                and isinstance(memory_index_of_insight_to_rethink, int)
+                                else len(memory) - 1
+                            ),
                         )
                     )
     elif memory and memory[-1].role == "assistant":
@@ -673,8 +694,17 @@ def comment_on_thread(request: AutofixUpdateRequest):
             cur.steps[step_index].active_comment_thread.is_completed = True
 
     if response.asked_to_do_something:
+        text = (
+            (
+                "Regarding the statement '"
+                + textwrap.shorten(request.payload.selected_text, width=100, placeholder="...")
+                + "',"
+            )
+            if request.payload.selected_text
+            else None
+        )
         formatted_thread_memory = (
-            "Based on the following conversation, rethink your analysis:\n"
+            f"{text if text else ''}rethink your analysis based on the following conversation:\n"
             + "\n".join(
                 [
                     f"{message.role}: {message.content}"
