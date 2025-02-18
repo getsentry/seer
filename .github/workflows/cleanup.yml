@@ -1,0 +1,20 @@
+name: Container Registry Cleanup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *" # at 6:00 PM UTC every day
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: "write"
+    steps:
+      - uses: snok/container-retention-policy@v3.0.0
+        with:
+          account: getsentry
+          token: ${{ secrets.GITHUB_TOKEN }}
+          image-names: "seer"
+          cut-off: 14d # Keep images up to 14 days old
+          keep-n-most-recent: 16 # Keep 16 most recent regardless of age
