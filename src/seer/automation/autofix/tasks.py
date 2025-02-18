@@ -413,7 +413,9 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def truncate_memory_to_match_insights(memory: list[Message], memory_index: int, step: DefaultStep):
+def truncate_memory_to_match_insights(
+    memory: list[Message], memory_index: int | float, step: DefaultStep
+):
     if memory_index >= len(memory):
         return memory
     truncated_memory = []
