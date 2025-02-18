@@ -1,3 +1,5 @@
+name: Container Registry Cleanup
+
 on:
   workflow_dispatch:
   schedule:
