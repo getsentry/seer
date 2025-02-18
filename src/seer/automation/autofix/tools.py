@@ -65,7 +65,7 @@ class BaseTools:
             valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
             files_per_repo[repo_name] = "\n".join(sorted(valid_file_paths))
 
-        self.context.event_manager.add_log(f"Searching for {query}...")
+        self.context.event_manager.add_log(f'Searching for "{query}"...')
 
         class FilePath(BaseModel):
             file_path: str
