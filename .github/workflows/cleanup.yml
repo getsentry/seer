@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 18 * * *" # at 6:00 PM UTC every day
-  pull_request: # TODO: Remove this once we have tested.
 
 jobs:
   cleanup:
@@ -17,6 +16,5 @@ jobs:
           account: getsentry
           token: ${{ secrets.GITHUB_TOKEN }}
           image-names: "seer"
-          cut-off: 2d # Keep images up to 14 days old
+          cut-off: 14d # Keep images up to 14 days old
           keep-n-most-recent: 16 # Keep 16 most recent regardless of age
-          dry-run: true
