@@ -20,7 +20,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: snok/container-retention-policy@v3.0.0
         with:
-          account: snok
+          account: ${{ github.actor }}
           token: ${{ secrets.GITHUB_TOKEN }}
           image-names: "seer"
           cut-off: 4d # TODO
