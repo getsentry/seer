@@ -9,7 +9,7 @@ class SeerEventNames(StrEnum):
     )
 
 
-def log_seer_event(name: SeerEventNames, event_metadata: dict):
+def log_seer_event(name: SeerEventNames, event_metadata: dict | None = None):
     """Log a Seer event to the database.
 
     Args:
