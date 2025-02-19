@@ -116,7 +116,6 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
     def _post_invoke(self, result: Any):
         with self.context.state.update() as cur:
             signal = make_done_signal(self.request.step_id)
-            sentry_sdk.capture_message(f"Done for signal {repr(signal)}")
             cur.signals.append(signal)
 
     def _check_for_kill(self):

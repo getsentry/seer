@@ -55,7 +55,6 @@ class CodegenStep(PipelineStep):
     def _post_invoke(self, result: Any):
         with self.context.state.update() as current_state:
             signal = make_done_signal(self.request.step_id)
-            sentry_sdk.capture_message(f"Done for signal {repr(signal)}")
             current_state.signals.append(signal)
 
     def _handle_exception(self, exception: Exception):
