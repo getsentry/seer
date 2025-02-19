@@ -256,7 +256,7 @@ def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
     """
     try:
         result = chardet.detect(raw_data)
-        encoding = result["encoding"] if result["confidence"] > 0.6 else fallback_encoding
+        encoding = result["encoding"] if result["confidence"] > 0.9 else fallback_encoding
     # if something went wrong, fallback
     except Exception as e:
         logger.exception(f"Error detecting encoding of data: {e}")
