@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from johen import generate
 
+from seer.automation.agent.client import GoogleProviderEmbeddings
 from seer.automation.agent.models import LlmGenerateStructuredResponse
 from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -97,7 +98,7 @@ class TestAssociateWarningsWithIssuesComponent:
     def patch_encode(self, monkeypatch: pytest.MonkeyPatch):
         rng = np.random.default_rng(seed=42)
 
-        def mock_encode(self, texts: list[str]):
+        def mock_encode(self: GoogleProviderEmbeddings, texts: list[str]):
             output_dimensionality = self.output_dimensionality or 5
             embeddings_unnormalized = rng.random((len(texts), output_dimensionality))
             embeddings = embeddings_unnormalized / np.linalg.norm(

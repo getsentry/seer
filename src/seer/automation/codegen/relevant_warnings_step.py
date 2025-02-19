@@ -1,12 +1,12 @@
 import logging
 from typing import Any
 
+import requests
 from langfuse.decorators import observe
-
-# import requests
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
+from integrations.codecov.codecov_auth import get_codecov_auth_header
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
@@ -65,6 +65,21 @@ class RelevantWarningsStep(CodegenStep):
     @staticmethod
     def get_task():
         return relevant_warnings_task
+
+    @staticmethod
+    def _post_results_to_overwatch(
+        run_id: str, relevant_warnings_output: CodePredictRelevantWarningsOutput
+    ):
+        request = {
+            "run_id": run_id,
+            "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
+        }
+        headers = get_codecov_auth_header(request)
+        requests.post(
+            url="https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
+            headers=headers,
+            json=request,
+        )
 
     # TODO(kddubey): is this @observe doing anything useful? This method doesn't return anything.
     @observe(name="Codegen - Relevant Warnings")
@@ -131,14 +146,17 @@ class RelevantWarningsStep(CodegenStep):
             request
         )
 
-        # requests.post(
-        #     "https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
-        #     json={
-        #         "run_id": self.context.run_id,
-        #         "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
-        #     },
-        # )
-
-        self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
-            relevant_warnings_output.relevant_warning_results
-        )
+        # 5. Save results.
+        try:
+            # self._post_results_to_overwatch(
+            #     run_id=self.context.run_id,
+            #     relevant_warnings_output=relevant_warnings_output,
+            # )
+            pass
+        except Exception as e:
+            logger.exception(f"Error posting relevant warnings results to Overwatch: {e}")
+            raise e
+        finally:
+            self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
+                relevant_warnings_output.relevant_warning_results
+            )

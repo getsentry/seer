@@ -1437,9 +1437,14 @@ class GoogleProviderEmbeddings:
     ) -> list[TextEmbeddingInput]:
         return [TextEmbeddingInput(text, self.task_type) for text in texts]
 
-    def _prepare_batches(self, texts: Iterable[str], max_batch_size: int, max_tokens: int):
-        avg_num_chars_per_token = 4.0
+    def _prepare_batches(
+        self,
+        texts: Iterable[str],
+        max_batch_size: int,
+        max_tokens: int,
+        avg_num_chars_per_token: int = 4.0,
         # https://ai.google.dev/gemini-api/docs/tokens?lang=python
+    ):
         for batch in chunked(texts, n=max_batch_size):
             for subbatch in batch_texts_by_token_count(
                 batch, max_tokens=max_tokens, avg_num_chars_per_token=avg_num_chars_per_token
