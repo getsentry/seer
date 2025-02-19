@@ -88,25 +88,22 @@ class RelevantWarningsStep(CodegenStep):
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
 
-        # 1. Fetch issues related to the PR.
+        # 1. Fetch issues related to the commit.
         repo_client = self.context.get_repo_client(type=RepoClientType.READ)
-        pr = repo_client.repo.get_pull(self.request.pr_id)
-        fetch_issues_component = FetchIssuesComponent(self.context)
+        commit = repo_client.repo.get_commit(self.request.commit_sha)
         pr_files = [
             PrFile(
                 filename=file.filename, patch=file.patch, status=file.status, changes=file.changes
             )
-            for file in pr.get_files()
+            for file in commit.files
         ]
+        fetch_issues_component = FetchIssuesComponent(self.context)
         fetch_issues_request = CodeFetchIssuesRequest(
             organization_id=self.request.organization_id, pr_files=pr_files
         )
         fetch_issues_output: CodeFetchIssuesOutput = fetch_issues_component.invoke(
             fetch_issues_request
         )
-        if not fetch_issues_output.filename_to_issues:
-            logger.info("No issues found in PR.")
-            return
 
         # 2. Limit the number of warning-issue associations we analyze to the top k.
         association_component = AssociateWarningsWithIssuesComponent(self.context)

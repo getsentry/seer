@@ -194,7 +194,6 @@ class TestAreIssuesFixableComponent:
 
 
 class TestPredictRelevantWarningsComponent:
-    # pytest tests/automation/codegen/test_relevant_warnings.py::TestPredictRelevantWarningsComponent
     @pytest.fixture
     def component(self):
         return PredictRelevantWarningsComponent(context=None)
@@ -249,12 +248,12 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_fetch_issues_component,
 ):
     mock_repo_client = MagicMock()
-    mock_pr = MagicMock()
+    mock_commit = MagicMock()
     mock_pr_files = next(generate(list[PrFile]))
     mock_context = MagicMock()
     mock_context.get_repo_client.return_value = mock_repo_client
-    mock_repo_client.repo.get_pull.return_value = mock_pr
-    mock_pr.get_files.return_value = mock_pr_files
+    mock_repo_client.repo.get_commit.return_value = mock_commit
+    mock_commit.files = mock_pr_files
 
     num_associations = 5
 
@@ -281,6 +280,7 @@ def test_relevant_warnings_step_invoke(
         pr_id=123,
         organization_id=1,
         warnings=next(generate(list[StaticAnalysisWarning])),
+        commit_sha="abc123",
         run_id=1,
         max_num_associations=10,
         max_num_issues_analyzed=10,
@@ -290,8 +290,7 @@ def test_relevant_warnings_step_invoke(
     step.invoke()
 
     mock_context.get_repo_client.assert_called_once()
-    mock_repo_client.repo.get_pull.assert_called_once_with(request.pr_id)
-    mock_pr.get_files.assert_called_once()
+    mock_repo_client.repo.get_commit.assert_called_once_with(request.commit_sha)
 
     mock_invoke_fetch_issues_component.assert_called_once()
     mock_invoke_fetch_issues_component.call_args[0][0].organization_id = request.organization_id

@@ -121,6 +121,7 @@ def codegen_relevant_warnings(
         pr_id=request.pr_id,
         organization_id=request.organization_id,
         warnings=request.warnings,
+        commit_sha=request.commit_sha,
         run_id=cur_state.run_id,
     )
 
