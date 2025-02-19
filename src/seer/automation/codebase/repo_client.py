@@ -23,7 +23,7 @@ from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.models import GithubPrReviewComment
-from seer.automation.codebase.utils import get_language_from_path
+from seer.automation.codebase.utils import get_all_supported_extensions, get_language_from_path
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
@@ -366,9 +366,12 @@ class RepoClient:
             )
 
         valid_file_paths: set[str] = set()
+        valid_file_extensions = get_all_supported_extensions()
 
         for file in tree.tree:
-            if file.type == "blob":
+            if file.type == "blob" and any(
+                file.path.endswith(ext) for ext in valid_file_extensions
+            ):
                 valid_file_paths.add(file.path)
 
         return valid_file_paths
