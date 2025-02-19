@@ -388,3 +388,26 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     saved_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
+
+
+class DbProphetAlertTimeSeries(Base):
+    __tablename__ = "prophet_alert_time_series"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    yhat: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class DbProphetAlertTimeSeriesHistory(Base):
+    __tablename__ = "prophet_alert_time_series_history"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    yhat: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
+    saved_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )

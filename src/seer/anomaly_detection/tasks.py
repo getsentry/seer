@@ -17,6 +17,7 @@ from seer.db import (
     DbDynamicAlert,
     DbDynamicAlertTimeSeries,
     DbDynamicAlertTimeSeriesHistory,
+    DbProphetAlertTimeSeriesHistory,
     Session,
     TaskStatus,
 )
@@ -226,12 +227,21 @@ def cleanup_old_timeseries_history():
     sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     date_threshold = datetime.now() - timedelta(days=90)
     with Session() as session:
-        stmt = delete(DbDynamicAlertTimeSeriesHistory).where(
+        dynamic_alert_stmt = delete(DbDynamicAlertTimeSeriesHistory).where(
             DbDynamicAlertTimeSeriesHistory.timestamp < date_threshold
         )
-        res = session.execute(stmt)
+        dynamic_alert_res = session.execute(dynamic_alert_stmt)
+
+        prophet_alert_stmt = delete(DbProphetAlertTimeSeriesHistory).where(
+            DbProphetAlertTimeSeriesHistory.timestamp < date_threshold
+        )
+        prophet_alert_res = session.execute(prophet_alert_stmt)
+
         session.commit()
         logger.info(
             "Deleted timeseries history records older than 90 days",
-            extra={"count": res.rowcount},
+            extra={
+                "dynamic alert count": dynamic_alert_res.rowcount,
+                "prophet alert count": prophet_alert_res.rowcount,
+            },
         )
