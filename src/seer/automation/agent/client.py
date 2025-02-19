@@ -1442,7 +1442,7 @@ class GoogleProviderEmbeddings:
         texts: Iterable[str],
         max_batch_size: int,
         max_tokens: int,
-        avg_num_chars_per_token: int = 4.0,
+        avg_num_chars_per_token: float = 4.0,
         # https://ai.google.dev/gemini-api/docs/tokens?lang=python
     ):
         for batch in chunked(texts, n=max_batch_size):
