@@ -150,7 +150,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 # Add retry logic for generating structured response
                 max_retries = 2
                 formatted_response = None
-                
+
                 for attempt in range(max_retries + 1):
                     formatted_response = llm_client.generate_structured(
                         messages=agent.memory,
@@ -160,23 +160,23 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         run_name="Root Cause Extraction & Formatting",
                         max_tokens=4096,
                     )
-                    
+
                     # If we got a valid response, break the retry loop
-                    if formatted_response and getattr(formatted_response, 'parsed', None):
+                    if formatted_response and getattr(formatted_response, "parsed", None):
                         break
 
-                if not formatted_response or not getattr(formatted_response, 'parsed', None):
+                if not formatted_response or not getattr(formatted_response, "parsed", None):
                     return RootCauseAnalysisOutput(
                         causes=[],
-                        termination_reason="Something went wrong when Autofix was running."
+                        termination_reason="Something went wrong when Autofix was running.",
                     )
 
                 parsed = formatted_response.parsed
-                cause = getattr(parsed, 'cause', None)
+                cause = getattr(parsed, "cause", None)
                 if not cause:
                     return RootCauseAnalysisOutput(
                         causes=[],
-                        termination_reason="Something went wrong when Autofix was running."
+                        termination_reason="Something went wrong when Autofix was running.",
                     )
 
                 cause_model = cause.to_model()
