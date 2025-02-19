@@ -3,7 +3,6 @@ import logging
 import uuid
 from typing import Any, Generic, TypeVar
 
-import sentry_sdk
 from celery import Task, signature
 from pydantic import BaseModel, Field
 
@@ -152,8 +151,6 @@ class PipelineChain(PipelineStep):
     """
 
     def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
-        sentry_sdk.capture_message(f"Next invoked from {self}", "info")
-
         if PIPELINE_SYNC_SIGNAL in self.context.signals:
             signature(sig).apply(**apply_async_kwargs)
         else:
