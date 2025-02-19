@@ -1,6 +1,10 @@
+import hashlib
+import hmac
+import json
 import logging
 from typing import Any
 
+import requests
 from langfuse.decorators import observe
 
 # import requests
@@ -33,6 +37,8 @@ from seer.automation.codegen.relevant_warnings_component import (
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +75,7 @@ class RelevantWarningsStep(CodegenStep):
     # TODO(kddubey): is this @observe doing anything useful? This method doesn't return anything.
     @observe(name="Codegen - Relevant Warnings")
     @ai_track(description="Codegen - Relevant Warnings Step")
-    def _invoke(self, **kwargs):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
 
@@ -131,13 +137,29 @@ class RelevantWarningsStep(CodegenStep):
             request
         )
 
-        # requests.post(
-        #     "https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
-        #     json={
-        #         "run_id": self.context.run_id,
-        #         "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
-        #     },
-        # )
+        # 5. Send results to overwatch.
+        payload = json.dumps(
+            {
+                "run_id": self.context.run_id,
+                "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
+            }
+        ).encode("utf-8")
+        signature = (
+            "sha256="
+            + hmac.new(
+                app_config.OVERWATCH_OUTGOING_SIGNATURE_SECRET.encode("utf-8"),
+                payload,
+                hashlib.sha256,
+            ).hexdigest()
+        )
+        requests.post(
+            "https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
+            headers={
+                "Content-Type": "application/json",
+                "X-GEN-AI-AUTH-SIGNATURE": signature,
+            },
+            data=payload,
+        )
 
         self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
             relevant_warnings_output.relevant_warning_results
