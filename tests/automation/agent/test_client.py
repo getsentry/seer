@@ -737,32 +737,31 @@ def test_gemini_generate_text_from_web_search():
 
 
 class TestGoogleProviderEmbeddings:
-    # pytest tests/automation/agent/test_client.py::TestGoogleProviderEmbeddings -x
-
     @pytest.fixture
     def model(self):
         return GoogleProviderEmbeddings.model("text-embedding-005")
 
     @pytest.fixture(autouse=True)
-    def patch_get_embeddings(self, monkeypatch: pytest.MonkeyPatch):
+    def patch_from_pretrained(self, monkeypatch: pytest.MonkeyPatch):
         # test_encode passes without this patch, i.e., when actually hitting Google.
         # But VCR doesn't seem to store the requests or responses, maybe b/c they're gRPC calls?
 
-        def mock_get_embeddings(self, texts: list[TextEmbeddingInput], *args, **kwargs):
-            output_dimensionality = kwargs.get("output_dimensionality") or 768
-            text_embeddings: list[TextEmbedding] = []
-            for text_embedding_input in texts:
-                rng = np.random.default_rng(seed=abs(hash(text_embedding_input.text)))
-                embedding_unnormalized = rng.random(size=(output_dimensionality,))
-                embedding = embedding_unnormalized / np.linalg.norm(
-                    embedding_unnormalized, axis=0, keepdims=True
-                )
-                text_embeddings.append(TextEmbedding(values=embedding))
-            return text_embeddings
+        class MockTextEmbeddingModel:
+            def get_embeddings(self, texts: list[TextEmbeddingInput], *args, **kwargs):
+                output_dimensionality = kwargs.get("output_dimensionality") or 768
+                text_embeddings: list[TextEmbedding] = []
+                for text_embedding_input in texts:
+                    rng = np.random.default_rng(seed=abs(hash(text_embedding_input.text)))
+                    embedding_unnormalized = rng.random(size=(output_dimensionality,))
+                    embedding = embedding_unnormalized / np.linalg.norm(
+                        embedding_unnormalized, axis=0, keepdims=True
+                    )
+                    text_embeddings.append(TextEmbedding(values=embedding))
+                return text_embeddings
 
         monkeypatch.setattr(
-            "vertexai.language_models._language_models.TextEmbeddingModel.get_embeddings",
-            mock_get_embeddings,
+            "vertexai.language_models._language_models.TextEmbeddingModel.from_pretrained",
+            lambda model_name: MockTextEmbeddingModel(),
         )
 
     @pytest.mark.parametrize(
