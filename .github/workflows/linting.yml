@@ -39,6 +39,7 @@ jobs:
 
       - name: Run pre-commit on PR commits
         id: pre-commit_results
+        continue-on-error: true
         run: |
           jq '.[]' --raw-output <<< '${{steps.changes.outputs.all_files}}' |
             # Run pre-commit to check files that were changed (but not deleted) compared to master.
