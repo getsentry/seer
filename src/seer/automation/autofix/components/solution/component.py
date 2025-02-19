@@ -178,7 +178,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=SolutionOutput,
                 run_name="Solution Extraction & Formatting",
-                max_tokens=4096,
+                max_tokens=8192,
             )
 
             if not formatted_response or not formatted_response.parsed:

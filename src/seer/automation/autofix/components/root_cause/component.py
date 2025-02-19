@@ -158,7 +158,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         model=GeminiProvider.model("gemini-2.0-flash-001"),
                         response_format=MultipleRootCauseAnalysisOutputPrompt,
                         run_name="Root Cause Extraction & Formatting",
-                        max_tokens=4096,
+                        max_tokens=8192,
                     )
 
                     # If we got a valid response, break the retry loop
