@@ -23,6 +23,7 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.state import State
 from seer.automation.utils import make_kill_signal
+from seer.events import SeerEventNames, log_seer_event
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +263,15 @@ class AutofixEventManager:
 
             if should_completely_error:
                 cur.status = AutofixStatus.ERROR
+
+            log_seer_event(
+                SeerEventNames.AUTOFIX_RUN_ERROR,
+                {
+                    "run_id": cur.run_id,
+                    "error_msg": error_msg,
+                    "should_completely_error": should_completely_error,
+                },
+            )
 
     def clear_file_changes(self):
         with self.state.update() as cur:

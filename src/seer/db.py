@@ -192,6 +192,16 @@ class ProcessRequest(Base):
         )
 
 
+class DbSeerEvent(Base):
+    __tablename__ = "seer_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    event_metadata: Mapped[dict] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+
 class DbRunState(Base):
     __tablename__ = "run_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
