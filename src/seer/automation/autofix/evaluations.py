@@ -260,32 +260,45 @@ def score_fix_single_it(
 
     prompt = textwrap.dedent(
         """\
+            <goal>
+            Score how well the predicted solution fixes the issue, given the known solution, with a float score from 0 to 1, where 1 means the solution fully fixes the issue and 0 means the solution does not fix the issue at all.
+            </goal>
+
+            <reasoning_rules>
+            When thinking/reasoning about the score, consider the following:
+            1. Use the known solution to understand what the issue is.
+            2. Consider that there are multiple ways to fix an issue.
+            3. Judge whether the predicted solution actually fixes the issue.
+            </reasoning_rules>
+
+            <output_format>
+            1. Provide your reasoning of your judgement of the predicted solution inside a <reasoning> tag.
+            2. Provide the score inside a <score> tag.
+            3. Given all that you know, now provide your verdict of whether the predicted solution actually fixes the issue with a boolean value inside a <verdict> tag, such as <verdict>True</verdict> or <verdict>False</verdict>.
+            </output_format>
+
+            Given the below issue:
+
+            <issue>
             {event_details}
+            </issue>
 
-            Given the above issue, we know the correct fix is:
+            We have a known correct solution:
 
-            <expected_solution>
+            <known_solution>
             <description>
             {expected_description}
             </description>
             <diff>
             {expected_diff}
             </diff>
-            </expected_solution>
+            </known_solution>
 
             The model outputted the following solution:
 
             <predicted_solution>
             {predicted_diff}
-            </predicted_solution>
-
-            Score how well the predicted solution matches the expected solution with a float score from 0 to 1, where 1 means the solution fully fixes the issue and 0 means the solution does not fix the issue at all.
-            - Consider the context of the issue and the diff
-            - Consider that there are multiple ways to fix an issue
-
-            Think step-by-step inside a <thoughts> tag before giving a score.
-            Return the score inside a <score> tag.
-            Then, return your verdict of whether the predicted solution fixes the issue with a boolean value inside a <verdict> tag, such as <verdict>True</verdict> or <verdict>False</verdict>."""
+            </predicted_solution>"""
     ).format(
         event_details=event_details.format_event(),
         expected_description=expected_output["solution_diff"]["description"],
