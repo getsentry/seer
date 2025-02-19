@@ -61,6 +61,19 @@ language_to_extensions = {
 
 
 @functools.cache
+def get_all_supported_extensions() -> set[str]:
+    """
+    Returns a set of all supported file extensions across all languages.
+
+    :return: A set of file extensions including the dot prefix (e.g. {'.py', '.js'})
+    """
+    extensions = set()
+    for extensions_list in language_to_extensions.values():
+        extensions.update(extensions_list)
+    return extensions
+
+
+@functools.cache
 def get_extension_to_language_map():
     extension_to_language: dict[str, str] = {}
     for language, extensions in language_to_extensions.items():
