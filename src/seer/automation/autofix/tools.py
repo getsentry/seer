@@ -51,8 +51,6 @@ class BaseTools:
             return [self.context.repo.full_name]
         else:
 
-
-            
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
     @observe(name="Semantic File Search")
