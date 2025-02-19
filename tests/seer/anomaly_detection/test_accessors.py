@@ -552,10 +552,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
     def test_combine_anomalies(self):
         suss_thresholds = [
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=10.0, lower=10.0),
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=10.0, lower=10.0),
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=20.0, lower=20.0),
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=20.0, lower=20.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=10.0, upper=10.0, lower=10.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=11.0, upper=10.0, lower=10.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=12.0, upper=20.0, lower=20.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=13.0, upper=20.0, lower=20.0),
         ]
         anomalies_suss = MPTimeSeriesAnomaliesSingleWindow(
             flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
@@ -573,10 +573,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             ],
         )
         fixed_thresholds = [
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=1.0, lower=1.0),
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=2.0, lower=2.0),
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=3.0, lower=3.0),
-            Threshold(type=ThresholdType.MP_DIST_IQR, upper=4.0, lower=4.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=10.0, upper=1.0, lower=1.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=11.0, upper=2.0, lower=2.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=12.0, upper=3.0, lower=3.0),
+            Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=13.0, upper=4.0, lower=4.0),
         ]
 
         anomalies_fixed = MPTimeSeriesAnomaliesSingleWindow(

@@ -20,6 +20,7 @@ class ThresholdType(Enum):
 
 class Threshold(BaseModel):
     type: ThresholdType
+    timestamp: float
     upper: float
     lower: float
 

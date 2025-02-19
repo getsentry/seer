@@ -32,7 +32,9 @@ def mock_location_detector():
     detector = Mock()
     detector.detect.return_value = RelativeLocation(
         location=PointLocation.UP,
-        thresholds=[Threshold(type=ThresholdType.PREDICTION, upper=10.0, lower=5.0)],
+        thresholds=[
+            Threshold(type=ThresholdType.PREDICTION, timestamp=10.0, upper=10.0, lower=5.0)
+        ],
     )
     return detector
 

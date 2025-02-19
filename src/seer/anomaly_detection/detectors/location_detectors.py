@@ -154,9 +154,15 @@ class ProphetLocationDetector(LocationDetector):
             yhat_lower = streamed_forecast["yhat_lower"]
             if algo_config.return_thresholds:
                 thresholds = [
-                    Threshold(type=ThresholdType.PREDICTION, upper=yhat_upper, lower=yhat_lower),
+                    Threshold(
+                        type=ThresholdType.PREDICTION,
+                        timestamp=streamed_timestamp,
+                        upper=yhat_upper,
+                        lower=yhat_lower,
+                    ),
                     Threshold(
                         type=ThresholdType.TREND,
+                        timestamp=streamed_timestamp,
                         upper=streamed_forecast["trend_upper"],
                         lower=streamed_forecast["trend_lower"],
                     ),
