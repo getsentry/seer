@@ -243,6 +243,76 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
     def _get_app_config(self, app_config: AppConfig = injected) -> AppConfig:
         return app_config
 
+    def _parse_code_changes_xml(
+        self, response: str, agent: AutofixAgent
+    ) -> CodeChangesPromptXml | None:
+        """Try to parse code changes XML from response, with one retry attempt if parsing fails."""
+        try:
+            code_changes_content = extract_text_inside_tags(response, "code_changes")
+            return CodeChangesPromptXml.from_xml(
+                f"<code_changes>{escape_multi_xml(code_changes_content, ['code', 'commit_message'])}</code_changes>"
+            ).to_model()
+        except Exception:
+            # Try once to fix the XML format
+            agent.config.interactive = False
+            retry_response = agent.run(
+                RunConfig(
+                    prompt=CodingPrompts.format_xml_format_fix_msg(),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    memory_storage_key="code",
+                    run_name="XML Format Fix",
+                ),
+            )
+
+            if not retry_response:
+                return None
+
+            try:
+                code_changes_content = extract_text_inside_tags(retry_response, "code_changes")
+                return CodeChangesPromptXml.from_xml(
+                    f"<code_changes>{escape_multi_xml(code_changes_content, ['code', 'commit_message'])}</code_changes>"
+                ).to_model()
+            except Exception as e:
+                sentry_sdk.capture_exception(e)
+                return None
+
+    def _fix_file_existence_errors(
+        self, code_changes_output: CodeChangesPromptXml, agent: AutofixAgent
+    ) -> CodeChangesPromptXml:
+        """Check for missing or already existing files and try to fix the changes if needed."""
+        missing_files_errors = []
+        file_exist_errors = []
+
+        for task in code_changes_output.tasks:
+            repo_client = self.context.get_repo_client(task.repo_name)
+            file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
+            if task.type == "file_change" and not file_content:
+                missing_files_errors.append(task.file_path)
+            elif task.type == "file_delete" and not file_content:
+                missing_files_errors.append(task.file_path)
+            elif task.type == "file_create" and file_content:
+                file_exist_errors.append(task.file_path)
+
+        if missing_files_errors or file_exist_errors:
+            agent.config.interactive = False
+            new_response = agent.run(
+                RunConfig(
+                    prompt=CodingPrompts.format_missing_msg(
+                        missing_files_errors, file_exist_errors
+                    ),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    memory_storage_key="code",
+                    run_name="Missing File Fix",
+                ),
+            )
+
+            if new_response:
+                new_output = self._parse_code_changes_xml(new_response, agent)
+                if new_output:
+                    return new_output
+
+        return code_changes_output
+
     @observe(name="Code")
     @ai_track(description="Code")
     def invoke(self, request: CodingRequest) -> CodingOutput | None:
@@ -293,130 +363,102 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             if not response:
                 return None
 
-            code_changes_content = extract_text_inside_tags(response, "code_changes")
-            code_changes_output = CodeChangesPromptXml.from_xml(
-                f"<code_changes>{escape_multi_xml(code_changes_content, ['code', 'commit_message'])}</code_changes>"
-            ).to_model()
-
-            # We only do this once, if it still errors, we just let it go
-            missing_files_errors = []
-            file_exist_errors = []
-            for task in code_changes_output.tasks:
-                repo_client = self.context.get_repo_client(task.repo_name)
-                file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
-                if task.type == "file_change" and not file_content:
-                    missing_files_errors.append(task.file_path)
-                elif task.type == "file_delete" and not file_content:
-                    missing_files_errors.append(task.file_path)
-                elif task.type == "file_create" and file_content:
-                    file_exist_errors.append(task.file_path)
-
-            if missing_files_errors or file_exist_errors:
-                agent.config.interactive = False
-                new_response = agent.run(
-                    RunConfig(
-                        prompt=CodingPrompts.format_missing_msg(
-                            missing_files_errors, file_exist_errors
-                        ),
-                        model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
-                        memory_storage_key="code",
-                        run_name="Missing File Fix",
-                    ),
-                )
-
-                if new_response and "<code_changes>" in new_response:
-                    code_changes_output = CodeChangesPromptXml.from_xml(
-                        f"<code_changes>{escape_multi_xml(extract_text_inside_tags(new_response, 'code_changes'), ['code', 'commit_message'])}</code_changes>"
-                    ).to_model()
-
-        self.context.event_manager.add_log("Rewriting your unfortunate code...")
-        tasks_with_diffs: list[PlanTaskPromptXml] = []
-
-        # Resolve LlmClient once in the main thread
-        resolved_llm_client = self._get_llm_client()
-        resolved_app_config = self._get_app_config()
-
-        @observe(name="Process Change Task")
-        @ai_track(description="Process Change Task")
-        def process_task(task: CodeChangeXml, llm_client: LlmClient, app_config: AppConfig):
-            repo_client = self.context.get_repo_client(task.repo_name)
-            if task.type == "file_change":
-                file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
-                if not file_content:
-                    logger.warning(f"Failed to get content for {task.file_path}")
-                    return None
-                diff = self.apply_code_suggestion_to_file(file_content, task.code, task.file_path)
-                if not diff:
-                    return None
-                task_with_diff = PlanTaskPromptXml(
-                    file_path=task.file_path,
-                    repo_name=task.repo_name,
-                    type="file_change",
-                    diff=diff,
-                    commit_message=task.commit_message,
-                    description=f"Change file {task.file_path}",
-                )
-                changes, _ = task_to_file_change(task_with_diff, file_content)
-                updates = [(repo_client.repo_external_id, change) for change in changes]
-                return task_with_diff, updates
-
-            elif task.type == "file_delete":
-                task_with_diff = PlanTaskPromptXml(
-                    file_path=task.file_path,
-                    repo_name=task.repo_name,
-                    type="file_delete",
-                    commit_message=task.commit_message,
-                    diff="",
-                    description=f"Delete file {task.file_path}",
-                )
-                update = (repo_client.repo_external_id, task_to_file_delete(task_with_diff))
-                return task_with_diff, [update]
-
-            elif task.type == "file_create":
-                diff = self.apply_code_suggestion_to_file(None, task.code, task.file_path)
-                if not diff:
-                    return None
-                task_with_diff = PlanTaskPromptXml(
-                    file_path=task.file_path,
-                    repo_name=task.repo_name,
-                    type="file_create",
-                    diff=diff,
-                    commit_message=task.commit_message,
-                    description=f"Create file {task.file_path}",
-                )
-                update = (repo_client.repo_external_id, task_to_file_create(task_with_diff))
-                return task_with_diff, [update]
-
-            else:
-                logger.warning(f"Unsupported task type: {task.type}")
+            code_changes_output = self._parse_code_changes_xml(response, agent)
+            if not code_changes_output:
                 return None
 
-        # apply change tasks in parallel
-        with concurrent.futures.ThreadPoolExecutor(
-            initializer=copy_modules_initializer()
-        ) as executor:
-            trace_id = langfuse_context.get_current_trace_id()
-            observation_id = langfuse_context.get_current_observation_id()
+            code_changes_output = self._fix_file_existence_errors(code_changes_output, agent)
 
-            futures = [
-                executor.submit(
-                    process_task,
-                    task,
-                    resolved_llm_client,
-                    resolved_app_config,
-                    langfuse_parent_trace_id=trace_id,  # type: ignore
-                    langfuse_parent_observation_id=observation_id,  # type: ignore
-                )
-                for task in code_changes_output.tasks
-            ]
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result:
-                    task_with_diff, updates = result
-                    tasks_with_diffs.append(task_with_diff)
-                    for repo_external_id, file_change in updates:
-                        self._append_file_change(repo_external_id, file_change)
+            self.context.event_manager.add_log("Rewriting your unfortunate code...")
+            tasks_with_diffs: list[PlanTaskPromptXml] = []
+
+            # Resolve LlmClient once in the main thread
+            resolved_llm_client = self._get_llm_client()
+            resolved_app_config = self._get_app_config()
+
+            @observe(name="Process Change Task")
+            @ai_track(description="Process Change Task")
+            def process_task(task: CodeChangeXml, llm_client: LlmClient, app_config: AppConfig):
+                repo_client = self.context.get_repo_client(task.repo_name)
+                if task.type == "file_change":
+                    file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
+                    if not file_content:
+                        logger.warning(f"Failed to get content for {task.file_path}")
+                        return None
+                    diff = self.apply_code_suggestion_to_file(
+                        file_content, task.code, task.file_path
+                    )
+                    if not diff:
+                        return None
+                    task_with_diff = PlanTaskPromptXml(
+                        file_path=task.file_path,
+                        repo_name=task.repo_name,
+                        type="file_change",
+                        diff=diff,
+                        commit_message=task.commit_message,
+                        description=f"Change file {task.file_path}",
+                    )
+                    changes, _ = task_to_file_change(task_with_diff, file_content)
+                    updates = [(repo_client.repo_external_id, change) for change in changes]
+                    return task_with_diff, updates
+
+                elif task.type == "file_delete":
+                    task_with_diff = PlanTaskPromptXml(
+                        file_path=task.file_path,
+                        repo_name=task.repo_name,
+                        type="file_delete",
+                        commit_message=task.commit_message,
+                        diff="",
+                        description=f"Delete file {task.file_path}",
+                    )
+                    update = (repo_client.repo_external_id, task_to_file_delete(task_with_diff))
+                    return task_with_diff, [update]
+
+                elif task.type == "file_create":
+                    diff = self.apply_code_suggestion_to_file(None, task.code, task.file_path)
+                    if not diff:
+                        return None
+                    task_with_diff = PlanTaskPromptXml(
+                        file_path=task.file_path,
+                        repo_name=task.repo_name,
+                        type="file_create",
+                        diff=diff,
+                        commit_message=task.commit_message,
+                        description=f"Create file {task.file_path}",
+                    )
+                    update = (repo_client.repo_external_id, task_to_file_create(task_with_diff))
+                    return task_with_diff, [update]
+
                 else:
-                    sentry_sdk.capture_message("Failed to apply code changes.")
+                    logger.warning(f"Unsupported task type: {task.type}")
+                    return None
 
-        return CodingOutput(tasks=tasks_with_diffs)
+            # apply change tasks in parallel
+            with concurrent.futures.ThreadPoolExecutor(
+                initializer=copy_modules_initializer()
+            ) as executor:
+                trace_id = langfuse_context.get_current_trace_id()
+                observation_id = langfuse_context.get_current_observation_id()
+
+                futures = [
+                    executor.submit(
+                        process_task,
+                        task,
+                        resolved_llm_client,
+                        resolved_app_config,
+                        langfuse_parent_trace_id=trace_id,  # type: ignore
+                        langfuse_parent_observation_id=observation_id,  # type: ignore
+                    )
+                    for task in code_changes_output.tasks
+                ]
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
+                    if result:
+                        task_with_diff, updates = result
+                        tasks_with_diffs.append(task_with_diff)
+                        for repo_external_id, file_change in updates:
+                            self._append_file_change(repo_external_id, file_change)
+                    else:
+                        sentry_sdk.capture_message("Failed to apply code changes.")
+
+            return CodingOutput(tasks=tasks_with_diffs)

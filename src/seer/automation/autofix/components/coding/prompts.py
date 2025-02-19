@@ -3,7 +3,6 @@ from typing import Literal, Optional
 
 from seer.automation.autofix.components.coding.models import (
     CodeChangesPromptXml,
-    FuzzyDiffChunk,
     RootCausePlanTaskPromptXml,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
@@ -106,36 +105,24 @@ class CodingPrompts:
         )
 
     @staticmethod
-    def format_incorrect_diff_fixer(
-        file_path: str, diff_chunks: list[FuzzyDiffChunk], file_content: str
-    ):
-        return textwrap.dedent(
-            """\
-            Given the below file content:
-            <file path="{file_path}">
-            {file_content}
-            </file>
-
-            The following diffs were found to be incorrect:
-            {diff_chunks}
-
-            Provide the corrected unified diffs inside a <corrected_diffs></corrected_diffs> block:"""
-        ).format(
-            file_path=file_path,
-            file_content=file_content,
-            diff_chunks="\n".join([chunk.diff_content for chunk in diff_chunks]),
-        )
-
-    @staticmethod
     def format_missing_msg(missing_files: list[str], existing_files: list[str]):
         text = ""
 
         if missing_files:
-            text += f"The following files don't exist: {', '.join(missing_files)}\n"
+            text += f"The following files don't exist, yet you are trying to modify them: {', '.join(missing_files)}\n"
         if existing_files:
-            text += f"The following files already exist: {', '.join(existing_files)}\n"
+            text += f"The following files already exist, yet you are trying to create them: {', '.join(existing_files)}\n"
+        text += "\nPlease fix the above issues and output your answer in the correct format again."
 
         return text
+
+    @staticmethod
+    def format_xml_format_fix_msg():
+        example = CodeChangesPromptXml.get_example().to_prompt_str()
+        return textwrap.dedent(
+            """\
+            Your previous response had invalid XML formatting. Please provide your response again with valid XML tag, fields, and attributes. Again, here is the example of the correct format:\n{example}"""
+        ).format(example=example)
 
     @staticmethod
     def format_is_obvious_msg(
