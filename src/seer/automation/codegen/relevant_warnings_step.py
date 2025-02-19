@@ -2,6 +2,8 @@ import logging
 from typing import Any
 
 from langfuse.decorators import observe
+
+# import requests
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
@@ -129,7 +131,6 @@ class RelevantWarningsStep(CodegenStep):
             request
         )
 
-        # TODO(kddubey): POST relevant warnings to overwatch
         # requests.post(
         #     "https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
         #     json={

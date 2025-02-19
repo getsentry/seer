@@ -266,7 +266,7 @@ class PredictRelevantWarningsComponent(
                     reasoning=completion.parsed.reasoning,
                     short_description=completion.parsed.short_description or "",
                     short_justification=completion.parsed.short_justification or "",
-                    warning=warning,
+                    encoded_location=warning.encoded_location,
                 )
             )
 

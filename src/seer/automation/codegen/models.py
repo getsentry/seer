@@ -24,7 +24,7 @@ class RelevantWarningResult(BaseModel):
     reasoning: str
     short_description: str
     short_justification: str
-    warning: StaticAnalysisWarning
+    encoded_location: str
 
 
 class CodegenState(BaseModel):
