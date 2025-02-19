@@ -147,20 +147,43 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     "Arranging data in a way that looks intentional..."
                 )
 
-                formatted_response = llm_client.generate_structured(
-                    messages=agent.memory,
-                    prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                    model=GeminiProvider.model("gemini-2.0-flash-001"),
-                    response_format=MultipleRootCauseAnalysisOutputPrompt,
-                    run_name="Root Cause Extraction & Formatting",
-                    max_tokens=4096,
-                )
+                # Add retry logic for generating structured response
+                max_retries = 2
+                formatted_response = None
 
-                # Assign the ids to be the numerical indices of the causes
-                cause_model = formatted_response.parsed.cause.to_model()
+                for attempt in range(max_retries + 1):
+                    formatted_response = llm_client.generate_structured(
+                        messages=agent.memory,
+                        prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
+                        model=GeminiProvider.model("gemini-2.0-flash-001"),
+                        response_format=MultipleRootCauseAnalysisOutputPrompt,
+                        run_name="Root Cause Extraction & Formatting",
+                        max_tokens=4096,
+                    )
+
+                    # If we got a valid response, break the retry loop
+                    if formatted_response and getattr(formatted_response, "parsed", None):
+                        break
+
+                if not formatted_response or not getattr(formatted_response, "parsed", None):
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
+
+                parsed = formatted_response.parsed
+                cause = getattr(parsed, "cause", None)
+                if not cause:
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
+
+                cause_model = cause.to_model()
                 cause_model.id = 0
                 causes = [cause_model]
                 return RootCauseAnalysisOutput(causes=causes, termination_reason=None)
+
             finally:
                 with self.context.state.update() as cur:
                     cur.usage += agent.usage
