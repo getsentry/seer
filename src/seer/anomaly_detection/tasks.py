@@ -226,6 +226,9 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
     )
 
     # TODO: Replace this to use the detect() function when implemented
+
+    # prophet_detector.detect(df, config)
+
     # Pre-Process
     prophet_detector.pre_process_data(df, config.time_period)
 
@@ -238,8 +241,6 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
 
     # Add Prophet uncertainty
     prediction = prophet_detector.add_uncertainty(prediction)
-
-    # TODO: Convert the prediction to a list of ProphetPrediction
 
     prophet_predictions = []
     for i in range(forecast_len):
@@ -259,15 +260,25 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
 def _store_prophet_predictions(alert: DbDynamicAlert, predictions: List[ProphetPrediction]):
 
     with Session() as session:
+
+        cur_predictions = (
+            session.query(DbProphetAlertTimeSeries)
+            .filter(DbProphetAlertTimeSeries.alert_id == alert.external_alert_id)
+            .all()
+        )
+
+        cur_predictions_timestamps = [prediction.timestamp for prediction in cur_predictions]
+
         for prediction in predictions:
-            prophet_prediction = DbProphetAlertTimeSeries(
-                alert_id=alert.external_alert_id,
-                timestamp=prediction.timestamp,
-                yhat=prediction.yhat,
-                yhat_lower=prediction.yhat_lower,
-                yhat_upper=prediction.yhat_upper,
-            )
-            session.add(prophet_prediction)
+            if prediction.timestamp not in cur_predictions_timestamps:
+                prophet_prediction = DbProphetAlertTimeSeries(
+                    alert_id=alert.external_alert_id,
+                    timestamp=prediction.timestamp,
+                    yhat=prediction.yhat,
+                    yhat_lower=prediction.yhat_lower,
+                    yhat_upper=prediction.yhat_upper,
+                )
+                session.add(prophet_prediction)
         session.commit()
 
     logger.info(
