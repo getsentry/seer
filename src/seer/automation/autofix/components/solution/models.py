@@ -17,11 +17,16 @@ class RelevantCodeFile(BaseModel):
 class SolutionTimelineEvent(BaseModel):
     title: str
     code_snippet_and_analysis: str
-    timeline_item_type: (
-        Literal["internal_code", "external_system", "human_action"] | str
-    )  # TODO put back to literal only when not breaking anything
     relevant_code_file: RelevantCodeFile | None
-    is_new_event: bool
+    is_most_important_event: bool
+    event_type: Literal["internal_code"] = "internal_code"
+
+
+class SolutionPlanStep(BaseModel):
+    title: str
+    code_snippet_and_analysis: str
+    relevant_code_file: RelevantCodeFile | None
+    is_most_important: bool
 
 
 class SolutionRequest(BaseComponentRequest):
@@ -34,4 +39,4 @@ class SolutionRequest(BaseComponentRequest):
 
 
 class SolutionOutput(BaseComponentOutput):
-    modified_timeline: list[SolutionTimelineEvent]
+    solution_steps: list[SolutionPlanStep]

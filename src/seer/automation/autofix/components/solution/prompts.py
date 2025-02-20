@@ -129,18 +129,13 @@ class SolutionPrompts:
     def solution_formatter_msg(root_cause: RootCauseAnalysisItem | str):
         return textwrap.dedent(
             """\
-            Given the root cause of the issue:
-            {root_cause_str}
+            Based on the discussed plan, extract out each step of the plan to fix the issue.
 
-            Based on the discussed plan, write the steps needed to fix the issue.
-
-            For each step in the plan, include the following:
+            For each item in the plan (where one item is one step to fix the issue):
               - Title: a complete sentence describing what needs to change to fix the issue.
-              - Code Snippet and Analysis: an explanation of the code change and the reasoning behind it. All Markdown formatted. (don't write the full code, just tiny snippets at most)
-              - Event type: whether this change is about logic in the code, a human interaction, or an external system like a database, API, etc.
-              - Is new event: whether this change is the SINGLE MOST important part of the solution.
-            As a whole, this sequence of steps should tell the precise plan of how to fix the issue. You can put as few steps as needed.
-            """
+              - Code Snippet and Analysis: A snippet of the code change and an explanation of the code change and the reasoning behind it. All Markdown formatted. (don't write the full code, just tiny snippets at most)
+              - Is most important: whether this change is the SINGLE MOST important part of the solution.
+            As a whole, this sequence of steps should tell the precise plan of how to fix the issue. You can put as few or as many steps as needed."""
         ).format(root_cause_str=SolutionPrompts.format_root_cause(root_cause))
 
     @staticmethod

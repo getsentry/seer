@@ -11,7 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from seer.automation.agent.models import Message, Usage
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.components.solution.models import SolutionTimelineEvent
+from seer.automation.autofix.components.solution.models import (
+    SolutionPlanStep,
+    SolutionTimelineEvent,
+)
 from seer.automation.autofix.config import AUTOFIX_HARD_TIME_OUT_MINS, AUTOFIX_UPDATE_TIMEOUT_SECS
 from seer.automation.models import (
     FileChange,
@@ -533,7 +536,7 @@ class AutofixContinuation(AutofixGroupState):
 
     def get_selected_solution(
         self,
-    ) -> tuple[list[SolutionTimelineEvent] | str | None, Literal["all", "fix", "test"] | None]:
+    ) -> tuple[list[SolutionPlanStep] | str | None, Literal["all", "fix", "test"] | None]:
         solution_step = self.find_step(key="solution")
         if solution_step and isinstance(solution_step, SolutionStep):
             if solution_step.solution_selected:
