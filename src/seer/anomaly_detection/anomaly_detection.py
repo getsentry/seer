@@ -240,22 +240,24 @@ class AnomalyDetection(BaseModel):
         )
 
         # Delayed import due to circular imports
-        from seer.anomaly_detection.tasks import cleanup_timeseries
+        from seer.anomaly_detection.tasks import cleanup_timeseries_and_predict
 
         try:
-            # Set flag and create new task for cleanup
-            cleanup_config = historic.cleanup_config
-            if (
-                alert_data_accessor.can_queue_cleanup_task(historic.external_alert_id)
-                and cleanup_config.num_old_points >= cleanup_config.num_acceptable_points
+            # Set flag and create new task for cleanup if too many old points or not enough predictions remaining
+            cleanup_predict_config = historic.cleanup_predict_config
+            if alert_data_accessor.can_queue_cleanup_predict_task(historic.external_alert_id) and (
+                cleanup_predict_config.num_old_points
+                >= cleanup_predict_config.num_acceptable_points
+                or cleanup_predict_config.num_predictions_remaining
+                <= cleanup_predict_config.num_acceptable_predictions
             ):
                 alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
-                cleanup_timeseries.delay(
-                    historic.external_alert_id, cleanup_config.timestamp_threshold
+                cleanup_timeseries_and_predict.delay(
+                    historic.external_alert_id, cleanup_predict_config.timestamp_threshold
                 )
         except Exception as e:
             # Reset task and capture exception
-            alert_data_accessor.reset_cleanup_task(historic.external_alert_id)
+            alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
             sentry_sdk.capture_exception(e)
             logger.exception(e)
 
@@ -447,6 +449,7 @@ class AnomalyDetection(BaseModel):
                     "project_id": request.project_id,
                     "external_alert_id": request.alert.id,
                     "num_datapoints": len(request.timeseries),
+                    "num_predictions": len(request.prophet_predictions),
                     "minimum_required": min_len,
                     "config": request.config.model_dump(),
                 },
@@ -460,6 +463,7 @@ class AnomalyDetection(BaseModel):
                 "project_id": request.project_id,
                 "external_alert_id": request.alert.id,
                 "num_datapoints": len(request.timeseries),
+                "num_predictions": len(request.prophet_predictions),
                 "config": request.config.model_dump(),
             },
         )
@@ -487,6 +491,7 @@ class AnomalyDetection(BaseModel):
             config=request.config,
             timeseries=ts,
             anomalies=anomalies,
+            prophet_predictions=request.prophet_predictions,
             anomaly_algo_data={"window_size": anomalies.window_size},
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )

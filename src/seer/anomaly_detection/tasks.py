@@ -82,15 +82,10 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
                 expected_seasonality=alert.config["expected_seasonality"],
             )
 
-            # Delete old prophet prediction points
-            prophet_alert_stmt = delete(DbProphetAlertTimeSeries).where(
-                DbProphetAlertTimeSeries.alert_id == alert_id,
-                DbProphetAlertTimeSeries.timestamp < date_threshold,
+            # Delete old timeseries and prophet prediction points
+            deleted_timeseries_points, prophet_deleted_timeseries_points = (
+                _delete_old_timeseries_points(alert, date_threshold)
             )
-            prophet_alert_res = session.execute(prophet_alert_stmt)
-
-            # Delete old timeseries points
-            deleted_timeseries_points = _delete_old_timeseries_points(alert, date_threshold)
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
 
@@ -104,13 +99,11 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
                 updated_timeseries_points = 0
 
             session.commit()
-            logger.info(f"Deleted {deleted_timeseries_points} timeseries points")
+            logger.info(
+                f"Deleted {deleted_timeseries_points} timeseries points and {prophet_deleted_timeseries_points} prophet prediction points in alertd id {alert_id}"
+            )
             logger.info(
                 f"Updated matrix profiles for {updated_timeseries_points} points in alertd id {alert_id}"
-            )
-
-            logger.info(
-                f"Deleted {prophet_alert_res.rowcount} prophet prediction points in alertd id {alert_id}"
             )
 
     _toggle_data_purge_flag(alert_id)
@@ -118,23 +111,40 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
 
 @sentry_sdk.trace
 def _delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
-    deleted_count = 0
-    to_remove = []
+
+    time_series_to_remove = []
     for ts in alert.timeseries:
         if ts.timestamp.timestamp() < date_threshold:
-            to_remove.append(ts)
+            time_series_to_remove.append(ts)
+
+    prophet_time_series_to_remove = []
+    for prophet_ts in alert.prophet_prediction:
+        if prophet_ts.timestamp.timestamp() < date_threshold:
+            prophet_time_series_to_remove.append(prophet_ts)
 
     # Save history records before removing
-    _save_timeseries_history(alert, to_remove)
+    _save_timeseries_history(alert, time_series_to_remove, prophet_time_series_to_remove)
 
-    for ts in to_remove:
+    deleted_count = 0
+    for ts in time_series_to_remove:
         alert.timeseries.remove(ts)
         deleted_count += 1
-    return deleted_count
+
+    prophet_deleted_count = 0
+    for prophet_ts in prophet_time_series_to_remove:
+        alert.prophet_prediction.remove(prophet_ts)
+        prophet_deleted_count += 1
+
+    return deleted_count, prophet_deleted_count
 
 
 @sentry_sdk.trace
-def _save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAlertTimeSeries]):
+def _save_timeseries_history(
+    alert: DbDynamicAlert,
+    timeseries: List[DbDynamicAlertTimeSeries],
+    prophet_timeseries: List[DbProphetAlertTimeSeries],
+):
+
     with Session() as session:
         for ts in timeseries:
             history_record = DbDynamicAlertTimeSeriesHistory(
@@ -145,6 +155,17 @@ def _save_timeseries_history(alert: DbDynamicAlert, timeseries: List[DbDynamicAl
                 saved_at=datetime.now(),
             )
             session.add(history_record)
+
+        for prophet_ts in prophet_timeseries:
+            prophet_history_record = DbProphetAlertTimeSeriesHistory(
+                alert_id=alert.external_alert_id,
+                timestamp=prophet_ts.timestamp,
+                yhat=prophet_ts.yhat,
+                yhat_lower=prophet_ts.yhat_lower,
+                yhat_upper=prophet_ts.yhat_upper,
+                saved_at=datetime.now(),
+            )
+            session.add(prophet_history_record)
         session.commit()
 
 
@@ -203,6 +224,8 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
             "y": y,
         }
     )
+
+    # TODO: Replace this to use the detect() function when implemented
     # Pre-Process
     prophet_detector.pre_process_data(df, config.time_period)
 
@@ -218,12 +241,22 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
 
     # TODO: Convert the prediction to a list of ProphetPrediction
 
+    prophet_predictions = []
+    for i in range(forecast_len):
+        prophet_predictions.append(
+            ProphetPrediction(
+                timestamp=datetime.now() + timedelta(minutes=i * config.time_period),
+                yhat=prediction[i]["yhat"],
+                yhat_lower=prediction[i]["yhat_lower"],
+                yhat_upper=prediction[i]["yhat_upper"],
+            )
+        )
+
     return prophet_predictions
 
 
 @sentry_sdk.trace
 def _store_prophet_predictions(alert: DbDynamicAlert, predictions: List[ProphetPrediction]):
-    # store prophet predictions
 
     with Session() as session:
         for prediction in predictions:
@@ -301,7 +334,7 @@ def cleanup_disabled_alerts():
 
 @celery_app.task
 @sentry_sdk.trace
-def cleanup_old_timeseries_history():
+def cleanup_old_timeseries_and_prophet_history():
     sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     date_threshold = datetime.now() - timedelta(days=90)
     with Session() as session:

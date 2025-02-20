@@ -11,7 +11,7 @@ from seer.anomaly_detection.models import (
     MPTimeSeries,
     MPTimeSeriesAnomaliesSingleWindow,
 )
-from seer.anomaly_detection.models.cleanup import CleanupConfig
+from seer.anomaly_detection.models.cleanup_predict import CleanupConfig
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     AnomalyDetectionConfig,
