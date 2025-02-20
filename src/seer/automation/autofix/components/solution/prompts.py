@@ -142,5 +142,9 @@ class SolutionPrompts:
     def solution_proposal_msg():
         return textwrap.dedent(
             """\
-            Based on all the information gathered, provide the most actionable and effective steps to fix the issue. Each step should include the needed code changes."""
+            Based on all the information gathered, provide the most actionable and effective steps to fix the issue. Each step should include the needed code changes.
+
+            # Guidelines:
+            - You don't need to update or write tests unless you are specifically asked to do so, another engineer will do that.
+            - Only include explicit code changes in your steps."""
         )
