@@ -19,7 +19,7 @@ class SolutionTimelineEvent(BaseModel):
     code_snippet_and_analysis: str
     relevant_code_file: RelevantCodeFile | None
     is_most_important_event: bool
-    event_type: Literal["internal_code"] = "internal_code"
+    event_type: Literal["internal_code"] | str = "internal_code"
 
 
 class SolutionPlanStep(BaseModel):
