@@ -18,7 +18,7 @@ class CodegenStatus(str, Enum):
 
 class RelevantWarningResult(BaseModel):
     warning_id: int
-    issue_group_id: int
+    issue_id: int
     does_fixing_warning_fix_issue: bool
     relevance_probability: float
     reasoning: str
@@ -128,6 +128,7 @@ class CodegenRelevantWarningsRequest(CodegenBaseRequest):
     commit_sha: str
     max_num_associations: int = 10
     max_num_issues_analyzed: int = 10
+    post_to_overwatch: bool = False
 
 
 class CodegenRelevantWarningsResponse(CodegenBaseResponse):

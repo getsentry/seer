@@ -260,7 +260,7 @@ class PredictRelevantWarningsComponent(
             relevant_warning_results.append(
                 RelevantWarningResult(
                     warning_id=warning.id,
-                    issue_group_id=issue.id,
+                    issue_id=issue.id,
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
                     reasoning=completion.parsed.reasoning,

@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any
 
@@ -33,6 +34,8 @@ from seer.automation.codegen.relevant_warnings_component import (
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -67,18 +70,26 @@ class RelevantWarningsStep(CodegenStep):
         return relevant_warnings_task
 
     @staticmethod
+    @inject
     def _post_results_to_overwatch(
-        run_id: str, relevant_warnings_output: CodePredictRelevantWarningsOutput
+        run_id: int,
+        relevant_warnings_output: CodePredictRelevantWarningsOutput,
+        config: AppConfig = injected,
     ):
         request = {
             "run_id": run_id,
             "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
         }
-        headers = get_codecov_auth_header(request)
+        request_data = json.dumps(request).encode("utf-8")
+        headers = get_codecov_auth_header(
+            request_data,
+            signature_header="X-GEN-AI-AUTH-SIGNATURE",
+            signature_secret=config.OVERWATCH_OUTGOING_SIGNATURE_SECRET,
+        )
         requests.post(
             url="https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
             headers=headers,
-            json=request,
+            data=request_data,
         )
 
     # TODO(kddubey): is this @observe doing anything useful? This method doesn't return anything.
@@ -96,6 +107,7 @@ class RelevantWarningsStep(CodegenStep):
                 filename=file.filename, patch=file.patch, status=file.status, changes=file.changes
             )
             for file in commit.files
+            if file.patch
         ]
         fetch_issues_component = FetchIssuesComponent(self.context)
         fetch_issues_request = CodeFetchIssuesRequest(
@@ -145,11 +157,13 @@ class RelevantWarningsStep(CodegenStep):
 
         # 5. Save results.
         try:
-            # self._post_results_to_overwatch(
-            #     run_id=self.context.run_id,
-            #     relevant_warnings_output=relevant_warnings_output,
-            # )
-            pass
+            if self.request.post_to_overwatch:
+                self._post_results_to_overwatch(
+                    run_id=self.context.run_id,
+                    relevant_warnings_output=relevant_warnings_output,
+                )
+            else:
+                logger.info("Skipping posting relevant warnings results to Overwatch.")
         except Exception as e:
             logger.exception(f"Error posting relevant warnings results to Overwatch: {e}")
             raise e

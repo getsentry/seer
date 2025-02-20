@@ -226,7 +226,7 @@ class TestPredictRelevantWarningsComponent:
             candidate_associations, output.relevant_warning_results, strict=True
         ):
             assert warning.id == result.warning_id
-            assert issue.id == result.issue_group_id
+            assert issue.id == result.issue_id
 
 
 @patch("seer.automation.codegen.relevant_warnings_component.FetchIssuesComponent.invoke")
@@ -284,6 +284,7 @@ def test_relevant_warnings_step_invoke(
         run_id=1,
         max_num_associations=10,
         max_num_issues_analyzed=10,
+        post_to_overwatch=False,
     )
     step = RelevantWarningsStep(request=request)
     step.context = mock_context
