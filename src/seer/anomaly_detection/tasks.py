@@ -1,9 +1,11 @@
 import logging
 from datetime import datetime, timedelta
 from operator import and_, or_
+from random import random
 from typing import List
 
 import numpy as np
+import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from sqlalchemy import delete
@@ -17,6 +19,7 @@ from seer.db import (
     DbDynamicAlert,
     DbDynamicAlertTimeSeries,
     DbDynamicAlertTimeSeriesHistory,
+    DbProphetAlertTimeSeries,
     DbProphetAlertTimeSeriesHistory,
     Session,
     TaskStatus,
@@ -43,7 +46,7 @@ def _init_stumpy():
 
 @celery_app.task
 @sentry_sdk.trace
-def cleanup_timeseries(alert_id: int, date_threshold: float):
+def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
     sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     span = sentry_sdk.get_current_span()
 
@@ -78,18 +81,36 @@ def cleanup_timeseries(alert_id: int, date_threshold: float):
                 direction=alert.config["direction"],
                 expected_seasonality=alert.config["expected_seasonality"],
             )
+
+            # Delete old prophet prediction points
+            prophet_alert_stmt = delete(DbProphetAlertTimeSeries).where(
+                DbProphetAlertTimeSeries.alert_id == alert_id,
+                DbProphetAlertTimeSeries.timestamp < date_threshold,
+            )
+            prophet_alert_res = session.execute(prophet_alert_stmt)
+
+            # Delete old timeseries points
             deleted_timeseries_points = _delete_old_timeseries_points(alert, date_threshold)
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
+
+                predictions = _fit_predict(alert, config)
+                _store_prophet_predictions(alert, predictions)
+
             else:
                 # Reset the window size to 0 if there are no timeseries points left
                 alert.anomaly_algo_data = {"window_size": 0}
                 logger.warn(f"Alert with id {alert_id} has empty timeseries data after pruning")
                 updated_timeseries_points = 0
+
             session.commit()
             logger.info(f"Deleted {deleted_timeseries_points} timeseries points")
             logger.info(
                 f"Updated matrix profiles for {updated_timeseries_points} points in alertd id {alert_id}"
+            )
+
+            logger.info(
+                f"Deleted {prophet_alert_res.rowcount} prophet prediction points in alertd id {alert_id}"
             )
 
     _toggle_data_purge_flag(alert_id)
@@ -162,6 +183,63 @@ def _update_matrix_profiles(
         updateed_timeseries_points += 1
     alert.anomaly_algo_data = {"window_size": anomalies.window_size}
     return updateed_timeseries_points
+
+
+@sentry_sdk.trace
+def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
+
+    prophet_detector = ProphetAnomalyDetector()  # TODO: Import this once changes are merged
+
+    # TODO: Can we convert this preprocess function to not use pandas?
+    # Convert the timeseries to a pandas dataframe
+    ds = []
+    y = []
+    for timestep in alert.timeseries:
+        ds.append(timestep.timestamp.timestamp())
+        y.append(timestep.value)
+    df = pd.DataFrame(
+        {
+            "ds": ds,
+            "y": y,
+        }
+    )
+    # Pre-Process
+    prophet_detector.pre_process_data(df, config.time_period)
+
+    # Fit the model
+    prophet_detector.fit()
+
+    # predict ~24 hours worth of points
+    forecast_len = random.randint(24, 28) * (60 // config.time_period)
+    prediction = prophet_detector.predict(forecast_len)
+
+    # Add Prophet uncertainty
+    prediction = prophet_detector.add_uncertainty(prediction)
+
+    # TODO: Convert the prediction to a list of ProphetPrediction
+
+    return prophet_predictions
+
+
+@sentry_sdk.trace
+def _store_prophet_predictions(alert: DbDynamicAlert, predictions: List[ProphetPrediction]):
+    # store prophet predictions
+
+    with Session() as session:
+        for prediction in predictions:
+            prophet_prediction = DbProphetAlertTimeSeries(
+                alert_id=alert.external_alert_id,
+                timestamp=prediction.timestamp,
+                yhat=prediction.yhat,
+                yhat_lower=prediction.yhat_lower,
+                yhat_upper=prediction.yhat_upper,
+            )
+            session.add(prophet_prediction)
+        session.commit()
+
+    logger.info(
+        f"Stored {len(predictions)} prophet predictions for alert {alert.external_alert_id}"
+    )
 
 
 @sentry_sdk.trace
