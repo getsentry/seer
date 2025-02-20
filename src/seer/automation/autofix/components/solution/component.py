@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
+from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -154,34 +154,90 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     ),
                 )
 
-            response = agent.run(
-                run_config=RunConfig(
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
-                    system_prompt=SolutionPrompts.format_system_msg(has_tools=not is_obvious),
-                    memory_storage_key="solution",
-                    run_name="Solution",
+            try:
+                has_tools = not is_obvious
+                if has_tools:  # run context gatherer if not obvious
+                    response = agent.run(
+                        run_config=RunConfig(
+                            model=GeminiProvider.model("gemini-2.0-flash-001"),
+                            system_prompt=SolutionPrompts.format_system_msg(),
+                            prompt=SolutionPrompts.format_default_msg(
+                                event=request.event_details.format_event(),
+                                root_cause=request.root_cause_and_fix,
+                                summary=request.summary,
+                                repo_names=[repo.full_name for repo in state.request.repos],
+                                original_instruction=request.original_instruction,
+                                code_map=request.profile,
+                                has_tools=True,
+                            ),
+                            memory_storage_key="solution",
+                            run_name="Solution Discovery",
+                            max_iterations=24,
+                        ),
+                    )
+
+                    if not response:
+                        self.context.store_memory("solution", agent.memory)
+                        return None
+
+                self.context.event_manager.add_log("Being artificially intelligent...")
+
+                # reason to propose final solution
+                agent.tools = []
+                agent.memory = (
+                    LlmClient.clean_assistant_messages(agent.memory)
+                    if has_tools
+                    else (
+                        [
+                            Message(
+                                role="user",
+                                content=SolutionPrompts.format_default_msg(
+                                    event=request.event_details.format_event(),
+                                    root_cause=request.root_cause_and_fix,
+                                    summary=request.summary,
+                                    repo_names=[repo.full_name for repo in state.request.repos],
+                                    original_instruction=request.original_instruction,
+                                    code_map=request.profile,
+                                    has_tools=False,
+                                ),
+                            )
+                        ]
+                        if not request.initial_memory
+                        else request.initial_memory
+                    )
                 )
-            )
 
-            with self.context.state.update() as cur:
-                cur.usage += agent.usage
+                response = agent.run(
+                    run_config=RunConfig(
+                        model=OpenAiProvider.model("o3-mini"),
+                        memory_storage_key="solution",
+                        run_name="Solution Proposal",
+                        temperature=1.0,
+                        reasoning_effort="high",
+                        prompt=SolutionPrompts.solution_proposal_msg(),
+                    )
+                )
 
-            if not response:
-                self.context.store_memory("solution", agent.memory)
-                return None
+                if not response:
+                    self.context.store_memory("solution", agent.memory)
+                    return None
 
-            self.context.event_manager.add_log("Arranging data in a way that looks intentional...")
+                self.context.event_manager.add_log("Formatting for human consumption...")
 
-            formatted_response = llm_client.generate_structured(
-                messages=agent.memory,
-                prompt=SolutionPrompts.solution_formatter_msg(request.root_cause_and_fix),
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
-                response_format=SolutionOutput,
-                run_name="Solution Extraction & Formatting",
-                max_tokens=8192,
-            )
+                formatted_response = llm_client.generate_structured(
+                    messages=agent.memory,
+                    prompt=SolutionPrompts.solution_formatter_msg(request.root_cause_and_fix),
+                    model=GeminiProvider.model("gemini-2.0-flash-001"),
+                    response_format=SolutionOutput,
+                    run_name="Solution Extraction & Formatting",
+                    max_tokens=8192,
+                )
 
-            if not formatted_response or not formatted_response.parsed:
-                return None
+                if not formatted_response or not formatted_response.parsed:
+                    return None
 
-            return formatted_response.parsed
+                return formatted_response.parsed
+
+            finally:
+                with self.context.state.update() as cur:
+                    cur.usage += agent.usage

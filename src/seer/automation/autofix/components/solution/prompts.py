@@ -14,26 +14,19 @@ from seer.automation.summarize.issue import IssueSummary
 
 class SolutionPrompts:
     @staticmethod
-    def format_system_msg(has_tools: bool):
-        if has_tools:
-            return textwrap.dedent(
-                """\
-                You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
+    def format_system_msg():
+        return textwrap.dedent(
+            """\
+            You are an exceptional principal engineer that is amazing at researching bugs in codebases.
 
-                You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
+            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
 
-                # Guidelines:
-                - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
-                - You also MUST think step-by-step before giving the final answer."""
-            )
-        else:
-            return textwrap.dedent(
-                """\
-                You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
+            # Guidelines:
+            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            - You also MUST think step-by-step before giving the final answer.
 
-                # Guidelines:
-                - You also MUST think step-by-step before giving the final answer."""
-            )
+            It is important that you gather all information needed to understand how to fix the issue, from the entry point of the code to the error."""
+        )
 
     @staticmethod
     def format_original_instruction(instruction: str):
@@ -98,20 +91,12 @@ class SolutionPrompts:
 
             {code_map_str}
 
-            # Your goal:
-            Provide the most actionable and effective steps to fix the issue.
-
-            Since you are an exceptional principal engineer, your solution should not add logs or throw more errors, but should meaningfully fix the issue. Your list of steps to fix the problem should be detailed enough so that following it exactly will lead to a fully complete solution. Each step should include the needed code changes.
-
-            When ready with your final answer, detail the precise plan to fix the issue.
+            GOAL: Gather all information that may be needed to plan a fix for this issue.
 
             # Guidelines:
-            {use_tools_instructions}
-            - You do not need to make changes in test files, someone else will do that.
             {ask_questions_instructions}
             {search_google_instructions}
-            {think_tools_instructions}
-            - You also MUST think step-by-step before giving the final answer."""
+            {think_tools_instructions}"""
         ).format(
             event_str=event,
             repo_names_str=format_repo_names(repo_names),
@@ -122,11 +107,6 @@ class SolutionPrompts:
                 else ""
             ),
             summary_str=format_summary(summary),
-            use_tools_instructions=(
-                "- Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix."
-                if has_tools
-                else ""
-            ),
             think_tools_instructions=(
                 "- EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you."
                 if has_tools
@@ -162,3 +142,10 @@ class SolutionPrompts:
             As a whole, this sequence of steps should tell the precise plan of how to fix the issue. You can put as few steps as needed.
             """
         ).format(root_cause_str=SolutionPrompts.format_root_cause(root_cause))
+
+    @staticmethod
+    def solution_proposal_msg():
+        return textwrap.dedent(
+            """\
+            Based on all the information gathered, provide the most actionable and effective steps to fix the issue. Each step should include the needed code changes."""
+        )
