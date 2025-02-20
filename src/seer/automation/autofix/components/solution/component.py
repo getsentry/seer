@@ -180,7 +180,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         self.context.store_memory("solution", agent.memory)
                         return None
 
-                self.context.event_manager.add_log("Simulating profound thought...")
+                self.context.event_manager.add_log("Being artificially intelligent...")
 
                 # reason to propose final solution
                 agent.tools = []
@@ -222,9 +222,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     self.context.store_memory("solution", agent.memory)
                     return None
 
-                self.context.event_manager.add_log(
-                    "Arranging data in a way that looks intentional..."
-                )
+                self.context.event_manager.add_log("Formatting for human consumption...")
 
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
