@@ -764,6 +764,7 @@ class GeminiProvider:
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
         retryable_errors = (
+            "Resource exhausted. Please try again later.",
             "429 RESOURCE_EXHAUSTED",
             # https://sentry.sentry.io/issues/6301072208
             "TLS/SSL connection has been closed",
