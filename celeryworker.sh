@@ -7,7 +7,14 @@ if [ "$CELERY_WORKER_QUEUE" != "" ]; then
     QUEUE="$CELERY_WORKER_QUEUE"
 fi
 
-WORKER_CMD="celery -A src.celery_app.tasks worker --loglevel=info -Q $QUEUE $CELERY_WORKER_OPTIONS"
+# You can set the number of celery workers via the NUM_CELERY_WORKERS environment variable.
+# If not set, the default number of workers is 16.
+NUM_WORKERS="16"
+if [ "$NUM_CELERY_WORKERS" != "" ]; then
+    NUM_WORKERS="$NUM_CELERY_WORKERS"
+fi
+
+WORKER_CMD="celery -A src.celery_app.tasks worker --loglevel=info -Q $QUEUE -c $NUM_WORKERS $CELERY_WORKER_OPTIONS"
 
 if [ "$CELERY_WORKER_ENABLE" = "true" ]; then
     if [ "$DEV" = "true" ] || [ "$DEV" = "1" ]; then
