@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
@@ -18,8 +18,10 @@ class SolutionTimelineEvent(BaseModel):
     title: str
     code_snippet_and_analysis: str
     relevant_code_file: RelevantCodeFile | None
-    is_most_important_event: bool
+    is_most_important_event: bool = False
     event_type: Literal["internal_code"] | str = "internal_code"
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class SolutionPlanStep(BaseModel):
