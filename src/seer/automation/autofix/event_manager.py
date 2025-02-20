@@ -110,6 +110,13 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
+            log_seer_event(
+                SeerEventNames.AUTOFIX_ROOT_CAUSE_STARTED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
+
     def send_root_cause_analysis_result(self, root_cause_output: RootCauseAnalysisOutput):
         with self.state.update() as cur:
             root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
@@ -123,6 +130,13 @@ class AutofixEventManager:
                 root_cause_step.status = AutofixStatus.ERROR
                 cur.status = AutofixStatus.ERROR
                 root_cause_step.termination_reason = root_cause_output.termination_reason
+
+            log_seer_event(
+                SeerEventNames.AUTOFIX_ROOT_CAUSE_COMPLETED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
 
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
         root_cause_selection: CustomRootCauseSelection | CodeContextRootCauseSelection | None = None
@@ -157,6 +171,13 @@ class AutofixEventManager:
             cur.make_step_latest(solution_step)
             cur.status = AutofixStatus.PROCESSING
 
+            log_seer_event(
+                SeerEventNames.AUTOFIX_SOLUTION_STARTED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
+
     def send_solution_result(self, solution_output: SolutionOutput):
         with self.state.update() as cur:
             solution_processing_step = cur.find_or_add(self.solution_processing_step)
@@ -165,6 +186,13 @@ class AutofixEventManager:
             solution_step.status = AutofixStatus.COMPLETED
             solution_step.solution = solution_output.modified_timeline
             cur.status = AutofixStatus.NEED_MORE_INFORMATION
+
+            log_seer_event(
+                SeerEventNames.AUTOFIX_SOLUTION_COMPLETED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
 
     def set_selected_solution(self, payload: AutofixSolutionUpdatePayload):
         with self.state.update() as cur:
@@ -190,6 +218,13 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
+            log_seer_event(
+                SeerEventNames.AUTOFIX_CODING_STARTED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
+
     def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
@@ -206,6 +241,13 @@ class AutofixEventManager:
             changes_step.changes = codebase_changes
 
             cur.status = AutofixStatus.COMPLETED
+
+            log_seer_event(
+                SeerEventNames.AUTOFIX_COMPLETED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
 
     def add_log(self, message: str):
         with self.state.update() as cur:
@@ -253,6 +295,14 @@ class AutofixEventManager:
             )
 
             cur.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
+
+            log_seer_event(
+                SeerEventNames.AUTOFIX_ASKED_USER_QUESTION,
+                {
+                    "run_id": cur.run_id,
+                    "question": question,
+                },
+            )
 
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True
