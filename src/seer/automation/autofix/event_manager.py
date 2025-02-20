@@ -4,7 +4,7 @@ import time
 
 from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
-from seer.automation.autofix.components.solution.models import SolutionOutput
+from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRootCauseUpdatePayload,
@@ -184,7 +184,15 @@ class AutofixEventManager:
             solution_processing_step.status = AutofixStatus.COMPLETED
             solution_step = cur.find_or_add(self.solution_step)
             solution_step.status = AutofixStatus.COMPLETED
-            solution_step.solution = solution_output.modified_timeline
+            solution_step.solution = [
+                SolutionTimelineEvent(
+                    title=solution_step.title,
+                    code_snippet_and_analysis=solution_step.code_snippet_and_analysis,
+                    relevant_code_file=solution_step.relevant_code_file,
+                    is_most_important_event=solution_step.is_most_important,
+                )
+                for solution_step in solution_output.solution_steps
+            ]
             cur.status = AutofixStatus.NEED_MORE_INFORMATION
 
             log_seer_event(
