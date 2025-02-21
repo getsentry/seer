@@ -279,9 +279,14 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
         does_fixing_warning_fix_issue: bool
         short_description: str | None = None
         short_justification: str | None = None
+        # This justification is currenty unused. But it's cheap and we'll see later if it's useful
 
     @staticmethod
     def format_prompt(formatted_warning: str, formatted_error: str):
+        # Defining relevance as "does fixing the warning fix the issue" is taken from BPR:
+        # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L137
+        #
+        # Simply asking for the `relevance_probability` is inspired by: https://arxiv.org/abs/2305.14975
         return textwrap.dedent(
             f"""\
             {_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error)}
@@ -293,12 +298,15 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             We need to know if this warning is directly relevant to the issue.
             By relevant, we mean that fixing the warning would prevent the issue.
             We're not deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
-            We're not looking for warnings which vaguely relate to the issue. The relationship should be somewhat direct.
+            We're not looking for warnings which vaguely or hypothetically relate to the issue. The relationship should be direct.
+            The locations of the warning and the error don't have to be identical, but they should be referring to similar code/logic.
 
-            Before giving your final answer, think about the context in which the error occurs.
-            What are its possible causes? How would it be fixed? Next think about how the warning is related or unrelated to the issue.
-            Your `reasoning` should be at most 200 words.
-            Also, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue. This score, the `relevance_probability`, can be very granular, e.g., 0.32.
+            Before giving your final answer, think out loud in a `reasoning` section about the context in which the error occurs, independent of the warning. What are the possible causes of the error?
+            Then think about how the warning is related or unrelated to the issue. Is the warning referring to similar code/logic as the error's exception stacktrace?
+            Your `reasoning` should be at most 400 words. Feel free to mention what you're uncertain about, and what you're more confident about.
+
+            Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `reasoning`.
+            This score, the `relevance_probability`, can be very granular, e.g., 0.32.
             Then give your final answer in `does_fixing_warning_fix_issue`.
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:

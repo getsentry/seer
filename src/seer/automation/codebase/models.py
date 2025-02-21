@@ -104,7 +104,7 @@ class StaticAnalysisRule(BaseModel):
     id: int
     code: str
     tool: str
-    is_autofixable: bool | None  # refers to "Quick fix"?
+    is_autofixable: bool | None  # refers to "Quick fix"
     is_stable: bool | None
     category: str
 
@@ -126,8 +126,7 @@ class StaticAnalysisWarning(BaseModel):
     commit_id: str
     code: str
     message: str
-    encoded_location: str  # TODO: this is a predicate type
-    encoded_code_snippet: str | None
+    encoded_location: str
     rule_id: int | None = None
     rule: StaticAnalysisRule | None = None
     # TODO: project info necessary for seer?

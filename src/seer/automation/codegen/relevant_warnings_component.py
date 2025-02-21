@@ -7,7 +7,12 @@ from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GoogleProviderEmbeddings, LlmClient, OpenAiProvider
+from seer.automation.agent.client import (
+    GeminiProvider,
+    GoogleProviderEmbeddings,
+    LlmClient,
+    OpenAiProvider,
+)
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -244,7 +249,7 @@ class PredictRelevantWarningsComponent(
         relevant_warning_results: list[RelevantWarningResult] = []
         for warning, issue in request.candidate_associations:
             completion = llm_client.generate_structured(
-                model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
                     formatted_warning=warning.format_warning(),
@@ -255,7 +260,7 @@ class PredictRelevantWarningsComponent(
                 response_format=ReleventWarningsPrompts.DoesFixingWarningFixIssue,
                 temperature=0.0,
                 max_tokens=2048,
-                timeout=7.0,
+                timeout=10.0,
             )
             relevant_warning_results.append(
                 RelevantWarningResult(
