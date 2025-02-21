@@ -66,7 +66,6 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             pr_file
             for pr_file in pr_files
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
-            # If it's added or deleted, there won't be past issues for it.
         ]
         if not pr_files_eligible:
             logger.info("No eligible files in PR.")
@@ -90,8 +89,6 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
     @observe(name="Codegen - Relevant Warnings - Fetch Issues Component")
     @ai_track(description="Codegen - Relevant Warnings - Fetch Issues Component")
     def invoke(self, request: CodeFetchIssuesRequest) -> CodeFetchIssuesOutput:
-        # TODO(kddubey): is this filename the same format as what open_pr_comment uses?
-        # Need to ensure matchability wrt sentry stacktrace frame filenames
         filename_to_issues = self._fetch_issues(
             organization_id=request.organization_id,
             provider=self.context.repo.provider,
@@ -159,9 +156,7 @@ class AssociateWarningsWithIssuesComponent(
         )
         embeddings_warnings = model.encode(warnings_formatted)
         embeddings_issues = model.encode(issues_formatted)
-
         warning_issue_cosine_similarities = embeddings_warnings @ embeddings_issues.T
-        # Embeddings are already normalized.
         warning_issue_cosine_distances = 1 - warning_issue_cosine_similarities
         warning_issue_indices = self._top_k_indices(
             warning_issue_cosine_distances, request.max_num_associations

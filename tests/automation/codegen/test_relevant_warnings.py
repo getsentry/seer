@@ -113,16 +113,20 @@ class TestAssociateWarningsWithIssuesComponent:
 
     def test_invoke(self, component):
         num_warnings = 3
-        max_num_associations = 3
+        num_issues = 4
+        max_num_associations = 5
 
+        issues = [_mock_issue_details() for _ in range(num_issues)]
         filename_to_issues = {
-            "fine.py": [_mock_issue_details()],
-            "fine2.py": [_mock_issue_details(), _mock_issue_details()],
+            "fine.py": issues[:3],
+            "fine2.py": issues[1:],  # duplicate issues w/ idxs 1 and 2 on purpose
         }
         warnings = [_mock_static_analysis_warning() for _ in range(num_warnings)]
 
-        # We'll only pick the top 3 associations among 3 warnings * 3 issues = 9.
-        warning_issue_indices_expected = [(0, 1), (2, 0), (2, 1)]
+        # We'll pick the top 5 associations among 3 warnings * 4 issues = 12 total associations.
+        warning_issue_indices_expected = [(1, 5), (0, 1), (2, 5), (2, 0), (2, 1)]
+        assert len(set(warning_issue_indices_expected)) == len(warning_issue_indices_expected)
+
         issues = [issue for issues in filename_to_issues.values() for issue in issues]
         candidate_associations_expected = [
             (warnings[warning_idx], issues[issue_idx])
@@ -135,6 +139,15 @@ class TestAssociateWarningsWithIssuesComponent:
             max_num_associations=max_num_associations,
         )
         output: AssociateWarningsWithIssuesOutput = component.invoke(request)
+        assert len(output.candidate_associations) == max_num_associations
+
+        # Test no duplicate associations
+        warning_issue_idxs = [
+            (warnings.index(warning), issues.index(issue))
+            for warning, issue in output.candidate_associations
+        ]
+        assert len(set(warning_issue_idxs)) == len(warning_issue_idxs)
+
         assert output.candidate_associations == candidate_associations_expected
 
 
