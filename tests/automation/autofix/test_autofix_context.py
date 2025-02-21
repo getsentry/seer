@@ -292,6 +292,76 @@ class TestAutofixContext(unittest.TestCase):
             should_completely_error=True,
         )
 
+    def test_commit_changes_handles_missing_step(self):
+        """Test that commit_changes handles missing changes step gracefully"""
+        context = self.autofix_context
+
+        # Set up state without changes step
+        with context.state.update() as state:
+            state.steps = []  # Empty steps list
+
+        with self.assertRaises(ValueError, match="Changes step not found"):
+            context.commit_changes()
+
+    def test_commit_changes_refetches_step(self):
+        """Test that commit_changes correctly refetches changes step when updating state"""
+        context = self.autofix_context
+
+        # Set up initial state with changes step
+        changes_step = ChangesStep(
+            key="changes",
+            title="Test Changes",
+            changes=[
+                CodebaseChange(
+                    repo_external_id="test-repo",
+                    repo_name="test/repo",
+                    title="Test Change",
+                    description="Test",
+                    diff=[],
+                )
+            ],
+        )
+
+        with context.state.update() as state:
+            state.steps = [changes_step]
+            state.codebases["test-repo"] = CodebaseState(
+                repo_external_id="test-repo",
+                file_changes=[FileChange(path="test.py", content="test")],
+            )
+
+        self.mock_repo_client.create_branch_from_changes.return_value = MagicMock(
+            ref="refs/heads/test-branch"
+        )
+
+        # Call commit_changes
+        context.commit_changes(repo_external_id="test-repo")
+
+        # Verify changes step was refetched and updated correctly
+        state = context.state.get()
+        updated_step = state.find_step(key="changes")
+        self.assertIsNotNone(updated_step)
+        self.assertIsInstance(updated_step, ChangesStep)
+        self.assertEqual(updated_step.changes[0].branch_name, "test-branch")
+
+    def test_commit_changes_handles_invalid_changes_state(self):
+        """Test that commit_changes handles invalid changes state index gracefully"""
+        context = self.autofix_context
+
+        # Set up state with changes step but invalid change state
+        changes_step = ChangesStep(
+            key="changes", title="Test Changes", changes=[]  # Empty changes list
+        )
+
+        with context.state.update() as state:
+            state.steps = [changes_step]
+            state.codebases["test-repo"] = CodebaseState(
+                repo_external_id="test-repo",
+                file_changes=[FileChange(path="test.py", content="test")],
+            )
+
+        # Should not raise IndexError
+        context.commit_changes(repo_external_id="test-repo")  # Should log warning and continue
+
 
 class TestAutofixContextPrCommit(unittest.TestCase):
     def setUp(self):
