@@ -210,7 +210,7 @@ class AutofixContext(PipelineContext):
                 if not changes_step:
                     raise ValueError("Changes step not found")
                 changes_step = cast(ChangesStep, changes_step)
-                
+
                 # Find the change state for this repo
                 change_state, changes_state_index = next(
                     (
@@ -220,8 +220,12 @@ class AutofixContext(PipelineContext):
                     ),
                     (None, None),
                 )
-                if not (codebase_state.file_changes and change_state and changes_state_index is not None):
-                    logger.warning(f"No valid changes found for repo {codebase_state.repo_external_id}")
+                if not (
+                    codebase_state.file_changes and change_state and changes_state_index is not None
+                ):
+                    logger.warning(
+                        f"No valid changes found for repo {codebase_state.repo_external_id}"
+                    )
                     continue
 
                 key = codebase_state.repo_external_id
@@ -317,9 +321,7 @@ class AutofixContext(PipelineContext):
                     session.add(pr_id_mapping)
                     session.commit()
 
-                if (
-                    pr_to_comment_on_url
-                ):  # for GitHub Copilot, leave a comment that the PR is made
+                if pr_to_comment_on_url:  # for GitHub Copilot, leave a comment that the PR is made
                     repo_client.comment_pr_generated_for_copilot(
                         pr_to_comment_on_url=pr_to_comment_on_url,
                         new_pr_url=pr.html_url,
