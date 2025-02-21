@@ -4,7 +4,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from prophet import Prophet  # type: ignore
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from scipy import special, stats  # type: ignore
 from tsmoothie.smoother import SpectralSmoother  # type: ignore
 
@@ -22,10 +22,6 @@ class ProphetAnomalyDetector(BaseModel):
     anomaly scores by comparing the intervals to observed values.
 
     """
-
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-    )
 
     def predict(
         self,
@@ -53,6 +49,8 @@ class ProphetAnomalyDetector(BaseModel):
         df_train = pd.DataFrame({"ds": timestamps, "y": values})
         df_train.ds = pd.to_datetime(df_train.ds)
         df_train.ds = df_train.ds.dt.tz_localize(None)
+        ts_value_map = df_train.set_index("ds")["y"].to_dict()
+
         df_train.sort_values(by="ds", inplace=True)
 
         df_train, bc_lambda = self._pre_process_data(df_train, time_period)
@@ -60,16 +58,14 @@ class ProphetAnomalyDetector(BaseModel):
 
         future = model.make_future_dataframe(periods=forecast_len, freq=f"{time_period}min")
         forecast = model.predict(future)
-        forecast.index = forecast["ds"]
         forecast.ds = pd.to_datetime(forecast.ds)
+        forecast.index = forecast["ds"]
 
         forecast["actual"] = None
-        timestamps_set = set(timestamps)
-        forecast["actual"] = forecast["ds"].map(
-            lambda x: values[np.where(timestamps == x)[0][0]] if x in timestamps_set else None
-        )
-        forecast["actual"] = forecast["actual"].astype(np.float64)
-        forecast["y"] = forecast["actual"]
+        forecast.actual = forecast.ds.map(lambda x: ts_value_map[x] if x in ts_value_map else None)
+
+        forecast.actual = forecast.actual.astype(np.float64)
+        forecast["y"] = forecast.actual
         forecast = self._add_prophet_uncertainty(
             forecast, model, sensitivity, algo_config, bc_lambda
         )
