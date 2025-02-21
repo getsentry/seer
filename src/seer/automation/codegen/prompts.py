@@ -259,8 +259,8 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
     def format_prompt(formatted_error: str):
         # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L86
         return textwrap.dedent(
-            f"""\
-            {_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error)}
+            """\
+            {error_prompt}
 
             Carefully analyze the issue above. Focus on the error, the stacktrace.
             Think about the context in which the error occurs. What are possible causes to it? How do you fix it?
@@ -268,7 +268,7 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
             For example a TypeError or ValueError is likely to be caused by the application, while a 500 error is likely to be caused by an external service.
             You should have a somewhat high bar for answering that the issue is unfixable.
             """
-        )
+        ).format(prompt_error=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
 
 
 class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
