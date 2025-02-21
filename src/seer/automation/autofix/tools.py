@@ -486,12 +486,12 @@ class BaseTools:
                 FunctionTool(
                     name="ask_a_question",
                     fn=self.ask_user_question,
-                    description="Asks your team members a quick question.",
+                    description="Ask the codeowners a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else.",
                     parameters=[
                         {
                             "name": "question",
                             "type": "string",
-                            "description": "The question you want to ask your team.",
+                            "description": "The question you want to ask.",
                         }
                     ],
                     required=["question"],

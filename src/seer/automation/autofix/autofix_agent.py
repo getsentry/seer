@@ -253,7 +253,7 @@ class AutofixAgent(LlmAgent):
 
         insight_card, usage = create_insight_output(
             latest_thought=text,
-            past_insights=step.get_all_insights(),
+            past_insights=step.get_all_insights(exclude_user_messages=True),
             step_type=step.key,
             memory=self.memory,
             generated_at_memory_index=generated_at_memory_index,
