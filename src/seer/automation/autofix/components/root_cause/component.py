@@ -18,6 +18,7 @@ from seer.automation.autofix.components.root_cause.models import (
     RootCauseAnalysisRequest,
 )
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
+from seer.automation.autofix.prompts import format_repo_prompt
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
@@ -46,9 +47,14 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
         )
 
         with BaseTools(self.context) as tools:
+            state = self.context.state.get()
+
+            readable_repos = state.readable_repos
+            unreadable_repos = state.unreadable_repos
+
             agent = AutofixAgent(
                 tools=(
-                    tools.get_tools()
+                    tools.get_tools(can_access_repos=bool(readable_repos))
                     if not (is_obvious and is_obvious.is_root_cause_clear)
                     else None
                 ),
@@ -60,7 +66,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 name="Root Cause Analysis Agent",
             )
 
-            state = self.context.state.get()
+            repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             try:
                 has_tools = not (is_obvious and is_obvious.is_root_cause_clear)
@@ -74,7 +80,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                                     summary=request.summary,
                                     code_map=request.profile,
                                     instruction=request.instruction,
-                                    repo_names=[repo.full_name for repo in state.request.repos],
+                                    repos_str=repos_str,
                                 )
                                 if not request.initial_memory
                                 else None
@@ -111,7 +117,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                                     summary=request.summary,
                                     code_map=request.profile,
                                     instruction=request.instruction,
-                                    repo_names=[repo.full_name for repo in state.request.repos],
+                                    repos_str=repos_str,
                                 ),
                             )
                         ]

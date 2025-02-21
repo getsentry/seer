@@ -13,6 +13,7 @@ from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionRequest
 from seer.automation.autofix.components.solution.prompts import SolutionPrompts
+from seer.automation.autofix.prompts import format_repo_prompt
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
@@ -127,35 +128,41 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
         with BaseTools(self.context) as tools:
             memory = request.initial_memory
 
+            state = self.context.state.get()
+
+            readable_repos = state.readable_repos
+            unreadable_repos = state.unreadable_repos
+
             is_obvious = False
             if not memory:
                 memory = self._prefill_initial_memory(request)
                 is_obvious = self._is_obvious(request, memory)
 
+            has_tools = (not is_obvious) and bool(readable_repos)
+            repos_str = format_repo_prompt(readable_repos, unreadable_repos)
+
             agent = AutofixAgent(
-                tools=tools.get_tools() if not is_obvious else None,
+                tools=tools.get_tools() if has_tools else None,
                 config=AgentConfig(interactive=True),
                 memory=memory,
                 context=self.context,
                 name="Solution",
             )
 
-            state = self.context.state.get()
             if not request.initial_memory:
                 agent.add_user_message(
                     SolutionPrompts.format_default_msg(
                         event=request.event_details.format_event(),
                         root_cause=request.root_cause_and_fix,
                         summary=request.summary,
-                        repo_names=[repo.full_name for repo in state.request.repos],
+                        repos_str=repos_str,
                         original_instruction=request.original_instruction,
                         code_map=request.profile,
-                        has_tools=not is_obvious,
+                        has_tools=has_tools,
                     ),
                 )
 
             try:
-                has_tools = not is_obvious
                 if has_tools:  # run context gatherer if not obvious
                     response = agent.run(
                         run_config=RunConfig(
@@ -165,7 +172,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                                 event=request.event_details.format_event(),
                                 root_cause=request.root_cause_and_fix,
                                 summary=request.summary,
-                                repo_names=[repo.full_name for repo in state.request.repos],
+                                repos_str=repos_str,
                                 original_instruction=request.original_instruction,
                                 code_map=request.profile,
                                 has_tools=True,
@@ -195,7 +202,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                                     event=request.event_details.format_event(),
                                     root_cause=request.root_cause_and_fix,
                                     summary=request.summary,
-                                    repo_names=[repo.full_name for repo in state.request.repos],
+                                    repos_str=repos_str,
                                     original_instruction=request.original_instruction,
                                     code_map=request.profile,
                                     has_tools=False,
