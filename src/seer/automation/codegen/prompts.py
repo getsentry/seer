@@ -315,6 +315,6 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
               - `short_justification`: a short summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 10 words.
             """
         ).format(
-          error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
-          formatted_warning=formatted_warning
+            error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
+            formatted_warning=formatted_warning,
         )
