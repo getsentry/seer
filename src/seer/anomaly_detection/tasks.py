@@ -207,76 +207,55 @@ def _update_matrix_profiles(
 
 
 @sentry_sdk.trace
-def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig):
+def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig) -> ProphetPrediction:
 
     prophet_detector = ProphetAnomalyDetector()  # TODO: Import this once changes are merged
 
-    # TODO: Can we convert this preprocess function to not use pandas?
-    # Convert the timeseries to a pandas dataframe
-    ds = []
-    y = []
-    for timestep in alert.timeseries:
-        ds.append(timestep.timestamp.timestamp())
-        y.append(timestep.value)
-    df = pd.DataFrame(
-        {
-            "ds": ds,
-            "y": y,
-        }
+    timestamps = []
+    values = []
+    for ts in alert.timeseries:
+        timestamps.append(ts.timestamp.timestamp())
+        values.append(ts.value)
+
+    forecast_len = 24 * (60 // config.time_period)
+    prediction_df = prophet_detector.predict(
+        timestamps, values, forecast_len, config.time_period, config.sensitivity
     )
 
-    # TODO: Replace this to use the detect() function when implemented
-
-    # prophet_detector.detect(df, config)
-
-    # Pre-Process
-    prophet_detector.pre_process_data(df, config.time_period)
-
-    # Fit the model
-    prophet_detector.fit()
-
-    # predict ~24 hours worth of points
-    forecast_len = random.randint(24, 28) * (60 // config.time_period)
-    prediction = prophet_detector.predict(forecast_len)
-
-    # Add Prophet uncertainty
-    prediction = prophet_detector.add_uncertainty(prediction)
-
-    prophet_predictions = []
-    for i in range(forecast_len):
-        prophet_predictions.append(
-            ProphetPrediction(
-                timestamp=datetime.now() + timedelta(minutes=i * config.time_period),
-                yhat=prediction[i]["yhat"],
-                yhat_lower=prediction[i]["yhat_lower"],
-                yhat_upper=prediction[i]["yhat_upper"],
-            )
-        )
-
-    return prophet_predictions
+    return ProphetPrediction(
+        timestamp=prediction_df["ds"],
+        yhat=prediction_df["yhat"],
+        yhat_lower=prediction_df["yhat_lower"],
+        yhat_upper=prediction_df["yhat_upper"],
+    )
 
 
 @sentry_sdk.trace
-def _store_prophet_predictions(alert: DbDynamicAlert, predictions: List[ProphetPrediction]):
+def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPrediction) -> None:
 
     with Session() as session:
 
-        cur_predictions = (
+        # Make sure to skip predictions that have already been stored
+        stored_predictions = (
             session.query(DbProphetAlertTimeSeries)
-            .filter(DbProphetAlertTimeSeries.alert_id == alert.external_alert_id)
+            .filter(
+                DbProphetAlertTimeSeries.alert_id == alert.external_alert_id,
+                DbProphetAlertTimeSeries.timestamp >= datetime.now(),
+            )
             .all()
         )
+        stored_predictions_timestamps = [prediction.timestamp for prediction in stored_predictions]
 
-        cur_predictions_timestamps = [prediction.timestamp for prediction in cur_predictions]
-
-        for prediction in predictions:
-            if prediction.timestamp not in cur_predictions_timestamps:
+        for timestamp, yhat, yhat_lower, yhat_upper in zip(
+            predictions.timestamp, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
+        ):
+            if timestamp not in stored_predictions_timestamps:
                 prophet_prediction = DbProphetAlertTimeSeries(
                     alert_id=alert.external_alert_id,
-                    timestamp=prediction.timestamp,
-                    yhat=prediction.yhat,
-                    yhat_lower=prediction.yhat_lower,
-                    yhat_upper=prediction.yhat_upper,
+                    timestamp=timestamp,
+                    yhat=yhat,
+                    yhat_lower=yhat_lower,
+                    yhat_upper=yhat_upper,
                 )
                 session.add(prophet_prediction)
         session.commit()

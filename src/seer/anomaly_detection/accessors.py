@@ -40,7 +40,7 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         external_alert_id: int,
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
-        prophet_predictions: List[ProphetPrediction],
+        prophet_predictions: ProphetPrediction,
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
         data_purge_flag: str,
@@ -105,7 +105,12 @@ class DbAlertDataAccessor(AlertDataAccessor):
         mp_fixed = []
         original_flags = ["none"] * n_points
         use_suss = [True] * n_points
-        prophet_predictions = []
+
+        n_predictions = len(db_alert.prophet_predictions)
+        prophet_timestamps = [0.0] * n_predictions
+        prophet_yhats = [0.0] * n_predictions
+        prophet_yhat_lowers = [0.0] * n_predictions
+        prophet_yhat_uppers = [0.0] * n_predictions
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
         only_suss = len(timeseries) > 0 and any(
@@ -155,18 +160,13 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 num_old_points += 1
 
         num_predictions_remaining = 0
-        if db_alert.prophet_predictions is not None:
-            for i, prediction in enumerate(db_alert.prophet_predictions):
-                prophet_predictions.append(
-                    ProphetPrediction(
-                        timestamp=prediction.timestamp,
-                        yhat=prediction.yhat,
-                        yhat_lower=prediction.yhat_lower,
-                        yhat_upper=prediction.yhat_upper,
-                    )
-                )
-                if prediction.timestamp > datetime.now().timestamp():
-                    num_predictions_remaining += 1
+        for i, prediction in enumerate(db_alert.prophet_predictions):
+            prophet_timestamps[i] = prediction.timestamp
+            prophet_yhats[i] = prediction.yhat
+            prophet_yhat_lowers[i] = prediction.yhat_lower
+            prophet_yhat_uppers[i] = prediction.yhat_upper
+            if prediction.timestamp > datetime.now().timestamp():
+                num_predictions_remaining += 1
 
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
@@ -210,7 +210,12 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     12 * (60 // db_alert.config.time_period)
                 ),  # Num predictions for 12 hours
             ),
-            prophet_predictions=prophet_predictions,
+            prophet_predictions=ProphetPredictions(
+                timestamps=prophet_timestamps,
+                yhats=prophet_yhats,
+                yhat_lowers=prophet_yhat_lowers,
+                yhat_uppers=prophet_yhat_uppers,
+            ),
             only_suss=only_suss,
         )
 
@@ -241,7 +246,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
         anomalies: TimeSeriesAnomalies,
-        prophet_predictions: List[ProphetPrediction],
+        prophet_predictions: ProphetPrediction,  # TODO: Potentially create new model for this
         anomaly_algo_data: dict,
         data_purge_flag: str,
     ):
@@ -267,17 +272,18 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 session.execute(delete_q)
                 session.flush()
 
-            prophet_predictions = []
-            if prophet_predictions is not None:
-                prophet_predictions = [
-                    DbProphetAlertTimeSeries(
-                        timestamp=datetime.fromtimestamp(prediction.timestamp),
-                        yhat=prediction.yhat,
-                        yhat_lower=prediction.yhat_lower,
-                        yhat_upper=prediction.yhat_upper,
-                    )
-                    for prediction in prophet_predictions
-                ]
+            # TODO: Add prophet predictions to the database
+            # prophet_predictions = []
+            # if prophet_predictions is not None:
+            #     prophet_predictions = [
+            #         DbProphetAlertTimeSeries(
+            #             timestamp=datetime.fromtimestamp(prediction.timestamp),
+            #             yhat=prediction.yhat,
+            #             yhat_lower=prediction.yhat_lower,
+            #             yhat_upper=prediction.yhat_upper,
+            #         )
+            #         for prediction in prophet_predictions
+            #     ]
             algo_data = anomalies.get_anomaly_algo_data(len(timeseries))
             new_record = DbDynamicAlert(
                 organization_id=organization_id,

@@ -83,7 +83,7 @@ class StoreDataRequest(BaseModel):
     alert: AlertInSeer
     config: AnomalyDetectionConfig
     timeseries: List[TimeSeriesPoint]
-    prophet_predictions: Optional[List[ProphetPrediction]] = Field(None)
+    prophet_predictions: Optional[ProphetPrediction] = Field(None)
 
 
 class StoreDataResponse(BaseModel):
