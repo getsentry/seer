@@ -164,12 +164,13 @@ class AssociateWarningsWithIssuesComponent(
         return AssociateWarningsWithIssuesOutput(candidate_associations=candidate_associations)
 
 
-def _is_issue_fixable_cache_key(llm_client: LlmClient, issue: IssueDetails) -> tuple[str]:
+def _is_issue_fixable_cache_key(issue: IssueDetails) -> tuple[str]:
     return hashkey(issue.id)
 
 
 @cached(cache=LRUCache(maxsize=2048), key=_is_issue_fixable_cache_key)
-def _is_issue_fixable(llm_client: LlmClient, issue: IssueDetails) -> bool:
+@inject
+def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> bool:
     # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
     # a repo has a set of files which are frequently used to handle and raise exceptions.
     completion = llm_client.generate_structured(
@@ -199,10 +200,7 @@ class AreIssuesFixableComponent(
 
     @observe(name="Codegen - Relevant Warnings - Predict Issue Fixability Component")
     @ai_track(description="Codegen - Relevant Warnings - Predict Issue Fixability Component")
-    @inject
-    def invoke(
-        self, request: CodeAreIssuesFixableRequest, llm_client: LlmClient = injected
-    ) -> CodeAreIssuesFixableOutput:
+    def invoke(self, request: CodeAreIssuesFixableRequest) -> CodeAreIssuesFixableOutput:
         """
         It's fine if there are duplicate issues in the request. That can happen if issues were
         passed in from a list of warning-issue associations.
@@ -211,8 +209,7 @@ class AreIssuesFixableComponent(
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
         issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
         issue_id_to_is_fixable = {
-            issue_id: _is_issue_fixable(llm_client, issue_id_to_issue[issue_id])
-            for issue_id in issue_ids
+            issue_id: _is_issue_fixable(issue_id_to_issue[issue_id]) for issue_id in issue_ids
         }
         return CodeAreIssuesFixableOutput(
             are_fixable=[issue_id_to_is_fixable.get(issue.id) for issue in request.candidate_issues]

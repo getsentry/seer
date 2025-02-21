@@ -268,7 +268,7 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
             For example a TypeError or ValueError is likely to be caused by the application, while a 500 error is likely to be caused by an external service.
             You should have a somewhat high bar for answering that the issue is unfixable.
             """
-        ).format(prompt_error=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
+        ).format(error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
 
 
 class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
