@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from johen import generate
 
-from seer.automation.agent.client import GoogleProviderEmbeddings
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.agent.models import LlmGenerateStructuredResponse
 from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext

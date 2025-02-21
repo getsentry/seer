@@ -7,12 +7,8 @@ from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import (
-    GeminiProvider,
-    GoogleProviderEmbeddings,
-    LlmClient,
-    OpenAiProvider,
-)
+from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,

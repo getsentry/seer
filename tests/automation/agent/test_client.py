@@ -11,7 +11,6 @@ from vertexai.language_models import (  # type: ignore[import-untyped]
 from seer.automation.agent.client import (
     AnthropicProvider,
     GeminiProvider,
-    GoogleProviderEmbeddings,
     LlmClient,
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
@@ -21,6 +20,7 @@ from seer.automation.agent.client import (
     ToolCall,
     Usage,
 )
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.agent.models import LlmRefusalError
 from seer.automation.agent.tools import FunctionTool
 
