@@ -141,11 +141,14 @@ class AssociateWarningsWithIssuesComponent(
     ) -> AssociateWarningsWithIssuesOutput:
 
         warnings_formatted = [warning.format_warning() for warning in request.warnings]
-        issues_with_pr_filename = [
-            (issue, filename)
+        issue_id_to_issue_with_pr_filename = {
+            issue.id: (issue, filename)
             for filename, issues in request.filename_to_issues.items()
             for issue in issues
-        ]
+        }
+        # De-duplicate in case the same issue is present across multiple files. That's possible when
+        # the issue's stacktrace matches multiple files modified in the commit.
+        issues_with_pr_filename = list(issue_id_to_issue_with_pr_filename.values())
         issues_formatted = [
             self._format_issue_with_related_filename(issue, pr_filename)
             for issue, pr_filename in issues_with_pr_filename
