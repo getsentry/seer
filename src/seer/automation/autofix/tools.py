@@ -1,6 +1,5 @@
 import fnmatch
 import logging
-import os
 import textwrap
 
 from langfuse.decorators import observe
@@ -223,7 +222,6 @@ class BaseTools:
         self,
         keyword: str,
         supported_extensions: list[str],
-        in_proximity_to: str | None = None,
     ):
         """
         Searches for a keyword in the codebase.
@@ -253,7 +251,6 @@ class BaseTools:
             searcher = CodeSearcher(
                 directory=tmp_repo_dir,
                 supported_extensions=set(supported_extensions),
-                start_path=in_proximity_to,
             )
 
             results = searcher.search(keyword)
@@ -280,10 +277,10 @@ class BaseTools:
     @ai_track(description="File Search")
     def file_search(
         self,
-        filename: str,
+        subpath: str,
     ):
         """
-        Given a filename with extension returns the list of locations where a file with the name is found.
+        Given a subpath, returns the list of locations where a file containing the subpath is found.
         """
         repo_names = self._get_repo_names()
         found_files = ""
@@ -293,17 +290,15 @@ class BaseTools:
                 repo_name=repo_name, type=self.repo_client_type
             )
             all_paths = repo_client.get_index_file_set()
-            found = [
-                path for path in all_paths if os.path.basename(path).lower() == filename.lower()
-            ]
+            found = [path for path in all_paths if subpath in path.lower()]
             if found:
                 found_files += f"\n FILES IN REPO {repo_name}:\n"
                 found_files += "\n".join([f"  {path}" for path in sorted(found)])
 
-        self.context.event_manager.add_log(f"Searching for file `{filename}`...")
+        self.context.event_manager.add_log(f"Searching for file `{subpath}`...")
 
         if len(found_files) == 0:
-            return f"no file with name {filename} found in any repository"
+            return f"no file with subpath {subpath} found in any repository"
 
         return found_files
 
@@ -416,26 +411,21 @@ class BaseTools:
                         "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
                         "items": {"type": "string"},
                     },
-                    {
-                        "name": "in_proximity_to",
-                        "type": "string",
-                        "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
-                    },
                 ],
                 required=["keyword", "supported_extensions"],
             ),
             FunctionTool(
                 name="file_search",
                 fn=self.file_search,
-                description="Searches for a file in the codebase.",
+                description="Returns a list of file paths in the codebase that contain the given subpath.",
                 parameters=[
                     {
-                        "name": "filename",
+                        "name": "subpath",
                         "type": "string",
-                        "description": "The file to search for.",
+                        "description": "A string that will be matched against any file path in the codebase. Will match with any file path that contains the given string.",
                     },
                 ],
-                required=["filename"],
+                required=["subpath"],
             ),
             FunctionTool(
                 name="file_search_wildcard",
