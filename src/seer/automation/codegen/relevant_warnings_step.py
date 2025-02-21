@@ -92,8 +92,7 @@ class RelevantWarningsStep(CodegenStep):
             data=request_data,
         )
 
-    # TODO(kddubey): is this @observe doing anything useful? This method doesn't return anything.
-    @observe(name="Codegen - Relevant Warnings")
+    @observe(name="Codegen - Relevant Warnings Step")
     @ai_track(description="Codegen - Relevant Warnings Step")
     def _invoke(self, **kwargs):
         self.logger.info("Executing Codegen - Relevant Warnings Step")

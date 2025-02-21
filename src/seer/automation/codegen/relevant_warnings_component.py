@@ -87,8 +87,8 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             for filename, issues in filename_to_issues.items()
         }
 
-    @observe(name="Fetch Issues")
-    @ai_track(description="Fetch Issues")
+    @observe(name="Codegen - Relevant Warnings - Fetch Issues Component")
+    @ai_track(description="Codegen - Relevant Warnings - Fetch Issues Component")
     def invoke(self, request: CodeFetchIssuesRequest) -> CodeFetchIssuesOutput:
         # TODO(kddubey): is this filename the same format as what open_pr_comment uses?
         # Need to ensure matchability wrt sentry stacktrace frame filenames
@@ -134,8 +134,8 @@ class AssociateWarningsWithIssuesComponent(
         top_k_indices = np.unravel_index(flat_indices_sorted_by_distance[:k], distances.shape)
         return list(zip(*top_k_indices))
 
-    @observe(name="Associate Warnings With Issues")
-    @ai_track(description="Associate Warnings With Issues")
+    @observe(name="Codegen - Relevant Warnings - Associate Warnings With Issues Component")
+    @ai_track(description="Codegen - Relevant Warnings - Associate Warnings With Issues Component")
     def invoke(
         self, request: AssociateWarningsWithIssuesRequest
     ) -> AssociateWarningsWithIssuesOutput:
@@ -203,8 +203,8 @@ class AreIssuesFixableComponent(
 
     context: CodegenContext
 
-    @observe(name="Predict Issue Fixability")
-    @ai_track(description="Predict Issue Fixability")
+    @observe(name="Codegen - Relevant Warnings - Predict Issue Fixability Component")
+    @ai_track(description="Codegen - Relevant Warnings - Predict Issue Fixability Component")
     @inject
     def invoke(
         self, request: CodeAreIssuesFixableRequest, llm_client: LlmClient = injected
@@ -236,8 +236,8 @@ class PredictRelevantWarningsComponent(
 
     context: CodegenContext
 
-    @observe(name="Predict Relevant Warnings")
-    @ai_track(description="Predict Relevant Warnings")
+    @observe(name="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
+    @ai_track(description="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
     @inject
     def invoke(
         self, request: CodePredictRelevantWarningsRequest, llm_client: LlmClient = injected
