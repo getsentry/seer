@@ -288,8 +288,8 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
         #
         # Simply asking for the `relevance_probability` is inspired by: https://arxiv.org/abs/2305.14975
         return textwrap.dedent(
-            f"""\
-            {_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error)}
+            """\
+            {error_prompt}
 
             Here is a warning that just surfaced in our codebase:
 
@@ -314,4 +314,7 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
                 This description must focus on the problem and not the warning itself. It should be at most 10 words.
               - `short_justification`: a short summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 10 words.
             """
+        ).format(
+          error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
+          formatted_warning=formatted_warning
         )
