@@ -86,9 +86,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         prompt = textwrap.dedent(
             """
             Merge all changes from the <update> snippet into the <code> below.
+            - Output only the final code file including the changes from the <update> snippet, enclosed within <updated_code> and </updated_code> tags.
             - Preserve the code's structure, order, comments, and indentation exactly.
-            - Output only the updated code, enclosed within <updated_code> and </updated_code> tags.
             - Do not include any other text, explanations, placeholders, ellipses, or code fences.
+            - If the update has placeholders such as in comments and ellipses, replace and integrate the placeholders with the appropriate code.
+              - For example, replace things in the updated code such as "The rest of the code..." with the actual code that should be there.
 
             <code>{original_content}</code>
 

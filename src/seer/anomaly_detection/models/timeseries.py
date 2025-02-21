@@ -10,6 +10,29 @@ from seer.anomaly_detection.models.timeseries_anomalies import (
 )
 
 
+class ProphetPrediction(BaseModel):
+    timestamps: npt.NDArray[np.float64] = Field(
+        ...,
+        description="Time stamps for the timeseries. There should be one-to-one correspondence between the timestamps and the values.",
+    )
+    yhat: npt.NDArray[np.float64] = Field(
+        ...,
+        description="The timeseries values. There should be one-to-one correspondence between the timestamps and the values.",
+    )
+    yhat_lower: npt.NDArray[np.float64] = Field(
+        ...,
+        description="The timeseries values. There should be one-to-one correspondence between the timestamps and the values.",
+    )
+    yhat_upper: npt.NDArray[np.float64] = Field(
+        ...,
+        description="The timeseries values. There should be one-to-one correspondence between the timestamps and the values.",
+    )
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
+
+
 class TimeSeries(BaseModel):
     timestamps: npt.NDArray[np.float64] = Field(
         ...,
@@ -23,6 +46,11 @@ class TimeSeries(BaseModel):
     anomalies: Optional[TimeSeriesAnomalies] = Field(
         None,
         description="Anomalies identified in time series",
+    )
+
+    prophet_predictions: Optional[ProphetPrediction] = Field(
+        None,
+        description="Prophet prediction for the timeseries",
     )
 
     model_config = ConfigDict(

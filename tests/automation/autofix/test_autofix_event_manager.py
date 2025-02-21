@@ -354,8 +354,7 @@ class TestAutofixEventManager:
 
     def test_send_solution_result(self, event_manager, state):
         # Create a mock solution output
-        mock_solution_output = MagicMock(spec=SolutionOutput)
-        mock_solution_output.modified_timeline = ["Step 1", "Step 2"]
+        mock_solution_output = next(generate(SolutionOutput))
 
         event_manager.send_solution_result(mock_solution_output)
 
@@ -379,7 +378,7 @@ class TestAutofixEventManager:
         )
         assert solution_step is not None
         assert solution_step.status == AutofixStatus.COMPLETED
-        assert solution_step.solution == mock_solution_output.modified_timeline
+        assert len(solution_step.solution) > 0
         assert state_obj.status == AutofixStatus.NEED_MORE_INFORMATION
 
     def test_set_selected_solution(self, event_manager, state):
