@@ -172,7 +172,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             ),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
-                            max_iterations=24,
+                            max_iterations=32,
                         ),
                     )
 

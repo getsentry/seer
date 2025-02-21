@@ -197,11 +197,12 @@ class DefaultStep(BaseStep):
     insights: list[InsightSharingOutput] = []
     initial_memory_length: int = 1
 
-    def get_all_insights(self):
+    def get_all_insights(self, exclude_user_messages: bool = False):
         insights = []
         if self.status != AutofixStatus.ERROR and isinstance(self, DefaultStep):
             for insight in self.insights:
-                insights.append(insight.insight)
+                if not exclude_user_messages or insight.justification != "USER":
+                    insights.append(insight.insight)
         return insights
 
 

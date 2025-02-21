@@ -363,11 +363,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 cur.usage += agent.usage
 
             if not response:
-                return None
+                raise ValueError("No response from coding agent")
 
             code_changes_output = self._parse_code_changes_xml(response, agent)
             if not code_changes_output:
-                return None
+                raise ValueError("No code changes output from coding agent")
 
             code_changes_output = self._fix_file_existence_errors(code_changes_output, agent)
 

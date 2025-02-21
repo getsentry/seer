@@ -17,7 +17,7 @@ class SolutionPrompts:
     def format_system_msg():
         return textwrap.dedent(
             """\
-            You are an exceptional principal engineer that is amazing at researching bugs in codebases.
+            You are an exceptional AI system that is amazing at researching bugs in codebases.
 
             You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
 
@@ -94,8 +94,7 @@ class SolutionPrompts:
             GOAL: Gather all information that may be needed to plan a fix for this issue.
 
             # Guidelines:
-            {ask_questions_instructions}
-            {search_google_instructions}
+            - Your job is to simply gather all information needed. You may not propose code changes yourself.
             {think_tools_instructions}"""
         ).format(
             event_str=event,
@@ -109,16 +108,6 @@ class SolutionPrompts:
             summary_str=format_summary(summary),
             think_tools_instructions=(
                 "- EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you."
-                if has_tools
-                else ""
-            ),
-            ask_questions_instructions=(
-                "- At any point, please feel free to ask your teammates any specific questions that would help you in your analysis that you cannot answer from analyzing the code."
-                if has_tools
-                else ""
-            ),
-            search_google_instructions=(
-                "- At any point, please feel free to Google for information that would help you in your analysis, using the tool provided."
                 if has_tools
                 else ""
             ),
@@ -142,5 +131,5 @@ class SolutionPrompts:
     def solution_proposal_msg():
         return textwrap.dedent(
             """\
-            Based on all the information gathered, provide the most actionable and effective steps to fix the issue. Each step should include the needed code changes."""
+            Based on all the information gathered, provide the most actionable and effective steps to fix the issue. You should propose code changes for each step."""
         )
