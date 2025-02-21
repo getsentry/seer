@@ -4,7 +4,6 @@ from seer.automation.codegen.models import (
     CodegenPrReviewResponse,
     CodegenRelevantWarningsRequest,
     CodegenRelevantWarningsResponse,
-    CodegenRelevantWarningsStateRequest,
     CodegenStatus,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
@@ -131,8 +130,3 @@ def codegen_relevant_warnings(
     ).apply_async()
 
     return CodegenRelevantWarningsResponse(run_id=cur_state.run_id)
-
-
-def get_relevant_warnings_state(request: CodegenRelevantWarningsStateRequest):
-    state = CodegenContinuationState(id=request.run_id, type=DbStateRunTypes.RELEVANT_WARNINGS)
-    return state.get()

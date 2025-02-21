@@ -53,18 +53,14 @@ from seer.automation.codegen.models import (
     CodegenPrReviewStateResponse,
     CodegenRelevantWarningsRequest,
     CodegenRelevantWarningsResponse,
-    CodegenRelevantWarningsStateRequest,
-    CodegenRelevantWarningsStateResponse,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
-    CodePredictRelevantWarningsOutput,
 )
 from seer.automation.codegen.tasks import (
     codegen_pr_review,
     codegen_relevant_warnings,
     codegen_unittest,
-    get_relevant_warnings_state,
     get_unittest_state,
 )
 from seer.automation.summarize.issue import run_summarize_issue
@@ -277,32 +273,6 @@ def codegen_relevant_warnings_endpoint(
     return codegen_relevant_warnings(data)
 
 
-@json_api(blueprint, "/v1/automation/codegen/relevant-warnings/state")
-def codegen_relevant_warnings_state_endpoint(
-    data: CodegenRelevantWarningsStateRequest,
-) -> CodegenRelevantWarningsStateResponse:
-    state = get_relevant_warnings_state(data)
-
-    return CodegenRelevantWarningsStateResponse(
-        run_id=state.run_id,
-        status=state.status,
-        relevant_warning_results=state.relevant_warning_results,
-        triggered_at=state.last_triggered_at,
-        updated_at=state.updated_at,
-        completed_at=state.completed_at,
-    )
-
-
-@json_api(blueprint, "/v1/automation/codegen/relevant-warnings/results")
-def codegen_relevant_warnings_results_endpoint(
-    data: CodegenRelevantWarningsStateRequest,
-) -> CodePredictRelevantWarningsOutput:
-    state = get_relevant_warnings_state(data)
-    return CodePredictRelevantWarningsOutput(
-        relevant_warning_results=state.relevant_warning_results
-    )
-
-
 @json_api(blueprint, "/v1/automation/codegen/pr-review")
 def codegen_pr_review_endpoint(data: CodegenBaseRequest) -> CodegenPrReviewResponse:
     return codegen_pr_review(data)
@@ -330,13 +300,6 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
-    elif data.request_type == "relevant-warnings":
-        if not isinstance(data.data, CodegenRelevantWarningsRequest):
-            raise TypeError(
-                f"Invalid request data type: {type(data.data)}. "
-                "Expected CodegenRelevantWarningsRequest."
-            )
-        return codegen_relevant_warnings_endpoint(data.data)
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
