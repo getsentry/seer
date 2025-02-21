@@ -240,12 +240,12 @@ class _RelevantWarningsPromptPrefix:
         together.
         """
         return textwrap.dedent(
-            f"""\
+            """\
             Here is an issue we had in our codebase:
 
             {formatted_error}
             """
-        )
+        ).format(formatted_error=formatted_error)
 
 
 class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
