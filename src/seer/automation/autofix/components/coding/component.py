@@ -378,13 +378,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             self.context.event_manager.add_log("Rewriting your unfortunate code...")
             tasks_with_diffs: list[PlanTaskPromptXml] = []
 
-            # Resolve LlmClient once in the main thread
-            resolved_llm_client = self._get_llm_client()
-            resolved_app_config = self._get_app_config()
-
             @observe(name="Process Change Task")
             @ai_track(description="Process Change Task")
-            def process_task(task: CodeChangeXml, llm_client: LlmClient, app_config: AppConfig):
+            def process_task(task: CodeChangeXml):
                 repo_client = self.context.get_repo_client(task.repo_name)
                 if task.type == "file_change":
                     file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
@@ -450,8 +446,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     executor.submit(
                         process_task,
                         task,
-                        resolved_llm_client,
-                        resolved_app_config,
                         langfuse_parent_trace_id=trace_id,  # type: ignore
                         langfuse_parent_observation_id=observation_id,  # type: ignore
                     )
