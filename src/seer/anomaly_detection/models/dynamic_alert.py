@@ -18,5 +18,4 @@ class DynamicAlert(BaseModel):
     timeseries: TimeSeries
     anomalies: TimeSeriesAnomalies
     cleanup_predict_config: CleanupPredictConfig
-    # prophet_predictions: ProphetPrediction
     only_suss: bool

@@ -107,10 +107,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
         use_suss = [True] * n_points
 
         n_predictions = len(db_alert.prophet_predictions)
-        prophet_timestamps = [0.0] * n_predictions
-        prophet_yhats = [0.0] * n_predictions
-        prophet_yhat_lowers = [0.0] * n_predictions
-        prophet_yhat_uppers = [0.0] * n_predictions
+        prophet_timestamps = np.array([0.0] * n_predictions)
+        prophet_yhats = np.array([0.0] * n_predictions)
+        prophet_yhat_lowers = np.array([0.0] * n_predictions)
+        prophet_yhat_uppers = np.array([0.0] * n_predictions)
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
         only_suss = len(timeseries) > 0 and any(

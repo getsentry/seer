@@ -435,7 +435,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )
 
-        assert alert_data_accessor.can_queue_cleanup_and_predict_task(external_alert_id)
+        assert alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
 
         # Manually adjust dynamic_alert and assert accordingly
         with Session() as session:
@@ -447,14 +447,14 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
             dynamic_alert.data_purge_flag = TaskStatus.PROCESSING
             session.commit()
-            assert not alert_data_accessor.can_queue_cleanup_and_predict_task(external_alert_id)
+            assert not alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
 
             dynamic_alert.last_queued_at = datetime.now()
             session.commit()
-            assert not alert_data_accessor.can_queue_cleanup_and_predict_task(external_alert_id)
+            assert not alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
 
         with self.assertRaises(Exception):
-            alert_data_accessor.can_queue_cleanup_and_predict_task(999)
+            alert_data_accessor.can_queue_cleanup_predict_task(999)
 
     def test_delete_alert_data(self):
         # Create and save alert
@@ -534,7 +534,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )
 
-        alert_data_accessor.reset_cleanup_and_predict_task(external_alert_id)
+        alert_data_accessor.reset_cleanup_predict_task(external_alert_id)
 
         with Session() as session:
             dynamic_alert = (
@@ -548,7 +548,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             assert dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
 
         with self.assertRaises(Exception):
-            alert_data_accessor.reset_cleanup_and_predict_task(999)
+            alert_data_accessor.reset_cleanup_predict_task(999)
 
     def test_combine_anomalies(self):
         suss_thresholds = [

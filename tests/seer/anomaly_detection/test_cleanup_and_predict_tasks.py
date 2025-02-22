@@ -36,26 +36,14 @@ class TestCleanupTasks(unittest.TestCase):
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
         points_old = [
-            TimeSeriesPoint(timestamp=past_ts + (i * 100), value=random.randint(1, 100))
+            TimeSeriesPoint(timestamp=past_ts + (i * 3600000), value=random.randint(1, 100))
             for i in range(num_old_points)
         ]
         points_new = [
-            TimeSeriesPoint(timestamp=cur_ts + (i * 100), value=random.randint(1, 100))
+            TimeSeriesPoint(timestamp=cur_ts + (i * 3600000), value=random.randint(1, 100))
             for i in range(num_new_points)
         ]
         points = [*points_old, *points_new]
-
-        prophet_predictions_old = [
-            ProphetPrediction(timestamp=past_ts + (i * 100), yhat=random.randint(1, 100))
-            for i in range(num_old_points)
-        ]
-
-        prophet_predictions_new = [
-            ProphetPrediction(timestamp=cur_ts + (i * 100), yhat=random.randint(1, 100))
-            for i in range(num_new_points)
-        ]
-
-        prophet_predictions = [*prophet_predictions_old, *prophet_predictions_new]
 
         ts = TimeSeries(
             timestamps=np.array([point.timestamp for point in points]),
@@ -82,7 +70,6 @@ class TestCleanupTasks(unittest.TestCase):
             external_alert_id=external_alert_id,
             config=config,
             timeseries=points,
-            prophet_predictions=prophet_predictions,
             anomalies=anomalies,
             anomaly_algo_data={"window_size": anomalies.window_size},
             data_purge_flag=TaskStatus.NOT_QUEUED,
@@ -96,7 +83,7 @@ class TestCleanupTasks(unittest.TestCase):
             assert alert is not None
             assert len(alert.timeseries) == len(points)
 
-        return external_alert_id, config, points, anomalies, prophet_predictions
+        return external_alert_id, config, points, anomalies
 
     def test_cleanup_invalid_alert_id(self):
         with self.assertRaises(ValueError, msg="Alert with id 100 not found"):
@@ -104,15 +91,13 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
-        external_alert_id, config, _, _, _ = self._save_alert(0, 0, 0)
+        external_alert_id, config, _, _ = self._save_alert(0, 0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
-        external_alert_id, config, points, anomalies, prophet_predictions = self._save_alert(
-            0, 1000, 0
-        )
+        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
@@ -137,9 +122,7 @@ class TestCleanupTasks(unittest.TestCase):
     ):  # TODO: Confirm the logic for prophet predictions in this test
 
         # Create and save alert with 2000 points (1000 old, 1000 new)
-        external_alert_id, config, points, anomalies, prophet_predictions = self._save_alert(
-            0, 1000, 1000
-        )
+        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 1000)
         points_new = points[1000:]
         ts_new = TimeSeries(
             timestamps=np.array([point.timestamp for point in points_new]),
@@ -150,7 +133,6 @@ class TestCleanupTasks(unittest.TestCase):
         )  # TODO: Need to update this and the entire test to use the Combined Anomalies when implemented
 
         old_timeseries_points = []
-        old_prophet_predictions = []
         with Session() as session:
             alert = (
                 session.query(DbDynamicAlert)
@@ -159,9 +141,8 @@ class TestCleanupTasks(unittest.TestCase):
             )
             assert alert is not None
             assert len(alert.timeseries) == 2000
-            assert len(alert.prophet_predictions) == 2000
+            assert len(alert.prophet_predictions) == 0
             old_timeseries_points = alert.timeseries
-            old_prophet_predictions = alert.prophet_predictions
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
@@ -212,25 +193,16 @@ class TestCleanupTasks(unittest.TestCase):
                         and "r_idx" in new.anomaly_algo_data["mp_fixed"]
                     )
 
-            new_prophet_predictions = alert.prophet_predictions
-            assert old_prophet_predictions != new_prophet_predictions
-
-            for old, new in zip(old_prophet_predictions[1000:], new_prophet_predictions):
-                assert old.timestamp == new.timestamp
-                assert old.yhat == new.yhat
-                assert old.yhat_lower == new.yhat_lower
-                assert old.yhat_upper == new.yhat_upper
-
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
             cleanup_timeseries_and_predict(999, date_threshold)
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
-        external_alert_id1, _, _, _, _ = self._save_alert(1, 1000, 0)
-        external_alert_id2, _, _, _, _ = self._save_alert(2, 500, 0)
-        external_alert_id3, _, _, _, _ = self._save_alert(3, 0, 500)
-        external_alert_id4, _, _, _, _ = self._save_alert(4, 0, 500)
+        external_alert_id1, _, _, _ = self._save_alert(1, 1000, 0)
+        external_alert_id2, _, _, _ = self._save_alert(2, 500, 0)
+        external_alert_id3, _, _, _ = self._save_alert(3, 0, 500)
+        external_alert_id4, _, _, _ = self._save_alert(4, 0, 500)
 
         # Set last_queued_at to be over 28 days ago for alerts 1 and 2
         with Session() as session:
@@ -290,11 +262,10 @@ class TestCleanupTasks(unittest.TestCase):
 
             assert alert is not None
             assert len(alert.timeseries) == 500
-            assert len(alert.prophet_predictions) == 500
 
     def test_cleanup_old_timeseries_history(self):
         # Create and save alert with 1000 points (all old)
-        external_alert_id, _, _, _, _ = self._save_alert(0, 1000, 0)
+        external_alert_id, _, _, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
@@ -307,13 +278,6 @@ class TestCleanupTasks(unittest.TestCase):
                 .all()
             )
             assert len(history) == 1000
-
-            prophet_predictions_history = (
-                session.query(DbProphetAlertTimeSeriesHistory)
-                .filter(DbProphetAlertTimeSeriesHistory.alert_id == external_alert_id)
-                .all()
-            )
-            assert len(prophet_predictions_history) == 1000
 
         # Timeseries History should be deleted as these points have been added over 90 days ago
 

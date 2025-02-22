@@ -23,6 +23,7 @@ class ProphetAnomalyDetector(BaseModel):
 
     """
 
+    @inject
     def predict(
         self,
         timestamps: npt.NDArray[np.float64],
@@ -52,8 +53,14 @@ class ProphetAnomalyDetector(BaseModel):
         ts_value_map = df_train.set_index("ds")["y"].to_dict()
 
         df_train.sort_values(by="ds", inplace=True)
+        print("============================df train BEFORE==================================")
+        print(df_train)
+        print("==============================================================")
 
         df_train, bc_lambda = self._pre_process_data(df_train, time_period)
+        print("============================df train AFTER==================================")
+        print(df_train)
+        print("==============================================================")
         model = self._fit(df_train, sensitivity, algo_config)
 
         future = model.make_future_dataframe(periods=forecast_len, freq=f"{time_period}min")
@@ -112,7 +119,6 @@ class ProphetAnomalyDetector(BaseModel):
         # train_df.reset_index(drop=True, inplace=True)
         return train_df, bc_lambda
 
-    @inject
     def _fit(
         self,
         df: pd.DataFrame,
@@ -130,6 +136,10 @@ class ProphetAnomalyDetector(BaseModel):
         Returns:
             The fitted prophet model object
         """
+
+        print("==============================================================")
+        print(df)
+        print("==============================================================")
         model_params = algo_config.get_prophet_params(sensitivity)
 
         prophet = Prophet(
@@ -166,7 +176,6 @@ class ProphetAnomalyDetector(BaseModel):
         model = prophet.fit(df=df, iter=250)
         return model
 
-    @inject
     def _add_prophet_uncertainty(
         self,
         df: pd.DataFrame,
