@@ -403,9 +403,11 @@ class DbProphetAlertTimeSeries(Base):
         UniqueConstraint("dynamic_alert_id", "timestamp"),
         Index("ix_prophet_alert_time_series_alert_id_timestamp", "dynamic_alert_id", "timestamp"),
     )
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    dynamic_alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dynamic_alert_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(DbDynamicAlert.id, ondelete="CASCADE"), nullable=False
+    )
+    timestamp: Mapped[datetime.datetime] = mapped_column(TIMESTAMP(timezone=False), nullable=False)
     yhat: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
