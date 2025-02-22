@@ -449,7 +449,6 @@ class AnomalyDetection(BaseModel):
                     "project_id": request.project_id,
                     "external_alert_id": request.alert.id,
                     "num_datapoints": len(request.timeseries),
-                    "num_predictions": len(request.prophet_predictions),
                     "minimum_required": min_len,
                     "config": request.config.model_dump(),
                 },
@@ -463,7 +462,6 @@ class AnomalyDetection(BaseModel):
                 "project_id": request.project_id,
                 "external_alert_id": request.alert.id,
                 "num_datapoints": len(request.timeseries),
-                "num_predictions": len(request.prophet_predictions),
                 "config": request.config.model_dump(),
             },
         )
@@ -491,7 +489,6 @@ class AnomalyDetection(BaseModel):
             config=request.config,
             timeseries=ts,
             anomalies=anomalies,
-            prophet_predictions=request.prophet_predictions,
             anomaly_algo_data={"window_size": anomalies.window_size},
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )

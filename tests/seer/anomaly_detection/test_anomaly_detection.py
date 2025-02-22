@@ -11,7 +11,7 @@ from seer.anomaly_detection.models import (
     MPTimeSeries,
     MPTimeSeriesAnomaliesSingleWindow,
 )
-from seer.anomaly_detection.models.cleanup_predict import CleanupConfig
+from seer.anomaly_detection.models.cleanup_predict import CleanupPredictConfig
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     AnomalyDetectionConfig,
@@ -157,8 +157,12 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        cleanup_config = CleanupConfig(
-            num_old_points=0, timestamp_threshold=0, num_acceptable_points=0
+        cleanup_config = CleanupPredictConfig(
+            num_old_points=0,
+            timestamp_threshold=0,
+            num_acceptable_points=0,
+            num_predictions_remaining=0,
+            num_acceptable_predictions=0,
         )
 
         loaded_synthetic_data = convert_synthetic_ts(
@@ -301,8 +305,12 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        cleanup_config = CleanupConfig(
-            num_old_points=0, timestamp_threshold=0, num_acceptable_points=0
+        cleanup_config = CleanupPredictConfig(
+            num_old_points=0,
+            timestamp_threshold=0,
+            num_acceptable_points=0,
+            num_predictions_remaining=0,
+            num_acceptable_predictions=0,
         )
 
         loaded_synthetic_data = convert_synthetic_ts(

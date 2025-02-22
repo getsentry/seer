@@ -1,11 +1,10 @@
 import logging
+import random
 from datetime import datetime, timedelta
 from operator import and_, or_
-from random import random
 from typing import List
 
 import numpy as np
-import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from sqlalchemy import delete
@@ -13,7 +12,8 @@ from sqlalchemy import delete
 from celery_app.app import celery_app
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
-from seer.anomaly_detection.models import AlgoConfig, TimeSeries
+from seer.anomaly_detection.detectors.prophet_anomaly_detector import ProphetAnomalyDetector
+from seer.anomaly_detection.models import AlgoConfig, ProphetPrediction, TimeSeries
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.db import (
     DbDynamicAlert,
@@ -118,7 +118,7 @@ def _delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
             time_series_to_remove.append(ts)
 
     prophet_time_series_to_remove = []
-    for prophet_ts in alert.prophet_prediction:
+    for prophet_ts in alert.prophet_predictions:
         if prophet_ts.timestamp.timestamp() < date_threshold:
             prophet_time_series_to_remove.append(prophet_ts)
 
@@ -132,7 +132,7 @@ def _delete_old_timeseries_points(alert: DbDynamicAlert, date_threshold: float):
 
     prophet_deleted_count = 0
     for prophet_ts in prophet_time_series_to_remove:
-        alert.prophet_prediction.remove(prophet_ts)
+        alert.prophet_predictions.remove(prophet_ts)
         prophet_deleted_count += 1
 
     return deleted_count, prophet_deleted_count
@@ -209,21 +209,22 @@ def _update_matrix_profiles(
 @sentry_sdk.trace
 def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig) -> ProphetPrediction:
 
-    prophet_detector = ProphetAnomalyDetector()  # TODO: Import this once changes are merged
+    prophet_detector = ProphetAnomalyDetector()
 
-    timestamps = []
-    values = []
-    for ts in alert.timeseries:
-        timestamps.append(ts.timestamp.timestamp())
-        values.append(ts.value)
+    timestamps = np.array([0.0] * len(alert.timeseries))
+    values = np.array([0.0] * len(alert.timeseries))
+    for i, ts in enumerate(alert.timeseries):
+        timestamps[i] = ts.timestamp.timestamp()
+        values[i] = ts.value
 
-    forecast_len = 24 * (60 // config.time_period)
+    forecast_len = random.randint(22, 28) * (60 // config.time_period)
+
     prediction_df = prophet_detector.predict(
         timestamps, values, forecast_len, config.time_period, config.sensitivity
     )
 
     return ProphetPrediction(
-        timestamp=prediction_df["ds"],
+        timestamps=prediction_df["ds"],
         yhat=prediction_df["yhat"],
         yhat_lower=prediction_df["yhat_lower"],
         yhat_upper=prediction_df["yhat_upper"],
@@ -239,7 +240,7 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
         stored_predictions = (
             session.query(DbProphetAlertTimeSeries)
             .filter(
-                DbProphetAlertTimeSeries.alert_id == alert.external_alert_id,
+                DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
                 DbProphetAlertTimeSeries.timestamp >= datetime.now(),
             )
             .all()
@@ -247,11 +248,11 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
         stored_predictions_timestamps = [prediction.timestamp for prediction in stored_predictions]
 
         for timestamp, yhat, yhat_lower, yhat_upper in zip(
-            predictions.timestamp, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
+            predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
         ):
             if timestamp not in stored_predictions_timestamps:
                 prophet_prediction = DbProphetAlertTimeSeries(
-                    alert_id=alert.external_alert_id,
+                    dynamic_alert_id=alert.id,
                     timestamp=timestamp,
                     yhat=yhat,
                     yhat_lower=yhat_lower,
@@ -260,9 +261,7 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
                 session.add(prophet_prediction)
         session.commit()
 
-    logger.info(
-        f"Stored {len(predictions)} prophet predictions for alert {alert.external_alert_id}"
-    )
+    logger.info(f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}")
 
 
 @sentry_sdk.trace

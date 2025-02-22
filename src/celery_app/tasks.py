@@ -7,7 +7,7 @@ from celery_app.app import celery_app as celery  # noqa: F401
 from seer.anomaly_detection.tasks import (  # noqa: F401
     cleanup_disabled_alerts,
     cleanup_old_timeseries_and_prophet_history,
-    cleanup_timeseries,
+    cleanup_timeseries_and_predict,
 )
 from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
 from seer.automation.tasks import delete_data_for_ttl

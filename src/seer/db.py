@@ -404,7 +404,7 @@ class DbProphetAlertTimeSeries(Base):
         Index("ix_prophet_alert_time_series_alert_id_timestamp", "dynamic_alert_id", "timestamp"),
     )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    dynamic_alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     yhat: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
