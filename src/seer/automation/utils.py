@@ -2,7 +2,8 @@ import functools
 import logging
 import os
 import re
-from typing import TypeVar
+from math import ceil
+from typing import Iterable, TypeVar
 from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
@@ -263,3 +264,39 @@ def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
         encoding = fallback_encoding
 
     return encoding
+
+
+def batch_texts_by_token_count(
+    texts: Iterable[str], max_tokens: int, avg_num_chars_per_token: float = 4.0
+):
+    """
+    Generate batches of texts with at most `max_tokens` per batch.
+    Tokens are roughly counted according to `avg_num_chars_per_token`.
+
+    If a text exceeds `max_tokens`, it's in its own batch. **It isn't truncated.**
+    """
+
+    batch: list[str] = []
+    num_tokens_batch_estimate = 0
+    for text in texts:
+        num_tokens_text_estimate = ceil(len(text) / avg_num_chars_per_token)
+
+        if num_tokens_text_estimate > max_tokens:
+            if batch:
+                # Yield existing batch first to maintain the order of texts.
+                yield batch
+            yield [text]
+            batch = []
+            num_tokens_batch_estimate = 0
+            continue
+
+        if num_tokens_batch_estimate + num_tokens_text_estimate > max_tokens:
+            yield batch
+            batch = []
+            num_tokens_batch_estimate = 0
+        batch.append(text)
+        num_tokens_batch_estimate += num_tokens_text_estimate
+
+    if batch:
+        # The last batch didn't hit max_tokens. It needs to be yielded.
+        yield batch

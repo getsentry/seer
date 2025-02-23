@@ -19,6 +19,7 @@ class DbStateRunTypes(str, Enum):
     AUTOFIX = "autofix"
     UNIT_TEST = "unit-test"
     PR_REVIEW = "pr-review"
+    RELEVANT_WARNINGS = "relevant-warnings"
 
 
 class State(abc.ABC, Generic[_State]):

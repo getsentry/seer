@@ -1,9 +1,12 @@
+from typing import cast
 from xml.etree.ElementTree import Element
 
 import pytest
+from pydantic import BaseModel
 
 from seer.automation.utils import (
     ConsentError,
+    batch_texts_by_token_count,
     check_genai_consent,
     escape_multi_xml,
     escape_xml,
@@ -86,3 +89,101 @@ class TestXmlUtils:
         assert remove_cdata("<![CDATA[Hello World]]>") == "Hello World"
         assert remove_cdata("No CDATA here") == "No CDATA here"
         assert remove_cdata("<![CDATA[Line1\nLine2]]>") == "Line1\nLine2"
+
+
+class _BatchTextsByTokensTestCase(BaseModel):
+    # Function parameters:
+    texts: list[str]
+    max_tokens: int
+    avg_num_chars_per_token: float
+    # Test case attributes:
+    batches_expected: list[list[str]]
+    id: str
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [  # A test case generator like hypothesis would be better here.
+        _BatchTextsByTokensTestCase(
+            texts=[],
+            max_tokens=100,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[],
+            id="empty_list_produces_no_batches",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["Hello world"],
+            max_tokens=10,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[["Hello world"]],
+            id="single_text_under_limit_stays_in_one_batch",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["This is a very long text that exceeds the token limit"],
+            max_tokens=5,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[["This is a very long text that exceeds the token limit"]],
+            id="single_text_over_limit_gets_own_batch",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["Hi", "world", "this", "is", "a", "test"],
+            max_tokens=3,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[["Hi", "world"], ["this", "is", "a"], ["test"]],
+            id="multiple_texts_are_batched_by_token_limit",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["Hello", "world", "test"],
+            max_tokens=3,
+            avg_num_chars_per_token=2.0,
+            batches_expected=[["Hello"], ["world"], ["test"]],
+            id="small_chars_per_token_creates_more_batches",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["Hello", "world", "test"],
+            max_tokens=3,
+            avg_num_chars_per_token=10.0,
+            batches_expected=[["Hello", "world", "test"]],
+            id="large_chars_per_token_allows_more_texts_per_batch",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["First", "Second", "ThisIsAVeryLongText", "Third", "Fourth"],
+            max_tokens=5,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[["First", "Second"], ["ThisIsAVeryLongText"], ["Third", "Fourth"]],
+            id="long_text_in_middle_creates_separate_batch",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=["1234", "5678", "90"],
+            max_tokens=2,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[["1234", "5678"], ["90"]],
+            id="texts_exactly_hitting_token_limit_boundary",
+        ),
+        _BatchTextsByTokensTestCase(
+            texts=[
+                "short",
+                "a relatively much longer text here",
+                "medium text",
+                "tiny",
+            ],
+            max_tokens=10,
+            avg_num_chars_per_token=4.0,
+            batches_expected=[
+                ["short"],
+                ["a relatively much longer text here"],
+                ["medium text", "tiny"],
+            ],
+            id="mixed_length_texts_are_batched_appropriately",
+        ),
+    ],
+    ids=lambda test_case: cast(_BatchTextsByTokensTestCase, test_case).id,
+)
+def test_batch_texts_by_token_count(test_case: _BatchTextsByTokensTestCase):
+    text_generator = (text for text in test_case.texts)
+    batches = batch_texts_by_token_count(
+        text_generator,
+        max_tokens=test_case.max_tokens,
+        avg_num_chars_per_token=test_case.avg_num_chars_per_token,
+    )
+    assert list(batches) == test_case.batches_expected

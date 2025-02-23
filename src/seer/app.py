@@ -51,11 +51,18 @@ from seer.automation.codegen.models import (
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
+    CodegenRelevantWarningsRequest,
+    CodegenRelevantWarningsResponse,
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
 )
-from seer.automation.codegen.tasks import codegen_pr_review, codegen_unittest, get_unittest_state
+from seer.automation.codegen.tasks import (
+    codegen_pr_review,
+    codegen_relevant_warnings,
+    codegen_unittest,
+    get_unittest_state,
+)
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
@@ -257,6 +264,13 @@ def codegen_unit_tests_state_endpoint(
         updated_at=state.updated_at,
         completed_at=state.completed_at,
     )
+
+
+@json_api(blueprint, "/v1/automation/codegen/relevant-warnings")
+def codegen_relevant_warnings_endpoint(
+    data: CodegenRelevantWarningsRequest,
+) -> CodegenRelevantWarningsResponse:
+    return codegen_relevant_warnings(data)
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")

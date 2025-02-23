@@ -146,7 +146,13 @@ class Stacktrace(BaseModel):
 
         return cls._trim_frames(stacktrace_frames)
 
-    def to_str(self, max_frames: int = 16, in_app_only: bool = False):
+    def to_str(
+        self,
+        max_frames: int = 16,
+        in_app_only: bool = False,
+        include_context: bool = True,
+        include_var_values: bool = True,
+    ):
         stack_str = ""
 
         frames = self.frames
@@ -170,20 +176,26 @@ class Stacktrace(BaseModel):
             else:
                 stack_str += f" {function} in unknown file {line_no_str} ({'In app' if frame.in_app else 'Not in app'})\n"
 
-            for ctx in frame.context:
-                is_suspect_line = ctx[0] == frame.line_no
-                stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
-            stack_str += (
-                textwrap.dedent(
+            if include_context:
+                for ctx in frame.context:
+                    is_suspect_line = ctx[0] == frame.line_no
+                    stack_str += f"{ctx[1]}{'  <-- SUSPECT LINE' if is_suspect_line else ''}\n"
+
+            if frame.vars:
+                if include_var_values:
+                    vars_title = "Variable values at the time of the exception:"
+                    vars_str = json.dumps(frame.vars, indent=2)
+                else:
+                    vars_title = "Variables at the time of the exception:"
+                    vars_str = ", ".join(frame.vars.keys())
+
+                stack_str += textwrap.dedent(
                     """\
-                ---
-                Variable values at the time of the exception:
-                {vars_json_str}
-                """
-                ).format(vars_json_str=json.dumps(frame.vars, indent=2))
-                if frame.vars
-                else ""
-            )
+                    ---
+                    {vars_title}:
+                    {vars_str}
+                    """
+                ).format(vars_title=vars_title, vars_str=vars_str)
             stack_str += "------\n"
 
         return stack_str
@@ -354,7 +366,18 @@ class EventDetails(BaseModel):
             breadcrumbs=self.format_breadcrumbs(),
         )
 
-    def format_exceptions(self):
+    def format_event_without_breadcrumbs(
+        self, include_context: bool = True, include_var_values: bool = True
+    ):
+        return textwrap.dedent(
+            f"""\
+            {self.title}
+            Exceptions:
+            {self.format_exceptions(include_context=include_context, include_var_values=include_var_values)}
+            """
+        )
+
+    def format_exceptions(self, include_context: bool = True, include_var_values: bool = True):
         return "\n".join(
             textwrap.dedent(
                 """\
@@ -366,7 +389,13 @@ class EventDetails(BaseModel):
                 exception_type=f' type="{exception.type}"' if exception.type else "",
                 exception_message=f' message="{exception.value}"' if exception.value else "",
                 stacktrace=(
-                    exception.stacktrace.to_str(in_app_only=True) if exception.stacktrace else ""
+                    exception.stacktrace.to_str(
+                        in_app_only=True,
+                        include_context=include_context,
+                        include_var_values=include_var_values,
+                    )
+                    if exception.stacktrace
+                    else ""
                 ),
                 handled=(
                     f' is_exception_handled="{"yes" if exception.mechanism.get("handled") else "no"}"'

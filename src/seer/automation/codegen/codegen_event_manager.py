@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime
 
-from seer.automation.codegen.models import CodegenStatus
+from seer.automation.codegen.models import CodegenStatus, RelevantWarningResult
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import FileChange
 
@@ -25,6 +25,14 @@ class CodegenEventManager:
     def append_file_change(self, file_change: FileChange):
         with self.state.update() as current_state:
             current_state.file_changes.append(file_change)
+
+    def mark_completed_and_extend_relevant_warning_results(
+        self, relevant_warning_results: list[RelevantWarningResult]
+    ):
+        with self.state.update() as cur:
+            cur.relevant_warning_results.extend(relevant_warning_results)
+            cur.completed_at = datetime.now()
+            cur.status = CodegenStatus.COMPLETED
 
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True

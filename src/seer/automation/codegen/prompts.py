@@ -1,5 +1,7 @@
 import textwrap
 
+from pydantic import BaseModel
+
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
 
 
@@ -211,4 +213,108 @@ class CodingCodeReviewPrompts:
             """
         ).format(
             diff_str=diff_str,
+        )
+
+
+class _RelevantWarningsPromptPrefix:
+    """
+    Stores common prompt prefixes to maximize prompt cache hits (for OpenAI calls).
+    """
+
+    @staticmethod
+    def format_system_msg():
+        # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L79-L81
+        return textwrap.dedent(
+            """\
+            You are a senior developer with extensive knowledge about code and static analysis warnings.
+            You always consider carefully the context of the code and the error before making a decision.
+            You are tasked with analyzing a single issue and providing a detailed explanation of the issue and the context in which it occurs.
+            """
+        )
+
+    @staticmethod
+    def format_prompt_error(formatted_error: str):
+        """
+        The error makes up the bulk of the prompt b/c of the stacktrace.
+        Put it right after the system message so that the system message and error are cached
+        together.
+        """
+        return textwrap.dedent(
+            """\
+            Here is an issue we had in our codebase:
+
+            {formatted_error}
+            """
+        ).format(formatted_error=formatted_error)
+
+
+class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
+
+    class IsIssueFixable(BaseModel):
+        # No reasoning due to the number of LLM calls involved in the pipeline.
+        # This should be an easier task.
+        is_fixable: bool
+
+    @staticmethod
+    def format_prompt(formatted_error: str):
+        # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L86
+        return textwrap.dedent(
+            """\
+            {error_prompt}
+
+            Carefully analyze the issue above. Focus on the error, the stacktrace.
+            Think about the context in which the error occurs. What are possible causes to it? How do you fix it?
+            Answer "does this issue originate from within the application or is it caused from an external service not behaving well?"
+            For example a TypeError or ValueError is likely to be caused by the application, while a 500 error is likely to be caused by an external service.
+            You should have a somewhat high bar for answering that the issue is unfixable.
+            """
+        ).format(error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
+
+
+class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
+
+    class DoesFixingWarningFixIssue(BaseModel):
+        reasoning: str
+        relevance_probability: float
+        does_fixing_warning_fix_issue: bool
+        short_description: str | None = None
+        short_justification: str | None = None
+        # This justification is currenty unused. But it's cheap and we'll see later if it's useful
+
+    @staticmethod
+    def format_prompt(formatted_warning: str, formatted_error: str):
+        # Defining relevance as "does fixing the warning fix the issue" is taken from BPR:
+        # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L137
+        #
+        # Simply asking for the `relevance_probability` is inspired by: https://arxiv.org/abs/2305.14975
+        return textwrap.dedent(
+            """\
+            {error_prompt}
+
+            Here is a warning that just surfaced in our codebase:
+
+            {formatted_warning}
+
+            We need to know if this warning is directly relevant to the issue.
+            By relevant, we mean that fixing the warning would prevent the issue.
+            We're not deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
+            We're not looking for warnings which vaguely or hypothetically relate to the issue. The relationship should be direct.
+            The locations of the warning and the error don't have to be identical, but they should be referring to similar code/logic.
+
+            Before giving your final answer, think out loud in a `reasoning` section about the context in which the error occurs, independent of the warning. What are the possible causes of the error?
+            Then think about how the warning is related or unrelated to the issue. Is the warning referring to similar code/logic as the error's exception stacktrace?
+            Your `reasoning` should be at most 400 words. Feel free to mention what you're uncertain about, and what you're more confident about.
+
+            Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `reasoning`.
+            This score, the `relevance_probability`, can be very granular, e.g., 0.32.
+            Then give your final answer in `does_fixing_warning_fix_issue`.
+
+            Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
+              - `short_description`: a short and sweet description of the problem caused by not addressing the warning.
+                This description must focus on the problem and not the warning itself. It should be at most 10 words.
+              - `short_justification`: a short summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 10 words.
+            """
+        ).format(
+            error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
+            formatted_warning=formatted_warning,
         )

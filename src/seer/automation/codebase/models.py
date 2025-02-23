@@ -1,6 +1,8 @@
-from typing import Literal, NotRequired, TypedDict
+import re
+import textwrap
+from typing import Any, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_serializer
 from pydantic_xml import attr
 
 from seer.automation.models import PromptXmlModel, RepoDefinition
@@ -58,3 +60,88 @@ class GithubPrReviewComment(TypedDict):
     start_line: NotRequired[int]
     start_side: NotRequired[Literal["LEFT", "RIGHT"]]
     in_reply_to: NotRequired[str]
+
+
+# Copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/typings.py
+class Location(BaseModel):
+    filename: str
+    start_line: str
+    end_line: str
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.end_line:
+            self.end_line = self.start_line
+
+    @classmethod
+    def from_encoded(cls, data: str):
+        location_parts = re.match(
+            r"(?P<filename>.+):(?P<start_line>\d+)(?:~(?P<end_line>\d+))?",
+            data,
+        )
+        if not location_parts:
+            msg = f"Invalid location encoding: {data}"
+            raise ValueError(msg)
+        grouped_dict = location_parts.groupdict()
+        return cls(
+            filename=grouped_dict["filename"],
+            start_line=grouped_dict["start_line"],
+            end_line=grouped_dict.get("end_line") or grouped_dict["start_line"],
+        )
+
+    @model_serializer
+    def serialize_location(self) -> str:
+        return self.encode()
+
+    def encode(self) -> str:
+        base = f"{self.filename}:{self.start_line}"
+        if self.end_line != self.start_line:
+            base += f"~{self.end_line}"
+        return base
+
+
+# Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py
+class StaticAnalysisRule(BaseModel):
+    id: int
+    code: str
+    tool: str
+    is_autofixable: bool | None  # refers to "Quick fix"
+    is_stable: bool | None
+    category: str
+
+    def format_rule(self) -> str:
+        return textwrap.dedent(
+            f"""\
+            Static Analysis Rule:
+                Rule: {self.code}
+                Tool: {self.tool}
+                Is auto-fixable: {self.is_autofixable}
+                Is stable: {self.is_stable}
+                Category: {self.category}
+            """
+        )
+
+
+class StaticAnalysisWarning(BaseModel):
+    id: int
+    commit_id: str
+    code: str
+    message: str
+    encoded_location: str
+    rule_id: int | None = None
+    rule: StaticAnalysisRule | None = None
+    # TODO: project info necessary for seer?
+
+    def format_warning(self) -> str:
+        location = Location.from_encoded(self.encoded_location)
+        return textwrap.dedent(
+            f"""\
+            Warning message: {self.message}
+            ----------
+            Location:
+                filename: {location.filename}
+                start_line: {location.start_line}
+                end_line: {location.end_line}
+            ----------
+            {self.rule.format_rule() if self.rule else ""}
+            """
+        )
