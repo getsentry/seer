@@ -122,7 +122,7 @@ def codegen_relevant_warnings(
         warnings=request.warnings,
         commit_sha=request.commit_sha,
         run_id=cur_state.run_id,
-        post_to_overwatch=True,
+        should_post_to_overwatch=True,
     )
 
     RelevantWarningsStep.get_signature(

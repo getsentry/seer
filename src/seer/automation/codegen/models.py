@@ -128,7 +128,7 @@ class CodegenRelevantWarningsRequest(CodegenBaseRequest):
     commit_sha: str
     max_num_associations: int = 10
     max_num_issues_analyzed: int = 10
-    post_to_overwatch: bool = False
+    should_post_to_overwatch: bool = False
 
 
 class CodegenRelevantWarningsResponse(CodegenBaseResponse):

@@ -1,5 +1,6 @@
 from collections import defaultdict
-from unittest.mock import MagicMock, patch
+from typing import Generic, TypeVar
+from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
 import pytest
@@ -45,7 +46,9 @@ class TestFetchIssuesComponent:
         mock_context.repo.external_id = "123123"
         return FetchIssuesComponent(mock_context)
 
-    def test_invoke_filters_files(self, mock_rpc_client_call, component):
+    def test_invoke_filters_files(
+        self, mock_rpc_client_call: Mock, component: FetchIssuesComponent
+    ):
         pr_files = [
             PrFile(filename="fine.py", patch="patch1", status="modified", changes=100),
             PrFile(filename="many_changes.py", patch="patch2", status="modified", changes=1_000),
@@ -67,11 +70,34 @@ class TestFetchIssuesComponent:
         assert output.filename_to_issues == filename_to_issues_expected
 
 
+_T = TypeVar("_T")
+
+
+class _MockId(Generic[_T]):
+    def __init__(self, cls_with_id_attr: type[_T], id_attr: str = "id"):
+        self.cls_with_id_attr = cls_with_id_attr
+        self._id = 1
+        self._id_attr = id_attr
+
+    def __call__(self):
+        """
+        Creates a mock object of type `cls_with_id` with a unique `id` attribute.
+        """
+        obj = next(generate(self.cls_with_id_attr))
+        setattr(obj, self._id_attr, self._id)
+        self._id += 1
+        return obj
+
+
+_MockStaticAnalysisWarning = _MockId(StaticAnalysisWarning)
+_MockIssueDetails = _MockId(IssueDetails)
+
+
 def _mock_static_analysis_warning():
     """
     Creates a static analysis warning with a dummy `encoded_location` that matches the regex.
     """
-    static_analysis_warning = next(generate(StaticAnalysisWarning))
+    static_analysis_warning = _MockStaticAnalysisWarning()
     static_analysis_warning.encoded_location = f"{static_analysis_warning.encoded_location}.py:1"
     return static_analysis_warning
 
@@ -80,10 +106,10 @@ def _mock_issue_details(issue_id: int | None = None):
     """
     Creates an issue which is guaranteed to have an event.
     """
-    issue_details = next(generate(IssueDetails))
-    issue_details.events = [next(generate(SentryEventData))]
+    issue_details = _MockIssueDetails()
     if issue_id is not None:
         issue_details.id = issue_id
+    issue_details.events = [next(generate(SentryEventData))]
     return issue_details
 
 
@@ -111,7 +137,7 @@ class TestAssociateWarningsWithIssuesComponent:
             mock_encode,
         )
 
-    def test_invoke(self, component):
+    def test_invoke(self, component: AssociateWarningsWithIssuesComponent):
         num_warnings = 3
         num_issues = 4
         max_num_associations = 5
@@ -150,6 +176,24 @@ class TestAssociateWarningsWithIssuesComponent:
 
         assert output.candidate_associations == candidate_associations_expected
 
+    def test_invoke_no_issues(self, component: AssociateWarningsWithIssuesComponent):
+        request = AssociateWarningsWithIssuesRequest(
+            warnings=[_mock_static_analysis_warning()],
+            filename_to_issues={},
+            max_num_associations=5,
+        )
+        output: AssociateWarningsWithIssuesOutput = component.invoke(request)
+        assert output.candidate_associations == []
+
+    def test_invoke_no_warnings(self, component: AssociateWarningsWithIssuesComponent):
+        request = AssociateWarningsWithIssuesRequest(
+            warnings=[],
+            filename_to_issues={"fine.py": [_mock_issue_details()]},
+            max_num_associations=5,
+        )
+        output: AssociateWarningsWithIssuesOutput = component.invoke(request)
+        assert output.candidate_associations == []
+
 
 class TestAreIssuesFixableComponent:
     @pytest.fixture
@@ -174,13 +218,21 @@ class TestAreIssuesFixableComponent:
             mock_generate_structured,
         )
 
-    def test_invoke(self, component):
+    def test_invoke(self, component: AreIssuesFixableComponent):
         max_num_issues_analyzed = 3
-        issue_ids = [1, 1, 0, 2, 0, 1, 3]
-        # There can be duplicates when passing in issues from un-deduped warning-issue associations
-        # Issues 1, 0, 2 will be analyzed for fixability
+        issues_unique = [_mock_issue_details() for _ in range(4)]
+        candidate_issues = [
+            issues_unique[1],
+            issues_unique[1],
+            issues_unique[0],
+            issues_unique[2],
+            issues_unique[0],
+            issues_unique[1],
+            issues_unique[3],  # should be None b/c outside max_num_issues_analyzed
+        ]
+        # There can be duplicates when passing in issues from warning-issue associations.
+        # Issues 1, 0, 2 will be analyzed for fixability.
         num_issues_analyzed_expected = 6
-        candidate_issues = [_mock_issue_details(issue_id) for issue_id in issue_ids]
 
         request = CodeAreIssuesFixableRequest(
             candidate_issues=candidate_issues,
@@ -188,7 +240,8 @@ class TestAreIssuesFixableComponent:
         )
         output: CodeAreIssuesFixableOutput = component.invoke(request)
 
-        assert len(output.are_fixable) == len(issue_ids)
+        assert len(request.candidate_issues) == len(candidate_issues)
+        assert len(output.are_fixable) == len(request.candidate_issues)
 
         # Test that max_num_issues_analyzed were analyzed
         assert (
@@ -228,7 +281,7 @@ class TestPredictRelevantWarningsComponent:
             mock_generate_structured,
         )
 
-    def test_invoke(self, component):
+    def test_invoke(self, component: PredictRelevantWarningsComponent):
         candidate_associations = [
             (_mock_static_analysis_warning(), _mock_issue_details()) for _ in range(4)
         ]
@@ -253,12 +306,12 @@ class TestPredictRelevantWarningsComponent:
 @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
 @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
 def test_relevant_warnings_step_invoke(
-    mock_instantiate_context,
-    mock_pipeline_step,
-    mock_invoke_predict_relevant_warnings_component,
-    mock_invoke_associate_warnings_with_issues_component,
-    mock_invoke_are_issues_fixable_component,
-    mock_invoke_fetch_issues_component,
+    mock_instantiate_context: Mock,
+    mock_pipeline_step: MagicMock,
+    mock_invoke_predict_relevant_warnings_component: Mock,
+    mock_invoke_associate_warnings_with_issues_component: Mock,
+    mock_invoke_are_issues_fixable_component: Mock,
+    mock_invoke_fetch_issues_component: Mock,
 ):
     mock_repo_client = MagicMock()
     mock_commit = MagicMock()
@@ -297,7 +350,7 @@ def test_relevant_warnings_step_invoke(
         run_id=1,
         max_num_associations=10,
         max_num_issues_analyzed=10,
-        post_to_overwatch=False,
+        should_post_to_overwatch=False,
     )
     step = RelevantWarningsStep(request=request)
     step.context = mock_context

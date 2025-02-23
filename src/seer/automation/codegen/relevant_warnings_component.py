@@ -141,6 +141,16 @@ class AssociateWarningsWithIssuesComponent(
         }
         # De-duplicate in case the same issue is present across multiple files. That's possible when
         # the issue's stacktrace matches multiple files modified in the commit.
+        # This should be ok b/c the issue should contain enough information that the downstream LLM
+        # calls can match any relevant warnings to it. The filename is not the strongest signal.
+
+        if not request.warnings:
+            logger.info("No warnings to associate with issues.")
+            return AssociateWarningsWithIssuesOutput(candidate_associations=[])
+        if not issue_id_to_issue_with_pr_filename:
+            logger.info("No issues to associate with warnings.")
+            return AssociateWarningsWithIssuesOutput(candidate_associations=[])
+
         issues_with_pr_filename = list(issue_id_to_issue_with_pr_filename.values())
         issues_formatted = [
             self._format_issue_with_related_filename(issue, pr_filename)
@@ -198,8 +208,8 @@ class AreIssuesFixableComponent(
 
     context: CodegenContext
 
-    @observe(name="Codegen - Relevant Warnings - Predict Issue Fixability Component")
-    @ai_track(description="Codegen - Relevant Warnings - Predict Issue Fixability Component")
+    @observe(name="Codegen - Relevant Warnings - Are Issues Fixable Component")
+    @ai_track(description="Codegen - Relevant Warnings - Are Issues Fixable Component")
     def invoke(self, request: CodeAreIssuesFixableRequest) -> CodeAreIssuesFixableOutput:
         """
         It's fine if there are duplicate issues in the request. That can happen if issues were

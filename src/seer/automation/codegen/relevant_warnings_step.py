@@ -69,15 +69,18 @@ class RelevantWarningsStep(CodegenStep):
     def get_task():
         return relevant_warnings_task
 
-    @staticmethod
     @inject
     def _post_results_to_overwatch(
-        run_id: int,
+        self,
         relevant_warnings_output: CodePredictRelevantWarningsOutput,
         config: AppConfig = injected,
     ):
+        if not self.request.should_post_to_overwatch:
+            logger.info("Skipping posting relevant warnings results to Overwatch.")
+            return
+
         request = {
-            "run_id": run_id,
+            "run_id": self.context.run_id,
             "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
         }
         request_data = json.dumps(request).encode("utf-8")
@@ -92,11 +95,27 @@ class RelevantWarningsStep(CodegenStep):
             data=request_data,
         )
 
+    def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
+        try:
+            self._post_results_to_overwatch(relevant_warnings_output)
+        except Exception as exception:
+            logger.exception(f"Error posting relevant warnings results to Overwatch: {exception}")
+            raise exception
+        finally:
+            self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
+                relevant_warnings_output.relevant_warning_results
+            )
+
     @observe(name="Codegen - Relevant Warnings Step")
     @ai_track(description="Codegen - Relevant Warnings Step")
     def _invoke(self, **kwargs):
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
+
+        if not self.request.warnings:
+            self.logger.info("No warnings to predict relevancy for.")
+            self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
+            return
 
         # 1. Fetch issues related to the commit.
         repo_client = self.context.get_repo_client(type=RepoClientType.READ)
@@ -116,7 +135,8 @@ class RelevantWarningsStep(CodegenStep):
             fetch_issues_request
         )
 
-        # 2. Limit the number of warning-issue associations we analyze to the top k.
+        # 2. Limit the number of warning-issue associations we analyze to the top
+        # max_num_associations.
         association_component = AssociateWarningsWithIssuesComponent(self.context)
         associations_request = AssociateWarningsWithIssuesRequest(
             warnings=self.request.warnings,
@@ -145,7 +165,7 @@ class RelevantWarningsStep(CodegenStep):
             if is_fixable
         ]
 
-        # 4. Match warnings with issues if fixing the warning will fix the issue.
+        # 4. Predict which warnings are relevant to which issues.
         prediction_component = PredictRelevantWarningsComponent(self.context)
         request = CodePredictRelevantWarningsRequest(
             candidate_associations=associations_with_fixable_issues
@@ -155,18 +175,4 @@ class RelevantWarningsStep(CodegenStep):
         )
 
         # 5. Save results.
-        try:
-            if self.request.post_to_overwatch:
-                self._post_results_to_overwatch(
-                    run_id=self.context.run_id,
-                    relevant_warnings_output=relevant_warnings_output,
-                )
-            else:
-                logger.info("Skipping posting relevant warnings results to Overwatch.")
-        except Exception as e:
-            logger.exception(f"Error posting relevant warnings results to Overwatch: {e}")
-            raise e
-        finally:
-            self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
-                relevant_warnings_output.relevant_warning_results
-            )
+        self._complete_run(relevant_warnings_output)
