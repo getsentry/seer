@@ -67,7 +67,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             logger.info("No eligible files in PR.")
             return {}
 
-        pr_files_eligible[:max_files_analyzed]
+        pr_files_eligible = pr_files_eligible[:max_files_analyzed]
         filename_to_issues = client.call(
             "get_issues_related_to_file_patches",
             organization_id=organization_id,
