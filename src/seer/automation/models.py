@@ -366,12 +366,14 @@ class EventDetails(BaseModel):
             breadcrumbs=self.format_breadcrumbs(),
         )
 
-    def format_event_without_breadcrumbs(self):
+    def format_event_without_breadcrumbs(
+        self, include_context: bool = True, include_var_values: bool = True
+    ):
         return textwrap.dedent(
             f"""\
             {self.title}
             Exceptions:
-            {self.format_exceptions()}
+            {self.format_exceptions(include_context=include_context, include_var_values=include_var_values)}
             """
         )
 

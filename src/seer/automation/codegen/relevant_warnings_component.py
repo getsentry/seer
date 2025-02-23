@@ -112,10 +112,7 @@ class AssociateWarningsWithIssuesComponent(
         event_details = EventDetails.from_event(issue.events[0])
         return textwrap.dedent(
             f"""\
-            {event_details.title}
-            ----------
-            Exceptions:
-            {event_details.format_exceptions(include_context=False, include_var_values=False)}
+            {event_details.format_event_without_breadcrumbs(include_context=False, include_var_values=False)}
             ----------
             This file, in particular, contained function(s) that overlapped with the exceptions: {related_filename}
             """
