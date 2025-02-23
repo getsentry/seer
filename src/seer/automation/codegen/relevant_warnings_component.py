@@ -2,6 +2,7 @@ import logging
 import textwrap
 
 import numpy as np
+import openai
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
 from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
@@ -175,7 +176,7 @@ def _is_issue_fixable_cache_key(issue: IssueDetails) -> tuple[str]:
     return hashkey(issue.id)
 
 
-@cached(cache=LRUCache(maxsize=2048), key=_is_issue_fixable_cache_key)
+@cached(cache=LRUCache(maxsize=4096), key=_is_issue_fixable_cache_key)
 @inject
 def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> bool:
     # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
@@ -215,9 +216,14 @@ class AreIssuesFixableComponent(
         # Can instead batch and send uncached issues in one prompt.
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
         issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
-        issue_id_to_is_fixable = {
-            issue_id: _is_issue_fixable(issue_id_to_issue[issue_id]) for issue_id in issue_ids
-        }
+        issue_id_to_is_fixable = {}
+        for issue_id in issue_ids:
+            try:
+                is_fixable = _is_issue_fixable(issue_id_to_issue[issue_id])
+            except (openai.APITimeoutError, openai.InternalServerError) as exception:
+                logger.warning(f"Error checking if issue {issue_id} is fixable: {exception}")
+                is_fixable = True  # default to true to avoid skipping issues
+            issue_id_to_is_fixable[issue_id] = is_fixable
         return CodeAreIssuesFixableOutput(
             are_fixable=[issue_id_to_is_fixable.get(issue.id) for issue in request.candidate_issues]
         )
@@ -258,7 +264,7 @@ class PredictRelevantWarningsComponent(
                 response_format=ReleventWarningsPrompts.DoesFixingWarningFixIssue,
                 temperature=0.0,
                 max_tokens=2048,
-                timeout=10.0,
+                timeout=15.0,
             )
             relevant_warning_results.append(
                 RelevantWarningResult(
@@ -272,5 +278,4 @@ class PredictRelevantWarningsComponent(
                     encoded_location=warning.encoded_location,
                 )
             )
-
         return CodePredictRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)
