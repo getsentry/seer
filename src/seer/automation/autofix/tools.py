@@ -1,5 +1,6 @@
 import fnmatch
 import logging
+import os
 import textwrap
 
 from langfuse.decorators import observe
@@ -222,6 +223,7 @@ class BaseTools:
         self,
         keyword: str,
         supported_extensions: list[str],
+        in_proximity_to: str | None = None,
     ):
         """
         Searches for a keyword in the codebase.
@@ -251,6 +253,7 @@ class BaseTools:
             searcher = CodeSearcher(
                 directory=tmp_repo_dir,
                 supported_extensions=set(supported_extensions),
+                start_path=in_proximity_to,
             )
 
             results = searcher.search(keyword)
@@ -277,10 +280,10 @@ class BaseTools:
     @ai_track(description="File Search")
     def file_search(
         self,
-        subpath: str,
+        filename: str,
     ):
         """
-        Given a subpath, returns the list of locations where a file containing the subpath is found.
+        Given a filename with extension returns the list of locations where a file with the name is found.
         """
         repo_names = self._get_repo_names()
         found_files = ""
@@ -290,15 +293,17 @@ class BaseTools:
                 repo_name=repo_name, type=self.repo_client_type
             )
             all_paths = repo_client.get_index_file_set()
-            found = [path for path in all_paths if subpath in path.lower()]
+            found = [
+                path for path in all_paths if os.path.basename(path).lower() == filename.lower()
+            ]
             if found:
                 found_files += f"\n FILES IN REPO {repo_name}:\n"
                 found_files += "\n".join([f"  {path}" for path in sorted(found)])
 
-        self.context.event_manager.add_log(f"Searching for file `{subpath}`...")
+        self.context.event_manager.add_log(f"Searching for file `{filename}`...")
 
         if len(found_files) == 0:
-            return f"no file with subpath {subpath} found in any repository"
+            return f"no file with name {filename} found in any repository"
 
         return found_files
 
@@ -411,21 +416,26 @@ class BaseTools:
                         "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
                         "items": {"type": "string"},
                     },
+                    {
+                        "name": "in_proximity_to",
+                        "type": "string",
+                        "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
+                    },
                 ],
                 required=["keyword", "supported_extensions"],
             ),
             FunctionTool(
                 name="file_search",
                 fn=self.file_search,
-                description="Returns a list of file paths in the codebase that contain the given subpath.",
+                description="Given a filename with extension returns the list of locations where a file with the name is found.",
                 parameters=[
                     {
-                        "name": "subpath",
+                        "name": "filename",
                         "type": "string",
-                        "description": "A string that will be matched against any file path in the codebase. Will match with any file path that contains the given string.",
+                        "description": "The filename with extension to search for.",
                     },
                 ],
-                required=["subpath"],
+                required=["filename"],
             ),
             FunctionTool(
                 name="file_search_wildcard",
@@ -476,7 +486,7 @@ class BaseTools:
                 FunctionTool(
                     name="ask_a_question",
                     fn=self.ask_user_question,
-                    description="Ask the codeowners a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else.",
+                    description="Ask the user a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else. Only use this tool if necessary.",
                     parameters=[
                         {
                             "name": "question",

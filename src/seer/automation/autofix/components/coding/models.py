@@ -161,16 +161,7 @@ class CodeChangeXml(PromptXmlModel, tag="code_change"):
             file_path="path/to/file.py",
             repo_name="owner/repo",
             type="Either 'file_change', 'file_create', or 'file_delete'",
-            code=textwrap.dedent(
-                """\
-                Provide the exact code change you are making in a diff format like the example below:
-                <<<<<<< SEARCH
-                original code
-                =======
-                new code
-                >>>>>>> REPLACE
-                """
-            ),
+            code="Provide the exact code change you are making",
             commit_message="Provide a commit message that describes the change you are making",
         )
 

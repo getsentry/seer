@@ -120,7 +120,7 @@ class CodingPrompts:
         if existing_files:
             text += f"The following files already exist, yet you are trying to create them: {', '.join(existing_files)}\n"
 
-        text += "\nPlease fix the above issues by correcting the file paths or correcting the type (file_create, file_change, or file_delete) and output your answer in the correct format again."
+        text += "\nPlease fix the above issues by correcting the file paths or correcting the type (file_create, file_change, or file_delete) and output your answer in the correct format again. Re-write your WHOLE answer, including the already-correct changes."
 
         return text
 
