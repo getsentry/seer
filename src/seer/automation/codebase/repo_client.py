@@ -139,14 +139,16 @@ class RepoClient:
     repo_external_id: str
     base_commit_sha: str
 
+    supported_providers = ["github"]
+
     def __init__(
         self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
     ):
-        if repo_definition.provider != "github":
+        if repo_definition.provider not in self.supported_providers:
             # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
             # easier if it does
             raise InitializationError(
-                f"Unsupported repo provider: {repo_definition.provider}, only github is supported."
+                f"Unsupported repo provider: {repo_definition.provider}, only {', '.join(self.supported_providers)} are supported."
             )
 
         if app_id and private_key:
@@ -190,7 +192,7 @@ class RepoClient:
 
     @staticmethod
     def check_repo_read_access(repo: RepoDefinition):
-        app_id, pk = get_write_app_credentials()
+        app_id, pk = get_read_app_credentials()
 
         if app_id is None or pk is None:
             return True if get_github_token_auth() else None

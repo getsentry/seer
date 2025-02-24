@@ -224,6 +224,9 @@ def run_autofix_coding(
 
     raise_if_no_genai_consent(state.get().request.organization_id)
 
+    if not state.get().readable_repos:
+        raise ValueError("Cannot run coding without readable repos...")
+
     with state.update() as cur:
         cur.mark_triggered()
 
@@ -249,10 +252,7 @@ def run_autofix_coding(
             return
 
         AutofixCodingStep.get_signature(
-            AutofixCodingStepRequest(
-                run_id=cur.run_id,
-                mode=request.payload.mode,
-            ),
+            AutofixCodingStepRequest(run_id=cur.run_id),
             queue=app_config.CELERY_WORKER_QUEUE,
         ).apply_async()
     except InitializationError as e:

@@ -598,12 +598,7 @@ class RepoDefinition(BaseModel):
     @field_validator("provider", mode="after")
     @classmethod
     def validate_provider(cls, provider: str):
-        cleaned_provider = process_repo_provider(provider)
-
-        if cleaned_provider != "github":
-            raise ValueError(f"Provider {cleaned_provider} is not supported.")
-
-        return cleaned_provider
+        return process_repo_provider(provider)
 
     def __hash__(self):
         return hash((self.provider, self.owner, self.name, self.external_id))

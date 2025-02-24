@@ -12,7 +12,6 @@ from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRunMemory,
     ChangesStep,
-    CodebaseState,
     CommittedPullRequestDetails,
 )
 from seer.automation.autofix.state import ContinuationState
@@ -59,19 +58,8 @@ class AutofixContext(PipelineContext):
 
         self.sentry_client = sentry_client
 
-        with state.update() as cur:
-            for repo in request.repos:
-                if repo.external_id not in cur.codebases:
-                    cur.codebases[repo.external_id] = CodebaseState(
-                        file_changes=[],
-                        repo_external_id=repo.external_id,
-                    )
-
         self.event_manager = event_manager
         self.state = state
-
-        # TODO: Remove this when we no longer need the backwards compatibility.
-        self.event_manager.migrate_step_keys()
 
         logger.info(f"AutofixContext initialized with run_id {self.run_id}")
 
@@ -172,6 +160,9 @@ class AutofixContext(PipelineContext):
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
         for repo in self.repos:
+            if repo.provider not in RepoClient.supported_providers:
+                continue
+
             try:
                 repo_client = self.get_repo_client(
                     repo_external_id=repo.external_id, type=RepoClientType.READ

@@ -46,7 +46,7 @@ class BaseTools:
 
     def _get_repo_names(self) -> list[str]:
         if isinstance(self.context, AutofixContext):
-            return [repo.full_name for repo in self.context.repos]
+            return [repo.full_name for repo in self.context.state.get().readable_repos]
         elif isinstance(self.context, CodegenContext):
             return [self.context.repo.full_name]
         else:
@@ -357,112 +357,9 @@ class BaseTools:
             prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-001")
         )
 
-    def get_tools(self):
+    def get_tools(self, can_access_repos: bool = True):
+
         tools = [
-            FunctionTool(
-                name="list_directory",
-                fn=self.list_directory,
-                description="Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.",
-                parameters=[
-                    {
-                        "name": "path",
-                        "type": "string",
-                        "description": 'The path to view. For example, "src/app/components"',
-                    },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
-                    },
-                ],
-                required=["path"],
-            ),
-            FunctionTool(
-                name="expand_document",
-                fn=self.expand_document,
-                description=textwrap.dedent(
-                    """\
-                    Given a document path, returns the entire document text.
-                    - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
-                    - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
-                ),
-                parameters=[
-                    {
-                        "name": "file_path",
-                        "type": "string",
-                        "description": "The document path to expand.",
-                    },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Name of the repository containing the file.",
-                    },
-                ],
-                required=["file_path", "repo_name"],
-            ),
-            FunctionTool(
-                name="keyword_search",
-                fn=self.keyword_search,
-                description="Searches for a keyword in the codebase.",
-                parameters=[
-                    {
-                        "name": "keyword",
-                        "type": "string",
-                        "description": "The keyword to search for.",
-                    },
-                    {
-                        "name": "supported_extensions",
-                        "type": "array",
-                        "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
-                        "items": {"type": "string"},
-                    },
-                    {
-                        "name": "in_proximity_to",
-                        "type": "string",
-                        "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
-                    },
-                ],
-                required=["keyword", "supported_extensions"],
-            ),
-            FunctionTool(
-                name="file_search",
-                fn=self.file_search,
-                description="Given a filename with extension returns the list of locations where a file with the name is found.",
-                parameters=[
-                    {
-                        "name": "filename",
-                        "type": "string",
-                        "description": "The filename with extension to search for.",
-                    },
-                ],
-                required=["filename"],
-            ),
-            FunctionTool(
-                name="file_search_wildcard",
-                fn=self.file_search_wildcard,
-                description="Searches for files in a folder using a wildcard pattern.",
-                parameters=[
-                    {
-                        "name": "pattern",
-                        "type": "string",
-                        "description": "The wildcard pattern to match files.",
-                    },
-                ],
-                required=["pattern"],
-            ),
-            FunctionTool(
-                name="semantic_file_search",
-                fn=self.semantic_file_search,
-                description="Tries to find the file in the codebase that contains what you're looking for.",
-                parameters=[
-                    {
-                        "name": "query",
-                        "type": "string",
-                        "description": "Describe what file you're looking for.",
-                    },
-                ],
-                required=["query"],
-            ),
             FunctionTool(
                 name="search_google",
                 fn=self.search_google,
@@ -475,8 +372,118 @@ class BaseTools:
                     },
                 ],
                 required=["question"],
-            ),
+            )
         ]
+
+        if can_access_repos:
+            tools.extend(
+                [
+                    FunctionTool(
+                        name="list_directory",
+                        fn=self.list_directory,
+                        description="Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.",
+                        parameters=[
+                            {
+                                "name": "path",
+                                "type": "string",
+                                "description": 'The path to view. For example, "src/app/components"',
+                            },
+                            {
+                                "name": "repo_name",
+                                "type": "string",
+                                "description": "Optional name of the repository to search in if you know it.",
+                            },
+                        ],
+                        required=["path"],
+                    ),
+                    FunctionTool(
+                        name="expand_document",
+                        fn=self.expand_document,
+                        description=textwrap.dedent(
+                            """\
+                    Given a document path, returns the entire document text.
+                    - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
+                    - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
+                        ),
+                        parameters=[
+                            {
+                                "name": "file_path",
+                                "type": "string",
+                                "description": "The document path to expand.",
+                            },
+                            {
+                                "name": "repo_name",
+                                "type": "string",
+                                "description": "Name of the repository containing the file.",
+                            },
+                        ],
+                        required=["file_path", "repo_name"],
+                    ),
+                    FunctionTool(
+                        name="keyword_search",
+                        fn=self.keyword_search,
+                        description="Searches for a keyword in the codebase.",
+                        parameters=[
+                            {
+                                "name": "keyword",
+                                "type": "string",
+                                "description": "The keyword to search for.",
+                            },
+                            {
+                                "name": "supported_extensions",
+                                "type": "array",
+                                "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
+                                "items": {"type": "string"},
+                            },
+                            {
+                                "name": "in_proximity_to",
+                                "type": "string",
+                                "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
+                            },
+                        ],
+                        required=["keyword", "supported_extensions"],
+                    ),
+                    FunctionTool(
+                        name="file_search",
+                        fn=self.file_search,
+                        description="Given a filename with extension returns the list of locations where a file with the name is found.",
+                        parameters=[
+                            {
+                                "name": "filename",
+                                "type": "string",
+                                "description": "The filename with extension to search for.",
+                            },
+                        ],
+                        required=["filename"],
+                    ),
+                    FunctionTool(
+                        name="file_search_wildcard",
+                        fn=self.file_search_wildcard,
+                        description="Searches for files in a folder using a wildcard pattern.",
+                        parameters=[
+                            {
+                                "name": "pattern",
+                                "type": "string",
+                                "description": "The wildcard pattern to match files.",
+                            },
+                        ],
+                        required=["pattern"],
+                    ),
+                    FunctionTool(
+                        name="semantic_file_search",
+                        fn=self.semantic_file_search,
+                        description="Tries to find the file in the codebase that contains what you're looking for.",
+                        parameters=[
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "Describe what file you're looking for.",
+                            },
+                        ],
+                        required=["query"],
+                    ),
+                ]
+            )
 
         if (
             isinstance(self.context, AutofixContext)

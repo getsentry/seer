@@ -2,12 +2,7 @@ import textwrap
 
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.prompts import (
-    format_code_map,
-    format_instruction,
-    format_repo_names,
-    format_summary,
-)
+from seer.automation.autofix.prompts import format_code_map, format_instruction, format_summary
 from seer.automation.models import EventDetails, Profile
 from seer.automation.summarize.issue import IssueSummary
 
@@ -75,7 +70,7 @@ class SolutionPrompts:
     def format_default_msg(
         *,
         event: str,
-        repo_names: list[str],
+        repos_str: str,
         root_cause: RootCauseAnalysisItem | str,
         original_instruction: str | None,
         summary: IssueSummary | None,
@@ -84,7 +79,6 @@ class SolutionPrompts:
     ):
         return textwrap.dedent(
             """\
-            {repo_names_str}
             Given the issue: {summary_str}
             {event_str}{original_instruction}
             {root_cause_str}
@@ -93,12 +87,14 @@ class SolutionPrompts:
 
             GOAL: Gather all information that may be needed to plan a fix for this issue.
 
+            {repos_str}
+
             # Guidelines:
             - Your job is to simply gather all information needed. You may not propose code changes yourself.
             {think_tools_instructions}"""
         ).format(
             event_str=event,
-            repo_names_str=format_repo_names(repo_names),
+            repos_str=repos_str,
             root_cause_str=SolutionPrompts.format_root_cause(root_cause),
             original_instruction=(
                 ("\n" + SolutionPrompts.format_original_instruction(original_instruction))

@@ -236,6 +236,9 @@ class CodebaseState(BaseModel):
     repo_external_id: str | None = None
     file_changes: list[FileChange] = []
 
+    is_readable: bool = False
+    is_writeable: bool = False
+
 
 class AutofixGroupState(BaseModel):
     run_id: int = -1
@@ -447,6 +450,16 @@ class AutofixUpdateRequest(BaseModel):
 
 class AutofixContinuation(AutofixGroupState):
     request: AutofixRequest
+
+    @property
+    def readable_repos(self) -> list[RepoDefinition]:
+        return [repo for repo in self.request.repos if self.codebases[repo.external_id].is_readable]
+
+    @property
+    def unreadable_repos(self) -> list[RepoDefinition]:
+        return [
+            repo for repo in self.request.repos if not self.codebases[repo.external_id].is_readable
+        ]
 
     def kill_all_processing_steps(self):
         for step in self.steps:

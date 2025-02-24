@@ -3,7 +3,6 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 from github import GithubException, UnknownObjectException
 from johen import generate
-from pydantic import ValidationError
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FileChange, RepoDefinition
@@ -81,15 +80,6 @@ class TestRepoClient:
             "read",
         )
         assert client.provider == "github"
-
-    def test_repo_definition_rejects_unsupported_provider(self):
-        with pytest.raises(ValidationError):
-            RepoDefinition(
-                provider="unsupported_provider",
-                owner="getsentry",
-                name="seer",
-                external_id="123",
-            )
 
     @patch("seer.automation.codebase.repo_client.requests.get")
     @patch("seer.automation.codebase.repo_client.tarfile.open")
