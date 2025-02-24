@@ -296,14 +296,14 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             {formatted_warning}
 
             We need to know if this warning is directly relevant to the issue.
-            By relevant, we mean that fixing the warning would prevent the issue.
-            We're not deciding whether or not the warning is alarming by itself; we want to know how relevant the warning is to the issue at hand.
+            By relevant, we mean that fixing the warning would very likely prevent the issue.
             We're not looking for warnings which vaguely or hypothetically relate to the issue. The relationship should be direct.
-            The locations of the warning and the error don't have to be identical, but they should be referring to similar code/logic.
+            The file locations of the warning and the issue don't have to be identical, but they must be referring to similar functions or variables.
+            Important: if the warning and issue don't refer to similar functions or variables, then the warning is not directly relevant to the issue.
 
-            Before giving your final answer, think out loud in a `reasoning` section about the context in which the error occurs, independent of the warning. What are the possible causes of the error?
-            Then think about how the warning is related or unrelated to the issue. Is the warning referring to similar code/logic as the error's exception stacktrace?
-            Your `reasoning` should be at most 400 words. Feel free to mention what you're uncertain about, and what you're more confident about.
+            Before giving your final answer, think out loud in a `reasoning` section about the context in which the issue occurs, independent of the warning.
+            Then think about how the warning is related and unrelated to the issue. Is the warning referring to the same functions or variables as the issue?
+            Your `reasoning` should be at most 500 words. Express in words what you're uncertain about, and what you're more confident about.
 
             Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `reasoning`.
             This score, the `relevance_probability`, can be very granular, e.g., 0.32.

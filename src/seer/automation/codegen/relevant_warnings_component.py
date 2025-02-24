@@ -213,7 +213,7 @@ class AreIssuesFixableComponent(
         It's fine if there are duplicate issues in the request. That can happen if issues were
         passed in from a list of warning-issue associations.
         """
-        # Can instead batch and send uncached issues in one prompt.
+        # TODO(kddubey): can instead batch and send uncached issues in one prompt.
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
         issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
         issue_id_to_is_fixable = {}
@@ -248,8 +248,6 @@ class PredictRelevantWarningsComponent(
     ) -> CodePredictRelevantWarningsOutput:
         # TODO(kddubey): instead of looking at every association, probably faster and cheaper to input one
         # warning and prompt for which of its associated issues are relevant. May not work as well.
-        #
-        # TODO(kddubey): handle LLM API errors in this loop by moving on
         relevant_warning_results: list[RelevantWarningResult] = []
         for warning, issue in request.candidate_associations:
             completion = llm_client.generate_structured(
@@ -266,6 +264,11 @@ class PredictRelevantWarningsComponent(
                 max_tokens=2048,
                 timeout=15.0,
             )
+            if completion.parsed is None:  # Gemini quirk
+                logger.warning(
+                    f"No response from LLM for warning {warning.id} and issue {issue.id}"
+                )
+                continue
             relevant_warning_results.append(
                 RelevantWarningResult(
                     warning_id=warning.id,
