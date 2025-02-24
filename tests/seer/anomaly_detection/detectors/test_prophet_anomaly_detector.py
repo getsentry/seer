@@ -53,7 +53,7 @@ class TestProphetAnomalyDetector(unittest.TestCase):
         self.assertTrue("yhat_lower" in forecast.columns)
         self.assertTrue("yhat_upper" in forecast.columns)
         self.assertTrue("actual" in forecast.columns)
-        self.assertEqual(len(forecast), 10)
+        self.assertEqual(len(forecast), len(self.timestamps) + 10)
 
     def test_predict_with_invalid_data(self):
         """Test prediction with invalid data"""

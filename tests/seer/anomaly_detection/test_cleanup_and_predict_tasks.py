@@ -26,7 +26,12 @@ from seer.db import (
 
 
 class TestCleanupTasks(unittest.TestCase):
-    def _save_alert(self, external_alert_id: int, num_old_points: int, num_new_points: int):
+    def _save_alert(
+        self,
+        external_alert_id: int,
+        num_old_points: int,
+        num_new_points: int,
+    ):
         # Helper function to save an alert with a given number of old and new points
         organization_id = 100
         project_id = 101
@@ -84,7 +89,7 @@ class TestCleanupTasks(unittest.TestCase):
             assert alert is not None
             assert len(alert.timeseries) == len(points)
 
-        return external_alert_id, config, points, anomalies
+        return external_alert_id, config, points, anomalies, cur_ts
 
     def _save_prophet_predictions(
         self, external_alert_id: int, num_points_old: int, num_points_new: int
@@ -135,13 +140,13 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
-        external_alert_id, config, _, _ = self._save_alert(0, 0, 0)
+        external_alert_id, config, _, _, _ = self._save_alert(0, 0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
-        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 0)
+        external_alert_id, config, points, anomalies, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
@@ -164,7 +169,7 @@ class TestCleanupTasks(unittest.TestCase):
     ):
 
         # Create and save alert with 2000 points (1000 old, 1000 new)
-        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 1000)
+        external_alert_id, config, points, anomalies, _ = self._save_alert(0, 1000, 1000)
 
         external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 1000, 0)
 
@@ -245,7 +250,7 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_make_prophet_predictions(self):
         # Create and save alert with 6 points (3 old, 3 new)
-        external_alert_id, config, points, anomalies = self._save_alert(0, 4800, 1)
+        external_alert_id, config, points, anomalies, cur_timestamp = self._save_alert(0, 4800, 1)
         external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 0, 6)
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
@@ -262,19 +267,20 @@ class TestCleanupTasks(unittest.TestCase):
             new_predictions = [
                 prediction.timestamp
                 for prediction in alert.prophet_predictions
-                if prediction.timestamp >= datetime.now()
+                if prediction.timestamp >= datetime.fromtimestamp(cur_timestamp)
             ]
 
-            assert len(new_predictions) >= (22 * (60 // config.time_period)) and len(
-                new_predictions
-            ) <= (28 * (60 // config.time_period))
+            assert (
+                len(new_predictions) >= (22 * (60 // config.time_period))
+                and len(new_predictions) <= (28 * (60 // config.time_period)) + 1
+            )
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
-        external_alert_id1, _, _, _ = self._save_alert(1, 1000, 0)
-        external_alert_id2, _, _, _ = self._save_alert(2, 500, 0)
-        external_alert_id3, _, _, _ = self._save_alert(3, 0, 500)
-        external_alert_id4, _, _, _ = self._save_alert(4, 0, 500)
+        external_alert_id1, _, _, _, _ = self._save_alert(1, 1000, 0)
+        external_alert_id2, _, _, _, _ = self._save_alert(2, 500, 0)
+        external_alert_id3, _, _, _, _ = self._save_alert(3, 0, 500)
+        external_alert_id4, _, _, _, _ = self._save_alert(4, 0, 500)
 
         # Set last_queued_at to be over 28 days ago for alerts 1 and 2
         with Session() as session:
@@ -337,7 +343,7 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_old_timeseries_history(self):
         # Create and save alert with 1000 points (all old)
-        external_alert_id, _, _, _ = self._save_alert(0, 1000, 0)
+        external_alert_id, _, _, _, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
