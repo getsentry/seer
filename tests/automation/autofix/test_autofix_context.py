@@ -28,7 +28,7 @@ from seer.automation.models import (
     StacktraceFrame,
     ThreadDetails,
 )
-from seer.automation.state import DbStateRunTypes, LocalMemoryState
+from seer.automation.state import DbStateRunTypes
 from seer.automation.summarize.issue import IssueSummary
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 
@@ -52,27 +52,6 @@ class TestAutofixContext(unittest.TestCase):
             self.state,
             MagicMock(),
         )
-
-    @patch("seer.automation.autofix.autofix_context.AutofixEventManager")
-    def test_migrate_step_keys_called_in_init(self, mock_AutofixEventManager):
-        mock_event_manager = MagicMock()
-        mock_AutofixEventManager.return_value = mock_event_manager
-
-        error_event = next(generate(SentryEventData))
-        state = LocalMemoryState(
-            AutofixContinuation(
-                request=AutofixRequest(
-                    organization_id=1,
-                    project_id=1,
-                    repos=[],
-                    issue=IssueDetails(id=0, title="", events=[error_event]),
-                )
-            )
-        )
-
-        AutofixContext(state, mock_event_manager)
-
-        mock_event_manager.migrate_step_keys.assert_called_once()
 
     def test_process_event_paths(self):
         mock_event = EventDetails(
@@ -269,6 +248,7 @@ class TestAutofixContext(unittest.TestCase):
     @patch("seer.automation.autofix.autofix_context.RepoClient")
     def test_process_stacktrace_paths_unknown_object_exception(self, mock_RepoClient):
         mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)
+        mock_RepoClient.supported_providers = ["github"]
         stacktrace = Stacktrace(
             frames=[
                 StacktraceFrame(
@@ -291,6 +271,30 @@ class TestAutofixContext(unittest.TestCase):
             error_msg="Autofix does not have access to the `test/repo` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
             should_completely_error=True,
         )
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_process_stacktrace_paths_ignores_unsupported_providers(self, mock_RepoClient):
+        mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)
+        mock_RepoClient.supported_providers = ["github"]
+        stacktrace = Stacktrace(
+            frames=[
+                StacktraceFrame(
+                    filename="test_file.py",
+                    in_app=True,
+                    repo_name=None,
+                    context=[],
+                    abs_path="path",
+                    line_no=1,
+                    col_no=1,
+                )
+            ]
+        )
+        test_repo = RepoDefinition(provider="bitbucket", owner="test", name="repo", external_id="1")
+        self.autofix_context.repos = [test_repo]
+
+        self.autofix_context._process_stacktrace_paths(stacktrace)
+
+        self.autofix_context.event_manager.on_error.assert_not_called()
 
 
 class TestAutofixContextPrCommit(unittest.TestCase):

@@ -169,14 +169,16 @@ def delete_grouping_records_by_hash_endpoint(
 
 @json_api(blueprint, "/v1/automation/codebase/repo/check-access")
 def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckResponse:
-    return RepoAccessCheckResponse(has_access=RepoClient.check_repo_write_access(data.repo))
+    return RepoAccessCheckResponse(
+        has_access=RepoClient.check_repo_write_access(data.repo) or False
+    )
 
 
 @json_api(blueprint, "/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
     raise_if_no_genai_consent(data.organization_id)
     run_id = run_autofix_root_cause(data)
-    return AutofixEndpointResponse(started=True, run_id=run_id)
+    return AutofixEndpointResponse(started=True, run_id=run_id or -1)
 
 
 @json_api(blueprint, "/v1/automation/autofix/update")

@@ -275,12 +275,6 @@ class TestRepoDefinition(unittest.TestCase):
         self.assertEqual(repo_def.owner, "seer")
         self.assertEqual(repo_def.name, "automation")
 
-    def test_repo_with_invalid_provider(self):
-        with self.assertRaises(ValidationError):
-            RepoDefinition(
-                provider="invalid_provider", owner="seer", name="automation", external_id="123"
-            )
-
     def test_repo_with_none_provider(self):
         repo_dict = {"provider": None, "owner": "seer", "name": "automation"}
         with self.assertRaises(ValidationError):

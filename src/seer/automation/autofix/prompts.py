@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.models import Profile
+from seer.automation.models import Profile, RepoDefinition
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -19,13 +19,28 @@ def format_instruction(instruction: str | None):
     )
 
 
-def format_repo_names(repo_names: list[str]):
-    return textwrap.dedent(
+def format_repo_prompt(
+    readable_repos: list[RepoDefinition], unreadable_repos: list[RepoDefinition] = []
+):
+    if not readable_repos:
+        return "You can't access repositories or look up code, but you're still amazing at solving the problem regardless. Do so without looking up code."
+
+    readable_str = textwrap.dedent(
         """\
         You have the following repositories to work with:
-        {names_list_str}
-        """
-    ).format(names_list_str="\n".join([f"- {repo_name}" for repo_name in repo_names]))
+        {names_list_str}"""
+    ).format(names_list_str="\n".join([f"- {repo.full_name}" for repo in readable_repos]))
+
+    if unreadable_repos:
+        unreadable_str = textwrap.dedent(
+            """\
+            The follow repositories may show up, but you don't have access to them:
+            {names_list_str}"""
+        ).format(names_list_str="\n".join([f"- {repo.full_name}" for repo in unreadable_repos]))
+
+        return readable_str + "\n\n" + unreadable_str
+
+    return readable_str
 
 
 def format_summary(summary: IssueSummary | None) -> str:
@@ -48,4 +63,4 @@ def format_summary(summary: IssueSummary | None) -> str:
 def format_code_map(code_map: Profile | None):
     if not code_map:
         return ""
-    return f"Here's a partial map of the code {('at the time of the issue' if code_map.profile_matches_issue else 'that may help')}: \n{code_map.format_profile()}"
+    return f"\nHere's a partial map of the code {('at the time of the issue' if code_map.profile_matches_issue else 'that may help')}: \n{code_map.format_profile()}\n"
