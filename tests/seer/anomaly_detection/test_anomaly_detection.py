@@ -11,7 +11,7 @@ from seer.anomaly_detection.models import (
     MPTimeSeries,
     MPTimeSeriesAnomaliesSingleWindow,
 )
-from seer.anomaly_detection.models.cleanup import CleanupConfig
+from seer.anomaly_detection.models.cleanup_predict import CleanupPredictConfig
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     AnomalyDetectionConfig,
@@ -143,10 +143,10 @@ class TestAnomalyDetection(unittest.TestCase):
 
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
-    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_predict_task")
     def test_detect_anomalies_online(
         self,
-        mock_reset_cleanup,
+        mock_reset_cleanup_predict,
         mock_save_timepoint,
         mock_query,
     ):
@@ -157,8 +157,12 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        cleanup_config = CleanupConfig(
-            num_old_points=0, timestamp_threshold=0, num_acceptable_points=0
+        cleanup_predict_config = CleanupPredictConfig(
+            num_old_points=0,
+            timestamp_threshold=0,
+            num_acceptable_points=0,
+            num_predictions_remaining=0,
+            num_acceptable_predictions=0,
         )
 
         loaded_synthetic_data = convert_synthetic_ts(
@@ -190,13 +194,13 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
             ),
-            cleanup_config=cleanup_config,
+            cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
         )
 
         # Dummy return so we don't hit db
         mock_save_timepoint.return_value = ""
-        mock_reset_cleanup.return_value = ""
+        mock_reset_cleanup_predict.return_value = ""
 
         new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
         context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=new_timestamp, value=0.5))
@@ -234,7 +238,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=np.array(["none"] * len(ts_timestamps[:100])),
                 use_suss=np.array([True] * len(ts_timestamps[:100])),
             ),
-            cleanup_config=cleanup_config,
+            cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
         )
 
@@ -279,7 +283,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
                 use_suss=[True] * len(ts_timestamps),
             ),
-            cleanup_config=cleanup_config,
+            cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
         )
 
@@ -290,9 +294,9 @@ class TestAnomalyDetection(unittest.TestCase):
     @patch("seer.anomaly_detection.detectors.MPStreamAnomalyDetector.detect")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
-    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_task")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_predict_task")
     def test_detect_anomalies_online_switch_window(
-        self, mock_reset_cleanup, mock_save_timepoint, mock_query, mock_stream_detector
+        self, mock_reset_cleanup_predict, mock_save_timepoint, mock_query, mock_stream_detector
     ):
 
         fixed_window_size = 10
@@ -301,8 +305,12 @@ class TestAnomalyDetection(unittest.TestCase):
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
 
-        cleanup_config = CleanupConfig(
-            num_old_points=0, timestamp_threshold=0, num_acceptable_points=0
+        cleanup_predict_config = CleanupPredictConfig(
+            num_old_points=0,
+            timestamp_threshold=0,
+            num_acceptable_points=0,
+            num_predictions_remaining=0,
+            num_acceptable_predictions=0,
         )
 
         loaded_synthetic_data = convert_synthetic_ts(
@@ -334,13 +342,13 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([False] * len(ts_timestamps)),
             ),
-            cleanup_config=cleanup_config,
+            cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
         )
 
         # Dummy return so we don't hit db
         mock_save_timepoint.return_value = ""
-        mock_reset_cleanup.return_value = ""
+        mock_reset_cleanup_predict.return_value = ""
 
         # Can return back to the SuSS window after using the fixed window
         mock_stream_detector.return_value = MPTimeSeriesAnomaliesSingleWindow(
@@ -386,7 +394,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
             ),
-            cleanup_config=cleanup_config,
+            cleanup_predict_config=cleanup_predict_config,
             only_suss=True,
         )
 

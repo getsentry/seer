@@ -23,6 +23,7 @@ class ProphetAnomalyDetector(BaseModel):
 
     """
 
+    @inject
     def predict(
         self,
         timestamps: npt.NDArray[np.float64],
@@ -46,9 +47,13 @@ class ProphetAnomalyDetector(BaseModel):
         Returns:
             A dataframe with the forecasted values, confidence intervals, and actual values
         """
+
+        # Convert timestamps from floats to datetime
         df_train = pd.DataFrame({"ds": timestamps, "y": values})
-        df_train.ds = pd.to_datetime(df_train.ds)
+
+        df_train.ds = pd.to_datetime(df_train.ds, unit="s", utc=True)
         df_train.ds = df_train.ds.dt.tz_localize(None)
+
         ts_value_map = df_train.set_index("ds")["y"].to_dict()
 
         df_train.sort_values(by="ds", inplace=True)
@@ -112,7 +117,6 @@ class ProphetAnomalyDetector(BaseModel):
         # train_df.reset_index(drop=True, inplace=True)
         return train_df, bc_lambda
 
-    @inject
     def _fit(
         self,
         df: pd.DataFrame,
@@ -166,7 +170,6 @@ class ProphetAnomalyDetector(BaseModel):
         model = prophet.fit(df=df, iter=250)
         return model
 
-    @inject
     def _add_prophet_uncertainty(
         self,
         df: pd.DataFrame,

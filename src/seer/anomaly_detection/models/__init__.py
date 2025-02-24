@@ -25,3 +25,4 @@ RelativeLocation = relative_location.RelativeLocation
 Threshold = relative_location.Threshold
 ThresholdType = relative_location.ThresholdType
 PointLocation = relative_location.PointLocation
+ProphetPrediction = timeseries.ProphetPrediction

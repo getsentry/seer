@@ -11,13 +11,14 @@ from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeS
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.anomaly_detection.tasks import (
     cleanup_disabled_alerts,
-    cleanup_old_timeseries_history,
-    cleanup_timeseries,
+    cleanup_old_timeseries_and_prophet_history,
+    cleanup_timeseries_and_predict,
 )
 from seer.db import (
     DbDynamicAlert,
     DbDynamicAlertTimeSeries,
     DbDynamicAlertTimeSeriesHistory,
+    DbProphetAlertTimeSeriesHistory,
     Session,
     TaskStatus,
 )
@@ -29,17 +30,17 @@ class TestCleanupTasks(unittest.TestCase):
         organization_id = 100
         project_id = 101
         cur_ts = datetime.now().timestamp()
-        past_ts = (datetime.now() - timedelta(days=100)).timestamp()
+        past_ts = (datetime.now() - timedelta(days=200)).timestamp()
 
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
         points_old = [
-            TimeSeriesPoint(timestamp=past_ts + (i * 100), value=random.randint(1, 100))
+            TimeSeriesPoint(timestamp=past_ts + (i * 3600), value=random.randint(1, 100))
             for i in range(num_old_points)
         ]
         points_new = [
-            TimeSeriesPoint(timestamp=cur_ts + (i * 100), value=random.randint(1, 100))
+            TimeSeriesPoint(timestamp=cur_ts + (i * 3600), value=random.randint(1, 100))
             for i in range(num_new_points)
         ]
         points = [*points_old, *points_new]
@@ -86,19 +87,19 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_invalid_alert_id(self):
         with self.assertRaises(ValueError, msg="Alert with id 100 not found"):
-            cleanup_timeseries(100, datetime.now().timestamp())
+            cleanup_timeseries_and_predict(100, datetime.now().timestamp())
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
         external_alert_id, config, _, _ = self._save_alert(0, 0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
         external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:
@@ -112,8 +113,11 @@ class TestCleanupTasks(unittest.TestCase):
             assert len(alert.timeseries) == 0
             assert "window_size" in alert.anomaly_algo_data
             assert alert.anomaly_algo_data["window_size"] == 0
+            assert len(alert.prophet_predictions) == 0
 
-    def test_cleanup_timeseries(self):
+    def test_cleanup_timeseries(
+        self,
+    ):  # TODO: Confirm the logic for prophet predictions in this test
 
         # Create and save alert with 2000 points (1000 old, 1000 new)
         external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 1000)
@@ -122,7 +126,9 @@ class TestCleanupTasks(unittest.TestCase):
             timestamps=np.array([point.timestamp for point in points_new]),
             values=np.array([point.value for point in points_new]),
         )
-        anomalies_new = MPBatchAnomalyDetector().detect(ts_new, config)
+        anomalies_new = MPBatchAnomalyDetector().detect(
+            ts_new, config
+        )  # TODO: Need to update this and the entire test to use the Combined Anomalies when implemented
 
         old_timeseries_points = []
         with Session() as session:
@@ -133,10 +139,11 @@ class TestCleanupTasks(unittest.TestCase):
             )
             assert alert is not None
             assert len(alert.timeseries) == 2000
+            assert len(alert.prophet_predictions) == 0
             old_timeseries_points = alert.timeseries
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:
@@ -186,7 +193,7 @@ class TestCleanupTasks(unittest.TestCase):
 
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
-            cleanup_timeseries(999, date_threshold)
+            cleanup_timeseries_and_predict(999, date_threshold)
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
@@ -236,6 +243,13 @@ class TestCleanupTasks(unittest.TestCase):
                 )
                 assert len(timeseries) == 0
 
+                prophet_predictions_history = (
+                    session.query(DbProphetAlertTimeSeriesHistory)
+                    .filter(DbProphetAlertTimeSeriesHistory.alert_id == alert_id)
+                    .all()
+                )
+                assert len(prophet_predictions_history) == 0
+
         # Confirm that alert 4 and its respective timeseries are not deleted
         with Session() as session:
             alert = (
@@ -249,9 +263,9 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_old_timeseries_history(self):
         # Create and save alert with 1000 points (all old)
-        external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 0)
+        external_alert_id, _, _, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
 
         # Confirm the historical table is populated with 1000 points
 
@@ -267,11 +281,19 @@ class TestCleanupTasks(unittest.TestCase):
 
         with Session() as session:
 
-            cleanup_old_timeseries_history()
+            cleanup_old_timeseries_and_prophet_history()
 
             history = (
                 session.query(DbDynamicAlertTimeSeriesHistory)
                 .filter(DbDynamicAlertTimeSeriesHistory.alert_id == external_alert_id)
                 .all()
             )
+
             assert len(history) == 0
+
+            prophet_predictions_history = (
+                session.query(DbProphetAlertTimeSeriesHistory)
+                .filter(DbProphetAlertTimeSeriesHistory.alert_id == external_alert_id)
+                .all()
+            )
+            assert len(prophet_predictions_history) == 0
