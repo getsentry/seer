@@ -149,6 +149,7 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ClientError("No timeseries data found for alert")
+        # TODO: Add celery being clogged logic
         if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
             logger.error(
                 "invalid_state",

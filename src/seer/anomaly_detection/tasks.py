@@ -86,6 +86,7 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
             deleted_timeseries_points, prophet_deleted_timeseries_points = (
                 _delete_old_timeseries_points(alert, date_threshold)
             )
+
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
 
@@ -241,29 +242,29 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
 
     with Session() as session:
 
-        # Make sure to skip predictions that have already been stored
-        stored_predictions = (
-            session.query(DbProphetAlertTimeSeries)
-            .filter(
-                DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
-                DbProphetAlertTimeSeries.timestamp >= datetime.now(),
-            )
-            .all()
-        )
-        stored_predictions_timestamps = [prediction.timestamp for prediction in stored_predictions]
+        # TODO: Overwrite the predictions if they are already stored
+        # Delete existing predictions that overlap with new prediction timestamps
+        min_timestamp = datetime.now()
+        max_timestamp = datetime.fromtimestamp(max(predictions.timestamps))
+
+        session.query(DbProphetAlertTimeSeries).filter(
+            DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
+            DbProphetAlertTimeSeries.timestamp >= min_timestamp,
+            DbProphetAlertTimeSeries.timestamp <= max_timestamp,
+        ).delete()
 
         for timestamp, yhat, yhat_lower, yhat_upper in zip(
             predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
         ):
-            if timestamp not in stored_predictions_timestamps:
-                prophet_prediction = DbProphetAlertTimeSeries(
-                    dynamic_alert_id=alert.id,
-                    timestamp=datetime.fromtimestamp(timestamp),
-                    yhat=yhat,
-                    yhat_lower=yhat_lower,
-                    yhat_upper=yhat_upper,
-                )
-                session.add(prophet_prediction)
+            # if timestamp not in stored_predictions_timestamps:
+            prophet_prediction = DbProphetAlertTimeSeries(
+                dynamic_alert_id=alert.id,
+                timestamp=datetime.fromtimestamp(timestamp),
+                yhat=yhat,
+                yhat_lower=yhat_lower,
+                yhat_upper=yhat_upper,
+            )
+            session.add(prophet_prediction)
         session.commit()
 
     logger.info(f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}")

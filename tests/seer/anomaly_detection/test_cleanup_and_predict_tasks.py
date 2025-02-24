@@ -18,6 +18,7 @@ from seer.db import (
     DbDynamicAlert,
     DbDynamicAlertTimeSeries,
     DbDynamicAlertTimeSeriesHistory,
+    DbProphetAlertTimeSeries,
     DbProphetAlertTimeSeriesHistory,
     Session,
     TaskStatus,
@@ -85,6 +86,49 @@ class TestCleanupTasks(unittest.TestCase):
 
         return external_alert_id, config, points, anomalies
 
+    def _save_prophet_predictions(
+        self, external_alert_id: int, num_points_old: int, num_points_new: int
+    ):
+
+        cur_ts = datetime.now().timestamp()
+        past_ts = (datetime.now() - timedelta(days=200)).timestamp()
+
+        timestamps_old = [past_ts + (i * 3600) for i in range(num_points_old)]
+        timestamps_new = [cur_ts + (i * 3600) for i in range(num_points_new)]
+        timestamps = np.array([*timestamps_old, *timestamps_new])
+        yhats = np.array([random.randint(1, 100) for _ in range(num_points_old + num_points_new)])
+        yhats_lower = yhats - 10
+        yhats_upper = yhats + 10
+
+        prophet_predictions = []
+
+        with Session() as session:
+
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+
+            assert alert is not None
+
+            for timestamp, yhat, yhat_lower, yhat_upper in zip(
+                timestamps, yhats, yhats_lower, yhats_upper
+            ):
+                prediction = DbProphetAlertTimeSeries(
+                    dynamic_alert_id=alert.id,
+                    timestamp=datetime.fromtimestamp(timestamp),
+                    yhat=float(yhat),
+                    yhat_lower=float(yhat_lower),
+                    yhat_upper=float(yhat_upper),
+                )
+                session.add(prediction)
+                prophet_predictions.append(prediction)
+
+            session.commit()
+
+        return external_alert_id, prophet_predictions
+
     def test_cleanup_invalid_alert_id(self):
         with self.assertRaises(ValueError, msg="Alert with id 100 not found"):
             cleanup_timeseries_and_predict(100, datetime.now().timestamp())
@@ -117,10 +161,13 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_timeseries(
         self,
-    ):  # TODO: Confirm the logic for prophet predictions in this test
+    ):
 
         # Create and save alert with 2000 points (1000 old, 1000 new)
         external_alert_id, config, points, anomalies = self._save_alert(0, 1000, 1000)
+
+        external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 1000, 0)
+
         points_new = points[1000:]
         ts_new = TimeSeries(
             timestamps=np.array([point.timestamp for point in points_new]),
@@ -139,7 +186,7 @@ class TestCleanupTasks(unittest.TestCase):
             )
             assert alert is not None
             assert len(alert.timeseries) == 2000
-            assert len(alert.prophet_predictions) == 0
+            assert len(alert.prophet_predictions) == 1000
             old_timeseries_points = alert.timeseries
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
@@ -155,6 +202,7 @@ class TestCleanupTasks(unittest.TestCase):
             assert alert is not None
             assert alert.data_purge_flag == TaskStatus.NOT_QUEUED
             assert len(alert.timeseries) == 1000
+
             assert "window_size" in alert.anomaly_algo_data
             assert alert.anomaly_algo_data["window_size"] == anomalies_new.window_size
             new_timeseries_points = alert.timeseries
@@ -194,6 +242,32 @@ class TestCleanupTasks(unittest.TestCase):
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
             cleanup_timeseries_and_predict(999, date_threshold)
+
+    def test_make_prophet_predictions(self):
+        # Create and save alert with 6 points (3 old, 3 new)
+        external_alert_id, config, points, anomalies = self._save_alert(0, 4800, 1)
+        external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 0, 6)
+
+        date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+
+        with Session() as session:
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+            assert alert is not None
+
+            new_predictions = [
+                prediction.timestamp
+                for prediction in alert.prophet_predictions
+                if prediction.timestamp >= datetime.now()
+            ]
+
+            assert len(new_predictions) >= (22 * (60 // config.time_period)) and len(
+                new_predictions
+            ) <= (28 * (60 // config.time_period))
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
