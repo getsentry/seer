@@ -225,7 +225,7 @@ def run_autofix_coding(
     raise_if_no_genai_consent(state.get().request.organization_id)
 
     if not state.get().readable_repos:
-        raise ValueError("Cannot run coding without readable repos...")
+        raise ValueError("Cannot run coding without readable repos.")
 
     with state.update() as cur:
         cur.mark_triggered()
