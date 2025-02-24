@@ -47,20 +47,18 @@ class ProphetAnomalyDetector(BaseModel):
         Returns:
             A dataframe with the forecasted values, confidence intervals, and actual values
         """
+
+        # Convert timestamps from floats to datetime
         df_train = pd.DataFrame({"ds": timestamps, "y": values})
-        df_train.ds = pd.to_datetime(df_train.ds)
+
+        df_train.ds = pd.to_datetime(df_train.ds, unit="s", utc=True)
         df_train.ds = df_train.ds.dt.tz_localize(None)
+
         ts_value_map = df_train.set_index("ds")["y"].to_dict()
 
         df_train.sort_values(by="ds", inplace=True)
-        print("============================df train BEFORE==================================")
-        print(df_train)
-        print("==============================================================")
 
         df_train, bc_lambda = self._pre_process_data(df_train, time_period)
-        print("============================df train AFTER==================================")
-        print(df_train)
-        print("==============================================================")
         model = self._fit(df_train, sensitivity, algo_config)
 
         future = model.make_future_dataframe(periods=forecast_len, freq=f"{time_period}min")
@@ -136,10 +134,6 @@ class ProphetAnomalyDetector(BaseModel):
         Returns:
             The fitted prophet model object
         """
-
-        print("==============================================================")
-        print(df)
-        print("==============================================================")
         model_params = algo_config.get_prophet_params(sensitivity)
 
         prophet = Prophet(

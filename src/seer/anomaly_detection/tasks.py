@@ -223,11 +223,16 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig) -> Proph
         timestamps, values, forecast_len, config.time_period, config.sensitivity
     )
 
+    # Convert ds back to timestamps
+    prophet_timestamps = np.array(
+        [date.timestamp() for date in prediction_df["ds"]], dtype=np.float64
+    )
+
     return ProphetPrediction(
-        timestamps=prediction_df["ds"],
-        yhat=prediction_df["yhat"],
-        yhat_lower=prediction_df["yhat_lower"],
-        yhat_upper=prediction_df["yhat_upper"],
+        timestamps=prophet_timestamps,
+        yhat=np.array(prediction_df["yhat"]),
+        yhat_lower=np.array(prediction_df["yhat_lower"]),
+        yhat_upper=np.array(prediction_df["yhat_upper"]),
     )
 
 
@@ -253,7 +258,7 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
             if timestamp not in stored_predictions_timestamps:
                 prophet_prediction = DbProphetAlertTimeSeries(
                     dynamic_alert_id=alert.id,
-                    timestamp=timestamp,
+                    timestamp=datetime.fromtimestamp(timestamp),
                     yhat=yhat,
                     yhat_lower=yhat_lower,
                     yhat_upper=yhat_upper,
