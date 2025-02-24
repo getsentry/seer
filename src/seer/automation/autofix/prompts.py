@@ -23,7 +23,7 @@ def format_repo_prompt(
     readable_repos: list[RepoDefinition], unreadable_repos: list[RepoDefinition] = []
 ):
     if not readable_repos:
-        return "You can't access repositories or look up code, but you're still amazing at solving the problem regardless, do so without looking up code."
+        return "You can't access repositories or look up code, but you're still amazing at solving the problem regardless. Do so without looking up code."
 
     readable_str = textwrap.dedent(
         """\
