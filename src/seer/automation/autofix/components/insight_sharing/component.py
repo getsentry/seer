@@ -65,7 +65,7 @@ class InsightSharingPrompts:
         return textwrap.dedent(template).format(
             latest_thought=latest_thought,
             insights=" ".join(past_insights) if past_insights else "[paragraph is empty]",
-            no_insight_instruction="If there is nothing SUPER IMPORTANT to add, just return <NO_INSIGHT/>.",
+            no_insight_instruction="If there is nothing SUPER IMPORTANT to add, just return <NO_INSIGHT/>. If there is no new conclusion, but just a plan of what to search for, return <NO_INSIGHT/>.",
         )
 
     @staticmethod
