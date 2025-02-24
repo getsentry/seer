@@ -27,11 +27,11 @@ from seer.automation.autofix.models import (
     DefaultStep,
     InsightSharingOutput,
     RootCauseStep,
+    SolutionStep,
 )
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep as RootCausePipelineStep
 from seer.automation.autofix.steps.root_cause_step import RootCauseStepRequest
-from seer.automation.autofix.steps.solution_step import AutofixSolutionStep
 from seer.automation.autofix.tasks import (
     check_and_mark_recent_autofix_runs,
     comment_on_thread,
@@ -48,7 +48,7 @@ from seer.automation.autofix.tasks import (
     update_code_change,
 )
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import FilePatch, Hunk, Line
+from seer.automation.models import FilePatch, Hunk, Line, RepoDefinition
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import resolve
 from seer.rpc import DummyRpcClient, RpcClient
@@ -212,8 +212,107 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
 
     solution_step = continuation.get().find_step(key="solution")
     assert solution_step is not None
-    solution_step = cast(AutofixSolutionStep, solution_step)
+    solution_step = cast(SolutionStep, solution_step)
     assert solution_step.status == AutofixStatus.COMPLETED
+
+    with eager_celery():
+        run_autofix_coding(
+            AutofixUpdateRequest(
+                run_id=run_id,
+                payload=AutofixSolutionUpdatePayload(custom_solution="fix it however you see fit"),
+            )
+        )
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    changes_step = continuation.get().find_step(key="changes")
+
+    assert changes_step is not None
+    changes_step = cast(ChangesStep, changes_step)
+    assert changes_step.status == AutofixStatus.COMPLETED
+    assert len(changes_step.changes) > 0
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}
+
+
+@pytest.mark.vcr()
+def test_autofix_run_full_without_repos(autofix_request: AutofixRequest):
+    autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
+    autofix_request.repos = []
+    with eager_celery():
+        run_id = run_autofix_root_cause(autofix_request)
+
+    assert run_id is not None
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    root_cause_step = continuation.get().find_step(key="root_cause_analysis")
+    assert root_cause_step is not None
+    root_cause_step = cast(RootCauseStep, root_cause_step)
+    assert root_cause_step.status == AutofixStatus.COMPLETED
+
+    solution_step = continuation.get().find_step(key="solution")
+    assert solution_step is not None
+    solution_step = cast(SolutionStep, solution_step)
+    assert solution_step.status == AutofixStatus.COMPLETED
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}
+
+    with eager_celery():
+        with pytest.raises(ValueError):
+            run_autofix_coding(
+                AutofixUpdateRequest(
+                    run_id=run_id,
+                    payload=AutofixSolutionUpdatePayload(
+                        custom_solution="fix it however you see fit"
+                    ),
+                )
+            )
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    changes_step = continuation.get().find_step(key="changes")
+
+    assert changes_step is None
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}  # Shouldn't error out the run
+
+
+@pytest.mark.vcr()
+def test_autofix_run_full_with_partial_supported_repos(autofix_request: AutofixRequest):
+    autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
+    autofix_request.repos = [
+        RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="439438299"),
+        RepoDefinition(
+            provider="bitbucket", owner="getsentry", name="wowowoww", external_id="2344"
+        ),
+    ]
+    with eager_celery():
+        run_id = run_autofix_root_cause(autofix_request)
+
+    assert run_id is not None
+
+    continuation = get_autofix_state(run_id=run_id)
+
+    assert continuation is not None
+
+    root_cause_step = continuation.get().find_step(key="root_cause_analysis")
+    assert root_cause_step is not None
+    root_cause_step = cast(RootCauseStep, root_cause_step)
+    assert root_cause_step.status == AutofixStatus.COMPLETED
+
+    solution_step = continuation.get().find_step(key="solution")
+    assert solution_step is not None
+    solution_step = cast(SolutionStep, solution_step)
+    assert solution_step.status == AutofixStatus.COMPLETED
+
+    assert continuation.get().status not in {AutofixStatus.ERROR}
 
     with eager_celery():
         run_autofix_coding(
