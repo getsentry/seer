@@ -86,9 +86,6 @@ class TestProphetAnomalyDetector(unittest.TestCase):
     def test_different_sensitivities(self):
         """Test predictions with different sensitivity levels"""
 
-        print("============================timestamps==================================")
-        print(self.timestamps)
-        print("==============================================================")
         forecasts = {}
         for sensitivity in ["low", "medium", "high"]:
             forecast = self.detector.predict(
