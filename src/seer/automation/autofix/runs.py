@@ -40,4 +40,6 @@ def set_accessible_repos(cur: AutofixContinuation) -> None:
                 cur.codebases[repo.external_id].is_readable = True
             if RepoClient.check_repo_write_access(repo):
                 cur.codebases[repo.external_id].is_writeable = True
-        # else the values are already False
+        else:
+            cur.codebases[repo.external_id].is_readable = False
+            cur.codebases[repo.external_id].is_writeable = False
