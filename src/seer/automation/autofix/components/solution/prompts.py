@@ -118,7 +118,7 @@ class SolutionPrompts:
     def solution_formatter_msg(root_cause: RootCauseAnalysisItem | str):
         return textwrap.dedent(
             """\
-            Based on the discussed plan, extract out each step of the plan to fix the issue.
+            Based on the discussed plan, extract out each step of the plan to fix the issue. Exclude steps that are not part of the fix, such as tests.
 
             For each item in the plan (where one item is one step to fix the issue):
               - Title: a complete sentence describing what needs to change to fix the issue.
