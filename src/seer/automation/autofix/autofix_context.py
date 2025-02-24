@@ -149,7 +149,7 @@ class AutofixContext(PipelineContext):
             # Try to find a repo name that contains the provided one to autocorrect
             matching_repos = [r for r in repo_names if repo_name.lower() in r.lower()]
             if matching_repos:
-                repo_name = min(matching_repos, key=lambda x: abs(len(x) - len(repo_name)))
+                repo_name = min(matching_repos, key=lambda x: abs(len(x) - len(repo_name or "")))
             else:
                 raise AgentError() from ValueError(
                     f"Repo '{repo_name}' not found. Available repos: {', '.join(repo_names)}"
