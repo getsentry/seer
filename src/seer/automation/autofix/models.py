@@ -236,8 +236,8 @@ class CodebaseState(BaseModel):
     repo_external_id: str | None = None
     file_changes: list[FileChange] = []
 
-    is_readable: bool = False
-    is_writeable: bool = False
+    is_readable: bool | None = None
+    is_writeable: bool | None = None
 
 
 class AutofixGroupState(BaseModel):
@@ -453,12 +453,20 @@ class AutofixContinuation(AutofixGroupState):
 
     @property
     def readable_repos(self) -> list[RepoDefinition]:
-        return [repo for repo in self.request.repos if self.codebases[repo.external_id].is_readable]
+        return [
+            repo
+            for repo in self.request.repos
+            if self.codebases[repo.external_id].is_readable is True
+            or self.codebases[repo.external_id].is_readable
+            is None  # TODO: Remove this once we don't need backwards compatibility
+        ]
 
     @property
     def unreadable_repos(self) -> list[RepoDefinition]:
         return [
-            repo for repo in self.request.repos if not self.codebases[repo.external_id].is_readable
+            repo
+            for repo in self.request.repos
+            if self.codebases[repo.external_id].is_readable is False
         ]
 
     def kill_all_processing_steps(self):
