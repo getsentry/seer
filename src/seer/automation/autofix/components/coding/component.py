@@ -98,8 +98,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             {new_content}
             </update>
 
-            Provide the complete updated code.
-            """
+            Provide the complete updated code."""
         ).format(original_content=original_content, new_content=new_content)
 
         # use predicted output for faster response
