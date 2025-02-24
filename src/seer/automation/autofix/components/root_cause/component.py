@@ -82,7 +82,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                             system_prompt=RootCauseAnalysisPrompts.format_system_msg(
                                 has_tools=True
                             ),
-                            max_iterations=32,
+                            max_iterations=40,
                             memory_storage_key="root_cause_analysis",
                             run_name="Root Cause Discovery",
                         ),
