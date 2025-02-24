@@ -105,14 +105,22 @@ class CodingPrompts:
         )
 
     @staticmethod
-    def format_missing_msg(missing_files: list[str], existing_files: list[str]):
+    def format_missing_msg(
+        missing_files: list[str], existing_files: list[str], correct_paths: list[str]
+    ):
         text = ""
 
+        if correct_paths:
+            text += (
+                f"The following code changes are formatted correctly: {', '.join(correct_paths)}\n"
+            )
+            text += "But..."
         if missing_files:
             text += f"The following files don't exist, yet you are trying to modify them: {', '.join(missing_files)}\n"
         if existing_files:
             text += f"The following files already exist, yet you are trying to create them: {', '.join(existing_files)}\n"
-        text += "\nPlease fix the above issues and output your answer in the correct format again."
+
+        text += "\nPlease fix the above issues by correcting the file paths or correcting the type (file_create, file_change, or file_delete) and output your answer in the correct format again. Re-write your WHOLE answer, including the already-correct changes."
 
         return text
 

@@ -427,12 +427,12 @@ class BaseTools:
             FunctionTool(
                 name="file_search",
                 fn=self.file_search,
-                description="Searches for a file in the codebase.",
+                description="Given a filename with extension returns the list of locations where a file with the name is found.",
                 parameters=[
                     {
                         "name": "filename",
                         "type": "string",
-                        "description": "The file to search for.",
+                        "description": "The filename with extension to search for.",
                     },
                 ],
                 required=["filename"],
@@ -486,7 +486,7 @@ class BaseTools:
                 FunctionTool(
                     name="ask_a_question",
                     fn=self.ask_user_question,
-                    description="Ask the codeowners a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else.",
+                    description="Ask the user a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else. Only use this tool if necessary.",
                     parameters=[
                         {
                             "name": "question",

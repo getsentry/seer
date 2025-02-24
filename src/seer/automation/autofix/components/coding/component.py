@@ -94,10 +94,11 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             <code>{original_content}</code>
 
-            <update>{new_content}</update>
+            <update>
+            {new_content}
+            </update>
 
-            Provide the complete updated code.
-            """
+            Provide the complete updated code."""
         ).format(original_content=original_content, new_content=new_content)
 
         # use predicted output for faster response
@@ -284,23 +285,25 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         """Check for missing or already existing files and try to fix the changes if needed."""
         missing_files_errors = []
         file_exist_errors = []
-
+        correct_paths = []
         for task in code_changes_output.tasks:
             repo_client = self.context.get_repo_client(task.repo_name)
-            file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
+            file_content, _ = repo_client.get_file_content(task.file_path)
             if task.type == "file_change" and not file_content:
                 missing_files_errors.append(task.file_path)
             elif task.type == "file_delete" and not file_content:
                 missing_files_errors.append(task.file_path)
             elif task.type == "file_create" and file_content:
                 file_exist_errors.append(task.file_path)
+            else:
+                correct_paths.append(task.file_path)
 
         if missing_files_errors or file_exist_errors:
             agent.config.interactive = False
             new_response = agent.run(
                 RunConfig(
                     prompt=CodingPrompts.format_missing_msg(
-                        missing_files_errors, file_exist_errors
+                        missing_files_errors, file_exist_errors, correct_paths
                     ),
                     model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="code",
@@ -374,13 +377,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             self.context.event_manager.add_log("Rewriting your unfortunate code...")
             tasks_with_diffs: list[PlanTaskPromptXml] = []
 
-            # Resolve LlmClient once in the main thread
-            resolved_llm_client = self._get_llm_client()
-            resolved_app_config = self._get_app_config()
-
             @observe(name="Process Change Task")
             @ai_track(description="Process Change Task")
-            def process_task(task: CodeChangeXml, llm_client: LlmClient, app_config: AppConfig):
+            def process_task(task: CodeChangeXml):
                 repo_client = self.context.get_repo_client(task.repo_name)
                 if task.type == "file_change":
                     file_content, _ = repo_client.get_file_content(task.file_path, autocorrect=True)
@@ -446,8 +445,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     executor.submit(
                         process_task,
                         task,
-                        resolved_llm_client,
-                        resolved_app_config,
                         langfuse_parent_trace_id=trace_id,  # type: ignore
                         langfuse_parent_observation_id=observation_id,  # type: ignore
                     )
