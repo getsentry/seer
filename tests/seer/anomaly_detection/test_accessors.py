@@ -12,7 +12,7 @@ from seer.anomaly_detection.models import (
     ThresholdType,
 )
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
-from seer.db import DbDynamicAlert, Session, TaskStatus
+from seer.db import DbDynamicAlert, DbProphetAlertTimeSeries, Session, TaskStatus
 
 
 class TestDbAlertDataAccessor(unittest.TestCase):
@@ -48,6 +48,16 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )
 
+        # Make sure that no prophet predictions are saved
+        alert_no_prophet = alert_data_accessor.query(external_alert_id=external_alert_id)
+        assert alert_no_prophet is not None
+        assert alert_no_prophet.prophet_predictions is not None
+        assert len(alert_no_prophet.prophet_predictions.timestamps) == 0
+        assert len(alert_no_prophet.prophet_predictions.yhat) == 0
+        assert len(alert_no_prophet.prophet_predictions.yhat_lower) == 0
+        assert len(alert_no_prophet.prophet_predictions.yhat_upper) == 0
+        assert alert_no_prophet.cleanup_predict_config.num_predictions_remaining == 0
+
         with Session() as session:
             self.assertEqual(
                 session.query(DbDynamicAlert).count(), 1, "One and only one dynamic alert row saved"
@@ -59,7 +69,34 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 1,
                 f"One and only one dynamic alert with the external_alert_id {external_alert_id}",
             )
+
+            # Include some prophet predictions
+            alert = (
+                session.query(DbDynamicAlert)
+                .filter_by(external_alert_id=external_alert_id)
+                .one_or_none()
+            )
+
+            prophet_timestamps = [
+                datetime.now() + timedelta(minutes=i * config.time_period) for i in range(12)
+            ]
+            prophet_yhats = [42.42 + i for i in range(12)]
+            prophet_yhat_lowers = [42.42 + i - 1 for i in range(12)]
+            prophet_yhat_uppers = [42.42 + i + 1 for i in range(12)]
+
+            for i, timestamp in enumerate(prophet_timestamps):
+                prophet_prediction = DbProphetAlertTimeSeries(
+                    dynamic_alert_id=alert.id,
+                    timestamp=timestamp,
+                    yhat=prophet_yhats[i],
+                    yhat_lower=prophet_yhat_lowers[i],
+                    yhat_upper=prophet_yhat_uppers[i],
+                )
+                session.add(prophet_prediction)
+            session.commit()
+
         alert_from_db = alert_data_accessor.query(external_alert_id=external_alert_id)
+
         self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
         self.assertEqual(
             alert_from_db.organization_id,
@@ -104,6 +141,14 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
         self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
         self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
+
+        assert len(alert_from_db.prophet_predictions.timestamps) == 12
+        assert len(alert_from_db.prophet_predictions.yhat) == 12
+        assert len(alert_from_db.prophet_predictions.yhat_lower) == 12
+        assert len(alert_from_db.prophet_predictions.yhat_upper) == 12
+
+        # Should be 11 because the first point is for the current timestamp
+        assert alert_from_db.cleanup_predict_config.num_predictions_remaining == 11
 
         # Verify updating an existing alert
         organization_id = 1001

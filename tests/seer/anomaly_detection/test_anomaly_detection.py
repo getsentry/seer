@@ -24,6 +24,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesPoint,
     TimeSeriesWithHistory,
 )
+from seer.anomaly_detection.models.timeseries import ProphetPrediction
 from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomalies
 from seer.exceptions import ClientError, ServerError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
@@ -194,6 +195,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
             ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=np.array([]),
+                yhat=np.array([]),
+                yhat_lower=np.array([]),
+                yhat_upper=np.array([]),
+            ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
         )
@@ -237,6 +244,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps[:100])),
                 use_suss=np.array([True] * len(ts_timestamps[:100])),
+            ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=np.array([]),
+                yhat=np.array([]),
+                yhat_lower=np.array([]),
+                yhat_upper=np.array([]),
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
@@ -282,6 +295,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
                 use_suss=[True] * len(ts_timestamps),
+            ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=np.array([]),
+                yhat=np.array([]),
+                yhat_lower=np.array([]),
+                yhat_upper=np.array([]),
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
@@ -342,6 +361,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([False] * len(ts_timestamps)),
             ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=np.array([]),
+                yhat=np.array([]),
+                yhat_lower=np.array([]),
+                yhat_upper=np.array([]),
+            ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
         )
@@ -393,6 +418,12 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+            ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=np.array([]),
+                yhat=np.array([]),
+                yhat_lower=np.array([]),
+                yhat_upper=np.array([]),
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=True,
