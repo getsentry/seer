@@ -87,11 +87,8 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
             )
 
             if len(alert.timeseries) > 0:
-                print("Updating matrix profiles")
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
-                print("Fitting prophet predictions")
                 predictions = _fit_predict(alert, config)
-                print("Storing prophet predictions")
                 _store_prophet_predictions(alert, predictions)
             else:
                 # Reset the window size to 0 if there are no timeseries points left

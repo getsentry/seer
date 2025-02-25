@@ -47,7 +47,6 @@ class ProphetAnomalyDetector(BaseModel):
         Returns:
             A dataframe with the forecasted values, confidence intervals, and actual values
         """
-
         df_train = pd.DataFrame({"ds": timestamps, "y": values})
         df_train.ds = pd.to_datetime(df_train.ds, unit="s", utc=True)
         df_train.ds = df_train.ds.dt.tz_localize(None)

@@ -160,13 +160,14 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 num_old_points += 1
 
         num_predictions_remaining = 0
+        cur_ts = datetime.now().timestamp()
         for i, prediction in enumerate(db_alert.prophet_predictions):
             prophet_timestamp = prediction.timestamp.timestamp()
             prophet_timestamps[i] = prophet_timestamp
             prophet_yhats[i] = prediction.yhat
             prophet_yhat_lowers[i] = prediction.yhat_lower
             prophet_yhat_uppers[i] = prediction.yhat_upper
-            if prophet_timestamp > datetime.now().timestamp():
+            if prophet_timestamp > cur_ts:
                 num_predictions_remaining += 1
 
         anomalies = MPTimeSeriesAnomalies(
