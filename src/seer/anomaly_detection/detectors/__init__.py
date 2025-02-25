@@ -20,9 +20,8 @@ SuSSWindowSizeSelector = window_size_selectors.SuSSWindowSizeSelector
 FlagsAndScores = mp_scorers.FlagsAndScores
 MPScorer = mp_scorers.MPScorer
 MPCascadingScorer = mp_cascading_scorer.MPCascadingScorer
-LowVarianceScorer = mp_scorers.LowVarianceScorer
+MPLowVarianceScorer = mp_scorers.MPLowVarianceScorer
 MPBoxCoxScorer = mp_boxcox_scorer.MPBoxCoxScorer
-MPIQRScorer = mp_scorers.MPIQRScorer
 Normalizer = normalizers.Normalizer
 MinMaxNormalizer = normalizers.MinMaxNormalizer
 
