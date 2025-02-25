@@ -795,18 +795,22 @@ class GeminiProvider:
 
         client = self.get_client()
 
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=message_dicts,
-            config=GenerateContentConfig(
-                tools=tool_dicts,
-                response_modalities=["TEXT"],
-                temperature=temperature or 0.0,
-                response_mime_type="application/json",
-                max_output_tokens=max_tokens or 8192,
-                response_schema=response_format,
-            ),
-        )
+        max_retries = 2  # Gemini sometimes doesn't fill in response.parsed
+        for _ in range(max_retries + 1):
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=message_dicts,
+                config=GenerateContentConfig(
+                    tools=tool_dicts,
+                    response_modalities=["TEXT"],
+                    temperature=temperature or 0.0,
+                    response_mime_type="application/json",
+                    max_output_tokens=max_tokens or 8192,
+                    response_schema=response_format,
+                ),
+            )
+            if response.parsed is not None:
+                break
 
         usage = Usage(
             completion_tokens=response.usage_metadata.candidates_token_count,
