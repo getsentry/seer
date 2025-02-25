@@ -1,10 +1,12 @@
 from seer.anomaly_detection.detectors import (
     anomaly_detectors,
+    anomaly_scorer,
     mp_boxcox_scorer,
     mp_cascading_scorer,
     mp_scorers,
     mp_utils,
     normalizers,
+    prophet_scorer,
     smoothers,
     window_size_selectors,
 )
@@ -28,3 +30,5 @@ MPUtils = mp_utils.MPUtils
 FlagSmoother = smoothers.FlagSmoother
 MajorityVoteBatchFlagSmoother = smoothers.MajorityVoteBatchFlagSmoother
 MajorityVoteStreamFlagSmoother = smoothers.MajorityVoteStreamFlagSmoother
+CombinedAnomalyScorer = anomaly_scorer.CombinedAnomalyScorer
+ProphetScaledSmoothedScorer = prophet_scorer.ProphetScaledSmoothedScorer

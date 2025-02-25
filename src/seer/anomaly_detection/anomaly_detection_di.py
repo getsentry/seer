@@ -1,13 +1,17 @@
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.detectors import (
+    CombinedAnomalyScorer,
+    LowVarianceScorer,
     MinMaxNormalizer,
+    MPBoxCoxScorer,
     MPCascadingScorer,
-    MPScorer,
     MPUtils,
     Normalizer,
+    ProphetScaledSmoothedScorer,
     SuSSWindowSizeSelector,
     WindowSizeSelector,
 )
+from seer.anomaly_detection.detectors.anomaly_scorer import AnomalyScorer
 from seer.anomaly_detection.detectors.location_detectors import (
     LocationDetector,
     ProphetLocationDetector,
@@ -25,8 +29,11 @@ def alert_data_accessor_provider() -> AlertDataAccessor:
 
 
 @anomaly_detection_module.provider
-def mp_scorer_provider() -> MPScorer:
-    return MPCascadingScorer()
+def anomaly_scorer_provider() -> AnomalyScorer:
+    return CombinedAnomalyScorer(
+        mp_scorer=MPCascadingScorer(scorers=[LowVarianceScorer(), MPBoxCoxScorer()]),
+        prophet_scorer=ProphetScaledSmoothedScorer(),
+    )
 
 
 @anomaly_detection_module.provider

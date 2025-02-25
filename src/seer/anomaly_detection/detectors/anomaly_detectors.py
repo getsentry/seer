@@ -8,7 +8,7 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.detectors.mp_scorers import MPScorer
+from seer.anomaly_detection.detectors.anomaly_scorer import AnomalyScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
 from seer.anomaly_detection.detectors.smoothers import (
     MajorityVoteBatchFlagSmoother,
@@ -88,7 +88,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         window_size: int | None = None,
         time_budget_ms: int | None = None,
         ws_selector: WindowSizeSelector = injected,
-        scorer: MPScorer = injected,
+        scorer: AnomalyScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -130,9 +130,9 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             values=ts_values,
             timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
+            prophet_df=None,  # TODO: wire in the prophet df once its available
             ad_config=ad_config,
             window_size=window_size,
-            time_budget_ms=time_budget_ms,
         )
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
@@ -186,7 +186,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
         time_budget_ms: int | None = None,
-        scorer: MPScorer = injected,
+        scorer: AnomalyScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -259,6 +259,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     history_values=self.history_values,
                     history_timestamps=self.history_timestamps,
                     history_mp_dist=mp_dist_baseline,
+                    prophet_df=None,  # TODO: wire in the prophet df once its available
                     ad_config=ad_config,
                     window_size=self.window_size,
                 )
