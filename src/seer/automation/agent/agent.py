@@ -1,4 +1,5 @@
 import contextlib
+import json
 import logging
 from typing import Optional
 
@@ -164,11 +165,10 @@ class LlmAgent:
 
     def parse_tool_arguments(self, tool: FunctionTool, args: str) -> dict:
         try:
-            return parse_json_with_keys(
-                args, [param["name"] for param in tool.parameters if isinstance(param["name"], str)]
-            )
+            print(args, tool.parameters)
+            return json.loads(args)
         except Exception as e:
-            raise AgentError() from ValueError(f"Invalid tool arguments: {args}\nException: {e}")
+            raise AgentError(f"Invalid tool arguments: {args}\nException: {e}")
 
     def process_tool_calls(self, tool_calls: list[ToolCall]):
         for tool_call in tool_calls:
