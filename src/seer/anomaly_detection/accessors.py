@@ -218,6 +218,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 yhat_upper=prophet_yhat_uppers,
             ),
             only_suss=only_suss,
+            data_purge_flag=db_alert.data_purge_flag,
+            last_queued_at=db_alert.last_queued_at,
         )
 
     @sentry_sdk.trace
@@ -291,6 +293,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 prophet_predictions=[],  # Passing in an empty list because new record is created
                 anomaly_algo_data=anomaly_algo_data,
                 data_purge_flag=data_purge_flag,
+                last_queued_at=None,
             )
             session.add(new_record)
             session.commit()

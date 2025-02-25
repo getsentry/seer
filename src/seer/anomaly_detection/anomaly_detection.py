@@ -149,7 +149,6 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ClientError("No timeseries data found for alert")
-        # TODO: Add celery being clogged logic
         if not isinstance(historic.anomalies, MPTimeSeriesAnomalies):
             logger.error(
                 "invalid_state",
@@ -158,6 +157,18 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ServerError("Invalid state")
+        if (
+            historic.data_purge_flag == TaskStatus.QUEUED
+            or historic.data_purge_flag == TaskStatus.PROCESSING
+        ):
+            logger.info(
+                "data_purge_flag",
+                extra={
+                    "alert_id": alert.id,
+                    "data_purge_flag": historic.data_purge_flag,
+                    "last_queued_at": historic.last_queued_at,
+                },
+            )
 
         # Confirm that there is enough data (after purge)
         min_data = self._min_required_timesteps(historic.config.time_period)

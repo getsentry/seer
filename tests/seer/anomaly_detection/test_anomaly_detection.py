@@ -26,6 +26,7 @@ from seer.anomaly_detection.models.external import (
 )
 from seer.anomaly_detection.models.timeseries import ProphetPrediction
 from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomalies
+from seer.db import TaskStatus
 from seer.exceptions import ClientError, ServerError
 from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
@@ -203,6 +204,8 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+            last_queued_at=None,
         )
 
         # Dummy return so we don't hit db
@@ -253,6 +256,8 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+            last_queued_at=None,
         )
 
         with self.assertRaises(Exception):
@@ -304,6 +309,8 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+            last_queued_at=None,
         )
 
         with self.assertRaises(ServerError) as e:
@@ -369,6 +376,8 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=False,
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+            last_queued_at=None,
         )
 
         # Dummy return so we don't hit db
@@ -427,6 +436,8 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             cleanup_predict_config=cleanup_predict_config,
             only_suss=True,
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+            last_queued_at=None,
         )
 
         response = AnomalyDetection().detect_anomalies(request=request)
