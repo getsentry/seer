@@ -180,7 +180,7 @@ class TestCleanupTasks(unittest.TestCase):
         )
         anomalies_new = MPBatchAnomalyDetector().detect(
             ts_new, config
-        )  # TODO: Need to update this and the entire test to use the Combined Anomalies when implemented
+        )  # TODO: This test will need to be updated when the combined anomalies are implemented
 
         old_timeseries_points = []
         with Session() as session:

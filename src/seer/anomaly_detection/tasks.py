@@ -89,10 +89,8 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
 
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
-
                 predictions = _fit_predict(alert, config)
                 _store_prophet_predictions(alert, predictions)
-
             else:
                 # Reset the window size to 0 if there are no timeseries points left
                 alert.anomaly_algo_data = {"window_size": 0}
@@ -242,7 +240,6 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
 
     with Session() as session:
 
-        # TODO: Overwrite the predictions if they are already stored
         # Delete existing predictions that overlap with new prediction timestamps
         min_timestamp = datetime.now()
         max_timestamp = datetime.fromtimestamp(max(predictions.timestamps))
@@ -256,7 +253,6 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
         for timestamp, yhat, yhat_lower, yhat_upper in zip(
             predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
         ):
-            # if timestamp not in stored_predictions_timestamps:
             prophet_prediction = DbProphetAlertTimeSeries(
                 dynamic_alert_id=alert.id,
                 timestamp=datetime.fromtimestamp(timestamp),
