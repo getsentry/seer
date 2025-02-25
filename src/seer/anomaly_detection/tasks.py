@@ -1,5 +1,4 @@
 import logging
-import random
 from datetime import datetime, timedelta
 from operator import and_, or_
 from typing import List
@@ -88,8 +87,11 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
             )
 
             if len(alert.timeseries) > 0:
+                print("Updating matrix profiles")
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
+                print("Fitting prophet predictions")
                 predictions = _fit_predict(alert, config)
+                print("Storing prophet predictions")
                 _store_prophet_predictions(alert, predictions)
             else:
                 # Reset the window size to 0 if there are no timeseries points left
@@ -216,8 +218,8 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig) -> Proph
         timestamps[i] = ts.timestamp.timestamp()
         values[i] = ts.value
 
-    forecast_len = random.randint(22, 28) * (60 // config.time_period)
-
+    # Create 24 hours worth of predictions
+    forecast_len = 24 * (60 // config.time_period)
     prediction_df = prophet_detector.predict(
         timestamps, values, forecast_len, config.time_period, config.sensitivity
     )

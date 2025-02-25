@@ -1,5 +1,6 @@
 import datetime
 import logging
+import random
 from typing import List, Tuple
 
 import numpy as np
@@ -264,8 +265,11 @@ class AnomalyDetection(BaseModel):
                 <= cleanup_predict_config.num_acceptable_predictions
             ):
                 alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
-                cleanup_timeseries_and_predict.delay(
-                    historic.external_alert_id, cleanup_predict_config.timestamp_threshold
+                cleanup_timeseries_and_predict.apply_async(
+                    (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
+                    countdown=random.randint(
+                        0, 120
+                    ),  # Wait between 0 - 120 seconds before queuing so the tasks are not all queued at the same time
                 )
         except Exception as e:
             # Reset task and capture exception
