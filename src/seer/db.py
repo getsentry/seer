@@ -397,6 +397,7 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     )
 
 
+# TODO: Add the other prophet fields to this table if needed
 class DbProphetAlertTimeSeries(Base):
     __tablename__ = "prophet_alert_time_series"
     __table_args__ = (
@@ -411,17 +412,21 @@ class DbProphetAlertTimeSeries(Base):
     yhat: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
     dynamic_alert = relationship(
         "DbDynamicAlert",
         back_populates="prophet_predictions",
     )
 
 
+# TODO: Add the other prophet fields to this table if needed
 class DbProphetAlertTimeSeriesHistory(Base):
     __tablename__ = "prophet_alert_time_series_history"
     __table_args__ = (Index("ix_prophet_alert_time_series_history_timestamp", "timestamp"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     yhat: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
