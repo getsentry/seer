@@ -347,7 +347,9 @@ class RepoClient:
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
             try:
-                detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
+                detected_encoding = (
+                    detect_encoding(contents.decoded_content) if contents else "utf-8"
+                )
             except Exception as exc:
                 detected_encoding = "utf-8"
 
