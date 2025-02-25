@@ -153,23 +153,14 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     "Arranging data in a way that looks intentional..."
                 )
 
-                # Add retry logic for generating structured response
-                max_retries = 2
-                formatted_response = None
-
-                for attempt in range(max_retries + 1):
-                    formatted_response = llm_client.generate_structured(
-                        messages=agent.memory,
-                        prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                        model=GeminiProvider.model("gemini-2.0-flash-001"),
-                        response_format=MultipleRootCauseAnalysisOutputPrompt,
-                        run_name="Root Cause Extraction & Formatting",
-                        max_tokens=8192,
-                    )
-
-                    # If we got a valid response, break the retry loop
-                    if formatted_response and getattr(formatted_response, "parsed", None):
-                        break
+                formatted_response = llm_client.generate_structured(
+                    messages=agent.memory,
+                    prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
+                    model=GeminiProvider.model("gemini-2.0-flash-001"),
+                    response_format=MultipleRootCauseAnalysisOutputPrompt,
+                    run_name="Root Cause Extraction & Formatting",
+                    max_tokens=8192,
+                )
 
                 if not formatted_response or not getattr(formatted_response, "parsed", None):
                     return RootCauseAnalysisOutput(
