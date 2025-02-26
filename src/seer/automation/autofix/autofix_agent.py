@@ -9,6 +9,7 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
     LlmGenerateTextResponse,
+    LlmProviderType,
     LlmResponseMetadata,
     Message,
     ToolCall,
@@ -88,6 +89,12 @@ class AutofixAgent(LlmAgent):
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,
             reasoning_effort=run_config.reasoning_effort,
+            first_token_timeout=(
+                90.0
+                if (run_config.model.provider_name == LlmProviderType.OPENAI)
+                and run_config.model.model_name.startswith("o")
+                else 40.0
+            ),
         )
 
         cleared = False
