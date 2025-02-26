@@ -12,8 +12,8 @@ def test_detected_celery_jobs():
     with Module():
         assert set(k for k in celery_app.tasks.keys() if not k.startswith("celery.")) == set(
             [
-                "seer.anomaly_detection.tasks.cleanup_timeseries",
-                "seer.anomaly_detection.tasks.cleanup_old_timeseries_history",
+                "seer.anomaly_detection.tasks.cleanup_timeseries_and_predict",
+                "seer.anomaly_detection.tasks.cleanup_old_timeseries_and_prophet_history",
                 "seer.anomaly_detection.tasks.cleanup_disabled_alerts",
                 "seer.automation.autofix.steps.change_describer_step.autofix_change_describer_task",
                 "seer.automation.autofix.steps.coding_step.autofix_coding_task",
@@ -36,7 +36,7 @@ def test_detected_celery_jobs():
                 "Check and mark recent autofix runs every hour",
                 "Delete old Automation runs for 90 day time-to-live",
                 "Clean up old disabled timeseries every week",
-                "Clean up old timeseries history every week",
+                "Clean up old timeseries and prophet history every week",
             ]
         )
 
@@ -53,7 +53,7 @@ def test_anomaly_beat_jobs():
         assert set(k for k in app.conf.beat_schedule.keys()) == set(
             [
                 "Clean up old disabled timeseries every week",
-                "Clean up old timeseries history every week",
+                "Clean up old timeseries and prophet history every week",
             ]
         )
 

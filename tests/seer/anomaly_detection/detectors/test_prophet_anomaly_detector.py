@@ -13,9 +13,10 @@ class TestProphetAnomalyDetector(unittest.TestCase):
         self.detector = ProphetAnomalyDetector()
 
         # Create sample timeseries data
-        self.dates = pd.date_range(start="2023-01-01", periods=100, freq="15min")
+        self.dates = pd.date_range(start="2023-01-01", periods=100, freq="15min", tz="UTC")
         # self.timestamps = np.array(self.dates.astype(np.int64) // 10**9, dtype=np.float64)
-        self.timestamps = np.array(self.dates.astype(np.int64), dtype=np.float64)
+
+        self.timestamps = np.array([date.timestamp() for date in self.dates])
 
         # Create sinusoidal pattern with daily seasonality
         t = np.linspace(0, 4 * np.pi, 100)

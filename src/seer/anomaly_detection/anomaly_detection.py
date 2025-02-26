@@ -1,5 +1,6 @@
 import datetime
 import logging
+import random
 from typing import List, Tuple
 
 import numpy as np
@@ -157,6 +158,15 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ServerError("Invalid state")
+        if historic.data_purge_flag == TaskStatus.PROCESSING:
+            logger.warning(
+                "data_purge_flag_invalid",
+                extra={
+                    "alert_id": alert.id,
+                    "data_purge_flag": historic.data_purge_flag,
+                    "last_queued_at": historic.last_queued_at,
+                },
+            )
 
         # Confirm that there is enough data (after purge)
         min_data = self._min_required_timesteps(historic.config.time_period)
@@ -240,22 +250,27 @@ class AnomalyDetection(BaseModel):
         )
 
         # Delayed import due to circular imports
-        from seer.anomaly_detection.tasks import cleanup_timeseries
+        from seer.anomaly_detection.tasks import cleanup_timeseries_and_predict
 
         try:
-            # Set flag and create new task for cleanup
-            cleanup_config = historic.cleanup_config
-            if (
-                alert_data_accessor.can_queue_cleanup_task(historic.external_alert_id)
-                and cleanup_config.num_old_points >= cleanup_config.num_acceptable_points
+            # Set flag and create new task for cleanup if too many old points or not enough predictions remaining
+            cleanup_predict_config = historic.cleanup_predict_config
+            if alert_data_accessor.can_queue_cleanup_predict_task(historic.external_alert_id) and (
+                cleanup_predict_config.num_old_points
+                >= cleanup_predict_config.num_acceptable_points
+                or cleanup_predict_config.num_predictions_remaining
+                <= cleanup_predict_config.num_acceptable_predictions
             ):
                 alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
-                cleanup_timeseries.delay(
-                    historic.external_alert_id, cleanup_config.timestamp_threshold
+                cleanup_timeseries_and_predict.apply_async(
+                    (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
+                    countdown=random.randint(
+                        0, config.time_period * 60
+                    ),  # Wait between 0 - time_period * 60 seconds before queuing so the tasks are not all queued at the same time
                 )
         except Exception as e:
             # Reset task and capture exception
-            alert_data_accessor.reset_cleanup_task(historic.external_alert_id)
+            alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
             sentry_sdk.capture_exception(e)
             logger.exception(e)
 

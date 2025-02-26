@@ -163,6 +163,11 @@ class AlgoConfig(BaseModel):
         description="Intervals for the Prophet model",
     )
 
+    prophet_forecast_len: int = Field(
+        24,
+        description="Number of hours to forecast for the Prophet model",
+    )
+
     def get_prophet_params(self, sensitivity: str) -> ProphetParams:
         return ProphetParams(
             interval_width=self.prophet_intervals[sensitivity],
