@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Any
 
 import requests
@@ -36,8 +35,6 @@ from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
-
-logger = logging.getLogger(__name__)
 
 
 @celery_app.task(
@@ -76,7 +73,7 @@ class RelevantWarningsStep(CodegenStep):
         config: AppConfig = injected,
     ):
         if not self.request.should_post_to_overwatch:
-            logger.info("Skipping posting relevant warnings results to Overwatch.")
+            self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
         request = {
@@ -99,7 +96,9 @@ class RelevantWarningsStep(CodegenStep):
         try:
             self._post_results_to_overwatch(relevant_warnings_output)
         except Exception as exception:
-            logger.exception(f"Error posting relevant warnings results to Overwatch: {exception}")
+            self.logger.exception(
+                f"Error posting relevant warnings results to Overwatch: {exception}"
+            )
             raise exception
         finally:
             self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
