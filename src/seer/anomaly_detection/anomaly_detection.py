@@ -9,7 +9,7 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 
-from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
+from seer.anomaly_detection.accessors import AlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
 from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
 from seer.anomaly_detection.detectors.prophet_anomaly_detector import ProphetAnomalyDetector
@@ -204,12 +204,10 @@ class AnomalyDetection(BaseModel):
             raise ServerError("Invalid state")
 
         # Run stream detection
-
-        # SuSS Window
-        stream_detector_suss = MPStreamAnomalyDetector(
+        stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
-            history_mp=anomalies.matrix_profile_suss,
+            history_mp=anomalies.matrix_profile,
             window_size=anomalies.window_size,
             original_flags=original_flags,
         )
@@ -347,7 +345,7 @@ class AnomalyDetection(BaseModel):
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
         # We are doing 4 detection operations, so allocating 1/4th of the time budget for each one.
-        time_budget_ms = time_budget_ms // 4 if time_budget_ms else None
+        time_budget_ms = time_budget_ms // 2 if time_budget_ms else None
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
@@ -366,13 +364,12 @@ class AnomalyDetection(BaseModel):
         )
 
         # Run stream detection on current data
-        # SuSS Window
-        stream_detector_suss = MPStreamAnomalyDetector(
+        stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
-            history_mp=historic_anomalies_suss.matrix_profile,
-            window_size=historic_anomalies_suss.window_size,
-            original_flags=historic_anomalies_suss.original_flags,
+            history_mp=historic_anomalies.matrix_profile,
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags,
         )
         streamed_anomalies_suss = stream_detector_suss.detect(
             convert_external_ts_to_internal(ts_external),
@@ -398,29 +395,14 @@ class AnomalyDetection(BaseModel):
 
         if trim_current_by > 0:
             ts_external = ts_with_history.history[-trim_current_by:] + ts_external
-            streamed_anomalies_suss.flags = (
-                historic_anomalies_suss.flags[-trim_current_by:] + streamed_anomalies_suss.flags
+            streamed_anomalies.flags = (
+                historic_anomalies.flags[-trim_current_by:] + streamed_anomalies.flags
             )
-            streamed_anomalies_suss.scores = (
-                historic_anomalies_suss.scores[-trim_current_by:] + streamed_anomalies_suss.scores
-            )
-            streamed_anomalies_fixed.flags = (
-                historic_anomalies_fixed.flags[-trim_current_by:] + streamed_anomalies_fixed.flags
-            )
-            streamed_anomalies_fixed.scores = (
-                historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
+            streamed_anomalies.scores = (
+                historic_anomalies.scores[-trim_current_by:] + streamed_anomalies.scores
             )
 
-        anomalies = DbAlertDataAccessor().combine_anomalies(
-            streamed_anomalies_suss,
-            streamed_anomalies_fixed,
-            [True]
-            * len(
-                streamed_anomalies_suss.flags
-            ),  # Defaulting to using SuSS window because switching logic is for streaming only
-        )
-
-        return ts_external, anomalies
+        return ts_external, streamed_anomalies
 
     def _update_anomalies(
         self,
