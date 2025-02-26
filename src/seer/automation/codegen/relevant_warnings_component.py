@@ -68,6 +68,12 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             logger.info("No eligible files in PR.")
             return {}
 
+        if not provider.startswith("integrations:"):
+            # TODO(kddubey): need to come up with something more general
+            provider = f"integrations:{provider}"
+
+        logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
+
         pr_files_eligible = pr_files_eligible[:max_files_analyzed]
         filename_to_issues = client.call(
             "get_issues_related_to_file_patches",

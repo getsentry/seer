@@ -93,14 +93,14 @@ class RelevantWarningsStep(CodegenStep):
             url="https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
             headers=headers,
             data=request_data,
-        )
+        ).raise_for_status()
 
     def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
         try:
             self._post_results_to_overwatch(relevant_warnings_output)
-        except Exception as exception:
-            logger.exception(f"Error posting relevant warnings results to Overwatch: {exception}")
-            raise exception
+        except Exception:
+            logger.exception("Error posting relevant warnings results to Overwatch")
+            raise
         finally:
             self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
                 relevant_warnings_output.relevant_warning_results

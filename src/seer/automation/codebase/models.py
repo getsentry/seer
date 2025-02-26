@@ -123,7 +123,6 @@ class StaticAnalysisRule(BaseModel):
 
 class StaticAnalysisWarning(BaseModel):
     id: int
-    commit_id: str
     code: str
     message: str
     encoded_location: str
