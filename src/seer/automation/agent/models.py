@@ -87,3 +87,21 @@ class LlmRefusalError(Exception):
     """Raised when the LLM refuses to complete the request."""
 
     pass
+
+
+class LlmStreamTimeoutError(TimeoutError):
+    """Raised when the LLM stream times out."""
+
+    pass
+
+
+class LlmStreamFirstTokenTimeoutError(LlmStreamTimeoutError):
+    """Raised when the LLM takes too long to generate the first token."""
+
+    pass
+
+
+class LlmStreamInactivityTimeoutError(LlmStreamTimeoutError):
+    """Raised when the LLM stream times out due to inactivity."""
+
+    pass

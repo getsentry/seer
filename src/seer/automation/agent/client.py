@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Type, Union, cast
 
@@ -36,6 +37,9 @@ from seer.automation.agent.models import (
     LlmProviderType,
     LlmRefusalError,
     LlmResponseMetadata,
+    LlmStreamFirstTokenTimeoutError,
+    LlmStreamInactivityTimeoutError,
+    LlmStreamTimeoutError,
     Message,
     StructuredOutputType,
     ToolCall,
@@ -96,7 +100,9 @@ class OpenAiProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        return isinstance(exception, openai.InternalServerError)
+        return isinstance(exception, openai.InternalServerError) or isinstance(
+            exception, LlmStreamTimeoutError
+        )
 
     def generate_text(
         self,
@@ -445,9 +451,10 @@ class AnthropicProvider:
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
         # https://sentry.sentry.io/issues/6267320373/
-        return isinstance(exception, anthropic.AnthropicError) and (
-            "overloaded_error" in str(exception)
-        )
+        return (
+            isinstance(exception, anthropic.AnthropicError)
+            and ("overloaded_error" in str(exception))
+        ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
@@ -770,9 +777,10 @@ class GeminiProvider:
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
         )
-        return isinstance(exception, ClientError) and any(
-            error in str(exception) for error in retryable_errors
-        )
+        return (
+            isinstance(exception, ClientError)
+            and any(error in str(exception) for error in retryable_errors)
+        ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Gemini Generation")
     def generate_structured(
@@ -1264,6 +1272,8 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
+        first_token_timeout: float = 40.0,  # Time to first token timeout
+        inactivity_timeout: float = 20.0,  # Timeout for inactivity after first token
     ) -> Iterator[str | ToolCall | Usage]:
         try:
             if run_name:
@@ -1278,9 +1288,10 @@ class LlmClient:
             if not tools:
                 messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
+            # Get the appropriate stream generator based on provider
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
-                yield from model.generate_text_stream(
+                stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -1292,7 +1303,7 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
-                yield from model.generate_text_stream(
+                stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -1303,7 +1314,7 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
-                yield from model.generate_text_stream(
+                stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -1313,6 +1324,34 @@ class LlmClient:
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
+
+            # Add timeout check to the stream with differentiated timeouts
+            # for first token and subsequent tokens
+            last_yield_time = time.time()
+            first_token_received = False
+
+            for item in stream_generator:
+                current_time = time.time()
+                # Use first_token_timeout for the first token, inactivity_timeout for subsequent tokens
+                timeout_to_use = (
+                    first_token_timeout if not first_token_received else inactivity_timeout
+                )
+
+                if current_time - last_yield_time > timeout_to_use:
+                    if first_token_received:
+                        raise LlmStreamInactivityTimeoutError(
+                            f"Stream inactivity timeout after {timeout_to_use} seconds"
+                        )
+                    else:
+                        raise LlmStreamFirstTokenTimeoutError(
+                            f"Stream time to first token timeout after {timeout_to_use} seconds"
+                        )
+
+                # Mark that we've received at least one token
+                first_token_received = True
+                last_yield_time = current_time
+                yield item
+
         except Exception as e:
             logger.exception(
                 f"Text stream generation failed with provider {model.provider_name}: {e}"
