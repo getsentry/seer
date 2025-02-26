@@ -397,7 +397,6 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     )
 
 
-# TODO: Add the other prophet fields to this table if needed
 class DbProphetAlertTimeSeries(Base):
     __tablename__ = "prophet_alert_time_series"
     __table_args__ = (
@@ -421,7 +420,6 @@ class DbProphetAlertTimeSeries(Base):
     )
 
 
-# TODO: Add the other prophet fields to this table if needed
 class DbProphetAlertTimeSeriesHistory(Base):
     __tablename__ = "prophet_alert_time_series_history"
     __table_args__ = (Index("ix_prophet_alert_time_series_history_timestamp", "timestamp"),)

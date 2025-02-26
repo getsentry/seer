@@ -158,12 +158,9 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ServerError("Invalid state")
-        if (
-            historic.data_purge_flag == TaskStatus.QUEUED
-            or historic.data_purge_flag == TaskStatus.PROCESSING
-        ):
-            logger.info(
-                "data_purge_flag",
+        if historic.data_purge_flag == TaskStatus.PROCESSING:
+            logger.warning(
+                "data_purge_flag_invalid",
                 extra={
                     "alert_id": alert.id,
                     "data_purge_flag": historic.data_purge_flag,
@@ -268,8 +265,8 @@ class AnomalyDetection(BaseModel):
                 cleanup_timeseries_and_predict.apply_async(
                     (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
                     countdown=random.randint(
-                        0, 120
-                    ),  # Wait between 0 - 120 seconds before queuing so the tasks are not all queued at the same time
+                        0, config.time_period * 60
+                    ),  # Wait between 0 - time_period * 60 seconds before queuing so the tasks are not all queued at the same time
                 )
         except Exception as e:
             # Reset task and capture exception
