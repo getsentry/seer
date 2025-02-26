@@ -205,7 +205,12 @@ def _update_matrix_profiles(
 
 
 @sentry_sdk.trace
-def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig) -> ProphetPrediction:
+@inject
+def _fit_predict(
+    alert: DbDynamicAlert,
+    config: AnomalyDetectionConfig,
+    algo_config: AlgoConfig = injected,
+) -> ProphetPrediction:
 
     prophet_detector = ProphetAnomalyDetector()
 
@@ -216,7 +221,7 @@ def _fit_predict(alert: DbDynamicAlert, config: AnomalyDetectionConfig) -> Proph
         values[i] = ts.value
 
     # Create 24 hours worth of predictions
-    forecast_len = 24 * (60 // config.time_period)
+    forecast_len = algo_config.prophet_forecast_len * (60 // config.time_period)
     prediction_df = prophet_detector.predict(
         timestamps, values, forecast_len, config.time_period, config.sensitivity
     )
