@@ -5,7 +5,7 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 import requests
 import sentry_sdk
@@ -355,7 +355,7 @@ class RepoClient:
 
             # Try to detect encoding, fall back to utf-8 if detection fails or returns none
             detected_encoding = detect_encoding(decoded_content)
-            if detected_encoding is None or detected_encoding.lower() == 'none':
+            if detected_encoding is None or detected_encoding.lower() == "none":
                 logger.warning(f"Invalid encoding detected for {path}, falling back to utf-8")
                 detected_encoding = "utf-8"
 
@@ -363,7 +363,9 @@ class RepoClient:
                 # Try to decode with detected encoding
                 content = decoded_content.decode(detected_encoding)
             except (LookupError, UnicodeDecodeError) as e:
-                logger.warning(f"Failed to decode with {detected_encoding}, falling back to utf-8: {e}")
+                logger.warning(
+                    f"Failed to decode with {detected_encoding}, falling back to utf-8: {e}"
+                )
                 detected_encoding = "utf-8"
                 content = decoded_content.decode(detected_encoding)
 

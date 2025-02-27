@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from math import ceil
-from typing import Iterable, TypeVar, Optional
+from typing import Iterable, Optional, TypeVar
 from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
@@ -254,37 +254,37 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
 def detect_encoding(content: bytes | None) -> str:
     """
     Detect the encoding of a byte string.
-    
+
     Args:
         content: Bytes to detect encoding from
-        
+
     Returns:
         str: Detected encoding or 'utf-8' as fallback
     """
     if not content:
-        return 'utf-8'
-        
+        return "utf-8"
+
     try:
         # Use chardet to detect encoding
         detection_result = chardet.detect(content)
-        
-        if not detection_result or not detection_result['encoding']:
+
+        if not detection_result or not detection_result["encoding"]:
             logger.warning("No encoding detected, falling back to utf-8")
-            return 'utf-8'
-            
-        encoding = detection_result['encoding'].lower()
-        
+            return "utf-8"
+
+        encoding = detection_result["encoding"].lower()
+
         # Validate the encoding is supported
         try:
-            ''.encode(encoding)
+            "".encode(encoding)
             return encoding
         except LookupError:
             logger.warning(f"Unsupported encoding detected: {encoding}, falling back to utf-8")
-            return 'utf-8'
-            
+            return "utf-8"
+
     except Exception as e:
         logger.exception(f"Error detecting encoding: {e}")
-        return 'utf-8'
+        return "utf-8"
 
 
 def batch_texts_by_token_count(
