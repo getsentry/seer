@@ -202,34 +202,34 @@ def sync_run_evaluation_on_item(item: DatasetItemClient) -> AutofixContinuation:
 
     run_id = state.get().run_id
 
-    RootCauseStep.get_signature(
-        RootCauseStepRequest(
-            run_id=run_id,
-        )
-    ).apply()
-
-    state_after_root_cause = state.get()
-    root_cause_step = state_after_root_cause.find_step(key="root_cause_analysis")
-
-    if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
-        return state.get()
-
-    event_manager = AutofixEventManager(state)
-    event_manager.set_selected_solution(
-        AutofixSolutionUpdatePayload(
-            type=AutofixUpdateType.SELECT_SOLUTION,
-            custom_solution=None,
-            solution_selected=True,
-        )
-    )
-
     try:
+        RootCauseStep.get_signature(
+            RootCauseStepRequest(
+                run_id=run_id,
+            )
+        ).apply()
+
+        state_after_root_cause = state.get()
+        root_cause_step = state_after_root_cause.find_step(key="root_cause_analysis")
+
+        if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
+            return state.get()
+
+        event_manager = AutofixEventManager(state)
+        event_manager.set_selected_solution(
+            AutofixSolutionUpdatePayload(
+                type=AutofixUpdateType.SELECT_SOLUTION,
+                custom_solution=None,
+                solution_selected=True,
+            )
+        )
+
         AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
 
         return state.get()
     except Exception as e:
         logger.exception(f"Error running evaluation: {e}")
-        # Return the root cause step causes anyway to score.
+        # Return the state anyway to score.
         return state.get()
 
 
