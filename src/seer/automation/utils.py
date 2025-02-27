@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from math import ceil
-from typing import Iterable, TypeVar
+from typing import Iterable, TypeVar, Optional
 from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
@@ -251,19 +251,40 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
     return structured_message.parsed
 
 
-def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
+def detect_encoding(content: bytes | None) -> str:
     """
-    Try to detect the encoding of the given data using chardet library. If the confidence is not high enough, fallback.
+    Detect the encoding of a byte string.
+    
+    Args:
+        content: Bytes to detect encoding from
+        
+    Returns:
+        str: Detected encoding or 'utf-8' as fallback
     """
+    if not content:
+        return 'utf-8'
+        
     try:
-        result = chardet.detect(raw_data)
-        encoding = result["encoding"] if result["confidence"] > 0.9 else fallback_encoding
-    # if something went wrong, fallback
+        # Use chardet to detect encoding
+        detection_result = chardet.detect(content)
+        
+        if not detection_result or not detection_result['encoding']:
+            logger.warning("No encoding detected, falling back to utf-8")
+            return 'utf-8'
+            
+        encoding = detection_result['encoding'].lower()
+        
+        # Validate the encoding is supported
+        try:
+            ''.encode(encoding)
+            return encoding
+        except LookupError:
+            logger.warning(f"Unsupported encoding detected: {encoding}, falling back to utf-8")
+            return 'utf-8'
+            
     except Exception as e:
-        logger.exception(f"Error detecting encoding of data: {e}")
-        encoding = fallback_encoding
-
-    return encoding
+        logger.exception(f"Error detecting encoding: {e}")
+        return 'utf-8'
 
 
 def batch_texts_by_token_count(

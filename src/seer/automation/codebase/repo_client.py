@@ -5,7 +5,7 @@ import shutil
 import tarfile
 import tempfile
 from enum import Enum
-from typing import Literal
+from typing import Optional, Literal
 
 import requests
 import sentry_sdk
@@ -334,6 +334,7 @@ class RepoClient:
                         f"Path '{path}' not found exactly, using closest match: '{closest_match}'"
                     )
                     path = closest_match
+                    autocorrected_path = True
                 else:
                     logger.exception(
                         "No matching file found for provided file path", extra={"path": path}
@@ -346,11 +347,30 @@ class RepoClient:
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
-            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-            content = contents.decoded_content.decode(detected_encoding)
+            # Get decoded content first
+            decoded_content = contents.decoded_content if contents else None
+            if not decoded_content:
+                logger.warning(f"No content found for file {path}")
+                return None, "utf-8"
+
+            # Try to detect encoding, fall back to utf-8 if detection fails or returns none
+            detected_encoding = detect_encoding(decoded_content)
+            if detected_encoding is None or detected_encoding.lower() == 'none':
+                logger.warning(f"Invalid encoding detected for {path}, falling back to utf-8")
+                detected_encoding = "utf-8"
+
+            try:
+                # Try to decode with detected encoding
+                content = decoded_content.decode(detected_encoding)
+            except (LookupError, UnicodeDecodeError) as e:
+                logger.warning(f"Failed to decode with {detected_encoding}, falling back to utf-8: {e}")
+                detected_encoding = "utf-8"
+                content = decoded_content.decode(detected_encoding)
+
             if autocorrected_path:
                 content = f"Showing results instead for {path}\n=====\n{content}"
             return content, detected_encoding
+
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
             return None, "utf-8"
