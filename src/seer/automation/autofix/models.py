@@ -110,6 +110,7 @@ class CodebaseChange(BaseModel):
     description: str
     diff: list[FilePatch] = []
     diff_str: Optional[str] = None
+    draft_branch_name: str | None = None
     branch_name: str | None = None
     pull_request: Optional[CommittedPullRequestDetails] = None
 

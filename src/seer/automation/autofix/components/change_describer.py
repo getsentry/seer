@@ -17,6 +17,7 @@ class ChangeDescriptionRequest(BaseComponentRequest):
 class ChangeDescriptionOutput(BaseComponentOutput):
     title: str
     description: str
+    branch_name: str
 
 
 class ChangeDescriptionPrompts:
@@ -33,10 +34,10 @@ class ChangeDescriptionPrompts:
 
             {hint}
             You must output a title and description of the changes that are quickly readable for other engineers. Follow the format of:
-            {{
-                "title": "The most important specific change that is being made.",
-                "description": "A brief bulleted list of the changes."
-            }}"""
+
+            - Title: The most important specific change that is being made. The title should be all lowercase except for symbol/variable names, prefixed with a "fix:" prefix, and describe the change in a way that is easy to understand.
+            - Description: A brief bulleted list of the changes.
+            - Branch Name: A short name for the branch that will be created to make the changes"""
         ).format(
             change_dump=change_dump,
             hint=f"In the style of: {hint}\n" if hint else "",
@@ -61,6 +62,8 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
             response_format=ChangeDescriptionOutput,
         )
         data = output.parsed
+
+        data.branch_name = f"autofix/{data.branch_name}"
 
         with self.context.state.update() as cur:
             cur.usage += output.metadata.usage

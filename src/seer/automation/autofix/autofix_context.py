@@ -240,11 +240,10 @@ class AutofixContext(PipelineContext):
                         repo_external_id=repo_definition.external_id, type=RepoClientType.WRITE
                     )
 
-                    branch_name = f"autofix/{change_state.title}"
                     branch_ref = repo_client.create_branch_from_changes(
                         pr_title=change_state.title,
                         file_patches=change_state.diff,
-                        branch_name=branch_name,
+                        branch_name=f"sentry/autofix/{change_state.branch_name or change_state.title}",
                     )
 
                     if branch_ref is None:
@@ -259,7 +258,7 @@ class AutofixContext(PipelineContext):
                     if not make_pr:
                         return
 
-                    pr_title = f"""🤖 {change_state.title}"""
+                    pr_title = f"""fix: {change_state.title}"""
 
                     ref_note = ""
                     org_slug = self.get_org_slug(state.request.organization_id)
