@@ -1488,10 +1488,10 @@ class LlmClient:
     def construct_message_from_stream(
         self,
         content_chunks: list[str],
-        thinking_content_chunks: list[str],
-        thinking_signature: str | None,
         tool_calls: list[ToolCall],
         model: LlmProvider,
+        thinking_content_chunks: list[str] = [],
+        thinking_signature: str | None = None,
     ) -> Message:
         if model.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
