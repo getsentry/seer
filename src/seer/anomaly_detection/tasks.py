@@ -90,7 +90,8 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
                 predictions = _fit_predict(alert, config)
-                _store_prophet_predictions(alert, predictions)
+                db_accessor = DbAlertDataAccessor()
+                db_accessor.store_prophet_predictions(alert.id, predictions)
             else:
                 # Reset the window size to 0 if there are no timeseries points left
                 alert.anomaly_algo_data = {"window_size": 0}
@@ -227,48 +228,7 @@ def _fit_predict(
     prediction_df = prophet_detector.predict(
         timestamps, values, forecast_len, config.time_period, config.sensitivity
     )
-
-    # Convert ds back to timestamps
-    prophet_timestamps = np.array(
-        [date.timestamp() for date in prediction_df["ds"]], dtype=np.float64
-    )
-
-    return ProphetPrediction(
-        timestamps=prophet_timestamps,
-        yhat=np.array(prediction_df["yhat"]),
-        yhat_lower=np.array(prediction_df["yhat_lower"]),
-        yhat_upper=np.array(prediction_df["yhat_upper"]),
-    )
-
-
-@sentry_sdk.trace
-def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPrediction) -> None:
-
-    with Session() as session:
-
-        prediction_values = [
-            {
-                "dynamic_alert_id": alert.id,
-                "timestamp": datetime.fromtimestamp(predictions.timestamps[i]),
-                "yhat": predictions.yhat[i],
-                "yhat_lower": predictions.yhat_lower[i],
-                "yhat_upper": predictions.yhat_upper[i],
-            }
-            for i in range(len(predictions.timestamps))
-        ]
-        stmt = insert(DbProphetAlertTimeSeries).values(prediction_values)
-
-        update_stmt = stmt.on_conflict_do_update(
-            index_elements=["dynamic_alert_id", "timestamp"],
-            set_={
-                "yhat": stmt.excluded.yhat,
-                "yhat_lower": stmt.excluded.yhat_lower,
-                "yhat_upper": stmt.excluded.yhat_upper,
-            },
-        )
-
-        session.execute(update_stmt)
-        session.commit()
+    return ProphetPrediction.from_prophet_df(prediction_df)
 
 
 @sentry_sdk.trace
