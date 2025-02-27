@@ -409,4 +409,10 @@ def start_app(app: Flask = injected) -> Flask:
             ),
         ],
     )
+    app.conf.beat_schedule = {
+        'check-github-reactions': {
+            'task': 'seer.automation.tasks.check_github_reactions',
+            'schedule': 300.0,  # Run every 5 minutes
+        },
+    }
     return app
