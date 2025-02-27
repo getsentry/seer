@@ -7,7 +7,6 @@ import numpy as np
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from sqlalchemy import delete
-from sqlalchemy.dialects.postgresql import insert
 
 from celery_app.app import celery_app
 from seer.anomaly_detection.accessors import DbAlertDataAccessor

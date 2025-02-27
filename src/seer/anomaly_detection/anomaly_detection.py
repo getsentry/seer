@@ -356,14 +356,14 @@ class AnomalyDetection(BaseModel):
             historic,
             config,
             time_budget_ms=time_budget_ms,
-            # TODO COmpute and pass prophet df?
+            # TODO Compute and pass prophet df?
         )
         historic_anomalies_fixed = batch_detector.detect(
             historic,
             config,
             window_size=10,
             time_budget_ms=time_budget_ms,
-            # TODO COmpute and pass prophet df?
+            # TODO Compute and pass prophet df?
         )
 
         # Run stream detection on current data
@@ -379,7 +379,7 @@ class AnomalyDetection(BaseModel):
             convert_external_ts_to_internal(ts_external),
             config,
             time_budget_ms=time_budget_ms,
-            # TODO COmpute and pass prophet df?
+            # TODO Compute and pass prophet df?
         )
 
         # Fixed Window
@@ -394,7 +394,7 @@ class AnomalyDetection(BaseModel):
             convert_external_ts_to_internal(ts_external),
             config,
             time_budget_ms=time_budget_ms,
-            # TODO COmpute and pass prophet df?
+            # TODO Compute and pass prophet df?
         )
 
         if trim_current_by > 0:
