@@ -1,4 +1,5 @@
 import abc
+import logging
 
 import numpy as np
 import numpy.typing as npt
@@ -14,6 +15,8 @@ from seer.anomaly_detection.detectors.prophet_scorer import (
 from seer.anomaly_detection.models import AlgoConfig, AnomalyDetectionConfig
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ServerError
+
+logger = logging.getLogger(__name__)
 
 
 class AnomalyScorer(BaseModel, abc.ABC):
@@ -143,10 +146,31 @@ class CombinedAnomalyScorer(AnomalyScorer):
         if mp_flags_and_scores is None:
             raise ServerError("No flags and scores from MP scorer")
 
-        if prophet_df is None or prophet_df.empty:
+        if prophet_df is None:
+            logger.warning("No prophet_df provided to stream_score")
+            return mp_flags_and_scores
+        if prophet_df.empty:
+            logger.warning("Prophet_df is empty")
             return mp_flags_and_scores
 
-        return NotImplemented  # TODO: implement combined scoring for streaming
+        # Lookup row in prophet_df for streamed_timestam and update y and actual with the new streamed value
+        row_exists = (prophet_df["ds"] == streamed_timestamp).any()
+        if not row_exists:
+            logger.warning(
+                "Row for timestamp not found in prophet_df",
+                extra={"streamed_timestamp": streamed_timestamp},
+            )
+            return mp_flags_and_scores
+        prophet_df.loc[prophet_df.ds == streamed_timestamp, "y"] = float(streamed_value)
+        prophet_df.loc[prophet_df.ds == streamed_timestamp, "actual"] = float(streamed_value)
+        df_prophet_scores = self.prophet_scorer.batch_score(prophet_df)
+
+        combined = self._merge_prophet_mp_results(
+            timestamps=np.array([np.float64(streamed_timestamp)]),
+            mp_flags_and_scores=mp_flags_and_scores,
+            prophet_predictions=df_prophet_scores,
+        )
+        return combined
 
     def _merge_prophet_mp_results(
         self,
