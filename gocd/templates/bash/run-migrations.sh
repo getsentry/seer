@@ -6,9 +6,9 @@ echo "running flask db upgrade" \
   && /devinfra/scripts/k8s/k8s-spawn-job.py \
   --container-name="seer" \
   --label-selector="service=seer" \
+  --env="IS_DB_MIGRATION=true" \
   "seer-run-migrations" \
   "us-central1-docker.pkg.dev/sentryio/seer/image:${GO_REVISION_SEER_REPO}" \
-  -- \
   flask \
   db \
   upgrade

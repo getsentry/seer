@@ -41,7 +41,14 @@ def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+    # Get the database URL based on whether we're in migration mode
+    database_url = (
+        config.DATABASE_MIGRATIONS_URL
+        if config.IS_DB_MIGRATION and config.DATABASE_MIGRATIONS_URL
+        else config.DATABASE_URL
+    )
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {"prepare_threshold": None},
         "pool_pre_ping": True,
