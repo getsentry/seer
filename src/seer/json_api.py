@@ -129,6 +129,7 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
 
             try:
                 result: BaseModel = implementation(request_annotation.model_validate(data))
+                print("test")
             except ValidationError as e:
                 sentry_sdk.capture_exception(e)
                 raise BadRequest(str(e))
