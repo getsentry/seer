@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pandas as pd
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import (
@@ -89,15 +90,28 @@ class TestAnomalyDetection(unittest.TestCase):
             timeseries, config, window_size=None, algo_config=None, time_budget_ms=None
         ):
             time.sleep(0.2)  # Simulate a 200ms delay
-            return timeseries, MPTimeSeriesAnomalies(
-                flags=[],
-                scores=[],
-                matrix_profile_suss=np.array([]),
-                matrix_profile_fixed=np.array([]),
-                window_size=0,
-                thresholds=[],
-                original_flags=[],
-                use_suss=[],
+            return (
+                timeseries,
+                MPTimeSeriesAnomalies(
+                    flags=[],
+                    scores=[],
+                    matrix_profile_suss=np.array([]),
+                    matrix_profile_fixed=np.array([]),
+                    window_size=0,
+                    thresholds=[],
+                    original_flags=[],
+                    use_suss=[],
+                ),
+                pd.DataFrame(
+                    {
+                        "ds": pd.Series([], dtype=np.float64),
+                        "y": pd.Series([], dtype=np.float64),
+                        "actual": pd.Series([], dtype=np.float64),
+                        "yhat": pd.Series([], dtype=np.float64),
+                        "yhat_lower": pd.Series([], dtype=np.float64),
+                        "yhat_upper": pd.Series([], dtype=np.float64),
+                    },
+                ),
             )
 
         mock_batch_detect.side_effect = slow_function
@@ -198,6 +212,7 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
+                y=np.array([]),
                 yhat=np.array([]),
                 yhat_lower=np.array([]),
                 yhat_upper=np.array([]),
@@ -250,6 +265,7 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
+                y=np.array([]),
                 yhat=np.array([]),
                 yhat_lower=np.array([]),
                 yhat_upper=np.array([]),
@@ -303,6 +319,7 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
+                y=np.array([]),
                 yhat=np.array([]),
                 yhat_lower=np.array([]),
                 yhat_upper=np.array([]),
@@ -370,6 +387,7 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
+                y=np.array([]),
                 yhat=np.array([]),
                 yhat_lower=np.array([]),
                 yhat_upper=np.array([]),
@@ -430,6 +448,7 @@ class TestAnomalyDetection(unittest.TestCase):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
+                y=np.array([]),
                 yhat=np.array([]),
                 yhat_lower=np.array([]),
                 yhat_upper=np.array([]),

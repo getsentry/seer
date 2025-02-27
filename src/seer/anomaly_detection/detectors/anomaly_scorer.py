@@ -12,7 +12,12 @@ from seer.anomaly_detection.detectors.prophet_scorer import (
     ProphetScaledSmoothedScorer,
     ProphetScorer,
 )
-from seer.anomaly_detection.models import AlgoConfig, AnomalyDetectionConfig
+from seer.anomaly_detection.models import (
+    AlgoConfig,
+    AnomalyDetectionConfig,
+    AnomalyFlags,
+    Directions,
+)
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ServerError
 
@@ -115,6 +120,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
+            ad_config=ad_config,
         )
         return combined
 
@@ -146,18 +152,15 @@ class CombinedAnomalyScorer(AnomalyScorer):
         if mp_flags_and_scores is None:
             raise ServerError("No flags and scores from MP scorer")
 
-        if prophet_df is None:
-            logger.warning("No prophet_df provided to stream_score")
-            return mp_flags_and_scores
-        if prophet_df.empty:
-            logger.warning("Prophet_df is empty")
+        if prophet_df is None or prophet_df.empty:
+            # logger.warning("The prophet_df is None or empty, skipping prophet scoring")
             return mp_flags_and_scores
 
         # Lookup row in prophet_df for streamed_timestam and update y and actual with the new streamed value
         row_exists = (prophet_df["ds"] == streamed_timestamp).any()
         if not row_exists:
             logger.warning(
-                "Row for timestamp not found in prophet_df",
+                "Row for timestamp not found in prophet_df, skipping prophet scoring",
                 extra={"streamed_timestamp": streamed_timestamp},
             )
             return mp_flags_and_scores
@@ -169,27 +172,62 @@ class CombinedAnomalyScorer(AnomalyScorer):
             timestamps=np.array([np.float64(streamed_timestamp)]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
+            ad_config=ad_config,
         )
         return combined
+
+    def _adjust_prophet_flag_for_location(
+        self,
+        mp_flag: AnomalyFlags,
+        prev_mp_flag: AnomalyFlags,
+        prophet_flag: AnomalyFlags,
+        y: np.float64,
+        yhat: np.float64,
+        yhat_lower: np.float64,
+        yhat_upper: np.float64,
+        direction: Directions,
+    ) -> AnomalyFlags:
+        if (
+            direction == "both"
+            or mp_flag == "none"
+            or mp_flag == prev_mp_flag
+            or prophet_flag == "none"
+        ):
+            return prophet_flag
+
+        if (direction == "up" and y >= yhat_upper) or (direction == "down" and y <= yhat_lower):
+            return "anomaly_higher_confidence"
+        else:
+            return "none"
 
     def _merge_prophet_mp_results(
         self,
         timestamps: np.ndarray,
         mp_flags_and_scores: FlagsAndScores,
         prophet_predictions: pd.DataFrame,
+        ad_config: AnomalyDetectionConfig,
     ) -> FlagsAndScores:
 
         # todo: return prophet thresholds
-        # todo: apply location logic using prophet_predictions
-
         def merge(timestamps, mp_flags, prophet_map):
             flags = []
             found = 0
+            previous_mp_flag: AnomalyFlags = "none"
             for timestamp, mp_flag in zip(timestamps, mp_flags):
                 if pd.to_datetime(timestamp) in prophet_map["flag"]:
                     found += 1
                     prophet_flag = prophet_map["flag"][pd.to_datetime(timestamp)]
                     prophet_score = prophet_map["score"][pd.to_datetime(timestamp)]
+                    prophet_flag = self._adjust_prophet_flag_for_location(
+                        mp_flag=mp_flag,
+                        prev_mp_flag=previous_mp_flag,
+                        prophet_flag=prophet_flag,
+                        y=prophet_map["y"],
+                        yhat=prophet_map["yhat"],
+                        yhat_lower=prophet_map["yhat_lower"],
+                        yhat_upper=prophet_map["yhat_upper"],
+                        direction=ad_config.direction,
+                    )
                     if (
                         mp_flag == "anomaly_higher_confidence"
                         and prophet_flag == "anomaly_higher_confidence"
@@ -201,12 +239,15 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         flags.append("none")
                 else:
                     flags.append(mp_flag)
+                previous_mp_flag = mp_flag
             # todo: publish metrics for found/total
             # if debug:
             #     print(f"found {found} out of {len(timestamps)}")
             return flags
 
-        prophet_predictions_map = prophet_predictions.set_index("ds")[["flag", "score"]].to_dict()
+        prophet_predictions_map = prophet_predictions.set_index("ds")[
+            ["flag", "score", "y", "yhat", "yhat_lower", "yhat_upper"]
+        ].to_dict()
 
         flags = merge(timestamps, mp_flags_and_scores.flags, prophet_predictions_map)
 
@@ -215,93 +256,3 @@ class CombinedAnomalyScorer(AnomalyScorer):
             scores=mp_flags_and_scores.scores,
             thresholds=mp_flags_and_scores.thresholds,
         )
-
-    # todo: fix me and apply location logic using prophet_predictions
-    # def _adjust_flag_for_direction(
-    #     self,
-    #     flag: AnomalyFlags,
-    #     direction: Directions,
-    #     streamed_value: np.float64,
-    #     streamed_timestamp: np.float64,
-    #     history_values: npt.NDArray[np.float64],
-    #     history_timestamps: npt.NDArray[np.float64],
-    #     location_detector: LocationDetector,
-    # ) -> Tuple[AnomalyFlags, List[Threshold]]:
-    #     if flag == "none" or direction == "both":
-    #         return flag, []
-
-    #     if len(history_values) == 0:
-    #         raise ValueError("No history values to detect location")
-    #     relative_location = location_detector.detect(
-    #         streamed_value, streamed_timestamp, history_values, history_timestamps
-    #     )
-    #     if relative_location is None:
-    #         return flag, []
-
-    #     if (direction == "up" and relative_location.location != PointLocation.UP) or (
-    #         direction == "down" and relative_location.location != PointLocation.DOWN
-    #     ):
-    #         return "none", relative_location.thresholds
-    #     return flag, relative_location.thresholds
-
-    # def _detect_location(
-    #     self,
-    #     streamed_value: np.float64,
-    #     streamed_timestamp: np.float64,
-    #     forecast: pd.DataFrame,
-    #     algo_config: AlgoConfig,
-    # ) -> Tuple[PointLocation, List[Threshold]]:
-    #     if algo_config.prophet_uncertainty_samples > 0 or algo_config.prophet_mcmc_samples > 0:
-    #         streamed_forecast = forecast.loc[len(forecast) - 1]
-    #         yhat_upper = streamed_forecast["yhat_upper"]
-    #         yhat_lower = streamed_forecast["yhat_lower"]
-    #         if algo_config.return_thresholds:
-    #             thresholds = [
-    #                 Threshold(
-    #                     type=ThresholdType.PREDICTION,
-    #                     timestamp=streamed_timestamp,
-    #                     upper=yhat_upper,
-    #                     lower=yhat_lower,
-    #                 ),
-    #                 Threshold(
-    #                     type=ThresholdType.TREND,
-    #                     timestamp=streamed_timestamp,
-    #                     upper=streamed_forecast["trend_upper"],
-    #                     lower=streamed_forecast["trend_lower"],
-    #                 ),
-    #             ]
-    #         else:
-    #             thresholds = []
-
-    #         if streamed_value > yhat_upper:
-    #             return RelativeLocation(
-    #                 location=PointLocation.UP,
-    #                 thresholds=thresholds,
-    #             )
-    #         elif streamed_value < yhat_lower:
-    #             return RelativeLocation(
-    #                 location=PointLocation.DOWN,
-    #                 thresholds=thresholds,
-    #             )
-    #         else:
-    #             return RelativeLocation(
-    #                 location=PointLocation.NONE,
-    #                 thresholds=thresholds,
-    #             )
-    #     else:
-    #         forecast = forecast.yhat.loc[len(forecast) - 1]
-    #         if np.isclose(streamed_value, forecast, rtol=1e-5, atol=1e-8):
-    #             return RelativeLocation(
-    #                 location=PointLocation.NONE,
-    #                 thresholds=[],
-    #             )
-    #         elif streamed_value > forecast:
-    #             return RelativeLocation(
-    #                 location=PointLocation.UP,
-    #                 thresholds=[],
-    #             )
-    #         else:
-    #             return RelativeLocation(
-    #                 location=PointLocation.DOWN,
-    #                 thresholds=[],
-    #             )
