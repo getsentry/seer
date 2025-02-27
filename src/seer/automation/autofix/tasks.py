@@ -2,7 +2,7 @@ import datetime
 import logging
 import random
 import textwrap
-from typing import Literal, Type, cast
+from typing import Type, cast
 
 import sentry_sdk
 from langfuse import Langfuse
@@ -16,14 +16,12 @@ from seer.automation.autofix.components.comment_thread import (
     CommentThreadRequest,
 )
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.evaluations import (
     make_score_name,
-    score_one,
+    score_coding,
     score_root_causes,
+    score_solution,
     sync_run_evaluation_on_item,
-    sync_run_execution,
-    sync_run_root_cause,
 )
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
@@ -763,7 +761,6 @@ def run_autofix_evaluation(
                     item_id=item.id,
                     run_name=request.run_name,
                     run_description=request.run_description,
-                    run_type=request.run_type,
                     item_index=i,
                     item_count=len(items),
                 ),
@@ -777,7 +774,6 @@ def run_autofix_evaluation_on_item(
     item_id: str,
     run_name: str,
     run_description: str,
-    run_type: Literal["execution", "full", "root_cause"],
     item_index: int,
     item_count: int,
 ):
@@ -792,197 +788,127 @@ def run_autofix_evaluation_on_item(
     scoring_n_panel = 5
     scoring_model = "o3-mini-2025-01-31"
 
-    diff: str | None = None
-    causes: list[RootCauseAnalysisItem] | None = None
-
     with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
-        if run_type == "root_cause":
-            try:
-                causes = sync_run_root_cause(dataset_item, langfuse_session_id=trace_id)
-            except Exception as e:
-                logger.error(f"Error running root cause analysis: {e}")
 
-            if causes:
-                root_cause_score = score_root_causes(
-                    dataset_item,
-                    causes,
-                    n_panel=scoring_n_panel,
-                    model=scoring_model,
-                    langfuse_session_id=trace_id,
-                )
+        try:
+            final_state = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
+        except Exception as e:
+            logger.exception(f"Error running evaluation: {e}")
 
-                # Will output 4 scores for a run item:
-                # - `"highest_score"`: The score for the highest scored cause out of all the returned root causes.
-                # - `"positioning_score"`: Positioning of the highest scored cause, if the highest scored cause is first, this score is `1.0`. If it is last, it will be `0.0`. The score is calculated proportional to the number of causes provided.
-                # - `"mean_score"`: The mean score of all the root causes.
-                # - `"error_weighted_score"` This score is the same as the highest score but scored 0 if there is an error or no root cause returned. This is used to weight the score in the aggregated run result.
+        root_cause_scores = score_root_causes(
+            dataset_item,
+            final_state,
+            n_panel=scoring_n_panel,
+            model=scoring_model,
+            langfuse_session_id=trace_id,  # type: ignore
+        )
 
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
-                    ),
-                    value=root_cause_score.get("highest_score"),
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="highest_score"
-                    ),
-                    value=root_cause_score.get("highest_score"),
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="positioning_score"
-                    ),
-                    value=root_cause_score.get("position_score"),
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="mean_score"
-                    ),
-                    value=root_cause_score.get("mean_score"),
-                )
-            else:
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
-                    ),
-                    value=0,
-                )
-        elif run_type == "execution":
-            try:
-                diff = sync_run_execution(dataset_item, langfuse_session_id=trace_id)
-            except Exception as e:
-                logger.error(f"Error running evaluation: {e}")
+        if root_cause_scores:
+            root_cause_score, root_cause_verdict, root_cause_helpful = root_cause_scores
 
-            if diff:
-                score = score_one(
-                    dataset_item,
-                    diff,
-                    n_panel=scoring_n_panel,
-                    model=scoring_model,
-                    langfuse_session_id=trace_id,
-                )
-
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
-                    ),
-                    value=score,
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="score"
-                    ),
-                    value=score,
-                )
-            else:
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
-                    ),
-                    value=0,
-                )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
+                ),
+                value=1 if root_cause_verdict else 0,
+            )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="rc_is_helpful"
+                ),
+                value=1 if root_cause_helpful else 0,
+            )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
+                ),
+                value=root_cause_score,
+            )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="rc_score"),
+                value=root_cause_score,
+            )
         else:
-            try:
-                diff, causes = sync_run_evaluation_on_item(
-                    dataset_item, langfuse_session_id=trace_id
-                )
-            except Exception as e:
-                logger.exception(f"Error running evaluation: {e}")
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
+                ),
+                value=0,
+            )
 
-            if diff:
-                score, verdict = score_one(
-                    dataset_item,
-                    diff,
-                    n_panel=scoring_n_panel,
+        solution_scores = score_solution(
+            dataset_item,
+            final_state,
+            n_panel=scoring_n_panel,
+            model=scoring_model,
+            langfuse_session_id=trace_id,  # type: ignore
+        )
+
+        if solution_scores:
+            mean_score, verdict = solution_scores
+
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="solution_is_fixed"
+                ),
+                value=1 if verdict else 0,
+            )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
                     model=scoring_model,
-                    langfuse_session_id=trace_id,
-                )
-
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="is_fixed"
-                    ),
-                    value=1 if verdict else 0,
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
-                    ),
-                    value=score,
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="score"
-                    ),
-                    value=score,
-                )
-            else:
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="error_weighted_score"
-                    ),
-                    value=0,
-                )
-
-            if causes:
-                root_cause_score, root_cause_verdict, root_cause_helpful = score_root_causes(
-                    dataset_item,
-                    causes,
                     n_panel=scoring_n_panel,
+                    name="solution_error_weighted_score",
+                ),
+                value=mean_score,
+            )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="solution_score"
+                ),
+                value=mean_score,
+            )
+        else:
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
                     model=scoring_model,
-                    langfuse_session_id=trace_id,
-                )
+                    n_panel=scoring_n_panel,
+                    name="solution_error_weighted_score",
+                ),
+                value=0,
+            )
 
-                # Will output 4 scores for a run item:
-                # - `"highest_score"`: The score for the highest scored cause out of all the returned root causes.
-                # - `"error_weighted_score"` This score is the same as the highest score but scored 0 if there is an error or no root cause returned. This is used to weight the score in the aggregated run result.
+        coding_scores = score_coding(
+            dataset_item,
+            final_state,
+            n_panel=scoring_n_panel,
+            model=scoring_model,
+            langfuse_session_id=trace_id,  # type: ignore
+        )
 
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
-                    ),
-                    value=1 if root_cause_verdict else 0,
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_is_helpful"
-                    ),
-                    value=1 if root_cause_helpful else 0,
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
-                    ),
-                    value=root_cause_score,
-                )
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_score"
-                    ),
-                    value=root_cause_score,
-                )
-            else:
-                langfuse.score(
-                    trace_id=trace_id,
-                    name=make_score_name(
-                        model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
-                    ),
-                    value=0,
-                )
+        if coding_scores:
+            mean_correctness_score, mean_conciseness_score = coding_scores
+
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="code_correctness_score"
+                ),
+                value=mean_correctness_score,
+            )
+            langfuse.score(
+                trace_id=trace_id,
+                name=make_score_name(
+                    model=scoring_model, n_panel=scoring_n_panel, name="code_conciseness_score"
+                ),
+                value=mean_conciseness_score,
+            )
+        # If no coding scores, we don't do anything...
