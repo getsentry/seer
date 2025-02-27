@@ -137,7 +137,7 @@ class MPBoxCoxScorer(MPScorer):
         location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         z_scores, threshold, std, threshold_transformed = self._get_z_scores(
-            mp_dist[len(mp_dist) // 2 :], ad_config.sensitivity
+            mp_dist, ad_config.sensitivity
         )
         scores = []
         flags = []
