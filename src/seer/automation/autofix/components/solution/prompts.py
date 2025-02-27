@@ -77,7 +77,7 @@ class SolutionPrompts:
         return textwrap.dedent(
             """\
             <goal>Gather all information that may be needed to fix this issue at its root. (don't worry about proposing the fix yet)</goal>
-            
+
             <available_repos>
             {repos_str}
             </available_repos>
@@ -94,7 +94,7 @@ class SolutionPrompts:
             <raw_issue_details>
             {event_str}
             </raw_issue_details>
-            
+
             <map_of_relevant_code>
             {code_map_str}
             </map_of_relevant_code>
