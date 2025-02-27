@@ -1,7 +1,6 @@
 import logging
 
 from langfuse.decorators import observe
-from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
@@ -34,36 +33,6 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
         return memory
 
-    @observe(name="Is Obvious")
-    @ai_track(description="Is Obvious")
-    @inject
-    def _is_obvious(
-        self,
-        request: SolutionRequest,
-        memory: list[Message],
-        llm_client: LlmClient = injected,
-    ) -> bool:
-        if memory:
-
-            class IsObviousOutput(BaseModel):
-                need_to_search_codebase: bool
-
-            output = llm_client.generate_structured(
-                messages=memory,
-                prompt=SolutionPrompts.format_is_obvious_msg(
-                    summary=request.summary,
-                    event_details=request.event_details,
-                    root_cause=request.root_cause_and_fix,
-                    original_instruction=request.original_instruction,
-                ),
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
-                response_format=IsObviousOutput,
-            )
-
-            return not output.parsed.need_to_search_codebase
-
-        return False
-
     @observe(name="Solution")
     @ai_track(description="Solution")
     @inject
@@ -79,12 +48,10 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             readable_repos = state.readable_repos
             unreadable_repos = state.unreadable_repos
 
-            is_obvious = False
             if not memory:
                 memory = self._prefill_initial_memory(request)
-                is_obvious = False  # TODO self._is_obvious(request, memory)
 
-            has_tools = (not is_obvious) and bool(readable_repos)
+            has_tools = bool(readable_repos)
             repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             agent = AutofixAgent(

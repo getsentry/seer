@@ -90,7 +90,7 @@ class AutofixAgent(LlmAgent):
                 text,
                 cur_step_idx,
                 self.context.state,
-                len(self.memory) - 1,
+                max(0, len(self.memory) - 1),
                 langfuse_parent_trace_id=trace_id,  # type: ignore
                 langfuse_parent_observation_id=observation_id,  # type: ignore
             )
@@ -130,7 +130,7 @@ class AutofixAgent(LlmAgent):
             if self.queued_user_messages:  # user interruption
                 return
 
-            if isinstance(chunk, (str, str)):
+            if isinstance(chunk, tuple):
                 with self.context.state.update() as cur:
                     cur_step = cur.steps[-1]
                     if not cleared:
@@ -219,6 +219,9 @@ class AutofixAgent(LlmAgent):
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
+
+        if self.iterations == 0 and run_config.memory_storage_key:
+            self.context.store_memory(run_config.memory_storage_key, self.memory)
 
         # Use any queued user messages
         if self.config.interactive:

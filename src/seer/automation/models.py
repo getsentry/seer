@@ -391,7 +391,6 @@ class EventDetails(BaseModel):
                 exception_message=f' message="{exception.value}"' if exception.value else "",
                 stacktrace=(
                     exception.stacktrace.to_str(
-                        in_app_only=True,
                         include_context=include_context,
                         include_var_values=include_var_values,
                     )

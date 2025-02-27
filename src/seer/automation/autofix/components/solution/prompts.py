@@ -3,7 +3,7 @@ import textwrap
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.prompts import format_code_map, format_instruction, format_summary
-from seer.automation.models import EventDetails, Profile
+from seer.automation.models import Profile
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -33,36 +33,6 @@ class SolutionPrompts:
             return RootCausePlanTaskPromptXml.from_root_cause(root_cause).to_prompt_str()
         else:
             return root_cause
-
-    @staticmethod
-    def format_is_obvious_msg(
-        summary: IssueSummary | None,
-        event_details: EventDetails,
-        root_cause: RootCauseAnalysisItem | str,
-        original_instruction: str | None,
-    ):
-        return (
-            textwrap.dedent(
-                """\
-                Here is an issue in our codebase: {summary_str}
-
-                {event_details}{original_instruction}
-                {root_cause_str}
-
-                Does the solution exist ONLY in files you can already see in your context here or do you need to look at other files?"""
-            )
-            .format(
-                summary_str=format_summary(summary),
-                event_details=event_details.format_event(),
-                root_cause_str=SolutionPrompts.format_root_cause(root_cause),
-                original_instruction=(
-                    ("\n" + SolutionPrompts.format_original_instruction(original_instruction))
-                    if original_instruction
-                    else ""
-                ),
-            )
-            .strip()
-        )
 
     @staticmethod
     def format_default_msg(
