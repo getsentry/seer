@@ -46,6 +46,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         provider: str,
         external_id: str,
         pr_files: list[PrFile],
+        repo_full_name: str | None = None,
         max_files_analyzed: int = 7,
         max_lines_analyzed: int = 500,
         client: RpcClient = injected,
@@ -81,6 +82,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             provider=provider,
             external_id=external_id,
             pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
+            repo_full_name=repo_full_name,
         )
         if filename_to_issues is None:
             return {}
@@ -97,6 +99,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             provider=self.context.repo.provider,
             external_id=self.context.repo.external_id,
             pr_files=request.pr_files,
+            repo_full_name=self.context.repo.full_name,
         )
         return CodeFetchIssuesOutput(filename_to_issues=filename_to_issues)
 
