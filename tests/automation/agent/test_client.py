@@ -328,7 +328,7 @@ def test_openai_generate_text_stream():
     )
 
     # Check that we got content chunks and usage
-    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    content_chunks = [item[1] for item in stream_items if isinstance(item, tuple)]
     usage_items = [item for item in stream_items if isinstance(item, Usage)]
 
     assert len(content_chunks) > 0
@@ -352,7 +352,7 @@ def test_anthropic_generate_text_stream():
     )
 
     # Check that we got content chunks and usage
-    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    content_chunks = [item[1] for item in stream_items if isinstance(item, tuple)]
     usage_items = [item for item in stream_items if isinstance(item, Usage)]
 
     assert len(content_chunks) > 0
@@ -444,7 +444,7 @@ def test_anthropic_generate_text_stream_with_tools():
     )
 
     # Check that we got content chunks, tool calls and usage
-    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    content_chunks = [item[1] for item in stream_items if isinstance(item, tuple)]
     tool_calls = [item for item in stream_items if isinstance(item, ToolCall)]
     usage_items = [item for item in stream_items if isinstance(item, Usage)]
 
@@ -656,7 +656,7 @@ def test_gemini_generate_text_stream():
     )
 
     # Check that we got content chunks and usage
-    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    content_chunks = [item[1] for item in stream_items if isinstance(item, tuple)]
     usage_items = [item for item in stream_items if isinstance(item, Usage)]
 
     assert len(content_chunks) > 0
@@ -698,7 +698,7 @@ def test_gemini_generate_text_stream_with_tools():
     )
 
     # Check that we got content chunks, tool calls and usage
-    content_chunks = [item for item in stream_items if isinstance(item, str)]
+    content_chunks = [item[1] for item in stream_items if isinstance(item, tuple)]
     tool_calls = [item for item in stream_items if isinstance(item, ToolCall)]
     usage_items = [item for item in stream_items if isinstance(item, Usage)]
 

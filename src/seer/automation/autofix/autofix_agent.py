@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 class AutofixAgent(LlmAgent):
     futures: list[Future]
     executor: Executor
+    accumulated_thinking_chunks: list[str]
 
     def __init__(
         self,
@@ -40,6 +41,7 @@ class AutofixAgent(LlmAgent):
     ):
         super().__init__(config=config, tools=tools, memory=memory, name=name)
         self.context = context
+        self.accumulated_thinking_chunks = []
 
     @property
     def queued_user_messages(self):
@@ -61,26 +63,51 @@ class AutofixAgent(LlmAgent):
 
         return super().should_continue(run_config)
 
-    def _check_prompt_for_help(self, run_config: RunConfig):
-        if (
-            self.config.interactive
-            and self.iterations > 0
-            and (
-                self.iterations == run_config.max_iterations - 3
-                or (self.iterations % 6 == 0 and self.iterations < run_config.max_iterations - 3)
+    def _submit_insight(self, text: str):
+        """
+        Helper method to submit an insight for processing in parallel.
+
+        Args:
+            text: The text to process for insights
+        """
+        # Only submit if we have meaningful content and interactivity is enabled
+        if not text.strip():
+            return
+
+        cur = self.context.state.get()
+        if not self.config.interactive or cur.request.options.disable_interactivity:
+            return
+
+        # Get trace and observation IDs for langfuse
+        trace_id = langfuse_context.get_current_trace_id()
+        observation_id = langfuse_context.get_current_observation_id()
+
+        # Share insights in parallel
+        cur_step_idx = len(cur.steps) - 1
+        self.futures.append(
+            self.executor.submit(
+                self.share_insights,
+                text,
+                cur_step_idx,
+                self.context.state,
+                max(0, len(self.memory) - 1),
+                langfuse_parent_trace_id=trace_id,  # type: ignore
+                langfuse_parent_observation_id=observation_id,  # type: ignore
             )
-        ):
-            self.add_user_message(
-                "You're taking a while. If you need help, ask me a concrete question using the tool provided."
-            )
+        )
 
     def _get_completion(self, run_config: RunConfig):
         """
         Streams the preliminary output to the current step and only returns when output is complete
         """
         content_chunks = []
+        thinking_content_chunks = []
+        thinking_signature = None
         tool_calls = []
         usage = Usage()
+
+        # Reset accumulated thinking chunks for this completion
+        self.accumulated_thinking_chunks = []
 
         stream = self.client.generate_text_stream(
             messages=self.memory,
@@ -95,6 +122,7 @@ class AutofixAgent(LlmAgent):
                 and run_config.model.model_name.startswith("o")
                 else 40.0
             ),
+            max_tokens=run_config.max_tokens,
         )
 
         cleared = False
@@ -102,14 +130,50 @@ class AutofixAgent(LlmAgent):
             if self.queued_user_messages:  # user interruption
                 return
 
-            if isinstance(chunk, str):
+            if isinstance(chunk, tuple):
                 with self.context.state.update() as cur:
                     cur_step = cur.steps[-1]
                     if not cleared:
                         cur_step.clear_output_stream()
                         cleared = True
-                    cur_step.receive_output_stream(chunk)
-                content_chunks.append(chunk)
+                    if chunk[0] == "thinking_content" or chunk[0] == "content":
+                        cur_step.receive_output_stream(chunk[1])
+                if chunk[0] == "thinking_content":
+                    thinking_content_chunks.append(chunk[1])
+
+                    # Accumulate thinking chunks for insight sharing
+                    self.accumulated_thinking_chunks.append(chunk[1])
+
+                    # Check if we have enough accumulated content to share insights
+                    # Only share insights if we have at least 1500 characters and the accumulated text contains a newline
+                    accumulated_text = "".join(self.accumulated_thinking_chunks)
+
+                    if (
+                        len(accumulated_text) >= 1500
+                        and "\n"
+                        in accumulated_text  # Only share when we have at least one complete line
+                    ):
+                        # Reset for next batch
+                        text_to_process = accumulated_text
+                        self.accumulated_thinking_chunks = []
+
+                        # Submit for insight processing
+                        self._submit_insight(text_to_process)
+
+                elif chunk[0] == "thinking_signature":
+                    thinking_signature = chunk[1]
+
+                    # If we have accumulated thinking content and received the thinking signature,
+                    # share insights regardless of content length
+                    if self.accumulated_thinking_chunks:
+                        text_to_process = "".join(self.accumulated_thinking_chunks)
+                        self.accumulated_thinking_chunks = []
+
+                        # Submit for insight processing
+                        self._submit_insight(text_to_process)
+
+                elif chunk[0] == "content":
+                    content_chunks.append(chunk[1])
             elif isinstance(chunk, ToolCall):
                 tool_calls.append(chunk)
             elif isinstance(chunk, Usage):
@@ -117,6 +181,8 @@ class AutofixAgent(LlmAgent):
 
         message = self.client.construct_message_from_stream(
             content_chunks=content_chunks,
+            thinking_content_chunks=thinking_content_chunks,
+            thinking_signature=thinking_signature,
             tool_calls=tool_calls,
             model=run_config.model,
         )
@@ -154,7 +220,8 @@ class AutofixAgent(LlmAgent):
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
 
-        self._check_prompt_for_help(run_config)
+        if self.iterations == 0 and run_config.memory_storage_key:
+            self.context.store_memory(run_config.memory_storage_key, self.memory)
 
         # Use any queued user messages
         if self.config.interactive:
@@ -170,31 +237,14 @@ class AutofixAgent(LlmAgent):
         self.memory.append(completion.message)
 
         # log thoughts to the user
-        cur = self.context.state.get()
         if (
             completion.message.content  # only if we have something to summarize
-            and self.config.interactive  # only in interactive mode
-            and not cur.request.options.disable_interactivity
             and completion.message.tool_calls  # only if the run is in progress
         ):
-            trace_id = langfuse_context.get_current_trace_id()
-            observation_id = langfuse_context.get_current_observation_id()
-
             text_before_tag = completion.message.content.split("<")[0]
-            text = text_before_tag
-            if text:
-                cur_step_idx = len(cur.steps) - 1
-                self.futures.append(
-                    self.executor.submit(
-                        self.share_insights,
-                        text,
-                        cur_step_idx,
-                        self.context.state,
-                        len(self.memory) - 1,
-                        langfuse_parent_trace_id=trace_id,  # type: ignore
-                        langfuse_parent_observation_id=observation_id,  # type: ignore
-                    )
-                )
+            if text_before_tag:
+                # Submit for insight processing
+                self._submit_insight(text_before_tag)
 
         # call any tools the model wants to use
         if completion.message.tool_calls:

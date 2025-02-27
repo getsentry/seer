@@ -424,7 +424,11 @@ def truncate_memory_to_match_insights(memory: list[Message], memory_index: int, 
                 new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
             else:
                 new_memory = new_memory[:-1]
-        truncated_memory = new_memory
+        truncated_memory = (
+            new_memory
+            if len(new_memory) >= step.initial_memory_length
+            else memory[: step.initial_memory_length]
+        )
     if not step.insights:
         truncated_memory = memory[: step.initial_memory_length]
     return truncated_memory if truncated_memory else memory
