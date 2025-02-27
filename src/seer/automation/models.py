@@ -353,12 +353,12 @@ class EventDetails(BaseModel):
         return textwrap.dedent(
             """\
             {title}
-            Exceptions:
+            <exceptions>
             {exceptions}
-            ----------
-            Event Logs:
+            </exceptions>
+            <breadcrumb_logs>
             {breadcrumbs}
-            ----------
+            </breadcrumb_logs>
             """
         ).format(
             title=self.title,
@@ -372,8 +372,9 @@ class EventDetails(BaseModel):
         return textwrap.dedent(
             f"""\
             {self.title}
-            Exceptions:
+            <exceptions>
             {self.format_exceptions(include_context=include_context, include_var_values=include_var_values)}
+            </exceptions>
             """
         )
 
@@ -431,9 +432,9 @@ class EventDetails(BaseModel):
         return "\n".join(
             textwrap.dedent(
                 """\
-                <event_log_{i}{breadcrumb_type}{breadcrumb_category}{level}>
+                <breadcrumb_{i}{breadcrumb_type}{breadcrumb_category}{level}>
                 {content}
-                </event_log_{i}>"""
+                </breadcrumb_{i}>"""
             ).format(
                 i=i,
                 breadcrumb_type=f' type="{breadcrumb.type}"' if breadcrumb.type else "",

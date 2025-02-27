@@ -31,6 +31,7 @@ class RunConfig(BaseModel):
     max_iterations: int = Field(
         default=16, description="Maximum number of iterations the agent can perform"
     )
+    max_tokens: int | None = None
     model: LlmProvider
     memory_storage_key: str | None = None
     temperature: float | None = 0.0

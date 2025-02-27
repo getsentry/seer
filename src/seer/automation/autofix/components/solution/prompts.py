@@ -30,11 +30,9 @@ class SolutionPrompts:
     @staticmethod
     def format_root_cause(root_cause: RootCauseAnalysisItem | str):
         if isinstance(root_cause, RootCauseAnalysisItem):
-            return f"""The steps to reproduce the root cause of the issue have been identified: {RootCausePlanTaskPromptXml.from_root_cause(
-                    root_cause
-                ).to_prompt_str()}"""
+            return RootCausePlanTaskPromptXml.from_root_cause(root_cause).to_prompt_str()
         else:
-            return f"The user has provided the following instruction for the fix: {root_cause}"
+            return root_cause
 
     @staticmethod
     def format_is_obvious_msg(
@@ -75,23 +73,33 @@ class SolutionPrompts:
         original_instruction: str | None,
         summary: IssueSummary | None,
         code_map: Profile | None,
-        has_tools: bool,
     ):
         return textwrap.dedent(
             """\
-            Given the issue: {summary_str}
-            {event_str}{original_instruction}
-            {root_cause_str}
-
-            {code_map_str}
-
-            GOAL: Gather all information that may be needed to plan a fix for this issue.
-
+            <goal>Gather all information that may be needed to fix this issue at its root. (don't worry about proposing the fix yet)</goal>
+            
+            <available_repos>
             {repos_str}
+            </available_repos>
 
-            # Guidelines:
-            - Your job is to simply gather all information needed. You may not propose code changes yourself.
-            {think_tools_instructions}"""
+            <issue_details>
+            <summary>
+            {summary_str}
+            </summary>
+
+            <root_cause>
+            {root_cause_str}
+            </root_cause>
+
+            <raw_issue_details>
+            {event_str}
+            </raw_issue_details>
+            
+            <map_of_relevant_code>
+            {code_map_str}
+            </map_of_relevant_code>
+            </issue_details>
+            """
         ).format(
             event_str=event,
             repos_str=repos_str,
@@ -102,11 +110,6 @@ class SolutionPrompts:
                 else ""
             ),
             summary_str=format_summary(summary),
-            think_tools_instructions=(
-                "- EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you."
-                if has_tools
-                else ""
-            ),
             code_map_str=format_code_map(code_map),
         )
 
@@ -114,7 +117,7 @@ class SolutionPrompts:
     def solution_formatter_msg(root_cause: RootCauseAnalysisItem | str):
         return textwrap.dedent(
             """\
-            Based on the discussed plan, extract out each step of the plan to fix the issue. Exclude steps that are not part of the fix, such as tests.
+            Format the discussed plan exactly into a list of steps in the plan to fix the issue. Exclude steps that are not part of the fix, such as adding tests and logs.
 
             For each item in the plan (where one item is one step to fix the issue):
               - Title: a complete sentence describing what needs to change to fix the issue.
@@ -127,5 +130,10 @@ class SolutionPrompts:
     def solution_proposal_msg():
         return textwrap.dedent(
             """\
-            Based on all the information gathered, provide the most actionable and effective steps to fix the issue. You should propose code changes for each step."""
+            <goal>Based on all the information you've learned, outline the most actionable and effective steps to fix the issue.</goal>
+
+            <guidelines>
+            Your solution should be whatever is the BEST, most CORRECT solution, whether it's a one-line change or a bigger refactor.
+            </guidelines>
+            """
         )

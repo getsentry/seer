@@ -22,7 +22,6 @@ class RootCauseAnalysisPrompts:
             # Guidelines:
             - Your job is to simply gather all information needed to understand what happened, not to propose fixes.
             - You are not able to search in external libraries. If the error is caused by an external library or the stacktrace only contains frames from external libraries, do not attempt to search in external libraries.
-            - At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK.
 
             It is important that you gather all information needed to understand what happened, from the entry point of the code to the error."""
         )
@@ -34,19 +33,27 @@ class RootCauseAnalysisPrompts:
         instruction: Optional[str] = None,
         summary: Optional[IssueSummary] = None,
         code_map: Optional[Profile] = None,
+        has_tools: bool = True,
     ):
         return textwrap.dedent(
             """\
+            <goal>{explore_msg}</goal>
+            <available_repos>
+            {repos_str}
+            </available_repos>
+
+            <issue_details>
             Given the issue: {summary_str}
             {error_str}
             {code_map_str}
             {instruction_str}
-            Gather all information needed to understand what happened.
-
-            {repos_str}
-
-            At EVERY step of your investigation, you MUST think out loud! Share what you're learning and thinking along the way, EVERY TIME YOU SPEAK."""
+            </issue_details>"""
         ).format(
+            explore_msg=(
+                "Gather all information needed to understand what happened, from the entry point of the code to the error."
+                if has_tools
+                else "Figure out how and why this issue happened, from the entry point of the code to the error."
+            ),
             error_str=event,
             repos_str=repos_str,
             instruction_str=format_instruction(instruction),
@@ -58,7 +65,8 @@ class RootCauseAnalysisPrompts:
     def root_cause_proposal_msg():
         return textwrap.dedent(
             """\
-            Based on all the information you've learned, detail the true root cause of the issue."""
+            <goal>Based on all the information you've learned, detail the true root cause of the issue.</goal>
+            """
         )
 
     @staticmethod
