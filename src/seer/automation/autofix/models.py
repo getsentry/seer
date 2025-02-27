@@ -270,7 +270,6 @@ class AutofixEvaluationRequest(BaseModel):
     dataset_name: str
     run_name: str
     run_description: Optional[str] = None
-    run_type: Literal["root_cause", "full", "execution"] = "full"
     test: bool = False
     run_on_item_id: Optional[str] = None
     random_for_test: bool = False
@@ -535,6 +534,26 @@ class AutofixContinuation(AutofixGroupState):
     def set_last_step_completed_message(self, message: str):
         if self.steps:
             self.steps[-1].completedMessage = message
+
+    @property
+    def root_cause_step(self) -> RootCauseStep | None:
+        root_cause_step = self.find_step(key="root_cause_analysis")
+        return (
+            root_cause_step
+            if root_cause_step and isinstance(root_cause_step, RootCauseStep)
+            else None
+        )
+
+    @property
+    def solution_step(self) -> SolutionStep | None:
+        solution_step = self.find_step(key="solution")
+
+        return solution_step if solution_step and isinstance(solution_step, SolutionStep) else None
+
+    @property
+    def changes_step(self) -> ChangesStep | None:
+        changes_step = self.find_step(key="changes")
+        return changes_step if changes_step and isinstance(changes_step, ChangesStep) else None
 
     def get_selected_root_cause(
         self,
