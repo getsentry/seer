@@ -1,6 +1,6 @@
 import logging
 import textwrap
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypedDict
 
 from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
@@ -9,21 +9,14 @@ from pydantic_xml import attr, element
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
-from seer.automation.autofix.components.root_cause.models import (
-    RelevantCodeFile,
-    RootCauseAnalysisItem,
-    TimelineEvent,
-)
 from seer.automation.autofix.components.solution.models import SolutionTimelineEvent
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRequest,
     AutofixRequestOptions,
-    AutofixRootCauseUpdatePayload,
     AutofixSolutionUpdatePayload,
     AutofixUpdateType,
-    ChangesStep,
 )
 from seer.automation.autofix.models import RootCauseStep as RootCauseStepModel
 from seer.automation.autofix.runs import create_initial_autofix_run
@@ -72,117 +65,6 @@ class DatasetItemDict(TypedDict):
     input: AutofixRequestDict
     metadata: DatasetItemMetadataDict
     expected_output: ExpectedOutputDict
-
-
-@observe(name="Sync run root cause evaluation on item")
-def sync_run_root_cause(item: DatasetItemClient):
-    run_id = None
-
-    input_data: AutofixRequestDict = item.input
-    request = AutofixRequest.model_validate(input_data["request"])
-
-    request.options = AutofixRequestOptions(
-        disable_codebase_indexing=True, disable_interactivity=True
-    )
-
-    state = create_initial_autofix_run(request)
-    with state.update() as cur:
-        cur.signals.append(PIPELINE_SYNC_SIGNAL)
-
-    run_id = state.get().run_id
-
-    RootCauseStep.get_signature(
-        RootCauseStepRequest(
-            run_id=run_id,
-        )
-    ).apply()
-
-    state_after_root_cause = state.get()
-    root_cause_step = state_after_root_cause.steps[-1]
-
-    if not isinstance(root_cause_step, RootCauseStepModel) or not root_cause_step.causes:
-        raise ValueError("Expected root cause step")
-
-    return root_cause_step.causes
-
-
-@observe(name="Sync run execution evaluation on item")
-def sync_run_execution(item: DatasetItemClient):
-    request = AutofixRequest.model_validate(item.input.get("request"))
-    request.options = AutofixRequestOptions(
-        disable_codebase_indexing=True, disable_interactivity=True
-    )
-
-    expected_output = RootCauseExpectedOutput.model_validate(
-        {
-            "diff": item.input.get("snippet_diff"),
-            "root_cause": item.input.get("root_cause"),
-            "solution_summary": item.input.get("solution_summary"),
-        }
-    )
-
-    state = create_initial_autofix_run(request)
-
-    event_manager = AutofixEventManager(state)
-    with state.update() as cur:
-        cur.signals.append(PIPELINE_SYNC_SIGNAL)
-
-        root_cause_step = cast(
-            RootCauseStepModel, cur.find_or_add(event_manager.root_cause_analysis_step)
-        )
-        root_cause_step.causes = [
-            RootCauseAnalysisItem(
-                title=expected_output.root_cause,
-                description="",
-                root_cause_reproduction=[
-                    TimelineEvent(
-                        title=expected_output.solution_summary,
-                        code_snippet_and_analysis="",
-                        timeline_item_type="code",
-                        relevant_code_file=RelevantCodeFile(
-                            file_path=expected_output.diff.file_path,
-                            repo_name="",
-                        ),
-                        is_most_important_event=False,
-                    )
-                ],
-            )
-        ]
-
-        run_id = cur.run_id
-
-    event_manager.set_selected_root_cause(
-        AutofixRootCauseUpdatePayload(
-            type=AutofixUpdateType.SELECT_ROOT_CAUSE,
-            cause_id=-1,
-        )
-    )
-    event_manager.set_selected_solution(
-        AutofixSolutionUpdatePayload(
-            type=AutofixUpdateType.SELECT_SOLUTION,
-            custom_solution=None,
-            solution_selected=True,
-        )
-    )
-
-    AutofixCodingStep.get_signature(AutofixCodingStepRequest(run_id=run_id)).apply()
-
-    state_after_execution = state.get()
-    changes_step = state_after_execution.steps[-1]
-    if not isinstance(changes_step, ChangesStep):
-        raise ValueError("Expected changes step")
-
-    changes = changes_step.changes
-
-    if not changes:
-        raise ValueError("No changes found, expected changes")
-
-    diffs: list[str] = []
-    for change in changes:
-        if change.diff_str:
-            diffs.append(change.diff_str)
-
-    return "\n".join(diffs)
 
 
 @observe(name="Sync run evaluation on item (JENN)")
