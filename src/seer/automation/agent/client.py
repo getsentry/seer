@@ -399,7 +399,7 @@ class OpenAiProvider:
                 if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
                     yield ToolCall(**current_tool_call)
                 if delta.content:
-                    yield "CONTENT", delta.content
+                    yield "content", delta.content
         finally:
             stream.response.close()
 
@@ -709,11 +709,11 @@ class AnthropicProvider:
                 if chunk.type == "message_stop":
                     break
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
-                    yield "CONTENT", chunk.delta.text
+                    yield "content", chunk.delta.text
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "thinking_delta":
-                    yield "THINKING_CONTENT", chunk.delta.thinking
+                    yield "thinking_content", chunk.delta.thinking
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "signature_delta":
-                    yield "THINKING_SIGNATURE", chunk.delta.signature
+                    yield "thinking_signature", chunk.delta.signature
                 elif chunk.type == "content_block_start" and chunk.content_block.type == "tool_use":
                     # Start accumulating a new tool call
                     current_tool_call = {
@@ -951,7 +951,7 @@ class GeminiProvider:
                         current_tool_call = None
                 # Handle text chunks
                 elif chunk.text is not None:
-                    yield "CONTENT", str(chunk.text)  # type: ignore[misc]
+                    yield "content", str(chunk.text)  # type: ignore[misc]
 
                 # Update token counts if available
                 if chunk.usage_metadata:

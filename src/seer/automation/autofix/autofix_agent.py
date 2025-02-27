@@ -136,9 +136,9 @@ class AutofixAgent(LlmAgent):
                     if not cleared:
                         cur_step.clear_output_stream()
                         cleared = True
-                    if chunk[0] == "THINKING_CONTENT" or chunk[0] == "CONTENT":
+                    if chunk[0] == "thinking_content" or chunk[0] == "content":
                         cur_step.receive_output_stream(chunk[1])
-                if chunk[0] == "THINKING_CONTENT":
+                if chunk[0] == "thinking_content":
                     thinking_content_chunks.append(chunk[1])
 
                     # Accumulate thinking chunks for insight sharing
@@ -160,7 +160,7 @@ class AutofixAgent(LlmAgent):
                         # Submit for insight processing
                         self._submit_insight(text_to_process)
 
-                elif chunk[0] == "THINKING_SIGNATURE":
+                elif chunk[0] == "thinking_signature":
                     thinking_signature = chunk[1]
 
                     # If we have accumulated thinking content and received the thinking signature,
@@ -172,7 +172,7 @@ class AutofixAgent(LlmAgent):
                         # Submit for insight processing
                         self._submit_insight(text_to_process)
 
-                elif chunk[0] == "CONTENT":
+                elif chunk[0] == "content":
                     content_chunks.append(chunk[1])
             elif isinstance(chunk, ToolCall):
                 tool_calls.append(chunk)
