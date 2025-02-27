@@ -21,7 +21,13 @@ from seer.anomaly_detection.models import (
 )
 from seer.anomaly_detection.models.cleanup_predict import CleanupPredictConfig
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
-from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
+from seer.db import (
+    DbDynamicAlert,
+    DbDynamicAlertTimeSeries,
+    DbProphetAlertTimeSeries,
+    Session,
+    TaskStatus,
+)
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 
@@ -44,8 +50,12 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
         data_purge_flag: str,
-    ):
+    ) -> int:
         return NotImplemented
+
+    @abc.abstractmethod
+    def store_prophet_predictions(self, alert_id: int, predictions: ProphetPrediction) -> None:
+        NotImplemented
 
     @abc.abstractmethod
     def save_timepoint(
@@ -107,10 +117,11 @@ class DbAlertDataAccessor(AlertDataAccessor):
         use_suss = [True] * n_points
 
         n_predictions = len(db_alert.prophet_predictions)
-        prophet_timestamps = np.array([0.0] * n_predictions)
-        prophet_yhats = np.array([0.0] * n_predictions)
-        prophet_yhat_lowers = np.array([0.0] * n_predictions)
-        prophet_yhat_uppers = np.array([0.0] * n_predictions)
+        prophet_timestamps = np.array([None] * n_predictions)
+        prophet_ys = np.array([None] * n_predictions)
+        prophet_yhats = np.array([None] * n_predictions)
+        prophet_yhat_lowers = np.array([None] * n_predictions)
+        prophet_yhat_uppers = np.array([None] * n_predictions)
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
         only_suss = len(timeseries) > 0 and any(
@@ -122,13 +133,14 @@ class DbAlertDataAccessor(AlertDataAccessor):
 
         num_old_points = 0
         window_size = db_alert.anomaly_algo_data.get("window_size")
+        y_map = {}
 
         for i, point in enumerate(timeseries):
             ts[i] = point.timestamp.timestamp()
             values[i] = point.value
             flags[i] = point.anomaly_type
             scores[i] = point.anomaly_score
-
+            y_map[point.timestamp.timestamp()] = point.value
             if point.anomaly_algo_data is not None:
                 algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
 
@@ -163,6 +175,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         cur_ts = datetime.now().timestamp()
         for i, prediction in enumerate(db_alert.prophet_predictions):
             prophet_timestamp = prediction.timestamp.timestamp()
+            prophet_ys[i] = y_map[prophet_timestamp] if prophet_timestamp in y_map else None
             prophet_timestamps[i] = prophet_timestamp
             prophet_yhats[i] = prediction.yhat
             prophet_yhat_lowers[i] = prediction.yhat_lower
@@ -214,6 +227,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=prophet_timestamps,
+                y=prophet_ys,
                 yhat=prophet_yhats,
                 yhat_lower=prophet_yhat_lowers,
                 yhat_upper=prophet_yhat_uppers,
@@ -252,7 +266,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
         data_purge_flag: str,
-    ):
+    ) -> int:
         with Session() as session:
             existing_records = (
                 session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).count()
@@ -298,6 +312,8 @@ class DbAlertDataAccessor(AlertDataAccessor):
             )
             session.add(new_record)
             session.commit()
+            session.refresh(new_record, attribute_names=["id"])
+            return new_record.id
 
     @sentry_sdk.trace
     def save_timepoint(
@@ -459,3 +475,31 @@ class DbAlertDataAccessor(AlertDataAccessor):
             original_flags=combined_original_flags,
             use_suss=use_suss,
         )
+
+    @sentry_sdk.trace
+    def store_prophet_predictions(self, alert_id: int, predictions: ProphetPrediction) -> None:
+        with Session() as session:
+
+            prediction_values = [
+                {
+                    "dynamic_alert_id": alert_id,
+                    "timestamp": datetime.fromtimestamp(predictions.timestamps[i]),
+                    "yhat": predictions.yhat[i],
+                    "yhat_lower": predictions.yhat_lower[i],
+                    "yhat_upper": predictions.yhat_upper[i],
+                }
+                for i in range(len(predictions.timestamps))
+            ]
+            stmt = insert(DbProphetAlertTimeSeries).values(prediction_values)
+
+            update_stmt = stmt.on_conflict_do_update(
+                index_elements=["dynamic_alert_id", "timestamp"],
+                set_={
+                    "yhat": stmt.excluded.yhat,
+                    "yhat_lower": stmt.excluded.yhat_lower,
+                    "yhat_upper": stmt.excluded.yhat_upper,
+                },
+            )
+
+            session.execute(update_stmt)
+            session.commit()
