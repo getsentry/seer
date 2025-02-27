@@ -70,7 +70,7 @@ class CodingPrompts:
     ):
         return textwrap.dedent(
             """\
-            <goal>Break down the task of {mode_str} into a list of code changes to make. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution.</goal>
+            <goal>Break down the task of {mode_str} into a list of code changes to make. {filter_str}</goal>
 
             <output_format>
             Enclose this plan between <code_changes> and </code_changes> tags. Your output must follow the format properly according to the following guidelines:
@@ -99,6 +99,11 @@ class CodingPrompts:
                     if mode == "test"
                     else "writing a unit test to reproduce the issue and assert the planned solution (following test-driven development) and then fixing the issue"
                 )
+            ),
+            filter_str=(
+                "Use the planned solution to inform the test, but do NOT implement the solution. Only write the test."
+                if mode == "test"
+                else "Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
             ),
             steps_example_str=CodeChangesPromptXml.get_example().to_prompt_str(),
             solution_str=(
