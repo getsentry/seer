@@ -9,6 +9,7 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert
 
 from seer.anomaly_detection.models import (
     AlgoConfig,
