@@ -204,8 +204,6 @@ class TestSyncRunEvaluationOnItem:
         # Setup mock to raise exception
         self.mock_root_cause_step_instance.apply.side_effect = Exception("Test exception")
 
-        # Mock AutofixContinuation return value to simulate what happens after an exception
-        AutofixContinuation(request=self.autofix_request)
         # We need to patch the AutofixEventManager to return our empty state
         with patch(
             "seer.automation.autofix.evaluations.create_initial_autofix_run",
