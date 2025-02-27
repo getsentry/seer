@@ -459,7 +459,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         and anomalies_fixed.thresholds is not None
                         and combined_thresholds is not None
                     ):
-                        for j in range(len(anomalies_fixed.thresholds[j])):
+                        for j in range(len(anomalies_suss.thresholds)):
                             if i < len(anomalies_fixed.thresholds[j]):
                                 combined_thresholds[j][i] = anomalies_fixed.thresholds[j][i]
 

@@ -245,12 +245,13 @@ class TestCleanupTasks(unittest.TestCase):
                         and new.anomaly_algo_data["mp_suss"]["l_idx"] == algo_data["l_idx"]
                         and new.anomaly_algo_data["mp_suss"]["r_idx"] == algo_data["r_idx"]
                     )
-                    assert (
-                        "dist" in new.anomaly_algo_data["mp_fixed"]
-                        and "idx" in new.anomaly_algo_data["mp_fixed"]
-                        and "l_idx" in new.anomaly_algo_data["mp_fixed"]
-                        and "r_idx" in new.anomaly_algo_data["mp_fixed"]
-                    )
+                    # Commenting fixed window logic for now as we are not using it
+                    # assert (
+                    #     "dist" in new.anomaly_algo_data["mp_fixed"]
+                    #     and "idx" in new.anomaly_algo_data["mp_fixed"]
+                    #     and "l_idx" in new.anomaly_algo_data["mp_fixed"]
+                    #     and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+                    # )
 
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
