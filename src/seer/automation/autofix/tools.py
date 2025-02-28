@@ -127,6 +127,8 @@ class BaseTools:
         """
         Given a file path, repository name, and commit SHA, returns the diff for the file in the given commit.
         """
+        if not isinstance(self.context, AutofixContext):
+            return None
         self.context.event_manager.add_log(
             f"Studying commit `{commit_sha}` in `{file_path}` in `{repo_name}`..."
         )
@@ -143,6 +145,8 @@ class BaseTools:
         """
         Given a file path and repository name, returns recent commits and related files.
         """
+        if not isinstance(self.context, AutofixContext):
+            return None
         num_commits = 30
         commit_history = self.context.get_commit_history_for_file(
             file_path, repo_name, max_commits=num_commits
@@ -516,6 +520,12 @@ class BaseTools:
                         ],
                         required=["query"],
                     ),
+                ]
+            )
+
+        if isinstance(self.context, AutofixContext):
+            tools.extend(
+                [
                     FunctionTool(
                         name="explain_file",
                         fn=self.explain_file,
