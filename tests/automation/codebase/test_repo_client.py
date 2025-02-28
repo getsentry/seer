@@ -590,7 +590,7 @@ class TestRepoClient:
         # Test with a path that needs correction (wrong case)
         content, _ = repo_client.get_file_content("SRC/test_file.py", autocorrect=True)
 
-        assert content == "test content"
+        assert content == "Showing results instead for src/test_file.py\n=====\ntest content"
 
         # Verify get_contents was called with corrected path
         mock_github.get_repo.return_value.get_contents.assert_called_once_with(
