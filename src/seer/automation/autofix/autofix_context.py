@@ -203,7 +203,7 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
-    def _get_current_change_state(self, repo_external_id: str) -> CodebaseChange | None:
+    def _get_change_state(self, repo_external_id: str) -> CodebaseChange | None:
         changes_step = self.state.get().changes_step
 
         if not changes_step:
@@ -220,7 +220,7 @@ class AutofixContext(PipelineContext):
 
         return change_state
 
-    def _set_current_change_state(self, change_state: CodebaseChange):
+    def _set_change_state(self, change_state: CodebaseChange):
         with self.state.update() as cur:
             changes_step = cur.changes_step
 
@@ -253,7 +253,7 @@ class AutofixContext(PipelineContext):
                 if not codebase_state.repo_external_id:
                     raise ValueError("Repo external ID not found")
 
-                change_state = self._get_current_change_state(codebase_state.repo_external_id)
+                change_state = self._get_change_state(codebase_state.repo_external_id)
 
                 if codebase_state.file_changes and change_state:
                     key = codebase_state.repo_external_id
@@ -285,12 +285,12 @@ class AutofixContext(PipelineContext):
                             return None
 
                         change_state.branch_name = branch_ref.ref.replace("refs/heads/", "")
-                        self._set_current_change_state(change_state)
+                        self._set_change_state(change_state)
 
                     if not make_pr:
                         return
 
-                    change_state = self._get_current_change_state(codebase_state.repo_external_id)
+                    change_state = self._get_change_state(codebase_state.repo_external_id)
 
                     if not change_state:
                         raise ValueError("Change state not found for PR creation")
@@ -350,7 +350,7 @@ class AutofixContext(PipelineContext):
                         pr_number=pr.number, pr_url=pr.html_url, pr_id=pr.id
                     )
 
-                    self._set_current_change_state(change_state)
+                    self._set_change_state(change_state)
 
                     with Session() as session:
                         pr_id_mapping = DbPrIdToAutofixRunIdMapping(
