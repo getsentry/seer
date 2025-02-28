@@ -143,16 +143,11 @@ class AutofixContext(PipelineContext):
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        repo_names = [repo.full_name for repo in self.repos]
-        if repo_name and repo_name not in repo_names:
-            # Try to find a repo name that contains the provided one to autocorrect
-            matching_repos = [r for r in repo_names if repo_name.lower() in r.lower()]
-            if matching_repos:
-                repo_name = min(matching_repos, key=lambda x: abs(len(x) - len(repo_name or "")))
-            else:
-                raise AgentError() from ValueError(
-                    f"Repo '{repo_name}' not found. Available repos: {', '.join(repo_names)}"
-                )
+        repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
+        if not repo_name:
+            raise AgentError() from ValueError(
+                f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
+            )
         repo_client = self.get_repo_client(repo_name)
 
         file_contents, _ = repo_client.get_file_content(path, autocorrect=True)
