@@ -250,21 +250,23 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
 
         session.query(DbProphetAlertTimeSeries).filter(
             DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
-            DbProphetAlertTimeSeries.timestamp >= min_timestamp,
+            DbProphetAlertTimeSeries.timestamp > min_timestamp,
             DbProphetAlertTimeSeries.timestamp <= max_timestamp,
         ).delete()
 
         for timestamp, yhat, yhat_lower, yhat_upper in zip(
             predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
         ):
-            prophet_prediction = DbProphetAlertTimeSeries(
-                dynamic_alert_id=alert.id,
-                timestamp=datetime.fromtimestamp(timestamp),
-                yhat=yhat,
-                yhat_lower=yhat_lower,
-                yhat_upper=yhat_upper,
-            )
-            session.add(prophet_prediction)
+            timestamp = datetime.fromtimestamp(timestamp)
+            if timestamp > min_timestamp:
+                prophet_prediction = DbProphetAlertTimeSeries(
+                    dynamic_alert_id=alert.id,
+                    timestamp=timestamp,
+                    yhat=yhat,
+                    yhat_lower=yhat_lower,
+                    yhat_upper=yhat_upper,
+                )
+                session.add(prophet_prediction)
         session.commit()
 
     logger.info(f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}")
