@@ -240,7 +240,14 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
 
-    def send_coding_complete(self, codebase_changes: list[CodebaseChange]):
+            log_seer_event(
+                SeerEventNames.AUTOFIX_CODING_COMPLETED,
+                {
+                    "run_id": cur.run_id,
+                },
+            )
+
+    def send_complete(self, codebase_changes: list[CodebaseChange]):
         with self.state.update() as cur:
             cur.mark_running_steps_completed()
 
@@ -322,11 +329,14 @@ class AutofixEventManager:
             if should_completely_error:
                 cur.status = AutofixStatus.ERROR
 
+            current_running_step = cur.steps[-1]
+
             log_seer_event(
                 SeerEventNames.AUTOFIX_RUN_ERROR,
                 {
                     "run_id": cur.run_id,
                     "error_msg": error_msg,
+                    "current_running_step": current_running_step.key,
                     "should_completely_error": should_completely_error,
                 },
             )
