@@ -67,7 +67,7 @@ class DatasetItemDict(TypedDict):
     expected_output: ExpectedOutputDict
 
 
-@observe(name="Sync run evaluation on item (JENN)")
+@observe(name="Sync run evaluation on item")
 def sync_run_evaluation_on_item(item: DatasetItemClient) -> AutofixContinuation:
     run_id = None
 

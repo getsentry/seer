@@ -162,6 +162,30 @@ class AutofixContext(PipelineContext):
 
         return file_contents
 
+    def get_commit_history_for_file(
+        self, path: str, repo_name: str | None = None, max_commits: int = 10
+    ) -> list[str]:
+        repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
+        if not repo_name:
+            raise AgentError() from ValueError(
+                f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
+            )
+
+        repo_client = self.get_repo_client(repo_name)
+        return repo_client.get_commit_history(path, autocorrect=True, max_commits=max_commits)
+
+    def get_commit_patch_for_file(
+        self, path: str, repo_name: str | None = None, commit_sha: str | None = None
+    ) -> str | None:
+        repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
+        if not repo_name:
+            raise AgentError() from ValueError(
+                f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
+            )
+
+        repo_client = self.get_repo_client(repo_name)
+        return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
+
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
