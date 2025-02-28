@@ -472,7 +472,7 @@ class RepoClient:
             return "No files changed"
 
         # First, build a nested dictionary structure representing the file tree
-        tree = {}
+        tree: dict = {}
         for file in files:
             path = file["path"]
             status = file["status"]
