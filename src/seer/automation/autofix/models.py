@@ -85,6 +85,12 @@ class AutofixEndpointResponse(BaseModel):
     run_id: int
 
 
+class AutofixUpdateEndpointResponse(BaseModel):
+    run_id: int
+    status: Literal["success", "error"] = "success"
+    message: str | None = None
+
+
 class CustomRootCauseSelection(BaseModel):
     custom_root_cause: str
 
