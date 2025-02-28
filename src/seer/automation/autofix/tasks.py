@@ -328,7 +328,6 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
         )
     except SoftTimeLimitExceeded:
         logger.error(f"Soft time limit (25s) exceeded when committing changes for run {run_id}")
-        # Do any cleanup if needed
         raise
     except Exception as e:
         logger.error(f"Error committing changes for run {run_id}: {e}")
