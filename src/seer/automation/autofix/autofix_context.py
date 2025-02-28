@@ -189,13 +189,13 @@ class AutofixContext(PipelineContext):
                     else:
  best_match = None
  best_score = 0.0
- 
+
                         for valid_path in valid_file_paths:
  matches, score = potential_frame_match(valid_path, frame)
  if matches and score > best_score:
  best_match = valid_path
  best_score = score
- 
+
  # Use match if confidence score is above threshold
  if best_match and best_score >= 0.4:
  frame.repo_name = repo.full_name
