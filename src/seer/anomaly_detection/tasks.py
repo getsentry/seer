@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from operator import and_, or_
+from sqlite3 import IntegrityError
 from typing import List
 
 import numpy as np
@@ -163,7 +164,13 @@ def _save_timeseries_history(
                 yhat_upper=prophet_ts.yhat_upper,
                 saved_at=datetime.now(),
             )
-            session.add(prophet_history_record)
+            try:
+                session.add(prophet_history_record)
+                session.flush()
+            except IntegrityError:
+                # Roll back and skip the record as it already exists
+                session.rollback()
+                continue
         session.commit()
 
 
@@ -244,32 +251,51 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
 
     with Session() as session:
 
-        # Delete existing predictions that overlap with new prediction timestamps
-        min_timestamp = datetime.now()
-        max_timestamp = datetime.fromtimestamp(max(predictions.timestamps))
+        existing_predictions = (
+            session.query(DbProphetAlertTimeSeries)
+            .filter(
+                DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
+            )
+            .all()
+        )
+        existing_predictions_map = {
+            pred.timestamp.timestamp(): pred for pred in existing_predictions
+        }
 
-        session.query(DbProphetAlertTimeSeries).filter(
-            DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
-            DbProphetAlertTimeSeries.timestamp > min_timestamp,
-            DbProphetAlertTimeSeries.timestamp <= max_timestamp,
-        ).delete()
+        updated_predictions = 0
+        new_predictions = 0
 
         for timestamp, yhat, yhat_lower, yhat_upper in zip(
             predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
         ):
-            timestamp = datetime.fromtimestamp(timestamp)
-            if timestamp > min_timestamp:
+            dt_timestamp = datetime.fromtimestamp(timestamp)
+            existing_prediction = existing_predictions_map.get(timestamp)
+
+            if existing_prediction:
+                # Update existing record
+                existing_prediction.yhat = yhat
+                existing_prediction.yhat_lower = yhat_lower
+                existing_prediction.yhat_upper = yhat_upper
+                updated_predictions += 1
+            else:
+                # Insert new record
                 prophet_prediction = DbProphetAlertTimeSeries(
                     dynamic_alert_id=alert.id,
-                    timestamp=timestamp,
+                    timestamp=dt_timestamp,
                     yhat=yhat,
                     yhat_lower=yhat_lower,
                     yhat_upper=yhat_upper,
                 )
                 session.add(prophet_prediction)
+                new_predictions += 1
         session.commit()
-
-    logger.info(f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}")
+        logger.info(
+            f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}",
+            extra={
+                "updated_predictions": updated_predictions,
+                "new_predictions": new_predictions,
+            },
+        )
 
 
 @sentry_sdk.trace
