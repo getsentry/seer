@@ -127,27 +127,70 @@ def cleanup_dir(directory: str):
         logger.info(f"Directory {directory} already cleaned!")
 
 
-def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:
-    """Determine if the frame filename represents a source code file."""
-    match = False
-
-    src_split = src_file.split("/")[::-1]
-
-    filename = frame.filename or frame.package
-    if filename:
-        # Remove leading './' or '.' from filename
-        filename = filename.lstrip("./")
-        frame_split = filename.split("/")[::-1]
-
-        if len(src_split) > 0 and len(frame_split) > 0 and len(src_split) >= len(frame_split):
-            for i in range(len(frame_split)):
-                if src_split[i] == frame_split[i]:
-                    match = True
-                else:
-                    match = False
-                    break
-
-    return match
+def potential_frame_match(src_file: str, frame: StacktraceFrame) -> tuple[bool, float]:
+ """
+ Determine if the frame filename represents a source code file.
+ Returns a tuple of (match_found, confidence_score) where confidence_score is a value from 0.0 to 1.0
+ indicating how confident we are in the match.
+ """
+ # Normalize paths for comparison
+ def normalize_path(path):
+ if not path:
+ return ""
+ # Strip leading './' and '/'
+ path = path.lstrip("./").lstrip("/")
+ # Convert to lowercase for case-insensitive comparison
+ return path.lower()
+ 
+ src_normalized = normalize_path(src_file)
+ frame_path = frame.filename or frame.package
+ frame_normalized = normalize_path(frame_path)
+ 
+ if not frame_normalized:
+ return False, 0.0
+ 
+ # Quick exact match check
+ if src_normalized == frame_normalized:
+ return True, 1.0
+ 
+ # Component-wise matching (from the end)
+ src_components = src_normalized.split('/')
+ frame_components = frame_normalized.split('/')
+ 
+ # File name matching (highest priority)
+ if src_components and frame_components and src_components[-1] == frame_components[-1]:
+ # Filename matches are a good sign
+ base_score = 0.6
+ else:
+ # If filenames don't match, lower starting score
+ base_score = 0.3
+ 
+ # Check for path suffix match (e.g., "src/module/file.py" matches "module/file.py")
+ max_components = min(len(src_components), len(frame_components))
+ matching_components = 0
+ 
+ for i in range(1, max_components + 1):
+ if src_components[-i] == frame_components[-i]:
+ matching_components += 1
+ else:
+ break
+ 
+ if matching_components == 0:
+ return False, 0.0
+ 
+ # Calculate score based on matching components
+ component_score = matching_components / max(len(src_components), len(frame_components))
+ 
+ # Check if one path is contained in the other (lower priority, but still useful)
+ containment_score = 0.0
+ if src_normalized in frame_normalized or frame_normalized in src_normalized:
+ containment_score = 0.2
+ 
+ # Combine scores with appropriate weighting
+ final_score = base_score * 0.5 + component_score * 0.4 + containment_score * 0.1
+ 
+ # Only return true if we have a reasonable confidence
+ return final_score >= 0.4, final_score
 
 
 def group_documents_by_language(documents: list[Document]) -> dict[str, list[Document]]:
