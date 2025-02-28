@@ -56,6 +56,7 @@ from seer.automation.utils import process_repo_provider, raise_if_no_genai_conse
 from seer.configuration import AppConfig
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import inject, injected
+from seer.events import SeerEventNames, log_seer_event
 from seer.rpc import get_sentry_client
 
 logger = logging.getLogger(__name__)
@@ -330,6 +331,14 @@ def receive_user_message(request: AutofixUpdateRequest):
     cur_state = state.get()
     step_to_restart = cur_state.find_last_step_waiting_for_response()
 
+    log_seer_event(
+        SeerEventNames.AUTOFIX_USER_QUESTION_RESPONSE_RECEIVED,
+        {
+            "run_id": cur_state.run_id,
+            "step_to_restart": step_to_restart.key if step_to_restart else None,
+        },
+    )
+
     # check the state to see if we're responding to a question or interjecting
     if step_to_restart:
         # user response to question
@@ -453,6 +462,14 @@ def restart_from_point_with_feedback(
     step = state.get().find_step(index=step_index)
     if not isinstance(step, DefaultStep):
         raise ValueError("Cannot rethink steps without insights.")
+
+    log_seer_event(
+        SeerEventNames.AUTOFIX_RESTARTED_FROM_POINT,
+        {
+            "run_id": state.get().run_id,
+            "restarting_step": step.key,
+        },
+    )
 
     memory_index_of_insight_to_rethink = (
         step.initial_memory_length
