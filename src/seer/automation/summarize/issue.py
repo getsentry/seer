@@ -1,14 +1,10 @@
 import textwrap
-from functools import cache
 
-import numpy as np
-import numpy.typing as npt
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.models import EventDetails
-from seer.automation.summarize import scoring
 from seer.automation.summarize.models import (
     SummarizeIssueRequest,
     SummarizeIssueResponse,
@@ -34,35 +30,13 @@ class IssueSummaryWithScores(IssueSummary):
     scores: SummarizeIssueScores
 
 
-@cache
-def _confidence_embeddings_cause() -> npt.NDArray[np.float64]:
-    return scoring.embed_texts(["The cause is uncertain.", "The cause is certain."])
-
-
-def score_issue_summary(issue_summary: IssueSummary) -> SummarizeIssueScores:
-    # Embed everything we need once to minimize network requests.
-    embedding_possible_cause, embedding_whats_wrong = scoring.embed_texts(
-        [
-            f"Cause: {issue_summary.possible_cause}",
-            issue_summary.whats_wrong,
-        ]
-    )
-
-    embeddings_confidence = _confidence_embeddings_cause()
-    possible_cause_confidence = scoring.predict_proba(
-        embedding_possible_cause, embeddings_confidence
-    )[..., -1]
-    # Extract the normalized score for the positive confidence
-    # This score isn't a calibrated probability, but it's slightly useful with a threshold
-
-    possible_cause_novelty = 1 - scoring.cosine_similarity(
-        embedding_possible_cause, embedding_whats_wrong
-    )
-
-    return SummarizeIssueScores(
-        possible_cause_confidence=possible_cause_confidence.item(),
-        possible_cause_novelty=possible_cause_novelty,
-    )
+class IssueSummaryForLlmToGenerate(BaseModel):
+    whats_wrong: str
+    session_related_issues: str
+    possible_cause: str
+    possible_cause_novelty_score: float
+    possible_cause_confidence_score: float
+    title: str
 
 
 @observe(name="Summarize Issue")
@@ -106,34 +80,54 @@ def summarize_issue(
         Your #1 goal is to help our engineers immediately understand what's going on in the main issue.
 
         Write a concise report that sets the scene for the issue. Know that our engineers can already see all the same details on the issue that were provided to you, so DO NOT repeat them. Instead extract the holistic insights that would take time to figure out otherwise.
-        Please write under 20 words per section, while cramming as much detail as possible, to make the report super easy to skim. Please bold important insights and unique terms by surrounding them with double asterisks (**like this**). The structure you should follow is:
+        Please write under 15 words per section, while cramming as much detail as possible, to make the report super easy to skim. Please bold important insights and unique terms by surrounding them with double asterisks (**like this**). The structure you should follow is:
 
         ###### What's wrong? [not optional]
-        summary of the stacktrace, breadcrumbs, and other context
+        Summary of the stacktrace, breadcrumbs, and other context
 
         ###### Session related issues [optional]
-        insights from the application session issues, if relevant to this issue [return empty string if none]
+        Insights from the application session issues, if relevant to this issue [you must return an empty string here if there are no relevant session related issues]
 
         ###### Possible cause [optional]
-        guess as to the cause, maybe show if there's clear smoking bullet [return empty string if none]
+        Guess as to the cause, maybe show if there's clear smoking bullet. [return empty string if none]
+        The guess should be somewhat novel compared to the `whats_wrong` section.
+        If you're not sure about the guess, express this uncertainty subtly in your guess, e.g., by using words like "possible", "perhaps", "may be", etc.
 
-        Also provide a concise title for the report that summarizes everything you write above.
+        ###### Possible cause novelty score [optional]
+        If you filled out the `possible_cause`, return a float score between 0 and 1 for how much new, insightful information is in the `possible_cause` section compared to the `whats_wrong` section.
+        A `possible_cause` that is mostly a rephrasing of the `whats_wrong` section should score low.
+        A `possible_cause` whose information is obviously implied by the `whats_wrong` section should score low.
+        A `possible_cause` that contains new and insightful information that isn't mentioned in the `whats_wrong` section should score high.
+
+        ###### Possible cause confidence score [optional]
+        If you filled out the `possible_cause`, return a float score between 0 and 1 for how certain you are that this `possible_cause` is the true, upstream source of the issue. This score should be granular, e.g., 0.432.
+        A guess that may contain erroneous information should score very low.
+        A guess that contains a shred of speculation or vagueness should score low.
+        A guess that only contains verifiably correct, specific, and unspeculative information should score high.
+        Be hypercritical of your guess.
+        If you didn't make a guess for the possible cause, return none here.
+
+        ###### Title [not optional]
+        Provide a concise title for the report that summarizes the `whats_wrong`, `session_related_issues`, and `possible_cause` sections.
 
         IMPORTANT: each section should be unique and not repeat the information in another section."""
     )
 
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
+        model=GeminiProvider.model("gemini-2.0-flash-lite"),
         prompt=prompt,
-        response_format=IssueSummary,
+        response_format=IssueSummaryForLlmToGenerate,
         temperature=0.0,
-        max_tokens=2048,
-        timeout=7.0,
+        max_tokens=512,
     )
 
     issue_summary = completion.parsed
     issue_summary_with_scores = IssueSummaryWithScores(
-        **issue_summary.model_dump(), scores=score_issue_summary(issue_summary)
+        **issue_summary.model_dump(),
+        scores=SummarizeIssueScores(
+            possible_cause_confidence=issue_summary.possible_cause_confidence_score,
+            possible_cause_novelty=issue_summary.possible_cause_novelty_score,
+        ),
     )
 
     return (
@@ -143,7 +137,6 @@ def summarize_issue(
             whats_wrong=issue_summary_with_scores.whats_wrong,
             trace=issue_summary_with_scores.session_related_issues,
             possible_cause=issue_summary_with_scores.possible_cause,
-            scores=issue_summary_with_scores.scores,
         ),
         issue_summary_with_scores,
     )
