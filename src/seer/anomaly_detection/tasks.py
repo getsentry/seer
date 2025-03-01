@@ -256,10 +256,6 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
             }
             for i in range(len(predictions.timestamps))
         ]
-
-        if not prediction_values:
-            return
-
         stmt = insert(DbProphetAlertTimeSeries).values(prediction_values)
 
         update_stmt = stmt.on_conflict_do_update(
