@@ -4,6 +4,8 @@ import os
 import shutil
 import tarfile
 import tempfile
+import textwrap
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from typing import Literal
 
@@ -309,6 +311,45 @@ class RepoClient:
 
         return tmp_dir, tmp_repo_dir
 
+    def _autocorrect_path(self, path: str, sha: str | None = None) -> tuple[str, bool]:
+        """
+        Attempts to autocorrect a file path by finding the closest match in the repository.
+
+        Args:
+            path: The path to autocorrect
+            sha: The commit SHA to use for finding valid paths
+
+        Returns:
+            A tuple of (corrected_path, was_autocorrected)
+        """
+        if sha is None:
+            sha = self.base_commit_sha
+
+        path = path.lstrip("/")
+        valid_paths = self.get_valid_file_paths(sha)
+
+        # If path is valid, return it unchanged
+        if path in valid_paths:
+            return path, False
+
+        # Check for partial matches if no exact match and path is long enough
+        if len(path) > 3:
+            path_lower = path.lower()
+            partial_matches = [
+                valid_path for valid_path in valid_paths if path_lower in valid_path.lower()
+            ]
+            if partial_matches:
+                # Sort by length to get closest match (shortest containing path)
+                closest_match = sorted(partial_matches, key=len)[0]
+                logger.warning(
+                    f"Path '{path}' not found exactly, using closest match: '{closest_match}'"
+                )
+                return closest_match, True
+
+        # No match found
+        logger.warning("No matching file found for provided file path", extra={"path": path})
+        return path, False
+
     def get_file_content(
         self, path: str, sha: str | None = None, autocorrect: bool = False
     ) -> tuple[str | None, str]:
@@ -318,27 +359,9 @@ class RepoClient:
 
         autocorrected_path = False
         if autocorrect:
-            path = path.lstrip("/")
-            valid_paths = self.get_valid_file_paths(sha)
-
-            # Check for partial matches if no exact match
-            if path not in valid_paths and len(path) > 3:
-                path_lower = path.lower()
-                partial_matches = [
-                    valid_path for valid_path in valid_paths if path_lower in valid_path.lower()
-                ]
-                if partial_matches:
-                    # Sort by length to get closest match (shortest containing path)
-                    closest_match = sorted(partial_matches, key=len)[0]
-                    logger.warning(
-                        f"Path '{path}' not found exactly, using closest match: '{closest_match}'"
-                    )
-                    path = closest_match
-                else:
-                    logger.exception(
-                        "No matching file found for provided file path", extra={"path": path}
-                    )
-                    return None, "utf-8"
+            path, autocorrected_path = self._autocorrect_path(path, sha)
+            if not autocorrected_path and path not in self.get_valid_file_paths(sha):
+                return None, "utf-8"
 
         try:
             contents = self.repo.get_contents(path, ref=sha)
@@ -377,6 +400,149 @@ class RepoClient:
                 valid_file_paths.add(file.path)
 
         return valid_file_paths
+
+    @functools.lru_cache(maxsize=16)
+    def get_commit_history(
+        self, path: str, sha: str | None = None, autocorrect: bool = False, max_commits: int = 10
+    ) -> list[str]:
+        if sha is None:
+            sha = self.base_commit_sha
+
+        if autocorrect:
+            path, was_autocorrected = self._autocorrect_path(path, sha)
+            if not was_autocorrected and path not in self.get_valid_file_paths(sha):
+                return []
+
+        commits = self.repo.get_commits(sha=sha, path=path)
+        commit_list = list(commits[:max_commits])
+        commit_strs = []
+
+        def process_commit(commit):
+            short_sha = commit.sha[:7]
+            message = commit.commit.message
+            files_touched = [
+                {"path": file.filename, "status": file.status} for file in commit.files[:20]
+            ]
+
+            # Build a file tree representation instead of a flat list
+            file_tree_str = self._build_file_tree_string(files_touched)
+
+            # Add a note about additional files if needed
+            additional_files_note = ""
+            if len(files_touched) < len(commit.files):
+                additional_files_note = (
+                    f"\n[and {len(commit.files) - len(files_touched)} more files were changed...]"
+                )
+
+            string = textwrap.dedent(
+                """\
+                ----------------
+                {short_sha} - {message}
+                Files touched:
+                {file_tree}{additional_files}
+                """
+            ).format(
+                short_sha=short_sha,
+                message=message,
+                file_tree=file_tree_str,
+                additional_files=additional_files_note,
+            )
+            return string
+
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(process_commit, commit_list))
+
+        for result in results:
+            commit_strs.append(result)
+
+        return commit_strs
+
+    def _build_file_tree_string(self, files: list[dict]) -> str:
+        """
+        Builds a tree representation of files to save tokens when many files share the same directories.
+        The output is similar to the 'tree' command in terminal.
+
+        Args:
+            files: List of dictionaries with 'path' and 'status' keys
+
+        Returns:
+            A string representation of the file tree
+        """
+        if not files:
+            return "No files changed"
+
+        # First, build a nested dictionary structure representing the file tree
+        tree: dict = {}
+        for file in files:
+            path = file["path"]
+            status = file["status"]
+
+            # Split the path into components
+            parts = path.split("/")
+
+            # Navigate through the tree, creating nodes as needed
+            current = tree
+            for i, part in enumerate(parts):
+                # If this is the last part (the filename)
+                if i == len(parts) - 1:
+                    current[part] = {"__status__": status}
+                else:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+
+        # Now build the tree string recursively
+        lines = []
+
+        def _build_tree(node, prefix="", is_last=True, is_root=True):
+            items = list(node.items())
+
+            # Process each item
+            for i, (key, value) in enumerate(sorted(items)):
+                if key == "__status__":
+                    continue
+
+                # Determine if this is the last item at this level
+                is_last_item = i == len(items) - 1 or (i == len(items) - 2 and "__status__" in node)
+
+                # Create the appropriate prefix for this line
+                if is_root:
+                    current_prefix = ""
+                    next_prefix = ""
+                else:
+                    current_prefix = prefix + ("└── " if is_last else "├── ")
+                    next_prefix = prefix + ("    " if is_last else "│   ")
+
+                # If this is a file (has a status)
+                if "__status__" in value:
+                    status = value["__status__"]
+                    status_str = f" ({status})" if status else ""
+                    lines.append(f"{current_prefix}{key}{status_str}")
+                # If this is a directory
+                else:
+                    lines.append(f"{current_prefix}{key}/")
+                    _build_tree(value, next_prefix, is_last_item, False)
+
+        # Start building the tree from the root
+        _build_tree(tree)
+
+        return "\n".join(lines)
+
+    @functools.lru_cache(maxsize=16)
+    def get_commit_patch_for_file(
+        self, path: str, commit_sha: str, autocorrect: bool = False
+    ) -> str | None:
+        if autocorrect:
+            path, was_autocorrected = self._autocorrect_path(path, commit_sha)
+            if not was_autocorrected and path not in self.get_valid_file_paths(commit_sha):
+                return None
+
+        commit = self.repo.get_commit(commit_sha)
+        matching_file = next((file for file in commit.files if file.filename == path), None)
+        if not matching_file:
+            return None
+
+        return matching_file.patch
 
     def _create_branch(self, branch_name):
         ref = self.repo.create_git_ref(

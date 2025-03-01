@@ -63,7 +63,11 @@ class BaseTools:
                 repo_name=repo_name, type=self.repo_client_type
             )
             valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
-            files_per_repo[repo_name] = "\n".join(sorted(valid_file_paths))
+
+            # Convert the list of file paths to a tree structure
+            files_with_status = [{"path": path, "status": ""} for path in valid_file_paths]
+            tree_representation = repo_client._build_file_tree_string(files_with_status)
+            files_per_repo[repo_name] = tree_representation
 
         self.context.event_manager.add_log(f'Searching for "{query}"...')
 
@@ -116,6 +120,40 @@ class BaseTools:
         # show potential corrected paths if nothing was found here
         other_paths = self._get_potential_abs_paths(file_path, repo_name)
         return f"<document with the provided path not found/>\n{other_paths}".strip()
+
+    @observe(name="View Diff")
+    @ai_track(description="View Diff")
+    def view_diff(self, file_path: str, repo_name: str, commit_sha: str):
+        """
+        Given a file path, repository name, and commit SHA, returns the diff for the file in the given commit.
+        """
+        if not isinstance(self.context, AutofixContext):
+            return None
+        self.context.event_manager.add_log(
+            f"Studying commit `{commit_sha}` in `{file_path}` in `{repo_name}`..."
+        )
+        patch = self.context.get_commit_patch_for_file(
+            path=file_path, repo_name=repo_name, commit_sha=commit_sha
+        )
+        if patch is None:
+            return "Could not find the file in the given commit. Either your hash is incorrect or the file does not exist in the given commit."
+        return patch
+
+    @observe(name="Explain File")
+    @ai_track(description="Explain File")
+    def explain_file(self, file_path: str, repo_name: str):
+        """
+        Given a file path and repository name, returns recent commits and related files.
+        """
+        if not isinstance(self.context, AutofixContext):
+            return None
+        num_commits = 30
+        commit_history = self.context.get_commit_history_for_file(
+            file_path, repo_name, max_commits=num_commits
+        )
+        if commit_history:
+            return "COMMIT HISTORY:\n" + "\n".join(commit_history)
+        return "No commit history found for the given file. Either the file path or repo name is incorrect, or it is just unavailable right now."
 
     @observe(name="List Directory")
     @ai_track(description="List Directory")
@@ -348,7 +386,7 @@ class BaseTools:
     @observe(name="Search Google")
     @ai_track(description="Search Google")
     @inject
-    def search_google(self, question: str, llm_client: LlmClient = injected):
+    def google_search(self, question: str, llm_client: LlmClient = injected):
         """
         Searches Google to answer a question.
         """
@@ -361,8 +399,8 @@ class BaseTools:
 
         tools = [
             FunctionTool(
-                name="search_google",
-                fn=self.search_google,
+                name="google_search",
+                fn=self.google_search,
                 description="Searches the web with Google and returns the answer to a question.",
                 parameters=[
                     {
@@ -481,6 +519,53 @@ class BaseTools:
                             },
                         ],
                         required=["query"],
+                    ),
+                ]
+            )
+
+        if isinstance(self.context, AutofixContext):
+            tools.extend(
+                [
+                    FunctionTool(
+                        name="explain_file",
+                        fn=self.explain_file,
+                        description="Given a file path and repository name, describes recent commits and suggests related files.",
+                        parameters=[
+                            {
+                                "name": "file_path",
+                                "type": "string",
+                                "description": "The file to get more context on.",
+                            },
+                            {
+                                "name": "repo_name",
+                                "type": "string",
+                                "description": "Name of the repository containing the file.",
+                            },
+                        ],
+                        required=["file_path", "repo_name"],
+                    ),
+                    FunctionTool(
+                        name="view_diff",
+                        fn=self.view_diff,
+                        description="Given a file path, repository name, and 7 character commit SHA, returns the diff of what changed in the file in the given commit.",
+                        parameters=[
+                            {
+                                "name": "file_path",
+                                "type": "string",
+                                "description": "The file path to view the diff for.",
+                            },
+                            {
+                                "name": "repo_name",
+                                "type": "string",
+                                "description": "Name of the repository containing the file.",
+                            },
+                            {
+                                "name": "commit_sha",
+                                "type": "string",
+                                "description": "The 7 character commit SHA to view the diff for.",
+                            },
+                        ],
+                        required=["file_path", "repo_name", "commit_sha"],
                     ),
                 ]
             )
