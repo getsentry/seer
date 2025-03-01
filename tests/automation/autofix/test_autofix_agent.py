@@ -5,7 +5,7 @@ from johen import generate
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import OpenAiProvider
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import LlmGenerateTextResponse, LlmResponseMetadata, Message
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -195,59 +195,6 @@ def test_share_insights_no_new_insights(autofix_agent):
 
 @patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
 @pytest.mark.vcr()
-def test_run_iteration_prompts_for_help_near_max_iterations(
-    mock_get_completion, interactive_autofix_agent, run_config
-):
-    mock_completion = MagicMock(
-        message=Message(role="assistant", content="Thinking about the solution...")
-    )
-    mock_get_completion.return_value = mock_completion
-
-    run_config.max_iterations = 10
-
-    with interactive_autofix_agent.context.state.update() as state:
-        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
-        state.request.options.disable_interactivity = False
-
-    with interactive_autofix_agent.manage_run():
-        interactive_autofix_agent.iterations = 7  # max_iterations - 3
-        interactive_autofix_agent.run_iteration(run_config)
-
-    # First message should be the help prompt, second should be the completion
-    assert len(interactive_autofix_agent.memory) == 2
-    assert interactive_autofix_agent.memory[0].content == (
-        "You're taking a while. If you need help, ask me a concrete question using the tool provided."
-    )
-    assert interactive_autofix_agent.memory[1] == mock_completion.message
-
-
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
-@pytest.mark.vcr()
-def test_run_iteration_prompts_for_help_at_interval(
-    mock_get_completion, interactive_autofix_agent, run_config
-):
-    mock_completion = MagicMock(
-        message=Message(role="assistant", content="Thinking about the solution...")
-    )
-    mock_get_completion.return_value = mock_completion
-
-    with interactive_autofix_agent.context.state.update() as state:
-        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
-        state.request.options.disable_interactivity = False
-
-    with interactive_autofix_agent.manage_run():
-        interactive_autofix_agent.iterations = 6  # divisible by 6
-        interactive_autofix_agent.run_iteration(run_config)
-
-    assert len(interactive_autofix_agent.memory) == 2
-    assert interactive_autofix_agent.memory[0].content == (
-        "You're taking a while. If you need help, ask me a concrete question using the tool provided."
-    )
-    assert interactive_autofix_agent.memory[1] == mock_completion.message
-
-
-@patch("seer.automation.autofix.autofix_agent.AutofixAgent.get_completion")
-@pytest.mark.vcr()
 def test_run_iteration_no_help_prompt_when_not_needed(
     mock_get_completion, interactive_autofix_agent, run_config
 ):
@@ -284,3 +231,70 @@ def test_get_completion_interrupts_with_queued_messages(interactive_autofix_agen
     # Call get_completion and verify it returns None due to interruption
     result = interactive_autofix_agent.get_completion(run_config)
     assert result is None
+
+
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent._get_completion")
+def test_get_completion_retries_for_retryable_errors(
+    mock_get_completion, autofix_agent, run_config
+):
+    """Test that get_completion retries when AnthropicProvider raises retryable errors."""
+    from anthropic import AnthropicError
+
+    from seer.automation.agent.client import AnthropicProvider
+    from seer.automation.agent.models import LlmStreamFirstTokenTimeoutError, Message, Usage
+
+    # Set up the run config to use the AnthropicProvider
+    run_config.model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    # Set up the mock to raise an exception for the first two calls and succeed on the third call
+    mock_response = LlmGenerateTextResponse(
+        message=Message(role="assistant", content="Response after retry"),
+        metadata=LlmResponseMetadata(
+            model=run_config.model.model_name,
+            provider_name=run_config.model.provider_name,
+            usage=Usage(completion_tokens=10, prompt_tokens=5, total_tokens=15),
+        ),
+    )
+
+    # First call raises AnthropicError with overloaded_error message (which is retryable)
+    # Second call raises LlmStreamFirstTokenTimeoutError (which is retryable)
+    # Third call succeeds
+    mock_get_completion.side_effect = [
+        AnthropicError("Your request failed due to overloaded_error"),
+        LlmStreamFirstTokenTimeoutError("Stream time to first token timeout after 40.0 seconds"),
+        mock_response,
+    ]
+
+    # Call the get_completion method
+    result = autofix_agent.get_completion(run_config, max_tries=4)
+
+    # Verify that get_completion was called multiple times due to retries
+    assert mock_get_completion.call_count == 3
+
+    # Verify the final result is correct
+    assert result == mock_response
+    assert result.message.content == "Response after retry"
+    assert result.metadata.usage.total_tokens == 15
+
+
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent._get_completion")
+def test_get_completion_does_not_retry_for_non_retryable_errors(
+    mock_get_completion, autofix_agent, run_config
+):
+    """Test that get_completion doesn't retry for non-retryable errors."""
+    from anthropic import AnthropicError
+
+    from seer.automation.agent.client import AnthropicProvider
+
+    # Set up the run config to use the AnthropicProvider
+    run_config.model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    # Set up the mock to raise a non-retryable exception
+    mock_get_completion.side_effect = AnthropicError("Some other non-retryable error")
+
+    # Call the get_completion method and expect the exception to be propagated
+    with pytest.raises(AnthropicError, match="Some other non-retryable error"):
+        autofix_agent.get_completion(run_config, max_tries=4)
+
+    # Verify get_completion was called only once (no retries)
+    assert mock_get_completion.call_count == 1

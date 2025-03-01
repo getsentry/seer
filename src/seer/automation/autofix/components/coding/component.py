@@ -1,5 +1,6 @@
 import concurrent.futures
 import difflib
+import json
 import logging
 import textwrap
 
@@ -17,7 +18,7 @@ from seer.automation.agent.client import (
     LlmClient,
     OpenAiProvider,
 )
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.coding.models import (
@@ -33,6 +34,7 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_create,
     task_to_file_delete,
 )
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.automation.models import FileChange
@@ -50,15 +52,85 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         with self.context.state.update() as cur:
             cur.codebases[repo_external_id].file_changes.append(file_change)
 
-    def _prefill_initial_memory(self) -> list[Message]:
+    def _prefill_initial_memory(self, request: CodingRequest) -> list[Message]:
         memory: list[Message] = []
 
-        solution_memory = self.context.get_memory("solution")
-        if solution_memory:
-            memory.extend(solution_memory)
+        relevant_files = []
+        if isinstance(request.root_cause, RootCauseAnalysisItem):
+            relevant_files_root_cause = list(
+                {
+                    (event.relevant_code_file.file_path, event.relevant_code_file.repo_name): {
+                        "file_path": event.relevant_code_file.file_path,
+                        "repo_name": event.relevant_code_file.repo_name,
+                    }
+                    for event in (
+                        request.root_cause.root_cause_reproduction
+                        if request.root_cause.root_cause_reproduction
+                        else []
+                    )
+                    if event.relevant_code_file
+                }.values()
+            )
+            relevant_files.extend(relevant_files_root_cause)
+
+        if isinstance(request.solution, list):
+            relevant_files_solution = list(
+                {
+                    (event.relevant_code_file.file_path, event.relevant_code_file.repo_name): {
+                        "file_path": event.relevant_code_file.file_path,
+                        "repo_name": event.relevant_code_file.repo_name,
+                    }
+                    for event in request.solution
+                    if event.relevant_code_file
+                }.values()
+            )
+            # Add only files that aren't already in the list
+            for file in relevant_files_solution:
+                if file not in relevant_files:
+                    relevant_files.append(file)
+
+        expanded_files_messages = []
+        for i, file in enumerate(relevant_files):
+            file_content = None
+            try:
+                file_content = (
+                    self.context.get_file_contents(
+                        path=file["file_path"], repo_name=file["repo_name"]
+                    )
+                    if file["file_path"]
+                    else None
+                )
+            except Exception as e:
+                logger.exception(f"Error getting file contents in memory prefill: {e}")
+                file_content = None
+
+            if file_content:
+                agent_message = Message(
+                    role="tool_use",
+                    content=f"Expand document: {file['file_path']} in {file['repo_name']}",
+                    tool_calls=[
+                        ToolCall(
+                            id=str(i),
+                            function="expand_document",
+                            args=json.dumps(
+                                {"file_path": file["file_path"], "repo_name": file["repo_name"]}
+                            ),
+                        )
+                    ],
+                )
+                user_message = Message(
+                    role="tool",
+                    content=file_content,
+                    tool_call_id=str(i),
+                    tool_call_function="expand_document",
+                )
+                memory.append(agent_message)
+                memory.append(user_message)
+                expanded_files_messages.append(agent_message)
+                expanded_files_messages.append(user_message)
 
         with self.context.state.update() as cur:
-            cur.steps[-1].initial_memory_length = len(memory) + 1
+            cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
 
         return memory
 
@@ -199,12 +271,13 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             output = llm_client.generate_structured(
                 messages=memory,
                 prompt=CodingPrompts.format_is_obvious_msg(
-                    summary=request.summary,
-                    event_details=request.event_details,
                     root_cause=request.root_cause,
                     original_instruction=request.original_instruction,
                     root_cause_extra_instruction=request.root_cause_extra_instruction,
                     custom_solution=request.solution if isinstance(request.solution, str) else None,
+                    auto_solution=(
+                        request.solution if isinstance(request.solution, list) else None
+                    ),
                     mode=request.mode,
                 ),
                 model=GeminiProvider.model("gemini-2.0-flash-001"),
@@ -252,16 +325,19 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         """Try to parse code changes XML from response, with one retry attempt if parsing fails."""
         try:
             code_changes_content = extract_text_inside_tags(response, "code_changes")
-            return CodeChangesPromptXml.from_xml(
+            model = CodeChangesPromptXml.from_xml(
                 f"<code_changes>{escape_multi_xml(code_changes_content, ['code', 'commit_message'])}</code_changes>"
             ).to_model()
+            for task in model.tasks:
+                task.repo_name = self.context.autocorrect_repo_name(task.repo_name)
+            return model
         except Exception:
             # Try once to fix the XML format
             agent.config.interactive = False
             retry_response = agent.run(
                 RunConfig(
                     prompt=CodingPrompts.format_xml_format_fix_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     memory_storage_key="code",
                     run_name="XML Format Fix",
                 ),
@@ -272,9 +348,12 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             try:
                 code_changes_content = extract_text_inside_tags(retry_response, "code_changes")
-                return CodeChangesPromptXml.from_xml(
+                model = CodeChangesPromptXml.from_xml(
                     f"<code_changes>{escape_multi_xml(code_changes_content, ['code', 'commit_message'])}</code_changes>"
                 ).to_model()
+                for task in model.tasks:
+                    task.repo_name = self.context.autocorrect_repo_name(task.repo_name)
+                return model
             except Exception as e:
                 sentry_sdk.capture_exception(e)
                 return None
@@ -305,7 +384,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     prompt=CodingPrompts.format_missing_msg(
                         missing_files_errors, file_exist_errors, correct_paths
                     ),
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     memory_storage_key="code",
                     run_name="Missing File Fix",
                 ),
@@ -324,10 +403,12 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         with BaseTools(self.context) as tools:
 
             memory = request.initial_memory
+            custom_solution = request.solution if isinstance(request.solution, str) else None
+            auto_solution = request.solution if isinstance(request.solution, list) else None
 
             is_obvious = False
             if not memory:
-                memory = self._prefill_initial_memory()
+                memory = self._prefill_initial_memory(request=request)
                 is_obvious = self._is_obvious(request, memory)
             else:
                 is_obvious = self._is_feedback_obvious(memory)
@@ -340,21 +421,21 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 name="Code",
             )
 
-            custom_solution = request.solution if isinstance(request.solution, str) else None
-
             if not request.initial_memory:
                 agent.add_user_message(
                     CodingPrompts.format_fix_msg(
-                        has_tools=not is_obvious,
                         custom_solution=custom_solution,
+                        auto_solution=auto_solution,
                         mode=request.mode,
+                        root_cause=request.root_cause,
+                        event_details=request.event_details,
                     ),
                 )
 
             response = agent.run(
                 RunConfig(
-                    system_prompt=CodingPrompts.format_system_msg(has_tools=not is_obvious),
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    system_prompt=CodingPrompts.format_system_msg(),
+                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     memory_storage_key="code",
                     run_name="Code",
                 ),

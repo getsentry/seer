@@ -279,12 +279,12 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
+            "none",
+            "none",
+            "none",
+            "none",
+            "none",
+            "none",
             "none",
         ]
         assert history_anomalies.window_size == 3

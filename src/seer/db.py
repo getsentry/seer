@@ -41,7 +41,14 @@ def initialize_database(
     config: AppConfig = injected,
     app: Flask = injected,
 ):
-    app.config["SQLALCHEMY_DATABASE_URI"] = config.DATABASE_URL
+    # Get the database URL based on whether we're in migration mode
+    database_url = (
+        config.DATABASE_MIGRATIONS_URL
+        if config.IS_DB_MIGRATION and config.DATABASE_MIGRATIONS_URL
+        else config.DATABASE_URL
+    )
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {"prepare_threshold": None},
         "pool_pre_ping": True,
@@ -317,6 +324,13 @@ class DbDynamicAlert(Base):
         passive_deletes=True,
         order_by="DbDynamicAlertTimeSeries.timestamp",
     )
+    prophet_predictions: Mapped[List["DbProphetAlertTimeSeries"]] = relationship(
+        "DbProphetAlertTimeSeries",
+        back_populates="dynamic_alert",
+        cascade="all, delete, delete-orphan",
+        passive_deletes=True,
+        order_by="DbProphetAlertTimeSeries.timestamp",
+    )
     data_purge_flag: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus, native_enum=False),
         nullable=False,
@@ -385,6 +399,43 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     )
     value: Mapped[float] = mapped_column(Float, nullable=False)
     anomaly_type: Mapped[str] = mapped_column(String, nullable=False)
+    saved_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+
+
+class DbProphetAlertTimeSeries(Base):
+    __tablename__ = "prophet_alert_time_series"
+    __table_args__ = (
+        UniqueConstraint("dynamic_alert_id", "timestamp"),
+        Index("ix_prophet_alert_time_series_alert_id_timestamp", "dynamic_alert_id", "timestamp"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dynamic_alert_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(DbDynamicAlert.id, ondelete="CASCADE"), nullable=False
+    )
+    timestamp: Mapped[datetime.datetime] = mapped_column(TIMESTAMP(timezone=False), nullable=False)
+    yhat: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+    dynamic_alert = relationship(
+        "DbDynamicAlert",
+        back_populates="prophet_predictions",
+    )
+
+
+class DbProphetAlertTimeSeriesHistory(Base):
+    __tablename__ = "prophet_alert_time_series_history"
+    __table_args__ = (Index("ix_prophet_alert_time_series_history_timestamp", "timestamp"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    yhat: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
+    yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
     saved_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )

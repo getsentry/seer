@@ -4,7 +4,7 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -73,7 +73,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 if has_tools:  # run context gatherer if not obvious
                     response = agent.run(
                         run_config=RunConfig(
-                            model=GeminiProvider.model("gemini-2.0-flash-001"),
+                            model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                             prompt=(
                                 RootCauseAnalysisPrompts.format_default_msg(
                                     event=request.event_details.format_event(),
@@ -91,6 +91,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                             max_iterations=40,
                             memory_storage_key="root_cause_analysis",
                             run_name="Root Cause Discovery",
+                            reasoning_effort="low",
+                            temperature=1.0,
+                            max_tokens=32000,
                         ),
                     )
 
@@ -106,7 +109,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 # reason to propose final root cause
                 agent.tools = []
                 agent.memory = (
-                    LlmClient.clean_assistant_messages(agent.memory)
+                    agent.memory
                     if has_tools
                     else (
                         [
@@ -118,6 +121,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                                     code_map=request.profile,
                                     instruction=request.instruction,
                                     repos_str=repos_str,
+                                    has_tools=False,
                                 ),
                             )
                         ]
@@ -127,12 +131,14 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 )
                 response = agent.run(
                     run_config=RunConfig(
-                        model=OpenAiProvider.model("o3-mini"),
+                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                         prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
+                        system_prompt="You are an exceptional AI system that is amazing at analyzing bugs in codebases. Your job is to figure out the correct root cause of this issue.",
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Proposal",
                         temperature=1.0,
                         reasoning_effort="high",
+                        max_tokens=32000,
                     )
                 )
 

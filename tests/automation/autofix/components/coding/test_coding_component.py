@@ -53,6 +53,8 @@ class TestCodingComponent:
         component.context.event_manager = MagicMock()
         component._is_obvious = MagicMock(return_value=False)
 
+        component.context.autocorrect_repo_name = MagicMock(return_value="repo1")
+
         # Simulate file content for different scenarios
         def mock_get_file_content(file_path, autocorrect=False):
             if file_path in ["missing_file1.py", "missing_file2.py"]:
@@ -62,6 +64,15 @@ class TestCodingComponent:
             return "def foo():\n    return 'Hello'", "utf-8"
 
         mock_repo_client.get_file_content.side_effect = mock_get_file_content
+
+        def mock_get_file_contents(path, repo_name):
+            if path in ["missing_file1.py", "missing_file2.py"]:
+                return None
+            elif path == "existing_file.py":
+                return "Existing content"
+            return "def foo():\n    return 'Hello'"
+
+        component.context.get_file_contents.side_effect = mock_get_file_contents
 
         mock_coding_output = MagicMock()
         mock_coding_output.tasks = [

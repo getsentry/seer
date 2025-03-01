@@ -1,38 +1,25 @@
 import textwrap
-from typing import Literal, Optional
+from typing import Literal
 
 from seer.automation.autofix.components.coding.models import (
     CodeChangesPromptXml,
     RootCausePlanTaskPromptXml,
 )
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.prompts import format_instruction, format_summary
+from seer.automation.autofix.components.solution.models import SolutionTimelineEvent
+from seer.automation.autofix.prompts import format_instruction
 from seer.automation.models import EventDetails
-from seer.automation.summarize.issue import IssueSummary
 
 
 class CodingPrompts:
     @staticmethod
-    def format_system_msg(has_tools: bool):
-        if has_tools:
-            return textwrap.dedent(
-                """\
-                You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
+    def format_system_msg():
+        return textwrap.dedent(
+            """\
+            You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
 
-                You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
-
-                # Guidelines:
-                - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
-                - You also MUST think step-by-step before giving the final answer."""
-            )
-        else:
-            return textwrap.dedent(
-                """\
-                You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
-
-                # Guidelines:
-                - You also MUST think step-by-step before giving the final answer."""
-            )
+            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets."""
+        )
 
     @staticmethod
     def format_extra_root_cause_instruction(instruction: str):
@@ -43,7 +30,10 @@ class CodingPrompts:
         return f"Earlier, the user provided context: {format_instruction(instruction)}"
 
     @staticmethod
-    def format_root_cause(root_cause: RootCauseAnalysisItem | str):
+    def format_root_cause(root_cause: RootCauseAnalysisItem | str | None):
+        if root_cause is None:
+            return ""
+
         if isinstance(root_cause, RootCauseAnalysisItem):
             return f"""The steps to reproduce the root cause of the issue have been identified: {RootCausePlanTaskPromptXml.from_root_cause(
                     root_cause
@@ -54,32 +44,52 @@ class CodingPrompts:
     @staticmethod
     def format_custom_solution(custom_solution: str | None):
         if not custom_solution:
-            return ""
+            return "No plan provided."
 
-        return f"The user has provided the following solution idea: {custom_solution}"
+        return custom_solution
+
+    @staticmethod
+    def format_auto_solution(auto_solution: list[SolutionTimelineEvent] | None):
+        if not auto_solution:
+            return "No plan provided."
+
+        solution_str = ""
+        solution_str = "\n".join(
+            f"<step_{i+1}>\n{event.title}\n{event.code_snippet_and_analysis}\n</step_{i+1}>"
+            for i, event in enumerate(auto_solution)
+        )
+        return solution_str
 
     @staticmethod
     def format_fix_msg(
-        has_tools: bool = True,
         custom_solution: str | None = None,
+        auto_solution: list[SolutionTimelineEvent] | None = None,
         mode: Literal["all", "fix", "test"] = "fix",
+        event_details: EventDetails | None = None,
+        root_cause: RootCauseAnalysisItem | str | None = None,
     ):
         return textwrap.dedent(
             """\
-            Break down the task of {mode_str} into a list of code changes to make. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution. {custom_solution_str}
+            <goal>Break down the task of {mode_str} into a list of code changes to make. {filter_str}</goal>
 
+            <output_format>
             Enclose this plan between <code_changes> and </code_changes> tags. Your output must follow the format properly according to the following guidelines:
 
             {steps_example_str}
+            </output_format>
 
-            # Guidelines:
-            - Each file change must be a separate step and be explicit and clear.
-              - You MUST include exact file paths for each step you provide. If you cannot, find the correct path.
-            {use_tools_instructions}
-            - The changes must be comprehensive. Do not provide temporary examples, placeholders or incomplete steps.
-            - Make sure any new files you create don't already exist, if they do, modify the existing file.
-            {think_tools_instructions}
-            - You also MUST think step-by-step before giving the final answer."""
+            <solution_plan>
+            {solution_str}
+            </solution_plan>
+
+            <root_cause_of_issue>
+            {root_cause_str}
+            </root_cause_of_issue>
+
+            <raw_issue_details>
+            {event_details_str}
+            </raw_issue_details>
+            """
         ).format(
             mode_str=(
                 "fixing the issue"
@@ -90,18 +100,19 @@ class CodingPrompts:
                     else "writing a unit test to reproduce the issue and assert the planned solution (following test-driven development) and then fixing the issue"
                 )
             ),
+            filter_str=(
+                "Use the planned solution to inform the test, but do NOT implement the solution. Only write the test."
+                if mode == "test"
+                else "Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
+            ),
             steps_example_str=CodeChangesPromptXml.get_example().to_prompt_str(),
-            use_tools_instructions=(
-                "- Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting the steps."
-                if has_tools
-                else ""
+            solution_str=(
+                CodingPrompts.format_custom_solution(custom_solution)
+                if custom_solution
+                else CodingPrompts.format_auto_solution(auto_solution)
             ),
-            think_tools_instructions=(
-                "- EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you."
-                if has_tools
-                else ""
-            ),
-            custom_solution_str=CodingPrompts.format_custom_solution(custom_solution),
+            root_cause_str=CodingPrompts.format_root_cause(root_cause),
+            event_details_str=(event_details.format_event() if event_details else ""),
         )
 
     @staticmethod
@@ -134,23 +145,25 @@ class CodingPrompts:
 
     @staticmethod
     def format_is_obvious_msg(
-        summary: Optional[IssueSummary],
-        event_details: EventDetails,
         root_cause: RootCauseAnalysisItem | str,
         original_instruction: str | None,
         root_cause_extra_instruction: str | None,
         custom_solution: str | None,
+        auto_solution: list[SolutionTimelineEvent] | None,
         mode: Literal["all", "fix", "test"] = "fix",
     ):
         return (
             textwrap.dedent(
                 """\
-                Here is an issue in our codebase: {summary_str}
+                Here is an issue in our codebase:
 
-                {event_details}{original_instruction}
+                {original_instruction}
                 {root_cause_str}{root_cause_extra_instruction}
 
-                {custom_solution_str}
+                <solution_plan>
+                {solution_str}
+                </solution_plan>
+
                 Does the code change needed for {mode_str} exist ONLY in files you can already see in your context here or do you need to look at other files?"""
             )
             .format(
@@ -163,8 +176,6 @@ class CodingPrompts:
                         else "writing a unit test and fixing the issue"
                     )
                 ),
-                summary_str=format_summary(summary),
-                event_details=event_details.format_event(),
                 root_cause_str=CodingPrompts.format_root_cause(root_cause),
                 original_instruction=(
                     ("\n" + CodingPrompts.format_original_instruction(original_instruction))
@@ -181,7 +192,11 @@ class CodingPrompts:
                     if root_cause_extra_instruction
                     else ""
                 ),
-                custom_solution_str=CodingPrompts.format_custom_solution(custom_solution),
+                solution_str=(
+                    CodingPrompts.format_custom_solution(custom_solution)
+                    if custom_solution
+                    else CodingPrompts.format_auto_solution(auto_solution)
+                ),
             )
             .strip()
         )

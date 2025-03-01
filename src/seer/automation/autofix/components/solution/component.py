@@ -1,16 +1,13 @@
-import json
 import logging
 
 from langfuse.decorators import observe
-from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
-from seer.automation.agent.models import Message, ToolCall
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionRequest
 from seer.automation.autofix.components.solution.prompts import SolutionPrompts
 from seer.automation.autofix.prompts import format_repo_prompt
@@ -27,96 +24,14 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
     def _prefill_initial_memory(self, request: SolutionRequest) -> list[Message]:
         memory: list[Message] = []
 
-        if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
-            expanded_files_messages = []
-            relevant_files = list(
-                {
-                    (event.relevant_code_file.file_path, event.relevant_code_file.repo_name): {
-                        "file_path": event.relevant_code_file.file_path,
-                        "repo_name": event.relevant_code_file.repo_name,
-                    }
-                    for event in (
-                        request.root_cause_and_fix.root_cause_reproduction
-                        if request.root_cause_and_fix.root_cause_reproduction
-                        else []
-                    )
-                    if event.relevant_code_file
-                }.values()
-            )
+        root_cause_memory = self.context.get_memory("root_cause_analysis")
+        if root_cause_memory:
+            memory.extend(root_cause_memory)
 
-            for i, file in enumerate(relevant_files):
-                file_content = None
-                try:
-                    file_content = (
-                        self.context.get_file_contents(
-                            path=file["file_path"], repo_name=file["repo_name"]
-                        )
-                        if file["file_path"]
-                        else None
-                    )
-                except Exception as e:
-                    logger.exception(f"Error getting file contents in memory prefill: {e}")
-                    file_content = None
-
-                if file_content:
-                    agent_message = Message(
-                        role="tool_use",
-                        content=f"Expand document: {file['file_path']} in {file['repo_name']}",
-                        tool_calls=[
-                            ToolCall(
-                                id=str(i),
-                                function="expand_document",
-                                args=json.dumps(
-                                    {"file_path": file["file_path"], "repo_name": file["repo_name"]}
-                                ),
-                            )
-                        ],
-                    )
-                    user_message = Message(
-                        role="tool",
-                        content=file_content,
-                        tool_call_id=str(i),
-                        tool_call_function="expand_document",
-                    )
-                    memory.append(agent_message)
-                    memory.append(user_message)
-                    expanded_files_messages.append(agent_message)
-                    expanded_files_messages.append(user_message)
-
-            with self.context.state.update() as cur:
-                cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
+        with self.context.state.update() as cur:
+            cur.steps[-1].initial_memory_length = len(memory) + 1
 
         return memory
-
-    @observe(name="Is Obvious")
-    @ai_track(description="Is Obvious")
-    @inject
-    def _is_obvious(
-        self,
-        request: SolutionRequest,
-        memory: list[Message],
-        llm_client: LlmClient = injected,
-    ) -> bool:
-        if memory:
-
-            class IsObviousOutput(BaseModel):
-                need_to_search_codebase: bool
-
-            output = llm_client.generate_structured(
-                messages=memory,
-                prompt=SolutionPrompts.format_is_obvious_msg(
-                    summary=request.summary,
-                    event_details=request.event_details,
-                    root_cause=request.root_cause_and_fix,
-                    original_instruction=request.original_instruction,
-                ),
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
-                response_format=IsObviousOutput,
-            )
-
-            return not output.parsed.need_to_search_codebase
-
-        return False
 
     @observe(name="Solution")
     @ai_track(description="Solution")
@@ -133,12 +48,10 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             readable_repos = state.readable_repos
             unreadable_repos = state.unreadable_repos
 
-            is_obvious = False
             if not memory:
                 memory = self._prefill_initial_memory(request)
-                is_obvious = self._is_obvious(request, memory)
 
-            has_tools = (not is_obvious) and bool(readable_repos)
+            has_tools = bool(readable_repos)
             repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             agent = AutofixAgent(
@@ -158,7 +71,6 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         repos_str=repos_str,
                         original_instruction=request.original_instruction,
                         code_map=request.profile,
-                        has_tools=has_tools,
                     ),
                 )
 
@@ -166,7 +78,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 if has_tools:  # run context gatherer if not obvious
                     response = agent.run(
                         run_config=RunConfig(
-                            model=GeminiProvider.model("gemini-2.0-flash-001"),
+                            model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                             system_prompt=SolutionPrompts.format_system_msg(),
                             prompt=SolutionPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
@@ -175,11 +87,13 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                                 repos_str=repos_str,
                                 original_instruction=request.original_instruction,
                                 code_map=request.profile,
-                                has_tools=True,
                             ),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=32,
+                            temperature=1.0,
+                            reasoning_effort="medium",
+                            max_tokens=32000,
                         ),
                     )
 
@@ -192,7 +106,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 # reason to propose final solution
                 agent.tools = []
                 agent.memory = (
-                    LlmClient.clean_assistant_messages(agent.memory)
+                    agent.memory
                     if has_tools
                     else (
                         [
@@ -205,7 +119,6 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                                     repos_str=repos_str,
                                     original_instruction=request.original_instruction,
                                     code_map=request.profile,
-                                    has_tools=False,
                                 ),
                             )
                         ]
@@ -216,12 +129,14 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
                 response = agent.run(
                     run_config=RunConfig(
-                        model=OpenAiProvider.model("o3-mini"),
+                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                         memory_storage_key="solution",
                         run_name="Solution Proposal",
                         temperature=1.0,
                         reasoning_effort="high",
                         prompt=SolutionPrompts.solution_proposal_msg(),
+                        system_prompt="You are an exceptional AI system that is amazing at fixing bugs in codebases. Your job is to figure out the correct and most effective solution to fix this issue.",
+                        max_tokens=32000,
                     )
                 )
 

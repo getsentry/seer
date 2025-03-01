@@ -16,9 +16,10 @@ from seer.anomaly_detection.models import (
     MPTimeSeries,
     MPTimeSeriesAnomalies,
     MPTimeSeriesAnomaliesSingleWindow,
+    ProphetPrediction,
     TimeSeriesAnomalies,
 )
-from seer.anomaly_detection.models.cleanup import CleanupConfig
+from seer.anomaly_detection.models.cleanup_predict import CleanupPredictConfig
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
 from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
 from seer.dependency_injection import inject, injected
@@ -65,11 +66,11 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         return NotImplemented
 
     @abc.abstractmethod
-    def can_queue_cleanup_task(self, external_alert_id: int):
+    def can_queue_cleanup_predict_task(self, external_alert_id: int):
         return NotImplemented
 
     @abc.abstractmethod
-    def reset_cleanup_task(self, external_alert_id: int):
+    def reset_cleanup_predict_task(self, external_alert_id: int):
         return NotImplemented
 
     @abc.abstractmethod
@@ -104,6 +105,12 @@ class DbAlertDataAccessor(AlertDataAccessor):
         mp_fixed = []
         original_flags = ["none"] * n_points
         use_suss = [True] * n_points
+
+        n_predictions = len(db_alert.prophet_predictions)
+        prophet_timestamps = np.array([0.0] * n_predictions)
+        prophet_yhats = np.array([0.0] * n_predictions)
+        prophet_yhat_lowers = np.array([0.0] * n_predictions)
+        prophet_yhat_uppers = np.array([0.0] * n_predictions)
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
         only_suss = len(timeseries) > 0 and any(
@@ -152,6 +159,17 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if ts[i] < timestamp_threshold:
                 num_old_points += 1
 
+        num_predictions_remaining = 0
+        cur_ts = datetime.now().timestamp()
+        for i, prediction in enumerate(db_alert.prophet_predictions):
+            prophet_timestamp = prediction.timestamp.timestamp()
+            prophet_timestamps[i] = prophet_timestamp
+            prophet_yhats[i] = prediction.yhat
+            prophet_yhat_lowers[i] = prediction.yhat_lower
+            prophet_yhat_uppers[i] = prediction.yhat_upper
+            if prophet_timestamp > cur_ts:
+                num_predictions_remaining += 1
+
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
             scores=scores,
@@ -183,12 +201,26 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 values=values,
             ),
             anomalies=anomalies,
-            cleanup_config=CleanupConfig(
+            cleanup_predict_config=CleanupPredictConfig(
                 num_old_points=num_old_points,
                 timestamp_threshold=timestamp_threshold,
-                num_acceptable_points=24 * 4 * 2,  # Num alerts for 2 days
+                num_acceptable_points=(
+                    24 * (60 // db_alert.config["time_period"])
+                ),  # Num alerts for 24 hours
+                num_predictions_remaining=num_predictions_remaining,
+                num_acceptable_predictions=(
+                    12 * (60 // db_alert.config["time_period"])
+                ),  # Num predictions for 12 hours
+            ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=prophet_timestamps,
+                yhat=prophet_yhats,
+                yhat_lower=prophet_yhat_lowers,
+                yhat_upper=prophet_yhat_uppers,
             ),
             only_suss=only_suss,
+            data_purge_flag=db_alert.data_purge_flag,
+            last_queued_at=db_alert.last_queued_at,
         )
 
     @sentry_sdk.trace
@@ -242,6 +274,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 )
                 session.execute(delete_q)
                 session.flush()
+
             algo_data = anomalies.get_anomaly_algo_data(len(timeseries))
             new_record = DbDynamicAlert(
                 organization_id=organization_id,
@@ -258,8 +291,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     )
                     for i, point in enumerate(timeseries)
                 ],
+                prophet_predictions=[],  # Passing in an empty list because new record is created
                 anomaly_algo_data=anomaly_algo_data,
                 data_purge_flag=data_purge_flag,
+                last_queued_at=None,
             )
             session.add(new_record)
             session.commit()
@@ -323,9 +358,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
             session.commit()
 
     @sentry_sdk.trace
-    def can_queue_cleanup_task(self, alert_id: int) -> bool:
+    def can_queue_cleanup_predict_task(self, alert_id: int) -> bool:
         """
-        Checks if cleanup task can be queued based on current flag or previous time of queueing
+        Checks if cleanup_predict task can be queued based on current flag or previous time of queueing
         """
         with Session() as session:
             dynamic_alert = (
@@ -344,7 +379,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             )
 
     @sentry_sdk.trace
-    def reset_cleanup_task(self, alert_id: int) -> None:
+    def reset_cleanup_predict_task(self, alert_id: int) -> None:
         with Session() as session:
             dynamic_alert = (
                 session.query(DbDynamicAlert)

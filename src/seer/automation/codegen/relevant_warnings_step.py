@@ -80,7 +80,7 @@ class RelevantWarningsStep(CodegenStep):
             "run_id": self.context.run_id,
             "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
         }
-        request_data = json.dumps(request).encode("utf-8")
+        request_data = json.dumps(request, separators=(",", ":")).encode("utf-8")
         headers = get_codecov_auth_header(
             request_data,
             signature_header="X-GEN-AI-AUTH-SIGNATURE",
@@ -90,7 +90,7 @@ class RelevantWarningsStep(CodegenStep):
             url="https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
             headers=headers,
             data=request_data,
-        )
+        ).raise_for_status()
 
     def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
         try:

@@ -207,7 +207,7 @@ class MPBoxCoxScorer(MPScorer):
         # Include current value in z-score calculation
         values = np.append(history_mp_dist, streamed_mp_dist)
         z_scores, threshold, std, threshold_transformed = self._get_z_scores(
-            values, ad_config.sensitivity
+            values[len(values) // 2 :], ad_config.sensitivity
         )
 
         # Get z-score for streamed value

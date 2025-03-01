@@ -161,7 +161,7 @@ class CodeChangeXml(PromptXmlModel, tag="code_change"):
             file_path="path/to/file.py",
             repo_name="owner/repo",
             type="Either 'file_change', 'file_create', or 'file_delete'",
-            code="Provide the exact code change you are making",
+            code="Provide the exact code change you are making. (not the whole file)",
             commit_message="Provide a commit message that describes the change you are making",
         )
 

@@ -1,14 +1,17 @@
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
-from typing import Any, ClassVar, Iterable, Iterator, Type, Union, cast
+from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
 
 import anthropic
 from anthropic import NOT_GIVEN
 from anthropic.types import (
     MessageParam,
     TextBlockParam,
+    ThinkingBlockParam,
+    ThinkingConfigEnabledParam,
     ToolParam,
     ToolResultBlockParam,
     ToolUseBlockParam,
@@ -36,6 +39,9 @@ from seer.automation.agent.models import (
     LlmProviderType,
     LlmRefusalError,
     LlmResponseMetadata,
+    LlmStreamFirstTokenTimeoutError,
+    LlmStreamInactivityTimeoutError,
+    LlmStreamTimeoutError,
     Message,
     StructuredOutputType,
     ToolCall,
@@ -96,7 +102,9 @@ class OpenAiProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        return isinstance(exception, openai.InternalServerError)
+        return isinstance(exception, openai.InternalServerError) or isinstance(
+            exception, LlmStreamTimeoutError
+        )
 
     def generate_text(
         self,
@@ -325,7 +333,7 @@ class OpenAiProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
-    ) -> Iterator[str | ToolCall | Usage]:
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
@@ -391,7 +399,7 @@ class OpenAiProvider:
                 if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
                     yield ToolCall(**current_tool_call)
                 if delta.content:
-                    yield delta.content
+                    yield "content", delta.content
         finally:
             stream.response.close()
 
@@ -445,9 +453,10 @@ class AnthropicProvider:
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
         # https://sentry.sentry.io/issues/6267320373/
-        return isinstance(exception, anthropic.AnthropicError) and (
-            "overloaded_error" in str(exception)
-        )
+        return (
+            isinstance(exception, anthropic.AnthropicError)
+            and ("overloaded_error" in str(exception))
+        ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
@@ -461,6 +470,7 @@ class AnthropicProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ):
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
@@ -479,6 +489,18 @@ class AnthropicProvider:
             max_tokens=max_tokens or 8192,
             temperature=temperature or NOT_GIVEN,
             timeout=timeout or NOT_GIVEN,
+            thinking=(
+                ThinkingConfigEnabledParam(
+                    type="enabled",
+                    budget_tokens=(
+                        1024
+                        if reasoning_effort == "low"
+                        else 4092 if reasoning_effort == "medium" else 8192
+                    ),
+                )
+                if reasoning_effort
+                else NOT_GIVEN
+            ),
         )
 
         message = self._format_claude_response_to_message(completion)
@@ -518,6 +540,9 @@ class AnthropicProvider:
                 message.tool_call_id = message.tool_calls[
                     0
                 ].id  # assumes we get only 1 tool call at a time, but we really don't use this field for tool_use blocks
+            elif block.type == "thinking":
+                message.thinking_content = block.thinking
+                message.thinking_signature = block.signature
         return message
 
     @staticmethod
@@ -534,24 +559,43 @@ class AnthropicProvider:
                 ],
             )
         elif message.role == "tool_use" or (message.role == "assistant" and message.tool_calls):
-            if not message.tool_calls:
-                return MessageParam(role="assistant", content=[])
-            tool_call = message.tool_calls[0]  # Assuming only one tool call per message
-            return MessageParam(
-                role="assistant",
-                content=[
+            assistant_msg_content: list[ThinkingBlockParam | ToolUseBlockParam] = []
+            if message.thinking_content and message.thinking_signature:
+                assistant_msg_content.append(
+                    ThinkingBlockParam(
+                        type="thinking",
+                        thinking=message.thinking_content,
+                        signature=message.thinking_signature,
+                    )
+                )
+            if message.tool_calls:
+                tool_call = message.tool_calls[0]  # Assuming only one tool call per message
+                assistant_msg_content.append(
                     ToolUseBlockParam(
                         type="tool_use",
                         id=tool_call.id or "",
                         name=tool_call.function,
                         input=json.loads(tool_call.args),
                     )
-                ],
+                )
+            return MessageParam(
+                role="assistant",
+                content=assistant_msg_content,
             )
         else:
+            other_content: list[ThinkingBlockParam | TextBlockParam] = []
+            if message.thinking_content and message.thinking_signature:
+                other_content.append(
+                    ThinkingBlockParam(
+                        type="thinking",
+                        thinking=message.thinking_content,
+                        signature=message.thinking_signature,
+                    )
+                )
+            other_content.append(TextBlockParam(type="text", text=message.content or ""))
             return MessageParam(
                 role=message.role,  # type: ignore
-                content=[TextBlockParam(type="text", text=message.content or "")],
+                content=other_content,
             )
 
     @staticmethod
@@ -615,7 +659,8 @@ class AnthropicProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
-    ) -> Iterator[str | ToolCall | Usage]:
+        reasoning_effort: str | None = None,
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
@@ -634,6 +679,18 @@ class AnthropicProvider:
             temperature=temperature or NOT_GIVEN,
             timeout=timeout or NOT_GIVEN,
             stream=True,
+            thinking=(
+                ThinkingConfigEnabledParam(
+                    type="enabled",
+                    budget_tokens=(
+                        1024
+                        if reasoning_effort == "low"
+                        else 4092 if reasoning_effort == "medium" else 8192
+                    ),
+                )
+                if reasoning_effort
+                else NOT_GIVEN
+            ),
         )
 
         try:
@@ -652,7 +709,11 @@ class AnthropicProvider:
                 if chunk.type == "message_stop":
                     break
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
-                    yield chunk.delta.text
+                    yield "content", chunk.delta.text
+                elif chunk.type == "content_block_delta" and chunk.delta.type == "thinking_delta":
+                    yield "thinking_content", chunk.delta.thinking
+                elif chunk.type == "content_block_delta" and chunk.delta.type == "signature_delta":
+                    yield "thinking_signature", chunk.delta.signature
                 elif chunk.type == "content_block_start" and chunk.content_block.type == "tool_use":
                     # Start accumulating a new tool call
                     current_tool_call = {
@@ -681,11 +742,17 @@ class AnthropicProvider:
             stream.response.close()
 
     def construct_message_from_stream(
-        self, content_chunks: list[str], tool_calls: list[ToolCall]
+        self,
+        content_chunks: list[str],
+        tool_calls: list[ToolCall],
+        thinking_content_chunks: list[str],
+        thinking_signature: str | None,
     ) -> Message:
         message = Message(
             role="tool_use" if tool_calls else "assistant",
             content="".join(content_chunks) if content_chunks else None,
+            thinking_content="".join(thinking_content_chunks) if thinking_content_chunks else None,
+            thinking_signature=thinking_signature,
         )
 
         if tool_calls:
@@ -770,9 +837,10 @@ class GeminiProvider:
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
         )
-        return isinstance(exception, ClientError) and any(
-            error in str(exception) for error in retryable_errors
-        )
+        return (
+            isinstance(exception, ClientError)
+            and any(error in str(exception) for error in retryable_errors)
+        ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Gemini Generation")
     def generate_structured(
@@ -882,8 +950,8 @@ class GeminiProvider:
                         yield ToolCall(**current_tool_call)
                         current_tool_call = None
                 # Handle text chunks
-                elif chunk.text:
-                    yield chunk.text
+                elif chunk.text is not None:
+                    yield "content", str(chunk.text)  # type: ignore[misc]
 
                 # Update token counts if available
                 if chunk.usage_metadata:
@@ -1176,6 +1244,7 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     tools=tools,
                     timeout=timeout,
+                    reasoning_effort=reasoning_effort,
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
@@ -1264,7 +1333,9 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
-    ) -> Iterator[str | ToolCall | Usage]:
+        first_token_timeout: float = 40.0,  # Time to first token timeout
+        inactivity_timeout: float = 20.0,  # Timeout for inactivity after first token
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         try:
             if run_name:
                 langfuse_context.update_current_observation(
@@ -1278,9 +1349,10 @@ class LlmClient:
             if not tools:
                 messages = LlmClient.clean_tool_call_assistant_messages(messages)
 
+            # Get the appropriate stream generator based on provider
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
-                yield from model.generate_text_stream(
+                stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -1292,7 +1364,7 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
-                yield from model.generate_text_stream(
+                stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -1300,10 +1372,11 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     tools=tools,
                     timeout=timeout,
+                    reasoning_effort=reasoning_effort,
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
-                yield from model.generate_text_stream(
+                stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
@@ -1313,6 +1386,34 @@ class LlmClient:
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
+
+            # Add timeout check to the stream with differentiated timeouts
+            # for first token and subsequent tokens
+            last_yield_time = time.time()
+            first_token_received = False
+
+            for item in stream_generator:
+                current_time = time.time()
+                # Use first_token_timeout for the first token, inactivity_timeout for subsequent tokens
+                timeout_to_use = (
+                    first_token_timeout if not first_token_received else inactivity_timeout
+                )
+
+                if current_time - last_yield_time > timeout_to_use:
+                    if first_token_received:
+                        raise LlmStreamInactivityTimeoutError(
+                            f"Stream inactivity timeout after {timeout_to_use} seconds"
+                        )
+                    else:
+                        raise LlmStreamFirstTokenTimeoutError(
+                            f"Stream time to first token timeout after {timeout_to_use} seconds"
+                        )
+
+                # Mark that we've received at least one token
+                first_token_received = True
+                last_yield_time = current_time
+                yield item
+
         except Exception as e:
             logger.exception(
                 f"Text stream generation failed with provider {model.provider_name}: {e}"
@@ -1389,13 +1490,17 @@ class LlmClient:
         content_chunks: list[str],
         tool_calls: list[ToolCall],
         model: LlmProvider,
+        thinking_content_chunks: list[str] = [],
+        thinking_signature: str | None = None,
     ) -> Message:
         if model.provider_name == LlmProviderType.OPENAI:
             model = cast(OpenAiProvider, model)
             return model.construct_message_from_stream(content_chunks, tool_calls)
         elif model.provider_name == LlmProviderType.ANTHROPIC:
             model = cast(AnthropicProvider, model)
-            return model.construct_message_from_stream(content_chunks, tool_calls)
+            return model.construct_message_from_stream(
+                content_chunks, tool_calls, thinking_content_chunks, thinking_signature
+            )
         elif model.provider_name == LlmProviderType.GEMINI:
             model = cast(GeminiProvider, model)
             return model.construct_message_from_stream(content_chunks, tool_calls)

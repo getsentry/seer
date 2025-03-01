@@ -46,6 +46,8 @@ class AppConfig(BaseModel):
     SENTRY_ENVIRONMENT: str = "production"
 
     DATABASE_URL: str
+    DATABASE_MIGRATIONS_URL: str | None = None
+    IS_DB_MIGRATION: ParseBool = False
     CELERY_BROKER_URL: str
     GITHUB_TOKEN: str | None = None
     GITHUB_APP_ID: str = ""
