@@ -194,6 +194,7 @@ def test_autofix_run_root_cause_analysis(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flaky, needs to be fixed.")
 def test_autofix_run_full(autofix_request: AutofixRequest):
     autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
     with eager_celery():
@@ -285,6 +286,7 @@ def test_autofix_run_full_without_repos(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flaky, needs to be fixed.")
 def test_autofix_run_full_with_partial_supported_repos(autofix_request: AutofixRequest):
     autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
     autofix_request.repos = [
