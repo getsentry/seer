@@ -188,8 +188,8 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
         ),
         response_format=IsFixableIssuePrompts.IsIssueFixable,
         temperature=0.0,
-        max_tokens=64,
-        timeout=5.0,
+        max_tokens=2048,
+        timeout=7.0,
     )
     return completion.parsed.is_fixable
 

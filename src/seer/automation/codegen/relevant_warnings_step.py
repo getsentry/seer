@@ -95,11 +95,9 @@ class RelevantWarningsStep(CodegenStep):
     def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
         try:
             self._post_results_to_overwatch(relevant_warnings_output)
-        except Exception as exception:
-            self.logger.exception(
-                f"Error posting relevant warnings results to Overwatch: {exception}"
-            )
-            raise exception
+        except Exception:
+            self.logger.exception("Error posting relevant warnings results to Overwatch")
+            raise
         finally:
             self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
                 relevant_warnings_output.relevant_warning_results
