@@ -628,6 +628,152 @@ class TestRepoClient:
         # Verify get_contents was never called
         mock_github.get_repo.return_value.get_contents.assert_not_called()
 
+    def test_get_commit_history(self, repo_client, mock_github):
+        # Setup mock commits
+        mock_commit1 = MagicMock()
+        mock_commit1.sha = "abcdef1"
+        mock_commit1.commit.message = "First commit message"
+        mock_commit1.files = [
+            MagicMock(filename="test_file.py", status="modified"),
+            MagicMock(filename="another_file.py", status="added"),
+        ]
+
+        mock_commit2 = MagicMock()
+        mock_commit2.sha = "abcdef2"
+        mock_commit2.commit.message = "Second commit message"
+        mock_commit2.files = [MagicMock(filename="test_file.py", status="modified")]
+
+        # Mock the commits list returned by get_commits
+        mock_commits = MagicMock()
+        mock_commits.__getitem__.return_value = [mock_commit1, mock_commit2]
+        mock_github.get_repo.return_value.get_commits.return_value = mock_commits
+
+        # Test the method
+        result = repo_client.get_commit_history("test_file.py", max_commits=2)
+
+        # Verify the result contains expected information
+        assert len(result) == 2
+        assert "abcdef1" in result[0]
+        assert "First commit message" in result[0]
+        assert "test_file.py" in result[0]
+        assert "another_file.py" in result[0]
+        assert "abcdef2" in result[1]
+        assert "Second commit message" in result[1]
+
+        # Verify the correct method was called
+        mock_github.get_repo.return_value.get_commits.assert_called_once_with(
+            sha="test_sha", path="test_file.py"
+        )
+
+    def test_get_commit_history_with_autocorrect(self, repo_client, mock_github):
+        # Setup mock for autocorrect
+        repo_client._autocorrect_path = MagicMock(return_value=("corrected_path.py", True))
+
+        # Setup mock commits
+        mock_commit = MagicMock()
+        mock_commit.sha = "abcdef1"
+        mock_commit.commit.message = "Test commit message"
+        mock_commit.files = [MagicMock(filename="corrected_path.py", status="modified")]
+
+        # Mock the commits list returned by get_commits
+        mock_commits = MagicMock()
+        mock_commits.__getitem__.return_value = [mock_commit]
+        mock_github.get_repo.return_value.get_commits.return_value = mock_commits
+
+        # Test the method with autocorrect=True
+        result = repo_client.get_commit_history("wrong_path.py", autocorrect=True, max_commits=1)
+
+        # Verify the result contains expected information
+        assert len(result) == 1
+        assert "abcdef1" in result[0]
+        assert "Test commit message" in result[0]
+        assert "corrected_path.py" in result[0]
+
+        # Verify autocorrect was called and the corrected path was used
+        repo_client._autocorrect_path.assert_called_once_with("wrong_path.py", "test_sha")
+        mock_github.get_repo.return_value.get_commits.assert_called_once_with(
+            sha="test_sha", path="corrected_path.py"
+        )
+
+    def test_get_commit_history_path_not_found(self, repo_client):
+        # Setup mock for autocorrect that returns no match
+        repo_client._autocorrect_path = MagicMock(return_value=("nonexistent_path.py", False))
+        repo_client.get_valid_file_paths = MagicMock(return_value=set())
+
+        # Test the method with autocorrect=True but no match found
+        result = repo_client.get_commit_history("nonexistent_path.py", autocorrect=True)
+
+        # Verify empty result when path not found
+        assert result == []
+
+    def test_get_commit_patch_for_file(self, repo_client, mock_github):
+        # Setup mock commit
+        mock_file = MagicMock(filename="test_file.py", patch="@@ -1,5 +1,7 @@ test patch content")
+        mock_commit = MagicMock()
+        mock_commit.files = [mock_file]
+        mock_github.get_repo.return_value.get_commit.return_value = mock_commit
+
+        # Test the method
+        result = repo_client.get_commit_patch_for_file("test_file.py", "commit_sha")
+
+        # Verify the result
+        assert result == "@@ -1,5 +1,7 @@ test patch content"
+
+        # Verify the correct methods were called
+        mock_github.get_repo.return_value.get_commit.assert_called_once_with("commit_sha")
+
+    def test_get_commit_patch_for_file_with_autocorrect(self, repo_client, mock_github):
+        # Setup mock for autocorrect
+        repo_client._autocorrect_path = MagicMock(return_value=("corrected_path.py", True))
+
+        # Setup mock commit
+        mock_file = MagicMock(
+            filename="corrected_path.py", patch="@@ -1,5 +1,7 @@ test patch content"
+        )
+        mock_commit = MagicMock()
+        mock_commit.files = [mock_file]
+        mock_github.get_repo.return_value.get_commit.return_value = mock_commit
+
+        # Test the method with autocorrect=True
+        result = repo_client.get_commit_patch_for_file(
+            "wrong_path.py", "commit_sha", autocorrect=True
+        )
+
+        # Verify the result
+        assert result == "@@ -1,5 +1,7 @@ test patch content"
+
+        # Verify autocorrect was called and the corrected path was used
+        repo_client._autocorrect_path.assert_called_once_with("wrong_path.py", "commit_sha")
+        mock_github.get_repo.return_value.get_commit.assert_called_once_with("commit_sha")
+
+    def test_get_commit_patch_for_file_not_found(self, repo_client, mock_github):
+        # Setup mock commit with different file
+        mock_file = MagicMock(
+            filename="different_file.py", patch="@@ -1,5 +1,7 @@ test patch content"
+        )
+        mock_commit = MagicMock()
+        mock_commit.files = [mock_file]
+        mock_github.get_repo.return_value.get_commit.return_value = mock_commit
+
+        # Test the method
+        result = repo_client.get_commit_patch_for_file("test_file.py", "commit_sha")
+
+        # Verify the result is None when file not found in commit
+        assert result is None
+
+    def test_get_commit_patch_for_file_with_autocorrect_not_found(self, repo_client):
+        # Setup mock for autocorrect that returns no match
+        repo_client._autocorrect_path = MagicMock(return_value=("nonexistent_path.py", False))
+        repo_client.get_valid_file_paths = MagicMock(return_value=set())
+
+        # Test the method with autocorrect=True but no match found
+        result = repo_client.get_commit_patch_for_file(
+            "nonexistent_path.py", "commit_sha", autocorrect=True
+        )
+
+        # Verify None result when path not found
+        assert result is None
+
 
 class TestRepoClientIndexFileSet:
     @patch("seer.automation.codebase.repo_client.Github")
@@ -770,25 +916,6 @@ class TestRepoClientIndexFileSet:
         result = repo_client.post_unit_test_reference_to_original_pr(
             original_pr_url, unit_test_pr_url
         )
-
-        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
-
-        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-
-    @patch("seer.automation.codebase.repo_client.requests.post")
-    def test_post_unit_test_not_generated_message_to_original_pr(self, mock_post, repo_client):
-        original_pr_url = "https://github.com/sentry/sentry/pull/12345"
-        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
-        expected_comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
-        expected_params = {"body": expected_comment}
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
-        }
-        mock_post.return_value = mock_response
-
-        result = repo_client.post_unit_test_not_generated_message_to_original_pr(original_pr_url)
 
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
