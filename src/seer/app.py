@@ -60,6 +60,7 @@ from seer.automation.codegen.models import (
 from seer.automation.codegen.tasks import (
     codegen_pr_review,
     codegen_relevant_warnings,
+    codegen_retry_unittest,
     codegen_unittest,
     get_unittest_state,
 )
@@ -287,6 +288,11 @@ def codegen_pr_review_state_endpoint(
     raise NotImplementedError("PR Review state is not implemented yet.")
 
 
+@json_api(blueprint, "/v1/automation/codegen/retry-unit-tests")
+def codegen_retry_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsResponse:
+    return codegen_retry_unittest(data)
+
+
 @json_api(blueprint, "/v1/automation/codecov-request")
 def codecov_request_endpoint(
     data: CodecovTaskRequest,
@@ -302,6 +308,9 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
+    elif data.request_type == "retry-unit-tests":
+        return codegen_retry_unit_tests_endpoint(data.data)
+
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
