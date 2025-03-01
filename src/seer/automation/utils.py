@@ -300,3 +300,7 @@ def batch_texts_by_token_count(
     if batch:
         # The last batch didn't hit max_tokens. It needs to be yielded.
         yield batch
+
+
+def determine_mapped_unit_test_run_id(owner: str, repo_name: str, pr_id: int) -> int:
+    return hash(f"{owner}-{repo_name}-{pr_id}")

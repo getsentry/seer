@@ -254,6 +254,23 @@ class DbPrIdToAutofixRunIdMapping(Base):
     )
 
 
+class DbPrContextToUnitTestGenerationRunIdMapping(Base):
+    __tablename__ = "codegen_unit_test_generation_pr_context_to_run_id"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    owner: Mapped[str] = mapped_column(String, nullable=False)
+    pr_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repo: Mapped[str] = mapped_column(String, nullable=False)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey(DbRunState.id, ondelete="CASCADE"), nullable=False
+    )
+    iterations = mapped_column(Integer, nullable=False, default=0)
+    __table_args__ = (
+        UniqueConstraint("provider", "pr_id", "repo", "owner"),
+        Index("ix_autofix_repo_owner_pr_id", "owner", "repo", "pr_id"),
+    )
+
+
 def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:
     for i in range(100):
         connection.execute(
