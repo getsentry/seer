@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timedelta
 from operator import and_, or_
-from sqlite3 import IntegrityError
 from typing import List
 
 import numpy as np
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert
 
 from celery_app.app import celery_app
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
@@ -164,13 +164,8 @@ def _save_timeseries_history(
                 yhat_upper=prophet_ts.yhat_upper,
                 saved_at=datetime.now(),
             )
-            try:
-                session.add(prophet_history_record)
-                session.flush()
-            except IntegrityError:
-                # Roll back and skip the record as it already exists
-                session.rollback()
-                continue
+            session.add(prophet_history_record)
+
         session.commit()
 
 
@@ -251,51 +246,33 @@ def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPredic
 
     with Session() as session:
 
-        existing_predictions = (
-            session.query(DbProphetAlertTimeSeries)
-            .filter(
-                DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
-            )
-            .all()
-        )
-        existing_predictions_map = {
-            pred.timestamp.timestamp(): pred for pred in existing_predictions
-        }
+        prediction_values = [
+            {
+                "dynamic_alert_id": alert.id,
+                "timestamp": datetime.fromtimestamp(predictions.timestamps[i]),
+                "yhat": predictions.yhat[i],
+                "yhat_lower": predictions.yhat_lower[i],
+                "yhat_upper": predictions.yhat_upper[i],
+            }
+            for i in range(len(predictions.timestamps))
+        ]
 
-        updated_predictions = 0
-        new_predictions = 0
+        if not prediction_values:
+            return
 
-        for timestamp, yhat, yhat_lower, yhat_upper in zip(
-            predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
-        ):
-            dt_timestamp = datetime.fromtimestamp(timestamp)
-            existing_prediction = existing_predictions_map.get(timestamp)
+        stmt = insert(DbProphetAlertTimeSeries).values(prediction_values)
 
-            if existing_prediction:
-                # Update existing record
-                existing_prediction.yhat = yhat
-                existing_prediction.yhat_lower = yhat_lower
-                existing_prediction.yhat_upper = yhat_upper
-                updated_predictions += 1
-            else:
-                # Insert new record
-                prophet_prediction = DbProphetAlertTimeSeries(
-                    dynamic_alert_id=alert.id,
-                    timestamp=dt_timestamp,
-                    yhat=yhat,
-                    yhat_lower=yhat_lower,
-                    yhat_upper=yhat_upper,
-                )
-                session.add(prophet_prediction)
-                new_predictions += 1
-        session.commit()
-        logger.info(
-            f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}",
-            extra={
-                "updated_predictions": updated_predictions,
-                "new_predictions": new_predictions,
+        update_stmt = stmt.on_conflict_do_update(
+            index_elements=["dynamic_alert_id", "timestamp"],
+            set_={
+                "yhat": stmt.excluded.yhat,
+                "yhat_lower": stmt.excluded.yhat_lower,
+                "yhat_upper": stmt.excluded.yhat_upper,
             },
         )
+
+        session.execute(update_stmt)
+        session.commit()
 
 
 @sentry_sdk.trace
