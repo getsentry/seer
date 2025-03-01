@@ -324,16 +324,56 @@ class RepoClient:
             # Check for partial matches if no exact match
             if path not in valid_paths and len(path) > 3:
                 path_lower = path.lower()
-                partial_matches = [
-                    valid_path for valid_path in valid_paths if path_lower in valid_path.lower()
-                ]
-                if partial_matches:
-                    # Sort by length to get closest match (shortest containing path)
-                    closest_match = sorted(partial_matches, key=len)[0]
-                    logger.warning(
-                        f"Path '{path}' not found exactly, using closest match: '{closest_match}'"
-                    )
-                    path = closest_match
+ path_normalized = path_lower.lstrip("./")
+ candidates = []
+
+ for valid_path in valid_paths:
+ valid_path_normalized = valid_path.lower()
+ score = 0.0
+
+ # Strategy 1: Exact filename match
+ if path_normalized.split('/')[-1] == valid_path_normalized.split('/')[-1]:
+ score += 0.5
+
+ # Strategy 2: Path containment
+ if path_normalized in valid_path_normalized:
+ score += 0.3
+ elif valid_path_normalized in path_normalized:
+ score += 0.2
+
+ # Strategy 3: Component matching from the end
+ path_components = path_normalized.split('/')
+ valid_components = valid_path_normalized.split('/')
+ max_check = min(len(path_components), len(valid_components))
+ matches = 0
+
+ for i in range(1, max_check + 1):
+ if path_components[-i] == valid_components[-i]:
+ matches += 1
+ else:
+ break
+
+ if matches > 0:
+ score += 0.1 * matches
+
+ if score > 0:
+ candidates.append((valid_path, score))
+
+ # Sort by score, descending
+ candidates.sort(key=lambda x: x[1], reverse=True)
+
+ if candidates:
+ best_match, confidence = candidates[0]
+ if confidence >= 0.4: # Threshold for accepting a match
+ logger.info(
+ f"Path '{path}' not found exactly, using best match: '{best_match}' with confidence {confidence:.2f}"
+ )
+ path = best_match
+ autocorrected_path = True
+ else:
+ logger.warning(
+ f"No confident match found for path '{path}'. Best candidate '{best_match}' had low confidence ({confidence:.2f})"
+ )
                 else:
                     logger.exception(
                         "No matching file found for provided file path", extra={"path": path}
@@ -355,28 +395,33 @@ class RepoClient:
             logger.exception(f"Error getting file contents: {e}")
             return None, "utf-8"
 
-    @functools.lru_cache(maxsize=8)
+ @functools.lru_cache(maxsize=32) # Increased from 8 to 32
     def get_valid_file_paths(self, sha: str | None = None, files_only=False) -> set[str]:
         if sha is None:
             sha = self.base_commit_sha
 
-        tree = self.repo.get_git_tree(sha, recursive=True)
+ try:
+ tree = self.repo.get_git_tree(sha, recursive=True)
 
-        if tree.raw_data["truncated"]:
-            sentry_sdk.capture_message(
-                f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
-            )
+ if tree.raw_data["truncated"]:
+ sentry_sdk.capture_message(
+ f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
+ )
 
-        valid_file_paths: set[str] = set()
-        valid_file_extensions = get_all_supported_extensions()
+ valid_file_paths: set[str] = set()
+ valid_file_extensions = get_all_supported_extensions()
 
-        for file in tree.tree:
-            if file.type == "blob" and any(
-                file.path.endswith(ext) for ext in valid_file_extensions
-            ):
-                valid_file_paths.add(file.path)
+ for file in tree.tree:
+ if file.type == "blob" and any(
+ file.path.endswith(ext) for ext in valid_file_extensions
+ ):
+ valid_file_paths.add(file.path)
 
-        return valid_file_paths
+ return valid_file_paths
+ except Exception as e:
+ logger.exception(f"Error getting valid file paths: {e}")
+ sentry_sdk.capture_exception(e)
+ return set() # Return empty set instead of failing
 
     def _create_branch(self, branch_name):
         ref = self.repo.create_git_ref(

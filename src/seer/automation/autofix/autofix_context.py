@@ -187,11 +187,23 @@ class AutofixContext(PipelineContext):
                     if frame.filename in valid_file_paths:
                         frame.repo_name = repo.full_name
                     else:
+ best_match = None
+ best_score = 0.0
+
                         for valid_path in valid_file_paths:
-                            if potential_frame_match(valid_path, frame):
-                                frame.repo_name = repo.full_name
-                                frame.filename = valid_path
-                                break
+ matches, score = potential_frame_match(valid_path, frame)
+ if matches and score > best_score:
+ best_match = valid_path
+ best_score = score
+
+ # Use match if confidence score is above threshold
+ if best_match and best_score >= 0.4:
+ frame.repo_name = repo.full_name
+ frame.filename = best_match
+ # Add logging for debugging purposes
+ logger.debug(
+ f"Matched frame path {frame.filename or frame.package} to {best_match} with score {best_score:.2f}"
+ )
 
     def process_event_paths(self, event: EventDetails):
         """
