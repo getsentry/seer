@@ -43,12 +43,24 @@ class TestFetchIssuesComponent:
         mock_context = MagicMock(spec=CodegenContext)
         mock_context.repo = MagicMock()
         mock_context.repo.provider = "github"
+        mock_context.repo.provider_raw = "integrations:github"
         mock_context.repo.external_id = "123123"
         return FetchIssuesComponent(mock_context)
+
+    def test_bad_provider_raw(self, component: FetchIssuesComponent):
+        mock_context = MagicMock(spec=CodegenContext)
+        mock_context.repo = MagicMock()
+        mock_context.repo.provider = "github"
+        mock_context.repo.provider_raw = None
+        mock_context.repo.external_id = "123123"
+        component = FetchIssuesComponent(mock_context)
+        with pytest.raises(TypeError):
+            component.invoke(CodeFetchIssuesRequest(organization_id=1, pr_files=[]))
 
     def test_invoke_filters_files(
         self, mock_rpc_client_call: Mock, component: FetchIssuesComponent
     ):
+        assert component.context.repo.provider_raw is not None
         pr_files = [
             PrFile(filename="fine.py", patch="patch1", status="modified", changes=100),
             PrFile(filename="many_changes.py", patch="patch2", status="modified", changes=1_000),
