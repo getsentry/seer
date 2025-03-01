@@ -302,7 +302,7 @@ def run_autofix_push_changes(
         return AutofixUpdateEndpointResponse(
             run_id=request.run_id,
             status="error",
-            message="GitHub took too long to create the branch or PR, please try again later.",
+            message="GitHub didn't respond - maybe try again?",
         )
 
     except Exception:
