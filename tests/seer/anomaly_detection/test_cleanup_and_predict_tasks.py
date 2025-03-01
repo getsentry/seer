@@ -38,6 +38,10 @@ class TestCleanupTasks(unittest.TestCase):
         cur_ts = datetime.now().timestamp()
         past_ts = (datetime.now() - timedelta(days=200)).timestamp()
 
+        # Strip the timestamp to the minute
+        cur_ts = int(cur_ts / 60) * 60
+        past_ts = int(past_ts / 60) * 60
+
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
@@ -97,6 +101,10 @@ class TestCleanupTasks(unittest.TestCase):
 
         cur_ts = datetime.now().timestamp()
         past_ts = (datetime.now() - timedelta(days=200)).timestamp()
+
+        # Strip the timestamp to the minute
+        cur_ts = int(cur_ts / 60) * 60
+        past_ts = int(past_ts / 60) * 60
 
         timestamps_old = [past_ts + (i * 3600) for i in range(num_points_old)]
         timestamps_new = [cur_ts + (i * 3600) for i in range(num_points_new)]
@@ -267,7 +275,7 @@ class TestCleanupTasks(unittest.TestCase):
             new_predictions = [
                 prediction.timestamp
                 for prediction in alert.prophet_predictions
-                if prediction.timestamp >= datetime.fromtimestamp(cur_timestamp)
+                if prediction.timestamp > datetime.fromtimestamp(cur_timestamp)
             ]
 
             assert len(new_predictions) == (24 * (60 // config.time_period))
