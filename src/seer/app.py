@@ -25,6 +25,7 @@ from seer.automation.autofix.models import (
     AutofixRequest,
     AutofixStateRequest,
     AutofixStateResponse,
+    AutofixUpdateEndpointResponse,
     AutofixUpdateRequest,
     AutofixUpdateType,
 )
@@ -184,15 +185,15 @@ def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
 @json_api(blueprint, "/v1/automation/autofix/update")
 def autofix_update_endpoint(
     data: AutofixUpdateRequest,
-) -> AutofixEndpointResponse:
+) -> AutofixUpdateEndpointResponse:
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
         run_autofix_solution(data)
     elif data.payload.type == AutofixUpdateType.SELECT_SOLUTION:
         run_autofix_coding(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        run_autofix_push_changes(data)
+        return run_autofix_push_changes(data)
     elif data.payload.type == AutofixUpdateType.CREATE_BRANCH:
-        run_autofix_push_changes(data)
+        return run_autofix_push_changes(data)
     elif data.payload.type == AutofixUpdateType.USER_MESSAGE:
         receive_user_message(data)
     elif data.payload.type == AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK:
@@ -201,7 +202,8 @@ def autofix_update_endpoint(
         update_code_change(data)
     elif data.payload.type == AutofixUpdateType.COMMENT_THREAD:
         comment_on_thread(data)
-    return AutofixEndpointResponse(started=True, run_id=data.run_id)
+
+    return AutofixUpdateEndpointResponse(run_id=data.run_id)
 
 
 @json_api(blueprint, "/v1/automation/autofix/state")

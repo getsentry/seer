@@ -89,6 +89,9 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                         description=change_description.description if change_description else "",
                         diff=diff,
                         diff_str=diff_str,
+                        draft_branch_name=(
+                            change_description.branch_name if change_description else None
+                        ),
                     )
 
                     codebase_changes.append(change)

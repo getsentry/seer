@@ -5,6 +5,7 @@ import textwrap
 from typing import Type, cast
 
 import sentry_sdk
+from celery.exceptions import SoftTimeLimitExceeded, TimeoutError
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
@@ -35,6 +36,7 @@ from seer.automation.autofix.models import (
     AutofixSolutionUpdatePayload,
     AutofixStatus,
     AutofixUpdateCodeChangePayload,
+    AutofixUpdateEndpointResponse,
     AutofixUpdateRequest,
     AutofixUpdateType,
     AutofixUserMessagePayload,
@@ -263,7 +265,7 @@ def run_autofix_coding(
 def run_autofix_push_changes(
     request: AutofixUpdateRequest,
     app_config: AppConfig = injected,
-):
+) -> AutofixUpdateEndpointResponse:
     if not isinstance(request.payload, AutofixCreatePrUpdatePayload) and not isinstance(
         request.payload, AutofixCreateBranchUpdatePayload
     ):
@@ -276,13 +278,61 @@ def run_autofix_push_changes(
     with state.update() as cur:
         cur.mark_triggered()
 
-    event_manager = AutofixEventManager(state)
-    context = AutofixContext(state=state, event_manager=event_manager)
+    try:
+        result = commit_changes_task.apply_async(
+            args=(
+                request.run_id,
+                request.payload.repo_external_id,
+                request.payload.make_pr,
+            ),
+            queue=app_config.CELERY_WORKER_QUEUE,
+        )
 
-    context.commit_changes(
-        repo_external_id=request.payload.repo_external_id,
-        make_pr=request.payload.make_pr,
-    )
+        # Wait for the task to complete with a 30-second timeout
+        # Celery will kill the task if it doesn't complete in 30 seconds
+        result.get(timeout=30)
+
+        return AutofixUpdateEndpointResponse(
+            run_id=request.run_id,
+            status="success",
+        )
+
+    except TimeoutError:
+        logger.exception(f"Timeout waiting for commit_changes_task for run {request.run_id}")
+
+        return AutofixUpdateEndpointResponse(
+            run_id=request.run_id,
+            status="error",
+            message="GitHub didn't respond - maybe try again?",
+        )
+
+    except Exception:
+        logger.exception(f"Error in commit_changes_task for run {request.run_id}")
+
+        return AutofixUpdateEndpointResponse(
+            run_id=request.run_id,
+            status="error",
+            message="Something broke while pushing your changes. Please try again later.",
+        )
+
+
+@celery_app.task(time_limit=30, soft_time_limit=25)
+def commit_changes_task(run_id, repo_external_id, make_pr):
+    try:
+        state = ContinuationState(run_id)
+        event_manager = AutofixEventManager(state)
+        context = AutofixContext(state=state, event_manager=event_manager)
+
+        return context.commit_changes(
+            repo_external_id=repo_external_id,
+            make_pr=make_pr,
+        )
+    except SoftTimeLimitExceeded:
+        logger.error(f"Soft time limit (25s) exceeded when committing changes for run {run_id}")
+        raise
+    except Exception as e:
+        logger.error(f"Error committing changes for run {run_id}: {e}")
+        raise
 
 
 @inject

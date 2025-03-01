@@ -20,14 +20,8 @@ from seer.anomaly_detection.models.external import (
     StoreDataRequest,
     StoreDataResponse,
 )
-from seer.app import app, autofix_update_endpoint
-from seer.automation.autofix.models import (
-    AutofixContinuation,
-    AutofixEndpointResponse,
-    AutofixEvaluationRequest,
-    AutofixUpdateRequest,
-    AutofixUpdateType,
-)
+from seer.app import app
+from seer.automation.autofix.models import AutofixContinuation, AutofixEvaluationRequest
 from seer.automation.state import LocalMemoryState
 from seer.automation.summarize.models import SummarizeIssueRequest
 from seer.configuration import AppConfig, provide_test_defaults
@@ -476,36 +470,6 @@ class TestSeer(unittest.TestCase):
 
         # Assert that run_autofix_evaluation was called with the correct arguments
         mock_run_autofix_evaluation.assert_called_once_with(test_data)
-
-    def test_autofix_update_endpoint(self):
-        test_cases = [
-            (AutofixUpdateType.SELECT_ROOT_CAUSE, "seer.app.run_autofix_solution"),
-            (AutofixUpdateType.SELECT_SOLUTION, "seer.app.run_autofix_coding"),
-            (AutofixUpdateType.CREATE_PR, "seer.app.run_autofix_push_changes"),
-            (AutofixUpdateType.CREATE_BRANCH, "seer.app.run_autofix_push_changes"),
-            (AutofixUpdateType.USER_MESSAGE, "seer.app.receive_user_message"),
-            (
-                AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK,
-                "seer.app.restart_from_point_with_feedback",
-            ),
-            (AutofixUpdateType.UPDATE_CODE_CHANGE, "seer.app.update_code_change"),
-            (AutofixUpdateType.COMMENT_THREAD, "seer.app.comment_on_thread"),
-        ]
-
-        for autofix_type, expected_func in test_cases:
-            mock_request = mock.MagicMock(spec=AutofixUpdateRequest)
-            mock_request.run_id = 123
-            mock_request.payload = mock.MagicMock()
-            mock_request.payload.type = autofix_type
-
-            with mock.patch(expected_func) as mock_func:
-                response = autofix_update_endpoint(mock_request)
-
-                mock_func.assert_called_once_with(mock_request)
-
-                self.assertIsInstance(response, AutofixEndpointResponse)
-                self.assertTrue(response.started)
-                self.assertEqual(response.run_id, mock_request.run_id)
 
     @mock.patch("seer.app.run_summarize_issue")
     def test_summarize_issue_endpoint_timeout(self, mock_run_summarize_issue):

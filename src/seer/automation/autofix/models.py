@@ -85,6 +85,12 @@ class AutofixEndpointResponse(BaseModel):
     run_id: int
 
 
+class AutofixUpdateEndpointResponse(BaseModel):
+    run_id: int
+    status: Literal["success", "error"] = "success"
+    message: str | None = None
+
+
 class CustomRootCauseSelection(BaseModel):
     custom_root_cause: str
 
@@ -110,6 +116,7 @@ class CodebaseChange(BaseModel):
     description: str
     diff: list[FilePatch] = []
     diff_str: Optional[str] = None
+    draft_branch_name: str | None = None
     branch_name: str | None = None
     pull_request: Optional[CommittedPullRequestDetails] = None
 
