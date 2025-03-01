@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
     """
-    Fetch issues related to the files in a PR by analyzing stacktrace frames in the issue.
+    Fetch issues related to the files in a commit by analyzing stacktrace frames in the issue.
     """
 
     context: CodegenContext
@@ -51,9 +51,9 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         client: RpcClient = injected,
     ) -> dict[str, list[IssueDetails]]:
         """
-        Returns a dict mapping a subset of file names in the PR to issues related to the file.
+        Returns a dict mapping a subset of file names in the commit to issues related to the file.
         They're related if the functions and filenames in the issue's stacktrace overlap with those
-        modified in the PR.
+        modified in the commit.
 
         The `max_files_analyzed` and `max_lines_analyzed` checks ensure that the payload we send to
         seer_rpc doesn't get too large.
@@ -65,7 +65,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
         ]
         if not pr_files_eligible:
-            logger.info("No eligible files in PR.")
+            logger.info("No eligible files in commit.")
             return {}
 
         if not provider.startswith("integrations:"):
@@ -197,8 +197,8 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
         ),
         response_format=IsFixableIssuePrompts.IsIssueFixable,
         temperature=0.0,
-        max_tokens=2048,
-        timeout=7.0,
+        max_tokens=64,
+        timeout=5.0,
     )
     return completion.parsed.is_fixable
 
@@ -256,6 +256,7 @@ class PredictRelevantWarningsComponent(
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         relevant_warning_results: list[RelevantWarningResult] = []
         for warning, issue in request.candidate_associations:
+            logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
             completion = llm_client.generate_structured(
                 model=GeminiProvider.model("gemini-2.0-flash-001"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
@@ -287,4 +288,10 @@ class PredictRelevantWarningsComponent(
                     encoded_location=warning.encoded_location,
                 )
             )
+        num_relevant_warnings = sum(
+            result.does_fixing_warning_fix_issue for result in relevant_warning_results
+        )
+        logger.info(
+            f"Found {num_relevant_warnings} relevant warnings out of {len(relevant_warning_results)}"
+        )
         return CodePredictRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)
