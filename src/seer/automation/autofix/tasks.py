@@ -311,7 +311,7 @@ def run_autofix_push_changes(
         return AutofixUpdateEndpointResponse(
             run_id=request.run_id,
             status="error",
-            message="An error occurred while creating the branch or PR, please try again later.",
+            message="Something broke while pushing your changes. Please try again later.",
         )
 
 
