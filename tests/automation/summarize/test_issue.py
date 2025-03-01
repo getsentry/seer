@@ -9,6 +9,7 @@ from seer.automation.agent.models import LlmProviderType, Usage
 from seer.automation.models import IssueDetails
 from seer.automation.summarize.issue import (
     IssueSummary,
+    IssueSummaryForLlmToGenerate,
     IssueSummaryWithScores,
     run_summarize_issue,
     summarize_issue,
@@ -45,48 +46,31 @@ class TestSummarizeIssue:
     @pytest.mark.vcr()
     def test_summarize_issue_success(self, sample_request, score_num_decimal_places: int = 10):
         result, raw_result = summarize_issue(sample_request)
-        assert isinstance(result, SummarizeIssueResponse)
 
         expected_raw_result = IssueSummaryWithScores(
-            title="Critical Issue: red-timothy-sandwich Failure",
-            whats_wrong="**Unhandled exceptions** detected in **red-timothy-sandwich**; potential **memory leak** indicated in logs.",
-            session_related_issues="Related issues: **cyan-vincent-banana** and **green-fred-tennis** may share underlying causes.",
-            possible_cause="Possible **resource contention** or **data corruption** affecting multiple components.",
-            scores=SummarizeIssueScores(
-                possible_cause_confidence=round(0.470738745118689, score_num_decimal_places),
-                possible_cause_novelty=round(0.5800708960415282, score_num_decimal_places),
-            ),
+            title="Multiple Issues in Session: Shared Resource Failure?",
+            whats_wrong="**red-timothy-sandwich** issue occurred.",
+            session_related_issues="Other issues: **cyan-vincent-banana** and **green-fred-tennis** occurred in the same session.",
+            possible_cause="Perhaps a **shared resource** or **dependency** is failing, affecting multiple features.",
+            scores=SummarizeIssueScores(possible_cause_confidence=0.5, possible_cause_novelty=0.8),
         )
-
-        assert isinstance(result, SummarizeIssueResponse)
-
         # Round for some tolerance during equality comparison.
-        # TODO: is decryption and decompression of the VCR causing tiny changes?
-        for res in (raw_result, result):
-            res.scores.possible_cause_confidence = round(
-                res.scores.possible_cause_confidence, score_num_decimal_places
-            )
-            res.scores.possible_cause_novelty = round(
-                res.scores.possible_cause_novelty, score_num_decimal_places
-            )
-
+        raw_result.scores.possible_cause_confidence = round(
+            raw_result.scores.possible_cause_confidence, score_num_decimal_places
+        )
+        raw_result.scores.possible_cause_novelty = round(
+            raw_result.scores.possible_cause_novelty, score_num_decimal_places
+        )
         assert raw_result == expected_raw_result
 
+        assert isinstance(result, SummarizeIssueResponse)
         assert result.group_id == 123
         assert result.headline == expected_raw_result.title
         assert result.whats_wrong == expected_raw_result.whats_wrong
         assert result.trace == expected_raw_result.session_related_issues
         assert result.possible_cause == expected_raw_result.possible_cause
-        assert (
-            result.scores.possible_cause_confidence
-            == expected_raw_result.scores.possible_cause_confidence
-        )
-        assert (
-            result.scores.possible_cause_novelty
-            == expected_raw_result.scores.possible_cause_novelty
-        )
+        assert result.scores is None
 
-    @pytest.mark.vcr()
     @patch("seer.automation.summarize.issue.EventDetails.from_event")
     def test_summarize_issue_event_details(self, mock_from_event, mock_llm_client, sample_request):
         mock_event_details = Mock()
@@ -94,15 +78,17 @@ class TestSummarizeIssue:
         mock_from_event.return_value = mock_event_details
 
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=IssueSummary(
-                title="Test headline",
+            parsed=IssueSummaryForLlmToGenerate(
                 whats_wrong="Test what's wrong",
                 session_related_issues="Test session related issues",
                 possible_cause="Test possible cause",
+                possible_cause_novelty_score=0.5,
+                possible_cause_confidence_score=0.5,
+                title="Test headline",
             ),
             metadata=LlmResponseMetadata(
                 model="test-model",
-                provider_name=LlmProviderType.OPENAI,
+                provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
             ),
         )
@@ -170,10 +156,7 @@ class TestRunSummarizeIssue:
                 whats_wrong="Test what's wrong",
                 trace="Test trace",
                 possible_cause="Test possible cause",
-                scores=SummarizeIssueScores(
-                    possible_cause_confidence=0.5,
-                    possible_cause_novelty=0.5,
-                ),
+                scores=None,
             ),
             IssueSummary(
                 title="Test headline",
