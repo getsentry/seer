@@ -131,3 +131,15 @@ def backoff_on_exception(
         return wrapped_func
 
     return decorator
+
+
+def prefix_logger(prefix: str, logger: logging.Logger) -> logging.LoggerAdapter:
+    """
+    Returns a logger that prefixes all messages with `prefix`.
+    """
+
+    class PrefixedLoggingAdapter(logging.LoggerAdapter):
+        def process(self, msg, kwargs):
+            return f"{prefix}{msg}", kwargs
+
+    return PrefixedLoggingAdapter(logger)
