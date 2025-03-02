@@ -408,7 +408,6 @@ class BaseTools:
         )
 
     def get_tools(self, can_access_repos: bool = True):
-
         tools = [
             FunctionTool(
                 name="google_search",
@@ -457,17 +456,17 @@ class BaseTools:
                         ),
                         parameters=[
                             {
+                                "name": "file_path",
+                                "type": "string",
+                                "description": "The document path to expand.",
+                            },
+                            {
                                 "name": "repo_name",
                                 "type": "string",
                                 "description": "Name of the repository containing the file. If omitted and there's only one repository, that repository will be used automatically.",
                             },
                         ],
                         required=["file_path"],
-                    ),
-                    FunctionTool(
-                        name="keyword_search",
-                        ],
-                        required=["file_path", "repo_name"],
                     ),
                     FunctionTool(
                         name="keyword_search",
