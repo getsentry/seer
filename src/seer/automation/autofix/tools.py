@@ -109,7 +109,7 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str = None):
+    def expand_document(self, file_path: str, repo_name: str | None = None):
         # If repo_name is not provided, try to determine it automatically
         if repo_name is None:
             repo_names = self._get_repo_names()
