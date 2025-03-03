@@ -1,3 +1,4 @@
+import logging
 import textwrap
 
 import numpy as np
@@ -27,6 +28,8 @@ from seer.automation.component import BaseComponent
 from seer.automation.models import EventDetails, IssueDetails
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
+
+logger = logging.getLogger(__name__)
 
 
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
@@ -62,14 +65,14 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
         ]
         if not pr_files_eligible:
-            self.logger.info("No eligible files in PR.")
+            logger.info("No eligible files in PR.")
             return {}
 
         if not provider.startswith("integrations:"):
             # TODO(kddubey): need to come up with something more general
             provider = f"integrations:{provider}"
 
-        self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
+        logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
 
         pr_files_eligible = pr_files_eligible[:max_files_analyzed]
         filename_to_issues = client.call(
@@ -146,10 +149,10 @@ class AssociateWarningsWithIssuesComponent(
         # calls can match any relevant warnings to it. The filename is not the strongest signal.
 
         if not request.warnings:
-            self.logger.info("No warnings to associate with issues.")
+            logger.info("No warnings to associate with issues.")
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
         if not issue_id_to_issue_with_pr_filename:
-            self.logger.info("No issues to associate with warnings.")
+            logger.info("No issues to associate with warnings.")
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
 
         issues_with_pr_filename = list(issue_id_to_issue_with_pr_filename.values())
@@ -224,7 +227,7 @@ class AreIssuesFixableComponent(
             try:
                 is_fixable = _is_issue_fixable(issue_id_to_issue[issue_id])
             except (openai.APITimeoutError, openai.InternalServerError) as exception:
-                self.logger.warning(f"Error checking if issue {issue_id} is fixable: {exception}")
+                logger.warning(f"Error checking if issue {issue_id} is fixable: {exception}")
                 is_fixable = True  # default to true to avoid skipping issues
             issue_id_to_is_fixable[issue_id] = is_fixable
         return CodeAreIssuesFixableOutput(
@@ -268,7 +271,7 @@ class PredictRelevantWarningsComponent(
                 timeout=15.0,
             )
             if completion.parsed is None:  # Gemini quirk
-                self.logger.warning(
+                logger.warning(
                     f"No response from LLM for warning {warning.id} and issue {issue.id}"
                 )
                 continue
