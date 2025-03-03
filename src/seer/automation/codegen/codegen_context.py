@@ -90,3 +90,14 @@ class CodegenContext(PipelineContext):
                 .one_or_none()
             )
         return pr_context
+
+    def store_unit_test_memory(
+        self, owner: str, repo: str, pr_id: int
+    ) -> DbPrContextToUnitTestGenerationRunIdMapping | None:
+        with Session() as session:
+            pr_context = (
+                session.query(DbPrContextToUnitTestGenerationRunIdMapping)
+                .filter_by(owner=owner, repo=repo, pr_id=pr_id)
+                .one_or_none()
+            )
+        return pr_context
