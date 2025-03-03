@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Allow statements and log messages to immediately appear in the Cloud Run logs
 ARG TEST
@@ -17,7 +17,9 @@ RUN apt-get update && \
     supervisor \
     curl \
     libpq-dev \
-    git && \
+    git \
+    gcc \
+    g++ && \
     rm -rf /var/lib/apt/lists/*
 
 # Install td-grpc-bootstrap
@@ -28,9 +30,13 @@ RUN curl -L https://storage.googleapis.com/traffic-director/td-grpc-bootstrap-0.
 # Install dependencies
 COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
+RUN pip install setuptools==69.*
 # pytorch without gpu
-RUN pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install torch==2.6.* --index-url https://download.pytorch.org/whl/cpu
 RUN pip install -r requirements.txt --no-cache-dir
+
+RUN pip install codegen==0.33.*
+RUN pip install numpy==1.*
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
