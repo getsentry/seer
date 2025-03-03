@@ -58,6 +58,15 @@ class CodeSearcher:
         Smart file reader that attempts to detect and handle different file encodings.
         Returns list of lines if successful, None if file cannot be read.
         """
+        # Check file size before attempting to read
+        try:
+            if os.path.getsize(file_path) > self.max_file_size_bytes:
+                logger.debug(f"Skipping {file_path} as it exceeds the maximum file size limit.")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to check file size for {file_path}: {str(e)}")
+            return None
+
         # First try: Read a sample to detect encoding
         try:
             # Read only first 256KB to detect encoding for large files
