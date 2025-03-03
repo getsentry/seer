@@ -36,6 +36,7 @@ class AnomalyDetector(BaseModel, abc.ABC):
     Abstract base class for anomaly detection logic.
     """
 
+    @inject
     @abc.abstractmethod
     def detect(
         self,

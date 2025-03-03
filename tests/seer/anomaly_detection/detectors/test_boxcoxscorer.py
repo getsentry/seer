@@ -148,46 +148,6 @@ class TestBoxCoxScorer:
         assert result.flags[0] == "anomaly_higher_confidence"
         assert result.scores[0] > box_cox_scorer.z_score_thresholds["medium"]
 
-    @pytest.mark.skip("Skipping direction handling test")
-    def test_direction_handling(self, box_cox_scorer):
-        # Test different direction configurations
-        mp_dist = np.arange(1.0, 50.0, 1.0)
-        mp_dist[-1] = 200.0  # Last value is anomalous
-        timestamps = np.arange(len(mp_dist), dtype=np.float64)
-        values = np.arange(1.0, 50.0, 1.0)
-        values[-1] = 200.0  # Last value is anomalous
-        # Test "up" direction with upward anomaly
-        up_config = AnomalyDetectionConfig(
-            time_period=15,
-            sensitivity="high",
-            direction="up",
-            expected_seasonality="auto",
-        )
-        result = box_cox_scorer.batch_score(
-            values=values,
-            timestamps=timestamps,
-            mp_dist=mp_dist,
-            ad_config=up_config,
-            window_size=10,
-        )
-        assert result.flags[-1] == "anomaly_higher_confidence"
-
-        # Test "down" direction with upward anomaly
-        down_config = AnomalyDetectionConfig(
-            time_period=15,
-            sensitivity="medium",
-            direction="down",
-            expected_seasonality="auto",
-        )
-        result = box_cox_scorer.batch_score(
-            values=values,
-            timestamps=timestamps,
-            mp_dist=mp_dist,
-            ad_config=down_config,
-            window_size=10,
-        )
-        assert result.flags[-1] == "none"
-
     def test_sensitivity_levels(self, box_cox_scorer):
         # Test different sensitivity levels
         values = np.array([1.0, 2.0, 3.0, 4.0, 6.0])  # Last value is mildly anomalous

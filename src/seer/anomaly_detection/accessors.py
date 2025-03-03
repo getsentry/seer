@@ -313,7 +313,6 @@ class DbAlertDataAccessor(AlertDataAccessor):
             )
             session.add(new_record)
             session.commit()
-            session.refresh(new_record, attribute_names=["id"])
             return new_record.id
 
     @sentry_sdk.trace
