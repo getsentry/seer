@@ -8,7 +8,7 @@ from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import DbStateRunTypes
-from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
+from seer.db import DbPrContextToUnitTestGenerationRunIdMapping, Session
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,13 @@ class CodegenContext(PipelineContext):
 
         return file_contents
 
-    def get_unit_test_memory(self, owner: str, repo: str, pr_id: int) -> list[Message]:
-        return DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
-            owner=self.request.owner,
-            repo=self.request.repo_definition.name,
-            pr_id=self.request.pr_id,
-        ).first()
+    def get_unit_test_memory(
+        self, owner: str, repo: str, pr_id: int
+    ) -> DbPrContextToUnitTestGenerationRunIdMapping | None:
+        with Session() as session:
+            pr_context = (
+                session.query(DbPrContextToUnitTestGenerationRunIdMapping)
+                .filter(owner == owner, repo == repo, pr_id == pr_id)
+                .one_or_none()
+            )
+        return pr_context

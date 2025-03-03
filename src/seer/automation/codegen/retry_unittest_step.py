@@ -57,28 +57,22 @@ class RetryUnittestStep(CodegenStep):
             type=RepoClientType.CODECOV_PR_REVIEW
         )  # Codecov-ai GH app
         pr = repo_client.repo.get_pull(self.request.pr_id)
+
         codecov_status = self.request.codecov_status["check_run"]["conclusion"]
+        saved_memory = self.context.get_unit_test_memory(
+            self.request.owner, self.request.repo_definition.name, self.request.pr_id
+        )
+
+        if not saved_memory:
+            raise RuntimeError("Unable to find PR context to retry unit tests")
 
         if codecov_status == "success":
-            saved_memory = DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
-                owner=self.request.owner,
-                repo=self.request.repo_definition.name,
-                pr_id=self.request.pr_id,
-            ).first()
-
             repo_client.post_unit_test_reference_to_original_pr(
                 saved_memory.original_pr_url, pr.html_url
             )
 
         else:
-            past_run = DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
-                owner=self.request.owner,
-                repo=self.request.repo_definition.name,
-                pr_id=self.request.pr_id,
-            ).first()
-            if not past_run:
-                return
-            if past_run.iterations == 3:
+            if saved_memory.iterations == 3:
                 # TODO: Fetch the "best" run and update the PR
                 return
             else:

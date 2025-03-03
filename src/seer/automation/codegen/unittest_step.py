@@ -15,7 +15,6 @@ from seer.automation.codegen.unit_test_coding_component import UnitTestCodingCom
 from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
-from seer.automation.utils import determine_mapped_unit_test_run_id
 
 
 class UnittestStepRequest(PipelineStepTaskRequest):
