@@ -101,11 +101,18 @@ class CombinedAnomalyScorer(AnomalyScorer):
             Combined flags and scores from MP and Prophet scoring methods
         """
 
+        # If we are going to apply prophet scoring, use a higher sensitivity for MP scoring
+        ad_config_for_mp = (
+            ad_config
+            if prophet_df is None or prophet_df.empty
+            else ad_config.model_copy(update={"sensitivity": "high"})
+        )
+
         mp_flags_and_scores = self.mp_scorer.batch_score(
             values=values,
             timestamps=timestamps,
             mp_dist=mp_dist,
-            ad_config=ad_config,
+            ad_config=ad_config_for_mp,
             window_size=window_size,
             algo_config=algo_config,
         )
@@ -138,6 +145,13 @@ class CombinedAnomalyScorer(AnomalyScorer):
         window_size: int,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
+
+        # If we are going to apply prophet scoring, use a higher sensitivity for MP scoring
+        ad_config_for_mp = (
+            ad_config
+            if prophet_df is None or prophet_df.empty
+            else ad_config.model_copy(update={"sensitivity": "high"})
+        )
         mp_flags_and_scores = self.mp_scorer.stream_score(
             streamed_value=streamed_value,
             streamed_timestamp=streamed_timestamp,
@@ -145,7 +159,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             history_values=history_values,
             history_timestamps=history_timestamps,
             history_mp_dist=history_mp_dist,
-            ad_config=ad_config,
+            ad_config=ad_config_for_mp,
             window_size=window_size,
             algo_config=algo_config,
         )
@@ -216,16 +230,17 @@ class CombinedAnomalyScorer(AnomalyScorer):
             for timestamp, mp_flag in zip(timestamps, mp_flags):
                 if pd.to_datetime(timestamp) in prophet_map["flag"]:
                     found += 1
-                    prophet_flag = prophet_map["flag"][pd.to_datetime(timestamp)]
-                    prophet_score = prophet_map["score"][pd.to_datetime(timestamp)]
+                    pd_dt = pd.to_datetime(timestamp)
+                    prophet_flag = prophet_map["flag"][pd_dt]
+                    prophet_score = prophet_map["score"][pd_dt]
                     prophet_flag = self._adjust_prophet_flag_for_location(
                         mp_flag=mp_flag,
                         prev_mp_flag=previous_mp_flag,
                         prophet_flag=prophet_flag,
-                        y=prophet_map["y"],
-                        yhat=prophet_map["yhat"],
-                        yhat_lower=prophet_map["yhat_lower"],
-                        yhat_upper=prophet_map["yhat_upper"],
+                        y=prophet_map["y"][pd_dt],
+                        yhat=prophet_map["yhat"][pd_dt],
+                        yhat_lower=prophet_map["yhat_lower"][pd_dt],
+                        yhat_upper=prophet_map["yhat_upper"][pd_dt],
                         direction=ad_config.direction,
                     )
                     if (
