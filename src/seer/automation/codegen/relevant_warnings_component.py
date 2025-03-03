@@ -39,9 +39,9 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
 
     context: CodegenContext
 
+    @staticmethod
     @inject
     def _fetch_issues(
-        self,
         organization_id: int,
         provider: str,
         external_id: str,
