@@ -114,13 +114,11 @@ def _mock_static_analysis_warning():
     return static_analysis_warning
 
 
-def _mock_issue_details(issue_id: int | None = None):
+def _mock_issue_details():
     """
     Creates an issue which is guaranteed to have an event.
     """
     issue_details = _MockIssueDetails()
-    if issue_id is not None:
-        issue_details.id = issue_id
     issue_details.events = [next(generate(SentryEventData))]
     return issue_details
 
@@ -128,7 +126,7 @@ def _mock_issue_details(issue_id: int | None = None):
 class TestAssociateWarningsWithIssuesComponent:
     @pytest.fixture
     def component(self):
-        return AssociateWarningsWithIssuesComponent(context=None)
+        return AssociateWarningsWithIssuesComponent(context=MagicMock())
 
     # Patch instead of VCR so that embeddings don't depend on the texts inputted, which are
     # derived from johen-generated objects.
@@ -210,9 +208,9 @@ class TestAssociateWarningsWithIssuesComponent:
 class TestAreIssuesFixableComponent:
     @pytest.fixture
     def component(self):
-        return AreIssuesFixableComponent(context=None)
+        return AreIssuesFixableComponent(context=MagicMock())
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
 
         def mock_generate_structured(*args, **kwargs):
@@ -230,7 +228,7 @@ class TestAreIssuesFixableComponent:
             mock_generate_structured,
         )
 
-    def test_invoke(self, component: AreIssuesFixableComponent):
+    def test_invoke(self, component: AreIssuesFixableComponent, patch_generate_structured):
         max_num_issues_analyzed = 3
         issues_unique = [_mock_issue_details() for _ in range(4)]
         candidate_issues = [
@@ -255,7 +253,7 @@ class TestAreIssuesFixableComponent:
         assert len(request.candidate_issues) == len(candidate_issues)
         assert len(output.are_fixable) == len(request.candidate_issues)
 
-        # Test that max_num_issues_analyzed were analyzed
+        # Test that num_issues_analyzed_expected were analyzed
         assert (
             sum(is_fixable is not None for is_fixable in output.are_fixable)
             == num_issues_analyzed_expected
@@ -267,14 +265,44 @@ class TestAreIssuesFixableComponent:
         issue_id_to_are_fixable = defaultdict(set)
         for issue, is_fixable in zip(candidate_issues, output.are_fixable, strict=True):
             issue_id_to_are_fixable[issue.id].add(is_fixable)
-        for issue_id, are_fixables in issue_id_to_are_fixable.items():
-            assert len(are_fixables) == 1, issue_id
+        for issue_id, are_fixable in issue_id_to_are_fixable.items():
+            assert len(are_fixable) == 1, issue_id
+
+    @pytest.fixture
+    def patch_generate_structured_failure(self, monkeypatch: pytest.MonkeyPatch):
+
+        def mock_generate_structured(*args, **kwargs):
+            completion = next(
+                generate(LlmGenerateStructuredResponse[IsFixableIssuePrompts.IsIssueFixable])
+            )
+            object.__setattr__(completion, "parsed", None)
+            return completion
+
+        monkeypatch.setattr(
+            "seer.automation.codegen.relevant_warnings_component.LlmClient.generate_structured",
+            mock_generate_structured,
+        )
+
+    def test_invoke_with_failed_completion(
+        self, component: AreIssuesFixableComponent, patch_generate_structured_failure
+    ):
+        max_num_issues_analyzed = 1
+        candidate_issues = [_mock_issue_details()]
+
+        request = CodeAreIssuesFixableRequest(
+            candidate_issues=candidate_issues,
+            max_num_issues_analyzed=max_num_issues_analyzed,
+        )
+        output: CodeAreIssuesFixableOutput = component.invoke(request)
+
+        assert len(request.candidate_issues) == len(candidate_issues)
+        assert output.are_fixable == [True]  # b/c it defaults to fixable
 
 
 class TestPredictRelevantWarningsComponent:
     @pytest.fixture
     def component(self):
-        return PredictRelevantWarningsComponent(context=None)
+        return PredictRelevantWarningsComponent(context=MagicMock())
 
     @pytest.fixture(autouse=True)
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):

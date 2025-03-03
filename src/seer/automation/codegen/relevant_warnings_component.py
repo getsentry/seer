@@ -2,13 +2,12 @@ import logging
 import textwrap
 
 import numpy as np
-import openai
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
 from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
@@ -189,7 +188,7 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
     # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
     # a repo has a set of files which are frequently used to handle and raise exceptions.
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),  # TODO(kddubey): use flash?
+        model=GeminiProvider.model("gemini-2.0-flash-lite"),
         system_prompt=IsFixableIssuePrompts.format_system_msg(),
         prompt=IsFixableIssuePrompts.format_prompt(
             formatted_error=EventDetails.from_event(
@@ -199,8 +198,9 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
         response_format=IsFixableIssuePrompts.IsIssueFixable,
         temperature=0.0,
         max_tokens=64,
-        timeout=5.0,
     )
+    if completion.parsed is None:
+        raise ValueError("No structured output from LLM.")
     return completion.parsed.is_fixable
 
 
@@ -220,16 +220,17 @@ class AreIssuesFixableComponent(
         It's fine if there are duplicate issues in the request. That can happen if issues were
         passed in from a list of warning-issue associations.
         """
-        # TODO(kddubey): can instead batch and send uncached issues in one prompt.
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
         issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
         issue_id_to_is_fixable = {}
         for issue_id in issue_ids:
             try:
                 is_fixable = _is_issue_fixable(issue_id_to_issue[issue_id])
-            except (openai.APITimeoutError, openai.InternalServerError) as exception:
-                logger.warning(f"Error checking if issue {issue_id} is fixable: {exception}")
-                is_fixable = True  # default to true to avoid skipping issues
+            except Exception:
+                # It's not critical that this component makes an actual prediction.
+                # Assume it's fixable b/c the next (predict relevancy) step handles it.
+                logger.exception("Error predicting fixability of issue")
+                is_fixable = True
             issue_id_to_is_fixable[issue_id] = is_fixable
         return CodeAreIssuesFixableOutput(
             are_fixable=[issue_id_to_is_fixable.get(issue.id) for issue in request.candidate_issues]
@@ -259,7 +260,7 @@ class PredictRelevantWarningsComponent(
         for warning, issue in request.candidate_associations:
             logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
             completion = llm_client.generate_structured(
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
+                model=GeminiProvider.model("gemini-2.0-flash-lite"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
                     formatted_warning=warning.format_warning(),
