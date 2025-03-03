@@ -8,7 +8,6 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
-
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
