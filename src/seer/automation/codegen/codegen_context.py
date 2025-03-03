@@ -86,7 +86,7 @@ class CodegenContext(PipelineContext):
         with Session() as session:
             pr_context = (
                 session.query(DbPrContextToUnitTestGenerationRunIdMapping)
-                .filter(owner == owner, repo == repo, pr_id == pr_id)
+                .filter_by(owner=owner, repo=repo, pr_id=pr_id)
                 .one_or_none()
             )
         return pr_context
