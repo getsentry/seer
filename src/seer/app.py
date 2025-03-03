@@ -376,7 +376,6 @@ def ready_check(app_config: AppConfig = injected):
     from seer.inference_models import models_loading_status
 
     status = models_loading_status()
-    logger.info(f"Model loading status: {status}")
     if app_config.SMOKE_CHECK:
         smoke_status = check_smoke_test()
         logger.info(f"Celery smoke status: {smoke_status}")

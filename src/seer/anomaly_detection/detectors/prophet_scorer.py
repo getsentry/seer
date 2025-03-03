@@ -4,15 +4,25 @@ from pydantic import BaseModel, Field
 
 
 class ProphetScorer(BaseModel):
-    low_threshold: float = Field(default=0.0)
-    high_threshold: float = Field(default=0.3)
+    def batch_score(self, df: pd.DataFrame) -> pd.DataFrame:
+        return NotImplemented
 
-    def scale_scores(self, df: pd.DataFrame):
+
+class ProphetScaledSmoothedScorer(ProphetScorer):
+    """
+    Generate anomaly scores by comparing observed values to
+    yhat_lower and yhat_upper (confidence interval) and
+    scaling by standard deviation.
+    """
+
+    low_threshold: float = Field(default=0.0, description="The low threshold for the anomaly score")
+
+    high_threshold: float = Field(
+        default=0.3, description="The high threshold for the anomaly score"
+    )
+
+    def batch_score(self, df: pd.DataFrame):
         """
-        Generate anomaly scores by comparing observed values to
-        yhat_lower and yhat_upper (confidence interval) and
-        scaling by standard deviation.
-
         Identify anomalies by smoothing scores (10 period moving avg) and
         then comparing results to preset thresholds.
 

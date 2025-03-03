@@ -1,53 +1,17 @@
-import time
 from unittest import mock
-from unittest.mock import Mock
 
 import numpy as np
 import pytest
-import stumpy
 from scipy import stats
 
-from seer.anomaly_detection.detectors import MPUtils, WindowSizeSelector
 from seer.anomaly_detection.detectors.mp_boxcox_scorer import MPBoxCoxScorer
-from seer.anomaly_detection.models import (
-    AlgoConfig,
-    AnomalyDetectionConfig,
-    PointLocation,
-    RelativeLocation,
-    Threshold,
-    ThresholdType,
-)
-from seer.dependency_injection import resolve
-from seer.exceptions import ClientError, ServerError
-from tests.seer.anomaly_detection.test_utils import test_data_with_cycles
+from seer.anomaly_detection.models import AnomalyDetectionConfig
+from seer.exceptions import ClientError
 
 
 @pytest.fixture
 def box_cox_scorer():
     return MPBoxCoxScorer()
-
-
-@pytest.fixture
-def mock_location_detector():
-    detector = Mock()
-    detector.detect.return_value = RelativeLocation(
-        location=PointLocation.UP,
-        thresholds=[
-            Threshold(type=ThresholdType.PREDICTION, timestamp=10.0, upper=10.0, lower=5.0)
-        ],
-    )
-    return detector
-
-
-@pytest.fixture
-def mock_slow_location_detector():
-    def slow_function(streamed_value, streamed_timestamp, history_values, history_timestamps):
-        time.sleep(0.05)  # Simulate a 50ms delay.
-        return None
-
-    detector = Mock()
-    detector.detect.side_effect = slow_function
-    return detector
 
 
 @pytest.fixture
@@ -114,9 +78,7 @@ class TestBoxCoxScorer:
         with pytest.raises(ClientError):
             box_cox_scorer._get_z_scores(values, "invalid")
 
-    def test_batch_score_normal_distribution(
-        self, box_cox_scorer, mock_location_detector, basic_ad_config
-    ):
+    def test_batch_score_normal_distribution(self, box_cox_scorer, basic_ad_config):
         # Generate normally distributed data with one obvious outlier
         values = np.concatenate([np.random.normal(10, 2, 99), [20.0]])
         mp_dist = np.concatenate([np.random.normal(10, 2, 99), [20.0]])  # Not used by BoxCoxScorer
@@ -128,7 +90,6 @@ class TestBoxCoxScorer:
             mp_dist=mp_dist,
             ad_config=basic_ad_config,
             window_size=10,
-            location_detector=mock_location_detector,
         )
 
         assert len(result.flags) == len(values)
@@ -139,9 +100,7 @@ class TestBoxCoxScorer:
         assert result.flags[-1] == "anomaly_higher_confidence"
         assert result.scores[-1] > box_cox_scorer.z_score_thresholds["medium"]
 
-    def test_batch_score_constant_data(
-        self, box_cox_scorer, mock_location_detector, basic_ad_config
-    ):
+    def test_batch_score_constant_data(self, box_cox_scorer, basic_ad_config):
         # Test with constant data (std = 0)
         mp_dist = np.ones(100)
         timestamps = np.arange(len(mp_dist), dtype=np.float64)
@@ -153,7 +112,6 @@ class TestBoxCoxScorer:
             mp_dist=mp_dist,
             ad_config=basic_ad_config,
             window_size=10,
-            location_detector=mock_location_detector,
         )
 
         assert len(result.flags) == len(values)
@@ -164,7 +122,7 @@ class TestBoxCoxScorer:
         assert result.flags[-1] == "none"
         assert result.scores[-1] == 0
 
-    def test_stream_score(self, box_cox_scorer, mock_location_detector, basic_ad_config):
+    def test_stream_score(self, box_cox_scorer, basic_ad_config):
         # Test streaming with normal history and anomalous new point
         history_mp_dist = np.random.normal(10, 2, 99)
         history_timestamps = np.arange(len(history_mp_dist), dtype=np.float64)
@@ -182,7 +140,6 @@ class TestBoxCoxScorer:
             history_mp_dist=history_mp_dist,
             ad_config=basic_ad_config,
             window_size=10,
-            location_detector=mock_location_detector,
         )
 
         assert len(result.flags) == 1
@@ -191,52 +148,7 @@ class TestBoxCoxScorer:
         assert result.flags[0] == "anomaly_higher_confidence"
         assert result.scores[0] > box_cox_scorer.z_score_thresholds["medium"]
 
-    def test_direction_handling(self, box_cox_scorer, mock_location_detector):
-        # Test different direction configurations
-        mp_dist = np.arange(1.0, 50.0, 1.0)
-        mp_dist[-1] = 200.0  # Last value is anomalous
-        timestamps = np.arange(len(mp_dist), dtype=np.float64)
-        values = np.arange(1.0, 50.0, 1.0)
-        values[-1] = 200.0  # Last value is anomalous
-        # Test "up" direction with upward anomaly
-        up_config = AnomalyDetectionConfig(
-            time_period=15,
-            sensitivity="high",
-            direction="up",
-            expected_seasonality="auto",
-        )
-        result = box_cox_scorer.batch_score(
-            values=values,
-            timestamps=timestamps,
-            mp_dist=mp_dist,
-            ad_config=up_config,
-            window_size=10,
-            location_detector=mock_location_detector,
-        )
-        assert result.flags[-1] == "anomaly_higher_confidence"
-
-        # Test "down" direction with upward anomaly
-        mock_location_detector.detect.return_value = RelativeLocation(
-            location=PointLocation.UP,
-            thresholds=[],
-        )
-        down_config = AnomalyDetectionConfig(
-            time_period=15,
-            sensitivity="medium",
-            direction="down",
-            expected_seasonality="auto",
-        )
-        result = box_cox_scorer.batch_score(
-            values=values,
-            timestamps=timestamps,
-            mp_dist=mp_dist,
-            ad_config=down_config,
-            window_size=10,
-            location_detector=mock_location_detector,
-        )
-        assert result.flags[-1] == "none"
-
-    def test_sensitivity_levels(self, box_cox_scorer, mock_location_detector):
+    def test_sensitivity_levels(self, box_cox_scorer):
         # Test different sensitivity levels
         values = np.array([1.0, 2.0, 3.0, 4.0, 6.0])  # Last value is mildly anomalous
         timestamps = np.arange(len(values), dtype=np.float64)
@@ -255,7 +167,6 @@ class TestBoxCoxScorer:
             mp_dist=mp_dist,
             ad_config=high_config,
             window_size=10,
-            location_detector=mock_location_detector,
         )
         high_anomaly_count = sum(1 for flag in result.flags if flag != "none")
 
@@ -272,46 +183,8 @@ class TestBoxCoxScorer:
             mp_dist=mp_dist,
             ad_config=low_config,
             window_size=10,
-            location_detector=mock_location_detector,
         )
         low_anomaly_count = sum(1 for flag in result.flags if flag != "none")
 
         # High sensitivity should detect more anomalies than low sensitivity
         assert high_anomaly_count >= low_anomaly_count
-
-    def test_abandon_batch_detection_if_time_budget_is_exceeded(self, mock_slow_location_detector):
-        box_cox_scorer = MPBoxCoxScorer()
-
-        mp_utils = resolve(MPUtils)
-        ws_selector = resolve(WindowSizeSelector)
-        ad_config = AnomalyDetectionConfig(
-            time_period=60, sensitivity="high", direction="up", expected_seasonality="auto"
-        )
-        algo_config = resolve(AlgoConfig)
-        df = test_data_with_cycles(num_days=29, num_anomalous=15)
-        window_size = ws_selector.optimal_window_size(df["value"].values)
-        mp = stumpy.stump(
-            df["value"].values,
-            m=max(3, window_size),
-            ignore_trivial=algo_config.mp_ignore_trivial,
-            normalize=False,
-        )
-
-        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
-        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(df["value"].values))
-        time_budget_ms = 100
-        with pytest.raises(ServerError) as ex:
-            box_cox_scorer.batch_score(
-                df["value"].values,
-                df["timestamp"].values,
-                mp_dist,
-                ad_config=ad_config,
-                algo_config=algo_config,
-                window_size=window_size,
-                time_budget_ms=time_budget_ms,
-                location_detector=mock_slow_location_detector,
-            )
-            assert mock_slow_location_detector.call_count >= 2
-            assert mock_slow_location_detector.call_count <= 10
-        # Since slow func sleeps for 50 ms and timeout is 100ms, location detection should be called at least twice and upto 10 which is the batch size.
-        assert "Batch detection took too long" in str(ex.value)

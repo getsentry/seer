@@ -4,9 +4,12 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import Field
 
-from seer.anomaly_detection.detectors.location_detectors import LocationDetector
 from seer.anomaly_detection.detectors.mp_boxcox_scorer import MPBoxCoxScorer
-from seer.anomaly_detection.detectors.mp_scorers import FlagsAndScores, LowVarianceScorer, MPScorer
+from seer.anomaly_detection.detectors.mp_scorers import (
+    FlagsAndScores,
+    MPLowVarianceScorer,
+    MPScorer,
+)
 from seer.anomaly_detection.models import AlgoConfig, AnomalyDetectionConfig
 from seer.dependency_injection import inject, injected
 
@@ -21,7 +24,7 @@ class MPCascadingScorer(MPScorer):
     """
 
     scorers: list[MPScorer] = Field(
-        [LowVarianceScorer(), MPBoxCoxScorer()], description="The list of scorers to cascade"
+        [MPLowVarianceScorer(), MPBoxCoxScorer()], description="The list of scorers to cascade"
     )
 
     @inject
@@ -34,7 +37,6 @@ class MPCascadingScorer(MPScorer):
         window_size: int,
         time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
-        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.batch_score(
@@ -45,7 +47,6 @@ class MPCascadingScorer(MPScorer):
                 window_size,
                 time_budget_ms,
                 algo_config,
-                location_detector,
             )
             if flags_and_scores is not None:
                 return flags_and_scores
@@ -63,7 +64,6 @@ class MPCascadingScorer(MPScorer):
         ad_config: AnomalyDetectionConfig,
         window_size: int,
         algo_config: AlgoConfig = injected,
-        location_detector: LocationDetector = injected,
     ) -> Optional[FlagsAndScores]:
         for scorer in self.scorers:
             flags_and_scores = scorer.stream_score(
@@ -76,7 +76,6 @@ class MPCascadingScorer(MPScorer):
                 ad_config,
                 window_size,
                 algo_config,
-                location_detector,
             )
             if flags_and_scores is not None:
                 return flags_and_scores
