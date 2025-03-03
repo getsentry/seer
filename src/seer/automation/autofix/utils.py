@@ -5,7 +5,6 @@ from rapidfuzz import fuzz, process
 
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/"
 
-
 def get_last_non_empty_line(text: str) -> str:
     """
     This function returns the last non-empty line in a piece of text.
@@ -21,7 +20,6 @@ def get_last_non_empty_line(text: str) -> str:
         if line.strip() != "":
             return line
     return ""
-
 
 @observe(name="Find original snippet")
 def find_original_snippet(
@@ -89,23 +87,28 @@ def find_original_snippet(
             best_score = full_score
             best_match = ("\n".join(file_lines[start_index:actual_end]), start_index, actual_end)
 
-    return best_match
 
+    return best_match
 
 def sanitize_branch_name(title: str) -> str:
     """
     Remove all characters that are not valid in git branch names
     and return a kebab-case branch name from the title.
+    Also ensures the branch name doesn't end with a slash.
     """
     kebab_case = title.replace(" ", "-").replace("_", "-").lower()
     sanitized = "".join(c for c in kebab_case if c in VALID_BRANCH_NAME_CHARS)
+    # Remove trailing slashes
+    while sanitized.endswith('/'):
+        sanitized = sanitized[:-1]
+    # Ensure no empty segments between slashes
+    if not sanitized:
+        return "autofix-branch"
     return sanitized
-
 
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
     return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
-
 
 def remove_code_backticks(text: str) -> str:
     """Remove code backticks from a string."""
