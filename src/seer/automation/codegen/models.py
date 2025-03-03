@@ -1,12 +1,14 @@
 import datetime
 from enum import Enum
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from seer.automation.agent.models import Message
 from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
+from seer.db import DbRunMemory
 
 
 class CodegenStatus(str, Enum):
@@ -45,6 +47,7 @@ class CodeUnitTestOutput(BaseComponentOutput):
 class CodegenBaseRequest(BaseModel):
     repo: RepoDefinition
     pr_id: int  # The PR number
+    codecov_status: Optional[dict] = None
 
 
 class CodegenUnitTestsRequest(CodegenBaseRequest):
@@ -208,4 +211,4 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
 class CodecovTaskRequest(BaseModel):
     data: CodegenUnitTestsRequest | CodegenPrReviewRequest | CodegenRelevantWarningsRequest
     external_owner_id: str
-    request_type: Literal["unit-tests", "pr-review", "relevant-warnings"]
+    request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "retry-unit-tests"]

@@ -20,6 +20,7 @@ class DbStateRunTypes(str, Enum):
     UNIT_TEST = "unit-test"
     PR_REVIEW = "pr-review"
     RELEVANT_WARNINGS = "relevant-warnings"
+    UNIT_TESTS_RETRY = "unit-test-retry"
 
 
 class State(abc.ABC, Generic[_State]):

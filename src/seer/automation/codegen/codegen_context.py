@@ -1,5 +1,6 @@
 import logging
 
+from seer.automation.agent.models import Message
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
 from seer.automation.codegen.models import CodegenContinuation
@@ -7,6 +8,7 @@ from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import DbStateRunTypes
+from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
 
 logger = logging.getLogger(__name__)
 
@@ -77,3 +79,10 @@ class CodegenContext(PipelineContext):
                 file_contents = file_change.apply(file_contents)
 
         return file_contents
+
+    def get_unit_test_memory(self, owner: str, repo: str, pr_id: int) -> list[Message]:
+        return DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
+            owner=self.request.owner,
+            repo=self.request.repo_definition.name,
+            pr_id=self.request.pr_id,
+        ).first()
