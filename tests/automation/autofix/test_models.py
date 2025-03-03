@@ -242,7 +242,7 @@ class TestStacktraceHelpers(unittest.TestCase):
 class TestRepoDefinition(unittest.TestCase):
     def test_repo_definition_creation(self):
         repo_def = RepoDefinition(
-            provider="github", owner="seer", name="automation", external_id="123"
+            provider="integrations:github", owner="seer", name="automation", external_id="123"
         )
         self.assertEqual(repo_def.provider, "github")
         self.assertEqual(repo_def.owner, "seer")
@@ -272,6 +272,7 @@ class TestRepoDefinition(unittest.TestCase):
             provider="integrations:github", owner="seer", name="automation", external_id="123"
         )
         self.assertEqual(repo_def.provider, "github")
+        self.assertEqual(repo_def.provider_raw, "integrations:github")
         self.assertEqual(repo_def.owner, "seer")
         self.assertEqual(repo_def.name, "automation")
 
