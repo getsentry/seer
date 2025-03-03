@@ -102,11 +102,13 @@ def _mock_static_analysis_warning():
     return static_analysis_warning
 
 
-def _mock_issue_details():
+def _mock_issue_details(issue_id: int | None = None):
     """
     Creates an issue which is guaranteed to have an event.
     """
     issue_details = _MockIssueDetails()
+    if issue_id is not None:
+        issue_details.id = issue_id
     issue_details.events = [next(generate(SentryEventData))]
     return issue_details
 
@@ -114,7 +116,7 @@ def _mock_issue_details():
 class TestAssociateWarningsWithIssuesComponent:
     @pytest.fixture
     def component(self):
-        return AssociateWarningsWithIssuesComponent(context=MagicMock())
+        return AssociateWarningsWithIssuesComponent(context=None)
 
     # Patch instead of VCR so that embeddings don't depend on the texts inputted, which are
     # derived from johen-generated objects.
@@ -196,7 +198,7 @@ class TestAssociateWarningsWithIssuesComponent:
 class TestAreIssuesFixableComponent:
     @pytest.fixture
     def component(self):
-        return AreIssuesFixableComponent(context=MagicMock())
+        return AreIssuesFixableComponent(context=None)
 
     @pytest.fixture(autouse=True)
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
@@ -260,7 +262,7 @@ class TestAreIssuesFixableComponent:
 class TestPredictRelevantWarningsComponent:
     @pytest.fixture
     def component(self):
-        return PredictRelevantWarningsComponent(context=MagicMock())
+        return PredictRelevantWarningsComponent(context=None)
 
     @pytest.fixture(autouse=True)
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
