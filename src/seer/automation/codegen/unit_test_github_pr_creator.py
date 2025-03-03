@@ -54,6 +54,13 @@ class GeneratedTestsPullRequestCreator:
             provided_base=self.pr.head.ref,
         )
 
+        self.store_pr_context(new_pr=new_pr, original_pr=self.pr)
+
+        original_pr_url = self.pr.html_url
+        new_pr_url = new_pr.html_url
+        self.repo_client.post_unit_test_reference_to_original_pr(original_pr_url, new_pr_url)
+
+    def store_pr_context(self, new_pr: PullRequest, original_pr: PullRequest):
         with Session() as session:
             pr_id_mapping = DbPrContextToUnitTestGenerationRunIdMapping(
                 provider="github",
@@ -62,10 +69,8 @@ class GeneratedTestsPullRequestCreator:
                 pr_id=new_pr.id,
                 iterations=0,
                 run_id=self.unit_test_run_id,
+                original_pr_url=self.pr.html_url,
             )
             session.add(pr_id_mapping)
             session.commit()
-
-        original_pr_url = self.pr.html_url
-        new_pr_url = new_pr.html_url
-        self.repo_client.post_unit_test_reference_to_original_pr(original_pr_url, new_pr_url)
+            print("SAVED TO DB")

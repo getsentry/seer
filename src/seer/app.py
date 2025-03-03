@@ -290,7 +290,9 @@ def codegen_pr_review_state_endpoint(
 
 @json_api(blueprint, "/v1/automation/codegen/retry-unit-tests")
 def codegen_retry_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsResponse:
-    return codegen_retry_unittest(data)
+    raise NotImplementedError("Retry unit tests is not implemented yet.")
+    # TODO: Finish implementation of retry-unit-tests
+    # return codegen_retry_unittest(data)
 
 
 @json_api(blueprint, "/v1/automation/codecov-request")
@@ -308,8 +310,9 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
-    elif data.request_type == "retry-unit-tests":
-        return codegen_retry_unit_tests_endpoint(data.data)
+    # TODO: Finish implementation of retry-unit-tests
+    # elif data.request_type == "retry-unit-tests":
+    #     return codegen_retry_unit_tests_endpoint(data.data)
 
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 

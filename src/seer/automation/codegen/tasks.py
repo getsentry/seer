@@ -158,6 +158,7 @@ def codegen_retry_unittest(request: CodegenBaseRequest, app_config: AppConfig = 
         run_id=cur_state.run_id,
         pr_id=request.pr_id,
         repo_definition=request.repo,
+        codecov_status=request.codecov_status,
     )
     RetryUnittestStep.get_signature(
         retry_unittest_request, queue=app_config.CELERY_WORKER_QUEUE

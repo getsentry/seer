@@ -9,7 +9,6 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 
-# from seer.automation.codegen.retry_unit_test_coding_component import RetryUnitTestCodingComponent
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodeUnitTestRequest
 from seer.automation.codegen.retry_unittest_coding_component import RetryUnitTestCodingComponent
@@ -19,12 +18,13 @@ from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
 from seer.automation.utils import determine_mapped_unit_test_run_id
+from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
 
 
 class RetryUnittestStepRequest(PipelineStepTaskRequest):
     pr_id: int
     repo_definition: RepoDefinition
-    # codecov_status: dict
+    codecov_status: dict
 
 
 @celery_app.task(
@@ -50,50 +50,50 @@ class RetryUnittestStep(CodegenStep):
 
     @staticmethod
     def get_task():
-        x = retry_unittest_task
-        return x
+        return retry_unittest_task
 
     @observe(name="Codegen - Retry Unittest Step")
     @ai_track(description="Codegen - Retry Unittest Step")
     def _invoke(self, **kwargs):
         self.logger.info("Executing Codegen - Retry Unittest Step")
         self.context.event_manager.mark_running()
-        # TODO: IF STATUS CHECK HAS PASSED OR WE HAVE MORE THAN 3 COMMITS, SKIP UNIT TEST GENERATION:
-
-        repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_UNIT_TEST)
+        repo_client = self.context.get_repo_client(
+            type=RepoClientType.CODECOV_PR_REVIEW
+        )  # Codecov-ai GH app
         pr = repo_client.repo.get_pull(self.request.pr_id)
-        diff_content = repo_client.get_pr_diff_content(pr.url)
+        codecov_status = self.request.codecov_status["check_run"]["conclusion"]
 
-        latest_commit_sha = repo_client.get_pr_head_sha(pr.url)
+        if codecov_status == "success":
+            saved_memory = DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
+                owner=self.request.owner,
+                repo=self.request.repo_definition.name,
+                pr_id=self.request.pr_id,
+            ).first()
 
-        codecov_client_params = {
-            "repo_name": self.request.repo_definition.name,
-            "pullid": self.request.pr_id,
-            "owner_username": self.request.repo_definition.owner,
-            "head_sha": latest_commit_sha,
-        }
-        try:
-            unittest_output = RetryUnitTestCodingComponent(self.context).invoke(
-                CodeUnitTestRequest(
-                    diff=diff_content,
-                    codecov_client_params=codecov_client_params,
-                ),
-                generated_run_id=determine_mapped_unit_test_run_id(
-                    owner=self.request.repo_definition.owner,
-                    repo_name=self.request.repo_definition.name,
-                    pr_id=self.request.pr_id,
-                ),
+            repo_client.post_unit_test_reference_to_original_pr(
+                saved_memory.original_pr_url, pr.html_url
             )
-
-            if unittest_output:
-                for file_change in unittest_output.diffs:
-                    self.context.event_manager.append_file_change(file_change)
-                generator = GeneratedTestsPullRequestCreator(unittest_output.diffs, pr, repo_client)
-                generator.create_github_pull_request()
-            else:
-                repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
+            self.context.event_manager.mark_completed()
+        else:
+            past_run = DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
+                owner=self.request.owner,
+                repo=self.request.repo_definition.name,
+                pr_id=self.request.pr_id,
+            ).first()
+            if not past_run:
                 return
+            if past_run.iterations == 3:
+                # TODO: Fetch the "best" run and update the PR
+                return
+            else:
+                # TODO: Retry test generation
+                pass
+                self.context.event_manager.mark_completed()
 
-        except ValueError:
-            repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
-        self.context.event_manager.mark_completed()
+    def get_mapping(owner, repo, pr_id):
+        try:
+            return DbPrContextToUnitTestGenerationRunIdMapping.objects.get(
+                owner=owner, repo=repo, pr_id=pr_id
+            )
+        except DbPrContextToUnitTestGenerationRunIdMapping.DoesNotExist:
+            return None

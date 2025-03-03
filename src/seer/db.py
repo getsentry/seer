@@ -265,9 +265,10 @@ class DbPrContextToUnitTestGenerationRunIdMapping(Base):
         ForeignKey(DbRunState.id, ondelete="CASCADE"), nullable=False
     )
     iterations = mapped_column(Integer, nullable=False, default=0)
+    original_pr_url: Mapped[str] = mapped_column(String, nullable=False)
     __table_args__ = (
-        UniqueConstraint("provider", "pr_id", "repo", "owner"),
-        Index("ix_autofix_repo_owner_pr_id", "owner", "repo", "pr_id"),
+        UniqueConstraint("provider", "pr_id", "repo", "owner", "original_pr_url"),
+        Index("ix_autofix_repo_owner_pr_id", "owner", "repo", "pr_id", "original_pr_url"),
     )
 
 

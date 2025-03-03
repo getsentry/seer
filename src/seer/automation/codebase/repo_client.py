@@ -622,11 +622,17 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
 
-    def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
+    def post_unit_test_reference_to_original_pr(
+        self,
+        original_pr_url: str,
+        unit_test_pr_url: str,
+        type: str = RepoClientType.CODECOV_UNIT_TEST,
+    ):
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        comment = f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        gh_app = "Sentry" if type == RepoClientType.CODECOV_UNIT_TEST else "Codecov"
+        comment = f"{gh_app} has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
@@ -637,7 +643,8 @@ class RepoClient:
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        gh_app = "Sentry" if type == RepoClientType.CODECOV_UNIT_TEST else "Codecov"
+        comment = f"{gh_app} has determined that unit tests are not necessary for this PR."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)

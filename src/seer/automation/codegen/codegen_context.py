@@ -3,12 +3,12 @@ import logging
 from seer.automation.agent.models import Message
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
-from seer.automation.codegen.models import CodegenContinuation, UnitTestRunMemory
+from seer.automation.codegen.models import CodegenContinuation
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import DbStateRunTypes
-from seer.db import DbRunMemory, Session
+from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
 
 logger = logging.getLogger(__name__)
 
@@ -80,30 +80,9 @@ class CodegenContext(PipelineContext):
 
         return file_contents
 
-    def store_memory(self, key: str, memory: list[Message]):
-        with Session() as session:
-            memory_record = (
-                session.query(DbRunMemory).where(DbRunMemory.run_id == self.run_id).one_or_none()
-            )
-
-            if not memory_record:
-                memory_model = UnitTestRunMemory(run_id=self.run_id)
-            else:
-                memory_model = UnitTestRunMemory.from_db_model(memory_record)
-
-            memory_model.memory[key] = memory
-            memory_record = memory_model.to_db_model()
-
-            session.merge(memory_record)
-            session.commit()
-
-    def get_memory(self, key: str) -> list[Message]:
-        with Session() as session:
-            memory_record = (
-                session.query(DbRunMemory).where(DbRunMemory.run_id == self.run_id).one_or_none()
-            )
-
-            if not memory_record:
-                return []
-
-            return UnitTestRunMemory.from_db_model(memory_record).memory.get(key, [])
+    def get_unit_test_memory(self, owner: str, repo: str, pr_id: int) -> list[Message]:
+        return DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
+            owner=self.request.owner,
+            repo=self.request.repo_definition.name,
+            pr_id=self.request.pr_id,
+        ).first()

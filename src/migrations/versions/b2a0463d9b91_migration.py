@@ -1,8 +1,8 @@
 """Migration
 
-Revision ID: 52d271c30ee5
+Revision ID: b2a0463d9b91
 Revises: e0fcdc14251c
-Create Date: 2025-02-28 23:53:40.954667
+Create Date: 2025-03-03 17:34:37.242326
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '52d271c30ee5'
+revision = 'b2a0463d9b91'
 down_revision = 'e0fcdc14251c'
 branch_labels = None
 depends_on = None
@@ -26,12 +26,13 @@ def upgrade():
     sa.Column('repo', sa.String(), nullable=False),
     sa.Column('run_id', sa.Integer(), nullable=False),
     sa.Column('iterations', sa.Integer(), nullable=False),
+    sa.Column('original_pr_url', sa.String(), nullable=False),
     sa.ForeignKeyConstraint(['run_id'], ['run_state.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('provider', 'pr_id', 'repo', 'owner')
+    sa.UniqueConstraint('provider', 'pr_id', 'repo', 'owner', 'original_pr_url')
     )
     with op.batch_alter_table('codegen_unit_test_generation_pr_context_to_run_id', schema=None) as batch_op:
-        batch_op.create_index('ix_autofix_repo_owner_pr_id', ['owner', 'repo', 'pr_id'], unique=False)
+        batch_op.create_index('ix_autofix_repo_owner_pr_id', ['owner', 'repo', 'pr_id', 'original_pr_url'], unique=False)
 
     # ### end Alembic commands ###
 

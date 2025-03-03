@@ -86,4 +86,5 @@ class PrReviewStep(CodegenStep):
         except ValueError as e:
             self.logger.error(f"Error publishing pr review for {pr.url}: {e}")
             return
+
         self.context.event_manager.mark_completed()
