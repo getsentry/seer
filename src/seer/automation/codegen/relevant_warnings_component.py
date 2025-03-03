@@ -39,9 +39,9 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
 
     context: CodegenContext
 
-    @staticmethod
     @inject
     def _fetch_issues(
+        self,
         organization_id: int,
         provider: str,
         external_id: str,
@@ -72,7 +72,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             # TODO(kddubey): need to come up with something more general
             provider = f"integrations:{provider}"
 
-        logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
+        self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
 
         pr_files_eligible = pr_files_eligible[:max_files_analyzed]
         filename_to_issues = client.call(
