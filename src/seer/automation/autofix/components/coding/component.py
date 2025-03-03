@@ -438,6 +438,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     memory_storage_key="code",
                     run_name="Code",
+                    max_iterations=64,
                 ),
             )
 
