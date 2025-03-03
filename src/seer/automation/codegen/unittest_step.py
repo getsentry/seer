@@ -85,7 +85,7 @@ class UnittestStep(CodegenStep):
                 repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
                 return
 
-        except ValueError as e:
+        except ValueError:
             repo_client.post_unit_test_not_generated_message_to_original_pr(pr.html_url)
 
         self.context.event_manager.mark_completed()

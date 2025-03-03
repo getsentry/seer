@@ -10,14 +10,10 @@ from seer.automation.autofix.config import (
 )
 
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import CodeUnitTestRequest
-from seer.automation.codegen.retry_unittest_coding_component import RetryUnitTestCodingComponent
 from seer.automation.codegen.step import CodegenStep
-from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
-from seer.automation.utils import determine_mapped_unit_test_run_id
 from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
 
 
@@ -73,7 +69,7 @@ class RetryUnittestStep(CodegenStep):
             repo_client.post_unit_test_reference_to_original_pr(
                 saved_memory.original_pr_url, pr.html_url
             )
-            self.context.event_manager.mark_completed()
+
         else:
             past_run = DbPrContextToUnitTestGenerationRunIdMapping.objects.filter(
                 owner=self.request.owner,
@@ -88,12 +84,4 @@ class RetryUnittestStep(CodegenStep):
             else:
                 # TODO: Retry test generation
                 pass
-                self.context.event_manager.mark_completed()
-
-    def get_mapping(owner, repo, pr_id):
-        try:
-            return DbPrContextToUnitTestGenerationRunIdMapping.objects.get(
-                owner=owner, repo=repo, pr_id=pr_id
-            )
-        except DbPrContextToUnitTestGenerationRunIdMapping.DoesNotExist:
-            return None
+        self.context.event_manager.mark_completed()
