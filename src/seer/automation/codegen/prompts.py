@@ -307,12 +307,12 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
             Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `reasoning`.
             This score, the `relevance_probability`, can be very granular, e.g., 0.32.
-            Then give your final answer in `does_fixing_warning_fix_issue`.
+            Then give your final answer in `does_fixing_warning_fix_issue`. It should be true only if you're quite confident.
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
               - `short_description`: a short and sweet description of the problem caused by not addressing the warning.
                 This description must focus on the problem and not the warning itself. It should be at most 10 words.
-              - `short_justification`: a short summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 10 words.
+              - `short_justification`: a short but specific summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 15 words.
             """
         ).format(
             error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
