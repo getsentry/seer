@@ -116,7 +116,7 @@ class CodingPrompts:
                 else ""
             ),
             has_test_guidelines=(
-                "- Make sure that your test case fits into the existing testing patterns of the codebase."
+                "- Examine any existing tests to determine existing testing patterns in the codebase and if there is an appropriate test suite to add your test to. If not, create a new test. Make sure that your test case fits in well with the codebase."
                 if mode == "test" or mode == "all"
                 else ""
             ),
