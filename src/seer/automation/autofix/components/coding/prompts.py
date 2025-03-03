@@ -78,6 +78,11 @@ class CodingPrompts:
             {steps_example_str}
             </output_format>
 
+            <guidelines>
+            {has_fix_guidelines}
+            {has_test_guidelines}
+            </guidelines>
+
             <solution_plan>
             {solution_str}
             </solution_plan>
@@ -104,6 +109,16 @@ class CodingPrompts:
                 "Use the planned solution to inform the test, but do NOT implement the solution. Only write the test."
                 if mode == "test"
                 else "Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
+            ),
+            has_fix_guidelines=(
+                "- Follow the planned solution EXACTLY, but you can add on to it or modify it if necessary to make the solution work as a complete implementation. Do not add any unnecessary changes."
+                if mode == "fix" or mode == "all"
+                else ""
+            ),
+            has_test_guidelines=(
+                "- Examine any existing tests to determine existing testing patterns in the codebase and if there is an appropriate test suite to add your test to. If not, create a new test. Make sure that your test case fits in well with the codebase."
+                if mode == "test" or mode == "all"
+                else ""
             ),
             steps_example_str=CodeChangesPromptXml.get_example().to_prompt_str(),
             solution_str=(
