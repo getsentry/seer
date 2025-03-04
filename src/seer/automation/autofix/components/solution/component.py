@@ -90,7 +90,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             ),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
-                            max_iterations=32,
+                            max_iterations=64,
                             temperature=1.0,
                             reasoning_effort="medium",
                             max_tokens=32000,

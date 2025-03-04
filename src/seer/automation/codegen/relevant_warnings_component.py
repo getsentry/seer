@@ -68,10 +68,6 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             logger.info("No eligible files in PR.")
             return {}
 
-        if not provider.startswith("integrations:"):
-            # TODO(kddubey): need to come up with something more general
-            provider = f"integrations:{provider}"
-
         self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
 
         pr_files_eligible = pr_files_eligible[:max_files_analyzed]
@@ -92,9 +88,14 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
     @observe(name="Codegen - Relevant Warnings - Fetch Issues Component")
     @ai_track(description="Codegen - Relevant Warnings - Fetch Issues Component")
     def invoke(self, request: CodeFetchIssuesRequest) -> CodeFetchIssuesOutput:
+        if self.context.repo.provider_raw is None:
+            raise TypeError(
+                f"provider_raw is not set for repo: {self.context.repo}. "
+                "Something went wrong during initialization of the RepoDefinition."
+            )
         filename_to_issues = self._fetch_issues(
             organization_id=request.organization_id,
-            provider=self.context.repo.provider,
+            provider=self.context.repo.provider_raw,
             external_id=self.context.repo.external_id,
             pr_files=request.pr_files,
         )

@@ -15,6 +15,7 @@ from pydantic import (
     ValidationError,
     ValidationInfo,
     field_validator,
+    model_validator,
 )
 from pydantic.alias_generators import to_camel, to_snake
 from pydantic_xml import BaseXmlModel
@@ -590,10 +591,18 @@ class RepoDefinition(BaseModel):
     name: str
     external_id: Annotated[str, Examples(specialized.ascii_words)]
     base_commit_sha: Optional[str] = None
+    provider_raw: Optional[str] = None
 
     @property
     def full_name(self):
         return f"{self.owner}/{self.name}"
+
+    @model_validator(mode="before")
+    @classmethod
+    def store_provider_raw(cls, data):
+        if isinstance(data, dict) and "provider" in data and "provider_raw" not in data:
+            data["provider_raw"] = data["provider"]
+        return data
 
     @field_validator("provider", mode="after")
     @classmethod
