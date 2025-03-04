@@ -225,6 +225,7 @@ class SolutionStep(BaseStep):
     type: Literal[StepType.SOLUTION] = StepType.SOLUTION
 
     solution: list[SolutionTimelineEvent] = []
+    description: str | None = None
     custom_solution: str | None = None
     solution_selected: bool = False
     selected_mode: Literal["all", "fix", "test"] | None = None

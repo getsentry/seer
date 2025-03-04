@@ -42,3 +42,4 @@ class SolutionRequest(BaseComponentRequest):
 
 class SolutionOutput(BaseComponentOutput):
     solution_steps: list[SolutionPlanStep]
+    summary: str
