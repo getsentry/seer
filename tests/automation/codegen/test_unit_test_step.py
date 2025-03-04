@@ -11,10 +11,19 @@ from seer.automation.models import FileChange, RepoDefinition
 
 
 class TestUnittestStep(unittest.TestCase):
+    @patch(
+        "seer.automation.codegen.unit_test_github_pr_creator.GeneratedTestsPullRequestCreator.create_github_pull_request"
+    )
     @patch("seer.automation.codegen.unit_test_coding_component.UnitTestCodingComponent.invoke")
     @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
     @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
-    def test_invoke_happy_path(self, mock_instantiate_context, _, mock_invoke_unit_test_component):
+    def test_invoke_happy_path(
+        self,
+        _,
+        mock_pipeline_step,
+        mock_invoke_unit_test_component,
+        mock_create_pr,
+    ):
         mock_repo_client = MagicMock()
         mock_pr = MagicMock()
         mock_diff_content = "diff content"
