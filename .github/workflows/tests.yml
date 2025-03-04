@@ -213,6 +213,7 @@ jobs:
       - name: Run Overwatch CLI
         run: |
           ./overwatch-cli \
+            --url https://overwatch.codecov.dev \
             --auth-token ${{ secrets.OVERWATCH_SENTRY_AUTH_TOKEN }} \
             --organization-slug sentry \
             python
