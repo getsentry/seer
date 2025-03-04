@@ -44,29 +44,56 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
     context: CodegenContext
 
     @staticmethod
-    def _does_warning_match_a_target_file(
-        warning: StaticAnalysisWarning, target_filenames: set[str], repo_full_name: str
-    ) -> bool:
-        if repo_full_name not in warning.encoded_location:
-            raise ValueError(
-                f"The repo {repo_full_name} isn't in the encoded location. "
-                f"Encoded location: {warning.encoded_location}"
-            )
+    def _left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
+        """
+        Example::
 
+            from pathlib import Path
+
+            path = Path("src/seer/automation/agent/client.py")
+            paths = FilterWarningsComponent._left_truncated_paths(path, 2)
+            assert paths == [
+                "seer/automation/agent/client.py",
+                "automation/agent/client.py",
+            ]
+        """
+        parts = list(path.parts)
+        num_dirs = len(parts) - 1  # -1 for the filename
+        num_paths = min(max_num_paths, num_dirs)
+
+        result = []
+        for _ in range(num_paths):
+            parts.pop(0)
+            result.append(Path(*parts).as_posix())
+        return result
+
+    def _does_warning_match_a_target_file(
+        self, warning: StaticAnalysisWarning, target_filenames: set[str]
+    ) -> bool:
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
 
-        # path can be relative, but shouldn't contain intermediate `..`s.
+        # If the path is relative, it shouldn't contain intermediate `..`s.
         first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
-        if ".." in path.parts[first_idx_non_dots:]:
+        path = Path(*path.parts[first_idx_non_dots:])
+        if ".." in path.parts:
             raise ValueError(
                 f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
             )
 
-        filename_clean = path.as_posix()
-        idx = filename_clean.index(repo_full_name)
-        filename_without_repo = filename_clean[idx + len(repo_full_name) :].lstrip("./")
-        return filename_without_repo in target_filenames
+        possible_matches_from_warning = {
+            path.as_posix(),
+            *self._left_truncated_paths(path, max_num_paths=2),
+        }
+        possible_matches_from_targets = {
+            *target_filenames,
+            *{
+                filename
+                for filename in target_filenames
+                for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
+            },
+        }
+        return possible_matches_from_warning & possible_matches_from_targets
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
@@ -75,9 +102,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         warnings = [
             warning
             for warning in request.warnings
-            if self._does_warning_match_a_target_file(
-                warning, target_filenames, request.repo_full_name
-            )
+            if self._does_warning_match_a_target_file(warning, target_filenames)
         ]
         return FilterWarningsOutput(warnings=warnings)
 

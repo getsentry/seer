@@ -129,9 +129,7 @@ class RelevantWarningsStep(CodegenStep):
         # 2. Only consider warnings from files changed in the commit.
         filter_warnings_component = FilterWarningsComponent(self.context)
         filter_warnings_request = FilterWarningsRequest(
-            warnings=self.request.warnings,
-            target_filenames=[file.filename for file in pr_files],
-            repo_full_name=self.request.repo.full_name,
+            warnings=self.request.warnings, target_filenames=[file.filename for file in pr_files]
         )
         filter_warnings_output: FilterWarningsOutput = filter_warnings_component.invoke(
             filter_warnings_request
