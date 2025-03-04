@@ -206,56 +206,17 @@ class AnomalyDetection(BaseModel):
         # Run stream detection
 
         # SuSS Window
-        stream_detector_suss = MPStreamAnomalyDetector(
+        stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
             history_mp=anomalies.matrix_profile_suss,
             window_size=anomalies.window_size,
             original_flags=original_flags,
         )
-        streamed_anomalies_suss = stream_detector_suss.detect(
+        streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external),
             config,
             prophet_df=historic.prophet_predictions.as_dataframe(),
-        )
-
-        streamed_anomalies_fixed = None
-        if not historic.only_suss:
-            # Fixed Window
-            stream_detector_fixed = MPStreamAnomalyDetector(
-                history_timestamps=historic.timeseries.timestamps,
-                history_values=historic.timeseries.values,
-                history_mp=anomalies.matrix_profile_fixed,
-                window_size=10,
-                original_flags=original_flags,
-            )
-            streamed_anomalies_fixed = stream_detector_fixed.detect(
-                convert_external_ts_to_internal(ts_external),
-                config,
-                prophet_df=historic.prophet_predictions.as_dataframe(),
-            )
-
-            # Check if next detection should switch window
-            use_suss_window = anomalies.use_suss[-1]
-            if use_suss_window and streamed_anomalies_suss.flags[-1] == "anomaly_higher_confidence":
-                use_suss_window = False
-
-            # If we are using fixed window and we are past the SuSS anomalous region
-            if (
-                not use_suss_window
-                and streamed_anomalies_fixed.flags[-1] == "none"
-                and streamed_anomalies_suss.flags[-1] == "none"
-            ):
-                use_suss_window = True
-
-            anomalies.use_suss.append(use_suss_window)
-
-        else:
-            anomalies.use_suss.append(True)
-
-        num_anomlies = len(streamed_anomalies_suss.flags)
-        streamed_anomalies = alert_data_accessor.combine_anomalies(
-            streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss[-num_anomlies:]
         )
 
         # Commenting out in case we need to include dynamic window logic again
@@ -292,9 +253,9 @@ class AnomalyDetection(BaseModel):
         #     anomalies.use_suss.append(True)
         anomalies.use_suss.append(True)
 
-        num_anomlies = len(streamed_anomalies_suss.flags)
+        num_anomlies = len(streamed_anomalies.flags)
         streamed_anomalies = alert_data_accessor.combine_anomalies(
-            streamed_anomalies_suss, None, anomalies.use_suss[-num_anomlies:]
+            streamed_anomalies, None, anomalies.use_suss[-num_anomlies:]
         )
 
         # Save new data point
