@@ -93,7 +93,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
                 for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
             },
         }
-        return possible_matches_from_warning & possible_matches_from_targets
+        return bool(possible_matches_from_warning & possible_matches_from_targets)
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
