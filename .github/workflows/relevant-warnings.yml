@@ -34,8 +34,8 @@ jobs:
 
       - name: Install Overwatch CLI
         run: |
-          curl -o cli https://overwatch.codecov.io/cli
-          chmod +x cli
+          curl -o overwatch-cli https://overwatch.codecov.io/cli
+          chmod +x overwatch-cli
 
       - name: Run Overwatch CLI
         run: |
