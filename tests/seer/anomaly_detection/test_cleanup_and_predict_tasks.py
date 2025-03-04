@@ -278,7 +278,7 @@ class TestCleanupTasks(unittest.TestCase):
                 if prediction.timestamp > datetime.fromtimestamp(cur_timestamp)
             ]
 
-            assert len(new_predictions) == (24 * (60 // config.time_period))
+            assert len(new_predictions) == (36 * (60 // config.time_period))
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points

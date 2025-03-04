@@ -222,7 +222,7 @@ def _fit_predict(
         timestamps[i] = ts.timestamp.timestamp()
         values[i] = ts.value
 
-    # Create 24 hours worth of predictions
+    # Create prophet_forecast_len hours worth of predictions
     forecast_len = algo_config.prophet_forecast_len * (60 // config.time_period)
     prediction_df = prophet_detector.predict(
         timestamps, values, forecast_len, config.time_period, config.sensitivity

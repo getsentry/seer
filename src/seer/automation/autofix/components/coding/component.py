@@ -409,7 +409,9 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             is_obvious = False
             if not memory:
                 memory = self._prefill_initial_memory(request=request)
-                is_obvious = self._is_obvious(request, memory)
+                is_obvious = request.mode == "fix" and self._is_obvious(
+                    request, memory
+                )  # coding is never obvious if we need to write a test
             else:
                 is_obvious = self._is_feedback_obvious(memory)
 
@@ -438,6 +440,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     memory_storage_key="code",
                     run_name="Code",
+                    max_iterations=64,
                 ),
             )
 
