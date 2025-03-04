@@ -54,7 +54,7 @@ class GeneratedTestsPullRequestCreator:
             provided_base=self.pr.head.ref,
         )
 
-        self.store_pr_context(new_pr=new_pr, original_pr=self.pr)
+        self.store_pr_context(new_pr=new_pr)
 
         original_pr_url = self.pr.html_url
         new_pr_url = new_pr.html_url
