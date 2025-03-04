@@ -197,10 +197,9 @@ jobs:
           pip install mypy==1.15.0
           pip install ruff==0.3.3
 
-      - name: Install x86_64 Build Dependencies
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev clang
           # Install libssl1.1 from Ubuntu 20.04 repositories
           wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
@@ -216,4 +215,5 @@ jobs:
             --url https://overwatch.codecov.dev \
             --auth-token ${{ secrets.OVERWATCH_SENTRY_AUTH_TOKEN }} \
             --organization-slug sentry \
-            python
+            python \
+            --tool ruff
