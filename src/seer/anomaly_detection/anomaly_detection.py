@@ -116,11 +116,11 @@ class AnomalyDetection(BaseModel):
         #     ),  # Time budget is split between the two detection calls
         #     prophet_df=prophet_df,
         # )
-        anomalies = DbAlertDataAccessor().combine_anomalies(
+        batch_anomalies = DbAlertDataAccessor().combine_anomalies(
             anomalies, None, [True] * len(timeseries)
         )
 
-        return timeseries, anomalies, prophet_df
+        return timeseries, batch_anomalies, prophet_df
 
     @inject
     @sentry_sdk.trace
@@ -254,7 +254,7 @@ class AnomalyDetection(BaseModel):
         anomalies.use_suss.append(True)
 
         num_anomlies = len(streamed_anomalies.flags)
-        streamed_anomalies = alert_data_accessor.combine_anomalies(
+        streamed_anomalies_online = alert_data_accessor.combine_anomalies(
             streamed_anomalies, None, anomalies.use_suss[-num_anomlies:]
         )
 
@@ -263,7 +263,7 @@ class AnomalyDetection(BaseModel):
             external_alert_id=alert.id,
             timepoint=ts_external[0],
             anomaly=streamed_anomalies,
-            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0],
+            anomaly_algo_data=streamed_anomalies_online.get_anomaly_algo_data(len(ts_external))[0],
         )
 
         # Delayed import due to circular imports
@@ -291,7 +291,7 @@ class AnomalyDetection(BaseModel):
             sentry_sdk.capture_exception(e)
             logger.exception(e)
 
-        return ts_external, streamed_anomalies
+        return ts_external, streamed_anomalies_online
 
     def _min_required_timesteps(self, time_period, min_num_days=7):
         return int(min_num_days * 24 * 60 / time_period)
