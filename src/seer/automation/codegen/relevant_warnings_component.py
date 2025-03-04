@@ -1,5 +1,6 @@
 import logging
 import textwrap
+from pathlib import Path
 
 import numpy as np
 import openai
@@ -10,6 +11,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
+from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -20,6 +22,8 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    FilterWarningsOutput,
+    FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
 )
@@ -30,6 +34,77 @@ from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
+
+
+class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
+    """
+    Filter out warnings from files that aren't affected by the commit.
+    """
+
+    context: CodegenContext
+
+    @staticmethod
+    def _left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
+        """
+        Example::
+
+            from pathlib import Path
+
+            path = Path("src/seer/automation/agent/client.py")
+            paths = FilterWarningsComponent._left_truncated_paths(path, 2)
+            assert paths == [
+                "seer/automation/agent/client.py",
+                "automation/agent/client.py",
+            ]
+        """
+        parts = list(path.parts)
+        num_dirs = len(parts) - 1  # -1 for the filename
+        num_paths = min(max_num_paths, num_dirs)
+
+        result = []
+        for _ in range(num_paths):
+            parts.pop(0)
+            result.append(Path(*parts).as_posix())
+        return result
+
+    def _does_warning_match_a_target_file(
+        self, warning: StaticAnalysisWarning, target_filenames: set[str]
+    ) -> bool:
+        filename = warning.encoded_location.split(":")[0]
+        path = Path(filename)
+
+        # If the path is relative, it shouldn't contain intermediate `..`s.
+        first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
+        path = Path(*path.parts[first_idx_non_dots:])
+        if ".." in path.parts:
+            raise ValueError(
+                f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
+            )
+
+        possible_matches_from_warning = {
+            path.as_posix(),
+            *self._left_truncated_paths(path, max_num_paths=2),
+        }
+        possible_matches_from_targets = {
+            *target_filenames,
+            *{
+                filename
+                for filename in target_filenames
+                for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
+            },
+        }
+        return bool(possible_matches_from_warning & possible_matches_from_targets)
+
+    @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
+    @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
+    def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
+        target_filenames = set(request.target_filenames)
+        warnings = [
+            warning
+            for warning in request.warnings
+            if self._does_warning_match_a_target_file(warning, target_filenames)
+        ]
+        return FilterWarningsOutput(warnings=warnings)
 
 
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
