@@ -164,6 +164,16 @@ class PrFile(BaseModel):
     changes: int
 
 
+class FilterWarningsRequest(BaseComponentRequest):
+    warnings: list[StaticAnalysisWarning]
+    target_filenames: list[str]
+    repo_full_name: str
+
+
+class FilterWarningsOutput(BaseComponentOutput):
+    warnings: list[StaticAnalysisWarning]
+
+
 class CodeFetchIssuesRequest(BaseComponentRequest):
     organization_id: int
     pr_files: list[PrFile]

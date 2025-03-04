@@ -19,6 +19,8 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    FilterWarningsOutput,
+    FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
 )
@@ -27,6 +29,7 @@ from seer.automation.codegen.relevant_warnings_component import (
     AreIssuesFixableComponent,
     AssociateWarningsWithIssuesComponent,
     FetchIssuesComponent,
+    FilterWarningsComponent,
     PredictRelevantWarningsComponent,
 )
 from seer.automation.codegen.relevant_warnings_step import (
@@ -34,6 +37,68 @@ from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStepRequest,
 )
 from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
+
+
+class TestFilterWarningsComponent:
+    def test_bad_encoded_locations_cause_errors(self):
+        repo_full_name = "getsentry/seer"
+
+        warning = next(generate(StaticAnalysisWarning))
+        warning.encoded_location = "missing/repo/name/file.py:1:1"
+        with pytest.raises(
+            ValueError,
+            match=(
+                f"The repo {repo_full_name} isn't in the encoded location. "
+                f"Encoded location: {warning.encoded_location}"
+            ),
+        ):
+            FilterWarningsComponent._does_warning_match_a_target_file(
+                warning, {"file1.py"}, repo_full_name=repo_full_name
+            )
+
+        warning = next(generate(StaticAnalysisWarning))
+        warning.encoded_location = "../../getsentry/seer/../not/anymore.py:1:1"
+        with pytest.raises(
+            ValueError,
+            match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
+        ):
+            FilterWarningsComponent._does_warning_match_a_target_file(
+                warning, {"file1.py"}, repo_full_name=repo_full_name
+            )
+
+    @pytest.fixture
+    def component(self):
+        return FilterWarningsComponent(context=MagicMock())
+
+    def test_invoke(self, component: FilterWarningsComponent):
+        target_files = [
+            # These files are relative to the repo root b/c they're from the GitHub API.
+            "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py",
+        ]
+        encoded_locations_with_matches = [
+            # These files come from overwatch. They'll always contain the repo's full name.
+            "getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
+            "../../../getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",
+            "../app/getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",
+        ]
+        encoded_locations_without_matches = [
+            "getsentry/seer/src/seer/mp_boxcox_scorer.py",
+            "getsentry/seer/src/seer/detectors/mp_boxcox_scorer.py",
+        ]
+
+        warnings = []
+        for encoded_location in encoded_locations_with_matches + encoded_locations_without_matches:
+            warning = next(generate(StaticAnalysisWarning))
+            warning.encoded_location = encoded_location
+            warnings.append(warning)
+
+        request = FilterWarningsRequest(
+            warnings=warnings, target_filenames=target_files, repo_full_name="getsentry/seer"
+        )
+        output: FilterWarningsOutput = component.invoke(request)
+        output_encoded_locations = [warning.encoded_location for warning in output.warnings]
+        assert output_encoded_locations == encoded_locations_with_matches
+        assert output.warnings == warnings[: len(encoded_locations_with_matches)]
 
 
 @patch("seer.rpc.DummyRpcClient.call")
@@ -307,6 +372,7 @@ class TestPredictRelevantWarningsComponent:
             assert issue.id == result.issue_id
 
 
+@patch("seer.automation.codegen.relevant_warnings_component.FilterWarningsComponent.invoke")
 @patch("seer.automation.codegen.relevant_warnings_component.FetchIssuesComponent.invoke")
 @patch("seer.automation.codegen.relevant_warnings_component.AreIssuesFixableComponent.invoke")
 @patch(
@@ -324,6 +390,7 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_associate_warnings_with_issues_component: Mock,
     mock_invoke_are_issues_fixable_component: Mock,
     mock_invoke_fetch_issues_component: Mock,
+    mock_invoke_filter_warnings_component: Mock,
 ):
     mock_repo_client = MagicMock()
     mock_commit = MagicMock()
@@ -335,6 +402,9 @@ def test_relevant_warnings_step_invoke(
 
     num_associations = 5
 
+    mock_invoke_filter_warnings_component.return_value = FilterWarningsOutput(
+        warnings=next(generate(list[StaticAnalysisWarning]))
+    )
     mock_invoke_fetch_issues_component.return_value = next(generate(CodeFetchIssuesOutput))
     mock_invoke_associate_warnings_with_issues_component.return_value = (
         AssociateWarningsWithIssuesOutput(
@@ -370,6 +440,13 @@ def test_relevant_warnings_step_invoke(
 
     mock_context.get_repo_client.assert_called_once()
     mock_repo_client.repo.get_commit.assert_called_once_with(request.commit_sha)
+
+    mock_invoke_filter_warnings_component.assert_called_once()
+    mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings
+    mock_invoke_filter_warnings_component.call_args[0][0].target_filenames = [
+        file.filename for file in mock_pr_files
+    ]
+    mock_invoke_filter_warnings_component.call_args[0][0].repo_full_name = request.repo.full_name
 
     mock_invoke_fetch_issues_component.assert_called_once()
     mock_invoke_fetch_issues_component.call_args[0][0].organization_id = request.organization_id

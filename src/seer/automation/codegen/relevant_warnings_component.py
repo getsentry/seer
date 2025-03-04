@@ -1,5 +1,6 @@
 import logging
 import textwrap
+from pathlib import Path
 
 import numpy as np
 import openai
@@ -10,6 +11,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
+from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -20,6 +22,8 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    FilterWarningsOutput,
+    FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
 )
@@ -30,6 +34,52 @@ from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
+
+
+class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
+    """
+    Filter out warnings from files that aren't affected by the commit.
+    """
+
+    context: CodegenContext
+
+    @staticmethod
+    def _does_warning_match_a_target_file(
+        warning: StaticAnalysisWarning, target_filenames: set[str], repo_full_name: str
+    ) -> bool:
+        if repo_full_name not in warning.encoded_location:
+            raise ValueError(
+                f"The repo {repo_full_name} isn't in the encoded location. "
+                f"Encoded location: {warning.encoded_location}"
+            )
+
+        filename = warning.encoded_location.split(":")[0]
+        path = Path(filename)
+
+        # path can be relative, but shouldn't contain intermediate `..`s.
+        first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
+        if ".." in path.parts[first_idx_non_dots:]:
+            raise ValueError(
+                f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
+            )
+
+        filename_clean = path.as_posix()
+        idx = filename_clean.index(repo_full_name)
+        filename_without_repo = filename_clean[idx + len(repo_full_name) :].lstrip("./")
+        return filename_without_repo in target_filenames
+
+    @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
+    @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
+    def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
+        target_filenames = set(request.target_filenames)
+        warnings = [
+            warning
+            for warning in request.warnings
+            if self._does_warning_match_a_target_file(
+                warning, target_filenames, request.repo_full_name
+            )
+        ]
+        return FilterWarningsOutput(warnings=warnings)
 
 
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
