@@ -50,8 +50,9 @@ class ProphetPrediction(BaseModel):
 
     @staticmethod
     def from_prophet_df(prophet_df: pd.DataFrame) -> "ProphetPrediction":
+
         return ProphetPrediction(
-            timestamps=np.array([date.timestamp() for date in prophet_df.ds], dtype=np.float64),
+            timestamps=np.array([pd.to_datetime(date, unit="s") for date in prophet_df.ds]),
             y=np.array(prophet_df.y),
             yhat=np.array(prophet_df.yhat),
             yhat_lower=np.array(prophet_df.yhat_lower),

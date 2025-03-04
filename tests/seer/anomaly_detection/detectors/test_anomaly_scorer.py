@@ -401,7 +401,7 @@ class TestCombinedAnomalyScorer:
 
         prophet_predictions = pd.DataFrame(
             {
-                "ds": pd.to_datetime(timestamps),
+                "ds": timestamps,
                 "flag": ["none", "none", "none"],
                 "score": [0.5, 2.5, 0.3],
                 "y": [10.0, 20.0, 15.0],
@@ -456,7 +456,7 @@ class TestCombinedAnomalyScorer:
 
         prophet_predictions = pd.DataFrame(
             {
-                "ds": pd.to_datetime(timestamps),
+                "ds": timestamps,
                 "flag": ["none", "anomaly_higher_confidence", "none"],
                 "score": [0.5, 2.5, 0.3],
                 "y": [10.0, 20.0, 15.0],
@@ -512,7 +512,7 @@ class TestCombinedAnomalyScorer:
 
         prophet_predictions = pd.DataFrame(
             {
-                "ds": pd.to_datetime(timestamps),
+                "ds": timestamps,
                 "flag": ["none", "anomaly_higher_confidence", "none"],
                 "score": [0.5, 2.5, 0.3],
                 "y": [10.0, 20.0, 15.0],
