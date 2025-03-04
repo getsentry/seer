@@ -118,11 +118,11 @@ class DbAlertDataAccessor(AlertDataAccessor):
         use_suss = [True] * n_points
 
         n_predictions = len(db_alert.prophet_predictions)
-        prophet_timestamps = np.array([None] * n_predictions)
-        prophet_ys = np.array([None] * n_predictions)
-        prophet_yhats = np.array([None] * n_predictions)
-        prophet_yhat_lowers = np.array([None] * n_predictions)
-        prophet_yhat_uppers = np.array([None] * n_predictions)
+        prophet_timestamps = np.full(n_predictions, None)
+        prophet_ys = np.full(n_predictions, None)
+        prophet_yhats = np.full(n_predictions, None)
+        prophet_yhat_lowers = np.full(n_predictions, None)
+        prophet_yhat_uppers = np.full(n_predictions, None)
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
         only_suss = len(timeseries) > 0 and any(
@@ -483,7 +483,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             prediction_values = [
                 {
                     "dynamic_alert_id": alert_id,
-                    "timestamp": datetime.fromtimestamp(predictions.timestamps[i]),
+                    "timestamp": predictions.timestamps[i],
                     "yhat": predictions.yhat[i],
                     "yhat_lower": predictions.yhat_lower[i],
                     "yhat_upper": predictions.yhat_upper[i],
@@ -491,7 +491,6 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 for i in range(len(predictions.timestamps))
             ]
             stmt = insert(DbProphetAlertTimeSeries).values(prediction_values)
-
             update_stmt = stmt.on_conflict_do_update(
                 index_elements=["dynamic_alert_id", "timestamp"],
                 set_={
@@ -500,6 +499,5 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     "yhat_upper": stmt.excluded.yhat_upper,
                 },
             )
-
             session.execute(update_stmt)
             session.commit()

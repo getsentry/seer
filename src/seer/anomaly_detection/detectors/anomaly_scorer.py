@@ -174,7 +174,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         row_exists = (prophet_df["ds"] == streamed_timestamp).any()
         if not row_exists:
             logger.warning(
-                "Row for timestamp not found in prophet_df, skipping prophet scoring",
+                "Timestamp not found in prophet_df, skipping prophet scoring",
                 extra={"streamed_timestamp": streamed_timestamp},
             )
             return mp_flags_and_scores
@@ -225,12 +225,14 @@ class CombinedAnomalyScorer(AnomalyScorer):
         # todo: return prophet thresholds
         def merge(timestamps, mp_flags, prophet_map):
             flags = []
+            missing = 0
             found = 0
             previous_mp_flag: AnomalyFlags = "none"
+            missing_timestamps = []
             for timestamp, mp_flag in zip(timestamps, mp_flags):
-                if pd.to_datetime(timestamp) in prophet_map["flag"]:
+                pd_dt = float(timestamp)
+                if pd_dt in prophet_map["flag"]:
                     found += 1
-                    pd_dt = pd.to_datetime(timestamp)
                     prophet_flag = prophet_map["flag"][pd_dt]
                     prophet_score = prophet_map["score"][pd_dt]
                     prophet_flag = self._adjust_prophet_flag_for_location(
@@ -253,17 +255,35 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     else:
                         flags.append("none")
                 else:
+                    missing += 1
+                    missing_timestamps.append(timestamp)
                     flags.append(mp_flag)
                 previous_mp_flag = mp_flag
-            # todo: publish metrics for found/total
-            # if debug:
-            #     print(f"found {found} out of {len(timestamps)}")
+
+            if missing > 0:
+                logger.warning(
+                    "Some of the MP flags did not have corresponding prophet flags",
+                    extra={
+                        "total mp flags": len(timestamps),
+                        "missing prophet flags": missing,
+                        "matching prophet flags": found,
+                        "upto 5 missing timestamps": (
+                            missing_timestamps[0:5]
+                            if len(missing_timestamps) > 5
+                            else missing_timestamps
+                        ),
+                        "upto 5 prophet timestamps": (
+                            list(prophet_map["flag"].keys())[0:5]
+                            if len(prophet_map["flag"].keys()) > 5
+                            else list(prophet_map["flag"].keys())
+                        ),
+                    },
+                )
             return flags
 
         prophet_predictions_map = prophet_predictions.set_index("ds")[
             ["flag", "score", "y", "yhat", "yhat_lower", "yhat_upper"]
         ].to_dict()
-
         flags = merge(timestamps, mp_flags_and_scores.flags, prophet_predictions_map)
 
         return FlagsAndScores(

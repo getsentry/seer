@@ -95,6 +95,7 @@ class AnomalyDetection(BaseModel):
             config.time_period,
             config.sensitivity,
         )
+        prophet_df.ds = prophet_df.ds.astype(int) / 10**9
         anomalies_suss = batch_detector.detect(
             ts_internal,
             config,
@@ -190,8 +191,6 @@ class AnomalyDetection(BaseModel):
                 f"Not enough timeseries data. At least {min_data} data points required"
             )
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
-
-        # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
 
         # Get the original flags from the historic data
         original_flags = anomalies.original_flags
@@ -540,7 +539,6 @@ class AnomalyDetection(BaseModel):
         alert_data_accessor.store_prophet_predictions(
             saved_alert_id, ProphetPrediction.from_prophet_df(prophet_df)
         )
-
         return StoreDataResponse(success=True)
 
     @inject
