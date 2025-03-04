@@ -79,8 +79,8 @@ class TestFilterWarningsComponent:
                 ],
                 encoded_locations_without_matches=[
                     "../app/getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",  # too far up
-                    "getsentry/seer/src/seer/anomaly_detection/mp_boxcox_scorer.py",  # missing detectors
-                    "getsentry/seer/src/seer/detectors/mp_boxcox_scorer.py",  # missing anomaly_detection
+                    "getsentry/seer/src/seer/anomaly_detection/mp_boxcox_scorer.py:1",  # missing detectors
+                    "getsentry/seer/src/seer/detectors/mp_boxcox_scorer.py:1",  # missing anomaly_detection
                 ],
             ),
             _TestInvokeTestCase(
@@ -96,10 +96,10 @@ class TestFilterWarningsComponent:
                     "app/Livewire/Actions/Logout.php:15",
                 ],
                 encoded_locations_without_matches=[
-                    "generate_signature.py",  # unknown location
-                    "app/tools/generate_signature.py",  # missing seer_signature
-                    "tests/services/test_package.py",  # wrong file
-                    "app/app/Livewire/Actions/Logout.py",  # wrong extension
+                    "generate_signature.py:1",  # unknown location
+                    "app/tools/generate_signature.py:1",  # missing seer_signature
+                    "tests/services/test_package.py:1",  # wrong file
+                    "app/app/Livewire/Actions/Logout.py:1",  # wrong extension
                 ],
             ),
         ],
