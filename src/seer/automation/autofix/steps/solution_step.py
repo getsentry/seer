@@ -78,7 +78,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
                 root_cause_and_fix=root_cause_and_fix,
                 event_details=event_details,
                 summary=summary,
-                instruction=state.request.instruction,
+                original_instruction=state.request.instruction,
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
             )

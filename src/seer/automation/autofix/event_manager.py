@@ -193,6 +193,7 @@ class AutofixEventManager:
                 )
                 for solution_step in solution_output.solution_steps
             ]
+            solution_step.description = solution_output.summary
             cur.status = AutofixStatus.NEED_MORE_INFORMATION
 
             log_seer_event(

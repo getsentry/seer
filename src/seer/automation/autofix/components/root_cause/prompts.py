@@ -80,5 +80,8 @@ class RootCauseAnalysisPrompts:
               - Code Snippet and Analysis: any extra analysis needed and a small relevant code snippet if this is an important event. All Markdown formatted.
               - Event type: logic in the code, a human interaction, or an external system like a database, API, etc.
               - Is most important event: whether this event is the MOST important and insightfulone in the timeline to pay attention to.
-            As a whole, this timeline should tell the precise story of the root cause of the issue. Starts at the entry point of the code, ends at the error."""
+            As a whole, this timeline should tell the precise story of the root cause of the issue. Starts at the entry point of the code, ends at the error.
+
+            Then, provide a concise summary of the root cause of the issue. This summary must be less than 30 words and must be an information-dense single summary and must not contain filler words such as "The application..." or "The issue...".
+              - Use a "matter of fact" tone, such as "The `process_task` function did not check if the task was already processed, due to `foo` being `bar`."."""
         )
