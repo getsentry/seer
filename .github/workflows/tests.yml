@@ -198,7 +198,12 @@ jobs:
           pip install ruff==0.3.3
 
       - name: Install x86_64 Build Dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev clang
+          # Install libssl1.1 from Ubuntu 20.04 repositories
+          wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
 
       - name: Install Overwatch CLI
         run: |
