@@ -164,7 +164,7 @@ class AlgoConfig(BaseModel):
     )
 
     prophet_forecast_len: int = Field(
-        24,
+        36,
         description="Number of hours to forecast for the Prophet model",
     )
 
