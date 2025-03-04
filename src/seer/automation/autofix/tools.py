@@ -1,8 +1,16 @@
 import fnmatch
+import json
 import logging
 import os
 import textwrap
+import time
 
+from codegen import Codebase
+from codegen.sdk.core.class_definition import Class
+from codegen.sdk.core.detached_symbols.function_call import FunctionCall
+from codegen.sdk.core.function import Function
+from codegen.sdk.core.statements.statement import Statement
+from codegen.sdk.enums import SymbolType
 from langfuse.decorators import observe
 from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
@@ -28,6 +36,8 @@ class BaseTools:
     tmp_repo_dir: str | None = None
     repo_client_type: RepoClientType = RepoClientType.READ
 
+    codebases: dict[str, Codebase] = {}
+
     def __init__(
         self,
         context: AutofixContext | CodegenContext,
@@ -39,6 +49,15 @@ class BaseTools:
         self.repo_client_type = repo_client_type
 
     def __enter__(self):
+        self._setup_tmp_dir_and_download()
+        if self.tmp_dir:
+            for repo_name, (tmp_dir, tmp_repo_dir) in self.tmp_dir.items():
+                start_time = time.time()
+                self.codebases[repo_name] = Codebase(tmp_repo_dir)
+                logger.info(f"Codebase initialization took {time.time() - start_time:.2f} seconds")
+        else:
+            raise ValueError("No tmp_dir found")
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -51,6 +70,155 @@ class BaseTools:
             return [self.context.repo.full_name]
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
+
+    def _setup_tmp_dir_and_download(self):
+        repo_names = self._get_repo_names()
+        if self.tmp_dir is None:
+            tmp_dirs = {}
+            for repo_name in repo_names:
+                repo_client = self.context.get_repo_client(
+                    repo_name=repo_name, type=self.repo_client_type
+                )
+                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                tmp_dirs[repo_name] = (tmp_dir, tmp_repo_dir)
+
+                self._initialize_git_repo(tmp_repo_dir)
+
+            self.tmp_dir = tmp_dirs  # Store all tmp dirs
+
+    def _initialize_git_repo(self, repo_dir: str):
+        """Initialize a Git repository in the specified directory."""
+        import subprocess
+
+        try:
+            # Initialize git repository
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+
+            # Add all files to git
+            subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
+
+            # Create initial commit
+            subprocess.run(
+                ["git", "commit", "-m", "Initial commit"],
+                cwd=repo_dir,
+                check=True,
+                env={
+                    **os.environ,
+                    "GIT_COMMITTER_NAME": "Autofix",
+                    "GIT_COMMITTER_EMAIL": "autofix@example.com",
+                    "GIT_AUTHOR_NAME": "Autofix",
+                    "GIT_AUTHOR_EMAIL": "autofix@example.com",
+                },
+            )
+
+            logger.info(f"Git repository initialized in {repo_dir}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to initialize Git repository: {e}")
+        except Exception as e:
+            logger.error(f"Error initializing Git repository: {e}")
+
+    def _get_symbol(self, query: str, repo_name: str):
+        segments = query.split(".")
+
+        if len(segments) > 2:
+            return None, f"Symbol `{query}` not found"
+
+        symbol = self.codebases[repo_name].get_symbol(symbol_name=segments[0], optional=True)
+
+        if not symbol:
+            return None, f"Symbol `{segments[0]}` not found"
+
+        if isinstance(symbol, Class) and len(segments) == 2:
+            method = symbol.get_method(segments[1])
+            if not method:
+                attribute = symbol.get_attribute(segments[1])
+                if not attribute:
+                    return None, f"Symbol `{segments[1]}` not found in class `{symbol.name}`"
+                symbol = attribute
+            else:
+                symbol = method
+
+        return symbol, None
+
+    @observe(name="Find Definition")
+    @ai_track(description="Semantic File Search")
+    def find_definition(self, query: str):
+        repo_names = self._get_repo_names()
+        for repo_name in repo_names:
+            symbol, error = self._get_symbol(query, repo_name)
+
+            if error:
+                return json.dumps({"error": error or "Symbol not found"}, indent=2)
+
+            if symbol:
+                return json.dumps(
+                    {
+                        "file_path": symbol.filepath,
+                        "source": symbol.source,
+                    },
+                    indent=2,
+                )
+
+        return json.dumps({"error": "Symbol not found"}, indent=2)
+
+    @observe(name="Find Call Sites")
+    @ai_track(description="Find Call Sites")
+    def find_call_sites(self, query: str):
+        def get_parent_function(call_site: FunctionCall):
+            parent_function = call_site.parent_function
+
+            remaining_iterations = 5
+
+            can_be_parent = False
+            try:
+                parent_function.extended_source
+                can_be_parent = True
+            except:
+                pass
+
+            while not can_be_parent and remaining_iterations > 0:
+                try:
+                    parent_function = parent_function.parent_function
+                    parent_function.extended_source
+                    can_be_parent = True
+                except:
+                    pass
+
+                remaining_iterations -= 1
+
+            return parent_function
+
+        repo_names = self._get_repo_names()
+        for repo_name in repo_names:
+            symbol, error = self._get_symbol(query, repo_name)
+
+            if error:
+                return json.dumps({"error": error or "Symbol not found"}, indent=2)
+
+            if symbol:
+                if not isinstance(symbol, Function) and not isinstance(symbol, Class):
+                    return json.dumps({"error": "Symbol is not a function or class"}, indent=2)
+
+                call_sites = []
+                for call_site in symbol.call_sites:
+                    invoking_parent_source = None
+                    try:
+                        invoking_parent = get_parent_function(call_site)
+                        invoking_parent_source = invoking_parent.extended_source
+                    except Exception as e:
+                        print(e)
+
+                    call_sites.append(
+                        {
+                            "file_path": call_site.filepath,
+                            "call_location": call_site.source,
+                            "source": invoking_parent_source,
+                        }
+                    )
+
+                return json.dumps({"call_sites": call_sites}, indent=2)
+
+        return json.dumps({"error": "Symbol not found"}, indent=2)
 
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
@@ -255,6 +423,8 @@ class BaseTools:
                 cleanup_dir(tmp_dir)
             self.tmp_dir = None
 
+        self.codebases = {}
+
     @observe(name="Keyword Search")
     @ai_track(description="Keyword Search")
     def keyword_search(
@@ -266,22 +436,13 @@ class BaseTools:
         """
         Searches for a keyword in the codebase.
         """
-        repo_names = self._get_repo_names()
+
         all_results = []
 
-        if self.tmp_dir is None:
-            tmp_dirs = {}
-            for repo_name in repo_names:
-                repo_client = self.context.get_repo_client(
-                    repo_name=repo_name, type=self.repo_client_type
-                )
-                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                tmp_dirs[repo_name] = (tmp_dir, tmp_repo_dir)
+        repo_names = self._get_repo_names()
 
-            self.tmp_dir = tmp_dirs  # Store all tmp dirs
-            append_langfuse_observation_metadata({"keyword_search_download": True})
-        else:
-            append_langfuse_observation_metadata({"keyword_search_download": False})
+        if not self.tmp_dir:
+            return "No codebase found. Please try again later."
 
         for repo_name in repo_names:
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
@@ -516,6 +677,32 @@ class BaseTools:
                                 "name": "query",
                                 "type": "string",
                                 "description": "Describe what file you're looking for.",
+                            },
+                        ],
+                        required=["query"],
+                    ),
+                    FunctionTool(
+                        name="find_definition",
+                        fn=self.find_definition,
+                        description="Finds the definition of a symbol such as a function, class, or variable in the codebase.",
+                        parameters=[
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "The symbol to find the definition of, for class methods, include the class name in the query. For example, 'MyClass.my_method'.",
+                            },
+                        ],
+                        required=["query"],
+                    ),
+                    FunctionTool(
+                        name="find_call_sites",
+                        fn=self.find_call_sites,
+                        description="Finds all the places that a symbol such as a function or class is called in the codebase.",
+                        parameters=[
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "The symbol to find the call sites of, for class methods, include the class name in the query. For example, 'MyClass.my_method'.",
                             },
                         ],
                         required=["query"],
