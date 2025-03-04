@@ -197,10 +197,10 @@ jobs:
           pip install mypy==1.15.0
           pip install ruff==0.3.3
 
-      - name: Install libssl (overwatch-cli requires OpenSSL 1.1)
+      - name: Install libssl (overwatch-cli requires OpenSSL)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl1.1 || sudo apt-get install -y libssl-dev
+          sudo apt-get install -y libssl1.1
 
       - name: Install Overwatch CLI
         run: |
