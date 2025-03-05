@@ -395,6 +395,7 @@ class AutofixSolutionUpdatePayload(BaseModel):
     custom_solution: str | None = None
     solution_selected: bool = False
     mode: Literal["all", "fix", "test"] = "fix"
+    solution: list[SolutionTimelineEvent] | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):

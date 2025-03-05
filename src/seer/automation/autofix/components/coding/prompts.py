@@ -49,14 +49,25 @@ class CodingPrompts:
         return custom_solution
 
     @staticmethod
+    def format_solution_item(index: int, solution_item: SolutionTimelineEvent):
+        solution_item_content = (
+            solution_item.code_snippet_and_analysis + "\n"
+            if solution_item.code_snippet_and_analysis
+            else ""
+        )
+        return f"<step_{index+1}>\n{solution_item.title}\n{solution_item_content}</step_{index+1}>"
+
+    @staticmethod
     def format_auto_solution(auto_solution: list[SolutionTimelineEvent] | None):
         if not auto_solution:
             return "No plan provided."
 
         solution_str = ""
         solution_str = "\n".join(
-            f"<step_{i+1}>\n{event.title}\n{event.code_snippet_and_analysis}\n</step_{i+1}>"
-            for i, event in enumerate(auto_solution)
+            CodingPrompts.format_solution_item(i, solution_item)
+            for i, solution_item in enumerate(
+                [solution_item for solution_item in auto_solution if solution_item.is_active]
+            )
         )
         return solution_str
 
@@ -83,9 +94,9 @@ class CodingPrompts:
             {has_test_guidelines}
             </guidelines>
 
-            <solution_plan>
+            <final_solution_plan>
             {solution_str}
-            </solution_plan>
+            </final_solution_plan>
 
             <root_cause_of_issue>
             {root_cause_str}
@@ -108,7 +119,7 @@ class CodingPrompts:
             filter_str=(
                 "Use the planned solution to inform the test, but do NOT implement the solution. Only write the test."
                 if mode == "test"
-                else "Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
+                else "You should exactly follow the final_solution_plan, do not add any additional steps or changes. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
             ),
             has_fix_guidelines=(
                 "- Follow the planned solution EXACTLY, but you can add on to it or modify it if necessary to make the solution work as a complete implementation. Do not add any unnecessary changes."
