@@ -731,7 +731,7 @@ def comment_on_thread(request: AutofixUpdateRequest):
                 cur.steps[step_index].active_comment_thread.selected_text = (
                     request.payload.selected_text
                 )
-    elif not step_after.agent_comment_thread:
+    elif not step_after or not step_after.agent_comment_thread:
         raise ValueError("No agent-initiated comment thread found")
 
     # add comment to the thread
