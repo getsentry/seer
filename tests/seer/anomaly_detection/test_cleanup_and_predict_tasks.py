@@ -94,11 +94,15 @@ class TestCleanupTasks(unittest.TestCase):
         return external_alert_id, config, points, anomalies, cur_ts
 
     def _save_prophet_predictions(
-        self, external_alert_id: int, num_points_old: int, num_points_new: int
+        self,
+        external_alert_id: int,
+        num_points_old: int,
+        num_points_new: int,
+        first_timestamp: float = None,
     ):
 
-        cur_ts = datetime.now().timestamp()
-        past_ts = (datetime.now() - timedelta(days=200)).timestamp()
+        cur_ts = first_timestamp if first_timestamp else datetime.now().timestamp()
+        past_ts = (datetime.fromtimestamp(first_timestamp) - timedelta(days=200)).timestamp()
 
         # Strip the timestamp to the minute
         cur_ts = int(cur_ts / 60) * 60
@@ -178,7 +182,11 @@ class TestCleanupTasks(unittest.TestCase):
         # Create and save alert with 2000 points (1000 old, 1000 new)
         external_alert_id, config, points, anomalies, _ = self._save_alert(0, 1000, 1000)
 
-        external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 1000, 0)
+        first_timestamp = points[0].timestamp
+
+        external_alert_id, prophet_predictions = self._save_prophet_predictions(
+            0, 1000, 0, first_timestamp
+        )
 
         points_new = points[1000:]
         ts_new = TimeSeries(
@@ -258,8 +266,11 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_make_prophet_predictions(self):
         # Create and save alert with 6 points (3 old, 3 new)
-        external_alert_id, config, points, anomalies, cur_timestamp = self._save_alert(0, 4800, 1)
-        external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 0, 6)
+        external_alert_id, config, points, anomalies, cur_timestamp = self._save_alert(777, 4800, 1)
+        first_timestamp = points[0].timestamp
+        external_alert_id, prophet_predictions = self._save_prophet_predictions(
+            777, 0, 6, first_timestamp
+        )
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
