@@ -326,42 +326,42 @@ class RepoClient:
             sha = self.base_commit_sha
  path_normalized = path_lower.lstrip("./")
  candidates = []
- 
+
  for valid_path in valid_paths:
  valid_path_normalized = valid_path.lower()
  score = 0.0
- 
+
  # Strategy 1: Exact filename match
  if path_normalized.split('/')[-1] == valid_path_normalized.split('/')[-1]:
  score += 0.5
- 
+
  # Strategy 2: Path containment
  if path_normalized in valid_path_normalized:
  score += 0.3
  elif valid_path_normalized in path_normalized:
  score += 0.2
- 
+
  # Strategy 3: Component matching from the end
  path_components = path_normalized.split('/')
  valid_components = valid_path_normalized.split('/')
  max_check = min(len(path_components), len(valid_components))
  matches = 0
- 
+
  for i in range(1, max_check + 1):
  if path_components[-i] == valid_components[-i]:
  matches += 1
  else:
  break
- 
+
  if matches > 0:
  score += 0.1 * matches
- 
+
  if score > 0:
  candidates.append((valid_path, score))
- 
+
  # Sort by score, descending
  candidates.sort(key=lambda x: x[1], reverse=True)
- 
+
  if candidates:
  best_match, confidence = candidates[0]
  if confidence >= 0.4: # Threshold for accepting a match
