@@ -35,12 +35,10 @@ class TestCleanupTasks(unittest.TestCase):
         # Helper function to save an alert with a given number of old and new points
         organization_id = 100
         project_id = 101
-        cur_ts = datetime.now().timestamp()
-        past_ts = (datetime.now() - timedelta(days=200)).timestamp()
-
-        # Strip the timestamp to the minute
-        cur_ts = int(cur_ts / 60) * 60
-        past_ts = int(past_ts / 60) * 60
+        cur_ts = datetime.now().replace(second=0, microsecond=0).timestamp()
+        past_ts = (
+            (datetime.now() - timedelta(days=200)).replace(second=0, microsecond=0).timestamp()
+        )
 
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
@@ -128,9 +126,10 @@ class TestCleanupTasks(unittest.TestCase):
             for timestamp, yhat, yhat_lower, yhat_upper in zip(
                 timestamps, yhats, yhats_lower, yhats_upper
             ):
+
                 prediction = DbProphetAlertTimeSeries(
                     dynamic_alert_id=alert.id,
-                    timestamp=datetime.fromtimestamp(timestamp),
+                    timestamp=datetime.fromtimestamp(timestamp).replace(second=0, microsecond=0),
                     yhat=float(yhat),
                     yhat_lower=float(yhat_lower),
                     yhat_upper=float(yhat_upper),
@@ -245,12 +244,13 @@ class TestCleanupTasks(unittest.TestCase):
                         and new.anomaly_algo_data["mp_suss"]["l_idx"] == algo_data["l_idx"]
                         and new.anomaly_algo_data["mp_suss"]["r_idx"] == algo_data["r_idx"]
                     )
-                    assert (
-                        "dist" in new.anomaly_algo_data["mp_fixed"]
-                        and "idx" in new.anomaly_algo_data["mp_fixed"]
-                        and "l_idx" in new.anomaly_algo_data["mp_fixed"]
-                        and "r_idx" in new.anomaly_algo_data["mp_fixed"]
-                    )
+                    # Commenting fixed window logic for now as we are not using it
+                    # assert (
+                    #     "dist" in new.anomaly_algo_data["mp_fixed"]
+                    #     and "idx" in new.anomaly_algo_data["mp_fixed"]
+                    #     and "l_idx" in new.anomaly_algo_data["mp_fixed"]
+                    #     and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+                    # )
 
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):

@@ -1,13 +1,29 @@
 import abc
 import logging
+from enum import Enum
 from typing import Dict, List, Optional
 
 import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.models.relative_location import Threshold
-
 logger = logging.getLogger(__name__)
+
+
+class ThresholdType(Enum):
+    TREND = 1
+    PREDICTION = 2
+    MP_DIST_IQR = 3
+    LOW_VARIANCE_THRESHOLD = 4
+    BOX_COX_THRESHOLD = 5
+
+
+class Threshold(BaseModel):
+    type: ThresholdType
+    timestamp: float
+    upper: float
+    lower: float
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class TimeSeriesAnomalies(BaseModel, abc.ABC):

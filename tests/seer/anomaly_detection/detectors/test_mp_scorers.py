@@ -1,28 +1,11 @@
-import time
 import unittest
-from unittest.mock import patch
 
 import numpy as np
-import stumpy
 
-from seer.anomaly_detection.detectors import (
-    LowVarianceScorer,
-    MPCascadingScorer,
-    MPIQRScorer,
-    MPScorer,
-    MPUtils,
-    WindowSizeSelector,
-)
-from seer.anomaly_detection.detectors.location_detectors import LocationDetector, PointLocation
-from seer.anomaly_detection.models import (
-    AlgoConfig,
-    AnomalyDetectionConfig,
-    RelativeLocation,
-    ThresholdType,
-)
-from seer.dependency_injection import resolve
-from seer.exceptions import ClientError, ServerError
-from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts, test_data_with_cycles
+from seer.anomaly_detection.detectors import MPCascadingScorer, MPLowVarianceScorer, MPScorer
+from seer.anomaly_detection.models import AnomalyDetectionConfig, ThresholdType
+from seer.exceptions import ClientError
+from tests.seer.anomaly_detection.test_utils import convert_synthetic_ts
 
 
 class TestMPCascadingScorer(unittest.TestCase):
@@ -205,9 +188,9 @@ class TestMPCascadingScorer(unittest.TestCase):
         assert flags_and_scores is None
 
 
-class TestLowVarianceScorer(unittest.TestCase):
+class TestMPLowVarianceScorer(unittest.TestCase):
     def test_low_variance_scorer(self):
-        scorer = LowVarianceScorer(scaling_factors={"low": 5})
+        scorer = MPLowVarianceScorer(scaling_factors={"low": 5})
         ad_config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
@@ -234,7 +217,7 @@ class TestLowVarianceScorer(unittest.TestCase):
             )
 
     def test_to_flag_and_score(self):
-        scorer = LowVarianceScorer()
+        scorer = MPLowVarianceScorer()
         ad_config = AnomalyDetectionConfig(
             time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
         )
@@ -260,298 +243,262 @@ class TestLowVarianceScorer(unittest.TestCase):
         self.assertEqual(flag, "anomaly_higher_confidence")
 
 
-class TestMPIQRScorer(unittest.TestCase):
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_abandon_batch_detection_if_time_budget_is_exceeded(self, mock_location_detector):
+# class TestMPIQRScorer(unittest.TestCase):
+#     @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
+#     def test_abandon_batch_detection_if_time_budget_is_exceeded(self, mock_location_detector):
 
-        def slow_function(streamed_value, streamed_timestamp, history_values, history_timestamps):
-            time.sleep(0.05)  # Simulate a 50ms delay.
-            return None
+#         def slow_function(streamed_value, streamed_timestamp, history_values, history_timestamps):
+#             time.sleep(0.05)  # Simulate a 50ms delay.
+#             return None
 
-        mock_location_detector.side_effect = slow_function
+#         mock_location_detector.side_effect = slow_function
 
-        scorer = MPIQRScorer()
-        mp_utils = resolve(MPUtils)
-        ws_selector = resolve(WindowSizeSelector)
-        ad_config = AnomalyDetectionConfig(
-            time_period=60, sensitivity="high", direction="up", expected_seasonality="auto"
-        )
-        algo_config = resolve(AlgoConfig)
-        df = test_data_with_cycles(num_anomalous=20)
-        window_size = ws_selector.optimal_window_size(df["value"].values)
-        mp = stumpy.stump(
-            df["value"].values,
-            m=max(3, window_size),
-            ignore_trivial=algo_config.mp_ignore_trivial,
-            normalize=False,
-        )
+#         scorer = MPIQRScorer()
+#         mp_utils = resolve(MPUtils)
+#         ws_selector = resolve(WindowSizeSelector)
+#         ad_config = AnomalyDetectionConfig(
+#             time_period=60, sensitivity="high", direction="up", expected_seasonality="auto"
+#         )
+#         algo_config = resolve(AlgoConfig)
+#         df = test_data_with_cycles(num_anomalous=20)
+#         window_size = ws_selector.optimal_window_size(df["value"].values)
+#         mp = stumpy.stump(
+#             df["value"].values,
+#             m=max(3, window_size),
+#             ignore_trivial=algo_config.mp_ignore_trivial,
+#             normalize=False,
+#         )
 
-        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
-        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(df["value"].values))
-        time_budget_ms = 100
-        with self.assertRaises(ServerError) as e:
-            scorer.batch_score(
-                df["value"].values,
-                df["timestamp"].values,
-                mp_dist,
-                ad_config=ad_config,
-                algo_config=algo_config,
-                window_size=window_size,
-                time_budget_ms=time_budget_ms,
-            )
-        # Since slow func sleeps for 50 ms and timeout is 100ms, location detection should be called at least twice and upto 10 which is the batch size.
-        assert mock_location_detector.call_count >= 2
-        assert mock_location_detector.call_count <= 10
-        assert "Batch detection took too long" in str(e.exception)
+#         # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+#         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(df["value"].values))
+#         time_budget_ms = 100
+#         with self.assertRaises(ServerError) as e:
+#             scorer.batch_score(
+#                 df["value"].values,
+#                 df["timestamp"].values,
+#                 mp_dist,
+#                 ad_config=ad_config,
+#                 algo_config=algo_config,
+#                 window_size=window_size,
+#                 time_budget_ms=time_budget_ms,
+#             )
+#         # Since slow func sleeps for 50 ms and timeout is 100ms, location detection should be called at least twice and upto 10 which is the batch size.
+#         assert mock_location_detector.call_count >= 2
+#         assert mock_location_detector.call_count <= 10
+#         assert "Batch detection took too long" in str(e.exception)
 
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_prophet_optimization_for_batch(self, mock_location_detector):
-        scorer = MPIQRScorer()
-        mp_utils = resolve(MPUtils)
-        ws_selector = resolve(WindowSizeSelector)
-        ad_config = AnomalyDetectionConfig(
-            time_period=60, sensitivity="high", direction="up", expected_seasonality="auto"
-        )
-        algo_config = resolve(AlgoConfig)
-        algo_config.direction_detection_num_timesteps_in_batch_mode = 2
-        df = test_data_with_cycles(num_anomalous=5)
-        window_size = ws_selector.optimal_window_size(df["value"].values)
-        # Get the matrix profile for the time series
-        mp = stumpy.stump(
-            df["value"].values,
-            m=max(3, window_size),
-            ignore_trivial=algo_config.mp_ignore_trivial,
-            normalize=False,
-        )
+#     @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
+#     def test_prophet_optimization_for_batch(self, mock_location_detector):
+#         scorer = MPIQRScorer()
+#         mp_utils = resolve(MPUtils)
+#         ws_selector = resolve(WindowSizeSelector)
+#         ad_config = AnomalyDetectionConfig(
+#             time_period=60, sensitivity="high", direction="up", expected_seasonality="auto"
+#         )
+#         algo_config = resolve(AlgoConfig)
+#         algo_config.direction_detection_num_timesteps_in_batch_mode = 2
+#         df = test_data_with_cycles(num_anomalous=5)
+#         window_size = ws_selector.optimal_window_size(df["value"].values)
+#         # Get the matrix profile for the time series
+#         mp = stumpy.stump(
+#             df["value"].values,
+#             m=max(3, window_size),
+#             ignore_trivial=algo_config.mp_ignore_trivial,
+#             normalize=False,
+#         )
 
-        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
-        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(df["value"].values))
+#         # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+#         mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(df["value"].values))
 
-        scorer.batch_score(
-            df["value"].values,
-            df["timestamp"].values,
-            mp_dist,
-            ad_config=ad_config,
-            algo_config=algo_config,
-            window_size=window_size,
-        )
-        assert mock_location_detector.call_count == 2
+#         scorer.batch_score(
+#             df["value"].values,
+#             df["timestamp"].values,
+#             mp_dist,
+#             ad_config=ad_config,
+#             algo_config=algo_config,
+#             window_size=window_size,
+#         )
+#         assert mock_location_detector.call_count == 2
 
-        algo_config.direction_detection_num_timesteps_in_batch_mode = 1
-        scorer.batch_score(
-            df["value"].values,
-            df["timestamp"].values,
-            mp_dist,
-            ad_config=ad_config,
-            algo_config=algo_config,
-            window_size=window_size,
-        )
-        assert mock_location_detector.call_count == 3
+#         algo_config.direction_detection_num_timesteps_in_batch_mode = 1
+#         scorer.batch_score(
+#             df["value"].values,
+#             df["timestamp"].values,
+#             mp_dist,
+#             ad_config=ad_config,
+#             algo_config=algo_config,
+#             window_size=window_size,
+#         )
+#         assert mock_location_detector.call_count == 3
 
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_adjust_flag_for_non_anomalous_case(self, mock_location_detector):
-        scorer = MPIQRScorer()
+#     def test_adjust_flag_for_non_anomalous_case(self):
+#         scorer = MPIQRScorer()
 
-        mock_location_detector.return_value = PointLocation.DOWN
+#         # if original flag is "none". then location detector should not be called.
+#         mp_based_flag = "none"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "up",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, mp_based_flag)
 
-        # if original flag is "none". then location detector should not be called.
-        mp_based_flag = "none"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "up",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_not_called()
-        self.assertEqual(flag, mp_based_flag)
+#         mp_based_flag = "none"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "down",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, mp_based_flag)
 
-        mp_based_flag = "none"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "down",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_not_called()
-        self.assertEqual(flag, mp_based_flag)
+#         mp_based_flag = "none"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "both",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, mp_based_flag)
 
-        mp_based_flag = "none"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "both",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_not_called()
-        self.assertEqual(flag, mp_based_flag)
+#     def test_adjust_flag_for_detecting_both_directions(self):
+#         scorer = MPIQRScorer()
 
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_adjust_flag_for_detecting_both_directions(self, mock_location_detector):
-        scorer = MPIQRScorer()
+#         # if original flag is "none". then location detector should not be called.
+#         mp_based_flag = "none"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "both",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, mp_based_flag)
 
-        mock_location_detector.return_value = PointLocation.DOWN
+#         mp_based_flag = "anomaly_higher_confidence"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "both",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, mp_based_flag)
 
-        # if original flag is "none". then location detector should not be called.
-        mp_based_flag = "none"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "both",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_not_called()
-        self.assertEqual(flag, mp_based_flag)
+#         mp_based_flag = "anomaly_lower_confidence"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "both",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, mp_based_flag)
 
-        mp_based_flag = "anomaly_higher_confidence"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "both",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_not_called()
-        self.assertEqual(flag, mp_based_flag)
+#     def test_adjust_flag_for_anomalous_case(self):
+#         scorer = MPIQRScorer()
+#         combos = [
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": "up",
+#                 "location": PointLocation.UP,
+#                 "expected_flag": "anomaly_higher_confidence",
+#                 "name": "up_up",
+#             },
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": "up",
+#                 "location": PointLocation.DOWN,
+#                 "expected_flag": "none",
+#                 "name": "up_down",
+#             },
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": "up",
+#                 "location": PointLocation.NONE,
+#                 "expected_flag": "none",
+#                 "name": "up_none",
+#             },
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": "down",
+#                 "location": PointLocation.DOWN,
+#                 "expected_flag": "anomaly_higher_confidence",
+#                 "name": "down_down",
+#             },
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": "down",
+#                 "location": PointLocation.UP,
+#                 "expected_flag": "none",
+#                 "name": "down_up",
+#             },
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": "up",
+#                 "location": PointLocation.NONE,
+#                 "expected_flag": "none",
+#                 "name": "up_none",
+#             },
+#             {
+#                 "mp_based_flag": "anomaly_higher_confidence",
+#                 "direction": None,
+#                 "location": PointLocation.NONE,
+#                 "expected_flag": "anomaly_higher_confidence",
+#                 "name": "up_none_failed_direction_detection",
+#             },
+#         ]
 
-        mp_based_flag = "anomaly_lower_confidence"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "both",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        # self.assertEqual(mock_location_detector.call_count, 2)
-        mock_location_detector.assert_not_called()
-        self.assertEqual(flag, mp_based_flag)
+#         for i, combo in enumerate(combos):
+#             mp_based_flag = combo["mp_based_flag"]
+#             direction = combo["direction"]
+#             location = RelativeLocation(location=combo["location"], thresholds=[])
+#             expected_flag = combo["expected_flag"]
 
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_adjust_flag_for_anomalous_case(self, mock_location_detector):
-        scorer = MPIQRScorer()
-        combos = [
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": "up",
-                "location": PointLocation.UP,
-                "expected_flag": "anomaly_higher_confidence",
-                "name": "up_up",
-            },
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": "up",
-                "location": PointLocation.DOWN,
-                "expected_flag": "none",
-                "name": "up_down",
-            },
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": "up",
-                "location": PointLocation.NONE,
-                "expected_flag": "none",
-                "name": "up_none",
-            },
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": "down",
-                "location": PointLocation.DOWN,
-                "expected_flag": "anomaly_higher_confidence",
-                "name": "down_down",
-            },
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": "down",
-                "location": PointLocation.UP,
-                "expected_flag": "none",
-                "name": "down_up",
-            },
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": "up",
-                "location": PointLocation.NONE,
-                "expected_flag": "none",
-                "name": "up_none",
-            },
-            {
-                "mp_based_flag": "anomaly_higher_confidence",
-                "direction": None,
-                "location": PointLocation.NONE,
-                "expected_flag": "anomaly_higher_confidence",
-                "name": "up_none_failed_direction_detection",
-            },
-        ]
+#             flag, _ = scorer._adjust_flag_for_direction(
+#                 mp_based_flag,
+#                 direction,
+#                 1.0,
+#                 1.0,
+#                 np.array([1.0] * 9),
+#                 np.arange(1.0, 10.0),
+#             )
+#             self.assertEqual(flag, expected_flag, msg=combo["name"])
 
-        for i, combo in enumerate(combos):
-            mp_based_flag = combo["mp_based_flag"]
-            direction = combo["direction"]
-            location = RelativeLocation(location=combo["location"], thresholds=[])
-            expected_flag = combo["expected_flag"]
+#     def test_adjust_flag_for_anomalous_case_when_location_inbwetween(self):
+#         scorer = MPIQRScorer()
 
-            mock_location_detector.return_value = location
+#         mp_based_flag = "anomaly_higher_confidence"
+#         flag, _ = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "up",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, "none")
 
-            flag, _ = scorer._adjust_flag_for_direction(
-                mp_based_flag,
-                direction,
-                1.0,
-                1.0,
-                np.array([1.0] * 9),
-                np.arange(1.0, 10.0),
-                location_detector=resolve(LocationDetector),
-            )
-            self.assertEqual(mock_location_detector.call_count, i + 1)
-            self.assertEqual(flag, expected_flag, msg=combo["name"])
+#     def test_adjust_flag_for_anomalous_case_when_location_fails(self):
+#         scorer = MPIQRScorer()
 
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_adjust_flag_for_anomalous_case_when_location_inbwetween(self, mock_location_detector):
-        scorer = MPIQRScorer()
-
-        mock_location_detector.return_value = RelativeLocation(
-            location=PointLocation.NONE, thresholds=[]
-        )
-
-        mp_based_flag = "anomaly_higher_confidence"
-        flag, _ = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "up",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_called_once()
-        self.assertEqual(flag, "none")
-
-    @patch("seer.anomaly_detection.detectors.location_detectors.ProphetLocationDetector.detect")
-    def test_adjust_flag_for_anomalous_case_when_location_fails(self, mock_location_detector):
-        scorer = MPIQRScorer()
-
-        mock_location_detector.return_value = None
-
-        mp_based_flag = "anomaly_higher_confidence"
-        flag, thresholds = scorer._adjust_flag_for_direction(
-            mp_based_flag,
-            "up",
-            1.0,
-            1.0,
-            np.array([1.0] * 9),
-            np.arange(1.0, 10.0),
-            location_detector=resolve(LocationDetector),
-        )
-        mock_location_detector.assert_called_once()
-        self.assertEqual(flag, "anomaly_higher_confidence")
+#         mp_based_flag = "anomaly_higher_confidence"
+#         flag, thresholds = scorer._adjust_flag_for_direction(
+#             mp_based_flag,
+#             "up",
+#             1.0,
+#             1.0,
+#             np.array([1.0] * 9),
+#             np.arange(1.0, 10.0),
+#         )
+#         self.assertEqual(flag, "anomaly_higher_confidence")

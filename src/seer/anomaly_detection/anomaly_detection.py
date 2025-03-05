@@ -4,6 +4,7 @@ import random
 from typing import List, Tuple
 
 import numpy as np
+import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
 from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
+from seer.anomaly_detection.detectors.prophet_anomaly_detector import ProphetAnomalyDetector
 from seer.anomaly_detection.models import AlgoConfig, MPTimeSeriesAnomalies
 from seer.anomaly_detection.models.converters import convert_external_ts_to_internal
 from seer.anomaly_detection.models.external import (
@@ -26,6 +28,7 @@ from seer.anomaly_detection.models.external import (
     TimeSeriesPoint,
     TimeSeriesWithHistory,
 )
+from seer.anomaly_detection.models.timeseries import ProphetPrediction
 from seer.db import TaskStatus
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError, ServerError
@@ -64,7 +67,7 @@ class AnomalyDetection(BaseModel):
         window_size: int | None = None,
         algo_config: AlgoConfig = injected,
         time_budget_ms: int | None = None,
-    ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
+    ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies, pd.DataFrame]:
         """
         Stateless batch anomaly detection on entire timeseries as provided. In batch mode, analysis of a
         single timestep is dependent on the time steps on either side of it.
@@ -81,30 +84,43 @@ class AnomalyDetection(BaseModel):
         """
         logger.info(f"Detecting anomalies for time series with {len(timeseries)} datapoints")
         batch_detector = MPBatchAnomalyDetector()
+        prophet_detector = ProphetAnomalyDetector()
 
-        anomalies_suss = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries),
+        forecast_len = algo_config.prophet_forecast_len * (60 // config.time_period)
+        ts_internal = convert_external_ts_to_internal(timeseries)
+        prophet_df = prophet_detector.predict(
+            ts_internal.timestamps,
+            ts_internal.values,
+            forecast_len,
+            config.time_period,
+            config.sensitivity,
+        )
+        prophet_df.ds = prophet_df.ds.astype(int) / 10**9
+        anomalies = batch_detector.detect(
+            ts_internal,
             config,
             algo_config=algo_config,
             window_size=window_size,
+            prophet_df=prophet_df,
             time_budget_ms=(
-                time_budget_ms // 2 if time_budget_ms else None
+                time_budget_ms if time_budget_ms else None
             ),  # Time budget is split between the two detection calls
         )
-        anomalies_fixed = batch_detector.detect(
-            convert_external_ts_to_internal(timeseries),
-            config,
-            algo_config=algo_config,
-            window_size=algo_config.mp_fixed_window_size,
-            time_budget_ms=(
-                time_budget_ms // 2 if time_budget_ms else None
-            ),  # Time budget is split between the two detection calls
-        )
-        anomalies = DbAlertDataAccessor().combine_anomalies(
-            anomalies_suss, anomalies_fixed, [True] * len(timeseries)
+        # anomalies_fixed = batch_detector.detect(
+        #     convert_external_ts_to_internal(timeseries),
+        #     config,
+        #     algo_config=algo_config,
+        #     window_size=algo_config.mp_fixed_window_size,
+        #     time_budget_ms=(
+        #         time_budget_ms // 2 if time_budget_ms else None
+        #     ),  # Time budget is split between the two detection calls
+        #     prophet_df=prophet_df,
+        # )
+        batch_anomalies = DbAlertDataAccessor().combine_anomalies(
+            anomalies, None, [True] * len(timeseries)
         )
 
-        return timeseries, anomalies
+        return timeseries, batch_anomalies, prophet_df
 
     @inject
     @sentry_sdk.trace
@@ -142,7 +158,6 @@ class AnomalyDetection(BaseModel):
         # Retrieve historic data
         historic = alert_data_accessor.query(alert.id)
         if historic is None:
-
             logger.error(
                 "no_stored_history_data",
                 extra={
@@ -177,8 +192,6 @@ class AnomalyDetection(BaseModel):
             )
         anomalies: MPTimeSeriesAnomalies = historic.anomalies
 
-        # TODO: Need to check the time gap between historic data and the new datapoint against the alert configuration
-
         # Get the original flags from the historic data
         original_flags = anomalies.original_flags
         if original_flags is not None and len(original_flags) != len(
@@ -193,52 +206,56 @@ class AnomalyDetection(BaseModel):
         # Run stream detection
 
         # SuSS Window
-        stream_detector_suss = MPStreamAnomalyDetector(
+        stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
             history_values=historic.timeseries.values,
             history_mp=anomalies.matrix_profile_suss,
             window_size=anomalies.window_size,
             original_flags=original_flags,
         )
-        streamed_anomalies_suss = stream_detector_suss.detect(
-            convert_external_ts_to_internal(ts_external), config
+        streamed_anomalies = stream_detector.detect(
+            convert_external_ts_to_internal(ts_external),
+            config,
+            prophet_df=historic.prophet_predictions.as_dataframe(),
         )
 
-        streamed_anomalies_fixed = None
-        if not historic.only_suss:
-            # Fixed Window
-            stream_detector_fixed = MPStreamAnomalyDetector(
-                history_timestamps=historic.timeseries.timestamps,
-                history_values=historic.timeseries.values,
-                history_mp=anomalies.matrix_profile_fixed,
-                window_size=10,
-                original_flags=original_flags,
-            )
-            streamed_anomalies_fixed = stream_detector_fixed.detect(
-                convert_external_ts_to_internal(ts_external), config
-            )
+        # Commenting out in case we need to include dynamic window logic again
+        # streamed_anomalies_fixed = None
+        # if not historic.only_suss:
+        #     # Fixed Window
+        #     stream_detector_fixed = MPStreamAnomalyDetector(
+        #         history_timestamps=historic.timeseries.timestamps,
+        #         history_values=historic.timeseries.values,
+        #         history_mp=anomalies.matrix_profile_fixed,
+        #         window_size=10,
+        #         original_flags=original_flags,
+        #     )
+        #     streamed_anomalies_fixed = stream_detector_fixed.detect(
+        #         convert_external_ts_to_internal(ts_external), config
+        #     )
 
-            # Check if next detection should switch window
-            use_suss_window = anomalies.use_suss[-1]
-            if use_suss_window and streamed_anomalies_suss.flags[-1] == "anomaly_higher_confidence":
-                use_suss_window = False
+        #     # Check if next detection should switch window
+        #     use_suss_window = anomalies.use_suss[-1]
+        #     if use_suss_window and streamed_anomalies_suss.flags[-1] == "anomaly_higher_confidence":
+        #         use_suss_window = False
 
-            # If we are using fixed window and we are past the SuSS anomalous region
-            if (
-                not use_suss_window
-                and streamed_anomalies_fixed.flags[-1] == "none"
-                and streamed_anomalies_suss.flags[-1] == "none"
-            ):
-                use_suss_window = True
+        #     # If we are using fixed window and we are past the SuSS anomalous region
+        #     if (
+        #         not use_suss_window
+        #         and streamed_anomalies_fixed.flags[-1] == "none"
+        #         and streamed_anomalies_suss.flags[-1] == "none"
+        #     ):
+        #         use_suss_window = True
 
-            anomalies.use_suss.append(use_suss_window)
+        #     anomalies.use_suss.append(use_suss_window)
 
-        else:
-            anomalies.use_suss.append(True)
+        # else:
+        #     anomalies.use_suss.append(True)
+        anomalies.use_suss.append(True)
 
-        num_anomlies = len(streamed_anomalies_suss.flags)
-        streamed_anomalies = alert_data_accessor.combine_anomalies(
-            streamed_anomalies_suss, streamed_anomalies_fixed, anomalies.use_suss[-num_anomlies:]
+        num_anomlies = len(streamed_anomalies.flags)
+        streamed_anomalies_online = alert_data_accessor.combine_anomalies(
+            streamed_anomalies, None, anomalies.use_suss[-num_anomlies:]
         )
 
         # Save new data point
@@ -246,7 +263,7 @@ class AnomalyDetection(BaseModel):
             external_alert_id=alert.id,
             timepoint=ts_external[0],
             anomaly=streamed_anomalies,
-            anomaly_algo_data=streamed_anomalies.get_anomaly_algo_data(len(ts_external))[0],
+            anomaly_algo_data=streamed_anomalies_online.get_anomaly_algo_data(len(ts_external))[0],
         )
 
         # Delayed import due to circular imports
@@ -274,7 +291,7 @@ class AnomalyDetection(BaseModel):
             sentry_sdk.capture_exception(e)
             logger.exception(e)
 
-        return ts_external, streamed_anomalies
+        return ts_external, streamed_anomalies_online
 
     def _min_required_timesteps(self, time_period, min_num_days=7):
         return int(min_num_days * 24 * 60 / time_period)
@@ -330,63 +347,88 @@ class AnomalyDetection(BaseModel):
 
         historic = convert_external_ts_to_internal(ts_with_history.history)
         # We are doing 4 detection operations, so allocating 1/4th of the time budget for each one.
-        time_budget_ms = time_budget_ms // 4 if time_budget_ms else None
+        time_budget_ms = time_budget_ms // 2 if time_budget_ms else None
 
         # Run batch detect on history data
         batch_detector = MPBatchAnomalyDetector()
-        historic_anomalies_suss = batch_detector.detect(
-            historic, config, time_budget_ms=time_budget_ms
+        historic_anomalies = batch_detector.detect(
+            historic,
+            config,
+            time_budget_ms=time_budget_ms,
+            # TODO Compute and pass prophet df?
         )
-        historic_anomalies_fixed = batch_detector.detect(
-            historic, config, window_size=10, time_budget_ms=time_budget_ms
-        )
+        # historic_anomalies_fixed = batch_detector.detect(
+        #     historic,
+        #     config,
+        #     window_size=10,
+        #     time_budget_ms=time_budget_ms,
+        #     # TODO Compute and pass prophet df?
+        # )
 
         # Run stream detection on current data
         # SuSS Window
-        stream_detector_suss = MPStreamAnomalyDetector(
+        stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
-            history_mp=historic_anomalies_suss.matrix_profile,
-            window_size=historic_anomalies_suss.window_size,
-            original_flags=historic_anomalies_suss.original_flags,
+            history_mp=historic_anomalies.matrix_profile,
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags,
         )
-        streamed_anomalies_suss = stream_detector_suss.detect(
-            convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
+        streamed_anomalies = stream_detector.detect(
+            convert_external_ts_to_internal(ts_external),
+            config,
+            time_budget_ms=time_budget_ms,
+            # TODO Compute and pass prophet df?
         )
 
         # Fixed Window
-        stream_detector_fixed = MPStreamAnomalyDetector(
-            history_timestamps=historic.timestamps,
-            history_values=historic.values,
-            history_mp=historic_anomalies_fixed.matrix_profile,
-            window_size=historic_anomalies_fixed.window_size,
-            original_flags=historic_anomalies_fixed.original_flags,
-        )
-        streamed_anomalies_fixed = stream_detector_fixed.detect(
-            convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
-        )
+        # stream_detector_fixed = MPStreamAnomalyDetector(
+        #     history_timestamps=historic.timestamps,
+        #     history_values=historic.values,
+        #     history_mp=historic_anomalies_fixed.matrix_profile,
+        #     window_size=historic_anomalies_fixed.window_size,
+        #     original_flags=historic_anomalies_fixed.original_flags,
+        # )
+        # streamed_anomalies_fixed = stream_detector_fixed.detect(
+        #     convert_external_ts_to_internal(ts_external),
+        #     config,
+        #     time_budget_ms=time_budget_ms,
+        #     # TODO Compute and pass prophet df?
+        # )
+
+        # Fixed Window
+        # stream_detector_fixed = MPStreamAnomalyDetector(
+        #     history_timestamps=historic.timestamps,
+        #     history_values=historic.values,
+        #     history_mp=historic_anomalies_fixed.matrix_profile,
+        #     window_size=historic_anomalies_fixed.window_size,
+        #     original_flags=historic_anomalies_fixed.original_flags,
+        # )
+        # streamed_anomalies_fixed = stream_detector_fixed.detect(
+        #     convert_external_ts_to_internal(ts_external), config, time_budget_ms=time_budget_ms
+        # )
 
         if trim_current_by > 0:
             ts_external = ts_with_history.history[-trim_current_by:] + ts_external
-            streamed_anomalies_suss.flags = (
-                historic_anomalies_suss.flags[-trim_current_by:] + streamed_anomalies_suss.flags
+            streamed_anomalies.flags = (
+                historic_anomalies.flags[-trim_current_by:] + streamed_anomalies.flags
             )
-            streamed_anomalies_suss.scores = (
-                historic_anomalies_suss.scores[-trim_current_by:] + streamed_anomalies_suss.scores
+            streamed_anomalies.scores = (
+                historic_anomalies.scores[-trim_current_by:] + streamed_anomalies.scores
             )
-            streamed_anomalies_fixed.flags = (
-                historic_anomalies_fixed.flags[-trim_current_by:] + streamed_anomalies_fixed.flags
-            )
-            streamed_anomalies_fixed.scores = (
-                historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
-            )
+            # streamed_anomalies_fixed.flags = (
+            #     historic_anomalies_fixed.flags[-trim_current_by:] + streamed_anomalies_fixed.flags
+            # )
+            # streamed_anomalies_fixed.scores = (
+            #     historic_anomalies_fixed.scores[-trim_current_by:] + streamed_anomalies_fixed.scores
+            # )
 
         anomalies = DbAlertDataAccessor().combine_anomalies(
-            streamed_anomalies_suss,
-            streamed_anomalies_fixed,
+            streamed_anomalies,
+            None,
             [True]
             * len(
-                streamed_anomalies_suss.flags
+                streamed_anomalies.flags
             ),  # Defaulting to using SuSS window because switching logic is for streaming only
         )
 
@@ -431,7 +473,7 @@ class AnomalyDetection(BaseModel):
                 request.context, request.config, time_budget_ms=time_budget_ms
             )
         else:
-            ts, anomalies = self._batch_detect(
+            ts, anomalies, _ = self._batch_detect(
                 request.context, request.config, time_budget_ms=time_budget_ms
             )
         self._update_anomalies(ts, anomalies)
@@ -479,7 +521,7 @@ class AnomalyDetection(BaseModel):
             },
         )
         time_start = datetime.datetime.now()
-        ts, anomalies = self._batch_detect(
+        ts, anomalies, prophet_df = self._batch_detect(
             request.timeseries, request.config, time_budget_ms=time_budget_ms
         )
         time_elapsed = datetime.datetime.now() - time_start
@@ -495,7 +537,7 @@ class AnomalyDetection(BaseModel):
                 "Batch detection took too long"
             )  # Abort without saving to avoid data going out of sync with alerting system.
 
-        alert_data_accessor.save_alert(
+        saved_alert_id = alert_data_accessor.save_alert(
             organization_id=request.organization_id,
             project_id=request.project_id,
             external_alert_id=request.alert.id,
@@ -504,6 +546,10 @@ class AnomalyDetection(BaseModel):
             anomalies=anomalies,
             anomaly_algo_data={"window_size": anomalies.window_size},
             data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        alert_data_accessor.store_prophet_predictions(
+            saved_alert_id, ProphetPrediction.from_prophet_df(prophet_df)
         )
         return StoreDataResponse(success=True)
 
