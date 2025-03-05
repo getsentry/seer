@@ -185,25 +185,25 @@ def _update_matrix_profiles(
     anomalies_suss = MPBatchAnomalyDetector()._compute_matrix_profile(
         timeseries=timeseries, ad_config=anomaly_detection_config, algo_config=algo_config
     )
-    anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
-        timeseries=timeseries,
-        ad_config=anomaly_detection_config,
-        algo_config=algo_config,
-        window_size=algo_config.mp_fixed_window_size,
-    )
+    # anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
+    #     timeseries=timeseries,
+    #     ad_config=anomaly_detection_config,
+    #     algo_config=algo_config,
+    #     window_size=algo_config.mp_fixed_window_size,
+    # )
     anomalies = DbAlertDataAccessor().combine_anomalies(
-        anomalies_suss, anomalies_fixed, [True] * len(timeseries.timestamps)
+        anomalies_suss, None, [True] * len(timeseries.timestamps)
     )
 
     algo_data_map = dict(
         zip(timeseries.timestamps, anomalies.get_anomaly_algo_data(len(timeseries.timestamps)))
     )
-    updateed_timeseries_points = 0
+    updated_timeseries_points = 0
     for timestep in alert.timeseries:
         timestep.anomaly_algo_data = algo_data_map[timestep.timestamp.timestamp()]
-        updateed_timeseries_points += 1
+        updated_timeseries_points += 1
     alert.anomaly_algo_data = {"window_size": anomalies.window_size}
-    return updateed_timeseries_points
+    return updated_timeseries_points
 
 
 @sentry_sdk.trace

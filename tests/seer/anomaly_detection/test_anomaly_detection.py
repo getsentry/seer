@@ -383,7 +383,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 window_size=window_size,
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
-                use_suss=np.array([False] * len(ts_timestamps)),
+                use_suss=np.array([True] * len(ts_timestamps)),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -393,7 +393,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 yhat_upper=np.array([]),
             ),
             cleanup_predict_config=cleanup_predict_config,
-            only_suss=False,
+            only_suss=True,
             data_purge_flag=TaskStatus.NOT_QUEUED,
             last_queued_at=None,
         )
@@ -420,7 +420,9 @@ class TestAnomalyDetection(unittest.TestCase):
         )
         response = AnomalyDetection().detect_anomalies(request=request)
 
-        assert mock_stream_detector.call_count == 2
+        assert (
+            mock_stream_detector.call_count == 1
+        )  # Only called once because the window should not switch
         assert isinstance(response, DetectAnomaliesResponse)
         assert isinstance(response.timeseries, list)
         assert len(response.timeseries) == 1  # Checking just 1 streamed value
@@ -461,7 +463,7 @@ class TestAnomalyDetection(unittest.TestCase):
 
         response = AnomalyDetection().detect_anomalies(request=request)
 
-        assert mock_stream_detector.call_count == 3
+        assert mock_stream_detector.call_count == 2
         assert isinstance(response, DetectAnomaliesResponse)
         assert isinstance(response.timeseries, list)
         assert len(response.timeseries) == 1  # Checking just 1 streamed value
