@@ -497,7 +497,7 @@ propcache==0.3.0
     #   aiohttp
     #   yarl
 prophet==1.1.6
-    # via -r requirements-constraints.txt
+    # via -r requirements-constraints.txtx
 proto-plus==1.26.0
     # via
     #   -r requirements-constraints.txt
@@ -524,7 +524,7 @@ protobuf==5.29.3
     #   transformers
 psycopg==3.1.18
     # via -r requirements-constraints.txt
-pulsar-client==3.6.0
+pulsar-client==3.6.1
     # via chromadb
 pyarrow==19.0.1
     # via datasets
