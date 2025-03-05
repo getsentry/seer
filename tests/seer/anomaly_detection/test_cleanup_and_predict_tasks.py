@@ -283,16 +283,6 @@ class TestCleanupTasks(unittest.TestCase):
             )
             assert alert is not None
 
-            print("------------ prophet predictions ------------")
-            for prediction in prophet_predictions:
-                print(prediction.timestamp)
-            print("---------------------------------------------")
-
-            print("------------ alert prophet predictions ------------")
-            for prediction in alert.prophet_predictions:
-                print(prediction.timestamp)
-            print("---------------------------------------------")
-
             new_predictions = [
                 prediction.timestamp
                 for prediction in alert.prophet_predictions
