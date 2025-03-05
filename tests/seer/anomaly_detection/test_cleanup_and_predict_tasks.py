@@ -272,6 +272,9 @@ class TestCleanupTasks(unittest.TestCase):
             )
             assert alert is not None
 
+            for prediction in prophet_predictions:
+                print(prediction.timestamp)
+
             new_predictions = [
                 prediction.timestamp
                 for prediction in alert.prophet_predictions
@@ -279,6 +282,7 @@ class TestCleanupTasks(unittest.TestCase):
             ]
 
             assert len(new_predictions) == (36 * (60 // config.time_period))
+            assert 1 / 0
 
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
