@@ -31,6 +31,7 @@ from seer.automation.autofix.models import (
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
+    AutofixResolveCommentThreadPayload,
     AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixSolutionUpdatePayload,
@@ -709,20 +710,29 @@ def comment_on_thread(request: AutofixUpdateRequest):
 
     step_index = request.payload.step_index
 
-    # create a new thread if needed
+    # create a new thread if needed (only for user-initiated threads)
     step = state.get().steps[step_index]
-    if not step.active_comment_thread or step.active_comment_thread.id != request.payload.thread_id:
-        with state.update() as cur:
-            cur.steps[step_index].active_comment_thread = CommentThread(
-                id=request.payload.thread_id,
-                selected_text=request.payload.selected_text,
-            )
-    else:
-        with state.update() as cur:
-            # update the selected text in case it changed
-            cur.steps[step_index].active_comment_thread.selected_text = (
-                request.payload.selected_text
-            )
+    step_after = (
+        state.get().steps[step_index + 1] if step_index + 1 < len(state.get().steps) else None
+    )  # the agent comment thread is on the step after the processing step
+    if not request.payload.is_agent_comment:
+        if (
+            not step.active_comment_thread
+            or step.active_comment_thread.id != request.payload.thread_id
+        ):
+            with state.update() as cur:
+                cur.steps[step_index].active_comment_thread = CommentThread(
+                    id=request.payload.thread_id,
+                    selected_text=request.payload.selected_text,
+                )
+        else:
+            with state.update() as cur:
+                # update the selected text in case it changed
+                cur.steps[step_index].active_comment_thread.selected_text = (
+                    request.payload.selected_text
+                )
+    elif not step_after.agent_comment_thread:
+        raise ValueError("No agent-initiated comment thread found")
 
     # add comment to the thread
     message = Message(
@@ -730,7 +740,10 @@ def comment_on_thread(request: AutofixUpdateRequest):
         content=request.payload.message,
     )
     with state.update() as cur:
-        cur.steps[step_index].active_comment_thread.messages.append(message)
+        if request.payload.is_agent_comment:
+            cur.steps[step_index + 1].agent_comment_thread.messages.append(message)
+        else:
+            cur.steps[step_index].active_comment_thread.messages.append(message)
 
     # fetch memory from the step
     is_coding_step = step.key == "plan"
@@ -747,20 +760,37 @@ def comment_on_thread(request: AutofixUpdateRequest):
 
     # ask LLM for response
     step = state.get().steps[step_index]
+    step_after = state.get().steps[step_index + 1]
     comment_thread_component = CommentThreadComponent(context=context)
     response = comment_thread_component.invoke(
         CommentThreadRequest(
             run_memory=memory,
-            thread_memory=step.active_comment_thread.messages,
-            selected_text=step.active_comment_thread.selected_text,
+            thread_memory=(
+                step.active_comment_thread.messages
+                if not request.payload.is_agent_comment
+                else step_after.agent_comment_thread.messages
+            ),
+            selected_text=(
+                step.active_comment_thread.selected_text
+                if not request.payload.is_agent_comment
+                else step_after.agent_comment_thread.selected_text
+            ),
         )
     )
     with state.update() as cur:
-        cur.steps[step_index].active_comment_thread.messages.append(
-            Message(content=response.comment_in_response, role="assistant")
-        )
+        if request.payload.is_agent_comment:
+            cur.steps[step_index + 1].agent_comment_thread.messages.append(
+                Message(content=response.comment_in_response, role="assistant")
+            )
+        else:
+            cur.steps[step_index].active_comment_thread.messages.append(
+                Message(content=response.comment_in_response, role="assistant")
+            )
         if response.asked_to_do_something:
-            cur.steps[step_index].active_comment_thread.is_completed = True
+            if request.payload.is_agent_comment:
+                cur.steps[step_index + 1].agent_comment_thread.is_completed = True
+            else:
+                cur.steps[step_index].active_comment_thread.is_completed = True
 
     if response.asked_to_do_something:
         text = (
@@ -777,7 +807,11 @@ def comment_on_thread(request: AutofixUpdateRequest):
             + "\n".join(
                 [
                     f"{message.role}: {message.content}"
-                    for message in step.active_comment_thread.messages
+                    for message in (
+                        step.active_comment_thread.messages
+                        if not request.payload.is_agent_comment
+                        else step_after.agent_comment_thread.messages
+                    )
                 ]
             )
         )
@@ -794,6 +828,22 @@ def comment_on_thread(request: AutofixUpdateRequest):
                 ),
             )
         )
+
+
+def resolve_comment_thread(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixResolveCommentThreadPayload):
+        raise ValueError("Invalid payload type for resolve_comment_thread")
+
+    state = ContinuationState(request.run_id)
+
+    step_index = request.payload.step_index
+    with state.update() as cur:
+        if request.payload.is_agent_comment and step_index + 1 < len(state.get().steps):
+            cur.steps[step_index + 1].agent_comment_thread = None
+        elif request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:
+            cur.steps[step_index].active_comment_thread = None
+        else:
+            raise ValueError("No matching comment thread found; unable to resolve thread")
 
 
 @inject
