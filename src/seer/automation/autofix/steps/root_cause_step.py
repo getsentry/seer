@@ -98,24 +98,28 @@ class RootCauseStep(AutofixPipelineStep):
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
 
         # confidence evaluation
-        # TODO only if in interactive mode
-        run_memory = self.context.get_memory("root_cause_analysis")
-        confidence_output = ConfidenceComponent(self.context).invoke(
-            ConfidenceRequest(
-                run_memory=run_memory,
-                step_goal_description="root cause analysis",
-                next_step_goal_description="figuring out a solution",
+        if not self.context.state.get().request.options.disable_interactivity:
+            run_memory = self.context.get_memory("root_cause_analysis")
+            confidence_output = ConfidenceComponent(self.context).invoke(
+                ConfidenceRequest(
+                    run_memory=run_memory,
+                    step_goal_description="root cause analysis",
+                    next_step_goal_description="figuring out a solution",
+                )
             )
-        )
-        if confidence_output:
-            with self.context.state.update() as cur:
-                cur.steps[-1].output_confidence_score = confidence_output.output_confidence_score
-                cur.steps[-1].proceed_confidence_score = confidence_output.proceed_confidence_score
-                if confidence_output.comment:
-                    cur.steps[-1].agent_comment_thread = CommentThread(
-                        id=str(uuid.uuid4()),
-                        messages=[Message(role="assistant", content=confidence_output.comment)],
+            if confidence_output:
+                with self.context.state.update() as cur:
+                    cur.steps[-1].output_confidence_score = (
+                        confidence_output.output_confidence_score
                     )
+                    cur.steps[-1].proceed_confidence_score = (
+                        confidence_output.proceed_confidence_score
+                    )
+                    if confidence_output.comment:
+                        cur.steps[-1].agent_comment_thread = CommentThread(
+                            id=str(uuid.uuid4()),
+                            messages=[Message(role="assistant", content=confidence_output.comment)],
+                        )
 
         self.context.event_manager.add_log(
             "Here is Autofix's proposed root cause."
