@@ -3,12 +3,12 @@ import logging
 from seer.automation.agent.models import Message
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
-from seer.automation.codegen.models import CodegenContinuation
+from seer.automation.codegen.models import CodegenContinuation, UnitTestRunMemory
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import DbStateRunTypes
-from seer.db import DbPrContextToUnitTestGenerationRunIdMapping, Session
+from seer.db import DbPrContextToUnitTestGenerationRunIdMapping, DbRunMemory, Session
 
 logger = logging.getLogger(__name__)
 
@@ -80,24 +80,44 @@ class CodegenContext(PipelineContext):
 
         return file_contents
 
-    def get_unit_test_memory(
-        self, owner: str, repo: str, pr_id: int
-    ) -> DbPrContextToUnitTestGenerationRunIdMapping | None:
+    def store_memory(self, key: str, memory: list[Message]):
         with Session() as session:
-            pr_context = (
-                session.query(DbPrContextToUnitTestGenerationRunIdMapping)
-                .filter_by(owner=owner, repo=repo, pr_id=pr_id)
-                .one_or_none()
+            memory_record = (
+                session.query(DbRunMemory).where(DbRunMemory.run_id == self.run_id).one_or_none()
             )
-        return pr_context
 
-    def store_unit_test_memory(
-        self, owner: str, repo: str, pr_id: int
-    ) -> DbPrContextToUnitTestGenerationRunIdMapping | None:
+            if not memory_record:
+                memory_model = UnitTestRunMemory(run_id=self.run_id)
+            else:
+                memory_model = UnitTestRunMemory.from_db_model(memory_record)
+
+            memory_model.memory[key] = memory
+            memory_record = memory_model.to_db_model()
+
+            session.merge(memory_record)
+            session.commit()
+
+    def get_memory(self, key: str, past_run_id: int) -> list[Message]:
         with Session() as session:
-            pr_context = (
+            memory_record = (
+                session.query(DbRunMemory).where(DbRunMemory.run_id == past_run_id).one_or_none()
+            )
+
+            if not memory_record:
+                return []
+
+            return UnitTestRunMemory.from_db_model(memory_record).memory.get(key, [])
+
+    def get_previous_run_context(
+        self, owner: str, repo: str, pr_id: int
+    ) -> DbPrContextToUnitTestGenerationRunIdMapping:
+        with Session() as session:
+            previous_context = (
                 session.query(DbPrContextToUnitTestGenerationRunIdMapping)
-                .filter_by(owner=owner, repo=repo, pr_id=pr_id)
+                .where(DbPrContextToUnitTestGenerationRunIdMapping.owner == owner)
+                .where(DbPrContextToUnitTestGenerationRunIdMapping.repo == repo)
+                .where(DbPrContextToUnitTestGenerationRunIdMapping.pr_id == pr_id)
                 .one_or_none()
             )
-        return pr_context
+
+            return previous_context

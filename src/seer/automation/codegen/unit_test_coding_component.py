@@ -115,4 +115,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 file_changes.append(change)
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
+
+        self.context.store_memory("UnitTestRunMemory", agent.memory)
+
         return CodeUnitTestOutput(diffs=file_changes)

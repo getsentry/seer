@@ -66,7 +66,7 @@ class GeneratedTestsPullRequestCreator:
                 provider="github",
                 owner=self.repo_client.repo.owner.login,
                 repo=self.repo_client.repo.name,
-                pr_id=new_pr.id,
+                pr_id=new_pr.number,
                 iterations=0,
                 run_id=self.unit_test_run_id,
                 original_pr_url=self.pr.html_url,

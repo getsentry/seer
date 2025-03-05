@@ -212,3 +212,15 @@ class CodecovTaskRequest(BaseModel):
     data: CodegenUnitTestsRequest | CodegenPrReviewRequest | CodegenRelevantWarningsRequest
     external_owner_id: str
     request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "retry-unit-tests"]
+
+
+class UnitTestRunMemory(BaseModel):
+    run_id: int
+    memory: dict[str, list[Message]] = Field(default_factory=dict)
+
+    def to_db_model(self) -> DbRunMemory:
+        return DbRunMemory(run_id=self.run_id, value=self.model_dump(mode="json"))
+
+    @classmethod
+    def from_db_model(cls, model: DbRunMemory) -> "UnitTestRunMemory":
+        return cls.model_validate(model.value)

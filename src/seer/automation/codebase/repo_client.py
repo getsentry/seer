@@ -682,3 +682,40 @@ class RepoClient:
             start_line=comment.get("start_line", GithubObject.NotSet),
         )
         return review_comment.html_url
+
+    def push_new_commit_to_pr(
+        self,
+        pr,
+        commit_message: str,
+        file_patches: list[FilePatch] | None = None,
+        file_changes: list[FileChange] | None = None,
+    ):
+        if not file_patches and not file_changes:
+            raise ValueError("Must provide file_patches or file_changes")
+        branch_name = pr.head.ref
+        tree_elements = []
+        if file_patches:
+            for patch in file_patches:
+                element = self.process_one_file_for_git_commit(branch_ref=branch_name, patch=patch)
+                if element:
+                    tree_elements.append(element)
+        elif file_changes:
+            for change in file_changes:
+                element = self.process_one_file_for_git_commit(
+                    branch_ref=branch_name, change=change
+                )
+                if element:
+                    tree_elements.append(element)
+        if not tree_elements:
+            logger.warning("No valid changes to commit")
+            return None
+        latest_sha = self.get_branch_head_sha(branch_name)
+        latest_commit = self.repo.get_git_commit(latest_sha)
+        base_tree = latest_commit.tree
+        new_tree = self.repo.create_git_tree(tree_elements, base_tree)
+        new_commit = self.repo.create_git_commit(
+            message=commit_message, tree=new_tree, parents=[latest_commit]
+        )
+        branch_ref = self.repo.get_git_ref(f"heads/{branch_name}")
+        branch_ref.edit(sha=new_commit.sha)
+        return new_commit
