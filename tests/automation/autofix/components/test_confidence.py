@@ -125,5 +125,6 @@ class TestConfidenceComponent:
             output = component.invoke(request)
 
         assert output is not None
-        assert output.output_confidence_score is None
-        assert output.proceed_confidence_score is None
+        assert output.output_confidence_score == 0.5
+        assert output.proceed_confidence_score == 0.5
+        assert output.comment is None
