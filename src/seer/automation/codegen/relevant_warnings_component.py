@@ -1,6 +1,7 @@
 import logging
 import textwrap
 from pathlib import Path
+from typing import Iterable
 
 import numpy as np
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
@@ -67,7 +68,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         return result
 
     def _does_warning_match_a_target_file(
-        self, warning: StaticAnalysisWarning, target_filenames: set[str]
+        self, warning: StaticAnalysisWarning, target_filenames: Iterable[str]
     ) -> bool:
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
@@ -92,16 +93,17 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
                 for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
             },
         }
-        return bool(possible_matches_from_warning & possible_matches_from_targets)
+        matches = possible_matches_from_warning & possible_matches_from_targets
+        self.logger.info(f"{warning.encoded_location=} {matches=}")
+        return bool(matches)
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
-        target_filenames = set(request.target_filenames)
         warnings = [
             warning
             for warning in request.warnings
-            if self._does_warning_match_a_target_file(warning, target_filenames)
+            if self._does_warning_match_a_target_file(warning, request.target_filenames)
         ]
         return FilterWarningsOutput(warnings=warnings)
 
@@ -139,7 +141,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
         ]
         if not pr_files_eligible:
-            logger.info("No eligible files in commit.")
+            self.logger.info("No eligible files in commit.")
             return {}
 
         self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
@@ -224,10 +226,13 @@ class AssociateWarningsWithIssuesComponent(
         # calls can match any relevant warnings to it. The filename is not the strongest signal.
 
         if not request.warnings:
-            logger.info("No warnings to associate with issues.")
+            self.logger.info("No warnings to associate with issues.")
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
         if not issue_id_to_issue_with_pr_filename:
-            logger.info("No issues to associate with warnings.")
+            self.logger.info(
+                "No issues to associate with warnings. "
+                'GCP query: SEARCH("fetch_issues_given_file_patches")'
+            )
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
 
         issues_with_pr_filename = list(issue_id_to_issue_with_pr_filename.values())
@@ -304,7 +309,7 @@ class AreIssuesFixableComponent(
             except Exception:
                 # It's not critical that this component makes an actual prediction.
                 # Assume it's fixable b/c the next (predict relevancy) step handles it.
-                logger.exception("Error predicting fixability of issue")
+                self.logger.exception("Error predicting fixability of issue")
                 is_fixable = True
             issue_id_to_is_fixable[issue_id] = is_fixable
         return CodeAreIssuesFixableOutput(
@@ -333,7 +338,7 @@ class PredictRelevantWarningsComponent(
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         relevant_warning_results: list[RelevantWarningResult] = []
         for warning, issue in request.candidate_associations:
-            logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
+            self.logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
             completion = llm_client.generate_structured(
                 model=GeminiProvider.model("gemini-2.0-flash-lite"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
@@ -349,7 +354,7 @@ class PredictRelevantWarningsComponent(
                 timeout=15.0,
             )
             if completion.parsed is None:  # Gemini quirk
-                logger.warning(
+                self.logger.warning(
                     f"No response from LLM for warning {warning.id} and issue {issue.id}"
                 )
                 continue
@@ -359,7 +364,7 @@ class PredictRelevantWarningsComponent(
                     issue_id=issue.id,
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
-                    reasoning=completion.parsed.reasoning,
+                    reasoning=completion.parsed.analysis,
                     short_description=completion.parsed.short_description or "",
                     short_justification=completion.parsed.short_justification or "",
                     encoded_location=warning.encoded_location,
@@ -368,7 +373,8 @@ class PredictRelevantWarningsComponent(
         num_relevant_warnings = sum(
             result.does_fixing_warning_fix_issue for result in relevant_warning_results
         )
-        logger.info(
-            f"Found {num_relevant_warnings} relevant warnings out of {len(relevant_warning_results)}"
+        self.logger.info(
+            f"Found {num_relevant_warnings} relevant warnings out of "
+            f"{len(relevant_warning_results)} pairs."
         )
         return CodePredictRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)
