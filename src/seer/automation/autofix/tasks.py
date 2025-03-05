@@ -760,7 +760,12 @@ def comment_on_thread(request: AutofixUpdateRequest):
 
     # ask LLM for response
     step = state.get().steps[step_index]
-    step_after = state.get().steps[step_index + 1]
+    step_after = (
+        state.get().steps[step_index + 1] if step_index + 1 < len(state.get().steps) else None
+    )
+    if not step_after and request.payload.is_agent_comment:
+        raise ValueError("No agent-initiated comment thread found")
+
     comment_thread_component = CommentThreadComponent(context=context)
     response = comment_thread_component.invoke(
         CommentThreadRequest(
