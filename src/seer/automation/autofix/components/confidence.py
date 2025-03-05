@@ -31,7 +31,7 @@ class ConfidencePrompts:
     def format_default_msg(step_goal_description: str, next_step_goal_description: str) -> str:
         return textwrap.dedent(
             """\
-            Think through the uncertainties and open questions, if any, that appeared during your analysis. Is there a missing piece of the puzzle? Anywhere you had to make an assumption or speculate? Any opportunities for a better answer? Anywhere you need more context or an opinion from the team? If there are uncertainties or open questions your team should be aware of when reading your final answer, leave a brief (under 30 words) comment/question on the document. If there is nothing worth surfacing, return None/null for the comment.
+            Think through the uncertainties and open questions, if any, that appeared during your analysis. Is there a missing piece of the puzzle? Anywhere you had to make an assumption or speculate? Any opportunities for a better answer? Anywhere you need more context or an opinion from the team? Be hypercritical. If there are uncertainties or open questions your team should be aware of when reading your final answer, leave a brief (under 30 words) comment/question on the document. If there is nothing worth surfacing, return None/null for the comment.
 
             Then score your confidence in the correctness of your final {step_goal_description} with an float between 0 and 1. The more uncertainties there are, the lower your confidence should be.
             Then based on your findings so far, score your confidence in successfully completing the next step, {next_step_goal_description}, with an float between 0 and 1. The more uncertain you are about your correctness, or if it seems hard to do the next step based on what you know, the lower your confidence should be.
@@ -66,7 +66,7 @@ class ConfidenceComponent(BaseComponent[ConfidenceRequest, ConfidenceOutput]):
 
         if data is None:
             return ConfidenceOutput(
-                output_confidence_score=None,
-                proceed_confidence_score=None,
+                output_confidence_score=0.5,
+                proceed_confidence_score=0.5,
             )
         return data
