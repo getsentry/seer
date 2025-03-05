@@ -773,12 +773,20 @@ def comment_on_thread(request: AutofixUpdateRequest):
             thread_memory=(
                 step.active_comment_thread.messages
                 if not request.payload.is_agent_comment
-                else step_after.agent_comment_thread.messages
+                else (
+                    step_after.agent_comment_thread.messages
+                    if step_after and step_after.agent_comment_thread
+                    else []
+                )
             ),
             selected_text=(
                 step.active_comment_thread.selected_text
                 if not request.payload.is_agent_comment
-                else step_after.agent_comment_thread.selected_text
+                else (
+                    step_after.agent_comment_thread.selected_text
+                    if step_after and step_after.agent_comment_thread
+                    else None
+                )
             ),
         )
     )
@@ -815,7 +823,11 @@ def comment_on_thread(request: AutofixUpdateRequest):
                     for message in (
                         step.active_comment_thread.messages
                         if not request.payload.is_agent_comment
-                        else step_after.agent_comment_thread.messages
+                        else (
+                            step_after.agent_comment_thread.messages
+                            if step_after and step_after.agent_comment_thread
+                            else []
+                        )
                     )
                 ]
             )
