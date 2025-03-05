@@ -41,6 +41,7 @@ class TestRootCauseStep(unittest.TestCase):
                     session_related_issues="trace",
                     possible_cause="possible cause",
                 ),
+                options=AutofixRequestOptions(disable_interactivity=True),
             )
         )
 
@@ -78,7 +79,9 @@ class TestRootCauseStep(unittest.TestCase):
                     session_related_issues="trace",
                     possible_cause="possible cause",
                 ),
-                options=AutofixRequestOptions(comment_on_pr_with_url=pr_url),
+                options=AutofixRequestOptions(
+                    comment_on_pr_with_url=pr_url, disable_interactivity=True
+                ),
             )
         )
 
