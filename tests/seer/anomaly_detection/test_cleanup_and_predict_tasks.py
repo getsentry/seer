@@ -258,8 +258,8 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_make_prophet_predictions(self):
         # Create and save alert with 6 points (3 old, 3 new)
-        external_alert_id, config, points, anomalies, cur_timestamp = self._save_alert(0, 4800, 1)
-        external_alert_id, prophet_predictions = self._save_prophet_predictions(0, 0, 6)
+        external_alert_id, config, points, anomalies, cur_timestamp = self._save_alert(777, 4800, 1)
+        external_alert_id, prophet_predictions = self._save_prophet_predictions(777, 0, 6)
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
         cleanup_timeseries_and_predict(external_alert_id, date_threshold)
