@@ -1,15 +1,15 @@
 import logging
 import textwrap
 from pathlib import Path
+from typing import Iterable
 
 import numpy as np
-import openai
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
 from cachetools.keys import hashkey  # type: ignore[import-untyped]
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 
-from seer.automation.agent.client import GeminiProvider, LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -68,7 +68,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         return result
 
     def _does_warning_match_a_target_file(
-        self, warning: StaticAnalysisWarning, target_filenames: set[str]
+        self, warning: StaticAnalysisWarning, target_filenames: Iterable[str]
     ) -> bool:
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
@@ -93,23 +93,24 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
                 for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
             },
         }
-        return bool(possible_matches_from_warning & possible_matches_from_targets)
+        matches = possible_matches_from_warning & possible_matches_from_targets
+        self.logger.info(f"{warning.encoded_location=} {matches=}")
+        return bool(matches)
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
-        target_filenames = set(request.target_filenames)
         warnings = [
             warning
             for warning in request.warnings
-            if self._does_warning_match_a_target_file(warning, target_filenames)
+            if self._does_warning_match_a_target_file(warning, request.target_filenames)
         ]
         return FilterWarningsOutput(warnings=warnings)
 
 
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
     """
-    Fetch issues related to the files in a PR by analyzing stacktrace frames in the issue.
+    Fetch issues related to the files in a commit by analyzing stacktrace frames in the issue.
     """
 
     context: CodegenContext
@@ -126,9 +127,9 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         client: RpcClient = injected,
     ) -> dict[str, list[IssueDetails]]:
         """
-        Returns a dict mapping a subset of file names in the PR to issues related to the file.
+        Returns a dict mapping a subset of file names in the commit to issues related to the file.
         They're related if the functions and filenames in the issue's stacktrace overlap with those
-        modified in the PR.
+        modified in the commit.
 
         The `max_files_analyzed` and `max_lines_analyzed` checks ensure that the payload we send to
         seer_rpc doesn't get too large.
@@ -140,7 +141,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
         ]
         if not pr_files_eligible:
-            logger.info("No eligible files in PR.")
+            self.logger.info("No eligible files in commit.")
             return {}
 
         self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
@@ -152,6 +153,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             provider=provider,
             external_id=external_id,
             pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
+            run_id=self.context.run_id,
         )
         if filename_to_issues is None:
             return {}
@@ -225,10 +227,13 @@ class AssociateWarningsWithIssuesComponent(
         # calls can match any relevant warnings to it. The filename is not the strongest signal.
 
         if not request.warnings:
-            logger.info("No warnings to associate with issues.")
+            self.logger.info("No warnings to associate with issues.")
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
         if not issue_id_to_issue_with_pr_filename:
-            logger.info("No issues to associate with warnings.")
+            self.logger.info(
+                "No issues to associate with warnings. "
+                'GCP query: SEARCH("fetch_issues_given_file_patches")'
+            )
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
 
         issues_with_pr_filename = list(issue_id_to_issue_with_pr_filename.values())
@@ -264,7 +269,7 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
     # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
     # a repo has a set of files which are frequently used to handle and raise exceptions.
     completion = llm_client.generate_structured(
-        model=OpenAiProvider.model("gpt-4o-mini-2024-07-18"),  # TODO(kddubey): use flash?
+        model=GeminiProvider.model("gemini-2.0-flash-lite"),
         system_prompt=IsFixableIssuePrompts.format_system_msg(),
         prompt=IsFixableIssuePrompts.format_prompt(
             formatted_error=EventDetails.from_event(
@@ -273,9 +278,10 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
         ),
         response_format=IsFixableIssuePrompts.IsIssueFixable,
         temperature=0.0,
-        max_tokens=2048,
-        timeout=7.0,
+        max_tokens=64,
     )
+    if completion.parsed is None:
+        raise ValueError("No structured output from LLM.")
     return completion.parsed.is_fixable
 
 
@@ -295,16 +301,17 @@ class AreIssuesFixableComponent(
         It's fine if there are duplicate issues in the request. That can happen if issues were
         passed in from a list of warning-issue associations.
         """
-        # TODO(kddubey): can instead batch and send uncached issues in one prompt.
         issue_id_to_issue = {issue.id: issue for issue in request.candidate_issues}
         issue_ids = list(issue_id_to_issue.keys())[: request.max_num_issues_analyzed]
         issue_id_to_is_fixable = {}
         for issue_id in issue_ids:
             try:
                 is_fixable = _is_issue_fixable(issue_id_to_issue[issue_id])
-            except (openai.APITimeoutError, openai.InternalServerError) as exception:
-                logger.warning(f"Error checking if issue {issue_id} is fixable: {exception}")
-                is_fixable = True  # default to true to avoid skipping issues
+            except Exception:
+                # It's not critical that this component makes an actual prediction.
+                # Assume it's fixable b/c the next (predict relevancy) step handles it.
+                self.logger.exception("Error predicting fixability of issue")
+                is_fixable = True
             issue_id_to_is_fixable[issue_id] = is_fixable
         return CodeAreIssuesFixableOutput(
             are_fixable=[issue_id_to_is_fixable.get(issue.id) for issue in request.candidate_issues]
@@ -332,8 +339,9 @@ class PredictRelevantWarningsComponent(
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         relevant_warning_results: list[RelevantWarningResult] = []
         for warning, issue in request.candidate_associations:
+            self.logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
             completion = llm_client.generate_structured(
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
+                model=GeminiProvider.model("gemini-2.0-flash-lite"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
                     formatted_warning=warning.format_warning(),
@@ -347,7 +355,7 @@ class PredictRelevantWarningsComponent(
                 timeout=15.0,
             )
             if completion.parsed is None:  # Gemini quirk
-                logger.warning(
+                self.logger.warning(
                     f"No response from LLM for warning {warning.id} and issue {issue.id}"
                 )
                 continue
@@ -357,10 +365,17 @@ class PredictRelevantWarningsComponent(
                     issue_id=issue.id,
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
-                    reasoning=completion.parsed.reasoning,
+                    reasoning=completion.parsed.analysis,
                     short_description=completion.parsed.short_description or "",
                     short_justification=completion.parsed.short_justification or "",
                     encoded_location=warning.encoded_location,
                 )
             )
+        num_relevant_warnings = sum(
+            result.does_fixing_warning_fix_issue for result in relevant_warning_results
+        )
+        self.logger.info(
+            f"Found {num_relevant_warnings} relevant warnings out of "
+            f"{len(relevant_warning_results)} pairs."
+        )
         return CodePredictRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)

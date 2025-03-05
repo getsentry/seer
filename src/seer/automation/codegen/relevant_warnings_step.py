@@ -79,7 +79,7 @@ class RelevantWarningsStep(CodegenStep):
         config: AppConfig = injected,
     ):
         if not self.request.should_post_to_overwatch:
-            logger.info("Skipping posting relevant warnings results to Overwatch.")
+            self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
         request = {
@@ -102,7 +102,7 @@ class RelevantWarningsStep(CodegenStep):
         try:
             self._post_results_to_overwatch(relevant_warnings_output)
         except Exception:
-            logger.exception("Error posting relevant warnings results to Overwatch")
+            self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
             self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
