@@ -1406,7 +1406,7 @@ def test_resolve_comment_thread():
 
     resolve_comment_thread(request)
 
-    # Verify thread was resolved
+    # Verify thread was removed
     updated_state = get_autofix_state(run_id=1)
     assert updated_state is not None
     updated_step = updated_state.get().steps[0]
@@ -1450,7 +1450,7 @@ def test_resolve_agent_comment_thread():
 
     resolve_comment_thread(request)
 
-    # Verify thread was resolved
+    # Verify thread was removed
     updated_state = get_autofix_state(run_id=1)
     assert updated_state is not None
     updated_step2 = updated_state.get().steps[1]
