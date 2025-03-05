@@ -153,6 +153,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             provider=provider,
             external_id=external_id,
             pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
+            run_id=self.context.run_id,
         )
         if filename_to_issues is None:
             return {}
