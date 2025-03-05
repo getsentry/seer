@@ -1,4 +1,5 @@
 import datetime
+import sys
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -162,7 +163,7 @@ class MPBoxCoxScorer(MPScorer):
             flag: AnomalyFlags = "none"
             location_thresholds: List[Threshold] = []
 
-            if std != 0 and score > threshold:
+            if std != 0 and not np.isnan(score) and score > threshold:
                 flag = "anomaly_higher_confidence"
                 if i >= idx_to_detect_location_from:
                     flag, location_thresholds = self._adjust_flag_for_direction(
@@ -183,7 +184,9 @@ class MPBoxCoxScorer(MPScorer):
                 )
             ]
 
-            scores.append(score)
+            scores.append(
+                -sys.float_info.max if np.isnan(score) else score
+            )  # Scores are not used and storing NaNs cause redash issues. So storing lowest float value.
             flags.append(flag)
             cur_thresholds.extend(location_thresholds)
             thresholds.append(cur_thresholds)
@@ -213,7 +216,7 @@ class MPBoxCoxScorer(MPScorer):
         # Get z-score for streamed value
         score = z_scores[-1]
 
-        if std == 0 or score <= threshold:
+        if std == 0 or np.isnan(score) or score <= threshold:
             flag: AnomalyFlags = "none"
             thresholds: List[Threshold] = []
         else:
@@ -226,7 +229,7 @@ class MPBoxCoxScorer(MPScorer):
                 history_timestamps,
                 location_detector,
             )
-
+        score = -sys.float_info.max if np.isnan(score) else score
         thresholds.append(
             Threshold(
                 type=ThresholdType.BOX_COX_THRESHOLD,
