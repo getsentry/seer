@@ -53,7 +53,7 @@ jobs:
             --organization-slug sentry \
             python \
             --tool ruff
-            
+
   build_and_push:
     runs-on: ubuntu-latest
     permissions:
