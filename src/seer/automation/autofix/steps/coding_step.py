@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from langfuse.decorators import observe
@@ -7,11 +8,12 @@ from celery_app.app import celery_app
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.coding.component import CodingComponent
 from seer.automation.autofix.components.coding.models import CodingRequest
+from seer.automation.autofix.components.confidence import ConfidenceComponent, ConfidenceRequest
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
-from seer.automation.autofix.models import AutofixStatus
+from seer.automation.autofix.models import AutofixStatus, CommentThread
 from seer.automation.autofix.steps.change_describer_step import (
     AutofixChangeDescriberRequest,
     AutofixChangeDescriberStep,
@@ -107,6 +109,30 @@ class AutofixCodingStep(AutofixPipelineStep):
             return
 
         self.context.event_manager.send_coding_result(coding_output)
+
+        # confidence evaluation
+        if not self.context.state.get().request.options.disable_interactivity:
+            run_memory = self.context.get_memory("code")
+            confidence_output = ConfidenceComponent(self.context).invoke(
+                ConfidenceRequest(
+                    run_memory=run_memory,
+                    step_goal_description="implementing the solution and drafting a PR",
+                    next_step_goal_description="opening the PR for review by the team",
+                )
+            )
+            if confidence_output:
+                with self.context.state.update() as cur:
+                    cur.steps[-1].output_confidence_score = (
+                        confidence_output.output_confidence_score
+                    )
+                    cur.steps[-1].proceed_confidence_score = (
+                        confidence_output.proceed_confidence_score
+                    )
+                    if confidence_output.comment:
+                        cur.steps[-1].agent_comment_thread = CommentThread(
+                            id=str(uuid.uuid4()),
+                            messages=[Message(role="assistant", content=confidence_output.comment)],
+                        )
 
         pr_to_comment_on = state.request.options.comment_on_pr_with_url
         self.next(

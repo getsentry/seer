@@ -35,6 +35,7 @@ from seer.automation.autofix.tasks import (
     get_autofix_state,
     get_autofix_state_from_pr_id,
     receive_user_message,
+    resolve_comment_thread,
     restart_from_point_with_feedback,
     run_autofix_coding,
     run_autofix_evaluation,
@@ -202,6 +203,8 @@ def autofix_update_endpoint(
         update_code_change(data)
     elif data.payload.type == AutofixUpdateType.COMMENT_THREAD:
         comment_on_thread(data)
+    elif data.payload.type == AutofixUpdateType.RESOLVE_COMMENT_THREAD:
+        resolve_comment_thread(data)
 
     return AutofixUpdateEndpointResponse(run_id=data.run_id)
 

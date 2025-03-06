@@ -115,7 +115,12 @@ def create_insight_output(
     )
 
     insight = completion.message.content
-    if not insight or "<NO_INSIGHT/>" in insight:
+    if (
+        not insight
+        or "<NO_INSIGHT/>" in insight
+        or "</NO_INSIGHT/>" in insight
+        or "</NO_INSIGHT>" in insight
+    ):
         return None, usage
 
     prompt_two = InsightSharingPrompts.format_step_two(
