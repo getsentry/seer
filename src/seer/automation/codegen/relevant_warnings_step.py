@@ -75,6 +75,7 @@ class RelevantWarningsStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
+        callback_url: str,
         relevant_warnings_output: CodePredictRelevantWarningsOutput,
         config: AppConfig = injected,
     ):
@@ -93,14 +94,18 @@ class RelevantWarningsStep(CodegenStep):
             signature_secret=config.OVERWATCH_OUTGOING_SIGNATURE_SECRET,
         )
         requests.post(
-            url="https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
+            url=callback_url,
             headers=headers,
             data=request_data,
         ).raise_for_status()
 
-    def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
+    def _complete_run(
+        self,
+        callback_url: str,
+        relevant_warnings_output: CodePredictRelevantWarningsOutput,
+    ):
         try:
-            self._post_results_to_overwatch(relevant_warnings_output)
+            self._post_results_to_overwatch(callback_url, relevant_warnings_output)
         except Exception:
             logger.exception("Error posting relevant warnings results to Overwatch")
             raise
@@ -138,7 +143,12 @@ class RelevantWarningsStep(CodegenStep):
 
         if not warnings:  # exit early to avoid unnecessary issue-fetching.
             self.logger.info("No warnings to predict relevancy for.")
-            self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
+            self._complete_run(
+                callback_url=self.request.callback_url,
+                relevant_warnings_output=CodePredictRelevantWarningsOutput(
+                    relevant_warning_results=[]
+                ),
+            )
             return
 
         # 3. Fetch issues related to the commit.
@@ -190,4 +200,7 @@ class RelevantWarningsStep(CodegenStep):
         )
 
         # 7. Save results.
-        self._complete_run(relevant_warnings_output)
+        self._complete_run(
+            callback_url=self.request.callback_url,
+            relevant_warnings_output=relevant_warnings_output,
+        )

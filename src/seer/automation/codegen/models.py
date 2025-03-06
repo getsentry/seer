@@ -123,6 +123,7 @@ class CodePrReviewOutput(BaseComponentOutput):
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
+    callback_url: str
     organization_id: int
     warnings: list[StaticAnalysisWarning]
     commit_sha: str
