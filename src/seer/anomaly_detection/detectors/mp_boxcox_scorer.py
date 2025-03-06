@@ -1,4 +1,5 @@
 import datetime
+import sys
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -7,14 +8,11 @@ import sentry_sdk
 from pydantic import Field
 from scipy import special, stats
 
-from seer.anomaly_detection.detectors.location_detectors import LocationDetector
 from seer.anomaly_detection.detectors.mp_scorers import FlagsAndScores, MPScorer
 from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
-    Directions,
-    PointLocation,
     Sensitivities,
     Threshold,
     ThresholdType,
@@ -134,7 +132,6 @@ class MPBoxCoxScorer(MPScorer):
         window_size: int,
         time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
-        location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         z_scores, threshold, std, threshold_transformed = self._get_z_scores(
             mp_dist, ad_config.sensitivity
@@ -144,9 +141,6 @@ class MPBoxCoxScorer(MPScorer):
         thresholds = []
         time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
         time_start = datetime.datetime.now()
-        idx_to_detect_location_from = (
-            len(mp_dist) - algo_config.direction_detection_num_timesteps_in_batch_mode
-        )
         batch_size = 10 if len(mp_dist) > 10 else 1
         for i, score in enumerate(z_scores):
             if time_allocated is not None and i % batch_size == 0:
@@ -162,18 +156,8 @@ class MPBoxCoxScorer(MPScorer):
             flag: AnomalyFlags = "none"
             location_thresholds: List[Threshold] = []
 
-            if std != 0 and score > threshold:
+            if std != 0 and not np.isnan(score) and score > threshold:
                 flag = "anomaly_higher_confidence"
-                if i >= idx_to_detect_location_from:
-                    flag, location_thresholds = self._adjust_flag_for_direction(
-                        flag,
-                        ad_config.direction,
-                        mp_dist[i],
-                        timestamps[i],
-                        mp_dist[:i],
-                        timestamps[:i],
-                        location_detector,
-                    )
             cur_thresholds = [
                 Threshold(
                     type=ThresholdType.BOX_COX_THRESHOLD,
@@ -183,7 +167,9 @@ class MPBoxCoxScorer(MPScorer):
                 )
             ]
 
-            scores.append(score)
+            scores.append(
+                -sys.float_info.max if np.isnan(score) else score
+            )  # Scores are not used and storing NaNs cause redash issues. So storing lowest float value.
             flags.append(flag)
             cur_thresholds.extend(location_thresholds)
             thresholds.append(cur_thresholds)
@@ -202,69 +188,33 @@ class MPBoxCoxScorer(MPScorer):
         ad_config: AnomalyDetectionConfig,
         window_size: int,
         algo_config: AlgoConfig = injected,
-        location_detector: LocationDetector = injected,
     ) -> FlagsAndScores:
         # Include current value in z-score calculation
         values = np.append(history_mp_dist, streamed_mp_dist)
         z_scores, threshold, std, threshold_transformed = self._get_z_scores(
-            values, ad_config.sensitivity
+            values[len(values) // 2 :], ad_config.sensitivity
         )
 
         # Get z-score for streamed value
         score = z_scores[-1]
 
-        if std == 0 or score <= threshold:
-            flag: AnomalyFlags = "none"
-            thresholds: List[Threshold] = []
-        else:
-            flag, thresholds = self._adjust_flag_for_direction(
-                "anomaly_higher_confidence",
-                ad_config.direction,
-                streamed_value,
-                streamed_timestamp,
-                history_values,
-                history_timestamps,
-                location_detector,
-            )
-
-        thresholds.append(
+        flag: AnomalyFlags = (
+            "none"
+            if std == 0 or np.isnan(score) or score <= threshold
+            else "anomaly_higher_confidence"
+        )
+        thresholds: List[Threshold] = [
             Threshold(
                 type=ThresholdType.BOX_COX_THRESHOLD,
                 timestamp=streamed_timestamp,
                 upper=threshold_transformed,
                 lower=-threshold_transformed,
             )
-        )
+        ]
+        score = -sys.float_info.max if np.isnan(score) else score
 
         return FlagsAndScores(
             flags=[flag],
             scores=[score],
             thresholds=[thresholds],
         )
-
-    def _adjust_flag_for_direction(
-        self,
-        flag: AnomalyFlags,
-        direction: Directions,
-        streamed_value: np.float64,
-        streamed_timestamp: np.float64,
-        history_values: npt.NDArray[np.float64],
-        history_timestamps: npt.NDArray[np.float64],
-        location_detector: LocationDetector,
-    ) -> Tuple[AnomalyFlags, List[Threshold]]:
-        if flag == "none" or direction == "both":
-            return flag, []
-
-        if len(history_values) == 0:
-            raise ValueError("No history values to detect location")
-        relative_location = location_detector.detect(
-            streamed_value, streamed_timestamp, history_values, history_timestamps
-        )
-        if relative_location is None:
-            return flag, []
-
-        if (direction == "up" and relative_location.location != PointLocation.UP) or (
-            direction == "down" and relative_location.location != PointLocation.DOWN
-        ):
-            return "none", relative_location.thresholds
-        return flag, relative_location.thresholds

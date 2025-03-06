@@ -89,7 +89,8 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
                 predictions = _fit_predict(alert, config)
-                _store_prophet_predictions(alert, predictions)
+                db_accessor = DbAlertDataAccessor()
+                db_accessor.store_prophet_predictions(alert.id, predictions)
             else:
                 # Reset the window size to 0 if there are no timeseries points left
                 alert.anomaly_algo_data = {"window_size": 0}
@@ -164,6 +165,7 @@ def _save_timeseries_history(
                 saved_at=datetime.now(),
             )
             session.add(prophet_history_record)
+
         session.commit()
 
 
@@ -183,25 +185,25 @@ def _update_matrix_profiles(
     anomalies_suss = MPBatchAnomalyDetector()._compute_matrix_profile(
         timeseries=timeseries, ad_config=anomaly_detection_config, algo_config=algo_config
     )
-    anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
-        timeseries=timeseries,
-        ad_config=anomaly_detection_config,
-        algo_config=algo_config,
-        window_size=algo_config.mp_fixed_window_size,
-    )
+    # anomalies_fixed = MPBatchAnomalyDetector()._compute_matrix_profile(
+    #     timeseries=timeseries,
+    #     ad_config=anomaly_detection_config,
+    #     algo_config=algo_config,
+    #     window_size=algo_config.mp_fixed_window_size,
+    # )
     anomalies = DbAlertDataAccessor().combine_anomalies(
-        anomalies_suss, anomalies_fixed, [True] * len(timeseries.timestamps)
+        anomalies_suss, None, [True] * len(timeseries.timestamps)
     )
 
     algo_data_map = dict(
         zip(timeseries.timestamps, anomalies.get_anomaly_algo_data(len(timeseries.timestamps)))
     )
-    updateed_timeseries_points = 0
+    updated_timeseries_points = 0
     for timestep in alert.timeseries:
         timestep.anomaly_algo_data = algo_data_map[timestep.timestamp.timestamp()]
-        updateed_timeseries_points += 1
+        updated_timeseries_points += 1
     alert.anomaly_algo_data = {"window_size": anomalies.window_size}
-    return updateed_timeseries_points
+    return updated_timeseries_points
 
 
 @sentry_sdk.trace
@@ -220,56 +222,12 @@ def _fit_predict(
         timestamps[i] = ts.timestamp.timestamp()
         values[i] = ts.value
 
-    # Create 24 hours worth of predictions
+    # Create prophet_forecast_len hours worth of predictions
     forecast_len = algo_config.prophet_forecast_len * (60 // config.time_period)
     prediction_df = prophet_detector.predict(
         timestamps, values, forecast_len, config.time_period, config.sensitivity
     )
-
-    # Convert ds back to timestamps
-    prophet_timestamps = np.array(
-        [date.timestamp() for date in prediction_df["ds"]], dtype=np.float64
-    )
-
-    return ProphetPrediction(
-        timestamps=prophet_timestamps,
-        yhat=np.array(prediction_df["yhat"]),
-        yhat_lower=np.array(prediction_df["yhat_lower"]),
-        yhat_upper=np.array(prediction_df["yhat_upper"]),
-    )
-
-
-@sentry_sdk.trace
-def _store_prophet_predictions(alert: DbDynamicAlert, predictions: ProphetPrediction) -> None:
-
-    with Session() as session:
-
-        # Delete existing predictions that overlap with new prediction timestamps
-        min_timestamp = datetime.now()
-        max_timestamp = datetime.fromtimestamp(max(predictions.timestamps))
-
-        session.query(DbProphetAlertTimeSeries).filter(
-            DbProphetAlertTimeSeries.dynamic_alert_id == alert.id,
-            DbProphetAlertTimeSeries.timestamp > min_timestamp,
-            DbProphetAlertTimeSeries.timestamp <= max_timestamp,
-        ).delete()
-
-        for timestamp, yhat, yhat_lower, yhat_upper in zip(
-            predictions.timestamps, predictions.yhat, predictions.yhat_lower, predictions.yhat_upper
-        ):
-            timestamp = datetime.fromtimestamp(timestamp)
-            if timestamp > min_timestamp:
-                prophet_prediction = DbProphetAlertTimeSeries(
-                    dynamic_alert_id=alert.id,
-                    timestamp=timestamp,
-                    yhat=yhat,
-                    yhat_lower=yhat_lower,
-                    yhat_upper=yhat_upper,
-                )
-                session.add(prophet_prediction)
-        session.commit()
-
-    logger.info(f"Stored {len(predictions.timestamps)} prophet predictions for alert {alert.id}")
+    return ProphetPrediction.from_prophet_df(prediction_df)
 
 
 @sentry_sdk.trace

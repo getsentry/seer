@@ -5,6 +5,7 @@ import textwrap
 from typing import Type, cast
 
 import sentry_sdk
+from celery.exceptions import SoftTimeLimitExceeded, TimeoutError
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
@@ -30,11 +31,13 @@ from seer.automation.autofix.models import (
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
     AutofixRequest,
+    AutofixResolveCommentThreadPayload,
     AutofixRestartFromPointPayload,
     AutofixRootCauseUpdatePayload,
     AutofixSolutionUpdatePayload,
     AutofixStatus,
     AutofixUpdateCodeChangePayload,
+    AutofixUpdateEndpointResponse,
     AutofixUpdateRequest,
     AutofixUpdateType,
     AutofixUserMessagePayload,
@@ -56,6 +59,7 @@ from seer.automation.utils import process_repo_provider, raise_if_no_genai_conse
 from seer.configuration import AppConfig
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import inject, injected
+from seer.events import SeerEventNames, log_seer_event
 from seer.rpc import get_sentry_client
 
 logger = logging.getLogger(__name__)
@@ -262,7 +266,7 @@ def run_autofix_coding(
 def run_autofix_push_changes(
     request: AutofixUpdateRequest,
     app_config: AppConfig = injected,
-):
+) -> AutofixUpdateEndpointResponse:
     if not isinstance(request.payload, AutofixCreatePrUpdatePayload) and not isinstance(
         request.payload, AutofixCreateBranchUpdatePayload
     ):
@@ -275,13 +279,61 @@ def run_autofix_push_changes(
     with state.update() as cur:
         cur.mark_triggered()
 
-    event_manager = AutofixEventManager(state)
-    context = AutofixContext(state=state, event_manager=event_manager)
+    try:
+        result = commit_changes_task.apply_async(
+            args=(
+                request.run_id,
+                request.payload.repo_external_id,
+                request.payload.make_pr,
+            ),
+            queue=app_config.CELERY_WORKER_QUEUE,
+        )
 
-    context.commit_changes(
-        repo_external_id=request.payload.repo_external_id,
-        make_pr=request.payload.make_pr,
-    )
+        # Wait for the task to complete with a 30-second timeout
+        # Celery will kill the task if it doesn't complete in 30 seconds
+        result.get(timeout=30)
+
+        return AutofixUpdateEndpointResponse(
+            run_id=request.run_id,
+            status="success",
+        )
+
+    except TimeoutError:
+        logger.exception(f"Timeout waiting for commit_changes_task for run {request.run_id}")
+
+        return AutofixUpdateEndpointResponse(
+            run_id=request.run_id,
+            status="error",
+            message="GitHub didn't respond - maybe try again?",
+        )
+
+    except Exception:
+        logger.exception(f"Error in commit_changes_task for run {request.run_id}")
+
+        return AutofixUpdateEndpointResponse(
+            run_id=request.run_id,
+            status="error",
+            message="Something broke while pushing your changes. Please try again later.",
+        )
+
+
+@celery_app.task(time_limit=30, soft_time_limit=25)
+def commit_changes_task(run_id, repo_external_id, make_pr):
+    try:
+        state = ContinuationState(run_id)
+        event_manager = AutofixEventManager(state)
+        context = AutofixContext(state=state, event_manager=event_manager)
+
+        return context.commit_changes(
+            repo_external_id=repo_external_id,
+            make_pr=make_pr,
+        )
+    except SoftTimeLimitExceeded:
+        logger.error(f"Soft time limit (25s) exceeded when committing changes for run {run_id}")
+        raise
+    except Exception as e:
+        logger.error(f"Error committing changes for run {run_id}: {e}")
+        raise
 
 
 @inject
@@ -329,6 +381,14 @@ def receive_user_message(request: AutofixUpdateRequest):
     state = ContinuationState(request.run_id)
     cur_state = state.get()
     step_to_restart = cur_state.find_last_step_waiting_for_response()
+
+    log_seer_event(
+        SeerEventNames.AUTOFIX_USER_QUESTION_RESPONSE_RECEIVED,
+        {
+            "run_id": cur_state.run_id,
+            "step_to_restart": step_to_restart.key if step_to_restart else None,
+        },
+    )
 
     # check the state to see if we're responding to a question or interjecting
     if step_to_restart:
@@ -453,6 +513,14 @@ def restart_from_point_with_feedback(
     step = state.get().find_step(index=step_index)
     if not isinstance(step, DefaultStep):
         raise ValueError("Cannot rethink steps without insights.")
+
+    log_seer_event(
+        SeerEventNames.AUTOFIX_RESTARTED_FROM_POINT,
+        {
+            "run_id": state.get().run_id,
+            "restarting_step": step.key,
+        },
+    )
 
     memory_index_of_insight_to_rethink = (
         step.initial_memory_length
@@ -642,20 +710,29 @@ def comment_on_thread(request: AutofixUpdateRequest):
 
     step_index = request.payload.step_index
 
-    # create a new thread if needed
+    # create a new thread if needed (only for user-initiated threads)
     step = state.get().steps[step_index]
-    if not step.active_comment_thread or step.active_comment_thread.id != request.payload.thread_id:
-        with state.update() as cur:
-            cur.steps[step_index].active_comment_thread = CommentThread(
-                id=request.payload.thread_id,
-                selected_text=request.payload.selected_text,
-            )
-    else:
-        with state.update() as cur:
-            # update the selected text in case it changed
-            cur.steps[step_index].active_comment_thread.selected_text = (
-                request.payload.selected_text
-            )
+    step_after = (
+        state.get().steps[step_index + 1] if step_index + 1 < len(state.get().steps) else None
+    )  # the agent comment thread is on the step after the processing step
+    if not request.payload.is_agent_comment:
+        if (
+            not step.active_comment_thread
+            or step.active_comment_thread.id != request.payload.thread_id
+        ):
+            with state.update() as cur:
+                cur.steps[step_index].active_comment_thread = CommentThread(
+                    id=request.payload.thread_id,
+                    selected_text=request.payload.selected_text,
+                )
+        else:
+            with state.update() as cur:
+                # update the selected text in case it changed
+                cur.steps[step_index].active_comment_thread.selected_text = (
+                    request.payload.selected_text
+                )
+    elif not step_after or not step_after.agent_comment_thread:
+        raise ValueError("No agent-initiated comment thread found")
 
     # add comment to the thread
     message = Message(
@@ -663,7 +740,10 @@ def comment_on_thread(request: AutofixUpdateRequest):
         content=request.payload.message,
     )
     with state.update() as cur:
-        cur.steps[step_index].active_comment_thread.messages.append(message)
+        if request.payload.is_agent_comment:
+            cur.steps[step_index + 1].agent_comment_thread.messages.append(message)
+        else:
+            cur.steps[step_index].active_comment_thread.messages.append(message)
 
     # fetch memory from the step
     is_coding_step = step.key == "plan"
@@ -680,20 +760,50 @@ def comment_on_thread(request: AutofixUpdateRequest):
 
     # ask LLM for response
     step = state.get().steps[step_index]
+    step_after = (
+        state.get().steps[step_index + 1] if step_index + 1 < len(state.get().steps) else None
+    )
+    if not step_after and request.payload.is_agent_comment:
+        raise ValueError("No agent-initiated comment thread found")
+
     comment_thread_component = CommentThreadComponent(context=context)
     response = comment_thread_component.invoke(
         CommentThreadRequest(
             run_memory=memory,
-            thread_memory=step.active_comment_thread.messages,
-            selected_text=step.active_comment_thread.selected_text,
+            thread_memory=(
+                step.active_comment_thread.messages
+                if not request.payload.is_agent_comment
+                else (
+                    step_after.agent_comment_thread.messages
+                    if step_after and step_after.agent_comment_thread
+                    else []
+                )
+            ),
+            selected_text=(
+                step.active_comment_thread.selected_text
+                if not request.payload.is_agent_comment
+                else (
+                    step_after.agent_comment_thread.selected_text
+                    if step_after and step_after.agent_comment_thread
+                    else None
+                )
+            ),
         )
     )
     with state.update() as cur:
-        cur.steps[step_index].active_comment_thread.messages.append(
-            Message(content=response.comment_in_response, role="assistant")
-        )
+        if request.payload.is_agent_comment:
+            cur.steps[step_index + 1].agent_comment_thread.messages.append(
+                Message(content=response.comment_in_response, role="assistant")
+            )
+        else:
+            cur.steps[step_index].active_comment_thread.messages.append(
+                Message(content=response.comment_in_response, role="assistant")
+            )
         if response.asked_to_do_something:
-            cur.steps[step_index].active_comment_thread.is_completed = True
+            if request.payload.is_agent_comment:
+                cur.steps[step_index + 1].agent_comment_thread.is_completed = True
+            else:
+                cur.steps[step_index].active_comment_thread.is_completed = True
 
     if response.asked_to_do_something:
         text = (
@@ -710,7 +820,15 @@ def comment_on_thread(request: AutofixUpdateRequest):
             + "\n".join(
                 [
                     f"{message.role}: {message.content}"
-                    for message in step.active_comment_thread.messages
+                    for message in (
+                        step.active_comment_thread.messages
+                        if not request.payload.is_agent_comment
+                        else (
+                            step_after.agent_comment_thread.messages
+                            if step_after and step_after.agent_comment_thread
+                            else []
+                        )
+                    )
                 ]
             )
         )
@@ -727,6 +845,22 @@ def comment_on_thread(request: AutofixUpdateRequest):
                 ),
             )
         )
+
+
+def resolve_comment_thread(request: AutofixUpdateRequest):
+    if not isinstance(request.payload, AutofixResolveCommentThreadPayload):
+        raise ValueError("Invalid payload type for resolve_comment_thread")
+
+    state = ContinuationState(request.run_id)
+
+    step_index = request.payload.step_index
+    with state.update() as cur:
+        if request.payload.is_agent_comment and step_index + 1 < len(state.get().steps):
+            cur.steps[step_index + 1].agent_comment_thread = None
+        elif request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:
+            cur.steps[step_index].active_comment_thread = None
+        else:
+            raise ValueError("No matching comment thread found; unable to resolve thread")
 
 
 @inject

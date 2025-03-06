@@ -155,16 +155,17 @@ class PrFile(BaseModel):
     # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28
     filename: str
     patch: str
-    status: Literal[
-        "added",
-        "removed",
-        "modified",
-        "renamed",
-        "copied",
-        "changed",
-        "unchanged",
-    ]
+    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
     changes: int
+
+
+class FilterWarningsRequest(BaseComponentRequest):
+    warnings: list[StaticAnalysisWarning]
+    target_filenames: list[str]
+
+
+class FilterWarningsOutput(BaseComponentOutput):
+    warnings: list[StaticAnalysisWarning]
 
 
 class CodeFetchIssuesRequest(BaseComponentRequest):

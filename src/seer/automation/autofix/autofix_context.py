@@ -1,6 +1,6 @@
 import logging
 import textwrap
-from typing import Mapping, cast
+from typing import Mapping
 
 import sentry_sdk
 from github import UnknownObjectException
@@ -11,7 +11,7 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRunMemory,
-    ChangesStep,
+    CodebaseChange,
     CommittedPullRequestDetails,
 )
 from seer.automation.autofix.state import ContinuationState
@@ -148,7 +148,6 @@ class AutofixContext(PipelineContext):
             raise AgentError() from ValueError(
                 f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
             )
-
         repo_client = self.get_repo_client(repo_name)
 
         file_contents, _ = repo_client.get_file_content(path, autocorrect=True)
@@ -161,6 +160,30 @@ class AutofixContext(PipelineContext):
                 file_contents = file_change.apply(file_contents)
 
         return file_contents
+
+    def get_commit_history_for_file(
+        self, path: str, repo_name: str | None = None, max_commits: int = 10
+    ) -> list[str]:
+        repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
+        if not repo_name:
+            raise AgentError() from ValueError(
+                f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
+            )
+
+        repo_client = self.get_repo_client(repo_name)
+        return repo_client.get_commit_history(path, autocorrect=True, max_commits=max_commits)
+
+    def get_commit_patch_for_file(
+        self, path: str, repo_name: str | None = None, commit_sha: str | None = None
+    ) -> str | None:
+        repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
+        if not repo_name:
+            raise AgentError() from ValueError(
+                f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
+            )
+
+        repo_client = self.get_repo_client(repo_name)
+        return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
 
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """
@@ -204,6 +227,44 @@ class AutofixContext(PipelineContext):
             if thread.stacktrace:
                 self._process_stacktrace_paths(thread.stacktrace)
 
+    def _get_change_state(self, repo_external_id: str) -> CodebaseChange | None:
+        changes_step = self.state.get().changes_step
+
+        if not changes_step:
+            raise ValueError("Changes step not found")
+
+        change_state = next(
+            (
+                (change)
+                for change in changes_step.changes
+                if change.repo_external_id == repo_external_id
+            ),
+            None,
+        )
+
+        return change_state
+
+    def _set_change_state(self, change_state: CodebaseChange):
+        with self.state.update() as cur:
+            changes_step = cur.changes_step
+
+            if not changes_step:
+                raise ValueError("Changes step not found")
+
+            changes_state_index = next(
+                (
+                    i
+                    for i, c in enumerate(changes_step.changes)
+                    if c.repo_external_id == change_state.repo_external_id
+                ),
+                None,
+            )
+
+            if changes_state_index is None:
+                raise ValueError("Change state not found")
+
+            changes_step.changes[changes_state_index] = change_state
+
     def commit_changes(
         self,
         repo_external_id: str | None = None,
@@ -213,19 +274,12 @@ class AutofixContext(PipelineContext):
         state = self.state.get()
         for codebase_state in state.codebases.values():
             if repo_external_id is None or codebase_state.repo_external_id == repo_external_id:
-                changes_step = state.find_step(key="changes")
-                if not changes_step:
-                    raise ValueError("Changes step not found")
-                changes_step = cast(ChangesStep, changes_step)
-                change_state, changes_state_index = next(
-                    (
-                        (change, i)
-                        for i, change in enumerate(changes_step.changes)
-                        if change.repo_external_id == codebase_state.repo_external_id
-                    ),
-                    (None, None),
-                )
-                if codebase_state.file_changes and change_state and changes_state_index is not None:
+                if not codebase_state.repo_external_id:
+                    raise ValueError("Repo external ID not found")
+
+                change_state = self._get_change_state(codebase_state.repo_external_id)
+
+                if codebase_state.file_changes and change_state:
                     key = codebase_state.repo_external_id
 
                     if key is None:
@@ -240,26 +294,41 @@ class AutofixContext(PipelineContext):
                         repo_external_id=repo_definition.external_id, type=RepoClientType.WRITE
                     )
 
-                    branch_name = f"autofix/{change_state.title}"
-                    branch_ref = repo_client.create_branch_from_changes(
-                        pr_title=change_state.title,
-                        file_patches=change_state.diff,
-                        branch_name=branch_name,
-                    )
-
-                    if branch_ref is None:
-                        logger.warning("Failed to create branch from changes")
-                        return None
-
-                    with self.state.update() as state:
-                        step = cast(ChangesStep, state.steps[changes_step.index])
-                        step.changes[changes_state_index].branch_name = branch_ref.ref.replace(
-                            "refs/heads/", ""
+                    # Because the GitHub API is slow, if we kill this task with a half-created branch, subsequent tries will create new branches.
+                    # However, if one already exists and is created we will use it.
+                    if not change_state.branch_name:
+                        branch_ref = repo_client.create_branch_from_changes(
+                            pr_title=change_state.title,
+                            file_patches=change_state.diff,
+                            branch_name=change_state.draft_branch_name
+                            or f"autofix/{change_state.title}",
                         )
+
+                        if branch_ref is None:
+                            logger.warning("Failed to create branch from changes")
+                            return None
+
+                        change_state.branch_name = branch_ref.ref.replace("refs/heads/", "")
+                        self._set_change_state(change_state)
+
                     if not make_pr:
                         return
 
-                    pr_title = f"""🤖 {change_state.title}"""
+                    change_state = self._get_change_state(codebase_state.repo_external_id)
+
+                    if not change_state:
+                        raise ValueError("Change state not found for PR creation")
+
+                    if change_state.pull_request:
+                        raise ValueError("Pull request already exists for this change")
+
+                    if not change_state.branch_name:
+                        raise ValueError("Branch name not found for PR creation")
+
+                    branch_ref = repo_client.get_branch_ref(change_state.branch_name)
+
+                    if not branch_ref:
+                        raise ValueError("Branch not found for PR creation")
 
                     ref_note = ""
                     org_slug = self.get_org_slug(state.request.organization_id)
@@ -297,15 +366,15 @@ class AutofixContext(PipelineContext):
                         ref_note=ref_note,
                     )
 
-                    pr = repo_client.create_pr_from_branch(branch_ref, pr_title, pr_description)
+                    pr = repo_client.create_pr_from_branch(
+                        branch_ref, change_state.title, pr_description
+                    )
 
                     change_state.pull_request = CommittedPullRequestDetails(
                         pr_number=pr.number, pr_url=pr.html_url, pr_id=pr.id
                     )
 
-                    with self.state.update() as state:
-                        step = cast(ChangesStep, state.steps[changes_step.index])
-                        step.changes[changes_state_index].pull_request = change_state.pull_request
+                    self._set_change_state(change_state)
 
                     with Session() as session:
                         pr_id_mapping = DbPrIdToAutofixRunIdMapping(

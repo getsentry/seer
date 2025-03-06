@@ -126,6 +126,7 @@ class TestCodingComponent:
     def test_invoke_with_root_cause_analysis_non_obvious_fix(self, component):
         # Setup
         mock_request = MagicMock()
+        mock_request.mode = "fix"
         mock_request.root_cause_and_fix = MagicMock(spec=RootCauseAnalysisItem)
         mock_request.root_cause_and_fix.root_cause_reproduction = [
             MagicMock(

@@ -23,12 +23,15 @@ from seer.automation.codegen.models import (
     CodegenRelevantWarningsRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    FilterWarningsOutput,
+    FilterWarningsRequest,
     PrFile,
 )
 from seer.automation.codegen.relevant_warnings_component import (
     AreIssuesFixableComponent,
     AssociateWarningsWithIssuesComponent,
     FetchIssuesComponent,
+    FilterWarningsComponent,
     PredictRelevantWarningsComponent,
 )
 from seer.automation.codegen.step import CodegenStep
@@ -76,7 +79,7 @@ class RelevantWarningsStep(CodegenStep):
         config: AppConfig = injected,
     ):
         if not self.request.should_post_to_overwatch:
-            logger.info("Skipping posting relevant warnings results to Overwatch.")
+            self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
         request = {
@@ -99,7 +102,7 @@ class RelevantWarningsStep(CodegenStep):
         try:
             self._post_results_to_overwatch(relevant_warnings_output)
         except Exception:
-            logger.exception("Error posting relevant warnings results to Overwatch")
+            self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
             self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
@@ -112,12 +115,7 @@ class RelevantWarningsStep(CodegenStep):
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
 
-        if not self.request.warnings:
-            self.logger.info("No warnings to predict relevancy for.")
-            self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
-            return
-
-        # 1. Fetch issues related to the commit.
+        # 1. Read the commit.
         repo_client = self.context.get_repo_client(type=RepoClientType.READ)
         commit = repo_client.repo.get_commit(self.request.commit_sha)
         pr_files = [
@@ -127,6 +125,23 @@ class RelevantWarningsStep(CodegenStep):
             for file in commit.files
             if file.patch
         ]
+
+        # 2. Only consider warnings from files changed in the commit.
+        filter_warnings_component = FilterWarningsComponent(self.context)
+        filter_warnings_request = FilterWarningsRequest(
+            warnings=self.request.warnings, target_filenames=[file.filename for file in pr_files]
+        )
+        filter_warnings_output: FilterWarningsOutput = filter_warnings_component.invoke(
+            filter_warnings_request
+        )
+        warnings = filter_warnings_output.warnings
+
+        if not warnings:  # exit early to avoid unnecessary issue-fetching.
+            self.logger.info("No warnings to predict relevancy for.")
+            self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
+            return
+
+        # 3. Fetch issues related to the commit.
         fetch_issues_component = FetchIssuesComponent(self.context)
         fetch_issues_request = CodeFetchIssuesRequest(
             organization_id=self.request.organization_id, pr_files=pr_files
@@ -135,11 +150,11 @@ class RelevantWarningsStep(CodegenStep):
             fetch_issues_request
         )
 
-        # 2. Limit the number of warning-issue associations we analyze to the top
-        # max_num_associations.
+        # 4. Limit the number of warning-issue associations we analyze to the top
+        #    max_num_associations.
         association_component = AssociateWarningsWithIssuesComponent(self.context)
         associations_request = AssociateWarningsWithIssuesRequest(
-            warnings=self.request.warnings,
+            warnings=warnings,
             filename_to_issues=fetch_issues_output.filename_to_issues,
             max_num_associations=self.request.max_num_associations,
         )
@@ -148,7 +163,7 @@ class RelevantWarningsStep(CodegenStep):
         )
         associations = associations_output.candidate_associations
 
-        # 3. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
+        # 5. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
         #    will fix the issue.
         are_issues_fixable_component = AreIssuesFixableComponent(self.context)
         are_fixable_output: CodeAreIssuesFixableOutput = are_issues_fixable_component.invoke(
@@ -165,7 +180,7 @@ class RelevantWarningsStep(CodegenStep):
             if is_fixable
         ]
 
-        # 4. Predict which warnings are relevant to which issues.
+        # 6. Predict which warnings are relevant to which issues.
         prediction_component = PredictRelevantWarningsComponent(self.context)
         request = CodePredictRelevantWarningsRequest(
             candidate_associations=associations_with_fixable_issues
@@ -174,5 +189,5 @@ class RelevantWarningsStep(CodegenStep):
             request
         )
 
-        # 5. Save results.
+        # 7. Save results.
         self._complete_run(relevant_warnings_output)

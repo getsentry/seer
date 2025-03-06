@@ -1,12 +1,14 @@
 import abc
 import logging
 import uuid
+from functools import cached_property
 from typing import Any, Generic, TypeVar
 
 from celery import Task, signature
 from pydantic import BaseModel, Field
 
 from seer.automation.state import DbStateRunTypes, State
+from seer.utils import prefix_logger
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +97,12 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
     def _cleanup(self):
         pass
 
-    @property
+    @cached_property
     def logger(self):
+        run_id = self.context.run_id
         name = self.name
-
-        class PipelineLoggingAdapter(logging.LoggerAdapter):
-            def process(self, msg, kwargs):
-                return f"[{name}] {msg}", kwargs
-
-        return PipelineLoggingAdapter(logger)
+        prefix = f"[{run_id=}] [{name}] "
+        return prefix_logger(prefix, logger)
 
     @staticmethod
     @abc.abstractmethod

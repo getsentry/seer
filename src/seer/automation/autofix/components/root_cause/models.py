@@ -43,13 +43,15 @@ class RootCauseAnalysisItem(BaseModel):
 
 class RootCauseAnalysisItemPrompt(BaseModel):
     root_cause_reproduction: list[TimelineEvent]
-
-    @classmethod
-    def from_model(cls, model: RootCauseAnalysisItem):
-        return cls(root_cause_reproduction=model.root_cause_reproduction)
+    summary: str
 
     def to_model(self):
-        return RootCauseAnalysisItem.model_validate(self.model_dump())
+        return RootCauseAnalysisItem.model_validate(
+            {
+                **self.model_dump(),
+                "description": self.summary,
+            }
+        )
 
 
 class MultipleRootCauseAnalysisOutputPrompt(BaseModel):

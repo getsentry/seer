@@ -459,3 +459,115 @@ class TestKeywordSearch:
             "Searched codebase for `keyword`, found 0 result(s)."
         )
         assert result == "No results found."
+
+
+class TestViewDiff:
+    def test_view_diff_found(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = AutofixContext
+
+        file_path = "src/example.py"
+        repo_name = "owner/test_repo"
+        commit_sha = "abc1234"
+        expected_patch = "@@ -1,5 +1,7 @@\n-old code\n+new code"
+
+        autofix_tools.context.get_commit_patch_for_file.return_value = expected_patch
+
+        result = autofix_tools.view_diff(file_path, repo_name, commit_sha)
+
+        autofix_tools.context.event_manager.add_log.assert_called_with(
+            f"Studying commit `{commit_sha}` in `{file_path}` in `{repo_name}`..."
+        )
+        autofix_tools.context.get_commit_patch_for_file.assert_called_with(
+            path=file_path, repo_name=repo_name, commit_sha=commit_sha
+        )
+        assert result == expected_patch
+
+    def test_view_diff_not_found(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = AutofixContext
+
+        file_path = "src/nonexistent.py"
+        repo_name = "owner/test_repo"
+        commit_sha = "abc1234"
+
+        autofix_tools.context.get_commit_patch_for_file.return_value = None
+
+        result = autofix_tools.view_diff(file_path, repo_name, commit_sha)
+
+        autofix_tools.context.event_manager.add_log.assert_called_with(
+            f"Studying commit `{commit_sha}` in `{file_path}` in `{repo_name}`..."
+        )
+        autofix_tools.context.get_commit_patch_for_file.assert_called_with(
+            path=file_path, repo_name=repo_name, commit_sha=commit_sha
+        )
+        assert (
+            result
+            == "Could not find the file in the given commit. Either your hash is incorrect or the file does not exist in the given commit."
+        )
+
+    def test_view_diff_non_autofix_context(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = MagicMock
+        result = autofix_tools.view_diff("file.py", "owner/repo", "abc1234")
+        assert result is None
+
+
+class TestExplainFile:
+    def test_explain_file_found(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = AutofixContext
+
+        file_path = "src/example.py"
+        repo_name = "owner/test_repo"
+        commit_history = [
+            "2023-01-01: abc1234 - Initial commit (Author: Test User)",
+            "2023-01-02: def5678 - Update example.py (Author: Another User)",
+        ]
+
+        autofix_tools.context.get_commit_history_for_file.return_value = commit_history
+
+        result = autofix_tools.explain_file(file_path, repo_name)
+
+        autofix_tools.context.get_commit_history_for_file.assert_called_with(
+            file_path, repo_name, max_commits=30
+        )
+        expected_result = "COMMIT HISTORY:\n" + "\n".join(commit_history)
+        assert result == expected_result
+
+    def test_explain_file_not_found(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = AutofixContext
+
+        file_path = "src/nonexistent.py"
+        repo_name = "owner/test_repo"
+
+        autofix_tools.context.get_commit_history_for_file.return_value = None
+
+        result = autofix_tools.explain_file(file_path, repo_name)
+
+        autofix_tools.context.get_commit_history_for_file.assert_called_with(
+            file_path, repo_name, max_commits=30
+        )
+        assert (
+            result
+            == "No commit history found for the given file. Either the file path or repo name is incorrect, or it is just unavailable right now."
+        )
+
+    def test_explain_file_empty_history(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = AutofixContext
+
+        file_path = "src/new_file.py"
+        repo_name = "owner/test_repo"
+
+        autofix_tools.context.get_commit_history_for_file.return_value = []
+
+        result = autofix_tools.explain_file(file_path, repo_name)
+
+        autofix_tools.context.get_commit_history_for_file.assert_called_with(
+            file_path, repo_name, max_commits=30
+        )
+        assert (
+            result
+            == "No commit history found for the given file. Either the file path or repo name is incorrect, or it is just unavailable right now."
+        )
+
+    def test_explain_file_non_autofix_context(self, autofix_tools: BaseTools):
+        autofix_tools.context.__class__ = MagicMock
+        result = autofix_tools.explain_file("file.py", "owner/repo")
+        assert result is None

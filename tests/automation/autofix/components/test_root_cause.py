@@ -66,6 +66,7 @@ class TestRootCauseComponent:
                             is_most_important_event=True,
                         )
                     ],
+                    summary="The root cause of the issue is ...",
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -141,6 +142,7 @@ class TestRootCauseComponent:
                             is_most_important_event=True,
                         )
                     ],
+                    summary="The root cause of the issue is ...",
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -189,6 +191,7 @@ class TestRootCauseComponent:
                             is_most_important_event=True,
                         )
                     ],
+                    summary="The root cause of the issue is ...",
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -236,6 +239,7 @@ class TestRootCauseComponent:
                             is_most_important_event=True,
                         )
                     ],
+                    summary="The root cause of the issue is ...",
                 )
             ),
             metadata=LlmResponseMetadata(

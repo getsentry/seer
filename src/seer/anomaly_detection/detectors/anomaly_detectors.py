@@ -4,11 +4,12 @@ import logging
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.detectors.mp_scorers import MPScorer
+from seer.anomaly_detection.detectors.anomaly_scorer import AnomalyScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
 from seer.anomaly_detection.detectors.smoothers import (
     MajorityVoteBatchFlagSmoother,
@@ -35,12 +36,14 @@ class AnomalyDetector(BaseModel, abc.ABC):
     Abstract base class for anomaly detection logic.
     """
 
+    @inject
     @abc.abstractmethod
     def detect(
         self,
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
-        algo_config: AlgoConfig,
+        algo_config: AlgoConfig = injected,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
     ) -> TimeSeriesAnomalies:
         return NotImplemented
@@ -58,6 +61,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
         window_size: int | None = None,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
@@ -75,7 +79,12 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         The input timeseries with an anomaly scores and a flag added
         """
         return self._compute_matrix_profile(
-            timeseries, ad_config, algo_config, window_size, time_budget_ms=time_budget_ms
+            timeseries,
+            ad_config,
+            algo_config,
+            window_size,
+            time_budget_ms=time_budget_ms,
+            prophet_df=prophet_df,
         )
 
     @inject
@@ -86,9 +95,10 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig,
         window_size: int | None = None,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
         ws_selector: WindowSizeSelector = injected,
-        scorer: MPScorer = injected,
+        scorer: AnomalyScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -113,7 +123,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if window_size is None:
             window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
-            # TODO: Add sentry logging of this error
             raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
         mp = stumpy.stump(
@@ -130,9 +139,9 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             values=ts_values,
             timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
+            prophet_df=prophet_df,
             ad_config=ad_config,
             window_size=window_size,
-            time_budget_ms=time_budget_ms,
         )
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
@@ -185,8 +194,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
-        scorer: MPScorer = injected,
+        scorer: AnomalyScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -259,6 +269,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     history_values=self.history_values,
                     history_timestamps=self.history_timestamps,
                     history_mp_dist=mp_dist_baseline,
+                    prophet_df=prophet_df,
                     ad_config=ad_config,
                     window_size=self.window_size,
                 )

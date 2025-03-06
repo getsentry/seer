@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 from johen import generate
+from pydantic import BaseModel
 
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.agent.models import LlmGenerateStructuredResponse
@@ -19,6 +20,8 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    FilterWarningsOutput,
+    FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
 )
@@ -27,6 +30,7 @@ from seer.automation.codegen.relevant_warnings_component import (
     AreIssuesFixableComponent,
     AssociateWarningsWithIssuesComponent,
     FetchIssuesComponent,
+    FilterWarningsComponent,
     PredictRelevantWarningsComponent,
 )
 from seer.automation.codegen.relevant_warnings_step import (
@@ -36,6 +40,91 @@ from seer.automation.codegen.relevant_warnings_step import (
 from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
 
 
+class TestFilterWarningsComponent:
+    @pytest.fixture
+    def component(self):
+        return FilterWarningsComponent(context=MagicMock())
+
+    def test_bad_encoded_locations_cause_errors(self, component: FilterWarningsComponent):
+        warning = next(generate(StaticAnalysisWarning))
+        warning.encoded_location = "../../getsentry/seer/../not/anymore.py:1:1"
+        with pytest.raises(
+            ValueError,
+            match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
+        ):
+            component._does_warning_match_a_target_file(warning, {"file1.py"})
+
+    class _TestInvokeTestCase(BaseModel):
+        id: str
+
+        target_files: list[str]
+        "These files are relative to the repo root b/c they're from the GitHub API."
+
+        encoded_locations_with_matches: list[str]
+        "These locations come from overwatch. Currently, they may not contain the repo's full name."
+
+        encoded_locations_without_matches: list[str]
+
+    @pytest.mark.parametrize(
+        "test_case",
+        [
+            _TestInvokeTestCase(
+                id="getsentry/seer",
+                target_files=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
+                encoded_locations_with_matches=[
+                    "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
+                    "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
+                    "getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
+                    "../../../getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",
+                ],
+                encoded_locations_without_matches=[
+                    "../app/getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",  # too far up
+                    "getsentry/seer/src/seer/anomaly_detection/mp_boxcox_scorer.py:1",  # missing detectors
+                    "getsentry/seer/src/seer/detectors/mp_boxcox_scorer.py:1",  # missing anomaly_detection
+                ],
+            ),
+            _TestInvokeTestCase(
+                id="codecov/overwatch",
+                target_files=[
+                    "app/tools/seer_signature/generate_signature.py",
+                    "processor/tests/services/test_envelope.py",
+                    "app/app/Livewire/Actions/Logout.php",
+                ],
+                encoded_locations_with_matches=[
+                    "app/tools/seer_signature/generate_signature.py:20",
+                    "tests/services/test_envelope.py:4",
+                    "app/Livewire/Actions/Logout.php:15",
+                ],
+                encoded_locations_without_matches=[
+                    "generate_signature.py:1",  # unknown location
+                    "app/tools/generate_signature.py:1",  # missing seer_signature
+                    "tests/services/test_package.py:1",  # wrong file
+                    "app/app/Livewire/Actions/Logout.py:1",  # wrong extension
+                ],
+            ),
+        ],
+        ids=lambda test_case: test_case.id,
+    )
+    def test_invoke(self, test_case: _TestInvokeTestCase, component: FilterWarningsComponent):
+        warnings = []
+        for encoded_location in (
+            test_case.encoded_locations_with_matches + test_case.encoded_locations_without_matches
+        ):
+            warning = next(generate(StaticAnalysisWarning))
+            warning.encoded_location = encoded_location
+            warnings.append(warning)
+
+        request = FilterWarningsRequest(
+            warnings=warnings,
+            target_filenames=test_case.target_files,
+            repo_full_name="getsentry/seer",
+        )
+        output: FilterWarningsOutput = component.invoke(request)
+        output_encoded_locations = [warning.encoded_location for warning in output.warnings]
+        assert output_encoded_locations == test_case.encoded_locations_with_matches
+        assert output.warnings == warnings[: len(test_case.encoded_locations_with_matches)]
+
+
 @patch("seer.rpc.DummyRpcClient.call")
 class TestFetchIssuesComponent:
     @pytest.fixture
@@ -43,12 +132,24 @@ class TestFetchIssuesComponent:
         mock_context = MagicMock(spec=CodegenContext)
         mock_context.repo = MagicMock()
         mock_context.repo.provider = "github"
+        mock_context.repo.provider_raw = "integrations:github"
         mock_context.repo.external_id = "123123"
         return FetchIssuesComponent(mock_context)
+
+    def test_bad_provider_raw(self, component: FetchIssuesComponent):
+        mock_context = MagicMock(spec=CodegenContext)
+        mock_context.repo = MagicMock()
+        mock_context.repo.provider = "github"
+        mock_context.repo.provider_raw = None
+        mock_context.repo.external_id = "123123"
+        component = FetchIssuesComponent(mock_context)
+        with pytest.raises(TypeError):
+            component.invoke(CodeFetchIssuesRequest(organization_id=1, pr_files=[]))
 
     def test_invoke_filters_files(
         self, mock_rpc_client_call: Mock, component: FetchIssuesComponent
     ):
+        assert component.context.repo.provider_raw is not None
         pr_files = [
             PrFile(filename="fine.py", patch="patch1", status="modified", changes=100),
             PrFile(filename="many_changes.py", patch="patch2", status="modified", changes=1_000),
@@ -102,13 +203,11 @@ def _mock_static_analysis_warning():
     return static_analysis_warning
 
 
-def _mock_issue_details(issue_id: int | None = None):
+def _mock_issue_details():
     """
     Creates an issue which is guaranteed to have an event.
     """
     issue_details = _MockIssueDetails()
-    if issue_id is not None:
-        issue_details.id = issue_id
     issue_details.events = [next(generate(SentryEventData))]
     return issue_details
 
@@ -116,7 +215,7 @@ def _mock_issue_details(issue_id: int | None = None):
 class TestAssociateWarningsWithIssuesComponent:
     @pytest.fixture
     def component(self):
-        return AssociateWarningsWithIssuesComponent(context=None)
+        return AssociateWarningsWithIssuesComponent(context=MagicMock())
 
     # Patch instead of VCR so that embeddings don't depend on the texts inputted, which are
     # derived from johen-generated objects.
@@ -198,9 +297,9 @@ class TestAssociateWarningsWithIssuesComponent:
 class TestAreIssuesFixableComponent:
     @pytest.fixture
     def component(self):
-        return AreIssuesFixableComponent(context=None)
+        return AreIssuesFixableComponent(context=MagicMock())
 
-    @pytest.fixture(autouse=True)
+    @pytest.fixture
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
 
         def mock_generate_structured(*args, **kwargs):
@@ -218,7 +317,7 @@ class TestAreIssuesFixableComponent:
             mock_generate_structured,
         )
 
-    def test_invoke(self, component: AreIssuesFixableComponent):
+    def test_invoke(self, component: AreIssuesFixableComponent, patch_generate_structured):
         max_num_issues_analyzed = 3
         issues_unique = [_mock_issue_details() for _ in range(4)]
         candidate_issues = [
@@ -243,7 +342,7 @@ class TestAreIssuesFixableComponent:
         assert len(request.candidate_issues) == len(candidate_issues)
         assert len(output.are_fixable) == len(request.candidate_issues)
 
-        # Test that max_num_issues_analyzed were analyzed
+        # Test that num_issues_analyzed_expected were analyzed
         assert (
             sum(is_fixable is not None for is_fixable in output.are_fixable)
             == num_issues_analyzed_expected
@@ -255,14 +354,44 @@ class TestAreIssuesFixableComponent:
         issue_id_to_are_fixable = defaultdict(set)
         for issue, is_fixable in zip(candidate_issues, output.are_fixable, strict=True):
             issue_id_to_are_fixable[issue.id].add(is_fixable)
-        for issue_id, are_fixables in issue_id_to_are_fixable.items():
-            assert len(are_fixables) == 1, issue_id
+        for issue_id, are_fixable in issue_id_to_are_fixable.items():
+            assert len(are_fixable) == 1, issue_id
+
+    @pytest.fixture
+    def patch_generate_structured_failure(self, monkeypatch: pytest.MonkeyPatch):
+
+        def mock_generate_structured(*args, **kwargs):
+            completion = next(
+                generate(LlmGenerateStructuredResponse[IsFixableIssuePrompts.IsIssueFixable])
+            )
+            object.__setattr__(completion, "parsed", None)
+            return completion
+
+        monkeypatch.setattr(
+            "seer.automation.codegen.relevant_warnings_component.LlmClient.generate_structured",
+            mock_generate_structured,
+        )
+
+    def test_invoke_with_failed_completion(
+        self, component: AreIssuesFixableComponent, patch_generate_structured_failure
+    ):
+        max_num_issues_analyzed = 1
+        candidate_issues = [_mock_issue_details()]
+
+        request = CodeAreIssuesFixableRequest(
+            candidate_issues=candidate_issues,
+            max_num_issues_analyzed=max_num_issues_analyzed,
+        )
+        output: CodeAreIssuesFixableOutput = component.invoke(request)
+
+        assert len(request.candidate_issues) == len(candidate_issues)
+        assert output.are_fixable == [True]  # b/c it defaults to fixable
 
 
 class TestPredictRelevantWarningsComponent:
     @pytest.fixture
     def component(self):
-        return PredictRelevantWarningsComponent(context=None)
+        return PredictRelevantWarningsComponent(context=MagicMock())
 
     @pytest.fixture(autouse=True)
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
@@ -295,6 +424,7 @@ class TestPredictRelevantWarningsComponent:
             assert issue.id == result.issue_id
 
 
+@patch("seer.automation.codegen.relevant_warnings_component.FilterWarningsComponent.invoke")
 @patch("seer.automation.codegen.relevant_warnings_component.FetchIssuesComponent.invoke")
 @patch("seer.automation.codegen.relevant_warnings_component.AreIssuesFixableComponent.invoke")
 @patch(
@@ -312,6 +442,7 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_associate_warnings_with_issues_component: Mock,
     mock_invoke_are_issues_fixable_component: Mock,
     mock_invoke_fetch_issues_component: Mock,
+    mock_invoke_filter_warnings_component: Mock,
 ):
     mock_repo_client = MagicMock()
     mock_commit = MagicMock()
@@ -323,6 +454,9 @@ def test_relevant_warnings_step_invoke(
 
     num_associations = 5
 
+    mock_invoke_filter_warnings_component.return_value = FilterWarningsOutput(
+        warnings=next(generate(list[StaticAnalysisWarning]))
+    )
     mock_invoke_fetch_issues_component.return_value = next(generate(CodeFetchIssuesOutput))
     mock_invoke_associate_warnings_with_issues_component.return_value = (
         AssociateWarningsWithIssuesOutput(
@@ -358,6 +492,12 @@ def test_relevant_warnings_step_invoke(
 
     mock_context.get_repo_client.assert_called_once()
     mock_repo_client.repo.get_commit.assert_called_once_with(request.commit_sha)
+
+    mock_invoke_filter_warnings_component.assert_called_once()
+    mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings
+    mock_invoke_filter_warnings_component.call_args[0][0].target_filenames = [
+        file.filename for file in mock_pr_files
+    ]
 
     mock_invoke_fetch_issues_component.assert_called_once()
     mock_invoke_fetch_issues_component.call_args[0][0].organization_id = request.organization_id

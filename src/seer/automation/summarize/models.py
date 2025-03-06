@@ -25,4 +25,4 @@ class SummarizeIssueResponse(BaseModel):
     whats_wrong: str
     trace: str
     possible_cause: str
-    scores: SummarizeIssueScores
+    scores: SummarizeIssueScores | None = None

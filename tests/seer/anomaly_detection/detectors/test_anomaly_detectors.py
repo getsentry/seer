@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from seer.anomaly_detection.detectors import (
+    CombinedAnomalyScorer,
     FlagsAndScores,
-    MPCascadingScorer,
     MPUtils,
     SuSSWindowSizeSelector,
 )
@@ -221,7 +221,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 ad_config=self.config,
                 ws_selector=SuSSWindowSizeSelector(),
                 algo_config=self.algo_config,
-                scorer=MPCascadingScorer(),
+                scorer=CombinedAnomalyScorer(),
                 mp_utils=MPUtils(),
             )
             history_mp = batch_anomalies.matrix_profile
@@ -237,7 +237,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         stream_anomalies = stream_detector.detect(
             timeseries=TimeSeries(timestamps=stream_ts_timestamps, values=np.array(stream_ts)),
             ad_config=self.config,
-            scorer=MPCascadingScorer(),
+            scorer=CombinedAnomalyScorer(),
             mp_utils=MPUtils(),
         )
 
@@ -279,12 +279,12 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
             "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
+            "none",
+            "none",
+            "none",
+            "none",
+            "none",
+            "none",
             "none",
         ]
         assert history_anomalies.window_size == 3
@@ -368,6 +368,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                     timestamps=np.arange(1.0, len(stream_ts) + 1), values=np.array(stream_ts)
                 ),
                 ad_config=self.config,
-                scorer=MPCascadingScorer(),
+                scorer=CombinedAnomalyScorer(),
                 mp_utils=MPUtils(),
             )

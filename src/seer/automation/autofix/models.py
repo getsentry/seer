@@ -85,6 +85,12 @@ class AutofixEndpointResponse(BaseModel):
     run_id: int
 
 
+class AutofixUpdateEndpointResponse(BaseModel):
+    run_id: int
+    status: Literal["success", "error"] = "success"
+    message: str | None = None
+
+
 class CustomRootCauseSelection(BaseModel):
     custom_root_cause: str
 
@@ -110,6 +116,7 @@ class CodebaseChange(BaseModel):
     description: str
     diff: list[FilePatch] = []
     diff_str: Optional[str] = None
+    draft_branch_name: str | None = None
     branch_name: str | None = None
     pull_request: Optional[CommittedPullRequestDetails] = None
 
@@ -144,7 +151,10 @@ class BaseStep(BaseModel):
 
     queued_user_messages: list[str] = []
     output_stream: str | None = None
-    active_comment_thread: CommentThread | None = None
+    active_comment_thread: CommentThread | None = None  # user-initiated comment thread
+    agent_comment_thread: CommentThread | None = None  # Autofix-initiated comment thread
+    output_confidence_score: float | None = None  # confidence in the step's output
+    proceed_confidence_score: float | None = None  # confidence in proceeding to the next step
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
@@ -218,6 +228,7 @@ class SolutionStep(BaseStep):
     type: Literal[StepType.SOLUTION] = StepType.SOLUTION
 
     solution: list[SolutionTimelineEvent] = []
+    description: str | None = None
     custom_solution: str | None = None
     solution_selected: bool = False
     selected_mode: Literal["all", "fix", "test"] | None = None
@@ -373,6 +384,7 @@ class AutofixUpdateType(str, enum.Enum):
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
     UPDATE_CODE_CHANGE = "update_code_change"
     COMMENT_THREAD = "comment_thread"
+    RESOLVE_COMMENT_THREAD = "resolve_comment_thread"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -431,6 +443,14 @@ class AutofixCommentThreadPayload(BaseModel):
     message: str
     step_index: int
     retain_insight_card_index: int | None = None
+    is_agent_comment: bool = False
+
+
+class AutofixResolveCommentThreadPayload(BaseModel):
+    type: Literal[AutofixUpdateType.RESOLVE_COMMENT_THREAD]
+    thread_id: str
+    step_index: int
+    is_agent_comment: bool = False
 
 
 class AutofixUpdateRequest(BaseModel):
@@ -444,6 +464,7 @@ class AutofixUpdateRequest(BaseModel):
         AutofixRestartFromPointPayload,
         AutofixUpdateCodeChangePayload,
         AutofixCommentThreadPayload,
+        AutofixResolveCommentThreadPayload,
     ] = Field(discriminator="type")
 
 
