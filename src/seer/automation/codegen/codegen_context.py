@@ -129,7 +129,7 @@ class CodegenContext(PipelineContext):
 
     def get_previous_run_context(
         self, owner: str, repo: str, pr_id: int
-    ) -> DbPrContextToUnitTestGenerationRunIdMapping:
+    ) -> DbPrContextToUnitTestGenerationRunIdMapping | None:
         with Session() as session:
             previous_context = (
                 session.query(DbPrContextToUnitTestGenerationRunIdMapping)
