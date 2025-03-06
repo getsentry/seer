@@ -403,7 +403,7 @@ class TestCombinedAnomalyScorer:
             {
                 "ds": timestamps,
                 "flag": ["none", "none", "none"],
-                "score": [0.5, 2.5, 0.3],
+                "score": [0.5, 0.2, 0.3],
                 "y": [10.0, 10.0, 15.0],
                 "yhat": [11.0, 12.0, 14.0],
                 "yhat_lower": [9.0, 10.0, 12.0],
@@ -427,8 +427,8 @@ class TestCombinedAnomalyScorer:
         assert isinstance(result, FlagsAndScores)
         assert len(result.flags) == 3
 
-        # For the second point, both MP and Prophet have high confidence anomalies
-        assert result.flags[1] == "none"
+        # For the seconde point, MP should override Prophet
+        assert result.flags[1] == "anomaly_higher_confidence"
 
     def test_prophet_negative_overrides_mp(
         self,
