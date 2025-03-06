@@ -139,6 +139,7 @@ class MPBoxCoxScorer(MPScorer):
         scores = []
         flags = []
         thresholds = []
+        confidence_levels = []
         time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
         time_start = datetime.datetime.now()
         batch_size = 10 if len(mp_dist) > 10 else 1
@@ -158,6 +159,8 @@ class MPBoxCoxScorer(MPScorer):
 
             if std != 0 and not np.isnan(score) and score > threshold:
                 flag = "anomaly_higher_confidence"
+
+            confidence_level = "high" if score >= threshold * 2 else "medium"
             cur_thresholds = [
                 Threshold(
                     type=ThresholdType.BOX_COX_THRESHOLD,
@@ -173,8 +176,10 @@ class MPBoxCoxScorer(MPScorer):
             flags.append(flag)
             cur_thresholds.extend(location_thresholds)
             thresholds.append(cur_thresholds)
-
-        return FlagsAndScores(flags=flags, scores=scores, thresholds=thresholds)
+            confidence_levels.append(confidence_level)
+        return FlagsAndScores(
+            flags=flags, scores=scores, thresholds=thresholds, confidence_levels=confidence_levels
+        )
 
     @inject
     def stream_score(
@@ -203,6 +208,7 @@ class MPBoxCoxScorer(MPScorer):
             if std == 0 or np.isnan(score) or score <= threshold
             else "anomaly_higher_confidence"
         )
+        confidence_level = "high" if score >= threshold * 2 else "medium"
         thresholds: List[Threshold] = [
             Threshold(
                 type=ThresholdType.BOX_COX_THRESHOLD,
@@ -217,4 +223,5 @@ class MPBoxCoxScorer(MPScorer):
             flags=[flag],
             scores=[score],
             thresholds=[thresholds],
+            confidence_levels=[confidence_level],
         )

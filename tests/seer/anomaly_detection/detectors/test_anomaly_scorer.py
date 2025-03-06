@@ -32,6 +32,7 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
+            confidence_levels=["medium", "medium", "medium"],
         )
 
     @pytest.fixture
@@ -393,6 +394,7 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
+            confidence_levels=["medium", "high", "medium"],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -417,7 +419,6 @@ class TestCombinedAnomalyScorer:
 
         result = scorer._merge_prophet_mp_results(
             timestamps=timestamps,
-            mp_distances=np.array([0.0, 2.0, 0.0]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
             ad_config=ad_config,
@@ -449,6 +450,7 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
+            confidence_levels=["medium", "medium", "medium"],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -473,7 +475,6 @@ class TestCombinedAnomalyScorer:
 
         result = scorer._merge_prophet_mp_results(
             timestamps=timestamps,
-            mp_distances=np.array([0.0, 0.0, 0.0]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
             ad_config=ad_config,
@@ -505,6 +506,7 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
+            confidence_levels=["high", "high", "high"],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -529,7 +531,6 @@ class TestCombinedAnomalyScorer:
 
         result = scorer._merge_prophet_mp_results(
             timestamps=timestamps,
-            mp_distances=np.array([0.0, 0.0, 0.0]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
             ad_config=ad_config,
@@ -561,6 +562,7 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
+            confidence_levels=["medium", "high", "medium"],
         )
 
         # Test merging MP and Prophet results
@@ -586,7 +588,6 @@ class TestCombinedAnomalyScorer:
 
         result = scorer._merge_prophet_mp_results(
             timestamps=timestamps,
-            mp_distances=np.array([0.0, 0.0, 0.0]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
             ad_config=ad_config,

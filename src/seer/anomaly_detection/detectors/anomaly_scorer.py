@@ -125,7 +125,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
         df_prophet_scores = self.prophet_scorer.batch_score(prophet_df)
         combined = self._merge_prophet_mp_results(
             timestamps=timestamps,
-            mp_distances=mp_dist,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
             ad_config=ad_config,
@@ -185,7 +184,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
 
         combined = self._merge_prophet_mp_results(
             timestamps=np.array([np.float64(streamed_timestamp)]),
-            mp_distances=np.array([np.float64(streamed_mp_dist)]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
             ad_config=ad_config,
@@ -219,28 +217,22 @@ class CombinedAnomalyScorer(AnomalyScorer):
     def _merge_prophet_mp_results(
         self,
         timestamps: np.ndarray,
-        mp_distances: np.ndarray,
         mp_flags_and_scores: FlagsAndScores,
         prophet_predictions: pd.DataFrame,
         ad_config: AnomalyDetectionConfig,
     ) -> FlagsAndScores:
 
         # todo: return prophet thresholds
-        def merge(timestamps, mp_distances, mp_flags_and_scores, prophet_map):
+        def merge(timestamps, mp_flags_and_scores, prophet_map):
             mp_flags = mp_flags_and_scores.flags
-            mp_thresholds = [thresh.upper for thresh in mp_flags_and_scores.thresholds[0]]
+            mp_confidence_levels = mp_flags_and_scores.confidence_levels
             flags = []
             missing = 0
             found = 0
             previous_mp_flag: AnomalyFlags = "none"
             missing_timestamps = []
-
-            # In the batch case, we only get 1 threshold so we need to ensure we have correct sizing
-            if len(mp_thresholds) < len(mp_distances):
-                mp_thresholds.extend([mp_thresholds[-1]] * (len(mp_distances) - len(mp_thresholds)))
-
-            for timestamp, mp_flag, mp_threshold, mp_distance in zip(
-                timestamps, mp_flags, mp_thresholds, mp_distances
+            for timestamp, mp_flag, mp_confidence_level in zip(
+                timestamps, mp_flags, mp_confidence_levels
             ):
                 pd_dt = float(timestamp)
                 if pd_dt in prophet_map["flag"]:
@@ -264,7 +256,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         flags.append("anomaly_higher_confidence")
                     elif prophet_score >= 2.0:
                         flags.append(prophet_flag)
-                    elif mp_distance >= mp_threshold * 2.0:
+                    elif mp_confidence_level == "high":
                         flags.append(mp_flag)
                     else:
                         flags.append("none")
@@ -298,10 +290,11 @@ class CombinedAnomalyScorer(AnomalyScorer):
         prophet_predictions_map = prophet_predictions.set_index("ds")[
             ["flag", "score", "y", "yhat", "yhat_lower", "yhat_upper"]
         ].to_dict()
-        flags = merge(timestamps, mp_distances, mp_flags_and_scores, prophet_predictions_map)
+        flags = merge(timestamps, mp_flags_and_scores, prophet_predictions_map)
 
         return FlagsAndScores(
             flags=flags,
             scores=mp_flags_and_scores.scores,
             thresholds=mp_flags_and_scores.thresholds,
+            confidence_levels=mp_flags_and_scores.confidence_levels,
         )
