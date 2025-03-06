@@ -2,6 +2,7 @@ from asyncio.log import logger
 from typing import Any
 from github.PaginatedList import PaginatedList
 from github.PullRequestComment import PullRequestComment
+import datetime
 
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
@@ -16,6 +17,9 @@ from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
+from seer.db import DbReviewCommentEmbedding, Session
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings
+from sqlalchemy.dialects.postgresql import insert
 
 
 class PrClosedStepRequest(PipelineStepTaskRequest):
@@ -27,7 +31,7 @@ class CommentAnalyzer:
     """
     Handles comment analysis logic
     """
-    def __init__(self, bot_username: str = "ai-review-test[bot]"):
+    def __init__(self, bot_username: str = "codecov-ai-reviewer[bot]"):
         self.bot_username = bot_username
 
     def is_bot_comment(self, comment: PullRequestComment) -> bool:
@@ -78,21 +82,58 @@ class PrClosedStep(CodegenStep):
         self.analyzer = CommentAnalyzer()
 
     def _process_comment(self, comment: PullRequestComment, pr):
-        """Helper method to process a single comment"""
-        is_good_pattern, is_bad_pattern = self.analyzer.analyze_reactions(comment)
-        
-        logger.info(
-            f"Processing bot comment id {comment.id} on PR {pr.url}: "
-            f"good_pattern={is_good_pattern}, "
-            f"bad_pattern={is_bad_pattern}"
-        )
+        try:
+            is_good_pattern, is_bad_pattern = self.analyzer.analyze_reactions(comment)
+            
+            logger.info(
+                f"Processing bot comment id {comment.id} on PR {pr.url}: "
+                f"good_pattern={is_good_pattern}, "
+                f"bad_pattern={is_bad_pattern}"
+            )
 
-        # TODO: Save to DB:
-        # You'll need three main steps:
-        # Generate embeddings for each comment.
-        # Compare embeddings to stored ones using cosine similarity.
-        # Decide if a comment should pass or be blocked.
+            model = GoogleProviderEmbeddings.model(
+                "text-embedding-005", 
+                task_type="CODE_RETRIEVAL_QUERY"
+            )
+            # Returns a 2D array, even for a single text input
+            embedding = model.encode(comment.body)[0]
 
+            with Session() as session:
+                insert_stmt = insert(DbReviewCommentEmbedding).values(
+                    provider="github",
+                    owner=pr.base.repo.owner.login,
+                    repo=pr.base.repo.name,
+                    pr_id=pr.number,
+                    body=comment.body,
+                    is_good_pattern=is_good_pattern,
+                    comment_metadata={
+                        "url": comment.html_url,
+                        "comment_id": comment.id,
+                        "location": {
+                            "file_path": comment.path,
+                            "line_number": comment.position
+                        } if hasattr(comment, "path") else None,
+                        "timestamps": {
+                            "created_at": comment.created_at.isoformat(),
+                            "updated_at": comment.updated_at.isoformat(),
+                        }
+                    },
+                    embedding=embedding,
+                    created_at=datetime.datetime.now()
+                )
+
+                session.execute(
+                    insert_stmt.on_conflict_do_nothing(
+                        index_elements=["provider", "pr_id", "repo", "owner"]
+                    )
+                )
+                session.commit()
+            
+        except Exception as e:
+            self.logger.error(
+                f"Error processing comment {comment.id} on PR {pr.url}: {e}"
+            )
+            raise
 
     @observe(name="Codegen - PR Closed")
     @ai_track(description="Codegen - PR Closed Step")
