@@ -359,8 +359,13 @@ class RepoClient:
 
         # Skip commonly excluded files that are typically not in version control
         commonly_excluded_files = [
-            '.env', '.env.local', '.env.development', '.env.production',
-            '.DS_Store', 'secrets.json', 'credentials.json'
+            ".env",
+            ".env.local",
+            ".env.development",
+            ".env.production",
+            ".DS_Store",
+            "secrets.json",
+            "credentials.json",
         ]
         if any(path.endswith(excluded_file) for excluded_file in commonly_excluded_files):
             logger.debug(f"Skipping commonly excluded file: {path}")
