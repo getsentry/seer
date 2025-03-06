@@ -1,7 +1,6 @@
 from seer.automation.codegen.models import (
     CodegenBaseRequest,
     CodegenContinuation,
-    CodegenPrClosedRequest,
     CodegenPrClosedResponse,
     CodegenPrReviewResponse,
     CodegenRelevantWarningsRequest,
@@ -49,7 +48,7 @@ def create_initial_pr_review_run(request: CodegenBaseRequest) -> DbState[Codegen
     return state
 
 
-def create_initial_pr_closed_run(request: CodegenPrClosedRequest) -> DbState[CodegenContinuation]:
+def create_initial_pr_closed_run(request: CodegenBaseRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_CLOSED
     )
@@ -100,7 +99,7 @@ def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = inject
 
 
 @inject
-def codegen_pr_closed(request: CodegenPrClosedRequest, app_config: AppConfig = injected):
+def codegen_pr_closed(request: CodegenBaseRequest, app_config: AppConfig = injected):
     state = create_initial_pr_closed_run(request)
 
     cur_state = state.get()
