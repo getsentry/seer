@@ -205,10 +205,16 @@ class AutofixEventManager:
 
     def set_selected_solution(self, payload: AutofixSolutionUpdatePayload):
         with self.state.update() as cur:
-            solution_step = cur.find_or_add(self.solution_step)
+            solution_step = cur.solution_step
+
+            if not solution_step:
+                raise ValueError("Solution step not found to set the selected solution")
+
             solution_step.custom_solution = (
                 payload.custom_solution if payload.custom_solution else None
             )
+            if payload.solution:
+                solution_step.solution = payload.solution
             solution_step.selected_mode = payload.mode
             solution_step.solution_selected = True
             cur.delete_steps_after(solution_step, include_current=False)
