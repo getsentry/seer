@@ -97,15 +97,17 @@ class CodegenContext(PipelineContext):
             session.merge(memory_record)
             session.commit()
 
-    def update_stored_memory(self, key: str, memory: list[Message]):
+    def update_stored_memory(self, key: str, memory: list[Message], original_run_id: int):
         with Session() as session:
             memory_record = (
-                session.query(DbRunMemory).where(DbRunMemory.run_id == self.run_id).one_or_none()
+                session.query(DbRunMemory)
+                .where(DbRunMemory.run_id == original_run_id)
+                .one_or_none()
             )
 
             if not memory_record:
                 raise RuntimeError(
-                    f"No memory record found for run_id {self.run_id}. Cannot update stored memory."
+                    f"No memory record found for run_id {original_run_id}. Cannot update stored memory."
                 )
             else:
                 memory_model = UnitTestRunMemory.from_db_model(memory_record)

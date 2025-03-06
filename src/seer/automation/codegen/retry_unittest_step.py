@@ -10,7 +10,7 @@ from seer.automation.autofix.config import (
 )
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodeUnitTestRequest
-from seer.automation.codegen.retry_unit_test_github_pr_creator import RetryUnitTestGithubPrCreator
+from seer.automation.codegen.retry_unit_test_github_pr_creator import RetryUnitTestGithubPrUpdater
 from seer.automation.codegen.retry_unittest_coding_component import RetryUnitTestCodingComponent
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
@@ -106,7 +106,7 @@ class RetryUnittestStep(CodegenStep):
         if unittest_output:
             for file_change in unittest_output.diffs:
                 self.context.event_manager.append_file_change(file_change)
-                generator = RetryUnitTestGithubPrCreator(
+                generator = RetryUnitTestGithubPrUpdater(
                     file_changes_payload=unittest_output.diffs,
                     pr=pr,
                     repo_client=repo_client,

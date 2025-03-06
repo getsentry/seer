@@ -8,7 +8,7 @@ from seer.db import DbPrContextToUnitTestGenerationRunIdMapping, Session
 logger = logging.getLogger(__name__)
 
 
-class RetryUnitTestGithubPrCreator:
+class RetryUnitTestGithubPrUpdater:
     def __init__(
         self,
         file_changes_payload: list[FileChange],
@@ -48,5 +48,6 @@ class RetryUnitTestGithubPrCreator:
         self, previous_context: DbPrContextToUnitTestGenerationRunIdMapping
     ):
         with Session() as session:
-            previous_context.iterations += 1
+            merged_context = session.merge(previous_context)
+            merged_context.iterations += 1
             session.commit()

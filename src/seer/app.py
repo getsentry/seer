@@ -295,7 +295,6 @@ def codegen_pr_review_state_endpoint(
 
 @json_api(blueprint, "/v1/automation/codegen/retry-unit-tests")
 def codegen_retry_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsResponse:
-    # TODO: Finish implementation of retry-unit-tests
     return codegen_retry_unittest(data)
 
 

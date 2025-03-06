@@ -111,5 +111,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
                 else:
                     logger.warning(f"Unsupported task type: {task.type}")
 
-            self.context.update_stored_memory("unit_test_memory", agent.memory)
+            self.context.update_stored_memory(
+                "unit_test_memory", agent.memory, previous_run_context.run_id
+            )
             return CodeUnitTestOutput(diffs=file_changes)
