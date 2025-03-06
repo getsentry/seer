@@ -320,7 +320,9 @@ class AutofixContext(PipelineContext):
                         raise ValueError("Change state not found for PR creation")
 
                     if change_state.pull_request:
-                        logger.info(f"Pull request already exists for change in repo {repo_external_id}")
+                        logger.info(
+                            f"Pull request already exists for change in repo {repo_external_id}"
+                        )
                         return
 
                     if not change_state.branch_name:
