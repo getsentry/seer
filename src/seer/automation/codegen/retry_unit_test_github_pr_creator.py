@@ -14,13 +14,11 @@ class RetryUnitTestGithubPrCreator:
         file_changes_payload: list[FileChange],
         pr: PullRequest,
         repo_client: RepoClient,
-        unit_test_run_id: int,
         previous_context: DbPrContextToUnitTestGenerationRunIdMapping,
     ):
         self.file_changes_payload = file_changes_payload
         self.pr = pr
         self.repo_client = repo_client
-        self.unit_test_run_id = unit_test_run_id
         self.previous_context = previous_context
 
     def update_github_pull_request(self):

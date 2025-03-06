@@ -48,7 +48,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
                 config=AgentConfig(interactive=False),
                 memory=previous_run_memory,
             )
-            print("HELLO WORLD", previous_run_context, "previous_run_context")
+
             codecov_client_params = request.codecov_client_params
 
             code_coverage_data = CodecovClient.fetch_coverage(
@@ -63,8 +63,6 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
                 latest_commit_sha=codecov_client_params["head_sha"],
             )
 
-            print(code_coverage_data, "code_coverage_data")
-            print(test_result_data, "test_result_data")
             final_response = agent.run(
                 run_config=RunConfig(
                     prompt=RetryUnitTestPrompts.format_continue_unit_tests_prompt(
@@ -79,7 +77,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
 
             if not final_response:
                 return None
-            print(final_response, "final_response")
+
             plan_steps_content = extract_text_inside_tags(final_response, "plan_steps")
 
             if len(plan_steps_content) == 0:
@@ -112,5 +110,6 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
                     file_changes.append(change)
                 else:
                     logger.warning(f"Unsupported task type: {task.type}")
-            print("file_changes", file_changes, "HERE CHECK IT OUT")
+
+            self.context.update_stored_memory("unit_test_memory", agent.memory)
             return CodeUnitTestOutput(diffs=file_changes)

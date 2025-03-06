@@ -59,7 +59,9 @@ class RetryUnittestStep(CodegenStep):
         self.context.event_manager.mark_running()
 
         try:
-            repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_REVIEW)
+            repo_client = self.context.get_repo_client(
+                type=RepoClientType.CODECOV_PR_REVIEW
+            )  # Codecov AI GH app
             pr = repo_client.repo.get_pull(self.request.pr_id)
             previous_run_context = self._get_previous_run_context()
 
@@ -102,20 +104,21 @@ class RetryUnittestStep(CodegenStep):
         unittest_output = self._generate_unit_tests(repo_client, pr, previous_run_context)
 
         if unittest_output:
-            self.logger.info(f"Generated unit test output: {unittest_output}")
             for file_change in unittest_output.diffs:
                 self.context.event_manager.append_file_change(file_change)
                 generator = RetryUnitTestGithubPrCreator(
-                    unittest_output.diffs,
-                    pr,
-                    repo_client,
-                    self.context.run_id,
-                    previous_run_context,
+                    file_changes_payload=unittest_output.diffs,
+                    pr=pr,
+                    repo_client=repo_client,
+                    previous_context=previous_run_context,
                 )
                 generator.update_github_pull_request()
 
         else:
             self.logger.info("No unit tests generated, posting message to original PR")
+            repo_client.post_unit_test_reference_to_original_pr(
+                previous_run_context.original_pr_url, pr.html_url
+            )
 
     def _generate_unit_tests(self, repo_client, pr, previous_run_context) -> Optional[Any]:
         try:
