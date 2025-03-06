@@ -75,12 +75,6 @@ class AutofixEventManager:
             changes=[],
         )
 
-    def migrate_step_keys(self):
-        # TODO: Remove this we no longer need the backwards compatibility.
-        with self.state.update() as cur:
-            for step in cur.steps:
-                step.ensure_uuid_id()
-
     def restart_step(self, step: Step):
         with self.state.update() as cur:
             cur_step = cur.find_or_add(step)
