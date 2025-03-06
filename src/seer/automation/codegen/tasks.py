@@ -100,7 +100,7 @@ def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = inject
 
 
 @inject
-def codegen_pr_closed(request: CodegenBaseRequest, app_config: AppConfig = injected):
+def codegen_pr_closed(request: CodegenPrClosedRequest, app_config: AppConfig = injected):
     state = create_initial_pr_closed_run(request)
 
     cur_state = state.get()

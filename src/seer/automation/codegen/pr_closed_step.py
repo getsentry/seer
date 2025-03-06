@@ -91,10 +91,11 @@ class PrClosedStep(CodegenStep):
             )
 
             model = GoogleProviderEmbeddings.model(
-                "text-embedding-005", task_type="CODE_RETRIEVAL_QUERY"
+                "text-embedding-005", 
+                task_type="CODE_RETRIEVAL_QUERY"
             )
-            # Returns a 2D array, even for a single text input
-            embedding = model.encode(comment.body)[0]
+            # encode() expects list[str], returns 2D array
+            embedding = model.encode([comment.body])[0]
 
             with Session() as session:
                 insert_stmt = insert(DbReviewCommentEmbedding).values(
