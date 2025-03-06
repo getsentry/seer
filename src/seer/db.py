@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     TIMESTAMP,
     BigInteger,
+    Boolean,
     Connection,
     DateTime,
     Enum,
@@ -28,9 +29,8 @@ from sqlalchemy import (
     func,
     select,
     text,
-    Boolean,
 )
-from sqlalchemy.dialects.postgresql import insert, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from seer.configuration import AppConfig
@@ -444,6 +444,7 @@ class DbProphetAlertTimeSeriesHistory(Base):
 
 class DbReviewCommentEmbedding(Base):
     """Store PR review comments with their embeddings for pattern matching per organization"""
+
     __tablename__ = "review_comments_embedding"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -461,10 +462,7 @@ class DbReviewCommentEmbedding(Base):
 
     __table_args__ = (
         UniqueConstraint("provider", "pr_id", "repo", "owner"),
-        Index(
-            "ix_review_comments_repo_owner_pr",
-            "owner", "repo", "pr_id"
-        ),
+        Index("ix_review_comments_repo_owner_pr", "owner", "repo", "pr_id"),
         Index(
             "ix_review_comments_embedding_hnsw",
             "embedding",

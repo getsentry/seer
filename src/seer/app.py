@@ -50,6 +50,7 @@ from seer.automation.codegen.models import (
     CodecovTaskRequest,
     CodegenBaseRequest,
     CodegenBaseResponse,
+    CodegenPrClosedResponse,
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
@@ -58,14 +59,13 @@ from seer.automation.codegen.models import (
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
     CodegenUnitTestsStateResponse,
-    CodegenPrClosedResponse,
 )
 from seer.automation.codegen.tasks import (
+    codegen_pr_closed,
     codegen_pr_review,
     codegen_relevant_warnings,
     codegen_unittest,
     get_unittest_state,
-    codegen_pr_closed
 )
 from seer.automation.summarize.issue import run_summarize_issue
 from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse

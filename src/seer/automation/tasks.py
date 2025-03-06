@@ -5,10 +5,10 @@ import sentry_sdk
 import sqlalchemy.sql as sql
 
 from celery_app.app import celery_app
-from seer.db import DbIssueSummary, DbRunState, Session
-from seer.automation.state import DbState, DbStateRunTypes
-from seer.automation.codegen.state import CodegenContinuation
 from seer.automation.codegen.models import CodegenStatus
+from seer.automation.codegen.state import CodegenContinuation
+from seer.automation.state import DbState, DbStateRunTypes
+from seer.db import DbIssueSummary, DbRunState, Session
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +84,11 @@ def spawn_pr_reaction_checks():
     Regular function that spawns PR reaction check tasks
     """
     with Session() as session:
-        db_states = session.query(DbRunState).filter(
-            DbRunState.type == DbStateRunTypes.PR_REVIEW,
-            DbRunState.group_id.isnot(None)
-        ).all()
+        db_states = (
+            session.query(DbRunState)
+            .filter(DbRunState.type == DbStateRunTypes.PR_REVIEW, DbRunState.group_id.isnot(None))
+            .all()
+        )
         state_ids = [state.id for state in db_states]
 
     for state_id in state_ids:
@@ -95,7 +96,7 @@ def spawn_pr_reaction_checks():
 
 
 @celery_app.task(
-    rate_limit='100/m',
+    rate_limit="100/m",
     retry_backoff=True,
     max_retries=3,
     soft_time_limit=30,
@@ -105,13 +106,9 @@ def check_pr_reactions(db_state_id: int):
     Task to check reactions for a single PR
     """
     try:
-        state = DbState(
-            id=db_state_id,
-            model=CodegenContinuation,
-            type=DbStateRunTypes.PR_REVIEW
-        )
+        state = DbState(id=db_state_id, model=CodegenContinuation, type=DbStateRunTypes.PR_REVIEW)
         continuation = state.get()
-        
+
         # Skip if not completed
         if continuation.status != CodegenStatus.COMPLETED:
             return
@@ -137,10 +134,14 @@ def check_github_reactions():
     Periodic task that spawns individual tasks for checking GitHub reactions on PRs
     """
     with Session() as session:
-        db_states = session.query(DbRunState).filter(
-            DbRunState.type == DbStateRunTypes.PR_REVIEW,
-            DbRunState.group_id.isnot(None)  # Ensure we have a PR ID
-        ).all()
+        db_states = (
+            session.query(DbRunState)
+            .filter(
+                DbRunState.type == DbStateRunTypes.PR_REVIEW,
+                DbRunState.group_id.isnot(None),  # Ensure we have a PR ID
+            )
+            .all()
+        )
         state_ids = [state.id for state in db_states]
 
     for state_id in state_ids:

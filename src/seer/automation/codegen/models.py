@@ -215,6 +215,11 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
 
 
 class CodecovTaskRequest(BaseModel):
-    data: CodegenUnitTestsRequest | CodegenPrReviewRequest | CodegenRelevantWarningsRequest | CodegenPrClosedRequest
+    data: (
+        CodegenUnitTestsRequest
+        | CodegenPrReviewRequest
+        | CodegenRelevantWarningsRequest
+        | CodegenPrClosedRequest
+    )
     external_owner_id: str
     request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "pr-closed"]

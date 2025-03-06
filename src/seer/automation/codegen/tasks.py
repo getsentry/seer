@@ -48,6 +48,7 @@ def create_initial_pr_review_run(request: CodegenBaseRequest) -> DbState[Codegen
 
     return state
 
+
 def create_initial_pr_closed_run(request: CodegenPrClosedRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_CLOSED
@@ -59,7 +60,6 @@ def create_initial_pr_closed_run(request: CodegenPrClosedRequest) -> DbState[Cod
         cur.mark_triggered()
 
     return state
-    
 
 
 def create_initial_relevant_warnings_run(
@@ -109,14 +109,13 @@ def codegen_pr_closed(request: CodegenBaseRequest, app_config: AppConfig = injec
         run_id=cur_state.run_id,
         pr_id=request.pr_id,
         repo_definition=request.repo,
-    )   
-    
+    )
+
     PrClosedStep.get_signature(
         pr_closed_request, queue=app_config.CELERY_WORKER_QUEUE
     ).apply_async()
 
     return CodegenPrClosedResponse(run_id=cur_state.run_id)
-
 
 
 def get_unittest_state(request: CodegenUnitTestsStateRequest):
