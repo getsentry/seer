@@ -145,7 +145,7 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
 
 
 def capture_alert(data: dict):
-    # Setting tags for failures on alerts
+    # Setting tags for Validation Errors on alerts
     if "context" in data and "id" in data["context"]:
         sentry_sdk.set_tag("alert_id", data["context"]["id"])
     if "organization_id" in data:
