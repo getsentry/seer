@@ -545,6 +545,14 @@ class RepoClient:
         return matching_file.patch
 
     def _create_branch(self, branch_name):
+        # Final validation to ensure branch name doesn't end with a slash
+        while branch_name.endswith("/"):
+            branch_name = branch_name[:-1]
+
+        # Ensure we have a valid branch name
+        if not branch_name:
+            branch_name = "autofix-branch"
+
         ref = self.repo.create_git_ref(
             ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
         )
@@ -621,6 +629,8 @@ class RepoClient:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
+                # Ensure we sanitize again after adding the random suffix
+                new_branch_name = sanitize_branch_name(new_branch_name)
                 branch_ref = self._create_branch(new_branch_name)
             else:
                 raise e
