@@ -119,7 +119,6 @@ class PrClosedStep(CodegenStep):
                         }
                     },
                     embedding=embedding,
-                    created_at=datetime.datetime.now()
                 )
 
                 session.execute(

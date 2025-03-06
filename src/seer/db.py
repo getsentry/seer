@@ -444,7 +444,7 @@ class DbProphetAlertTimeSeriesHistory(Base):
 
 class DbReviewCommentEmbedding(Base):
     """Store PR review comments with their embeddings for pattern matching per organization"""
-    __tablename__ = "codegen_review_comments_pattern_store"
+    __tablename__ = "review_comments_embedding"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider: Mapped[str] = mapped_column(String, nullable=False)
@@ -456,7 +456,7 @@ class DbReviewCommentEmbedding(Base):
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     comment_metadata: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
 
     __table_args__ = (
@@ -469,7 +469,7 @@ class DbReviewCommentEmbedding(Base):
             "ix_review_comments_embedding_hnsw",
             "embedding",
             postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_with={"m": 16, "ef_construction": 200},
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
         Index("ix_review_comments_is_good_pattern", "is_good_pattern"),
