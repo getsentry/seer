@@ -130,6 +130,7 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             try:
                 result: BaseModel = implementation(request_annotation.model_validate(data))
             except ValidationError as e:
+                capture_alert(data)
                 sentry_sdk.capture_exception(e)
                 raise BadRequest(str(e))
 
@@ -141,6 +142,16 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
         return implementation
 
     return decorator
+
+
+def capture_alert(data: dict):
+    # Setting tags for Validation Errors on alerts
+    if "context" in data and "id" in data["context"]:
+        sentry_sdk.set_tag("alert_id", data["context"]["id"])
+    if "organization_id" in data:
+        sentry_sdk.set_tag("organization_id", data["organization_id"])
+    if "project_id" in data:
+        sentry_sdk.set_tag("project_id", data["project_id"])
 
 
 def is_valid(payload: bytes, key: str, signature_data: str):
