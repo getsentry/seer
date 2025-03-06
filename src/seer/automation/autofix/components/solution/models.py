@@ -29,6 +29,13 @@ class SolutionTimelineEvent(BaseModel):
     def alias_event_type(cls, data):
         if isinstance(data, dict) and "event_type" in data and "timeline_item_type" not in data:
             data["timeline_item_type"] = data.pop("event_type")
+        if (
+            isinstance(data, dict)
+            and "timeline_item_type" in data
+            and data["timeline_item_type"] != "internal_code"
+            and data["timeline_item_type"] != "human_instruction"
+        ):
+            data["timeline_item_type"] = "internal_code"
         return data
 
 
