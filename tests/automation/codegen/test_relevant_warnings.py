@@ -450,10 +450,10 @@ def test_relevant_warnings_step_invoke(
     request = RelevantWarningsStepRequest(
         repo=RepoDefinition(name="repo1", owner="owner1", provider="github", external_id="123123"),
         pr_id=123,
-        callback_url="nope",
+        callback_url="not-used-url",
         organization_id=1,
         warnings=next(generate(list[StaticAnalysisWarning])),
-        commit_sha="abc123",
+        commit_sha="sha123",
         run_id=1,
         max_num_associations=10,
         max_num_issues_analyzed=10,
