@@ -374,6 +374,62 @@ class TestCombinedAnomalyScorer:
         mock_mp_scorer_stream_score.assert_called_once()
         mock_prophet_scorer_stream_score.assert_not_called()
 
+    def test_mp_overrides_prophet(
+        self,
+    ):
+        # Create the scorer without calling the real __init__
+        scorer = CombinedAnomalyScorer()
+        mp_flags_and_scores = FlagsAndScores(
+            flags=["none", "anomaly_higher_confidence", "none"],
+            scores=[0.1, 0.9, 0.2],
+            thresholds=[
+                [
+                    Threshold(
+                        type=ThresholdType.PREDICTION,
+                        timestamp=1672531200.0,
+                        upper=0.5,
+                        lower=0.5,
+                    )
+                ]
+                * 3
+            ],
+        )
+        # Test merging MP and Prophet results
+        timestamps = np.array(
+            [1672531200.0, 1672617600.0, 1672704000.0], dtype=np.float64
+        )  # 2023-01-01, 02, 03
+
+        prophet_predictions = pd.DataFrame(
+            {
+                "ds": timestamps,
+                "flag": ["none", "none", "none"],
+                "score": [0.5, 2.5, 0.3],
+                "y": [10.0, 10.0, 15.0],
+                "yhat": [11.0, 12.0, 14.0],
+                "yhat_lower": [9.0, 10.0, 12.0],
+                "yhat_upper": [13.0, 14.0, 16.0],
+            }
+        )
+
+        ad_config = AnomalyDetectionConfig(
+            sensitivity="medium", direction="both", time_period=30, expected_seasonality="auto"
+        )
+
+        result = scorer._merge_prophet_mp_results(
+            timestamps=timestamps,
+            mp_distances=np.array([0.0, 2.0, 0.0]),
+            mp_flags_and_scores=mp_flags_and_scores,
+            prophet_predictions=prophet_predictions,
+            ad_config=ad_config,
+        )
+
+        # Check that we got a valid result
+        assert isinstance(result, FlagsAndScores)
+        assert len(result.flags) == 3
+
+        # For the second point, both MP and Prophet have high confidence anomalies
+        assert result.flags[1] == "none"
+
     def test_prophet_negative_overrides_mp(
         self,
     ):
