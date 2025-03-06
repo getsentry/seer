@@ -325,7 +325,7 @@ class RetryUnitTestPrompts:
     def format_continue_unit_tests_prompt(code_coverage_info: str, test_result_info: str):
         return textwrap.dedent(
             """\            
-            The tests you have generated so far are not sufficient to cover all the changes in the codebase. You need to continue generating unit tests to cover all the changes in the codebase.
+            The tests you have generated so far are not sufficient to cover all the changes in the codebase. You need to continue generating unit tests to address the gaps in coverage and fix any failing tests.
 
             To help you with this, you have access to code coverage information at a file level attached as a JSON in addtion to test result information also in a JSON format. 
 

@@ -5,9 +5,7 @@ from github.PullRequest import PullRequest
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodeUnitTestRequest
-from seer.automation.codegen.retry_unit_test_github_pr_creator import (
-    GeneratedTestsPullRequestCreator,
-)
+from seer.automation.codegen.unit_test_github_pr_creator import GeneratedTestsPullRequestCreator
 from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.models import FileChange, RepoDefinition
 
