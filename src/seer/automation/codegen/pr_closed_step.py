@@ -91,8 +91,7 @@ class PrClosedStep(CodegenStep):
             )
 
             model = GoogleProviderEmbeddings.model(
-                "text-embedding-005", 
-                task_type="CODE_RETRIEVAL_QUERY"
+                "text-embedding-005", task_type="CODE_RETRIEVAL_QUERY"
             )
             # encode() expects list[str], returns 2D array
             embedding = model.encode([comment.body])[0]
