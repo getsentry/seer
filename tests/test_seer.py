@@ -1,7 +1,7 @@
 import json
 import time
-from typing import cast
 import unittest
+from typing import cast
 from unittest import mock
 
 import httpx
@@ -11,7 +11,6 @@ from celery.apps.worker import Worker
 from johen import generate
 from johen.pytest import parametrize
 from openai import APITimeoutError
-from seer.automation.autofix.runs import create_initial_autofix_run
 from sqlalchemy import text
 
 from seer.anomaly_detection.models.external import (
@@ -28,6 +27,7 @@ from seer.automation.autofix.models import (
     AutofixEvaluationRequest,
     AutofixRequest,
 )
+from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.state import LocalMemoryState
 from seer.automation.summarize.models import SummarizeIssueRequest
 from seer.configuration import AppConfig, provide_test_defaults
