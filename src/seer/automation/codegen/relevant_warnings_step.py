@@ -75,7 +75,6 @@ class RelevantWarningsStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
-        callback_url: str,
         relevant_warnings_output: CodePredictRelevantWarningsOutput,
         config: AppConfig = injected,
     ):
@@ -94,18 +93,17 @@ class RelevantWarningsStep(CodegenStep):
             signature_secret=config.OVERWATCH_OUTGOING_SIGNATURE_SECRET,
         )
         requests.post(
-            url=callback_url,
+            url=self.request.callback_url,
             headers=headers,
             data=request_data,
         ).raise_for_status()
 
     def _complete_run(
         self,
-        callback_url: str,
         relevant_warnings_output: CodePredictRelevantWarningsOutput,
     ):
         try:
-            self._post_results_to_overwatch(callback_url, relevant_warnings_output)
+            self._post_results_to_overwatch(relevant_warnings_output)
         except Exception:
             logger.exception("Error posting relevant warnings results to Overwatch")
             raise
@@ -144,7 +142,6 @@ class RelevantWarningsStep(CodegenStep):
         if not warnings:  # exit early to avoid unnecessary issue-fetching.
             self.logger.info("No warnings to predict relevancy for.")
             self._complete_run(
-                callback_url=self.request.callback_url,
                 relevant_warnings_output=CodePredictRelevantWarningsOutput(
                     relevant_warning_results=[]
                 ),
@@ -200,7 +197,4 @@ class RelevantWarningsStep(CodegenStep):
         )
 
         # 7. Save results.
-        self._complete_run(
-            callback_url=self.request.callback_url,
-            relevant_warnings_output=relevant_warnings_output,
-        )
+        self._complete_run(relevant_warnings_output)
