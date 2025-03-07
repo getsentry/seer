@@ -10,6 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field
 logger = logging.getLogger(__name__)
 
 
+class ConfidenceLevel(Enum):
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+
 class ThresholdType(Enum):
     TREND = 1
     PREDICTION = 2

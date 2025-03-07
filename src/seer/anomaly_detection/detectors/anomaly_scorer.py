@@ -16,6 +16,7 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Directions,
 )
 from seer.dependency_injection import inject, injected
@@ -256,7 +257,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         flags.append("anomaly_higher_confidence")
                     elif prophet_score >= 2.0:
                         flags.append(prophet_flag)
-                    elif mp_confidence_level == "high":
+                    elif mp_confidence_level == ConfidenceLevel.HIGH:
                         flags.append(mp_flag)
                     else:
                         flags.append("none")

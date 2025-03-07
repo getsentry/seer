@@ -13,6 +13,7 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Sensitivities,
     Threshold,
     ThresholdType,
@@ -160,7 +161,9 @@ class MPBoxCoxScorer(MPScorer):
             if std != 0 and not np.isnan(score) and score > threshold:
                 flag = "anomaly_higher_confidence"
 
-            confidence_level = "high" if score >= threshold * 2 else "medium"
+            confidence_level = (
+                ConfidenceLevel.HIGH if score >= threshold * 2 else ConfidenceLevel.MEDIUM
+            )
             cur_thresholds = [
                 Threshold(
                     type=ThresholdType.BOX_COX_THRESHOLD,
@@ -208,7 +211,9 @@ class MPBoxCoxScorer(MPScorer):
             if std == 0 or np.isnan(score) or score <= threshold
             else "anomaly_higher_confidence"
         )
-        confidence_level = "high" if score >= threshold * 2 else "medium"
+        confidence_level = (
+            ConfidenceLevel.HIGH if score >= threshold * 2 else ConfidenceLevel.MEDIUM
+        )
         thresholds: List[Threshold] = [
             Threshold(
                 type=ThresholdType.BOX_COX_THRESHOLD,
