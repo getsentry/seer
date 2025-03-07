@@ -50,6 +50,7 @@ from seer.automation.codegen.models import (
     CodecovTaskRequest,
     CodegenBaseRequest,
     CodegenBaseResponse,
+    CodegenPrClosedResponse,
     CodegenPrReviewResponse,
     CodegenPrReviewStateRequest,
     CodegenPrReviewStateResponse,
@@ -60,6 +61,7 @@ from seer.automation.codegen.models import (
     CodegenUnitTestsStateResponse,
 )
 from seer.automation.codegen.tasks import (
+    codegen_pr_closed,
     codegen_pr_review,
     codegen_relevant_warnings,
     codegen_unittest,
@@ -257,6 +259,11 @@ def codegen_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsRes
     return codegen_unittest(data)
 
 
+@json_api(blueprint, "/v1/automation/codegen/pr-closed")
+def codegen_pr_closed_endpoint(data: CodegenBaseRequest) -> CodegenPrClosedResponse:
+    return codegen_pr_closed(data)
+
+
 @json_api(blueprint, "/v1/automation/codegen/unit-tests/state")
 def codegen_unit_tests_state_endpoint(
     data: CodegenUnitTestsStateRequest,
@@ -307,6 +314,8 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
+    elif data.request_type == "pr-closed":
+        return codegen_pr_closed_endpoint(data.data)
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
