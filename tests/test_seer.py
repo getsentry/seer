@@ -1,5 +1,6 @@
 import json
 import time
+from typing import cast
 import unittest
 from unittest import mock
 
@@ -10,6 +11,7 @@ from celery.apps.worker import Worker
 from johen import generate
 from johen.pytest import parametrize
 from openai import APITimeoutError
+from seer.automation.autofix.runs import create_initial_autofix_run
 from sqlalchemy import text
 
 from seer.anomaly_detection.models.external import (
@@ -21,7 +23,11 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
 )
 from seer.app import app
-from seer.automation.autofix.models import AutofixContinuation, AutofixEvaluationRequest
+from seer.automation.autofix.models import (
+    AutofixContinuation,
+    AutofixEvaluationRequest,
+    AutofixRequest,
+)
 from seer.automation.state import LocalMemoryState
 from seer.automation.summarize.models import SummarizeIssueRequest
 from seer.configuration import AppConfig, provide_test_defaults
@@ -615,7 +621,7 @@ def test_prepared_statements_disabled(
         ProcessRequest,
         ProcessRequest,
         ProcessRequest,
-    ]
+    ],
 ):
     with Session() as session:
         # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
@@ -718,7 +724,7 @@ class TestGetAutofixState:
 
         response = app.test_client().post(
             "/v1/automation/autofix/state",
-            data=json.dumps({"group_id": 400}),
+            data=json.dumps({"group_id": 400, "check_repo_access": False}),
             content_type="application/json",
         )
         assert response.status_code == 200
@@ -736,7 +742,7 @@ class TestGetAutofixState:
 
         response = app.test_client().post(
             "/v1/automation/autofix/state",
-            data=json.dumps({"run_id": 500}),
+            data=json.dumps({"run_id": 500, "check_repo_access": False}),
             content_type="application/json",
         )
         assert response.status_code == 200
@@ -753,12 +759,37 @@ class TestGetAutofixState:
 
         response = app.test_client().post(
             "/v1/automation/autofix/state",
-            data=json.dumps({"group_id": 999}),
+            data=json.dumps({"group_id": 999, "check_repo_access": False}),
             content_type="application/json",
         )
         assert response.status_code == 200
         data = json.loads(response.get_data(as_text=True))
         assert data == {"group_id": None, "run_id": None, "state": None}
+
+    @mock.patch("seer.app.update_repo_access")
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_with_check_repo_access(
+        self, mock_get_autofix_state, mock_update_repo_access
+    ):
+        state_obj = create_initial_autofix_run(next(generate(AutofixRequest)))
+
+        state = state_obj.get()
+        request = cast(AutofixRequest, state.request)
+
+        mock_get_autofix_state.return_value = state_obj
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"group_id": request.issue.id, "check_repo_access": True}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+
+        mock_get_autofix_state.assert_called_once_with(group_id=1, run_id=None)
+        mock_update_repo_access.assert_called_once()
 
     @mock.patch("seer.app.get_autofix_state_from_pr_id")
     def test_get_autofix_state_from_pr_endpoint(self, mock_get_autofix_state_from_pr_id):
