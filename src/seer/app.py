@@ -2,7 +2,6 @@ import logging
 import time
 
 import flask
-from seer.automation.autofix.runs import update_repo_access
 import sentry_sdk
 from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
@@ -30,6 +29,7 @@ from seer.automation.autofix.models import (
     AutofixUpdateRequest,
     AutofixUpdateType,
 )
+from seer.automation.autofix.runs import update_repo_access
 from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
     comment_on_thread,
