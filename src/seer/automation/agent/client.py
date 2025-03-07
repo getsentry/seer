@@ -319,7 +319,6 @@ class OpenAiProvider:
             [cls.to_tool_dict(tool) for tool in tools] if tools and len(tools) > 0 else None
         )
 
-
         return message_dicts, tool_dicts
 
     @observe(as_type="generation", name="Generate Text Stream")
@@ -380,9 +379,9 @@ class OpenAiProvider:
                     )
                 else:
                     raise ValueError(f"Invalid provider: {self.provider_name}")
-                    
+
             except anthropic.APIStatusError as e:
-                if getattr(e, 'status_code', None) == 413:
+                if getattr(e, "status_code", None) == 413:
                     logger.warning(f"Prompt too long for Anthropic, falling back to OpenAI")
                     # Fall back to OpenAI for oversized prompts
                     fallback_model = OpenAiProvider.model("gpt-4-turbo")
@@ -486,8 +485,8 @@ class AnthropicProvider:
             isinstance(exception, anthropic.AnthropicError)
             and ("overloaded_error" in str(exception))
             and not (
-                isinstance(exception, anthropic.APIStatusError) 
-                and getattr(exception, 'status_code', None) == 413
+                isinstance(exception, anthropic.APIStatusError)
+                and getattr(exception, "status_code", None) == 413
             )
         ) or isinstance(exception, LlmStreamTimeoutError)
 
@@ -496,64 +495,66 @@ class AnthropicProvider:
         # Anthropic uses ~4 chars per token as a rough approximation
         chars_per_token = 4.0
         total_chars = 0
-        
+
         # Count system prompt chars
         if system_prompt_block:
             for block in system_prompt_block:
                 if block.text:
                     total_chars += len(block.text)
-        
+
         # Count message chars
         for message in messages:
             if isinstance(message.content, list):
                 for content_block in message.content:
-                    if getattr(content_block, 'text', None):
+                    if getattr(content_block, "text", None):
                         total_chars += len(content_block.text)
-                    elif getattr(content_block, 'thinking', None):
+                    elif getattr(content_block, "thinking", None):
                         total_chars += len(content_block.thinking)
-        
+
         return int(total_chars / chars_per_token)
-    
+
     # Add truncation function
-    def truncate_messages_to_fit(self, messages: list[MessageParam], system_prompt_block=None) -> tuple[list[MessageParam], list[TextBlockParam] | None]:
+    def truncate_messages_to_fit(
+        self, messages: list[MessageParam], system_prompt_block=None
+    ) -> tuple[list[MessageParam], list[TextBlockParam] | None]:
         MAX_TOKENS = 100000  # Anthropic's token limit
         messages_copy = list(messages)
-        
+
         # First estimate tokens
         estimated_tokens = self.estimate_tokens(messages_copy, system_prompt_block)
-        
+
         # If under limit, return as is
         if estimated_tokens <= MAX_TOKENS:
             return messages_copy, system_prompt_block
-        
+
         # Strategy 1: Remove thinking blocks which are the largest parts
         for message in messages_copy:
             if isinstance(message.content, list):
                 filtered_content = []
                 for block in message.content:
-                    if not getattr(block, 'type', None) == 'thinking':
+                    if not getattr(block, "type", None) == "thinking":
                         filtered_content.append(block)
                 message.content = filtered_content
-        
+
         # Check if that was enough
         estimated_tokens = self.estimate_tokens(messages_copy, system_prompt_block)
         if estimated_tokens <= MAX_TOKENS:
             return messages_copy, system_prompt_block
-        
+
         # Strategy 2: Keep only the most recent messages
         truncated_messages = messages_copy[-5:] if len(messages_copy) > 5 else messages_copy
-        
+
         # Check if that was enough
         estimated_tokens = self.estimate_tokens(truncated_messages, system_prompt_block)
         if estimated_tokens <= MAX_TOKENS:
             return truncated_messages, system_prompt_block
-        
+
         # Strategy 3: If still too large, reduce system prompt
         if system_prompt_block:
             system_text = system_prompt_block[0].text
             if len(system_text) > 1000:
                 system_prompt_block[0].text = system_text[:1000] + "..."
-        
+
         return truncated_messages, system_prompt_block
 
     @observe(as_type="generation", name="Anthropic Generation")
@@ -743,9 +744,11 @@ class AnthropicProvider:
             if system_prompt
             else None
         )
-        
+
         # Apply truncation to ensure prompt fits within token limits
-        message_dicts, system_prompt_block = cls().truncate_messages_to_fit(message_dicts, system_prompt_block)
+        message_dicts, system_prompt_block = cls().truncate_messages_to_fit(
+            message_dicts, system_prompt_block
+        )
 
         return message_dicts, tool_dicts, system_prompt_block
 
