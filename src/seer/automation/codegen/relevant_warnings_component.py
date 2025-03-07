@@ -94,7 +94,8 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             },
         }
         matches = possible_matches_from_warning & possible_matches_from_targets
-        self.logger.info(f"{warning.encoded_location=} {matches=}")
+        if matches:
+            self.logger.info(f"{warning.encoded_location=} {matches=}")
         return bool(matches)
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
