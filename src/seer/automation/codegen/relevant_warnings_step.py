@@ -98,10 +98,7 @@ class RelevantWarningsStep(CodegenStep):
             data=request_data,
         ).raise_for_status()
 
-    def _complete_run(
-        self,
-        relevant_warnings_output: CodePredictRelevantWarningsOutput,
-    ):
+    def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
         try:
             self._post_results_to_overwatch(relevant_warnings_output)
         except Exception:
@@ -141,11 +138,7 @@ class RelevantWarningsStep(CodegenStep):
 
         if not warnings:  # exit early to avoid unnecessary issue-fetching.
             self.logger.info("No warnings to predict relevancy for.")
-            self._complete_run(
-                relevant_warnings_output=CodePredictRelevantWarningsOutput(
-                    relevant_warning_results=[]
-                ),
-            )
+            self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
             return
 
         # 3. Fetch issues related to the commit.
