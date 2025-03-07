@@ -11,6 +11,7 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Sensitivities,
     Threshold,
     ThresholdType,
@@ -26,7 +27,7 @@ class FlagsAndScores(BaseModel):
     flags: List[AnomalyFlags]
     scores: List[float]
     thresholds: List[List[Threshold]]
-    confidence_levels: List[str]
+    confidence_levels: List[ConfidenceLevel]
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -154,7 +155,9 @@ class MPLowVarianceScorer(MPScorer):
                     )
                 ]
             )
-            confidence_levels.append("medium")  # Default to medium confidence for low variance
+            confidence_levels.append(
+                ConfidenceLevel.MEDIUM
+            )  # Default to medium confidence for low variance
         return FlagsAndScores(
             flags=flags, scores=scores, thresholds=thresholds, confidence_levels=confidence_levels
         )
@@ -189,5 +192,5 @@ class MPLowVarianceScorer(MPScorer):
             flags=[flag],
             scores=[score],
             thresholds=[[threshold]],
-            confidence_levels=["medium"],  # Default to medium for low variance
+            confidence_levels=[ConfidenceLevel.MEDIUM],  # Default to medium for low variance
         )

@@ -9,6 +9,7 @@ from seer.anomaly_detection.detectors.mp_scorers import FlagsAndScores
 from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
+    ConfidenceLevel,
     Threshold,
     ThresholdType,
 )
@@ -32,7 +33,11 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
-            confidence_levels=["medium", "medium", "medium"],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
 
     @pytest.fixture
@@ -394,7 +399,11 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
-            confidence_levels=["medium", "high", "medium"],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.HIGH,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -450,7 +459,11 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
-            confidence_levels=["medium", "medium", "medium"],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -506,7 +519,11 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
-            confidence_levels=["high", "high", "high"],
+            confidence_levels=[
+                ConfidenceLevel.HIGH,
+                ConfidenceLevel.HIGH,
+                ConfidenceLevel.HIGH,
+            ],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -562,7 +579,11 @@ class TestCombinedAnomalyScorer:
                 ]
                 * 3
             ],
-            confidence_levels=["medium", "high", "medium"],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.HIGH,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
 
         # Test merging MP and Prophet results
