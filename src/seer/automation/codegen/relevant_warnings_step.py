@@ -93,7 +93,7 @@ class RelevantWarningsStep(CodegenStep):
             signature_secret=config.OVERWATCH_OUTGOING_SIGNATURE_SECRET,
         )
         requests.post(
-            url="https://overwatch.codecov.dev/api/ai/seer/relevant-warnings",
+            url=self.request.callback_url,
             headers=headers,
             data=request_data,
         ).raise_for_status()
