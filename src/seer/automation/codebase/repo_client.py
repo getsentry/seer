@@ -362,6 +362,10 @@ class RepoClient:
             path, autocorrected_path = self._autocorrect_path(path, sha)
             if not autocorrected_path and path not in self.get_valid_file_paths(sha):
                 return None, "utf-8"
+        # Add check for file existence even when autocorrect is False
+        elif path not in self.get_valid_file_paths(sha):
+            logger.debug(f"File {path} not found in repository at sha {sha}")
+            return None, "utf-8"
 
         try:
             contents = self.repo.get_contents(path, ref=sha)
