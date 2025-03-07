@@ -545,62 +545,18 @@ class RepoClient:
         return matching_file.patch
 
     def _create_branch(self, branch_name):
+        # Final validation to ensure branch name doesn't end with a slash
+        while branch_name.endswith("/"):
+            branch_name = branch_name[:-1]
+
+        # Ensure we have a valid branch name
+        if not branch_name:
+            branch_name = f"autofix-{generate_random_string()}"
+
         ref = self.repo.create_git_ref(
             ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
         )
         return ref
-
-    def process_one_file_for_git_commit(
-        self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
-    ) -> InputGitTreeElement | None:
-        """
-        This method is used to get a single change to be committed by to github.
-        It processes a FilePatch/FileChange object and converts it into an InputGitTreeElement which can be commited
-        It supports both FilePatch and FileChange objects.
-        """
-        path = patch.path if patch else (change.path if change else None)
-        patch_type = patch.type if patch else (change.change_type if change else None)
-        if not path:
-            raise ValueError("Path must be provided")
-
-        if not patch_type:
-            raise ValueError("Patch type must be provided")
-        if patch_type == "create":
-            patch_type = "A"
-        elif patch_type == "delete":
-            patch_type = "D"
-        elif patch_type == "edit":
-            patch_type = "M"
-
-        to_apply = None
-        detected_encoding = "utf-8"
-        if patch_type != "A":
-            to_apply, detected_encoding = self.get_file_content(path, sha=branch_ref)
-
-        new_contents = (
-            patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
-        )
-
-        # Remove leading slash if it exists, the github api will reject paths with leading slashes.
-        if path.startswith("/"):
-            path = path[1:]
-
-        # don't create a blob if the file is being deleted
-        blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
-
-        # 100644 is the git code for creating a Regular non-executable file
-        # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
-        return InputGitTreeElement(
-            path=path, mode="100644", type="blob", sha=blob.sha if blob else None
-        )
-
-    def get_branch_ref(self, branch_name: str) -> GitRef | None:
-        try:
-            return self.repo.get_git_ref(f"heads/{branch_name}")
-        except GithubException as e:
-            if e.status == 404:
-                return None
-            raise e
 
     def create_branch_from_changes(
         self,
@@ -621,6 +577,8 @@ class RepoClient:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
+                # Ensure we sanitize again after adding the random suffix
+                new_branch_name = sanitize_branch_name(new_branch_name)
                 branch_ref = self._create_branch(new_branch_name)
             else:
                 raise e

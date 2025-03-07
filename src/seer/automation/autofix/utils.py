@@ -113,10 +113,16 @@ def sanitize_branch_name(title: str) -> str:
     """
     Remove all characters that are not valid in git branch names
     and return a kebab-case branch name from the title.
+    Also ensures the branch name doesn't end with a slash.
     """
     kebab_case = title.replace(" ", "-").replace("_", "-").lower()
     sanitized = "".join(c for c in kebab_case if c in VALID_BRANCH_NAME_CHARS)
-    return sanitized
+    # Remove trailing slashes
+    while sanitized.endswith("/"):
+        sanitized = sanitized[:-1]
+    # Ensure no empty segments between slashes
+    sanitized = "-".join(filter(None, sanitized.split("/")))
+    return sanitized or "autofix-branch"  # Fallback if sanitization results in empty string
 
 
 def generate_random_string(n=6) -> str:
