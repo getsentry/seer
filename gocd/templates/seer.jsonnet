@@ -8,7 +8,6 @@ local pipedream_config = {
     'customer-1',
     'customer-2',
     'customer-3',
-    'customer-4',
     'customer-6',
     'customer-7',
   ],
