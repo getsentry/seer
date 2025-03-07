@@ -43,3 +43,8 @@ def set_accessible_repos(cur: AutofixContinuation) -> None:
         else:
             cur.codebases[repo.external_id].is_readable = False
             cur.codebases[repo.external_id].is_writeable = False
+
+
+def update_repo_access(state: ContinuationState) -> None:
+    with state.update() as cur:
+        set_accessible_repos(cur)

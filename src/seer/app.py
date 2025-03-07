@@ -2,6 +2,7 @@ import logging
 import time
 
 import flask
+from seer.automation.autofix.runs import update_repo_access
 import sentry_sdk
 from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
@@ -215,6 +216,9 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
 
     if state:
         check_and_mark_if_timed_out(state)
+
+        if data.check_repo_access:
+            update_repo_access(state)
 
         cur_state = state.get()
 
