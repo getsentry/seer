@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from typing import Dict, List, Optional
 
+import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -101,6 +102,20 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
             map.get("r_idx"),
             map.get("original_flag"),
         )
+
+    def extend(
+        self, other: "MPTimeSeriesAnomaliesSingleWindow"
+    ) -> "MPTimeSeriesAnomaliesSingleWindow":
+        self.window_size = other.window_size
+        self.flags.extend(other.flags)
+        self.scores.extend(other.scores)
+        if self.thresholds is not None and other.thresholds is not None:
+            self.thresholds.extend(other.thresholds)
+        elif other.thresholds is not None:
+            self.thresholds = other.thresholds
+        self.matrix_profile = np.append(self.matrix_profile, other.matrix_profile)
+        self.original_flags.extend(other.original_flags)
+        return self
 
 
 class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
