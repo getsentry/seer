@@ -270,6 +270,7 @@ class AutofixGroupState(BaseModel):
 class AutofixStateRequest(BaseModel):
     group_id: int | None = None
     run_id: int | None = None
+    check_repo_access: bool = False
 
 
 class AutofixPrIdRequest(BaseModel):

@@ -29,6 +29,7 @@ from seer.automation.autofix.models import (
     AutofixUpdateRequest,
     AutofixUpdateType,
 )
+from seer.automation.autofix.runs import update_repo_access
 from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
     comment_on_thread,
@@ -215,6 +216,9 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
 
     if state:
         check_and_mark_if_timed_out(state)
+
+        if data.check_repo_access:
+            update_repo_access(state)
 
         cur_state = state.get()
 
