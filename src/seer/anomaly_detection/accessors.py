@@ -173,7 +173,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 if point_original_flag is not None and i >= n_points - len(point_original_flag):
                     original_flags[i] = point_original_flag
                     use_suss[i] = algo_data["use_suss"]
-                    confidence_levels[i] = algo_data["confidence_level"]
+                    confidence_levels[i] = (
+                        algo_data.get("confidence_level") or ConfidenceLevel.MEDIUM
+                    )  # Default to medium for backwards compatibility
             if ts[i] < timestamp_threshold:
                 num_old_points += 1
 
@@ -189,6 +191,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if prophet_timestamp > cur_ts:
                 num_predictions_remaining += 1
 
+        # print(confidence_levels)
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
             scores=scores,
