@@ -67,6 +67,7 @@ class TestCleanupTasks(unittest.TestCase):
                 thresholds=np.array([]),
                 original_flags=np.array([]),
                 use_suss=np.array([]),
+                confidence_levels=[],
             )
         else:
             anomalies = MPBatchAnomalyDetector().detect(ts, config)

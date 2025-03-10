@@ -166,6 +166,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             window_size=window_size,
             thresholds=flags_and_scores.thresholds if algo_config.return_thresholds else None,
             original_flags=original_flags,
+            confidence_levels=flags_and_scores.confidence_levels,
         )
 
 
@@ -313,4 +314,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 window_size=self.window_size,
                 thresholds=thresholds if algo_config.return_thresholds else None,
                 original_flags=self.original_flags,
+                confidence_levels=flags_and_scores.confidence_levels,
             )

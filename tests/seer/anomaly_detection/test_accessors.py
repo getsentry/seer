@@ -6,6 +6,7 @@ import numpy as np
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.models import (
     Anomaly,
+    ConfidenceLevel,
     MPTimeSeriesAnomalies,
     MPTimeSeriesAnomaliesSingleWindow,
     Threshold,
@@ -34,6 +35,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
@@ -186,6 +193,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
             ),
             anomaly_algo_data={
                 "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
@@ -223,6 +236,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
             ),
             anomaly_algo_data={"window_size": 1},
             data_purge_flag=TaskStatus.NOT_QUEUED,
@@ -305,6 +324,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none"] * 700,
             use_suss=[True] * 700,
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+            ]
+            * 700,
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -358,6 +381,13 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -415,6 +445,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -467,6 +501,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -520,6 +558,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -566,6 +608,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -616,6 +662,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 "anomaly_higher_confidence",
                 "none",
             ],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         fixed_thresholds = [
             Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=10.0, upper=1.0, lower=1.0),
@@ -633,6 +685,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             window_size=10,
             thresholds=[fixed_thresholds],
             original_flags=["none", "none", "none", "none"],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
 
         accessor = DbAlertDataAccessor()
