@@ -1,4 +1,4 @@
-name: Relevant Warnings
+name: Relevant Warnings Check
 
 on:
   pull_request:
