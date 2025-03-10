@@ -139,7 +139,6 @@ def _fetch_issues_for_pr_file(
         )
         return []
     if not pr_filename_to_issues:
-        logger.info("No issues found for file", extra={"file": pr_file.filename})
         return []
     assert list(pr_filename_to_issues.keys()) == [pr_file.filename]
     return list(pr_filename_to_issues.values())[0]
