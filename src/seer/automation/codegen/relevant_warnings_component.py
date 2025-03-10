@@ -1,7 +1,7 @@
 import logging
 import textwrap
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
@@ -66,7 +66,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         return result
 
     def _does_warning_match_a_target_file(
-        self, warning: StaticAnalysisWarning, target_filenames: Iterable[str]
+        self, warning: StaticAnalysisWarning, target_filenames: set[str]
     ) -> bool:
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
@@ -83,15 +83,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             path.as_posix(),
             *self._left_truncated_paths(path, max_num_paths=2),
         }
-        possible_matches_from_targets = {
-            *target_filenames,
-            *{
-                truncated
-                for filename in target_filenames
-                for truncated in self._left_truncated_paths(Path(filename), max_num_paths=1)
-            },
-        }
-        matches = possible_matches_from_warning & possible_matches_from_targets
+        matches = possible_matches_from_warning & target_filenames
         if matches:
             self.logger.info(f"{warning.encoded_location=} {matches=}")
         return bool(matches)
@@ -99,10 +91,18 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
+        left_truncated_target_filenames = {
+            left_truncated
+            for filename in request.target_filenames
+            for left_truncated in self._left_truncated_paths(Path(filename), max_num_paths=1)
+        }
+        possible_matches_from_targets = (
+            set(request.target_filenames) | left_truncated_target_filenames
+        )
         warnings = [
             warning
             for warning in request.warnings
-            if self._does_warning_match_a_target_file(warning, request.target_filenames)
+            if self._does_warning_match_a_target_file(warning, possible_matches_from_targets)
         ]
         return FilterWarningsOutput(warnings=warnings)
 
@@ -137,6 +137,8 @@ def _fetch_issues_for_pr_file(
             "Something went wrong with the issue-fetching RPC call",
             extra={"file": pr_file.filename},
         )
+        return []
+    if not pr_filename_to_issues:
         return []
     assert list(pr_filename_to_issues.keys()) == [pr_file.filename]
     return list(pr_filename_to_issues.values())[0]

@@ -57,7 +57,7 @@ class TestFilterWarningsComponent:
     class _TestInvokeTestCase(BaseModel):
         id: str
 
-        target_files: list[str]
+        target_filenames: list[str]
         "These files are relative to the repo root b/c they're from the GitHub API."
 
         encoded_locations_with_matches: list[str]
@@ -70,7 +70,7 @@ class TestFilterWarningsComponent:
         [
             _TestInvokeTestCase(
                 id="getsentry/seer",
-                target_files=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
+                target_filenames=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
                 encoded_locations_with_matches=[
                     "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
                     "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
@@ -85,7 +85,7 @@ class TestFilterWarningsComponent:
             ),
             _TestInvokeTestCase(
                 id="codecov/overwatch",
-                target_files=[
+                target_filenames=[
                     "app/tools/seer_signature/generate_signature.py",
                     "processor/tests/services/test_envelope.py",
                     "app/app/Livewire/Actions/Logout.php",
@@ -116,7 +116,7 @@ class TestFilterWarningsComponent:
 
         request = FilterWarningsRequest(
             warnings=warnings,
-            target_filenames=test_case.target_files,
+            target_filenames=test_case.target_filenames,
             repo_full_name="getsentry/seer",
         )
         output: FilterWarningsOutput = component.invoke(request)
@@ -184,6 +184,12 @@ class TestFetchIssuesComponent:
         output: CodeFetchIssuesOutput = component.invoke(request)
         assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
         assert mock_rpc_client_call.call_count == 2
+        request.organization_id = 1  # reset
+
+        mock_rpc_client_call.return_value = {}
+        request.organization_id = 3
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
 
 
 _T = TypeVar("_T")
