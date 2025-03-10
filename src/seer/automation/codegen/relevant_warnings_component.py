@@ -110,7 +110,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 def _fetch_issues_for_pr_file_cache_key(
     organization_id: int, provider: str, external_id: str, pr_file: PrFile, *args
 ) -> tuple[str]:
-    return hashkey(organization_id, provider, external_id, pr_file)
+    return hashkey(organization_id, provider, external_id, pr_file.filename, pr_file.sha)
 
 
 @cached(cache=LRUCache(maxsize=4096), key=_fetch_issues_for_pr_file_cache_key)
