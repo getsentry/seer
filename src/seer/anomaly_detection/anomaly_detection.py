@@ -408,6 +408,7 @@ class AnomalyDetection(BaseModel):
             matrix_profile=np.array([]),
             window_size=100,
             original_flags=[],
+            confidence_levels=[],
         )
         initial_history = True
         while len(current.values) > 0:
@@ -434,6 +435,7 @@ class AnomalyDetection(BaseModel):
                     matrix_profile=historic_anomalies.matrix_profile[-trim_current_by:],
                     window_size=historic_anomalies.window_size,
                     original_flags=historic_anomalies.original_flags[-trim_current_by:],
+                    confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
                 )
                 initial_history = False
 
@@ -477,6 +479,7 @@ class AnomalyDetection(BaseModel):
             matrix_profile=agg_streamed_anomalies.matrix_profile[-orig_curr_len:],
             window_size=agg_streamed_anomalies.window_size,
             original_flags=agg_streamed_anomalies.original_flags[-orig_curr_len:],
+            confidence_levels=agg_streamed_anomalies.confidence_levels[-orig_curr_len:],
         )
 
         converted_anomalies = DbAlertDataAccessor().combine_anomalies(

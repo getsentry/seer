@@ -1,18 +1,26 @@
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.models import (
     Anomaly,
+    ConfidenceLevel,
     MPTimeSeriesAnomalies,
     MPTimeSeriesAnomaliesSingleWindow,
     Threshold,
     ThresholdType,
 )
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
-from seer.db import DbDynamicAlert, DbProphetAlertTimeSeries, Session, TaskStatus
+from seer.db import (
+    DbDynamicAlert,
+    DbDynamicAlertTimeSeries,
+    DbProphetAlertTimeSeries,
+    Session,
+    TaskStatus,
+)
 
 
 class TestDbAlertDataAccessor(unittest.TestCase):
@@ -34,6 +42,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
@@ -186,6 +198,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
             ),
             anomaly_algo_data={
                 "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
@@ -223,6 +241,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
             ),
             anomaly_algo_data={"window_size": 1},
             data_purge_flag=TaskStatus.NOT_QUEUED,
@@ -305,6 +329,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none"] * 700,
             use_suss=[True] * 700,
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+            ]
+            * 700,
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -358,6 +386,13 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -415,6 +450,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -467,6 +506,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -520,6 +563,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -566,6 +613,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             thresholds=[],
             original_flags=["none", "none"],
             use_suss=[True, True],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -616,6 +667,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 "anomaly_higher_confidence",
                 "none",
             ],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
         fixed_thresholds = [
             Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=10.0, upper=1.0, lower=1.0),
@@ -633,6 +690,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             window_size=10,
             thresholds=[fixed_thresholds],
             original_flags=["none", "none", "none", "none"],
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+                ConfidenceLevel.MEDIUM,
+            ],
         )
 
         accessor = DbAlertDataAccessor()
@@ -663,3 +726,69 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             "none",
         ]
         assert combined_anomalies.use_suss == [True, True, False, True]
+
+    @patch("seer.anomaly_detection.accessors.stumpy.mparray.mparray")
+    def test_hydrate_alert_sets_flags_from_algo_data(self, mock_mparray):
+        mock_mparray.return_value = np.array([])
+
+        db_alert = DbDynamicAlert(
+            organization_id=1,
+            project_id=2,
+            external_alert_id=3,
+            config={
+                "time_period": 15,
+                "sensitivity": "medium",
+                "direction": "both",
+                "expected_seasonality": "auto",
+            },
+            anomaly_algo_data={"window_size": 10},
+            prophet_predictions=[],
+            data_purge_flag="not_queued",
+            last_queued_at=None,
+        )
+
+        ts1 = DbDynamicAlertTimeSeries(
+            timestamp=datetime.now(),
+            value=1.0,
+            anomaly_type="none",
+            anomaly_score=0.0,
+            anomaly_algo_data=None,
+        )
+
+        ts2 = DbDynamicAlertTimeSeries(
+            timestamp=datetime.now(),
+            value=2.0,
+            anomaly_type="none",
+            anomaly_score=0.0,
+            anomaly_algo_data=None,
+        )
+
+        ts3 = DbDynamicAlertTimeSeries(
+            timestamp=datetime.now(),
+            value=3.0,
+            anomaly_type="spike",
+            anomaly_score=0.8,
+            anomaly_algo_data={
+                "mp_suss": {"dist": 0.2, "idx": 2, "l_idx": 1, "r_idx": 3},
+                "original_flag": "none",
+                "use_suss": True,
+                "confidence_level": ConfidenceLevel.HIGH,
+            },
+        )
+
+        db_alert.timeseries = [ts1, ts2, ts3]
+
+        mock_algo_config = MagicMock()
+
+        accessor = DbAlertDataAccessor()
+        result = accessor._hydrate_alert(db_alert, algo_config=mock_algo_config)
+
+        assert result.anomalies.original_flags[0] == "none"
+        assert result.anomalies.original_flags[1] == "none"
+        assert result.anomalies.use_suss[0]
+        assert result.anomalies.use_suss[1]
+        assert result.anomalies.confidence_levels[0] == ConfidenceLevel.MEDIUM
+        assert result.anomalies.confidence_levels[1] == ConfidenceLevel.MEDIUM
+
+        assert result.anomalies.use_suss[2]
+        assert result.anomalies.confidence_levels[2] == ConfidenceLevel.HIGH

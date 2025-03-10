@@ -16,6 +16,7 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Directions,
 )
 from seer.dependency_injection import inject, injected
@@ -223,13 +224,17 @@ class CombinedAnomalyScorer(AnomalyScorer):
     ) -> FlagsAndScores:
 
         # todo: return prophet thresholds
-        def merge(timestamps, mp_flags, prophet_map):
+        def merge(timestamps, mp_flags_and_scores, prophet_map):
+            mp_flags = mp_flags_and_scores.flags
+            mp_confidence_levels = mp_flags_and_scores.confidence_levels
             flags = []
             missing = 0
             found = 0
             previous_mp_flag: AnomalyFlags = "none"
             missing_timestamps = []
-            for timestamp, mp_flag in zip(timestamps, mp_flags):
+            for timestamp, mp_flag, mp_confidence_level in zip(
+                timestamps, mp_flags, mp_confidence_levels
+            ):
                 pd_dt = float(timestamp)
                 if pd_dt in prophet_map["flag"]:
                     found += 1
@@ -252,6 +257,8 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         flags.append("anomaly_higher_confidence")
                     elif prophet_score >= 2.0:
                         flags.append(prophet_flag)
+                    elif mp_confidence_level == ConfidenceLevel.HIGH:
+                        flags.append(mp_flag)
                     else:
                         flags.append("none")
                 else:
@@ -284,10 +291,11 @@ class CombinedAnomalyScorer(AnomalyScorer):
         prophet_predictions_map = prophet_predictions.set_index("ds")[
             ["flag", "score", "y", "yhat", "yhat_lower", "yhat_upper"]
         ].to_dict()
-        flags = merge(timestamps, mp_flags_and_scores.flags, prophet_predictions_map)
+        flags = merge(timestamps, mp_flags_and_scores, prophet_predictions_map)
 
         return FlagsAndScores(
             flags=flags,
             scores=mp_flags_and_scores.scores,
             thresholds=mp_flags_and_scores.thresholds,
+            confidence_levels=mp_flags_and_scores.confidence_levels,
         )
