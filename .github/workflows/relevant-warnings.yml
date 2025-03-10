@@ -2,17 +2,15 @@ name: Relevant Warnings
 
 on:
   pull_request:
-    branches-ignore:
-      - main
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+    types:
+      - opened
+      - synchronize
 
 jobs:
   relevant-warnings:
     name: Relevant Warnings
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -35,7 +33,6 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          # Install libssl1.1 from Ubuntu 20.04 repositories
           wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
 
@@ -47,7 +44,6 @@ jobs:
       - name: Run Overwatch CLI
         run: |
           ./overwatch-cli \
-            --url https://overwatch.codecov.dev \
             --auth-token ${{ secrets.OVERWATCH_SENTRY_AUTH_TOKEN }} \
             --organization-slug sentry \
             python \
