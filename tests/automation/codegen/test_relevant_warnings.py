@@ -184,6 +184,12 @@ class TestFetchIssuesComponent:
         output: CodeFetchIssuesOutput = component.invoke(request)
         assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
         assert mock_rpc_client_call.call_count == 2
+        request.organization_id = 1  # reset
+
+        mock_rpc_client_call.return_value = {}
+        request.organization_id = 3
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
 
 
 _T = TypeVar("_T")
