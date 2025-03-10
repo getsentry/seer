@@ -115,18 +115,22 @@ class RelevantWarningsStep(CodegenStep):
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
 
-        # 1. Read the commit.
+        # 1. Read the PR.
         repo_client = self.context.get_repo_client(type=RepoClientType.READ)
-        commit = repo_client.repo.get_commit(self.request.commit_sha)
+        pr_files = repo_client.repo.get_pull(self.request.pr_id).get_files()
         pr_files = [
             PrFile(
-                filename=file.filename, patch=file.patch, status=file.status, changes=file.changes
+                filename=file.filename,
+                patch=file.patch,
+                status=file.status,
+                changes=file.changes,
+                sha=file.sha,
             )
-            for file in commit.files
+            for file in pr_files
             if file.patch
         ]
 
-        # 2. Only consider warnings from files changed in the commit.
+        # 2. Only consider warnings from files changed in the PR.
         filter_warnings_component = FilterWarningsComponent(self.context)
         filter_warnings_request = FilterWarningsRequest(
             warnings=self.request.warnings, target_filenames=[file.filename for file in pr_files]
@@ -141,7 +145,7 @@ class RelevantWarningsStep(CodegenStep):
             self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
             return
 
-        # 3. Fetch issues related to the commit.
+        # 3. Fetch issues related to the PR.
         fetch_issues_component = FetchIssuesComponent(self.context)
         fetch_issues_request = CodeFetchIssuesRequest(
             organization_id=self.request.organization_id, pr_files=pr_files
