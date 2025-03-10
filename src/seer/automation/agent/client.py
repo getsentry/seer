@@ -458,6 +458,107 @@ class AnthropicProvider:
         )
         return (
             isinstance(exception, anthropic.AnthropicError)
+    def _manage_context_size(
+        self,
+        messages: list[Message],
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        max_context_size: int = 204000,  # Slightly below Claude's limit for safety
+    ) -> tuple[list[MessageParam], int]:
+        """
+        Manages the context size for Anthropic's Claude model by:
+        1. Estimating token counts for messages and system prompt
+        2. Truncating history if needed to fit within context limits
+        3. Adjusting max_tokens to ensure we stay within context window
+
+        Args:
+            messages: List of messages to be sent to Claude
+            system_prompt: Optional system prompt
+            max_tokens: Maximum tokens for model response
+            max_context_size: Maximum context size in tokens
+
+        Returns:
+            A tuple of (processed_message_dicts, adjusted_max_tokens)
+        """
+        # Process the messages into Anthropic format first
+        message_dicts, _, system_prompt_block = self._prep_message_and_tools(
+            messages=messages,
+            system_prompt=system_prompt,
+            tools=None,
+        )
+
+        # Set default max_tokens if not provided
+        adjusted_max_tokens = max_tokens or 8192
+        
+        # Estimate the total input token count
+        # This is a rough estimate - each message has overhead
+        estimated_input_tokens = 0
+        
+        # Add system prompt tokens if present
+        if system_prompt_block:
+            # Rough estimate: 4 tokens per word
+            estimated_input_tokens += len(system_prompt or "") // 4 + 20  # overhead
+        
+        # Reserve 1000 tokens as safety margin
+        safety_margin = 1000
+        available_tokens = max_context_size - safety_margin
+
+        # If we already estimate we'll exceed the limit, truncate from oldest messages
+        if estimated_input_tokens + adjusted_max_tokens > available_tokens:
+            # Keep as many recent messages as possible
+            kept_messages = []
+            current_total = estimated_input_tokens + adjusted_max_tokens
+            
+            # Start from most recent message and go backwards
+            for msg in reversed(message_dicts):
+                # Rough estimate: 4 tokens per word plus overhead
+                content_str = ""
+                if isinstance(msg["content"], list):
+                    for item in msg["content"]:
+                        if isinstance(item, dict) and "text" in item:
+                            content_str += item["text"]
+                        elif isinstance(item, dict) and "thinking" in item:
+                            content_str += item["thinking"]
+                
+                msg_tokens = len(content_str) // 4 + 20  # overhead
+                
+                # If adding this message would exceed our limit, stop
+                if current_total + msg_tokens > available_tokens:
+                    break
+                
+                # Otherwise keep this message and update our total
+                kept_messages.insert(0, msg)
+                current_total += msg_tokens
+            
+            # If we eliminated all messages, keep at least the most recent one
+            if not kept_messages and message_dicts:
+                kept_messages = [message_dicts[-1]]
+            
+            message_dicts = kept_messages
+        
+        # Finally, adjust max_tokens to ensure we stay within limits
+        estimated_input_tokens = 0
+        for msg in message_dicts:
+            content_str = ""
+            if isinstance(msg["content"], list):
+                for item in msg["content"]:
+                    if isinstance(item, dict) and "text" in item:
+                        content_str += item["text"]
+                    elif isinstance(item, dict) and "thinking" in item:
+                        content_str += item["thinking"]
+            
+            msg_tokens = len(content_str) // 4 + 20  # overhead
+            estimated_input_tokens += msg_tokens
+        
+        if system_prompt_block:
+            estimated_input_tokens += len(system_prompt or "") // 4 + 20  # overhead
+        
+        # Make sure max_tokens doesn't push us over the limit
+        max_allowed_tokens = max_context_size - estimated_input_tokens - safety_margin
+        adjusted_max_tokens = min(adjusted_max_tokens, max(1000, max_allowed_tokens))
+        
+        return message_dicts, adjusted_max_tokens
+
             and any(error in str(exception) for error in retryable_errors)
         ) or isinstance(exception, LlmStreamTimeoutError)
 
@@ -478,6 +579,13 @@ class AnthropicProvider:
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
+        
+        # Manage context size to prevent exceeding Claude's limits
+        message_dicts, adjusted_max_tokens = self._manage_context_size(
+            messages=messages, 
+            system_prompt=system_prompt,
+            max_tokens=max_tokens
+        )
             system_prompt=system_prompt,
             tools=tools,
         )
@@ -486,7 +594,7 @@ class AnthropicProvider:
 
         completion = anthropic_client.messages.create(
             system=system_prompt_block or NOT_GIVEN,
-            model=self.model_name,
+            max_tokens=adjusted_max_tokens,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
             max_tokens=max_tokens or 8192,
@@ -667,6 +775,13 @@ class AnthropicProvider:
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
+        
+        # Manage context size to prevent exceeding Claude's limits
+        message_dicts, adjusted_max_tokens = self._manage_context_size(
+            messages=messages, 
+            system_prompt=system_prompt,
+            max_tokens=max_tokens
+        )
             system_prompt=system_prompt,
             tools=tools,
         )
@@ -675,7 +790,7 @@ class AnthropicProvider:
 
         stream = anthropic_client.messages.create(
             system=system_prompt_block or NOT_GIVEN,
-            model=self.model_name,
+            max_tokens=adjusted_max_tokens,
             tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
             messages=cast(Iterable[MessageParam], message_dicts),
             max_tokens=max_tokens or 8192,

@@ -93,7 +93,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             max_iterations=64,
                             temperature=1.0,
                             reasoning_effort="medium",
-                            max_tokens=32000,
+                            max_tokens=12000,  # Reduced from 32000
                         ),
                     )
 
@@ -136,8 +136,8 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         reasoning_effort="high",
                         prompt=SolutionPrompts.solution_proposal_msg(),
                         system_prompt="You are an exceptional AI system that is amazing at fixing bugs in codebases. Your job is to figure out the correct and most effective solution to fix this issue.",
-                        max_tokens=32000,
-                    )
+                        max_tokens=12000,  # Reduced from 32000
+                    ),
                 )
 
                 if not response:

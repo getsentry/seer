@@ -74,17 +74,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     response = agent.run(
                         run_config=RunConfig(
                             model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
-                            prompt=(
-                                RootCauseAnalysisPrompts.format_default_msg(
-                                    event=request.event_details.format_event(),
-                                    summary=request.summary,
-                                    code_map=request.profile,
-                                    instruction=request.instruction,
-                                    repos_str=repos_str,
-                                )
-                                if not request.initial_memory
-                                else None
-                            ),
                             system_prompt=RootCauseAnalysisPrompts.format_system_msg(
                                 has_tools=True
                             ),
@@ -93,7 +82,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                             run_name="Root Cause Discovery",
                             reasoning_effort="low",
                             temperature=1.0,
-                            max_tokens=32000,
+                            max_tokens=12000,  # Reduced from 32000
                         ),
                     )
 
@@ -138,7 +127,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         run_name="Root Cause Proposal",
                         temperature=1.0,
                         reasoning_effort="high",
-                        max_tokens=32000,
+                        max_tokens=12000,  # Reduced from 32000
                     )
                 )
 
