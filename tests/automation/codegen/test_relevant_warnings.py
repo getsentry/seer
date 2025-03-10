@@ -445,12 +445,12 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_filter_warnings_component: Mock,
 ):
     mock_repo_client = MagicMock()
-    mock_commit = MagicMock()
+    mock_pr = MagicMock()
     mock_pr_files = next(generate(list[PrFile]))
     mock_context = MagicMock()
     mock_context.get_repo_client.return_value = mock_repo_client
-    mock_repo_client.repo.get_commit.return_value = mock_commit
-    mock_commit.files = mock_pr_files
+    mock_repo_client.repo.get_pull.return_value = mock_pr
+    mock_pr.get_files.return_value = mock_pr_files
 
     num_associations = 5
 
@@ -492,7 +492,7 @@ def test_relevant_warnings_step_invoke(
     step.invoke()
 
     mock_context.get_repo_client.assert_called_once()
-    mock_repo_client.repo.get_commit.assert_called_once_with(request.commit_sha)
+    mock_repo_client.repo.get_pull.assert_called_once_with(request.pr_id)
 
     mock_invoke_filter_warnings_component.assert_called_once()
     mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings
