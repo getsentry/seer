@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from seer.anomaly_detection.models import (
     AlgoConfig,
+    ConfidenceLevel,
     DynamicAlert,
     MPTimeSeries,
     MPTimeSeriesAnomalies,
@@ -116,6 +117,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
         mp_fixed = []
         original_flags = ["none"] * n_points
         use_suss = [True] * n_points
+        confidence_levels = [
+            ConfidenceLevel.MEDIUM
+        ] * n_points  # Default to medium confidence level
 
         n_predictions = len(db_alert.prophet_predictions)
         prophet_timestamps = np.full(n_predictions, None)
@@ -168,7 +172,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                 if i >= n_points - len(algo_data.get("original_flags", [])):
                     original_flags[i] = algo_data["original_flag"]
                     use_suss[i] = algo_data["use_suss"]
-
+                    confidence_levels[i] = algo_data["confidence_level"]
             if ts[i] < timestamp_threshold:
                 num_old_points += 1
 
@@ -203,6 +207,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             thresholds=[],  # Note: thresholds are not stored in the database. They are computed on the fly.
             original_flags=original_flags,
             use_suss=use_suss,
+            confidence_levels=confidence_levels,
         )
 
         return DynamicAlert(
@@ -474,6 +479,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             window_size=anomalies_suss.window_size,
             original_flags=combined_original_flags,
             use_suss=use_suss,
+            confidence_levels=anomalies_suss.confidence_levels,
         )
 
     @sentry_sdk.trace
