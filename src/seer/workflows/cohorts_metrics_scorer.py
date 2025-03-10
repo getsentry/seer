@@ -21,7 +21,6 @@ class CohortsMetricsScorer:
             .pipe(self.compute_entropy_score)
             .pipe(self.compute_rrf_score, metric_weights)
         )
-        print(dataset)
         return dataset
 
     def compute_kl_score(self, dataset: pd.DataFrame) -> pd.DataFrame:
@@ -54,4 +53,4 @@ class CohortsMetricsScorer:
             + metric_weights.entropy_weight * dataset["entropy_rank"]
         )
         dataset.drop(columns=["KL_rank", "entropy_rank"], inplace=True)
-        return dataset
+        return dataset.sort_values(by="RRF_score", ascending=False)
