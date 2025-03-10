@@ -117,12 +117,12 @@ class RelevantWarningsStep(CodegenStep):
 
         # 1. Read the commit.
         repo_client = self.context.get_repo_client(type=RepoClientType.READ)
-        commit = repo_client.repo.get_commit(self.request.commit_sha)
+        pr_files = repo_client.repo.get_pull(self.request.pr_id).get_files()
         pr_files = [
             PrFile(
                 filename=file.filename, patch=file.patch, status=file.status, changes=file.changes
             )
-            for file in commit.files
+            for file in pr_files
             if file.patch
         ]
 

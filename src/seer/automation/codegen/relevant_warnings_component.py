@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
     """
-    Filter out warnings from files that aren't affected by the commit.
+    Filter out warnings from files that aren't affected by the PR.
     """
 
     context: CodegenContext
@@ -111,7 +111,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
     """
-    Fetch issues related to the files in a commit by analyzing stacktrace frames in the issue.
+    Fetch issues related to the files in a PR by analyzing stacktrace frames in the issue.
     """
 
     context: CodegenContext
@@ -128,9 +128,9 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         client: RpcClient = injected,
     ) -> dict[str, list[IssueDetails]]:
         """
-        Returns a dict mapping a subset of file names in the commit to issues related to the file.
+        Returns a dict mapping a subset of file names in the PR to issues related to the file.
         They're related if the functions and filenames in the issue's stacktrace overlap with those
-        modified in the commit.
+        modified in the PR.
 
         The `max_files_analyzed` and `max_lines_analyzed` checks ensure that the payload we send to
         seer_rpc doesn't get too large.
@@ -142,7 +142,7 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
         ]
         if not pr_files_eligible:
-            self.logger.info("No eligible files in commit.")
+            self.logger.info("No eligible files in PR.")
             return {}
 
         self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
@@ -223,7 +223,7 @@ class AssociateWarningsWithIssuesComponent(
             for issue in issues
         }
         # De-duplicate in case the same issue is present across multiple files. That's possible when
-        # the issue's stacktrace matches multiple files modified in the commit.
+        # the issue's stacktrace matches multiple files modified in the PR.
         # This should be ok b/c the issue should contain enough information that the downstream LLM
         # calls can match any relevant warnings to it. The filename is not the strongest signal.
 
