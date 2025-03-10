@@ -206,7 +206,7 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                     "r_idx": r_index_fixed,
                 }
             original_flag = self.original_flags[i] if i < len(self.original_flags) else "none"
-            use_suss = self.use_suss[len(self.use_suss) - front_pad_to_len + i]
+            use_suss = True  # Default to true since we are only using SuSS window
             confidence_level = (
                 self.confidence_levels[i]
                 if i < len(self.confidence_levels)

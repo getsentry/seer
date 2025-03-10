@@ -169,8 +169,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         ]
                     )
 
-                if i >= n_points - len(algo_data.get("original_flags", [])):
-                    original_flags[i] = algo_data["original_flag"]
+                point_original_flag = algo_data.get("original_flag")
+                if point_original_flag is not None and i >= n_points - len(point_original_flag):
+                    original_flags[i] = point_original_flag
                     use_suss[i] = algo_data["use_suss"]
                     confidence_levels[i] = algo_data["confidence_level"]
             if ts[i] < timestamp_threshold:
