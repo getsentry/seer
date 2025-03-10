@@ -191,7 +191,6 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if prophet_timestamp > cur_ts:
                 num_predictions_remaining += 1
 
-        # print(confidence_levels)
         anomalies = MPTimeSeriesAnomalies(
             flags=flags,
             scores=scores,
