@@ -8,6 +8,7 @@ import pandas as pd
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import (
+    ConfidenceLevel,
     DynamicAlert,
     MPTimeSeries,
     MPTimeSeriesAnomaliesSingleWindow,
@@ -101,6 +102,7 @@ class TestAnomalyDetection(unittest.TestCase):
                     thresholds=[],
                     original_flags=[],
                     use_suss=[],
+                    confidence_levels=[],
                 ),
                 pd.DataFrame(
                     {
@@ -209,6 +211,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -262,6 +268,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps[:100])),
                 use_suss=np.array([True] * len(ts_timestamps[:100])),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps[:100]),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -316,6 +326,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
                 use_suss=[True] * len(ts_timestamps),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -384,6 +398,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -410,6 +428,10 @@ class TestAnomalyDetection(unittest.TestCase):
             window_size=window_size,
             thresholds=[],
             original_flags=["none"] * len(ts_timestamps),
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+            ]
+            * len(ts_timestamps),
         )
 
         new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
@@ -447,6 +469,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
