@@ -122,11 +122,31 @@ def get_codecov_pr_review_app_credentials(
     return app_id, private_key
 
 
+@inject
+def get_codecov_pr_closed_app_credentials(
+    config: AppConfig = injected,
+) -> tuple[int | str | None, str | None]:
+    app_id = config.GITHUB_CODECOV_PR_CLOSED_APP_ID
+    private_key = config.GITHUB_CODECOV_PR_CLOSED_PRIVATE_KEY
+
+    if not app_id:
+        logger.warning("No key set GITHUB_CODECOV_PR_CLOSED_APP_ID")
+    if not private_key:
+        logger.warning("No key set GITHUB_CODECOV_PR_CLOSED_PRIVATE_KEY")
+
+    if not app_id or not private_key:
+        sentry_sdk.capture_message("Invalid credentials for codecov pr closed app.")
+        return get_write_app_credentials()
+
+    return app_id, private_key
+
+
 class RepoClientType(str, Enum):
     READ = "read"
     WRITE = "write"
     CODECOV_UNIT_TEST = "codecov_unit_test"
     CODECOV_PR_REVIEW = "codecov_pr_review"
+    CODECOV_PR_CLOSED = "codecov_pr_closed"
 
 
 class RepoClient:
@@ -225,6 +245,8 @@ class RepoClient:
             return cls(*get_codecov_unit_test_app_credentials(), repo_def)
         elif type == RepoClientType.CODECOV_PR_REVIEW:
             return cls(*get_codecov_pr_review_app_credentials(), repo_def)
+        elif type == RepoClientType.CODECOV_PR_CLOSED:
+            return cls(*get_codecov_pr_closed_app_credentials(), repo_def)
 
         return cls(*get_read_app_credentials(), repo_def)
 
