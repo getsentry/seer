@@ -120,7 +120,11 @@ class RelevantWarningsStep(CodegenStep):
         pr_files = repo_client.repo.get_pull(self.request.pr_id).get_files()
         pr_files = [
             PrFile(
-                filename=file.filename, patch=file.patch, status=file.status, changes=file.changes
+                filename=file.filename,
+                patch=file.patch,
+                status=file.status,
+                changes=file.changes,
+                sha=file.sha,
             )
             for file in pr_files
             if file.patch

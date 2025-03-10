@@ -150,11 +150,19 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
 
 
 class PrFile(BaseModel):
-    # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28
     filename: str
     patch: str
     status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
     changes: int
+    sha: str
+
+    def __hash__(self) -> int:
+        return hash((self.filename, self.sha))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PrFile):
+            return False
+        return self.filename == other.filename and self.sha == other.sha
 
 
 class FilterWarningsRequest(BaseComponentRequest):

@@ -134,6 +134,7 @@ class TestFetchIssuesComponent:
         mock_context.repo.provider = "github"
         mock_context.repo.provider_raw = "integrations:github"
         mock_context.repo.external_id = "123123"
+        mock_context.run_id = 1
         return FetchIssuesComponent(mock_context)
 
     def test_bad_provider_raw(self, component: FetchIssuesComponent):
@@ -151,16 +152,16 @@ class TestFetchIssuesComponent:
     ):
         assert component.context.repo.provider_raw is not None
         pr_files = [
-            PrFile(filename="fine.py", patch="patch1", status="modified", changes=100),
-            PrFile(filename="many_changes.py", patch="patch2", status="modified", changes=1_000),
-            PrFile(filename="not_modified.py", patch="patch3", status="added", changes=100),
+            PrFile(filename="fine.py", patch="patch1", status="modified", changes=100, sha="sha1"),
+            PrFile(filename="big.py", patch="patch2", status="modified", changes=1_000, sha="sha2"),
+            PrFile(filename="added.py", patch="patch3", status="added", changes=100, sha="sha3"),
         ]
-        filename_to_issues = {"fine.py": [next(generate(IssueDetails)).model_dump()]}
-        mock_rpc_client_call.return_value = filename_to_issues
 
+        pr_filename_to_issues = {"fine.py": [next(generate(IssueDetails)).model_dump()]}
+        mock_rpc_client_call.return_value = pr_filename_to_issues
         filename_to_issues_expected = {
             filename: [IssueDetails.model_validate(issue) for issue in issues]
-            for filename, issues in filename_to_issues.items()
+            for filename, issues in pr_filename_to_issues.items()
         }
 
         request = CodeFetchIssuesRequest(
@@ -169,6 +170,20 @@ class TestFetchIssuesComponent:
         )
         output: CodeFetchIssuesOutput = component.invoke(request)
         assert output.filename_to_issues == filename_to_issues_expected
+        assert mock_rpc_client_call.call_count == 1
+
+        # Test the cache
+        component.context.run_id += 1
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == filename_to_issues_expected
+        assert mock_rpc_client_call.call_count == 1
+        component.context.run_id -= 1
+
+        mock_rpc_client_call.return_value = None
+        request.organization_id = 2
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
+        assert mock_rpc_client_call.call_count == 2
 
 
 _T = TypeVar("_T")

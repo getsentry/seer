@@ -1,7 +1,7 @@
 import logging
 import textwrap
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
@@ -32,8 +32,6 @@ from seer.automation.component import BaseComponent
 from seer.automation.models import EventDetails, IssueDetails
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
-
-logger = logging.getLogger(__name__)
 
 
 class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
@@ -88,9 +86,9 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         possible_matches_from_targets = {
             *target_filenames,
             *{
-                filename
+                truncated
                 for filename in target_filenames
-                for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
+                for truncated in self._left_truncated_paths(Path(filename), max_num_paths=1)
             },
         }
         matches = possible_matches_from_warning & possible_matches_from_targets
@@ -109,6 +107,41 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         return FilterWarningsOutput(warnings=warnings)
 
 
+def _fetch_issues_for_pr_file_cache_key(
+    organization_id: int, provider: str, external_id: str, pr_file: PrFile, *args
+) -> tuple[str]:
+    return hashkey(organization_id, provider, external_id, pr_file)
+
+
+@cached(cache=LRUCache(maxsize=4096), key=_fetch_issues_for_pr_file_cache_key)
+@inject
+def _fetch_issues_for_pr_file(
+    organization_id: int,
+    provider: str,
+    external_id: str,
+    pr_file: PrFile,
+    run_id: int,
+    logger: logging.Logger,
+    client: RpcClient = injected,
+) -> list[dict[str, Any]]:
+    pr_filename_to_issues = client.call(
+        "get_issues_related_to_file_patches",
+        organization_id=organization_id,
+        provider=provider,
+        external_id=external_id,
+        pr_files=[pr_file.model_dump()],
+        run_id=run_id,
+    )
+    if pr_filename_to_issues is None:
+        logger.exception(
+            "Something went wrong with the issue-fetching RPC call",
+            extra={"file": pr_file.filename},
+        )
+        return []
+    assert list(pr_filename_to_issues.keys()) == [pr_file.filename]
+    return list(pr_filename_to_issues.values())[0]
+
+
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
     """
     Fetch issues related to the files in a PR by analyzing stacktrace frames in the issue.
@@ -116,7 +149,6 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
 
     context: CodegenContext
 
-    @inject
     def _fetch_issues(
         self,
         organization_id: int,
@@ -125,7 +157,6 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         pr_files: list[PrFile],
         max_files_analyzed: int = 7,
         max_lines_analyzed: int = 500,
-        client: RpcClient = injected,
     ) -> dict[str, list[IssueDetails]]:
         """
         Returns a dict mapping a subset of file names in the PR to issues related to the file.
@@ -146,18 +177,12 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             return {}
 
         self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
-
-        pr_files_eligible = pr_files_eligible[:max_files_analyzed]
-        filename_to_issues = client.call(
-            "get_issues_related_to_file_patches",
-            organization_id=organization_id,
-            provider=provider,
-            external_id=external_id,
-            pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
-            run_id=self.context.run_id,
-        )
-        if filename_to_issues is None:
-            return {}
+        filename_to_issues = {
+            pr_file.filename: _fetch_issues_for_pr_file(
+                organization_id, provider, external_id, pr_file, self.context.run_id, self.logger
+            )
+            for pr_file in pr_files_eligible[:max_files_analyzed]
+        }
         return {
             filename: [IssueDetails.model_validate(issue) for issue in issues]
             for filename, issues in filename_to_issues.items()
