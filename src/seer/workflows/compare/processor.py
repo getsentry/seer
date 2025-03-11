@@ -50,7 +50,7 @@ class DataProcessor:
         except Exception as e:
             raise DataProcessingError(f"Failed to preprocess cohort data: {str(e)}") from e
 
-    def add_unseen_value(self, distribution: dict) -> pd.Series:
+    def add_unseen_value(self, distribution: dict[str, float]) -> dict[str, float]:
         """
         Add an unseen value to the distribution if the total probability is less than 1. This can happen when the total count of the attribute is less than the total count of the cohort.
 
@@ -66,7 +66,9 @@ class DataProcessor:
             distribution[self.empty_value_attribute] = 1 - total_sum
         return distribution
 
-    def transform_distribution(self, distribution: pd.Series, all_keys: list) -> dict:
+    def transform_distribution(
+        self, distribution: pd.Series[float], all_keys: list[str]
+    ) -> dict[str, float]:
         """
         Apply Laplace smoothing to a probability distribution. It's needed to avoid zero probabilities, which would break the KL divergence calculation.
 
