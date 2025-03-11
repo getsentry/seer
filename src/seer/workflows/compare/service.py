@@ -74,12 +74,13 @@ class CompareService:
 
         results = [
             {
-                "attributeName": rows["attribute_name"],
-                "attributeValues": list(rows["distribution_selection"].keys())[
+                "attributeName": row["attribute_name"],
+                "attributeValues": list(row["distribution_selection"].keys())[
                     : request.options.top_k_buckets
                 ],
+                "attributeScore": row["RRF_score"],
             }
-            for _, rows in scored_dataset.head(request.options.top_k_attributes).iterrows()
+            for _, row in scored_dataset.head(request.options.top_k_attributes).iterrows()
         ]
         return CompareCohortsResponse(results=results)
 

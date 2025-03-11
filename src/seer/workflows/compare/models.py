@@ -47,6 +47,7 @@ class CompareCohortsRequest(BaseModel):
 class AttributeResult(BaseModel):
     attributeName: str
     attributeValues: List[str]
+    attributeScore: float
 
 
 # Response model
