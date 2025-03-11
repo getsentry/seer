@@ -67,7 +67,7 @@ class DataProcessor:
         return distribution
 
     def transform_distribution(
-        self, distribution: pd.Series[float], all_keys: list[str]
+        self, distribution: pd.Series, all_keys: list[str]
     ) -> dict[str, float]:
         """
         Apply Laplace smoothing to a probability distribution. It's needed to avoid zero probabilities, which would break the KL divergence calculation.
