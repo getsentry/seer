@@ -25,23 +25,17 @@ class CompareService:
 
     @classmethod
     def get_instance(cls):
-        """Get or create the singleton instance of CompareService."""
+        """Get or create the singleton instance of CompareService"""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self, processor: DataProcessor = None, scorer: CohortsMetricsScorer = None):
-        """
-        Initialize the service with optional custom processor and scorer.
-
-        Args:
-            processor: Custom DataProcessor instance. If None, creates default instance
-            scorer: Custom CohortsMetricsScorer instance. If None, creates default instance
-        """
+    def __init__(self):
+        """Private constructor - use get_instance() instead."""
         if self._instance is not None:
             raise RuntimeError("Use get_instance() to access CompareService")
-        self.processor = processor or DataProcessor()
-        self.scorer = scorer or CohortsMetricsScorer()
+        self.processor = DataProcessor()
+        self.scorer = CohortsMetricsScorer()
 
     def compare_cohorts(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
         """
@@ -67,7 +61,7 @@ class CompareService:
         if request.options is None:
             request.options = Options()
 
-        dataset = self.processor.prepare_data(request)
+        dataset = self.processor.prepare_cohorts_data(request)
         scored_dataset = self.scorer.compute_metrics(
             dataset, request.options.metric_weights or MetricWeights()
         )

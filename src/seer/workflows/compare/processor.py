@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from seer.workflows.common.constants import DEFAULT_ALPHA, EMPTY_VALUE_ATTRIBUTE
-from seer.workflows.compare.models import StatsCohort
+from seer.workflows.compare.models import CompareCohortsRequest, StatsCohort
 from seer.workflows.exceptions import DataProcessingError
 
 
@@ -20,7 +20,7 @@ class DataProcessor:
     empty_value_attribute: str = EMPTY_VALUE_ATTRIBUTE
     alpha: float = DEFAULT_ALPHA
 
-    def preprocess_data(self, data: StatsCohort) -> pd.DataFrame:
+    def preprocess_cohort(self, data: StatsCohort) -> pd.DataFrame:
         """
         Preprocess a single cohort's attribute distributions into a normalized DataFrame with added unseen value
 
@@ -92,12 +92,12 @@ class DataProcessor:
         except Exception as e:
             raise DataProcessingError(f"Failed to transform distribution: {str(e)}") from e
 
-    def prepare_data(self, data: StatsCohort) -> pd.DataFrame:
+    def prepare_cohorts_data(self, request: CompareCohortsRequest) -> pd.DataFrame:
         """
         Prepare and combine baseline and selection cohort data for comparison.
 
         Args:
-            data: StatsCohort containing both baseline and selection cohorts
+            request: CompareCohortsRequest containing both baseline and selection cohorts
 
         Returns:
             pd.DataFrame: DataFrame with columns:
@@ -113,8 +113,8 @@ class DataProcessor:
             5. Cleans up intermediate calculation columns
         """
 
-        baseline = self.preprocess_data(data.baseline)
-        selection = self.preprocess_data(data.selection)
+        baseline = self.preprocess_cohort(request.baseline)
+        selection = self.preprocess_cohort(request.selection)
 
         dataset = baseline.merge(
             selection, on="attribute_name", how="inner", suffixes=("_baseline", "_selection")
