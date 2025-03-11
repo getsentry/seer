@@ -20,6 +20,7 @@ from seer.automation.models import (
     Line,
     Profile,
     RepoDefinition,
+    TraceTree,
 )
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import make_kill_signal
@@ -318,10 +319,11 @@ class AutofixRequest(BaseModel):
     project_id: Annotated[int, Examples(specialized.unsigned_ints)]
     repos: list[RepoDefinition]
     issue: IssueDetails
-    invoking_user: Optional[AutofixUserDetails] = None
-    instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
-    issue_summary: Optional[IssueSummary] = None
+    invoking_user: AutofixUserDetails | None = None
+    instruction: str | None = Field(default=None, validation_alias="additional_context")
+    issue_summary: IssueSummary | None = None
     profile: Profile | None = None
+    trace_tree: TraceTree | None = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 

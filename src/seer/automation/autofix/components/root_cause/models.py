@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from seer.automation.agent.models import Message
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import EventDetails, Profile
+from seer.automation.models import EventDetails, Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -69,6 +69,7 @@ class RootCauseAnalysisRequest(BaseComponentRequest):
     summary: Optional[IssueSummary] = None
     initial_memory: list[Message] = []
     profile: Profile | None = None
+    trace_tree: TraceTree | None = None
 
 
 class RootCauseAnalysisOutput(BaseComponentOutput):

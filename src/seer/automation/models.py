@@ -595,6 +595,23 @@ class Profile(BaseModel):
         return "\n".join(result)
 
 
+class TraceEvent(BaseModel):
+    event_id: str | None = None
+    title: str | None = None
+    is_transaction: bool = False
+    is_error: bool = False
+    platform: str | None = None
+    is_current_project: bool = True
+    duration: str | None = None
+    profile_id: str | None = None
+    children: list["TraceEvent"] = Field(default_factory=list)
+
+
+class TraceTree(BaseModel):
+    trace_id: str | None = None
+    events: list[TraceEvent] = Field(default_factory=list)  # only expecting transactions and errors
+
+
 class RepoDefinition(BaseModel):
     provider: Annotated[str, Examples(("github", "integrations:github"))]
     owner: str
