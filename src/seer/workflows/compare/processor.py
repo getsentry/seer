@@ -4,6 +4,7 @@ import pandas as pd
 
 from seer.workflows.common.constants import DEFAULT_ALPHA, EMPTY_VALUE_ATTRIBUTE
 from seer.workflows.compare.models import StatsCohort
+from seer.workflows.exceptions import DataProcessingError
 
 
 @dataclass
@@ -31,22 +32,23 @@ class DataProcessor:
                 - attribute_name: Name of the attribute
                 - distribution: Dictionary mapping labels to normalized values
         """
-        df = pd.DataFrame(
-            [
-                {
-                    "attribute_name": attr.attributeName,
-                    "distribution": {
-                        item.label: item.value / data.attributeDistributions.total_count
-                        for item in attr.buckets
-                    },
-                }
-                for attr in data.attributeDistributions.attributes
-            ]
-        )
-
-        # Apply normalization to each Series in the attribute_distribution column
-        df["distribution"] = df["distribution"].apply(lambda x: self.add_unseen_value(x))
-        return df
+        try:
+            df = pd.DataFrame(
+                [
+                    {
+                        "attribute_name": attr.attributeName,
+                        "distribution": {
+                            item.label: item.value / data.attributeDistributions.total_count
+                            for item in attr.buckets
+                        },
+                    }
+                    for attr in data.attributeDistributions.attributes
+                ]
+            )
+            df["distribution"] = df["distribution"].apply(lambda x: self.add_unseen_value(x))
+            return df
+        except Exception as e:
+            raise DataProcessingError(f"Failed to preprocess cohort data: {str(e)}") from e
 
     def add_unseen_value(self, distribution: dict) -> pd.Series:
         """
@@ -79,13 +81,16 @@ class DataProcessor:
             - Missing keys are filled with 0 before smoothing
             - Adds alpha to all values and renormalizes to maintain sum = 1
         """
-        # reindex distribution to include all keys, filling missing values with 0
-        distribution = distribution.reindex(all_keys, fill_value=0)
+        try:
+            # reindex distribution to include all keys, filling missing values with 0
+            distribution = distribution.reindex(all_keys, fill_value=0)
 
-        # perform lapalce smoothing of the distribution
-        # Add alpha to all values and renormalize
-        distribution = distribution + self.alpha
-        return dict(distribution / distribution.sum())
+            # perform lapalce smoothing of the distribution
+            # Add alpha to all values and renormalize
+            distribution = distribution + self.alpha
+            return dict(distribution / distribution.sum())
+        except Exception as e:
+            raise DataProcessingError(f"Failed to transform distribution: {str(e)}") from e
 
     def prepare_data(self, data: StatsCohort) -> pd.DataFrame:
         """
@@ -107,6 +112,7 @@ class DataProcessor:
             4. Applies Laplace smoothing to both distributions
             5. Cleans up intermediate calculation columns
         """
+
         baseline = self.preprocess_data(data.baseline)
         selection = self.preprocess_data(data.selection)
 
