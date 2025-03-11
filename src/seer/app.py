@@ -87,8 +87,8 @@ from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.smoke_test import check_smoke_test
 from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
-from seer.workflows.compare import compare_cohorts
-from seer.workflows.models import CompareCohortsRequest, CompareCohortsResponse
+from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
+from seer.workflows.compare.service import compare_cohorts
 
 logger = logging.getLogger(__name__)
 

@@ -4,12 +4,13 @@ import pandas as pd
 from scipy.special import rel_entr
 from scipy.stats import entropy
 
-from seer.workflows.models import MetricWeights
+from seer.workflows.common.constants import DEFAULT_K_RRF
+from seer.workflows.compare.models import MetricWeights
 
 
 @dataclass
 class CohortsMetricsScorer:
-    K_RRF = 60
+    k_rrf: int = DEFAULT_K_RRF
 
     @staticmethod
     def kl_metric_lambda(baseline, selection):
@@ -43,10 +44,10 @@ class CohortsMetricsScorer:
         self, dataset: pd.DataFrame, metric_weights: MetricWeights
     ) -> pd.DataFrame:
         dataset["KL_rank"] = 1 / (
-            self.K_RRF + dataset["kl_score"].rank(method="min", ascending=False)
+            self.k_rrf + dataset["kl_score"].rank(method="min", ascending=False)
         )
         dataset["entropy_rank"] = 1 / (
-            self.K_RRF + dataset["entropy_score"].rank(method="min", ascending=True)
+            self.k_rrf + dataset["entropy_score"].rank(method="min", ascending=True)
         )
         dataset["RRF_score"] = (
             metric_weights.kl_divergence_weight * dataset["KL_rank"]

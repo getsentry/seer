@@ -2,6 +2,13 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from seer.workflows.common.constants import DEFAULT_ENTROPY_WEIGHT, DEFAULT_KL_DIVERGENCE_WEIGHT
+
+
+class MetricWeights(BaseModel):
+    kl_divergence_weight: float = DEFAULT_KL_DIVERGENCE_WEIGHT
+    entropy_weight: float = DEFAULT_ENTROPY_WEIGHT
+
 
 # Input models
 class StatsAttributeBucket(BaseModel):
@@ -21,11 +28,6 @@ class AttributeDistributions(BaseModel):
 
 class StatsCohort(BaseModel):
     attributeDistributions: AttributeDistributions
-
-
-class MetricWeights(BaseModel):
-    kl_divergence_weight: float = 0.8
-    entropy_weight: float = 0.2
 
 
 class Options(BaseModel):

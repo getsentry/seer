@@ -2,13 +2,14 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from seer.workflows.models import StatsCohort
+from seer.workflows.common.constants import DEFAULT_ALPHA, EMPTY_VALUE_ATTRIBUTE
+from seer.workflows.compare.models import StatsCohort
 
 
 @dataclass
 class DataProcessor:
-    EMPTY_VALUE_ATTRIBUTE = "EMTPY_VALUE"
-    alpha = 10**-6
+    empty_value_attribute: str = EMPTY_VALUE_ATTRIBUTE
+    alpha: float = DEFAULT_ALPHA
 
     def preprocess_data(self, data: StatsCohort) -> pd.DataFrame:
         df = pd.DataFrame(
@@ -31,7 +32,7 @@ class DataProcessor:
     def add_unseen_value(self, distribution: dict) -> pd.Series:
         total_sum = sum(distribution.values())
         if total_sum < 1:
-            distribution[self.EMPTY_VALUE_ATTRIBUTE] = 1 - total_sum
+            distribution[self.empty_value_attribute] = 1 - total_sum
         return distribution
 
     def transform_distribution(self, distribution: pd.Series, all_keys: list) -> dict:
