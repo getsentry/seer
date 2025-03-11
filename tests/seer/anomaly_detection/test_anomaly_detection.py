@@ -8,6 +8,7 @@ import pandas as pd
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import (
+    ConfidenceLevel,
     DynamicAlert,
     MPTimeSeries,
     MPTimeSeriesAnomaliesSingleWindow,
@@ -101,6 +102,7 @@ class TestAnomalyDetection(unittest.TestCase):
                     thresholds=[],
                     original_flags=[],
                     use_suss=[],
+                    confidence_levels=[],
                 ),
                 pd.DataFrame(
                     {
@@ -209,6 +211,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -262,6 +268,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps[:100])),
                 use_suss=np.array([True] * len(ts_timestamps[:100])),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps[:100]),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -316,6 +326,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"] * (len(ts_timestamps) - 1),  # One less than timestamps
                 use_suss=[True] * len(ts_timestamps),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -384,6 +398,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -410,6 +428,10 @@ class TestAnomalyDetection(unittest.TestCase):
             window_size=window_size,
             thresholds=[],
             original_flags=["none"] * len(ts_timestamps),
+            confidence_levels=[
+                ConfidenceLevel.MEDIUM,
+            ]
+            * len(ts_timestamps),
         )
 
         new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
@@ -447,6 +469,10 @@ class TestAnomalyDetection(unittest.TestCase):
                 thresholds=[],
                 original_flags=np.array(["none"] * len(ts_timestamps)),
                 use_suss=np.array([True] * len(ts_timestamps)),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps),
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=np.array([]),
@@ -485,9 +511,15 @@ class TestAnomalyDetection(unittest.TestCase):
 
             # Generate new observation window of n points which are the same as the last point
             ts_current = []
+            last_history_timestamp = ts_history[-1].timestamp
+            last_history_value = ts_history[-1].value
             for j in range(1, n + 1):
                 ts_current.append(
-                    TimeSeriesPoint(timestamp=len(ts_history) + j, value=ts_history[-1].value)
+                    TimeSeriesPoint(
+                        timestamp=last_history_timestamp
+                        + 15 * 60 * j,  # timestamps with 15 min intervals (in seconds)
+                        value=last_history_value,
+                    )
                 )
 
             context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
@@ -504,7 +536,6 @@ class TestAnomalyDetection(unittest.TestCase):
             assert isinstance(response.timeseries[0], TimeSeriesPoint)
 
     def test_detect_anomalies_combo_large_current(self):
-
         config = AnomalyDetectionConfig(
             time_period=15, sensitivity="low", direction="both", expected_seasonality="auto"
         )
@@ -513,13 +544,18 @@ class TestAnomalyDetection(unittest.TestCase):
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
         ts_history = loaded_synthetic_data.timeseries[0]
-        n = 600
+        last_history_timestamp = ts_history[-1].timestamp
+        last_history_value = ts_history[-1].value
+        n = 700  # should be greater than 7 days * 24 hours * 60 minutes * 15 minutes = 672
 
         # Generate new observation window of n points which are the same as the last point
         ts_current = []
         for j in range(1, n + 1):
             ts_current.append(
-                TimeSeriesPoint(timestamp=len(ts_history) + j, value=ts_history[-1].value)
+                TimeSeriesPoint(
+                    timestamp=last_history_timestamp + config.time_period * 60 * j,
+                    value=last_history_value,
+                )
             )
 
         context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
@@ -534,6 +570,7 @@ class TestAnomalyDetection(unittest.TestCase):
         assert isinstance(response.timeseries, list)
         assert len(response.timeseries) == n
         assert isinstance(response.timeseries[0], TimeSeriesPoint)
+        # assert False
 
     def test_detect_anomalies_combo_large_current_timeout(self):
 
@@ -546,12 +583,16 @@ class TestAnomalyDetection(unittest.TestCase):
         )
         ts_history = loaded_synthetic_data.timeseries[0][:180]
         n = 400
-
+        last_history_timestamp = ts_history[-1].timestamp
+        last_history_value = ts_history[-1].value
         # Generate new observation window of n points which are the same as the last point
         ts_current = []
         for j in range(1, n + 1):
             ts_current.append(
-                TimeSeriesPoint(timestamp=len(ts_history) + j, value=ts_history[-1].value)
+                TimeSeriesPoint(
+                    timestamp=last_history_timestamp + config.time_period * 60 * j,
+                    value=last_history_value,
+                )
             )
 
         context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
@@ -562,7 +603,7 @@ class TestAnomalyDetection(unittest.TestCase):
 
         # Test that detection with small time budget raises timeout error
         with self.assertRaises(ServerError) as e:
-            AnomalyDetection().detect_anomalies(request=request, time_budget_ms=400)
+            AnomalyDetection().detect_anomalies(request=request, time_budget_ms=100)
         assert "Stream detection took too long" in str(e.exception)
 
     def test_detect_anomalies_combo_insufficient_history(self):

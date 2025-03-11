@@ -68,14 +68,14 @@ class TestFindOriginalSnippet(unittest.TestCase):
         file_contents = textwrap.dedent(
             """\
             def example_function():
-                print('Hello world!')  # Missing comma
+                print('Hello world!')
 
             def unrelated_function():
                 pass
             """
-        )
+        )  # missing comma
         expected_result = (
-            "def example_function():\n    print('Hello world!')  # Missing comma",
+            "def example_function():\n    print('Hello world!')",
             0,
             2,
         )

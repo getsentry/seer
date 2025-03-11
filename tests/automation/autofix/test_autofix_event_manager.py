@@ -4,7 +4,7 @@ import pytest
 from johen import generate
 
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
-from seer.automation.autofix.components.solution.models import SolutionOutput
+from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -382,10 +382,16 @@ class TestAutofixEventManager:
         assert state_obj.status == AutofixStatus.NEED_MORE_INFORMATION
 
     def test_set_selected_solution(self, event_manager, state):
-        # Test with custom solution
-        custom_solution = "Custom solution text"
-        payload = AutofixSolutionUpdatePayload(custom_solution=custom_solution)
+        payload = AutofixSolutionUpdatePayload(
+            solution=[
+                SolutionTimelineEvent(
+                    title="Custom solution",
+                    timeline_item_type="human_instruction",
+                )
+            ]
+        )
 
+        event_manager.send_solution_result(SolutionOutput(solution_steps=[], summary=""))
         event_manager.set_selected_solution(payload)
 
         state_obj = state.get()
@@ -394,7 +400,7 @@ class TestAutofixEventManager:
             None,
         )
         assert solution_step is not None
-        assert solution_step.custom_solution == custom_solution
+        assert solution_step.solution[0].title == "Custom solution"
         assert solution_step.solution_selected is True
         assert state_obj.status == AutofixStatus.PROCESSING
 
@@ -417,7 +423,7 @@ class TestAutofixEventManager:
         with state.update() as cur:
             cur.codebases = {
                 "repo1": CodebaseState(
-                    repo_id=1, repo_external_id="repo1", file_changes=[next(generate(FileChange))]
+                    repo_external_id="repo1", file_changes=[next(generate(FileChange))]
                 )
             }
 
@@ -429,5 +435,6 @@ class TestAutofixEventManager:
             cur.steps.append(DefaultStep(id="after_solution", title="After Solution"))
 
         event_manager.set_selected_solution(payload)
-        assert len(state.get().steps) == 1
-        assert state.get().steps[0].key == event_manager.solution_step.key
+        assert len(state.get().steps) == 2
+        assert state.get().steps[0].key == event_manager.solution_processing_step.key
+        assert state.get().steps[1].key == event_manager.solution_step.key

@@ -109,15 +109,19 @@ def convert_synthetic_ts(directory: str, as_ts_datatype: bool, include_anomaly_r
                 data = data["ts"]
 
                 values = None
+                num_rows = len(data)
+                gen_timestamps = pd.date_range(
+                    start="2024-01-01", periods=num_rows, freq="15min", tz="UTC", unit="s"
+                ).values.astype(np.int64)
                 if as_ts_datatype:
                     values = [
-                        TimeSeriesPoint(timestamp=point["timestamp"], value=point["value"])
-                        for point in data
+                        TimeSeriesPoint(timestamp=float(ts), value=point["value"])
+                        for ts, point in zip(gen_timestamps, data)
                     ]
                 else:
                     values = np.array([point["value"] for point in data], dtype=np.float64)
 
-                ts_timestamps = np.array([point["timestamp"] for point in data], dtype=np.float64)
+                ts_timestamps = np.array(gen_timestamps, dtype=np.float64)
                 mp_dist = np.array([point["mp_dist"] for point in data], dtype=np.float64)
 
                 timeseries.append(values)

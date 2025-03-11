@@ -1,23 +1,15 @@
 import concurrent.futures
-import difflib
 import json
 import logging
 import textwrap
 
 import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
-from openai import BadRequestError as OpenAiBadRequestError
-from openai import LengthFinishReasonError as OpenAiLengthFinishReasonError
 from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import (
-    AnthropicProvider,
-    GeminiProvider,
-    LlmClient,
-    OpenAiProvider,
-)
+from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -156,69 +148,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         # For existing files, use LLM to merge changes
         system_prompt = """You are an coding assistant that helps merge code updates, ensuring every modification is fully integrated."""
         prompt = textwrap.dedent(
-            """
-            Merge all changes from the <update> snippet into the <code> below.
-            - Output only the final code file including the changes from the <update> snippet, enclosed within <updated_code> and </updated_code> tags.
-            - Preserve the code's structure, order, comments, and indentation exactly.
-            - Do not include any other text, explanations, placeholders, ellipses, or code fences.
-            - If the update has placeholders such as in comments and ellipses, replace and integrate the placeholders with the appropriate code.
-              - For example, replace things in the updated code such as "The rest of the code..." with the actual code that should be there.
-
-            <code>{original_content}</code>
-
-            <update>
-            {new_content}
-            </update>
-
-            Provide the complete updated code."""
-        ).format(original_content=original_content, new_content=new_content)
-
-        # use predicted output for faster response
-        predicted_output = f"<updated_code>{original_content}</updated_code>"
-        try:
-            output = llm_client.generate_text(
-                system_prompt=system_prompt,
-                prompt=prompt,
-                model=OpenAiProvider.model("gpt-4o-mini"),
-                predicted_output=predicted_output,
-            )
-        except (
-            OpenAiBadRequestError,
-            OpenAiLengthFinishReasonError,
-        ) as e:  # too much content, fallback to model with bigger input/output limit
-            sentry_sdk.capture_message(
-                f"Failed to apply code suggestion to file with gpt-4o-mini, falling back to o3-mini. Error message: {str(e)}"
-            )
-            try:
-                output = llm_client.generate_text(
-                    system_prompt=system_prompt,
-                    prompt=prompt,
-                    model=OpenAiProvider.model("o3-mini"),
-                    reasoning_effort="low",
-                    temperature=1.0,
-                )
-            except Exception as e2:
-                sentry_sdk.capture_exception(e2)
-                return None
-
-        text = output.message.content
-        updated_content = extract_text_inside_tags(text, "updated_code")
-        if updated_content:
-            # Generate unified diff between original_content and updated_content
-            original_lines = original_content.splitlines()
-            updated_lines = updated_content.splitlines()
-            diff = "\n".join(
-                difflib.unified_diff(
-                    original_lines,
-                    updated_lines,
-                    fromfile=f"a/{file_path}",
-                    tofile=f"b/{file_path}",
-                )
-            )
-            return diff
-
-        # fallback to writing a unified diff directly
-        fallback_prompt = textwrap.dedent(
             """\
             You are an expert software engineer. You are given a code snippet and a proposed update to the code.
             You need to generate the exact unified diff that shows the changes to the code, but only specific portions. You do NOT need to include the entire file in the diff, but you should include up to 3 lines of unchanged lines before and after the changes for context. Please preserve indentation.
@@ -247,8 +176,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         ).format(original_content=original_content, new_content=new_content)
         response = llm_client.generate_text(
             system_prompt=system_prompt,
-            prompt=fallback_prompt,
-            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            prompt=prompt,
+            model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
         )
         if not response.message.content:
             return None

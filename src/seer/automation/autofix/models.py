@@ -270,6 +270,7 @@ class AutofixGroupState(BaseModel):
 class AutofixStateRequest(BaseModel):
     group_id: int | None = None
     run_id: int | None = None
+    check_repo_access: bool = False
 
 
 class AutofixPrIdRequest(BaseModel):
@@ -399,6 +400,7 @@ class AutofixSolutionUpdatePayload(BaseModel):
     custom_solution: str | None = None
     solution_selected: bool = False
     mode: Literal["all", "fix", "test"] = "fix"
+    solution: list[SolutionTimelineEvent] | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
