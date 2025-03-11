@@ -1,6 +1,12 @@
 # Constants used across the workflow
+
+# Attribute used to represent missing values
 EMPTY_VALUE_ATTRIBUTE = "EMPTY_VALUE"
+
+# Default alpha for Laplace smoothing
 DEFAULT_ALPHA = 10**-6
+
+# Default k for RRF
 DEFAULT_K_RRF = 60
 
 # Default weights
