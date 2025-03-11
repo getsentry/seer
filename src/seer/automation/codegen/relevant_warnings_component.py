@@ -113,7 +113,7 @@ def _fetch_issues_for_pr_file_cache_key(
     return hashkey(organization_id, provider, external_id, pr_file.filename, pr_file.sha)
 
 
-@cached(cache=LRUCache(maxsize=4096), key=_fetch_issues_for_pr_file_cache_key)
+@cached(cache=LRUCache(maxsize=128), key=_fetch_issues_for_pr_file_cache_key)
 @inject
 def _fetch_issues_for_pr_file(
     organization_id: int,
