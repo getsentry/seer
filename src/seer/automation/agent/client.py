@@ -841,6 +841,7 @@ class GeminiProvider:
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
             "Internal error",
+            "Internal error encountered.",
         )
         return (
             isinstance(exception, ClientError)
