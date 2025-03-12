@@ -29,7 +29,12 @@ from seer.automation.autofix.models import (
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.state import LocalMemoryState
-from seer.automation.summarize.models import SummarizeIssueRequest
+from seer.automation.summarize.models import (
+    GetFixabilityScoreRequest,
+    SummarizeIssueRequest,
+    SummarizeIssueResponse,
+    SummarizeIssueScores,
+)
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
 from seer.dependency_injection import Module, resolve
@@ -510,6 +515,60 @@ class TestSeer(unittest.TestCase):
 
         assert response.status_code == 500  # InternalServerError
         mock_run_summarize_issue.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.run_fixability_score")
+    def test_get_fixability_score_endpoint_success(self, mock_run_fixability_score):
+        """Test a successful run of get_fixability_score endpoint"""
+        # Create a mock response
+        mock_response = SummarizeIssueResponse(
+            group_id=123,
+            headline="Test Error",
+            whats_wrong="Something is broken",
+            trace="No related issues",
+            possible_cause="Bad code",
+            scores=SummarizeIssueScores(
+                possible_cause_confidence=0.8,
+                possible_cause_novelty=0.6,
+                fixability_score=0.75,
+                fixability_score_version=1,
+                is_fixable=True,
+            ),
+        )
+        mock_run_fixability_score.return_value = mock_response
+
+        # Create test data
+        test_data = GetFixabilityScoreRequest(group_id=123)
+
+        # Make the request
+        response = app.test_client().post(
+            "/v1/automation/summarize/fixability",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        # Assertions
+        assert response.status_code == 200
+        response_data = json.loads(response.data)
+        assert response_data["group_id"] == 123
+        assert response_data["scores"]["fixability_score"] == 0.75
+        assert response_data["scores"]["fixability_score_version"] == 1
+        assert response_data["scores"]["is_fixable"] is True
+        mock_run_fixability_score.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.run_fixability_score")
+    def test_get_fixability_score_endpoint_error(self, mock_run_fixability_score):
+        """Test that get_fixability_score_endpoint handles exceptions correctly"""
+        mock_run_fixability_score.side_effect = ValueError("No issue summary found")
+        test_data = GetFixabilityScoreRequest(group_id=123)
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/fixability",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 500  # InternalServerError
+        mock_run_fixability_score.assert_called_once_with(test_data)
 
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.detect_anomalies")
     def test_detect_anomalies_endpoint_success(self, mock_detect_anomalies):

@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     TIMESTAMP,
     BigInteger,
+    Boolean,
     Connection,
     DateTime,
     Enum,
@@ -387,6 +388,9 @@ class DbIssueSummary(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
+    fixability_score: Mapped[float] = mapped_column(Float, nullable=True)
+    is_fixable: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    fixability_score_version: Mapped[int] = mapped_column(Integer, nullable=True)
 
 
 class DbDynamicAlertTimeSeriesHistory(Base):
