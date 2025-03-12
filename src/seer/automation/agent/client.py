@@ -455,6 +455,7 @@ class AnthropicProvider:
         retryable_errors = (
             "overloaded_error",
             "Internal server error",
+            "not_found_error",
         )
         return (
             isinstance(exception, anthropic.AnthropicError)
@@ -839,6 +840,7 @@ class GeminiProvider:
             # https://sentry.sentry.io/issues/6301072208
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
+            "Internal error",
         )
         return (
             isinstance(exception, ClientError)
