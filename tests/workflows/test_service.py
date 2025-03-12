@@ -1,3 +1,4 @@
+import json
 from unittest.mock import Mock
 
 import pytest
@@ -5,7 +6,6 @@ import pytest
 from seer.workflows.compare.models import (
     AttributeDistributions,
     CompareCohortsRequest,
-    CompareCohortsResponse,
     MetricWeights,
     Options,
     StatsAttribute,
@@ -90,7 +90,15 @@ def test_singleton_pattern():
         CompareService()
 
 
-def test_convenience_function(sample_request):
-    result = compare_cohorts(sample_request)
+def test_sanity_check():
+    """
+    Sanity check to ensure that the results make sense. The test payload contains the syntethic example from the tech spec in the Notion doc.
+    """
+    with open("tests/workflows/test_data/test_payload_0.json", "r") as f:
+        sample_request = CompareCohortsRequest(**json.load(f))
+    response = compare_cohorts(sample_request)
+    result_attributes = [attr.attributeName for attr in response.results]
+    # browser is the most distrub, followed by country
+    expected_attributes = ["browser", "country"]
 
-    assert isinstance(result, CompareCohortsResponse)
+    assert result_attributes == expected_attributes

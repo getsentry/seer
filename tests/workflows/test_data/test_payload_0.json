@@ -1,0 +1,172 @@
+{
+    "baseline": {
+        "attributeDistributions": {
+            "attributes": [
+                {
+                    "attributeName": "error_code",
+                    "buckets": [
+                        {
+                            "label": "404",
+                            "value": 333386.0
+                        },
+                        {
+                            "label": "400",
+                            "value": 332364.0
+                        },
+                        {
+                            "label": "504",
+                            "value": 332315.0
+                        }
+                    ]
+                },
+                {
+                    "attributeName": "browser",
+                    "buckets": [
+                        {
+                            "label": "edge",
+                            "value": 249804.0
+                        },
+                        {
+                            "label": "firefox",
+                            "value": 249578.0
+                        },
+                        {
+                            "label": "chrome",
+                            "value": 249489.0
+                        },
+                        {
+                            "label": "safari",
+                            "value": 249194.0
+                        }
+                    ]
+                },
+                {
+                    "attributeName": "device",
+                    "buckets": [
+                        {
+                            "label": "tablet",
+                            "value": 333215.0
+                        },
+                        {
+                            "label": "mobile",
+                            "value": 332586.0
+                        },
+                        {
+                            "label": "desktop",
+                            "value": 332264.0
+                        }
+                    ]
+                },
+                {
+                    "attributeName": "country",
+                    "buckets": [
+                        {
+                            "label": "fr",
+                            "value": 249871.0
+                        },
+                        {
+                            "label": "us",
+                            "value": 249662.0
+                        },
+                        {
+                            "label": "uk",
+                            "value": 249366.0
+                        },
+                        {
+                            "label": "de",
+                            "value": 249166.0
+                        }
+                    ]
+                }
+            ]
+        },
+        "total_count": 998065.0
+    },
+    "selection": {
+        "attributeDistributions": {
+            "attributes": [
+                {
+                    "attributeName": "browser",
+                    "buckets": [
+                        {
+                            "label": "unknown",
+                            "value": 1351.0
+                        },
+                        {
+                            "label": "safari",
+                            "value": 197.0
+                        },
+                        {
+                            "label": "edge",
+                            "value": 195.0
+                        },
+                        {
+                            "label": "firefox",
+                            "value": 192.0
+                        }
+                    ]
+                },
+                {
+                    "attributeName": "country",
+                    "buckets": [
+                        {
+                            "label": "fr",
+                            "value": 987.0
+                        },
+                        {
+                            "label": "uk",
+                            "value": 381.0
+                        },
+                        {
+                            "label": "us",
+                            "value": 367.0
+                        },
+                        {
+                            "label": "de",
+                            "value": 200.0
+                        }
+                    ]
+                },
+                {
+                    "attributeName": "device",
+                    "buckets": [
+                        {
+                            "label": "desktop",
+                            "value": 695.0
+                        },
+                        {
+                            "label": "mobile",
+                            "value": 638.0
+                        },
+                        {
+                            "label": "tablet",
+                            "value": 602.0
+                        }
+                    ]
+                },
+                {
+                    "attributeName": "error_code",
+                    "buckets": [
+                        {
+                            "label": "404",
+                            "value": 691.0
+                        },
+                        {
+                            "label": "504",
+                            "value": 632.0
+                        },
+                        {
+                            "label": "400",
+                            "value": 612.0
+                        }
+                    ]
+                }
+            ]
+        },
+        "total_count": 1935.0
+    },
+    "options": {
+        "top_k_attributes": 2,
+        "top_k_buckets": 3
+    }
+}
