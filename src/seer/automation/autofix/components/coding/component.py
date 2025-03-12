@@ -406,7 +406,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         return None
                     task_with_diff = PlanTaskPromptXml(
                         file_path=task.file_path,
-                        repo_name=task.repo_name,
+                        repo_name=task.repo_name or repo_client.repo_full_name,
                         type="file_change",
                         diff=diff,
                         commit_message=task.commit_message,
@@ -419,7 +419,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 elif task.type == "file_delete":
                     task_with_diff = PlanTaskPromptXml(
                         file_path=task.file_path,
-                        repo_name=task.repo_name,
+                        repo_name=task.repo_name or repo_client.repo_full_name,
                         type="file_delete",
                         commit_message=task.commit_message,
                         diff="",
@@ -434,7 +434,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         return None
                     task_with_diff = PlanTaskPromptXml(
                         file_path=task.file_path,
-                        repo_name=task.repo_name,
+                        repo_name=task.repo_name or repo_client.repo_full_name,
                         type="file_create",
                         diff=diff,
                         commit_message=task.commit_message,
