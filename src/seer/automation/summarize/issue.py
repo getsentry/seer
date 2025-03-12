@@ -2,8 +2,8 @@ import textwrap
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
-from scipy.special import softmax
 from scipy.spatial.distance import cosine
+from scipy.special import softmax
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
