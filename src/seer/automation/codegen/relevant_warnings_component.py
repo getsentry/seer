@@ -369,7 +369,7 @@ class PredictRelevantWarningsComponent(
         for warning, issue in request.candidate_associations:
             self.logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
             completion = llm_client.generate_structured(
-                model=GeminiProvider.model("gemini-2.0-flash-lite"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
                     formatted_warning=warning.format_warning(),
