@@ -1,7 +1,7 @@
 # Constants used across the workflow
 
 # Attribute used to represent missing values
-EMPTY_VALUE_ATTRIBUTE = "EMPTY_VALUE"
+EMPTY_VALUE_ATTRIBUTE = ""
 
 # Default alpha for Laplace smoothing
 DEFAULT_ALPHA = 10**-6

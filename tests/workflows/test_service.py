@@ -36,8 +36,8 @@ def service(mock_processor, mock_scorer):
 @pytest.fixture
 def sample_request():
     baseline = StatsCohort(
+        total_count=100,
         attributeDistributions=AttributeDistributions(
-            total_count=100,
             attributes=[
                 StatsAttribute(
                     attributeName="attr1",
@@ -47,12 +47,12 @@ def sample_request():
                     ],
                 )
             ],
-        )
+        ),
     )
 
     selection = StatsCohort(
+        total_count=100,
         attributeDistributions=AttributeDistributions(
-            total_count=100,
             attributes=[
                 StatsAttribute(
                     attributeName="attr1",
@@ -62,7 +62,7 @@ def sample_request():
                     ],
                 )
             ],
-        )
+        ),
     )
 
     return CompareCohortsRequest(

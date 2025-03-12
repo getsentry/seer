@@ -22,11 +22,11 @@ class StatsAttribute(BaseModel):
 
 
 class AttributeDistributions(BaseModel):
-    total_count: float
     attributes: List[StatsAttribute]
 
 
 class StatsCohort(BaseModel):
+    total_count: float
     attributeDistributions: AttributeDistributions
 
 

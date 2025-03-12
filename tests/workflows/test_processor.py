@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
+from seer.workflows.common.constants import EMPTY_VALUE_ATTRIBUTE
 from seer.workflows.compare.models import (
     AttributeDistributions,
     CompareCohortsRequest,
@@ -21,8 +22,8 @@ def processor():
 @pytest.fixture
 def sample_cohort():
     return StatsCohort(
+        total_count=100,
         attributeDistributions=AttributeDistributions(
-            total_count=100,
             attributes=[
                 StatsAttribute(
                     attributeName="test_attr",
@@ -32,7 +33,7 @@ def sample_cohort():
                     ],
                 )
             ],
-        )
+        ),
     )
 
 
@@ -40,7 +41,12 @@ def test_preprocess_cohort_success(processor, sample_cohort):
     result = processor.preprocess_cohort(sample_cohort)
 
     expected = pd.DataFrame(
-        [{"attribute_name": "test_attr", "distribution": {"A": 0.5, "B": 0.3, "EMPTY_VALUE": 0.2}}]
+        [
+            {
+                "attribute_name": "test_attr",
+                "distribution": {"A": 0.5, "B": 0.3, EMPTY_VALUE_ATTRIBUTE: 0.2},
+            }
+        ]
     )
 
     assert_frame_equal(result, expected)
@@ -55,7 +61,7 @@ def test_add_unseen_value(processor):
     distribution = {"A": 0.5, "B": 0.3}
     result = processor.add_unseen_value(distribution)
 
-    assert result["EMPTY_VALUE"] == pytest.approx(0.2)
+    assert result[EMPTY_VALUE_ATTRIBUTE] == pytest.approx(0.2)
     assert sum(result.values()) == pytest.approx(1.0)
 
 
@@ -77,8 +83,8 @@ def test_transform_distribution(processor):
 
 def test_prepare_data(processor):
     baseline = StatsCohort(
+        total_count=100,
         attributeDistributions=AttributeDistributions(
-            total_count=100,
             attributes=[
                 StatsAttribute(
                     attributeName="attr1",
@@ -88,12 +94,12 @@ def test_prepare_data(processor):
                     ],
                 )
             ],
-        )
+        ),
     )
 
     selection = StatsCohort(
+        total_count=100,
         attributeDistributions=AttributeDistributions(
-            total_count=100,
             attributes=[
                 StatsAttribute(
                     attributeName="attr1",
@@ -103,7 +109,7 @@ def test_prepare_data(processor):
                     ],
                 )
             ],
-        )
+        ),
     )
 
     request = CompareCohortsRequest(baseline=baseline, selection=selection)
