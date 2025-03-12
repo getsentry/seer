@@ -255,6 +255,7 @@ class SentryExceptionEntry(BaseModel):
 class SentryEventData(TypedDict):
     title: str
     entries: list[dict]
+    tags: NotRequired[list[dict[str, str]]]
 
 
 class ExceptionMechanism(TypedDict):
@@ -308,6 +309,7 @@ class BreadcrumbsDetails(BaseModel):
 
 class EventDetails(BaseModel):
     title: str
+    transaction_name: str | None = None
     exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=False)
     threads: list[ThreadDetails] = Field(default_factory=list, exclude=False)
     breadcrumbs: list[BreadcrumbsDetails] = Field(default_factory=list, exclude=False)
@@ -319,6 +321,12 @@ class EventDetails(BaseModel):
         exceptions: list[ExceptionDetails] = []
         threads: list[ThreadDetails] = []
         breadcrumbs: list[BreadcrumbsDetails] = []
+        transaction_name: str | None = None
+
+        for tag in error_event.get("tags", []):
+            if tag.get("key") == "transaction":
+                transaction_name = tag.get("value")
+
         for entry in error_event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
@@ -345,6 +353,7 @@ class EventDetails(BaseModel):
 
         return cls(
             title=error_event.get("title"),
+            transaction_name=transaction_name,
             exceptions=exceptions,
             threads=threads,
             breadcrumbs=breadcrumbs,
@@ -353,7 +362,7 @@ class EventDetails(BaseModel):
     def format_event(self):
         return textwrap.dedent(
             """\
-            {title}
+            {title} {transaction}
             <exceptions>
             {exceptions}
             </exceptions>
@@ -363,6 +372,7 @@ class EventDetails(BaseModel):
             """
         ).format(
             title=self.title,
+            transaction=f"(occurred in: {self.transaction_name})" if self.transaction_name else "",
             exceptions=self.format_exceptions(),
             breadcrumbs=self.format_breadcrumbs(),
         )
@@ -583,6 +593,23 @@ class Profile(BaseModel):
                 result.append(self._format_profile_helper(node.get("children", []), indent + 1))
 
         return "\n".join(result)
+
+
+class TraceEvent(BaseModel):
+    event_id: str | None = None
+    title: str | None = None
+    is_transaction: bool = False
+    is_error: bool = False
+    platform: str | None = None
+    is_current_project: bool = True
+    duration: str | None = None
+    profile_id: str | None = None
+    children: list["TraceEvent"] = Field(default_factory=list)
+
+
+class TraceTree(BaseModel):
+    trace_id: str | None = None
+    events: list[TraceEvent] = Field(default_factory=list)  # only expecting transactions and errors
 
 
 class RepoDefinition(BaseModel):
