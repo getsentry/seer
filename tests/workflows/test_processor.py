@@ -28,8 +28,8 @@ def sampleCohort():
                 StatsAttribute(
                     attributeName="test_attr",
                     buckets=[
-                        StatsAttributeBucket(label="A", value=50),
-                        StatsAttributeBucket(label="B", value=30),
+                        StatsAttributeBucket(attributeValue="A", attributeValueCount=50),
+                        StatsAttributeBucket(attributeValue="B", attributeValueCount=30),
                     ],
                 )
             ],
@@ -89,8 +89,8 @@ def test_prepareCohortsData(processor):
                 StatsAttribute(
                     attributeName="attr1",
                     buckets=[
-                        StatsAttributeBucket(label="A", value=50),
-                        StatsAttributeBucket(label="B", value=50),
+                        StatsAttributeBucket(attributeValue="A", attributeValueCount=50),
+                        StatsAttributeBucket(attributeValue="B", attributeValueCount=50),
                     ],
                 )
             ],
@@ -104,8 +104,8 @@ def test_prepareCohortsData(processor):
                 StatsAttribute(
                     attributeName="attr1",
                     buckets=[
-                        StatsAttributeBucket(label="B", value=80),
-                        StatsAttributeBucket(label="C", value=20),
+                        StatsAttributeBucket(attributeValue="B", attributeValueCount=80),
+                        StatsAttributeBucket(attributeValue="C", attributeValueCount=20),
                     ],
                 )
             ],

@@ -6,16 +6,16 @@
                     "attributeName": "error_code",
                     "buckets": [
                         {
-                            "label": "404",
-                            "value": 333386.0
+                            "attributeValue": "404",
+                            "attributeValueCount": 333386.0
                         },
                         {
-                            "label": "400",
-                            "value": 332364.0
+                            "attributeValue": "400",
+                            "attributeValueCount": 332364.0
                         },
                         {
-                            "label": "504",
-                            "value": 332315.0
+                            "attributeValue": "504",
+                            "attributeValueCount": 332315.0
                         }
                     ]
                 },
@@ -23,20 +23,20 @@
                     "attributeName": "browser",
                     "buckets": [
                         {
-                            "label": "edge",
-                            "value": 249804.0
+                            "attributeValue": "edge",
+                            "attributeValueCount": 249804.0
                         },
                         {
-                            "label": "firefox",
-                            "value": 249578.0
+                            "attributeValue": "firefox",
+                            "attributeValueCount": 249578.0
                         },
                         {
-                            "label": "chrome",
-                            "value": 249489.0
+                            "attributeValue": "chrome",
+                            "attributeValueCount": 249489.0
                         },
                         {
-                            "label": "safari",
-                            "value": 249194.0
+                            "attributeValue": "safari",
+                            "attributeValueCount": 249194.0
                         }
                     ]
                 },
@@ -44,16 +44,16 @@
                     "attributeName": "device",
                     "buckets": [
                         {
-                            "label": "tablet",
-                            "value": 333215.0
+                            "attributeValue": "tablet",
+                            "attributeValueCount": 333215.0
                         },
                         {
-                            "label": "mobile",
-                            "value": 332586.0
+                            "attributeValue": "mobile",
+                            "attributeValueCount": 332586.0
                         },
                         {
-                            "label": "desktop",
-                            "value": 332264.0
+                            "attributeValue": "desktop",
+                            "attributeValueCount": 332264.0
                         }
                     ]
                 },
@@ -61,20 +61,20 @@
                     "attributeName": "country",
                     "buckets": [
                         {
-                            "label": "fr",
-                            "value": 249871.0
+                            "attributeValue": "fr",
+                            "attributeValueCount": 249871.0
                         },
                         {
-                            "label": "us",
-                            "value": 249662.0
+                            "attributeValue": "us",
+                            "attributeValueCount": 249662.0
                         },
                         {
-                            "label": "uk",
-                            "value": 249366.0
+                            "attributeValue": "uk",
+                            "attributeValueCount": 249366.0
                         },
                         {
-                            "label": "de",
-                            "value": 249166.0
+                            "attributeValue": "de",
+                            "attributeValueCount": 249166.0
                         }
                     ]
                 }
@@ -89,20 +89,20 @@
                     "attributeName": "browser",
                     "buckets": [
                         {
-                            "label": "unknown",
-                            "value": 1351.0
+                            "attributeValue": "unknown",
+                            "attributeValueCount": 1351.0
                         },
                         {
-                            "label": "safari",
-                            "value": 197.0
+                            "attributeValue": "safari",
+                            "attributeValueCount": 197.0
                         },
                         {
-                            "label": "edge",
-                            "value": 195.0
+                            "attributeValue": "edge",
+                            "attributeValueCount": 195.0
                         },
                         {
-                            "label": "firefox",
-                            "value": 192.0
+                            "attributeValue": "firefox",
+                            "attributeValueCount": 192.0
                         }
                     ]
                 },
@@ -110,20 +110,20 @@
                     "attributeName": "country",
                     "buckets": [
                         {
-                            "label": "fr",
-                            "value": 987.0
+                            "attributeValue": "fr",
+                            "attributeValueCount": 987.0
                         },
                         {
-                            "label": "uk",
-                            "value": 381.0
+                            "attributeValue": "uk",
+                            "attributeValueCount": 381.0
                         },
                         {
-                            "label": "us",
-                            "value": 367.0
+                            "attributeValue": "us",
+                            "attributeValueCount": 367.0
                         },
                         {
-                            "label": "de",
-                            "value": 200.0
+                            "attributeValue": "de",
+                            "attributeValueCount": 200.0
                         }
                     ]
                 },
@@ -131,16 +131,16 @@
                     "attributeName": "device",
                     "buckets": [
                         {
-                            "label": "desktop",
-                            "value": 695.0
+                            "attributeValue": "desktop",
+                            "attributeValueCount": 695.0
                         },
                         {
-                            "label": "mobile",
-                            "value": 638.0
+                            "attributeValue": "mobile",
+                            "attributeValueCount": 638.0
                         },
                         {
-                            "label": "tablet",
-                            "value": 602.0
+                            "attributeValue": "tablet",
+                            "attributeValueCount": 602.0
                         }
                     ]
                 },
@@ -148,16 +148,16 @@
                     "attributeName": "error_code",
                     "buckets": [
                         {
-                            "label": "404",
-                            "value": 691.0
+                            "attributeValue": "404",
+                            "attributeValueCount": 691.0
                         },
                         {
-                            "label": "504",
-                            "value": 632.0
+                            "attributeValue": "504",
+                            "attributeValueCount": 632.0
                         },
                         {
-                            "label": "400",
-                            "value": 612.0
+                            "attributeValue": "400",
+                            "attributeValueCount": 612.0
                         }
                     ]
                 }

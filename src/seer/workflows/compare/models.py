@@ -12,12 +12,16 @@ class MetricWeights(BaseModel):
 
 # Input models
 class StatsAttributeBucket(BaseModel):
-    label: str
-    value: float
+    # the value of the attribute like "chrome"
+    attributeValue: str
+    # the count of this attribute value in the cohort like 100.0
+    attributeValueCount: float
 
 
 class StatsAttribute(BaseModel):
+    # the name of the attribute like "browser"
     attributeName: str
+    # the buckets of the attribute like [StatsAttributeBucket(attributeValue="chrome", attributeValueCount=100.0), StatsAttributeBucket(attributeValue="firefox", attributeValueCount=50.0)]
     buckets: List[StatsAttributeBucket]
 
 
@@ -45,11 +49,15 @@ class CompareCohortsRequest(BaseModel):
 
 # Output models
 class AttributeResult(BaseModel):
+    # the name of the attribute like "browser"
     attributeName: str
+    # the most suspcious values of the attribute like ["chrome", "firefox", "edge"]
     attributeValues: List[str]
+    # the score measuring how suspcious the attribute is
     attributeScore: float
 
 
 # Response model
 class CompareCohortsResponse(BaseModel):
+    # the list of attributes and their most suspcious values
     results: List[AttributeResult]

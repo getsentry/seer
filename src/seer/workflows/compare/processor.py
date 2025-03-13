@@ -38,7 +38,8 @@ class DataProcessor:
                     {
                         "attributeName": attr.attributeName,
                         "distribution": {
-                            item.label: item.value / data.totalCount for item in attr.buckets
+                            item.attributeValue: item.attributeValueCount / data.totalCount
+                            for item in attr.buckets
                         },
                     }
                     for attr in data.attributeDistributions.attributes
