@@ -13,21 +13,21 @@ def scorer():
 
 
 @pytest.fixture
-def sample_dataset():
+def sampleDataset():
     return pd.DataFrame(
         {
-            "attribute_name": ["attr1", "attr2"],
-            "distribution_baseline": [{"A": 0.5, "B": 0.5}, {"X": 0.5, "Y": 0.5}],
-            "distribution_selection": [{"A": 0.8, "B": 0.2}, {"X": 0.7, "Y": 0.3}],
+            "attributeName": ["attr1", "attr2"],
+            "distributionBaseline": [{"A": 0.5, "B": 0.5}, {"X": 0.5, "Y": 0.5}],
+            "distributionSelection": [{"A": 0.8, "B": 0.2}, {"X": 0.7, "Y": 0.3}],
         }
     )
 
 
-def test_kl_metric_lambda(scorer):
+def test_klMetricLambda(scorer):
     baseline = pd.Series({"A": 0.5, "B": 0.5})
     selection = pd.Series({"A": 0.8, "B": 0.2})
 
-    result = scorer.kl_metric_lambda(baseline, selection)
+    result = scorer.klMetricLambda(baseline, selection)
 
     assert isinstance(result, pd.Series)
     assert len(result) == 2
@@ -35,57 +35,57 @@ def test_kl_metric_lambda(scorer):
     assert np.allclose(result.values, [-0.235, 0.458], atol=1e-3)
 
 
-def test_compute_metrics(scorer, sample_dataset):
-    weights = MetricWeights(kl_divergence_weight=0.7, entropy_weight=0.3)
+def test_computeMetrics(scorer, sampleDataset):
+    weights = MetricWeights(klDivergenceWeight=0.7, entropyWeight=0.3)
 
-    result = scorer.compute_metrics(sample_dataset, weights)
+    result = scorer.computeMetrics(sampleDataset, weights)
 
-    assert "RRF_score" in result.columns
-    assert result["RRF_score"].is_monotonic_decreasing
+    assert "rrfScore" in result.columns
+    assert result["rrfScore"].is_monotonic_decreasing
 
 
-def test_compute_kl_score(scorer, sample_dataset):
-    result = scorer.compute_kl_score(sample_dataset)
+def test_computeKLScore(scorer, sampleDataset):
+    result = scorer.computeKLScore(sampleDataset)
 
-    assert "kl_individual_scores" in result.columns
-    assert "kl_score" in result.columns
-    assert all(isinstance(s, dict) for s in result["kl_individual_scores"])
-    assert all(isinstance(s, float) for s in result["kl_score"])
+    assert "klIndividualScores" in result.columns
+    assert "klScore" in result.columns
+    assert all(isinstance(s, dict) for s in result["klIndividualScores"])
+    assert all(isinstance(s, float) for s in result["klScore"])
     # hardcoded values for KL
-    assert np.allclose(result["kl_score"].values, [0.2231, 0.0871], atol=1e-4)
+    assert np.allclose(result["klScore"].values, [0.2231, 0.0871], atol=1e-4)
 
 
-def test_compute_entropy_score(scorer, sample_dataset):
-    result = scorer.compute_entropy_score(sample_dataset)
-    assert "entropy_score" in result.columns
-    assert all(isinstance(s, float) for s in result["entropy_score"])
+def test_computeEntropyScore(scorer, sampleDataset):
+    result = scorer.computeEntropyScore(sampleDataset)
+    assert "entropyScore" in result.columns
+    assert all(isinstance(s, float) for s in result["entropyScore"])
     # hardcoded values for entropy
-    assert np.allclose(result["entropy_score"].values, [0.5004, 0.6109], atol=1e-4)
+    assert np.allclose(result["entropyScore"].values, [0.5004, 0.6109], atol=1e-4)
 
 
-def test_compute_rrf_score(scorer, sample_dataset):
-    weights = MetricWeights(kl_divergence_weight=0.7, entropy_weight=0.3)
+def test_computeRRFScore(scorer, sampleDataset):
+    weights = MetricWeights(klDivergenceWeight=0.7, entropyWeight=0.3)
 
     # First compute KL and entropy scores
-    dataset = scorer.compute_kl_score(sample_dataset)
-    dataset = scorer.compute_entropy_score(dataset)
+    dataset = scorer.computeKLScore(sampleDataset)
+    dataset = scorer.computeEntropyScore(dataset)
 
-    result = scorer.compute_rrf_score(dataset, weights)
+    result = scorer.computeRRFScore(dataset, weights)
 
-    assert "RRF_score" in result.columns
-    assert "KL_rank" not in result.columns  # Should be dropped
-    assert "entropy_rank" not in result.columns  # Should be dropped
-    assert result["RRF_score"].is_monotonic_decreasing
+    assert "rrfScore" in result.columns
+    assert "klRank" not in result.columns  # Should be dropped
+    assert "entropyRank" not in result.columns  # Should be dropped
+    assert result["rrfScore"].is_monotonic_decreasing
 
 
-def test_error_handling(scorer):
-    bad_dataset = pd.DataFrame(
+def test_errorHandling(scorer):
+    badDataset = pd.DataFrame(
         {
-            "attribute_name": ["attr1"],
-            "distribution_baseline": [{"A": "not_a_number"}],
-            "distribution_selection": [{"A": 0.5}],
+            "attributeName": ["attr1"],
+            "distributionBaseline": [{"A": "not_a_number"}],
+            "distributionSelection": [{"A": 0.5}],
         }
     )
 
     with pytest.raises(ScoringError):
-        scorer.compute_kl_score(bad_dataset)
+        scorer.computeKLScore(badDataset)

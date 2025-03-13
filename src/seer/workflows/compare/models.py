@@ -6,8 +6,8 @@ from seer.workflows.common.constants import DEFAULT_ENTROPY_WEIGHT, DEFAULT_KL_D
 
 
 class MetricWeights(BaseModel):
-    kl_divergence_weight: float = DEFAULT_KL_DIVERGENCE_WEIGHT
-    entropy_weight: float = DEFAULT_ENTROPY_WEIGHT
+    klDivergenceWeight: float = DEFAULT_KL_DIVERGENCE_WEIGHT
+    entropyWeight: float = DEFAULT_ENTROPY_WEIGHT
 
 
 # Input models
@@ -26,14 +26,14 @@ class AttributeDistributions(BaseModel):
 
 
 class StatsCohort(BaseModel):
-    total_count: float
+    totalCount: float
     attributeDistributions: AttributeDistributions
 
 
 class Options(BaseModel):
-    metric_weights: Optional[MetricWeights] = Field(default_factory=MetricWeights)
-    top_k_attributes: int | None = None
-    top_k_buckets: int | None = None
+    metricWeights: Optional[MetricWeights] = Field(default_factory=MetricWeights)
+    topKAttributes: int | None = None
+    topKBuckets: int | None = None
 
 
 # Request model

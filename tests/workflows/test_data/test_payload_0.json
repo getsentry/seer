@@ -80,7 +80,7 @@
                 }
             ]
         },
-        "total_count": 998065.0
+        "totalCount": 998065.0
     },
     "selection": {
         "attributeDistributions": {
@@ -163,10 +163,10 @@
                 }
             ]
         },
-        "total_count": 1935.0
+        "totalCount": 1935.0
     },
     "options": {
-        "top_k_attributes": 2,
-        "top_k_buckets": 3
+        "topKAttributes": 2,
+        "topKBuckets": 3
     }
 }

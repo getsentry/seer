@@ -24,20 +24,20 @@ class CompareService:
     _instance = None  # Class-level instance for singleton pattern
 
     @classmethod
-    def get_instance(cls):
+    def getInstance(cls) -> "CompareService":
         """Get or create the singleton instance of CompareService"""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
     def __init__(self):
-        """Private constructor - use get_instance() instead."""
+        """Private constructor - use getInstance() instead."""
         if self._instance is not None:
-            raise RuntimeError("Use get_instance() to access CompareService")
+            raise RuntimeError("Use getInstance() to access CompareService")
         self.processor = DataProcessor()
         self.scorer = CohortsMetricsScorer()
 
-    def compare_cohorts(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
+    def compareCohorts(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
         """
         Compare two cohorts and identify the most interesting attribute differences.
 
@@ -61,25 +61,25 @@ class CompareService:
         if request.options is None:
             request.options = Options()
 
-        dataset = self.processor.prepare_cohorts_data(request)
-        scored_dataset = self.scorer.compute_metrics(
-            dataset, request.options.metric_weights or MetricWeights()
+        dataset = self.processor.prepareCohortsData(request)
+        scoredDataset = self.scorer.computeMetrics(
+            dataset, request.options.metricWeights or MetricWeights()
         )
 
         results = [
             {
-                "attributeName": row["attribute_name"],
-                "attributeValues": list(row["distribution_selection"].keys())[
-                    : request.options.top_k_buckets
+                "attributeName": row["attributeName"],
+                "attributeValues": list(row["distributionSelection"].keys())[
+                    : request.options.topKBuckets
                 ],
-                "attributeScore": row["RRF_score"],
+                "attributeScore": row["rrfScore"],
             }
-            for _, row in scored_dataset.head(request.options.top_k_attributes).iterrows()
+            for _, row in scoredDataset.head(request.options.topKAttributes).iterrows()
         ]
         return CompareCohortsResponse(results=results)
 
 
-def compare_cohorts(data):
+def compareCohorts(data: CompareCohortsRequest) -> CompareCohortsResponse:
     """
     Function used by the API to compare cohorts.
 
@@ -93,4 +93,4 @@ def compare_cohorts(data):
         This is a simplified entry point that creates a new service instance for each call.
         The service is implemented as a singleton, so the same instance will be reused across calls.
     """
-    return CompareService.get_instance().compare_cohorts(data)
+    return CompareService.getInstance().compareCohorts(data)

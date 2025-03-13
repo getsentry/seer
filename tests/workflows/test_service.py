@@ -12,7 +12,7 @@ from seer.workflows.compare.models import (
     StatsAttributeBucket,
     StatsCohort,
 )
-from seer.workflows.compare.service import CompareService, compare_cohorts
+from seer.workflows.compare.service import CompareService, compareCohorts
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def mock_scorer():
 
 @pytest.fixture
 def service(mock_processor, mock_scorer):
-    instance = CompareService.get_instance()
+    instance = CompareService.getInstance()
     instance.processor = mock_processor
     instance.scorer = mock_scorer
     return instance
@@ -36,7 +36,7 @@ def service(mock_processor, mock_scorer):
 @pytest.fixture
 def sample_request():
     baseline = StatsCohort(
-        total_count=100,
+        totalCount=100,
         attributeDistributions=AttributeDistributions(
             attributes=[
                 StatsAttribute(
@@ -51,7 +51,7 @@ def sample_request():
     )
 
     selection = StatsCohort(
-        total_count=100,
+        totalCount=100,
         attributeDistributions=AttributeDistributions(
             attributes=[
                 StatsAttribute(
@@ -69,19 +69,19 @@ def sample_request():
         baseline=baseline,
         selection=selection,
         options=Options(
-            metric_weights=MetricWeights(kl_divergence_weight=0.7, entropy_weight=0.3),
-            top_k_attributes=5,
-            top_k_buckets=3,
+            metricWeights=MetricWeights(klDivergenceWeight=0.7, entropyWeight=0.3),
+            topKAttributes=5,
+            topKBuckets=3,
         ),
     )
 
 
 def test_singleton_pattern():
     # First instance
-    service1 = CompareService.get_instance()
+    service1 = CompareService.getInstance()
 
     # Second instance should be the same object
-    service2 = CompareService.get_instance()
+    service2 = CompareService.getInstance()
 
     assert service1 is service2
 
@@ -95,10 +95,10 @@ def test_sanity_check():
     Sanity check to ensure that the results make sense. The test payload contains the syntethic example from the tech spec in the Notion doc.
     """
     with open("tests/workflows/test_data/test_payload_0.json", "r") as f:
-        sample_request = CompareCohortsRequest(**json.load(f))
-    response = compare_cohorts(sample_request)
-    result_attributes = [attr.attributeName for attr in response.results]
+        sampleRequest = CompareCohortsRequest(**json.load(f))
+    response = compareCohorts(sampleRequest)
+    resultAttributes = [attr.attributeName for attr in response.results]
     # browser is the most distrub, followed by country
-    expected_attributes = ["browser", "country"]
+    expectedAttributes = ["browser", "country"]
 
-    assert result_attributes == expected_attributes
+    assert resultAttributes == expectedAttributes
