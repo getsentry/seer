@@ -1,10 +1,12 @@
 import textwrap
 import unittest
 
-from seer.automation.autofix.utils import find_original_snippet
-from seer.automation.autofix.utils import sanitize_branch_name
-from seer.automation.autofix.utils import generate_random_string
-from seer.automation.autofix.utils import VALID_RANDOM_SUFFIX_CHARS
+from seer.automation.autofix.utils import (
+    VALID_RANDOM_SUFFIX_CHARS,
+    find_original_snippet,
+    generate_random_string,
+    sanitize_branch_name,
+)
 
 
 class TestFindOriginalSnippet(unittest.TestCase):
