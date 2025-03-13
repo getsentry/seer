@@ -1,11 +1,10 @@
 import random
 
 from langfuse.decorators import observe
-
-# Define a separate character set for random string generation that excludes slashes and dashes
-VALID_RANDOM_SUFFIX_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 from rapidfuzz import fuzz, process
 
+
+VALID_RANDOM_SUFFIX_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/"
 
 
