@@ -255,7 +255,7 @@ class SentryExceptionEntry(BaseModel):
 class SentryEventData(TypedDict):
     title: str
     entries: list[dict]
-    tags: NotRequired[list[dict[str, str]]]
+    tags: NotRequired[list[dict[str, str | None]]]
 
 
 class ExceptionMechanism(TypedDict):
