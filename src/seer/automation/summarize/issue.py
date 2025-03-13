@@ -210,11 +210,8 @@ def run_fixability_score(request: GetFixabilityScoreRequest) -> SummarizeIssueRe
             fixability_score_version=1,
             is_fixable=is_fixable,
         )
-        db_state = issue_summary.to_db_state(request.group_id)
-        session.merge(db_state)
+        session.merge(issue_summary.to_db_state(request.group_id))
         session.commit()
-
-        issue_summary = IssueSummaryWithScores.from_db_state(db_state)
 
     return issue_summary.to_summarize_issue_response(request.group_id)
 
