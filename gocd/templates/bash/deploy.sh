@@ -2,7 +2,7 @@
 
 eval "$(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")"
 
-if [ "${SENTRY_REGION}" != "customer-4" ]; then
+if [ "${SENTRY_REGION}" != "customer-1" ] && [ "${SENTRY_REGION}" != "customer-2" ] && [ "${SENTRY_REGION}" != "customer-4" ] && [ "${SENTRY_REGION}" != "customer-7" ]; then
   /devinfra/scripts/k8s/k8stunnel \
     && /devinfra/scripts/k8s/k8s-deploy.py \
     --label-selector="service=seer" \
