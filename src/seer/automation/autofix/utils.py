@@ -3,6 +3,7 @@ import random
 from langfuse.decorators import observe
 from rapidfuzz import fuzz, process
 
+VALID_RANDOM_SUFFIX_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/"
 
 
@@ -116,12 +117,13 @@ def sanitize_branch_name(title: str) -> str:
     """
     kebab_case = title.replace(" ", "-").replace("_", "-").lower()
     sanitized = "".join(c for c in kebab_case if c in VALID_BRANCH_NAME_CHARS)
+    sanitized = sanitized.rstrip("/")
     return sanitized
 
 
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
-    return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
+    return "".join(random.choice(VALID_RANDOM_SUFFIX_CHARS) for _ in range(n))
 
 
 def remove_code_backticks(text: str) -> str:
