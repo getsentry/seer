@@ -1,32 +1,21 @@
-from dataclasses import dataclass
-
 import pandas as pd
 
-from seer.workflows.common.constants import DEFAULT_ALPHA, EMPTY_VALUE_ATTRIBUTE
-from seer.workflows.compare.models import CompareCohortsRequest, StatsCohort
+from seer.workflows.compare.models import CompareCohortsConfig, CompareCohortsRequest, StatsCohort
 from seer.workflows.exceptions import DataProcessingError
 
 
-@dataclass
 class DataProcessor:
     """
     Processes cohort data by normalizing and transforming attribute distributions.
-
-    Attributes:
-        emptyValueAttribute (str): Label used for missing values in distributions
-        alpha (float): Smoothing parameter for Laplace smoothing
     """
 
-    emptyValueAttribute: str = EMPTY_VALUE_ATTRIBUTE
-    alpha: float = DEFAULT_ALPHA
-
-    def preprocessCohort(self, data: StatsCohort) -> pd.DataFrame:
+    def _preprocessCohort(self, data: StatsCohort, config: CompareCohortsConfig) -> pd.DataFrame:
         """
         Preprocess a single cohort's attribute distributions into a normalized DataFrame with added unseen value
 
         Args:
             data: StatsCohort object containing attribute distributions
-
+            config: CompareCohortsConfig containing the configuration for the comparison
         Returns:
             pd.DataFrame: DataFrame with columns:
                 - attributeName: Name of the attribute
@@ -45,29 +34,31 @@ class DataProcessor:
                     for attr in data.attributeDistributions.attributes
                 ]
             )
-            df["distribution"] = df["distribution"].apply(lambda x: self.addUnseenValue(x))
+            df["distribution"] = df["distribution"].apply(lambda x: self._addUnseenValue(x, config))
             return df
         except Exception as e:
             raise DataProcessingError(f"Failed to preprocess cohort data: {str(e)}") from e
 
-    def addUnseenValue(self, distribution: dict[str, float]) -> dict[str, float]:
+    def _addUnseenValue(
+        self, distribution: dict[str, float], config: CompareCohortsConfig
+    ) -> dict[str, float]:
         """
         Add an unseen value to the distribution if the total probability is less than 1. This can happen when the total count of the attribute is less than the total count of the cohort.
 
         Args:
             distribution: Dictionary mapping labels to probability values
-
+            config: CompareCohortsConfig containing the configuration for the comparison
         Returns:
             Updated distribution with unseen value added if needed
         """
         totalSum = sum(distribution.values())
         # if the total probability is less than 1, add an unseen value to the distribution
         if totalSum < 1:
-            distribution[self.emptyValueAttribute] = 1 - totalSum
+            distribution[config.emptyValueAttribute] = 1 - totalSum
         return distribution
 
-    def transformDistribution(
-        self, distribution: pd.Series, allKeys: list[str]
+    def _transformDistribution(
+        self, distribution: pd.Series, allKeys: list[str], config: CompareCohortsConfig
     ) -> dict[str, float]:
         """
         Apply Laplace smoothing to a probability distribution. It's needed to avoid zero probabilities, which would break the KL divergence calculation.
@@ -75,7 +66,7 @@ class DataProcessor:
         Args:
             distribution: Series containing the probability distribution
             allKeys: List of all possible keys that should be in the distribution (extracted from the two cohorts)
-
+            config: CompareCohortsConfig containing the configuration for the comparison
         Returns:
             Dictionary containing the smoothed distribution with all keys present
 
@@ -89,7 +80,7 @@ class DataProcessor:
 
             # perform lapalce smoothing of the distribution
             # Add alpha to all values and renormalize
-            distribution = distribution + self.alpha
+            distribution = distribution + config.alphaLaplace
             return dict(distribution / distribution.sum())
         except Exception as e:
             raise DataProcessingError(f"Failed to transform distribution: {str(e)}") from e
@@ -100,7 +91,6 @@ class DataProcessor:
 
         Args:
             request: CompareCohortsRequest containing both baseline and selection cohorts
-
         Returns:
             pd.DataFrame: DataFrame with columns:
                 - attributeName: Name of the attribute
@@ -114,9 +104,9 @@ class DataProcessor:
             4. Applies Laplace smoothing to both distributions
             5. Cleans up intermediate calculation columns
         """
-
-        baseline = self.preprocessCohort(request.baseline)
-        selection = self.preprocessCohort(request.selection)
+        config = request.config
+        baseline = self._preprocessCohort(request.baseline, config)
+        selection = self._preprocessCohort(request.selection, config)
 
         dataset = baseline.merge(
             selection, on="attributeName", how="inner", suffixes=("Baseline", "Selection")
@@ -130,7 +120,9 @@ class DataProcessor:
 
         for col in ["distributionBaseline", "distributionSelection"]:
             dataset[col] = dataset.apply(
-                lambda row: self.transformDistribution(pd.Series(row[col]), row["commonKeys"]),
+                lambda row: self._transformDistribution(
+                    pd.Series(row[col]), row["commonKeys"], config
+                ),
                 axis=1,
             )
         # drop the commonKeys column as it's no longer needed

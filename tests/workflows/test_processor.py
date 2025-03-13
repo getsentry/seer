@@ -2,9 +2,9 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from seer.workflows.common.constants import EMPTY_VALUE_ATTRIBUTE
 from seer.workflows.compare.models import (
     AttributeDistributions,
+    CompareCohortsConfig,
     CompareCohortsRequest,
     StatsAttribute,
     StatsAttributeBucket,
@@ -17,6 +17,11 @@ from seer.workflows.exceptions import DataProcessingError
 @pytest.fixture
 def processor():
     return DataProcessor()
+
+
+@pytest.fixture
+def config():
+    return CompareCohortsConfig()
 
 
 @pytest.fixture
@@ -37,14 +42,14 @@ def sampleCohort():
     )
 
 
-def test_preprocessCohortSuccess(processor, sampleCohort):
-    result = processor.preprocessCohort(sampleCohort)
+def test_preprocessCohortSuccess(processor, sampleCohort, config):
+    result = processor._preprocessCohort(sampleCohort, config)
 
     expected = pd.DataFrame(
         [
             {
                 "attributeName": "test_attr",
-                "distribution": {"A": 0.5, "B": 0.3, EMPTY_VALUE_ATTRIBUTE: 0.2},
+                "distribution": {"A": 0.5, "B": 0.3, config.emptyValueAttribute: 0.2},
             }
         ]
     )
@@ -52,24 +57,24 @@ def test_preprocessCohortSuccess(processor, sampleCohort):
     assert_frame_equal(result, expected)
 
 
-def test_preprocessCohortError(processor):
+def test_preprocessCohortError(processor, config):
     with pytest.raises(DataProcessingError):
-        processor.preprocessCohort(None)
+        processor._preprocessCohort(None, config)
 
 
-def test_addUnseenValue(processor):
+def test_addUnseenValue(processor, config):
     distribution = {"A": 0.5, "B": 0.3}
-    result = processor.addUnseenValue(distribution)
+    result = processor._addUnseenValue(distribution, config)
 
-    assert result[EMPTY_VALUE_ATTRIBUTE] == pytest.approx(0.2)
+    assert result[config.emptyValueAttribute] == pytest.approx(0.2)
     assert sum(result.values()) == pytest.approx(1.0)
 
 
-def test_transformDistribution(processor):
+def test_transformDistribution(processor, config):
     distribution = pd.Series({"A": 0.5, "B": 0.3})
     allKeys = ["A", "B", "C"]
 
-    result = processor.transformDistribution(distribution, allKeys)
+    result = processor._transformDistribution(distribution, allKeys, config)
 
     # Check that all keys are present
     assert set(result.keys()) == set(allKeys)
@@ -81,7 +86,7 @@ def test_transformDistribution(processor):
     assert all(v > 0 for v in result.values())
 
 
-def test_prepareCohortsData(processor):
+def test_prepareCohortsData(processor, config):
     baseline = StatsCohort(
         totalCount=100,
         attributeDistributions=AttributeDistributions(
@@ -112,7 +117,7 @@ def test_prepareCohortsData(processor):
         ),
     )
 
-    request = CompareCohortsRequest(baseline=baseline, selection=selection)
+    request = CompareCohortsRequest(baseline=baseline, selection=selection, config=config)
     result = processor.prepareCohortsData(request)
 
     # Check the structure of the result

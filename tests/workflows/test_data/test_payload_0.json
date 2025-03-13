@@ -165,7 +165,7 @@
         },
         "totalCount": 1935.0
     },
-    "options": {
+    "config": {
         "topKAttributes": 2,
         "topKBuckets": 3
     }

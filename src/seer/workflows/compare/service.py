@@ -1,7 +1,6 @@
 from seer.workflows.compare.models import (
     CompareCohortsRequest,
     CompareCohortsResponse,
-    MetricWeights,
 )
 from seer.workflows.compare.processor import DataProcessor
 from seer.workflows.compare.scorer import CohortsMetricsScorer
@@ -20,14 +19,17 @@ class CompareService:
     allowing for flexible configuration and easier testing.
     """
 
-    def __init__(self, processor: DataProcessor = None, scorer: CohortsMetricsScorer = None):
-        """Private constructor - use getInstance() instead."""
+    def __init__(
+        self,
+        processor: DataProcessor | None = None,
+        scorer: CohortsMetricsScorer | None = None,
+    ):
         self.processor = processor or DataProcessor()
         self.scorer = scorer or CohortsMetricsScorer()
 
     def compareCohorts(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
         """
-        Compare two cohorts and identify the most interesting attribute differences.
+        Compare two cohorts and identify the most suspcious attribute differences.
 
         Args:
             request: CompareCohortsRequest containing:
@@ -48,29 +50,26 @@ class CompareService:
         """
 
         dataset = self.processor.prepareCohortsData(request)
-        scoredDataset = self.scorer.computeMetrics(
-            dataset, request.options.metricWeights or MetricWeights()
-        )
-
+        scoredDataset = self.scorer.computeMetrics(dataset, request.config)
         results = [
             {
                 "attributeName": row["attributeName"],
                 "attributeValues": list(row["distributionSelection"].keys())[
-                    : request.options.topKBuckets
+                    : request.config.topKBuckets
                 ],
                 "attributeScore": row["rrfScore"],
             }
-            for _, row in scoredDataset.head(request.options.topKAttributes).iterrows()
+            for _, row in scoredDataset.head(request.config.topKAttributes).iterrows()
         ]
         return CompareCohortsResponse(results=results)
 
 
-def compareCohorts(data: CompareCohortsRequest) -> CompareCohortsResponse:
+def compareCohorts(request: CompareCohortsRequest) -> CompareCohortsResponse:
     """
     Function used by the API to compare cohorts.
 
     Args:
-        data: CompareCohortsRequest containing cohort data and comparison options
+        request: CompareCohortsRequest containing cohort data and comparison options
 
     Returns:
         CompareCohortsResponse containing ranked attributes and their distinctive values
@@ -79,4 +78,4 @@ def compareCohorts(data: CompareCohortsRequest) -> CompareCohortsResponse:
         This is a simplified entry point that creates a new service instance for each call, since the service is cheap to create.
         In the future, if the service becomes more complex, we can consider implementing a singleton pattern.
     """
-    return CompareService().compareCohorts(data)
+    return CompareService().compareCohorts(request)

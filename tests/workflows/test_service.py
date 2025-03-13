@@ -5,9 +5,9 @@ import pytest
 
 from seer.workflows.compare.models import (
     AttributeDistributions,
+    CompareCohortsConfig,
     CompareCohortsRequest,
     MetricWeights,
-    Options,
     StatsAttribute,
     StatsAttributeBucket,
     StatsCohort,
@@ -65,7 +65,7 @@ def sample_request():
     return CompareCohortsRequest(
         baseline=baseline,
         selection=selection,
-        options=Options(
+        config=CompareCohortsConfig(
             metricWeights=MetricWeights(klDivergenceWeight=0.7, entropyWeight=0.3),
             topKAttributes=5,
             topKBuckets=3,

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from seer.workflows.compare.models import MetricWeights
+from seer.workflows.compare.models import CompareCohortsConfig
 from seer.workflows.compare.scorer import CohortsMetricsScorer
 from seer.workflows.exceptions import ScoringError
 
@@ -10,6 +10,11 @@ from seer.workflows.exceptions import ScoringError
 @pytest.fixture
 def scorer():
     return CohortsMetricsScorer()
+
+
+@pytest.fixture
+def config():
+    return CompareCohortsConfig()
 
 
 @pytest.fixture
@@ -27,7 +32,7 @@ def test_klMetricLambda(scorer):
     baseline = pd.Series({"A": 0.5, "B": 0.5})
     selection = pd.Series({"A": 0.8, "B": 0.2})
 
-    result = scorer.klMetricLambda(baseline, selection)
+    result = scorer._klMetricLambda(baseline, selection)
 
     assert isinstance(result, pd.Series)
     assert len(result) == 2
@@ -35,17 +40,15 @@ def test_klMetricLambda(scorer):
     assert np.allclose(result.values, [-0.235, 0.458], atol=1e-3)
 
 
-def test_computeMetrics(scorer, sampleDataset):
-    weights = MetricWeights(klDivergenceWeight=0.7, entropyWeight=0.3)
-
-    result = scorer.computeMetrics(sampleDataset, weights)
+def test_computeMetrics(scorer, sampleDataset, config):
+    result = scorer.computeMetrics(sampleDataset, config)
 
     assert "rrfScore" in result.columns
     assert result["rrfScore"].is_monotonic_decreasing
 
 
 def test_computeKLScore(scorer, sampleDataset):
-    result = scorer.computeKLScore(sampleDataset)
+    result = scorer._computeKLScore(sampleDataset)
 
     assert "klIndividualScores" in result.columns
     assert "klScore" in result.columns
@@ -56,21 +59,20 @@ def test_computeKLScore(scorer, sampleDataset):
 
 
 def test_computeEntropyScore(scorer, sampleDataset):
-    result = scorer.computeEntropyScore(sampleDataset)
+    result = scorer._computeEntropyScore(sampleDataset)
     assert "entropyScore" in result.columns
     assert all(isinstance(s, float) for s in result["entropyScore"])
     # hardcoded values for entropy
     assert np.allclose(result["entropyScore"].values, [0.5004, 0.6109], atol=1e-4)
 
 
-def test_computeRRFScore(scorer, sampleDataset):
-    weights = MetricWeights(klDivergenceWeight=0.7, entropyWeight=0.3)
+def test_computeRRFScore(scorer, sampleDataset, config):
 
     # First compute KL and entropy scores
-    dataset = scorer.computeKLScore(sampleDataset)
-    dataset = scorer.computeEntropyScore(dataset)
+    dataset = scorer._computeKLScore(sampleDataset)
+    dataset = scorer._computeEntropyScore(dataset)
 
-    result = scorer.computeRRFScore(dataset, weights)
+    result = scorer._computeRRFScore(dataset, config)
 
     assert "rrfScore" in result.columns
     assert "klRank" not in result.columns  # Should be dropped
@@ -88,4 +90,4 @@ def test_errorHandling(scorer):
     )
 
     with pytest.raises(ScoringError):
-        scorer.computeKLScore(badDataset)
+        scorer._computeKLScore(badDataset)

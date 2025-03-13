@@ -1,30 +1,21 @@
-from dataclasses import dataclass
-
 import pandas as pd
 from scipy.special import rel_entr
 from scipy.stats import entropy
 
-from seer.workflows.common.constants import DEFAULT_K_RRF
-from seer.workflows.compare.models import MetricWeights
+from seer.workflows.compare.models import CompareCohortsConfig
 from seer.workflows.exceptions import ScoringError
 
 
-@dataclass
 class CohortsMetricsScorer:
     """
     Scores cohort comparisons using multiple metrics including KL divergence and entropy.
 
     This class implements a reciprocal rank fusion (RRF) approach to combine multiple
     scoring metrics into a final ranking score.
-
-    Attributes:
-        k_rrf (int): Constant used in RRF calculation to mitigate the impact of high rankings
     """
 
-    kRRF: int = DEFAULT_K_RRF
-
     @staticmethod
-    def klMetricLambda(baseline, selection):
+    def _klMetricLambda(baseline: pd.Series, selection: pd.Series) -> pd.Series:
         """
         Calculate the Kullback-Leibler divergence between baseline and selection distributions.
 
@@ -40,13 +31,13 @@ class CohortsMetricsScorer:
         """
         return rel_entr(pd.Series(baseline), pd.Series(selection))
 
-    def computeMetrics(self, dataset: pd.DataFrame, metricWeights: MetricWeights) -> pd.DataFrame:
+    def computeMetrics(self, dataset: pd.DataFrame, config: CompareCohortsConfig) -> pd.DataFrame:
         """
         Compute all metrics for the dataset and combine them using RRF.
 
         Args:
             dataset: DataFrame containing baseline and selection distributions
-            metricWeights: Weights to use when combining KL divergence and entropy scores
+            config: Config for the comparison
 
         Returns:
             DataFrame with added columns for KL scores, entropy scores, and final RRF score,
@@ -58,13 +49,13 @@ class CohortsMetricsScorer:
             3. Combines scores using RRF with provided weights
         """
         dataset = (
-            dataset.pipe(self.computeKLScore)
-            .pipe(self.computeEntropyScore)
-            .pipe(self.computeRRFScore, metricWeights)
+            dataset.pipe(self._computeKLScore)
+            .pipe(self._computeEntropyScore)
+            .pipe(self._computeRRFScore, config)
         )
         return dataset
 
-    def computeKLScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
+    def _computeKLScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
         Compute KL divergence scores for each attribute. Higher KL divergence scores indicate greater difference between distributions.
 
@@ -82,7 +73,7 @@ class CohortsMetricsScorer:
         try:
             # these scores are needed to rank the values within each attribute
             dataset["klIndividualScores"] = dataset.apply(
-                lambda row: self.klMetricLambda(
+                lambda row: self._klMetricLambda(
                     row["distributionBaseline"], row["distributionSelection"]
                 ).to_dict(),
                 axis=1,
@@ -93,7 +84,7 @@ class CohortsMetricsScorer:
         except Exception as e:
             raise ScoringError(f"Failed to compute KL divergence scores: {str(e)}") from e
 
-    def computeEntropyScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
+    def _computeEntropyScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
         Compute entropy scores for the selection distribution. We prefer lower entropy scores, as they indicate more concentrated (less uniform) distributions.
 
@@ -115,14 +106,13 @@ class CohortsMetricsScorer:
         except Exception as e:
             raise ScoringError(f"Failed to compute entropy scores: {str(e)}") from e
 
-    def computeRRFScore(self, dataset: pd.DataFrame, metricWeights: MetricWeights) -> pd.DataFrame:
+    def _computeRRFScore(self, dataset: pd.DataFrame, config: CompareCohortsConfig) -> pd.DataFrame:
         """
         Compute the final RRF score combining KL divergence and entropy rankings.
 
         Args:
             dataset: DataFrame containing KL and entropy scores
-            metricWeights: Weights for combining KL divergence and entropy rankings
-
+            config: CompareCohortsConfig containing the configuration for the comparison
         Returns:
             DataFrame with added columns:
                 - klRank: RRF-transformed KL divergence rank
@@ -137,14 +127,14 @@ class CohortsMetricsScorer:
         """
         try:
             dataset["klRank"] = 1 / (
-                self.kRRF + dataset["klScore"].rank(method="min", ascending=False)
+                config.kRRF + dataset["klScore"].rank(method="min", ascending=False)
             )
             dataset["entropyRank"] = 1 / (
-                self.kRRF + dataset["entropyScore"].rank(method="min", ascending=True)
+                config.kRRF + dataset["entropyScore"].rank(method="min", ascending=True)
             )
             dataset["rrfScore"] = (
-                metricWeights.klDivergenceWeight * dataset["klRank"]
-                + metricWeights.entropyWeight * dataset["entropyRank"]
+                config.metricWeights.klDivergenceWeight * dataset["klRank"]
+                + config.metricWeights.entropyWeight * dataset["entropyRank"]
             )
             # drop intermediate rank columns as they are no longer needed
             dataset.drop(columns=["klRank", "entropyRank"], inplace=True)
