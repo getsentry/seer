@@ -76,6 +76,7 @@ class CodingPrompts:
         custom_solution: str | None = None,
         auto_solution: list[SolutionTimelineEvent] | None = None,
         mode: Literal["all", "fix", "test"] = "fix",
+        has_test: bool = False,
         event_details: EventDetails | None = None,
         root_cause: RootCauseAnalysisItem | str | None = None,
     ):
@@ -128,7 +129,7 @@ class CodingPrompts:
             ),
             has_test_guidelines=(
                 "- Examine any existing tests to determine existing testing patterns in the codebase and if there is an appropriate test suite to add your test to. If not, create a new test. Make sure that your test case fits in well with the codebase."
-                if mode == "test" or mode == "all"
+                if mode == "test" or mode == "all" or has_test
                 else ""
             ),
             steps_example_str=CodeChangesPromptXml.get_example().to_prompt_str(),

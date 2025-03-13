@@ -334,12 +334,17 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             memory = request.initial_memory
             custom_solution = request.solution if isinstance(request.solution, str) else None
             auto_solution = request.solution if isinstance(request.solution, list) else None
+            has_test = (
+                any(step.timeline_item_type == "repro_test" for step in request.solution)
+                if isinstance(request.solution, list)
+                else False
+            )
 
             is_obvious = False
             if not memory:
                 memory = self._prefill_initial_memory(request=request)
-                is_obvious = request.mode == "fix" and self._is_obvious(
-                    request, memory
+                is_obvious = (
+                    not has_test and request.mode == "fix" and self._is_obvious(request, memory)
                 )  # coding is never obvious if we need to write a test
             else:
                 is_obvious = self._is_feedback_obvious(memory)
@@ -358,6 +363,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                         custom_solution=custom_solution,
                         auto_solution=auto_solution,
                         mode=request.mode,
+                        has_test=has_test,
                         root_cause=request.root_cause,
                         event_details=request.event_details,
                     ),

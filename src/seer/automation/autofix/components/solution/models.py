@@ -19,7 +19,9 @@ class SolutionTimelineEvent(BaseModel):
     code_snippet_and_analysis: str | None = None
     relevant_code_file: RelevantCodeFile | None = None
     is_most_important_event: bool = False
-    timeline_item_type: Literal["internal_code", "human_instruction"] = "internal_code"
+    timeline_item_type: Literal["internal_code", "human_instruction", "repro_test"] = (
+        "internal_code"
+    )
     is_active: bool = True
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -34,6 +36,7 @@ class SolutionTimelineEvent(BaseModel):
             and "timeline_item_type" in data
             and data["timeline_item_type"] != "internal_code"
             and data["timeline_item_type"] != "human_instruction"
+            and data["timeline_item_type"] != "repro_test"
         ):
             data["timeline_item_type"] = "internal_code"
         return data
