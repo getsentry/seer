@@ -2,7 +2,6 @@ from seer.workflows.compare.models import (
     CompareCohortsRequest,
     CompareCohortsResponse,
     MetricWeights,
-    Options,
 )
 from seer.workflows.compare.processor import DataProcessor
 from seer.workflows.compare.scorer import CohortsMetricsScorer
@@ -58,8 +57,6 @@ class CompareService:
             3. Computes comparison metrics and ranks attributes
             4. Extracts top K attributes and their most distinctive values
         """
-        if request.options is None:
-            request.options = Options()
 
         dataset = self.processor.prepareCohortsData(request)
         scoredDataset = self.scorer.computeMetrics(

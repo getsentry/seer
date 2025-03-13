@@ -40,7 +40,7 @@ class Options(BaseModel):
 class CompareCohortsRequest(BaseModel):
     baseline: StatsCohort
     selection: StatsCohort
-    options: Options | None = None
+    options: Options = Field(default_factory=Options)
 
 
 # Output models
