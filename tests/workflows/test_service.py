@@ -16,21 +16,18 @@ from seer.workflows.compare.service import CompareService, compareCohorts
 
 
 @pytest.fixture
-def mock_processor():
+def mockProcessor():
     return Mock()
 
 
 @pytest.fixture
-def mock_scorer():
+def mockScorer():
     return Mock()
 
 
 @pytest.fixture
-def service(mock_processor, mock_scorer):
-    instance = CompareService.getInstance()
-    instance.processor = mock_processor
-    instance.scorer = mock_scorer
-    return instance
+def service(mockProcessor, mockScorer):
+    return CompareService(mockProcessor, mockScorer)
 
 
 @pytest.fixture
@@ -74,20 +71,6 @@ def sample_request():
             topKBuckets=3,
         ),
     )
-
-
-def test_singleton_pattern():
-    # First instance
-    service1 = CompareService.getInstance()
-
-    # Second instance should be the same object
-    service2 = CompareService.getInstance()
-
-    assert service1 is service2
-
-    # Direct instantiation should raise error
-    with pytest.raises(RuntimeError):
-        CompareService()
 
 
 def test_sanity_check():

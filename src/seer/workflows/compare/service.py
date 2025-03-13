@@ -20,21 +20,10 @@ class CompareService:
     allowing for flexible configuration and easier testing.
     """
 
-    _instance = None  # Class-level instance for singleton pattern
-
-    @classmethod
-    def getInstance(cls) -> "CompareService":
-        """Get or create the singleton instance of CompareService"""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-
-    def __init__(self):
+    def __init__(self, processor: DataProcessor = None, scorer: CohortsMetricsScorer = None):
         """Private constructor - use getInstance() instead."""
-        if self._instance is not None:
-            raise RuntimeError("Use getInstance() to access CompareService")
-        self.processor = DataProcessor()
-        self.scorer = CohortsMetricsScorer()
+        self.processor = processor or DataProcessor()
+        self.scorer = scorer or CohortsMetricsScorer()
 
     def compareCohorts(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
         """
@@ -87,7 +76,7 @@ def compareCohorts(data: CompareCohortsRequest) -> CompareCohortsResponse:
         CompareCohortsResponse containing ranked attributes and their distinctive values
 
     Note:
-        This is a simplified entry point that creates a new service instance for each call.
-        The service is implemented as a singleton, so the same instance will be reused across calls.
+        This is a simplified entry point that creates a new service instance for each call, since the service is cheap to create.
+        In the future, if the service becomes more complex, we can consider implementing a singleton pattern.
     """
-    return CompareService.getInstance().compareCohorts(data)
+    return CompareService().compareCohorts(data)
