@@ -193,7 +193,7 @@ class AutofixEventManager:
                 )
                 for solution_step in solution_output.solution_steps
             ]
-            solution_step.solution.append(
+            solution_step.solution.append(  # type: ignore[union-attr]
                 SolutionTimelineEvent(
                     title="Add a unit test that reproduces the issue.",
                     code_snippet_and_analysis=None,
