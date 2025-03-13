@@ -60,7 +60,7 @@ class TestSummarizeIssue:
             title="Multiple Issues in Session: Shared Resource Failure?",
             whats_wrong="**red-timothy-sandwich** issue occurred.",
             session_related_issues="Other issues: **cyan-vincent-banana** and **green-fred-tennis** occurred in the same session.",
-            possible_cause="Perhaps a shared resource or dependency is failing, affecting multiple components.",
+            possible_cause="Perhaps a **shared resource** or **dependency** is failing, affecting multiple features.",
             scores=SummarizeIssueScores(
                 possible_cause_confidence=0.4,
                 possible_cause_novelty=0.75,
