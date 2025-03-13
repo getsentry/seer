@@ -5,13 +5,8 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
-from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.is_root_cause_obvious import (
-    IsRootCauseObviousComponent,
-    IsRootCauseObviousRequest,
-)
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
     RootCauseAnalysisOutput,
@@ -35,17 +30,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     def invoke(
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
     ) -> RootCauseAnalysisOutput:
-        is_obvious = (
-            IsRootCauseObviousComponent(self.context).invoke(
-                IsRootCauseObviousRequest(
-                    event_details=request.event_details,
-                    instruction=request.instruction,
-                )
-            )
-            if not request.initial_memory
-            else None
-        )
-
         with BaseTools(self.context) as tools:
             state = self.context.state.get()
 
@@ -53,11 +37,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             unreadable_repos = state.unreadable_repos
 
             agent = AutofixAgent(
-                tools=(
-                    tools.get_tools(can_access_repos=bool(readable_repos))
-                    if not (is_obvious and is_obvious.is_root_cause_clear)
-                    else None
-                ),
+                tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
                 config=AgentConfig(
                     interactive=True,
                 ),
@@ -69,66 +49,41 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             try:
-                has_tools = not (is_obvious and is_obvious.is_root_cause_clear)
-                if has_tools:  # run context gatherer if not obvious
-                    response = agent.run(
-                        run_config=RunConfig(
-                            model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
-                            prompt=(
-                                RootCauseAnalysisPrompts.format_default_msg(
-                                    event=request.event_details.format_event(),
-                                    summary=request.summary,
-                                    code_map=request.profile,
-                                    instruction=request.instruction,
-                                    repos_str=repos_str,
-                                )
-                                if not request.initial_memory
-                                else None
-                            ),
-                            system_prompt=RootCauseAnalysisPrompts.format_system_msg(
-                                has_tools=True
-                            ),
-                            max_iterations=64,
-                            memory_storage_key="root_cause_analysis",
-                            run_name="Root Cause Discovery",
-                            reasoning_effort="low",
-                            temperature=1.0,
-                            max_tokens=32000,
+                response = agent.run(
+                    run_config=RunConfig(
+                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        prompt=(
+                            RootCauseAnalysisPrompts.format_default_msg(
+                                event=request.event_details.format_event(),
+                                summary=request.summary,
+                                code_map=request.profile,
+                                instruction=request.instruction,
+                                repos_str=repos_str,
+                            )
+                            if not request.initial_memory
+                            else None
                         ),
-                    )
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
+                        max_iterations=64,
+                        memory_storage_key="root_cause_analysis",
+                        run_name="Root Cause Discovery",
+                        reasoning_effort="low",
+                        temperature=1.0,
+                        max_tokens=32000,
+                    ),
+                )
 
-                    if not response:
-                        self.context.store_memory("root_cause_analysis", agent.memory)
-                        return RootCauseAnalysisOutput(
-                            causes=[],
-                            termination_reason="Something went wrong when Autofix was running.",
-                        )
+                if not response:
+                    self.context.store_memory("root_cause_analysis", agent.memory)
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
 
                 self.context.event_manager.add_log("Simulating profound thought...")
 
                 # reason to propose final root cause
                 agent.tools = []
-                agent.memory = (
-                    agent.memory
-                    if has_tools
-                    else (
-                        [
-                            Message(
-                                role="user",
-                                content=RootCauseAnalysisPrompts.format_default_msg(
-                                    event=request.event_details.format_event(),
-                                    summary=request.summary,
-                                    code_map=request.profile,
-                                    instruction=request.instruction,
-                                    repos_str=repos_str,
-                                    has_tools=False,
-                                ),
-                            )
-                        ]
-                        if not request.initial_memory
-                        else request.initial_memory
-                    )
-                )
                 response = agent.run(
                     run_config=RunConfig(
                         model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),

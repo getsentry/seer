@@ -8,16 +8,12 @@ from seer.automation.summarize.issue import IssueSummary
 
 class RootCauseAnalysisPrompts:
     @staticmethod
-    def format_system_msg(has_tools: bool = True):
+    def format_system_msg():
         return textwrap.dedent(
-            f"""\
+            """\
             You are an exceptional AI system that is amazing at researching bugs in codebases.
 
-            {
-                "You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information."
-                if has_tools
-                else ""
-            }
+            You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information.
 
             # Guidelines:
             - Your job is to simply gather all information needed to understand what happened, not to propose fixes.
@@ -33,7 +29,6 @@ class RootCauseAnalysisPrompts:
         instruction: Optional[str] = None,
         summary: Optional[IssueSummary] = None,
         code_map: Optional[Profile] = None,
-        has_tools: bool = True,
     ):
         return textwrap.dedent(
             """\
@@ -51,8 +46,6 @@ class RootCauseAnalysisPrompts:
         ).format(
             explore_msg=(
                 "Gather all information needed to understand what happened, from the entry point of the code to the error."
-                if has_tools
-                else "Figure out how and why this issue happened, from the entry point of the code to the error."
             ),
             error_str=event,
             repos_str=repos_str,
