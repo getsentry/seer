@@ -62,8 +62,8 @@ class TestSummarizeIssue:
             session_related_issues="Other issues: **cyan-vincent-banana** and **green-fred-tennis** occurred in the same session.",
             possible_cause="Perhaps a **shared resource** or **dependency** is failing, affecting multiple features.",
             scores=SummarizeIssueScores(
-                possible_cause_confidence=0.4,
-                possible_cause_novelty=0.75,
+                possible_cause_confidence=0.5,
+                possible_cause_novelty=0.8,
                 fixability_score=None,
                 fixability_score_version=None,
                 is_fixable=None,
