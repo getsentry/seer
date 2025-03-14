@@ -193,6 +193,16 @@ class AutofixEventManager:
                 )
                 for solution_step in solution_output.solution_steps
             ]
+            solution_step.solution.append(  # type: ignore[union-attr]
+                SolutionTimelineEvent(
+                    title="Add a unit test that reproduces the issue.",
+                    code_snippet_and_analysis=None,
+                    relevant_code_file=None,
+                    is_most_important_event=False,
+                    is_active=False,
+                    timeline_item_type="repro_test",
+                )
+            )
             solution_step.description = solution_output.summary
             cur.status = AutofixStatus.NEED_MORE_INFORMATION
 
