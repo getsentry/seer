@@ -418,6 +418,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
             session.commit()
 
+    @sentry_sdk.trace
     def combine_anomalies(
         self,
         anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,

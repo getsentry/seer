@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import sentry_sdk
 from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.detectors.mp_cascading_scorer import MPCascadingScorer
@@ -74,6 +75,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         description="The ProphetScorer to use for scoring against the prophet model",
     )
 
+    @sentry_sdk.trace
     @inject
     def batch_score(
         self,

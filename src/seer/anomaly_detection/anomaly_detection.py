@@ -63,6 +63,7 @@ class AnomalyDetection(BaseModel):
         )
         stream.update(6.0)
 
+    @sentry_sdk.trace
     def _batch_detect_internal(
         self,
         ts_internal: TimeSeries,
@@ -70,13 +71,19 @@ class AnomalyDetection(BaseModel):
         window_size: int | None,
         algo_config: AlgoConfig,
         time_budget_ms: int | None,
+        prophet_forecast_len_days: float | None = None,
     ) -> Tuple[MPTimeSeriesAnomaliesSingleWindow, pd.DataFrame]:
         logger.info(
             f"Detecting anomalies for time series with {len(ts_internal.timestamps)} datapoints"
         )
         batch_detector = MPBatchAnomalyDetector()
         prophet_detector = ProphetAnomalyDetector()
-        forecast_len = algo_config.prophet_forecast_len * (60 // config.time_period)
+        forecast_len = (
+            prophet_forecast_len_days * 24 * 60 // config.time_period
+            if prophet_forecast_len_days
+            else algo_config.prophet_forecast_len * (60 // config.time_period)
+        )
+        forecast_len = int(forecast_len)
         prophet_df = prophet_detector.predict(
             ts_internal.timestamps,
             ts_internal.values,
@@ -91,9 +98,7 @@ class AnomalyDetection(BaseModel):
             algo_config=algo_config,
             window_size=window_size,
             prophet_df=prophet_df,
-            time_budget_ms=(
-                time_budget_ms if time_budget_ms else None
-            ),  # Time budget is split between the two detection calls
+            time_budget_ms=time_budget_ms,
         )
         return anomalies, prophet_df
 
@@ -358,7 +363,6 @@ class AnomalyDetection(BaseModel):
         Returns:
         Tuple with input timeseries and identified anomalies
         """
-
         min_len = self._min_required_timesteps(ad_config.time_period)
         if len(ts_with_history.history) < min_len:
             logger.warning(
@@ -419,6 +423,7 @@ class AnomalyDetection(BaseModel):
                 window_size=None,
                 time_budget_ms=time_budget_ms,
                 algo_config=algo_config,
+                prophet_forecast_len_days=algo_config.combo_detection_prophet_batching_interval_days,
             )
 
             if initial_history:

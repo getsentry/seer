@@ -87,6 +87,24 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             prophet_df=prophet_df,
         )
 
+    @sentry_sdk.trace
+    def _stumpy_mp(
+        self,
+        ts_values: npt.NDArray[np.float64],
+        window_size: int,
+        algo_config: AlgoConfig,
+        mp_utils: MPUtils,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        mp = stumpy.stump(
+            ts_values,
+            m=max(3, window_size),
+            ignore_trivial=algo_config.mp_ignore_trivial,
+            normalize=False,  # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+        )
+
+        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        return mp, mp_dist
+
     @inject
     @sentry_sdk.trace
     def _compute_matrix_profile(
@@ -125,15 +143,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if window_size <= 0:
             raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
-        mp = stumpy.stump(
-            ts_values,
-            m=max(3, window_size),
-            ignore_trivial=algo_config.mp_ignore_trivial,
-            normalize=False,
-        )
-
-        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
-        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        mp, mp_dist = self._stumpy_mp(ts_values, window_size, algo_config, mp_utils)
 
         flags_and_scores = scorer.batch_score(
             values=ts_values,
