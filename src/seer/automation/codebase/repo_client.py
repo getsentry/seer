@@ -796,11 +796,17 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
 
-    def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
+    def post_unit_test_reference_to_original_pr(
+        self,
+        original_pr_url: str,
+        unit_test_pr_url: str,
+        type: str = RepoClientType.CODECOV_UNIT_TEST,
+    ):
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        comment = f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        gh_app = "Sentry" if type == RepoClientType.CODECOV_UNIT_TEST else "Codecov"
+        comment = f"{gh_app} has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
@@ -811,7 +817,8 @@ class RepoClient:
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        gh_app = "Sentry" if type == RepoClientType.CODECOV_UNIT_TEST else "Codecov"
+        comment = f"{gh_app} has determined that unit tests are not necessary for this PR."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
@@ -849,3 +856,40 @@ class RepoClient:
             start_line=comment.get("start_line", GithubObject.NotSet),
         )
         return review_comment.html_url
+
+    def push_new_commit_to_pr(
+        self,
+        pr,
+        commit_message: str,
+        file_patches: list[FilePatch] | None = None,
+        file_changes: list[FileChange] | None = None,
+    ):
+        if not file_patches and not file_changes:
+            raise ValueError("Must provide file_patches or file_changes")
+        branch_name = pr.head.ref
+        tree_elements = []
+        if file_patches:
+            for patch in file_patches:
+                element = self.process_one_file_for_git_commit(branch_ref=branch_name, patch=patch)
+                if element:
+                    tree_elements.append(element)
+        elif file_changes:
+            for change in file_changes:
+                element = self.process_one_file_for_git_commit(
+                    branch_ref=branch_name, change=change
+                )
+                if element:
+                    tree_elements.append(element)
+        if not tree_elements:
+            logger.warning("No valid changes to commit")
+            return None
+        latest_sha = self.get_branch_head_sha(branch_name)
+        latest_commit = self.repo.get_git_commit(latest_sha)
+        base_tree = latest_commit.tree
+        new_tree = self.repo.create_git_tree(tree_elements, base_tree)
+        new_commit = self.repo.create_git_commit(
+            message=commit_message, tree=new_tree, parents=[latest_commit]
+        )
+        branch_ref = self.repo.get_git_ref(f"heads/{branch_name}")
+        branch_ref.edit(sha=new_commit.sha)
+        return new_commit
