@@ -264,7 +264,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                             "stream_detection_took_too_long",
                             level="error",
                         )
-                        raise ServerError("Stream detection took too long")
+                        raise ServerError(
+                            f"Stream detection took too long. Time taken: {time_elapsed}, Time allocated: {time_allocated}"
+                        )
 
                 # Update the stumpi stream processor with new data
                 stream.update(cur_val)

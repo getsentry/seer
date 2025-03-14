@@ -595,7 +595,7 @@ class AnomalyDetection(BaseModel):
                 level="error",
             )
             raise ServerError(
-                "Batch detection took too long"
+                f"Batch detection took too long. Time taken: {time_elapsed}, Time allocated: {time_allocated}"
             )  # Abort without saving to avoid data going out of sync with alerting system.
 
         saved_alert_id = alert_data_accessor.save_alert(
