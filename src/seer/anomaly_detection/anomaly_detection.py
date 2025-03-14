@@ -391,6 +391,9 @@ class AnomalyDetection(BaseModel):
         max_stream_detection_len = (
             algo_config.max_stream_days_for_combo_detection * num_rows_per_day
         )
+        max_batch_detection_len = (
+            algo_config.max_batch_days_for_combo_detection[time_period] * num_rows_per_day
+        )
         if orig_curr_len > max_stream_detection_len:
             trim_current_by = orig_curr_len - max_stream_detection_len
             logger.info(
@@ -400,6 +403,13 @@ class AnomalyDetection(BaseModel):
                 history=historic, current=current, num_rows=trim_current_by
             )
 
+        if len(historic.values) > max_batch_detection_len:
+            trim_historic_by = len(historic.values) - max_batch_detection_len
+            logger.info(
+                f"Limiting batch detection to last {max_batch_detection_len} datapoints of the original {len(historic.values)} datapoints."
+            )
+            historic.values = historic.values[trim_historic_by:]
+            historic.timestamps = historic.timestamps[trim_historic_by:]
         # Adjust time budget based on the number of rows in the current time series
         time_budget_ms = self._adjust_time_budget_for_combo_detection(
             time_budget_ms, len(current.values), prophet_batching_num_rows
