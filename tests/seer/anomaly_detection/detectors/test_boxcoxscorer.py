@@ -1,12 +1,13 @@
 from unittest import mock
 
 import numpy as np
+import pandas as pd
 import pytest
 from scipy import stats
 
 from seer.anomaly_detection.detectors.mp_boxcox_scorer import MPBoxCoxScorer
 from seer.anomaly_detection.models import AnomalyDetectionConfig
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 
 
 @pytest.fixture
@@ -188,3 +189,28 @@ class TestBoxCoxScorer:
 
         # High sensitivity should detect more anomalies than low sensitivity
         assert high_anomaly_count >= low_anomaly_count
+
+    def test_time_budget_exceeded(self, box_cox_scorer):
+        # Test different sensitivity levels
+        values = np.random.normal(10, 2, 10000)
+        timestamps = pd.date_range(
+            start="2024-01-01", periods=len(values), freq="15min", tz="UTC", unit="s"
+        ).values.astype(np.int64)
+        mp_dist = np.zeros_like(values)
+
+        # Test high sensitivity
+        high_config = AnomalyDetectionConfig(
+            time_period=15,
+            sensitivity="high",
+            direction="both",
+            expected_seasonality="auto",
+        )
+        with pytest.raises(ServerError):
+            box_cox_scorer.batch_score(
+                values=values,
+                timestamps=timestamps,
+                mp_dist=mp_dist,
+                ad_config=high_config,
+                window_size=10,
+                time_budget_ms=10,
+            )
