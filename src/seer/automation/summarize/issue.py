@@ -14,7 +14,6 @@ from seer.automation.summarize.models import (
     SummarizeIssueResponse,
     SummarizeIssueScores,
 )
-
 from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
 
