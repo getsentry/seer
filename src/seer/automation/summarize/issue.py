@@ -6,7 +6,7 @@ from scipy.spatial.distance import cosine
 from scipy.special import softmax
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.agent.embeddings import GoogleProviderEmbeddings
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings, cosine_similarity
 from seer.automation.models import EventDetails
 from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
@@ -14,7 +14,7 @@ from seer.automation.summarize.models import (
     SummarizeIssueResponse,
     SummarizeIssueScores,
 )
-from seer.automation.utils import cosine_similarity
+
 from seer.db import DbIssueSummary, Session
 from seer.dependency_injection import inject, injected
 
@@ -41,6 +41,8 @@ class IssueSummaryWithScores(IssueSummary):
             fixability_score=db_state.fixability_score,
             fixability_score_version=db_state.fixability_score_version,
             is_fixable=db_state.is_fixable,
+            possible_cause_confidence=item.scores.possible_cause_confidence,
+            possible_cause_novelty=item.scores.possible_cause_novelty,
         )
         return item
 

@@ -301,10 +301,3 @@ def batch_texts_by_token_count(
     if batch:
         # The last batch didn't hit max_tokens. It needs to be yielded.
         yield batch
-
-
-def cosine_similarity(embeddings_a, embeddings_b):
-    dot_product = embeddings_a @ embeddings_b.T
-    norm_a = np.linalg.norm(embeddings_a, axis=1, keepdims=True)
-    norm_b = np.linalg.norm(embeddings_b, axis=1, keepdims=True).T
-    return dot_product / (norm_a @ norm_b)
