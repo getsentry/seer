@@ -92,6 +92,8 @@ from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.smoke_test import check_smoke_test
 from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
+from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
+from seer.workflows.compare.service import compareCohorts
 
 logger = logging.getLogger(__name__)
 
@@ -382,6 +384,13 @@ def delete_alert__data_endpoint(
     except ClientError as e:
         response = DeleteAlertDataResponse(success=False, message=str(e))
     return response
+
+
+@json_api(blueprint, "/v1/workflows/compare-cohorts")
+def compare_cohorts_endpoint(
+    data: CompareCohortsRequest,
+) -> CompareCohortsResponse:
+    return compareCohorts(data)
 
 
 @blueprint.route("/health/live", methods=["GET"])
