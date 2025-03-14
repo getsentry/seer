@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from seer.workflows.compare.models import (
     AttributeDistributions,
@@ -128,3 +128,16 @@ def test_prepareCohortsData(processor, config):
     # Check that distributions are properly normalized
     assert all(sum(d.values()) == pytest.approx(1.0) for d in result["distributionBaseline"])
     assert all(sum(d.values()) == pytest.approx(1.0) for d in result["distributionSelection"])
+    # approximate equality due to Laplace smoothing
+    expected_baseline = pd.Series({"A": 0.5, "B": 0.5, "C": 0.0})
+    expected_selection = pd.Series({"A": 0.0, "B": 0.8, "C": 0.2})
+    assert_series_equal(
+        pd.Series(result["distributionBaseline"].iloc[0]).sort_index(),
+        expected_baseline,
+        atol=config.alphaLaplace,
+    )
+    assert_series_equal(
+        pd.Series(result["distributionSelection"].iloc[0]).sort_index(),
+        expected_selection,
+        atol=config.alphaLaplace,
+    )

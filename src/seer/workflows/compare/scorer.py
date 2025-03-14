@@ -15,7 +15,7 @@ class CohortsMetricsScorer:
     """
 
     @staticmethod
-    def _klMetricLambda(baseline: pd.Series, selection: pd.Series) -> pd.Series:
+    def _klMetricLambda(baseline: dict[str, float], selection: dict[str, float]) -> pd.Series:
         """
         Calculate the Kullback-Leibler divergence between baseline and selection distributions.
 
@@ -82,7 +82,7 @@ class CohortsMetricsScorer:
             dataset["klScore"] = dataset["klIndividualScores"].apply(lambda x: sum(x.values()))
             return dataset
         except Exception as e:
-            raise ScoringError(f"Failed to compute KL divergence scores: {str(e)}") from e
+            raise ScoringError(f"Failed to compute KL divergence scores: {e}") from e
 
     def _computeEntropyScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
@@ -104,7 +104,7 @@ class CohortsMetricsScorer:
             )
             return dataset
         except Exception as e:
-            raise ScoringError(f"Failed to compute entropy scores: {str(e)}") from e
+            raise ScoringError(f"Failed to compute entropy scores: {e}") from e
 
     def _computeRRFScore(self, dataset: pd.DataFrame, config: CompareCohortsConfig) -> pd.DataFrame:
         """
@@ -139,6 +139,6 @@ class CohortsMetricsScorer:
             # drop intermediate rank columns as they are no longer needed
             dataset.drop(columns=["klRank", "entropyRank"], inplace=True)
             # sort the dataset by RRF score in descending order
-            return dataset.sort_values(by="rrfScore", ascending=False)
+            return dataset.sort_values(by="rrfScore", ascending=False).reset_index(drop=True)
         except Exception as e:
-            raise ScoringError(f"Failed to compute RRF score: {str(e)}") from e
+            raise ScoringError(f"Failed to compute RRF score: {e}") from e

@@ -37,7 +37,7 @@ class DataProcessor:
             df["distribution"] = df["distribution"].apply(lambda x: self._addUnseenValue(x, config))
             return df
         except Exception as e:
-            raise DataProcessingError(f"Failed to preprocess cohort data: {str(e)}") from e
+            raise DataProcessingError(f"Failed to preprocess cohort data: {e}") from e
 
     def _addUnseenValue(
         self, distribution: dict[str, float], config: CompareCohortsConfig
@@ -112,7 +112,7 @@ class DataProcessor:
             selection, on="attributeName", how="inner", suffixes=("Baseline", "Selection")
         )
         # identify common keys which appear in both distributions
-        dataset["commonKeys"] = dataset.apply(
+        dataset["commonAttributeValues"] = dataset.apply(
             lambda row: set(row["distributionBaseline"].keys())
             | set(row["distributionSelection"].keys()),
             axis=1,
@@ -121,10 +121,10 @@ class DataProcessor:
         for col in ["distributionBaseline", "distributionSelection"]:
             dataset[col] = dataset.apply(
                 lambda row: self._transformDistribution(
-                    pd.Series(row[col]), row["commonKeys"], config
+                    pd.Series(row[col]), row["commonAttributeValues"], config
                 ),
                 axis=1,
             )
         # drop the commonKeys column as it's no longer needed
-        dataset.drop(columns=["commonKeys"], inplace=True)
+        dataset.drop(columns=["commonAttributeValues"], inplace=True)
         return dataset

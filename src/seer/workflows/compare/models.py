@@ -1,5 +1,3 @@
-from typing import List
-
 from pydantic import BaseModel, Field
 
 
@@ -37,11 +35,11 @@ class StatsAttributeBucket(BaseModel):
 
 class StatsAttribute(BaseModel):
     attributeName: str = Field(..., description="The name of the attribute, e.g. 'browser'")
-    buckets: List[StatsAttributeBucket] = Field(..., description="The buckets of the attribute")
+    buckets: list[StatsAttributeBucket] = Field(..., description="The buckets of the attribute")
 
 
 class AttributeDistributions(BaseModel):
-    attributes: List[StatsAttribute] = Field(
+    attributes: list[StatsAttribute] = Field(
         ..., description="The attribute distributions for the cohort"
     )
 
@@ -65,7 +63,7 @@ class CompareCohortsRequest(BaseModel):
 # Output models
 class AttributeResult(BaseModel):
     attributeName: str = Field(..., description="The name of the attribute, e.g. 'browser'")
-    attributeValues: List[str] = Field(
+    attributeValues: list[str] = Field(
         ...,
         description="The most suspcious values of the attribute, e.g. ['chrome', 'firefox', 'edge']",
     )
@@ -76,6 +74,6 @@ class AttributeResult(BaseModel):
 
 # Response model
 class CompareCohortsResponse(BaseModel):
-    results: List[AttributeResult] = Field(
+    results: list[AttributeResult] = Field(
         ..., description="The list of attributes and their most suspcious values"
     )
