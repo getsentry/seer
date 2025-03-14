@@ -164,12 +164,12 @@ class AlgoConfig(BaseModel):
     )
 
     max_stream_days_for_combo_detection: int = Field(
-        5,
+        3,
         description="Limit on the number of days we apply streaming to during combo detection",
     )
 
     combo_detection_prophet_batching_interval_days: float = Field(
-        1.5,
+        3,
         description="Number of days to batch prophet predictions for combo detection",
     )
 
