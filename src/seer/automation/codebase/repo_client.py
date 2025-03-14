@@ -21,6 +21,7 @@ from github import (
     UnknownObjectException,
 )
 from github.GitRef import GitRef
+from github.PullRequest import PullRequest
 from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
@@ -680,7 +681,20 @@ class RepoClient:
         title: str,
         description: str,
         provided_base: str | None = None,
-    ):
+    ) -> PullRequest:
+        if pulls := self.repo.get_pulls(state="open", head=branch.ref):
+            logger.error(
+                f"Branch {branch.ref} already has an open PR.",
+                extra={
+                    "branch_ref": branch.ref,
+                    "title": title,
+                    "description": description,
+                    "provided_base": provided_base,
+                },
+            )
+
+            return pulls[0]
+
         try:
             return self.repo.create_pull(
                 title=title,
@@ -690,7 +704,7 @@ class RepoClient:
                 draft=True,
             )
         except GithubException as e:
-            if e.status == 422:
+            if e.status == 422 and "Draft pull requests are not supported" in str(e):
                 # fallback to creating a regular PR if draft PR is not supported
                 return self.repo.create_pull(
                     title=title,
@@ -700,6 +714,7 @@ class RepoClient:
                     draft=False,
                 )
             else:
+                logger.exception(f"Error creating PR")
                 raise e
 
     def get_index_file_set(
