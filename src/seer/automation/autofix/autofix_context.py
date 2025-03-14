@@ -189,13 +189,13 @@ class AutofixContext(PipelineContext):
         """
  best_match = None
  best_score = 0.0
- 
+
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
  matches, score = potential_frame_match(valid_path, frame)
  if matches and score > best_score:
  best_match = valid_path
  best_score = score
- 
+
  # Use match if confidence score is above threshold
  if best_match and best_score >= 0.4:
  frame.repo_name = repo.full_name
