@@ -21,8 +21,8 @@ from github import (
     UnknownObjectException,
 )
 from github.GitRef import GitRef
-from github.Repository import Repository
 from github.PullRequest import PullRequest
+from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.models import GithubPrReviewComment
