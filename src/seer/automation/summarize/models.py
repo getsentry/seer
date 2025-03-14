@@ -14,9 +14,16 @@ class SummarizeIssueRequest(BaseModel):
     connected_issues: Optional[list[IssueDetails]] = None
 
 
+class GetFixabilityScoreRequest(BaseModel):
+    group_id: int
+
+
 class SummarizeIssueScores(BaseModel):
-    possible_cause_confidence: float
-    possible_cause_novelty: float
+    possible_cause_confidence: float | None = None
+    possible_cause_novelty: float | None = None
+    fixability_score: float | None = None
+    fixability_score_version: int | None = None
+    is_fixable: bool | None = None
 
 
 class SummarizeIssueResponse(BaseModel):

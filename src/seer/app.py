@@ -66,8 +66,12 @@ from seer.automation.codegen.tasks import (
     codegen_unittest,
     get_unittest_state,
 )
-from seer.automation.summarize.issue import run_summarize_issue
-from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
+from seer.automation.summarize.issue import run_fixability_score, run_summarize_issue
+from seer.automation.summarize.models import (
+    GetFixabilityScoreRequest,
+    SummarizeIssueRequest,
+    SummarizeIssueResponse,
+)
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
@@ -321,6 +325,18 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
     except APITimeoutError as e:
         raise GatewayTimeout from e
     except Exception as e:
+        logger.exception("Error summarizing issue")
+        raise InternalServerError from e
+
+
+@json_api(blueprint, "/v1/automation/summarize/fixability")
+def get_fixability_score_endpoint(data: GetFixabilityScoreRequest) -> SummarizeIssueResponse:
+    try:
+        return run_fixability_score(data)
+    except APITimeoutError as e:
+        raise GatewayTimeout from e
+    except Exception as e:
+        logger.exception("Error calculating fixability score")
         raise InternalServerError from e
 
 
