@@ -128,7 +128,7 @@ class StaticAnalysisWarning(BaseModel):
     encoded_location: str
     rule_id: int | None = None
     rule: StaticAnalysisRule | None = None
-    code_snippet: str | None = None
+    encoded_code_snippet: str | None = None
     # TODO: project info necessary for seer?
 
     def _try_get_language(self) -> str | None:
@@ -161,7 +161,7 @@ class StaticAnalysisWarning(BaseModel):
             )
             # Multiline strings being substituted inside textwrap.dedent would mess with the formatting.
             # So we substitute afterwards.
-            .replace("CODE_SNIPPET", textwrap.dedent(self.code_snippet or "").strip()).replace(
-                "FORMATTED_RULE", self.rule.format_rule() if self.rule else ""
-            )
+            .replace(
+                "CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip()
+            ).replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
         )
