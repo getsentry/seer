@@ -341,6 +341,9 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
 def receive_feedback(request: AutofixUpdateRequest):
     autofix_state = get_autofix_state(run_id=request.run_id)
 
+    if not autofix_state:
+        raise ValueError("Autofix state not found")
+
     payload = cast(AutofixFeedbackPayload, request.payload)
 
     print("updatintg", payload)
