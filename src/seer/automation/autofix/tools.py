@@ -73,10 +73,10 @@ class BaseTools:
         self.context.event_manager.add_log(f'Searching for "{query}"...')
 
         if len(repo_names) < 100:  # structured output can't handle too many options in Literal
-            RepoNames: TypeAlias = Literal[tuple(repo_names)]  # type: ignore
+            RepoName: TypeAlias = Literal[tuple(repo_names)]  # type: ignore
 
             class FilePath(BaseModel):
-                repo_name: RepoNames
+                repo_name: RepoName
                 file_path: str
 
         else:
