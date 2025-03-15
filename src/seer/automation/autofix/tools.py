@@ -53,6 +53,33 @@ class BaseTools:
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
+    def _semantic_file_search_completion(
+        self, query: str, valid_file_paths: str, repo_names: list[str], llm_client: LlmClient
+    ):
+        prompt = textwrap.dedent(
+            """
+            I'm searching for the file in this codebase that contains {query}. Please pick the most relevant file from the following list:
+            ------------
+            {valid_file_paths}
+            """
+        ).format(query=query, valid_file_paths=valid_file_paths)
+
+        if len(repo_names) < 100:  # structured output can't handle too many in Literal
+            RepoName: TypeAlias = Literal[tuple(repo_names)]  # type: ignore[valid-type]
+        else:
+            RepoName: TypeAlias = str  # type: ignore[no-redef]
+
+        class FileLocation(BaseModel):
+            file_path: str
+            repo_name: RepoName  # type: ignore
+
+        response = llm_client.generate_structured(
+            prompt=prompt,
+            model=GeminiProvider(model_name="gemini-2.0-flash-001"),
+            response_format=FileLocation,
+        )
+        return response.parsed
+
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
     @inject
@@ -72,41 +99,17 @@ class BaseTools:
 
         self.context.event_manager.add_log(f'Searching for "{query}"...')
 
-        if len(repo_names) < 100:  # structured output can't handle too many options in Literal
-            RepoName: TypeAlias = Literal[tuple(repo_names)]  # type: ignore
-
-            class FilePath(BaseModel):
-                repo_name: RepoName
-                file_path: str
-
-        else:
-
-            class FilePath(BaseModel):
-                file_path: str
-                repo_name: str
-
         all_valid_paths = "\n".join(
             [
                 f"FILES IN REPO {repo_name}:\n{files_per_repo[repo_name]}\n------------"
                 for repo_name in repo_names
             ]
         )
-        prompt = textwrap.dedent(
-            """
-            I'm searching for the file in this codebase that contains {query}. Please pick the most relevant file from the following list:
-            ------------
-            {valid_file_paths}
-            """
-        ).format(query=query, valid_file_paths=all_valid_paths)
-
-        response = llm_client.generate_structured(
-            prompt=prompt,
-            model=GeminiProvider(model_name="gemini-2.0-flash-001"),
-            response_format=FilePath,
+        file_location = self._semantic_file_search_completion(
+            query, all_valid_paths, repo_names, llm_client
         )
-        result = response.parsed
-        file_path = result.file_path if result else None
-        repo_name = result.repo_name if result else None
+        file_path = file_location.file_path if file_location else None
+        repo_name = file_location.repo_name if file_location else None
         if file_path is None or repo_name is None:
             return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
 
