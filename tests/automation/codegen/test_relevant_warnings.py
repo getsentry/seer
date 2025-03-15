@@ -58,7 +58,7 @@ from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
                     is_autofixable=False,
                     is_stable=None,
                 ),
-                code_snippet="    def test_format_code_snippet(self):\n        pass\n",
+                encoded_code_snippet="    def test_format_code_snippet(self):\n        pass\n",
             ),
             textwrap.dedent(
                 """\
@@ -99,7 +99,7 @@ from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
                     is_autofixable=False,
                     is_stable=False,
                 ),
-                code_snippet="",
+                encoded_code_snippet="",
             ),
             textwrap.dedent(
                 """\
