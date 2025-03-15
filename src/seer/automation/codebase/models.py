@@ -128,19 +128,40 @@ class StaticAnalysisWarning(BaseModel):
     encoded_location: str
     rule_id: int | None = None
     rule: StaticAnalysisRule | None = None
+    encoded_code_snippet: str | None = None
     # TODO: project info necessary for seer?
+
+    def _try_get_language(self) -> str | None:
+        if ".py" in self.encoded_location:
+            return "python"
+        if ".js" in self.encoded_location or ".ts" in self.encoded_location:
+            return "javascript"
+        if ".php" in self.encoded_location:
+            return "php"
+        return None
 
     def format_warning(self) -> str:
         location = Location.from_encoded(self.encoded_location)
-        return textwrap.dedent(
-            f"""\
+        return (
+            textwrap.dedent(
+                f"""\
             Warning message: {self.message}
             ----------
             Location:
                 filename: {location.filename}
                 start_line: {location.start_line}
                 end_line: {location.end_line}
+            Code Snippet:
+            ```{self._try_get_language() or ""}
+            CODE_SNIPPET
+            ```
             ----------
-            {self.rule.format_rule() if self.rule else ""}
+            FORMATTED_RULE
             """
+            )
+            # Multiline strings being substituted inside textwrap.dedent would mess with the formatting.
+            # So we substitute afterwards.
+            .replace(
+                "CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip()
+            ).replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
         )
