@@ -2,6 +2,7 @@ import fnmatch
 import logging
 import os
 import textwrap
+from typing import Literal, TypeAlias
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -71,9 +72,18 @@ class BaseTools:
 
         self.context.event_manager.add_log(f'Searching for "{query}"...')
 
-        class FilePath(BaseModel):
-            file_path: str
-            repo_name: str
+        if len(repo_names) < 100:  # structured output can't handle too many options in Literal
+            RepoNames: TypeAlias = Literal[tuple(repo_names)]  # type: ignore
+
+            class FilePath(BaseModel):
+                repo_name: RepoNames
+                file_path: str
+
+        else:
+
+            class FilePath(BaseModel):
+                file_path: str
+                repo_name: str
 
         all_valid_paths = "\n".join(
             [
