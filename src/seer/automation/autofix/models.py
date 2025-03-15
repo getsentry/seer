@@ -252,6 +252,11 @@ class CodebaseState(BaseModel):
     is_writeable: bool | None = None
 
 
+class AutofixFeedback(BaseModel):
+    root_cause_thumbs_up: bool | None = None
+    root_cause_thumbs_down: bool | None = None
+
+
 class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
@@ -266,6 +271,7 @@ class AutofixGroupState(BaseModel):
     )
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
+    feedback: AutofixFeedback | None = None
 
 
 class AutofixStateRequest(BaseModel):
@@ -388,6 +394,7 @@ class AutofixUpdateType(str, enum.Enum):
     UPDATE_CODE_CHANGE = "update_code_change"
     COMMENT_THREAD = "comment_thread"
     RESOLVE_COMMENT_THREAD = "resolve_comment_thread"
+    FEEDBACK = "feedback"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -457,6 +464,11 @@ class AutofixResolveCommentThreadPayload(BaseModel):
     is_agent_comment: bool = False
 
 
+class AutofixFeedbackPayload(BaseModel):
+    type: Literal[AutofixUpdateType.FEEDBACK]
+    action: Literal["root_cause_thumbs_up", "root_cause_thumbs_down"]
+
+
 class AutofixUpdateRequest(BaseModel):
     run_id: int
     payload: Union[
@@ -469,6 +481,7 @@ class AutofixUpdateRequest(BaseModel):
         AutofixUpdateCodeChangePayload,
         AutofixCommentThreadPayload,
         AutofixResolveCommentThreadPayload,
+        AutofixFeedbackPayload,
     ] = Field(discriminator="type")
 
 
