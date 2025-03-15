@@ -195,7 +195,6 @@ def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
 def autofix_update_endpoint(
     data: AutofixUpdateRequest,
 ) -> AutofixUpdateEndpointResponse:
-    print("updating", data)
     if data.payload.type == AutofixUpdateType.SELECT_ROOT_CAUSE:
         run_autofix_solution(data)
     elif data.payload.type == AutofixUpdateType.SELECT_SOLUTION:
