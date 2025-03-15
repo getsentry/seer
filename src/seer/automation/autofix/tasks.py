@@ -30,6 +30,8 @@ from seer.automation.autofix.models import (
     AutofixCreateBranchUpdatePayload,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
+    AutofixFeedback,
+    AutofixFeedbackPayload,
     AutofixRequest,
     AutofixResolveCommentThreadPayload,
     AutofixRestartFromPointPayload,
@@ -334,6 +336,25 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
     except Exception as e:
         logger.error(f"Error committing changes for run {run_id}: {e}")
         raise
+
+
+def receive_feedback(request: AutofixUpdateRequest):
+    autofix_state = get_autofix_state(run_id=request.run_id)
+
+    if not autofix_state:
+        raise ValueError("Autofix state not found")
+
+    payload = cast(AutofixFeedbackPayload, request.payload)
+
+    with autofix_state.update() as cur:
+        if cur.feedback is None:
+            cur.feedback = AutofixFeedback()
+        if payload.action == "root_cause_thumbs_up":
+            cur.feedback.root_cause_thumbs_up = True
+            cur.feedback.root_cause_thumbs_down = False
+        elif payload.action == "root_cause_thumbs_down":
+            cur.feedback.root_cause_thumbs_up = False
+            cur.feedback.root_cause_thumbs_down = True
 
 
 @inject
