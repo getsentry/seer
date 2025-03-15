@@ -346,7 +346,6 @@ def receive_feedback(request: AutofixUpdateRequest):
 
     payload = cast(AutofixFeedbackPayload, request.payload)
 
-
     with autofix_state.update() as cur:
         if cur.feedback is None:
             cur.feedback = AutofixFeedback()
