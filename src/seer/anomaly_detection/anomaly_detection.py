@@ -1,7 +1,7 @@
 import datetime
 import logging
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAno
 from seer.anomaly_detection.detectors.prophet_anomaly_detector import ProphetAnomalyDetector
 from seer.anomaly_detection.models import (
     AlgoConfig,
+    DynamicAlert,
     MPTimeSeriesAnomalies,
     MPTimeSeriesAnomaliesSingleWindow,
     TimeSeries,
@@ -141,6 +142,49 @@ class AnomalyDetection(BaseModel):
 
         return timeseries, batch_anomalies, prophet_df
 
+    @sentry_sdk.trace
+    def _save_and_fire_pruning_task(
+        self,
+        timepoint: TimeSeriesPoint,
+        streamed_anomalies: MPTimeSeriesAnomaliesSingleWindow,
+        algo_data: Optional[dict],
+        historic: DynamicAlert,
+        config: AnomalyDetectionConfig,
+        alert_data_accessor: AlertDataAccessor,
+    ) -> None:
+        # Save new data point
+        alert_data_accessor.save_timepoint(
+            external_alert_id=historic.external_alert_id,
+            timepoint=timepoint,
+            anomaly=streamed_anomalies,
+            anomaly_algo_data=algo_data,
+        )
+
+        # Delayed import due to circular imports
+        from seer.anomaly_detection.tasks import cleanup_timeseries_and_predict
+
+        try:
+            # Set flag and create new task for cleanup if too many old points or not enough predictions remaining
+            cleanup_predict_config = historic.cleanup_predict_config
+            if alert_data_accessor.can_queue_cleanup_predict_task(historic.external_alert_id) and (
+                cleanup_predict_config.num_old_points
+                >= cleanup_predict_config.num_acceptable_points
+                or cleanup_predict_config.num_predictions_remaining
+                <= cleanup_predict_config.num_acceptable_predictions
+            ):
+                alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
+                cleanup_timeseries_and_predict.apply_async(
+                    (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
+                    countdown=random.randint(
+                        0, config.time_period * 60
+                    ),  # Wait between 0 - time_period * 60 seconds before queuing so the tasks are not all queued at the same time
+                )
+        except Exception as e:
+            # Reset task and capture exception
+            alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
+            sentry_sdk.capture_exception(e)
+            logger.exception(e)
+
     @inject
     @sentry_sdk.trace
     def _online_detect(
@@ -216,6 +260,22 @@ class AnomalyDetection(BaseModel):
         if original_flags is not None and len(original_flags) != len(
             historic.timeseries.timestamps
         ):
+            self._save_and_fire_pruning_task(
+                timepoint=ts_external[0],
+                streamed_anomalies=MPTimeSeriesAnomaliesSingleWindow(
+                    flags=["none"] * len(ts_external),
+                    scores=[0.0] * len(ts_external),
+                    thresholds=[],
+                    matrix_profile=np.array([]),
+                    window_size=3,
+                    original_flags=[],
+                    confidence_levels=[],
+                ),
+                algo_data=None,
+                historic=historic,
+                config=config,
+                alert_data_accessor=alert_data_accessor,
+            )
             logger.error(
                 "invalid_state",
                 extra={"note": "Original flags and timeseries are not of the same length"},
@@ -277,38 +337,14 @@ class AnomalyDetection(BaseModel):
             streamed_anomalies, None, anomalies.use_suss[-num_anomlies:]
         )
 
-        # Save new data point
-        alert_data_accessor.save_timepoint(
-            external_alert_id=alert.id,
+        self._save_and_fire_pruning_task(
             timepoint=ts_external[0],
-            anomaly=streamed_anomalies,
-            anomaly_algo_data=streamed_anomalies_online.get_anomaly_algo_data(len(ts_external))[0],
+            streamed_anomalies=streamed_anomalies,
+            algo_data=streamed_anomalies_online.get_anomaly_algo_data(len(ts_external))[0],
+            historic=historic,
+            config=config,
+            alert_data_accessor=alert_data_accessor,
         )
-
-        # Delayed import due to circular imports
-        from seer.anomaly_detection.tasks import cleanup_timeseries_and_predict
-
-        try:
-            # Set flag and create new task for cleanup if too many old points or not enough predictions remaining
-            cleanup_predict_config = historic.cleanup_predict_config
-            if alert_data_accessor.can_queue_cleanup_predict_task(historic.external_alert_id) and (
-                cleanup_predict_config.num_old_points
-                >= cleanup_predict_config.num_acceptable_points
-                or cleanup_predict_config.num_predictions_remaining
-                <= cleanup_predict_config.num_acceptable_predictions
-            ):
-                alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
-                cleanup_timeseries_and_predict.apply_async(
-                    (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
-                    countdown=random.randint(
-                        0, config.time_period * 60
-                    ),  # Wait between 0 - time_period * 60 seconds before queuing so the tasks are not all queued at the same time
-                )
-        except Exception as e:
-            # Reset task and capture exception
-            alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
-            sentry_sdk.capture_exception(e)
-            logger.exception(e)
 
         return ts_external, streamed_anomalies_online
 
