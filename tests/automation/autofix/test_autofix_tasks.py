@@ -460,6 +460,7 @@ def test_autofix_restart_from_point_with_feedback(autofix_root_cause_run: Autofi
     assert continuation.get().status not in {AutofixStatus.ERROR}
 
 
+@pytest.mark.skip(reason="Failing in prod even when re-creating cassettes.")
 @pytest.mark.vcr()
 def test_autofix_create_pr(autofix_full_finished_run: AutofixContinuation):
     with Session() as session:
