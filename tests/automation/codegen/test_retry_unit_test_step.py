@@ -1,25 +1,24 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from seer.automation.models import RepoDefinition
-from seer.automation.codegen.retry_unittest_step import RetryUnittestStep, retry_unittest_task
+from seer.automation.codegen.retry_unittest_step import RetryUnittestStep
 from seer.automation.codegen.retry_unit_test_github_pr_creator import RetryUnitTestGithubPrUpdater
 from seer.automation.state import DbStateRunTypes
 
 
-# Use simple dummy objects for previous context instead of MagicMock
 class DummyPreviousContext:
     pass
 
 
 class TestRetryUnittestStep(unittest.TestCase):
-    def setUp(self):
+    @patch("seer.automation.codegen.retry_unittest_step.CodegenContext.from_run_id")
+    def setUp(self, mock_from_run_id):
         self.mock_pr = MagicMock()
         self.mock_pr.html_url = "http://example.com/pr/123"
         self.mock_pr.url = "http://api.github.com/pr/123"
         self.repo_client = MagicMock()
         self.repo_client.repo.get_pull.return_value = self.mock_pr
 
-        # Create a dummy previous context with concrete attributes.
         self.mock_previous_context = DummyPreviousContext()
         self.mock_previous_context.original_pr_url = "http://original.com/pr/111"
         self.mock_previous_context.iterations = 1
@@ -28,6 +27,9 @@ class TestRetryUnittestStep(unittest.TestCase):
         self.context.get_repo_client.return_value = self.repo_client
         self.context.get_previous_run_context.return_value = self.mock_previous_context
         self.context.event_manager = MagicMock()
+
+        mock_from_run_id.return_value = self.context
+
         self.request_data = {
             "run_id": 1,
             "pr_id": 123,
@@ -41,7 +43,6 @@ class TestRetryUnittestStep(unittest.TestCase):
         req = self.request_data.copy()
         if extra_request:
             req.update(extra_request)
-        # Pass the state run type as in production.
         step = RetryUnittestStep(request=req, type=DbStateRunTypes.UNIT_TESTS_RETRY)
         step.context = self.context
         return step
@@ -56,9 +57,10 @@ class TestRetryUnittestStep(unittest.TestCase):
         self.context.event_manager.mark_completed.assert_called_once()
 
     def test_invoke_failed_status_with_generated_tests(self):
-        req_extra = {"codecov_status": {"conclusion": "failure"}}
-        step = self._build_step(req_extra)
-        mock_diff1, mock_diff2 = MagicMock(), MagicMock()
+        extra = {"codecov_status": {"conclusion": "failure"}}
+        step = self._build_step(extra)
+        mock_diff1 = MagicMock()
+        mock_diff2 = MagicMock()
         mock_unittest_output = MagicMock()
         mock_unittest_output.diffs = [mock_diff1, mock_diff2]
         with patch.object(
@@ -78,8 +80,8 @@ class TestRetryUnittestStep(unittest.TestCase):
                 self.repo_client.post_unit_test_reference_to_original_pr.assert_not_called()
 
     def test_invoke_failed_status_with_no_generated_tests(self):
-        req_extra = {"codecov_status": {"conclusion": "failure"}}
-        step = self._build_step(req_extra)
+        extra = {"codecov_status": {"conclusion": "failure"}}
+        step = self._build_step(extra)
         with patch.object(step, "_generate_unit_tests", return_value=None) as mock_generate:
             step.invoke()
             mock_generate.assert_called_once_with(
@@ -91,8 +93,8 @@ class TestRetryUnittestStep(unittest.TestCase):
 
     def test_max_iterations_reached(self):
         self.mock_previous_context.iterations = RetryUnittestStep.MAX_ITERATIONS
-        req_extra = {"codecov_status": {"conclusion": "failure"}}
-        step = self._build_step(req_extra)
+        extra = {"codecov_status": {"conclusion": "failure"}}
+        step = self._build_step(extra)
         with patch.object(step, "_generate_unit_tests") as mock_generate:
             step.invoke()
             mock_generate.assert_not_called()
@@ -100,8 +102,8 @@ class TestRetryUnittestStep(unittest.TestCase):
 
     def test_get_previous_run_context_failure(self):
         self.context.get_previous_run_context.return_value = None
-        req_extra = {"codecov_status": {"conclusion": "failure"}}
-        step = self._build_step(req_extra)
+        extra = {"codecov_status": {"conclusion": "failure"}}
+        step = self._build_step(extra)
         with self.assertRaises(RuntimeError):
             step.invoke()
         self.context.event_manager.mark_completed.assert_called_once()
