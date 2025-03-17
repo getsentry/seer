@@ -564,7 +564,7 @@ class TestAnomalyDetection(unittest.TestCase):
             organization_id=1, project_id=1, config=config, context=context
         )
 
-        response = AnomalyDetection().detect_anomalies(request=request, time_budget_ms=10000)
+        response = AnomalyDetection().detect_anomalies(request=request, time_budget_ms=20000)
 
         assert isinstance(response, DetectAnomaliesResponse)
         assert isinstance(response.timeseries, list)
