@@ -42,7 +42,7 @@ class RetryUnittestStep(CodegenStep):
 
     name = "RetryUnittestStep"
     max_retries = 2
-    MAX_ITERATIONS = 3
+    MAX_ITERATIONS = 4
 
     @staticmethod
     def _instantiate_request(request: dict[str, Any]) -> RetryUnittestStepRequest:

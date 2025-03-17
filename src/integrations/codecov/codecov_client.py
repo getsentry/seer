@@ -30,8 +30,11 @@ class CodecovClient:
         }
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            if response.json()["count"] == 0:
+            data = response.json()
+            if data["count"] == 0:
                 return None
-            return response.text
-        else:
-            return None
+            return [
+                {"name": r["name"], "failure_message": r["failure_message"]}
+                for r in data["results"]
+            ]
+        return None
