@@ -42,7 +42,7 @@ class TestRetryUnittestStep(unittest.TestCase):
         if extra_request:
             req.update(extra_request)
         # Pass the state run type as in production.
-        step = RetryUnittestStep(request=req, state_run_type=DbStateRunTypes.UNIT_TESTS_RETRY)
+        step = RetryUnittestStep(request=req, type=DbStateRunTypes.UNIT_TESTS_RETRY)
         step.context = self.context
         return step
 
