@@ -172,7 +172,7 @@ class TestRootCauseStep(unittest.TestCase):
 
         # Mock the confidence component output
         mock_confidence_output = ConfidenceOutput(
-            comment="This is a test comment",
+            question="This is a test question",
             output_confidence_score=0.85,
             proceed_confidence_score=0.75,
         )
@@ -256,9 +256,11 @@ class TestRootCauseStep(unittest.TestCase):
         mock_root_cause_output = next(generate(RootCauseAnalysisOutput))
         mock_root_cause_component.return_value.invoke.return_value = mock_root_cause_output
 
-        # Mock the confidence component output with None comment
+        # Mock the confidence component output with None question
         mock_confidence_output = ConfidenceOutput(
-            comment=None, output_confidence_score=0.95, proceed_confidence_score=0.90  # No comment
+            question=None,
+            output_confidence_score=0.95,
+            proceed_confidence_score=0.90,  # No question
         )
         mock_confidence_component.return_value.invoke.return_value = mock_confidence_output
 
