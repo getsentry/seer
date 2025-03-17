@@ -103,7 +103,10 @@ class TestUnittestStep(unittest.TestCase):
         creator.create_github_pull_request()
 
         repo_client.create_branch_from_changes.assert_called_once_with(
-            pr_title=pr_title, file_changes=file_changes_payload, branch_name=branch_name
+            pr_title=pr_title,
+            file_changes=file_changes_payload,
+            branch_name=branch_name,
+            from_feature_branch=True,
         )
         repo_client.create_pr_from_branch.assert_called_once_with(
             branch="branch_ref",
