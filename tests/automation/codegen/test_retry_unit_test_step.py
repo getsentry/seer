@@ -11,8 +11,8 @@ class DummyPreviousContext:
 
 
 class TestRetryUnittestStep(unittest.TestCase):
-    @patch("seer.automation.codegen.retry_unittest_step.CodegenContext.from_run_id")
-    def setUp(self, mock_from_run_id):
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def setUp(self, mock_instantiate_context):
         self.mock_pr = MagicMock()
         self.mock_pr.html_url = "http://example.com/pr/123"
         self.mock_pr.url = "http://api.github.com/pr/123"
@@ -27,8 +27,6 @@ class TestRetryUnittestStep(unittest.TestCase):
         self.context.get_repo_client.return_value = self.repo_client
         self.context.get_previous_run_context.return_value = self.mock_previous_context
         self.context.event_manager = MagicMock()
-
-        mock_from_run_id.return_value = self.context
 
         self.request_data = {
             "run_id": 1,
