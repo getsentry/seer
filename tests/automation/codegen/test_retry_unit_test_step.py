@@ -3,6 +3,12 @@ from unittest.mock import MagicMock, patch
 from seer.automation.models import RepoDefinition
 from seer.automation.codegen.retry_unittest_step import RetryUnittestStep, retry_unittest_task
 from seer.automation.codegen.retry_unit_test_github_pr_creator import RetryUnitTestGithubPrUpdater
+from seer.automation.state import DbStateRunTypes
+
+
+# Use simple dummy objects for previous context instead of MagicMock
+class DummyPreviousContext:
+    pass
 
 
 class TestRetryUnittestStep(unittest.TestCase):
@@ -12,9 +18,12 @@ class TestRetryUnittestStep(unittest.TestCase):
         self.mock_pr.url = "http://api.github.com/pr/123"
         self.repo_client = MagicMock()
         self.repo_client.repo.get_pull.return_value = self.mock_pr
-        self.mock_previous_context = MagicMock()
+
+        # Create a dummy previous context with concrete attributes.
+        self.mock_previous_context = DummyPreviousContext()
         self.mock_previous_context.original_pr_url = "http://original.com/pr/111"
         self.mock_previous_context.iterations = 1
+
         self.context = MagicMock()
         self.context.get_repo_client.return_value = self.repo_client
         self.context.get_previous_run_context.return_value = self.mock_previous_context
@@ -32,12 +41,12 @@ class TestRetryUnittestStep(unittest.TestCase):
         req = self.request_data.copy()
         if extra_request:
             req.update(extra_request)
-        step = RetryUnittestStep(request=req)
+        # Pass the state run type as in production.
+        step = RetryUnittestStep(request=req, state_run_type=DbStateRunTypes.UNIT_TESTS_RETRY)
         step.context = self.context
         return step
 
     def test_invoke_success_status(self):
-        # When codecov_status is "success", the step should post a reference message.
         step = self._build_step()
         step.invoke()
         self.repo_client.post_unit_test_reference_to_original_pr.assert_called_once_with(
@@ -47,8 +56,6 @@ class TestRetryUnittestStep(unittest.TestCase):
         self.context.event_manager.mark_completed.assert_called_once()
 
     def test_invoke_failed_status_with_generated_tests(self):
-        # When status is not success and _generate_unit_tests returns output,
-        # the updater should be invoked and file changes appended.
         req_extra = {"codecov_status": {"conclusion": "failure"}}
         step = self._build_step(req_extra)
         mock_diff1, mock_diff2 = MagicMock(), MagicMock()
@@ -122,23 +129,26 @@ class TestRetryUnitTestGithubPrUpdater(unittest.TestCase):
         mock_pr.html_url = "http://example.com/pr/123"
         repo_client = MagicMock()
         repo_client.push_new_commit_to_pr.return_value = "new_commit"
-        previous_context = MagicMock()
+        # Use a dummy previous context with an integer iterations.
+        mock_previous_context = DummyPreviousContext()
+        mock_previous_context.iterations = 1
         updater = RetryUnitTestGithubPrUpdater(
             file_changes_payload=file_changes,
             pr=mock_pr,
             repo_client=repo_client,
-            previous_context=previous_context,
+            previous_context=mock_previous_context,
         )
+        merged_context = type("MergedContext", (), {})()
+        merged_context.iterations = mock_previous_context.iterations
         session_instance = MagicMock()
+        session_instance.merge.return_value = merged_context
         mock_session = MagicMock()
         mock_session.__enter__.return_value = session_instance
         mock_session_cls.return_value = mock_session
         updater.update_github_pull_request()
         repo_client.push_new_commit_to_pr.assert_called_once()
-        session_instance.merge.assert_called_once_with(previous_context)
-        self.assertEqual(
-            session_instance.merge.return_value.iterations, previous_context.iterations + 1
-        )
+        session_instance.merge.assert_called_once_with(mock_previous_context)
+        self.assertEqual(merged_context.iterations, mock_previous_context.iterations + 1)
         session_instance.commit.assert_called_once()
 
     def test_update_github_pull_request_failure(self):
@@ -151,12 +161,13 @@ class TestRetryUnitTestGithubPrUpdater(unittest.TestCase):
         mock_pr.html_url = "http://example.com/pr/123"
         repo_client = MagicMock()
         repo_client.push_new_commit_to_pr.return_value = None
-        previous_context = MagicMock()
+        mock_previous_context = DummyPreviousContext()
+        mock_previous_context.iterations = 1
         updater = RetryUnitTestGithubPrUpdater(
             file_changes_payload=file_changes,
             pr=mock_pr,
             repo_client=repo_client,
-            previous_context=previous_context,
+            previous_context=mock_previous_context,
         )
         with patch(
             "seer.automation.codegen.retry_unit_test_github_pr_creator.logger"
