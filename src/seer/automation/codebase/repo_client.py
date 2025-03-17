@@ -324,16 +324,56 @@ class RepoClient:
             A tuple of (corrected_path, was_autocorrected)
         """
         if sha is None:
-            sha = self.base_commit_sha
-
-        path = path.lstrip("/")
-        valid_paths = self.get_valid_file_paths(sha)
-
-        # If path is valid, return it unchanged
-        if path in valid_paths:
-            return path, False
-
-        # Check for partial matches if no exact match and path is long enough
+ path_normalized = path_lower.lstrip("./")
+ candidates = []
+ 
+ for valid_path in valid_paths:
+ valid_path_normalized = valid_path.lower()
+ score = 0.0
+ 
+ # Strategy 1: Exact filename match
+ if path_normalized.split('/')[-1] == valid_path_normalized.split('/')[-1]:
+ score += 0.5
+ 
+ # Strategy 2: Path containment
+ if path_normalized in valid_path_normalized:
+ score += 0.3
+ elif valid_path_normalized in path_normalized:
+ score += 0.2
+ 
+ # Strategy 3: Component matching from the end
+ path_components = path_normalized.split('/')
+ valid_components = valid_path_normalized.split('/')
+ max_check = min(len(path_components), len(valid_components))
+ matches = 0
+ 
+ for i in range(1, max_check + 1):
+ if path_components[-i] == valid_components[-i]:
+ matches += 1
+ else:
+ break
+ 
+ if matches > 0:
+ score += 0.1 * matches
+ 
+ if score > 0:
+ candidates.append((valid_path, score))
+ 
+ # Sort by score, descending
+ candidates.sort(key=lambda x: x[1], reverse=True)
+ 
+ if candidates:
+ best_match, confidence = candidates[0]
+ if confidence >= 0.4: # Threshold for accepting a match
+ logger.info(
+ f"Path '{path}' not found exactly, using best match: '{best_match}' with confidence {confidence:.2f}"
+ )
+ path = best_match
+ autocorrected_path = True
+ else:
+ logger.warning(
+ f"No confident match found for path '{path}'. Best candidate '{best_match}' had low confidence ({confidence:.2f})"
+ )
         if len(path) > 3:
             path_lower = path.lower()
             partial_matches = [
@@ -355,28 +395,33 @@ class RepoClient:
         self, path: str, sha: str | None = None, autocorrect: bool = False
     ) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
-        if sha is None:
+ @functools.lru_cache(maxsize=32) # Increased from 8 to 32
             sha = self.base_commit_sha
 
         autocorrected_path = False
         if autocorrect:
-            path, autocorrected_path = self._autocorrect_path(path, sha)
-            if not autocorrected_path and path not in self.get_valid_file_paths(sha):
-                return None, "utf-8"
+ try:
+ tree = self.repo.get_git_tree(sha, recursive=True)
 
-        try:
-            contents = self.repo.get_contents(path, ref=sha)
+ if tree.raw_data["truncated"]:
+ sentry_sdk.capture_message(
+ f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
+ )
 
-            if isinstance(contents, list):
-                raise Exception(f"Expected a single ContentFile but got a list for path {path}")
+ valid_file_paths: set[str] = set()
+ valid_file_extensions = get_all_supported_extensions()
 
-            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-            content = contents.decoded_content.decode(detected_encoding)
-            if autocorrected_path:
-                content = f"Showing results instead for {path}\n=====\n{content}"
-            return content, detected_encoding
-        except Exception as e:
-            logger.exception(f"Error getting file contents: {e}")
+ for file in tree.tree:
+ if file.type == "blob" and any(
+ file.path.endswith(ext) for ext in valid_file_extensions
+ ):
+ valid_file_paths.add(file.path)
+
+ return valid_file_paths
+ except Exception as e:
+ logger.exception(f"Error getting valid file paths: {e}")
+ sentry_sdk.capture_exception(e)
+ return set() # Return empty set instead of failing
             return None, "utf-8"
 
     @functools.lru_cache(maxsize=8)
