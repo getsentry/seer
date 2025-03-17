@@ -315,16 +315,6 @@ class AnomalyDetection(BaseModel):
     def _min_required_timesteps(self, time_period, min_num_days=7):
         return int(min_num_days * 24 * 60 / time_period)
 
-    def _adjust_time_budget_for_combo_detection(
-        self, time_budget_ms: int | None, num_rows: int, num_rows_per_day: int
-    ):
-        if time_budget_ms is not None:
-            if num_rows > num_rows_per_day:
-                time_budget_ms = time_budget_ms // (num_rows // num_rows_per_day)
-            else:
-                time_budget_ms = time_budget_ms // 2
-        return time_budget_ms
-
     def _shift_current_by(
         self, history: TimeSeries, current: TimeSeries, num_rows: int, inplace: bool = False
     ):
@@ -385,13 +375,10 @@ class AnomalyDetection(BaseModel):
         trim_current_by = 0
         time_period = ad_config.time_period
         num_rows_per_day = (24 * 60) // time_period
-        prophet_batching_num_rows = int(
-            num_rows_per_day * algo_config.combo_detection_prophet_batching_interval_days
+        max_stream_detection_len = int(
+            algo_config.max_stream_days_for_combo_detection[time_period] * num_rows_per_day
         )
-        max_stream_detection_len = (
-            algo_config.max_stream_days_for_combo_detection * num_rows_per_day
-        )
-        max_batch_detection_len = (
+        max_batch_detection_len = int(
             algo_config.max_batch_days_for_combo_detection[time_period] * num_rows_per_day
         )
         if orig_curr_len > max_stream_detection_len:
@@ -411,9 +398,9 @@ class AnomalyDetection(BaseModel):
             historic.values = historic.values[trim_historic_by:]
             historic.timestamps = historic.timestamps[trim_historic_by:]
         # Adjust time budget based on the number of rows in the current time series
-        time_budget_ms = self._adjust_time_budget_for_combo_detection(
-            time_budget_ms, len(current.values), prophet_batching_num_rows
-        )
+        time_budget_ms = (
+            time_budget_ms // 2 if time_budget_ms else None
+        )  # Splitting between batch and stream detection
 
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=[],
@@ -424,64 +411,48 @@ class AnomalyDetection(BaseModel):
             original_flags=[],
             confidence_levels=[],
         )
-        initial_history = True
-        while len(current.values) > 0:
-            # Run batch detect on history data
-            historic_anomalies, prophet_df = self._batch_detect_internal(
-                ts_internal=historic,
-                config=ad_config,
-                window_size=None,
-                time_budget_ms=time_budget_ms,
-                algo_config=algo_config,
-                prophet_forecast_len_days=algo_config.combo_detection_prophet_batching_interval_days,
-            )
 
-            if initial_history:
-                # When batch is run for the first time, we need to capture the anomalies for the last trim_current_by points
-                # because we will be shifting the current data in the next iteration
-                agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
-                    flags=historic_anomalies.flags[-trim_current_by:],
-                    scores=historic_anomalies.scores[-trim_current_by:],
-                    thresholds=(
-                        historic_anomalies.thresholds[-trim_current_by:]
-                        if historic_anomalies.thresholds
-                        else None
-                    ),
-                    matrix_profile=historic_anomalies.matrix_profile[-trim_current_by:],
-                    window_size=historic_anomalies.window_size,
-                    original_flags=historic_anomalies.original_flags[-trim_current_by:],
-                    confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
-                )
-                initial_history = False
+        historic_anomalies, prophet_df = self._batch_detect_internal(
+            ts_internal=historic,
+            config=ad_config,
+            window_size=None,
+            time_budget_ms=time_budget_ms,
+            algo_config=algo_config,
+            prophet_forecast_len_days=max_stream_detection_len,  # This ensures that the there is only prophet detection run always
+        )
+        agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
+            flags=historic_anomalies.flags[-trim_current_by:],
+            scores=historic_anomalies.scores[-trim_current_by:],
+            thresholds=(
+                historic_anomalies.thresholds[-trim_current_by:]
+                if historic_anomalies.thresholds
+                else None
+            ),
+            matrix_profile=historic_anomalies.matrix_profile[-trim_current_by:],
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags[-trim_current_by:],
+            confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
+        )
+        stream_detector = MPStreamAnomalyDetector(
+            history_timestamps=historic.timestamps,
+            history_values=historic.values,
+            history_mp=historic_anomalies.matrix_profile,
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags,
+        )
+        num_points_to_stream = min(max_stream_detection_len, len(current.values))
+        cur_stream_ts = TimeSeries(
+            timestamps=current.timestamps[0:num_points_to_stream],
+            values=current.values[0:num_points_to_stream],
+        )
 
-            # Run stream detection on current data
-            stream_detector = MPStreamAnomalyDetector(
-                history_timestamps=historic.timestamps,
-                history_values=historic.values,
-                history_mp=historic_anomalies.matrix_profile,
-                window_size=historic_anomalies.window_size,
-                original_flags=historic_anomalies.original_flags,
-            )
-
-            num_points_to_stream = min(prophet_batching_num_rows, len(current.values))
-            cur_stream_ts = TimeSeries(
-                timestamps=current.timestamps[0:num_points_to_stream],
-                values=current.values[0:num_points_to_stream],
-            )
-
-            streamed_anomalies = stream_detector.detect(
-                cur_stream_ts,
-                ad_config,
-                time_budget_ms=time_budget_ms,
-                prophet_df=prophet_df,
-            )
-            agg_streamed_anomalies = agg_streamed_anomalies.extend(streamed_anomalies)
-            self._shift_current_by(
-                history=historic,
-                current=current,
-                num_rows=num_points_to_stream,
-                inplace=True,
-            )
+        streamed_anomalies = stream_detector.detect(
+            cur_stream_ts,
+            ad_config,
+            time_budget_ms=time_budget_ms,
+            prophet_df=prophet_df,
+        )
+        agg_streamed_anomalies = agg_streamed_anomalies.extend(streamed_anomalies)
 
         final_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=agg_streamed_anomalies.flags[-orig_curr_len:],

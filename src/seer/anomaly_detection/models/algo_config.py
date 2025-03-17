@@ -163,19 +163,14 @@ class AlgoConfig(BaseModel):
         description="Number of hours to forecast for the Prophet model",
     )
 
-    max_stream_days_for_combo_detection: int = Field(
-        3,
-        description="Limit on the number of days we apply streaming to during combo detection",
+    max_stream_days_for_combo_detection: dict[int, float] = Field(
+        default={5: 1, 15: 1.5, 30: 3, 60: 5},
+        description="Limit on the number of days we apply streaming to during combo detection. Its 288 data points for 5 min data, 144 for 15 min data, 144 for 30 min data and 120 for 1 hour data",
     )
 
-    max_batch_days_for_combo_detection: dict[int, int] = Field(
+    max_batch_days_for_combo_detection: dict[int, float] = Field(
         default={5: 7, 15: 15, 30: 21, 60: 28},
         description="Limit on the number of days we apply batching to during combo detection",
-    )
-
-    combo_detection_prophet_batching_interval_days: float = Field(
-        3,
-        description="Number of days to batch prophet predictions for combo detection",
     )
 
     def get_prophet_params(self, sensitivity: str) -> ProphetParams:
