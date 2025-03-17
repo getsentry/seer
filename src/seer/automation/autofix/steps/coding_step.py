@@ -98,7 +98,7 @@ class AutofixCodingStep(AutofixPipelineStep):
                 summary=summary,
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
-                mode=coding_mode,
+                mode=coding_mode if coding_mode else "fix",
             )
         )
 

@@ -134,6 +134,7 @@ def codegen_relevant_warnings(
     relevant_warnings_request = RelevantWarningsStepRequest(
         repo=request.repo,
         pr_id=request.pr_id,
+        callback_url=request.callback_url,
         organization_id=request.organization_id,
         warnings=request.warnings,
         commit_sha=request.commit_sha,

@@ -452,10 +452,14 @@ class AnthropicProvider:
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
-        # https://sentry.sentry.io/issues/6267320373/
+        retryable_errors = (
+            "overloaded_error",
+            "Internal server error",
+            "not_found_error",
+        )
         return (
             isinstance(exception, anthropic.AnthropicError)
-            and ("overloaded_error" in str(exception))
+            and any(error in str(exception) for error in retryable_errors)
         ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Anthropic Generation")
@@ -836,6 +840,7 @@ class GeminiProvider:
             # https://sentry.sentry.io/issues/6301072208
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
+            "Internal error",
         )
         return (
             isinstance(exception, ClientError)

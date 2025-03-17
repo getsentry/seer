@@ -1,7 +1,7 @@
 import logging
 import textwrap
 from pathlib import Path
-from typing import Iterable
+from typing import Any
 
 import numpy as np
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
@@ -33,12 +33,10 @@ from seer.automation.models import EventDetails, IssueDetails
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
-logger = logging.getLogger(__name__)
-
 
 class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
     """
-    Filter out warnings from files that aren't affected by the commit.
+    Filter out warnings from files that aren't affected by the PR.
     """
 
     context: CodegenContext
@@ -68,7 +66,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         return result
 
     def _does_warning_match_a_target_file(
-        self, warning: StaticAnalysisWarning, target_filenames: Iterable[str]
+        self, warning: StaticAnalysisWarning, target_filenames: set[str]
     ) -> bool:
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
@@ -85,37 +83,74 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             path.as_posix(),
             *self._left_truncated_paths(path, max_num_paths=2),
         }
-        possible_matches_from_targets = {
-            *target_filenames,
-            *{
-                filename
-                for filename in target_filenames
-                for filename in self._left_truncated_paths(Path(filename), max_num_paths=1)
-            },
-        }
-        matches = possible_matches_from_warning & possible_matches_from_targets
-        self.logger.info(f"{warning.encoded_location=} {matches=}")
+        matches = possible_matches_from_warning & target_filenames
+        if matches:
+            self.logger.info(f"{warning.encoded_location=} {matches=}")
         return bool(matches)
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
+        left_truncated_target_filenames = {
+            left_truncated
+            for filename in request.target_filenames
+            for left_truncated in self._left_truncated_paths(Path(filename), max_num_paths=1)
+        }
+        possible_matches_from_targets = (
+            set(request.target_filenames) | left_truncated_target_filenames
+        )
         warnings = [
             warning
             for warning in request.warnings
-            if self._does_warning_match_a_target_file(warning, request.target_filenames)
+            if self._does_warning_match_a_target_file(warning, possible_matches_from_targets)
         ]
         return FilterWarningsOutput(warnings=warnings)
 
 
+def _fetch_issues_for_pr_file_cache_key(
+    organization_id: int, provider: str, external_id: str, pr_file: PrFile, *args
+) -> tuple[str]:
+    return hashkey(organization_id, provider, external_id, pr_file.filename, pr_file.sha)
+
+
+@cached(cache=LRUCache(maxsize=128), key=_fetch_issues_for_pr_file_cache_key)
+@inject
+def _fetch_issues_for_pr_file(
+    organization_id: int,
+    provider: str,
+    external_id: str,
+    pr_file: PrFile,
+    run_id: int,
+    logger: logging.Logger,
+    client: RpcClient = injected,
+) -> list[dict[str, Any]]:
+    pr_filename_to_issues = client.call(
+        "get_issues_related_to_file_patches",
+        organization_id=organization_id,
+        provider=provider,
+        external_id=external_id,
+        pr_files=[pr_file.model_dump()],
+        run_id=run_id,
+    )
+    if pr_filename_to_issues is None:
+        logger.exception(
+            "Something went wrong with the issue-fetching RPC call",
+            extra={"file": pr_file.filename},
+        )
+        return []
+    if not pr_filename_to_issues:
+        return []
+    assert list(pr_filename_to_issues.keys()) == [pr_file.filename]
+    return list(pr_filename_to_issues.values())[0]
+
+
 class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssuesOutput]):
     """
-    Fetch issues related to the files in a commit by analyzing stacktrace frames in the issue.
+    Fetch issues related to the files in a PR by analyzing stacktrace frames in the issue.
     """
 
     context: CodegenContext
 
-    @inject
     def _fetch_issues(
         self,
         organization_id: int,
@@ -124,12 +159,11 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         pr_files: list[PrFile],
         max_files_analyzed: int = 7,
         max_lines_analyzed: int = 500,
-        client: RpcClient = injected,
     ) -> dict[str, list[IssueDetails]]:
         """
-        Returns a dict mapping a subset of file names in the commit to issues related to the file.
+        Returns a dict mapping a subset of file names in the PR to issues related to the file.
         They're related if the functions and filenames in the issue's stacktrace overlap with those
-        modified in the commit.
+        modified in the PR.
 
         The `max_files_analyzed` and `max_lines_analyzed` checks ensure that the payload we send to
         seer_rpc doesn't get too large.
@@ -141,22 +175,16 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             if pr_file.status == "modified" and pr_file.changes <= max_lines_analyzed
         ]
         if not pr_files_eligible:
-            self.logger.info("No eligible files in commit.")
+            self.logger.info("No eligible files in PR.")
             return {}
 
         self.logger.info(f"Repo query: {organization_id=}, {provider=}, {external_id=}")
-
-        pr_files_eligible = pr_files_eligible[:max_files_analyzed]
-        filename_to_issues = client.call(
-            "get_issues_related_to_file_patches",
-            organization_id=organization_id,
-            provider=provider,
-            external_id=external_id,
-            pr_files=[pr_file.model_dump() for pr_file in pr_files_eligible],
-            run_id=self.context.run_id,
-        )
-        if filename_to_issues is None:
-            return {}
+        filename_to_issues = {
+            pr_file.filename: _fetch_issues_for_pr_file(
+                organization_id, provider, external_id, pr_file, self.context.run_id, self.logger
+            )
+            for pr_file in pr_files_eligible[:max_files_analyzed]
+        }
         return {
             filename: [IssueDetails.model_validate(issue) for issue in issues]
             for filename, issues in filename_to_issues.items()
@@ -222,7 +250,7 @@ class AssociateWarningsWithIssuesComponent(
             for issue in issues
         }
         # De-duplicate in case the same issue is present across multiple files. That's possible when
-        # the issue's stacktrace matches multiple files modified in the commit.
+        # the issue's stacktrace matches multiple files modified in the PR.
         # This should be ok b/c the issue should contain enough information that the downstream LLM
         # calls can match any relevant warnings to it. The filename is not the strongest signal.
 
@@ -341,7 +369,7 @@ class PredictRelevantWarningsComponent(
         for warning, issue in request.candidate_associations:
             self.logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
             completion = llm_client.generate_structured(
-                model=GeminiProvider.model("gemini-2.0-flash-lite"),
+                model=GeminiProvider.model("gemini-2.0-flash-001"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
                     formatted_warning=warning.format_warning(),

@@ -3,6 +3,7 @@ from datetime import timedelta
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import sentry_sdk
 from prophet import Prophet  # type: ignore
 from pydantic import BaseModel
 from scipy import special, stats  # type: ignore
@@ -24,6 +25,7 @@ class ProphetAnomalyDetector(BaseModel):
     """
 
     @inject
+    @sentry_sdk.trace
     def predict(
         self,
         timestamps: npt.NDArray[np.float64],

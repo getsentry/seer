@@ -126,6 +126,7 @@ class CodePrReviewOutput(BaseComponentOutput):
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
+    callback_url: str
     organization_id: int
     warnings: list[StaticAnalysisWarning]
     commit_sha: str
@@ -152,11 +153,11 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
 
 
 class PrFile(BaseModel):
-    # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28
     filename: str
     patch: str
     status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
     changes: int
+    sha: str
 
 
 class FilterWarningsRequest(BaseComponentRequest):

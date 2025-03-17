@@ -2,10 +2,14 @@ import textwrap
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
+from scipy.spatial.distance import cosine
+from scipy.special import softmax
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings, cosine_similarity
 from seer.automation.models import EventDetails
 from seer.automation.summarize.models import (
+    GetFixabilityScoreRequest,
     SummarizeIssueRequest,
     SummarizeIssueResponse,
     SummarizeIssueScores,
@@ -29,6 +33,37 @@ class IssueSummary(BaseModel):
 class IssueSummaryWithScores(IssueSummary):
     scores: SummarizeIssueScores
 
+    @classmethod
+    def from_db_state(cls, db_state: DbIssueSummary):
+        item = cls.model_validate(db_state.summary)
+        item.scores = SummarizeIssueScores(
+            fixability_score=db_state.fixability_score,
+            fixability_score_version=db_state.fixability_score_version,
+            is_fixable=db_state.is_fixable,
+            possible_cause_confidence=item.scores.possible_cause_confidence,
+            possible_cause_novelty=item.scores.possible_cause_novelty,
+        )
+        return item
+
+    def to_db_state(self, group_id: int):
+        return DbIssueSummary(
+            group_id=group_id,
+            summary=self.model_dump(mode="json"),
+            fixability_score=self.scores.fixability_score,
+            fixability_score_version=self.scores.fixability_score_version,
+            is_fixable=self.scores.is_fixable,
+        )
+
+    def to_summarize_issue_response(self, group_id: int):
+        return SummarizeIssueResponse(
+            group_id=group_id,
+            headline=self.title,
+            whats_wrong=self.whats_wrong,
+            trace=self.session_related_issues,
+            possible_cause=self.possible_cause,
+            scores=self.scores,
+        )
+
 
 class IssueSummaryForLlmToGenerate(BaseModel):
     whats_wrong: str
@@ -43,7 +78,7 @@ class IssueSummaryForLlmToGenerate(BaseModel):
 @inject
 def summarize_issue(
     request: SummarizeIssueRequest, llm_client: LlmClient = injected
-) -> tuple[SummarizeIssueResponse, IssueSummaryWithScores]:
+) -> IssueSummaryWithScores:
     event_details = EventDetails.from_event(request.issue.events[0])
     connected_event_details = (
         [
@@ -130,19 +165,10 @@ def summarize_issue(
         ),
     )
 
-    return (
-        SummarizeIssueResponse(
-            group_id=request.group_id,
-            headline=issue_summary_with_scores.title,
-            whats_wrong=issue_summary_with_scores.whats_wrong,
-            trace=issue_summary_with_scores.session_related_issues,
-            possible_cause=issue_summary_with_scores.possible_cause,
-        ),
-        issue_summary_with_scores,
-    )
+    return issue_summary_with_scores
 
 
-def run_summarize_issue(request: SummarizeIssueRequest):
+def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueResponse:
     langfuse_tags = []
     if request.organization_slug:
         langfuse_tags.append(f"org:{request.organization_slug}")
@@ -159,13 +185,62 @@ def run_summarize_issue(request: SummarizeIssueRequest):
         ),
     }
 
-    summary, raw_summary = summarize_issue(request, **extra_kwargs)
+    summary = summarize_issue(request, **extra_kwargs)
 
     with Session() as session:
-        db_state = DbIssueSummary(
-            group_id=request.group_id, summary=raw_summary.model_dump(mode="json")
-        )
+        db_state = summary.to_db_state(request.group_id)
         session.merge(db_state)
         session.commit()
 
-    return summary
+    return summary.to_summarize_issue_response(request.group_id)
+
+
+@observe(name="Get Fixability Score")
+def run_fixability_score(request: GetFixabilityScoreRequest) -> SummarizeIssueResponse:
+    with Session() as session:
+        db_state = session.get(DbIssueSummary, request.group_id)
+        if not db_state:
+            raise ValueError(f"No issue summary found for group_id: {request.group_id}")
+        issue_summary = IssueSummaryWithScores.from_db_state(db_state)
+
+    fixability_score, is_fixable = evaluate_autofixability(issue_summary)
+
+    with Session() as session:
+        issue_summary.scores = SummarizeIssueScores(
+            fixability_score=fixability_score,
+            fixability_score_version=1,
+            is_fixable=is_fixable,
+        )
+        session.merge(issue_summary.to_db_state(request.group_id))
+        session.commit()
+
+    return issue_summary.to_summarize_issue_response(request.group_id)
+
+
+@observe(name="Evaluate Autofixability")
+def evaluate_autofixability(issue_summary: IssueSummaryWithScores) -> tuple[float, bool]:
+    fixable_range = [
+        "This issue is complex and very difficult to resolve",
+        "This issue is in the codebase, simple and easily resolved",
+    ]
+    embedding_model = GoogleProviderEmbeddings(
+        model_name="text-multilingual-embedding-002", task_type="SEMANTIC_SIMILARITY"
+    )
+
+    issue_summary_input = (
+        f"Here's an issue:\n"
+        f"Issue title: {issue_summary.title}\n"
+        f"What's wrong: {issue_summary.whats_wrong}\n"
+        f"Possible cause: {issue_summary.possible_cause}"
+    )
+
+    embeddings = embedding_model.encode([*fixable_range, issue_summary_input])
+
+    similarity_scores = cosine_similarity(embeddings[2].reshape(1, -1), embeddings[:2])
+    fixable_scores = similarity_scores[:, 1] - similarity_scores[:, 0]
+
+    score = fixable_scores[0]
+
+    is_fixable = score > 0.00988  # 80th percentile
+
+    return score, is_fixable

@@ -22,7 +22,7 @@ from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
-from seer.automation.summarize.issue import IssueSummary
+from seer.automation.summarize.issue import IssueSummary, IssueSummaryWithScores
 from seer.automation.utils import AgentError
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 from seer.dependency_injection import inject, injected
@@ -86,13 +86,13 @@ class AutofixContext(PipelineContext):
         with self.state.update() as state:
             state.signals = value
 
-    def get_issue_summary(self) -> IssueSummary | None:
+    def get_issue_summary(self) -> IssueSummaryWithScores | None:
         group_id = self.state.get().request.issue.id
         with Session() as session:
             group_summary = session.get(DbIssueSummary, group_id)
             if group_summary:
                 try:
-                    return IssueSummary.model_validate(group_summary.summary)
+                    return IssueSummaryWithScores.from_db_state(group_summary)
                 except ValidationError:
                     return None
         return None
@@ -320,7 +320,10 @@ class AutofixContext(PipelineContext):
                         raise ValueError("Change state not found for PR creation")
 
                     if change_state.pull_request:
-                        raise ValueError("Pull request already exists for this change")
+                        logger.info(
+                            f"Pull request already exists for change in repo {repo_external_id}"
+                        )
+                        return
 
                     if not change_state.branch_name:
                         raise ValueError("Branch name not found for PR creation")

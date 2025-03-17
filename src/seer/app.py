@@ -29,6 +29,7 @@ from seer.automation.autofix.models import (
     AutofixUpdateRequest,
     AutofixUpdateType,
 )
+from seer.automation.autofix.runs import update_repo_access
 from seer.automation.autofix.tasks import (
     check_and_mark_if_timed_out,
     comment_on_thread,
@@ -66,8 +67,12 @@ from seer.automation.codegen.tasks import (
     codegen_unittest,
     get_unittest_state,
 )
-from seer.automation.summarize.issue import run_summarize_issue
-from seer.automation.summarize.models import SummarizeIssueRequest, SummarizeIssueResponse
+from seer.automation.summarize.issue import run_fixability_score, run_summarize_issue
+from seer.automation.summarize.models import (
+    GetFixabilityScoreRequest,
+    SummarizeIssueRequest,
+    SummarizeIssueResponse,
+)
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
@@ -88,6 +93,8 @@ from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.smoke_test import check_smoke_test
 from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
+from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
+from seer.workflows.compare.service import compareCohorts
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +224,9 @@ def get_autofix_state_endpoint(data: AutofixStateRequest) -> AutofixStateRespons
     if state:
         check_and_mark_if_timed_out(state)
 
+        if data.check_repo_access:
+            update_repo_access(state)
+
         cur_state = state.get()
 
         return AutofixStateResponse(
@@ -326,6 +336,18 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
     except APITimeoutError as e:
         raise GatewayTimeout from e
     except Exception as e:
+        logger.exception("Error summarizing issue")
+        raise InternalServerError from e
+
+
+@json_api(blueprint, "/v1/automation/summarize/fixability")
+def get_fixability_score_endpoint(data: GetFixabilityScoreRequest) -> SummarizeIssueResponse:
+    try:
+        return run_fixability_score(data)
+    except APITimeoutError as e:
+        raise GatewayTimeout from e
+    except Exception as e:
+        logger.exception("Error calculating fixability score")
         raise InternalServerError from e
 
 
@@ -371,6 +393,13 @@ def delete_alert__data_endpoint(
     except ClientError as e:
         response = DeleteAlertDataResponse(success=False, message=str(e))
     return response
+
+
+@json_api(blueprint, "/v1/workflows/compare-cohorts")
+def compare_cohorts_endpoint(
+    data: CompareCohortsRequest,
+) -> CompareCohortsResponse:
+    return compareCohorts(data)
 
 
 @blueprint.route("/health/live", methods=["GET"])

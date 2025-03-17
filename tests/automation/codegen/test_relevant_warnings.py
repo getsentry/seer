@@ -57,7 +57,7 @@ class TestFilterWarningsComponent:
     class _TestInvokeTestCase(BaseModel):
         id: str
 
-        target_files: list[str]
+        target_filenames: list[str]
         "These files are relative to the repo root b/c they're from the GitHub API."
 
         encoded_locations_with_matches: list[str]
@@ -70,7 +70,7 @@ class TestFilterWarningsComponent:
         [
             _TestInvokeTestCase(
                 id="getsentry/seer",
-                target_files=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
+                target_filenames=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
                 encoded_locations_with_matches=[
                     "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
                     "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
@@ -85,7 +85,7 @@ class TestFilterWarningsComponent:
             ),
             _TestInvokeTestCase(
                 id="codecov/overwatch",
-                target_files=[
+                target_filenames=[
                     "app/tools/seer_signature/generate_signature.py",
                     "processor/tests/services/test_envelope.py",
                     "app/app/Livewire/Actions/Logout.php",
@@ -116,7 +116,7 @@ class TestFilterWarningsComponent:
 
         request = FilterWarningsRequest(
             warnings=warnings,
-            target_filenames=test_case.target_files,
+            target_filenames=test_case.target_filenames,
             repo_full_name="getsentry/seer",
         )
         output: FilterWarningsOutput = component.invoke(request)
@@ -134,6 +134,7 @@ class TestFetchIssuesComponent:
         mock_context.repo.provider = "github"
         mock_context.repo.provider_raw = "integrations:github"
         mock_context.repo.external_id = "123123"
+        mock_context.run_id = 1
         return FetchIssuesComponent(mock_context)
 
     def test_bad_provider_raw(self, component: FetchIssuesComponent):
@@ -151,16 +152,16 @@ class TestFetchIssuesComponent:
     ):
         assert component.context.repo.provider_raw is not None
         pr_files = [
-            PrFile(filename="fine.py", patch="patch1", status="modified", changes=100),
-            PrFile(filename="many_changes.py", patch="patch2", status="modified", changes=1_000),
-            PrFile(filename="not_modified.py", patch="patch3", status="added", changes=100),
+            PrFile(filename="fine.py", patch="patch1", status="modified", changes=100, sha="sha1"),
+            PrFile(filename="big.py", patch="patch2", status="modified", changes=1_000, sha="sha2"),
+            PrFile(filename="added.py", patch="patch3", status="added", changes=100, sha="sha3"),
         ]
-        filename_to_issues = {"fine.py": [next(generate(IssueDetails)).model_dump()]}
-        mock_rpc_client_call.return_value = filename_to_issues
 
+        pr_filename_to_issues = {"fine.py": [next(generate(IssueDetails)).model_dump()]}
+        mock_rpc_client_call.return_value = pr_filename_to_issues
         filename_to_issues_expected = {
             filename: [IssueDetails.model_validate(issue) for issue in issues]
-            for filename, issues in filename_to_issues.items()
+            for filename, issues in pr_filename_to_issues.items()
         }
 
         request = CodeFetchIssuesRequest(
@@ -169,6 +170,26 @@ class TestFetchIssuesComponent:
         )
         output: CodeFetchIssuesOutput = component.invoke(request)
         assert output.filename_to_issues == filename_to_issues_expected
+        assert mock_rpc_client_call.call_count == 1
+
+        # Test the cache
+        component.context.run_id += 1
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == filename_to_issues_expected
+        assert mock_rpc_client_call.call_count == 1
+        component.context.run_id -= 1
+
+        mock_rpc_client_call.return_value = None
+        request.organization_id = 2
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
+        assert mock_rpc_client_call.call_count == 2
+        request.organization_id = 1  # reset
+
+        mock_rpc_client_call.return_value = {}
+        request.organization_id = 3
+        output: CodeFetchIssuesOutput = component.invoke(request)
+        assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
 
 
 _T = TypeVar("_T")
@@ -445,12 +466,12 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_filter_warnings_component: Mock,
 ):
     mock_repo_client = MagicMock()
-    mock_commit = MagicMock()
+    mock_pr = MagicMock()
     mock_pr_files = next(generate(list[PrFile]))
     mock_context = MagicMock()
     mock_context.get_repo_client.return_value = mock_repo_client
-    mock_repo_client.repo.get_commit.return_value = mock_commit
-    mock_commit.files = mock_pr_files
+    mock_repo_client.repo.get_pull.return_value = mock_pr
+    mock_pr.get_files.return_value = mock_pr_files
 
     num_associations = 5
 
@@ -478,9 +499,10 @@ def test_relevant_warnings_step_invoke(
     request = RelevantWarningsStepRequest(
         repo=RepoDefinition(name="repo1", owner="owner1", provider="github", external_id="123123"),
         pr_id=123,
+        callback_url="not-used-url",
         organization_id=1,
         warnings=next(generate(list[StaticAnalysisWarning])),
-        commit_sha="abc123",
+        commit_sha="sha123",
         run_id=1,
         max_num_associations=10,
         max_num_issues_analyzed=10,
@@ -491,7 +513,7 @@ def test_relevant_warnings_step_invoke(
     step.invoke()
 
     mock_context.get_repo_client.assert_called_once()
-    mock_repo_client.repo.get_commit.assert_called_once_with(request.commit_sha)
+    mock_repo_client.repo.get_pull.assert_called_once_with(request.pr_id)
 
     mock_invoke_filter_warnings_component.assert_called_once()
     mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings

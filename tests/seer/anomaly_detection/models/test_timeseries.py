@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 
+from seer.anomaly_detection.models import ConfidenceLevel
 from seer.anomaly_detection.models.timeseries import MPTimeSeries
 from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomalies
 
@@ -21,6 +22,9 @@ class TestTimeSeries(unittest.TestCase):
                 thresholds=[],
                 original_flags=["none"],
                 use_suss=[True],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ],
             ),
         )
 
