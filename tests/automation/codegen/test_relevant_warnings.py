@@ -135,7 +135,7 @@ class TestFilterWarningsComponent:
                             print("generating")
                             return True
                         +    print("done")""",
-                        status="modified", 
+                        status="modified",
                         changes=1,
                         sha="sha1",
                     ),
