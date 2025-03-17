@@ -80,7 +80,7 @@ class TestUnittestStep(unittest.TestCase):
         repo_client.repo.name = "repo1"
 
         new_pr = MagicMock(spec=PullRequest)
-        new_pr.id = 456
+        new_pr.number = 456
         new_pr.html_url = "http://example.com/pr/456"
         repo_client.create_branch_from_changes.return_value = "branch_ref"
         repo_client.create_pr_from_branch.return_value = new_pr
@@ -121,7 +121,7 @@ class TestUnittestStep(unittest.TestCase):
         self.assertEqual(mapping.provider, "github")
         self.assertEqual(mapping.owner, "owner_login")
         self.assertEqual(mapping.repo, "repo1")
-        self.assertEqual(mapping.pr_id, new_pr.id)
+        self.assertEqual(mapping.pr_id, new_pr.number)
         self.assertEqual(mapping.iterations, 0)
         self.assertEqual(mapping.run_id, 2)
         self.assertEqual(mapping.original_pr_url, pr.html_url)
