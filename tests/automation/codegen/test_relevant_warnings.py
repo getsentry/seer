@@ -52,12 +52,44 @@ class TestFilterWarningsComponent:
             ValueError,
             match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
         ):
-            component._does_warning_match_a_target_file(warning, {"file1.py"})
+            component._get_possible_pr_files(
+                warning,
+                [PrFile(filename="file1.py", patch="", status="modified", changes=1, sha="abc")],
+            )
+
+    def test_get_changed_lines(self, component: FilterWarningsComponent):
+        pr_file = PrFile(
+            filename="hello.py",
+            patch="""@@ -1,3 +1,4 @@
+ def hello():
+     print("hello")
++    print("world")
+ print("goodbye")""",
+            status="modified",
+            changes=10,
+            sha="sha1",
+        )
+        assert component._get_changed_lines(pr_file) == [1, 2, 3, 4]
+
+        pr_file = PrFile(
+            filename="test.py",
+            patch="""@@ -10,3 +10,6 @@
+ class MyTest:
+     def test_one(self):
+         assert True
++    def test_two(self):
++        assert False
++    def test_three(self):""",
+            status="modified",
+            changes=15,
+            sha="sha2",
+        )
+        assert component._get_changed_lines(pr_file) == [10, 11, 12, 13, 14, 15]
 
     class _TestInvokeTestCase(BaseModel):
         id: str
 
-        target_filenames: list[str]
+        pr_files: list[PrFile]
         "These files are relative to the repo root b/c they're from the GitHub API."
 
         encoded_locations_with_matches: list[str]
@@ -70,7 +102,17 @@ class TestFilterWarningsComponent:
         [
             _TestInvokeTestCase(
                 id="getsentry/seer",
-                target_filenames=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
+                pr_files=[
+                    PrFile(
+                        filename="src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py",
+                        patch="""@@ -233,1 +233,2 @@
+                        def test_func():
+                        +    print("hello")""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    )
+                ],
                 encoded_locations_with_matches=[
                     "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
                     "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
@@ -85,10 +127,38 @@ class TestFilterWarningsComponent:
             ),
             _TestInvokeTestCase(
                 id="codecov/overwatch",
-                target_filenames=[
-                    "app/tools/seer_signature/generate_signature.py",
-                    "processor/tests/services/test_envelope.py",
-                    "app/app/Livewire/Actions/Logout.php",
+                pr_files=[
+                    PrFile(
+                        filename="app/tools/seer_signature/generate_signature.py",
+                        patch="""@@ -20,3 +20,4 @@
+                        def generate():
+                            print("generating")
+                            return True
+                        +    print("done")""",
+                        status="modified", 
+                        changes=1,
+                        sha="sha1",
+                    ),
+                    PrFile(
+                        filename="processor/tests/services/test_envelope.py",
+                        patch="""@@ -4,2 +4,3 @@
+                        def test_envelope():
+                        +    assert True
+                            pass""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    ),
+                    PrFile(
+                        filename="app/app/Livewire/Actions/Logout.php",
+                        patch="""@@ -15,2 +15,3 @@
+                        public function logout() {
+                        +    return redirect('/');
+                        }""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    ),
                 ],
                 encoded_locations_with_matches=[
                     "app/tools/seer_signature/generate_signature.py:20",
@@ -116,7 +186,7 @@ class TestFilterWarningsComponent:
 
         request = FilterWarningsRequest(
             warnings=warnings,
-            target_filenames=test_case.target_filenames,
+            pr_files=test_case.pr_files,
             repo_full_name="getsentry/seer",
         )
         output: FilterWarningsOutput = component.invoke(request)
@@ -517,9 +587,7 @@ def test_relevant_warnings_step_invoke(
 
     mock_invoke_filter_warnings_component.assert_called_once()
     mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings
-    mock_invoke_filter_warnings_component.call_args[0][0].target_filenames = [
-        file.filename for file in mock_pr_files
-    ]
+    mock_invoke_filter_warnings_component.call_args[0][0].pr_files = mock_pr_files
 
     mock_invoke_fetch_issues_component.assert_called_once()
     mock_invoke_fetch_issues_component.call_args[0][0].organization_id = request.organization_id

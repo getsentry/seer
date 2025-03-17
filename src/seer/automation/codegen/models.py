@@ -159,7 +159,7 @@ class PrFile(BaseModel):
 
 class FilterWarningsRequest(BaseComponentRequest):
     warnings: list[StaticAnalysisWarning]
-    target_filenames: list[str]
+    pr_files: list[PrFile]
 
 
 class FilterWarningsOutput(BaseComponentOutput):

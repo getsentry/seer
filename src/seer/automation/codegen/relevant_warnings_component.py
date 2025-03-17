@@ -1,4 +1,5 @@
 import logging
+import re
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,7 @@ from seer.rpc import RpcClient
 
 class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
     """
-    Filter out warnings from files that aren't affected by the PR.
+    Filter out warnings that aren't on the PR diff lines.
     """
 
     context: CodegenContext
@@ -65,46 +66,151 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             result.append(Path(*parts).as_posix())
         return result
 
-    def _does_warning_match_a_target_file(
-        self, warning: StaticAnalysisWarning, target_filenames: set[str]
-    ) -> bool:
+    def _get_changed_lines(self, pr_file: PrFile) -> list[int]:
+        """Returns the 1-indexed changed line numbers in the updated file.
+
+        Determined by parsing git diff hunk headers of the form:
+        @@ -n,m +p,q @@ where:
+        - n: start line in original file
+        - m: number of lines from original file
+        - p: start line in modified file
+        - q: number of lines in modified file
+
+        For example, given this diff:
+        @@ -1,3 +1,4 @@
+        def hello():
+            print("hello")
+        +    print("world")  # Line 3 is added
+        print("goodbye")
+
+        This would return [1,2,3,4] since these are all the lines in the updated file
+
+        Args:
+            pr_file: PrFile object containing the patch/diff
+
+        Returns:
+            List of 1-indexed line numbers in the updated file
+        """
+        patch_lines = pr_file.patch.split("\n")
+        current_line = 0
+        changed_lines = []
+
+        for line in patch_lines:
+            if line.startswith("@@"):
+                try:
+                    match = re.match(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", line)
+                    if match:
+                        _, _, new_start, num_lines = map(int, match.groups())
+                        current_line = new_start
+                        changed_lines.extend(range(current_line, current_line + num_lines))
+                except Exception:
+                    self.logger.warning(f"Could not parse hunk header: {line}")
+                    continue
+
+        return changed_lines
+
+    def _get_possible_pr_files(
+        self, warning: StaticAnalysisWarning, pr_files: list[PrFile]
+    ) -> list[PrFile]:
+        """Find PR files that may match a warning's location.
+
+        This handles cases where the warning location and PR file paths may be specified differently:
+        - With different numbers of parent directories
+        - With or without a repo prefix
+        - With relative vs absolute paths
+
+        Args:
+            warning: The static analysis warning to check
+            pr_files: List of PR files to match against
+
+        Returns:
+            List of PR files that may match the warning's location
+        """
+        # Extract just the path portion from the warning location
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
 
-        # If the path is relative, it shouldn't contain intermediate `..`s.
-        first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
-        path = Path(*path.parts[first_idx_non_dots:])
+        # Handle relative paths by skipping any leading ".." components
+        try:
+            first_non_dot_idx = next((i for i, part in enumerate(path.parts) if part != ".."), 0)
+            path = Path(*path.parts[first_non_dot_idx:])
+        except (IndexError, StopIteration):
+            return []
+
+        # Don't allow ".." in the middle of paths
         if ".." in path.parts:
             raise ValueError(
                 f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
             )
 
-        possible_matches_from_warning = {
+        # Generate possible path variations to match against
+        possible_matches = {
             path.as_posix(),
             *self._left_truncated_paths(path, max_num_paths=2),
         }
-        matches = possible_matches_from_warning & target_filenames
-        if matches:
-            self.logger.info(f"{warning.encoded_location=} {matches=}")
-        return bool(matches)
+
+        # Build mapping of all possible path variations to their PR files
+        pr_file_map = {}
+        for pr_file in pr_files:
+            pr_path = Path(pr_file.filename)
+            pr_file_map[pr_path.as_posix()] = pr_file
+            for truncated in self._left_truncated_paths(pr_path, max_num_paths=1):
+                pr_file_map[truncated] = pr_file
+
+        # Find all matching PR files
+        matching_pr_files = []
+        for possible_match in possible_matches:
+            if possible_match in pr_file_map:
+                matching_pr_files.append(pr_file_map[possible_match])
+
+        if matching_pr_files:
+            self.logger.debug(
+                "Found matching PR files",
+                extra={
+                    "warning_location": warning.encoded_location,
+                    "matching_files": [pf.filename for pf in matching_pr_files],
+                },
+            )
+
+        return matching_pr_files
+
+    def _is_warning_in_files(
+        self, warning: StaticAnalysisWarning, matching_pr_files: list[PrFile]
+    ) -> bool:
+        """
+        Check if a warning's line number appears in any of the changed lines of matching PR files.
+
+        Args:
+            warning: The static analysis warning to check
+            matching_pr_files: List of PR files that match the warning's filename
+
+        Returns:
+            True if the warning line appears in changed lines of any matching PR file
+        """
+        # Encoded location format: "file:line:col"
+        location_parts = warning.encoded_location.split(":")
+        if len(location_parts) < 2:
+            self.logger.warning(
+                f"Invalid warning location format - missing line number: {warning.encoded_location}"
+            )
+            return False
+
+        warning_line = int(location_parts[1])
+        return any(
+            warning_line in self._get_changed_lines(pr_file) for pr_file in matching_pr_files
+        )
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
-        left_truncated_target_filenames = {
-            left_truncated
-            for filename in request.target_filenames
-            for left_truncated in self._left_truncated_paths(Path(filename), max_num_paths=1)
-        }
-        possible_matches_from_targets = (
-            set(request.target_filenames) | left_truncated_target_filenames
-        )
-        warnings = [
-            warning
-            for warning in request.warnings
-            if self._does_warning_match_a_target_file(warning, possible_matches_from_targets)
-        ]
-        return FilterWarningsOutput(warnings=warnings)
+        filtered_warnings: list[StaticAnalysisWarning] = []
+        for warning in request.warnings:
+            matched_pr_files = self._get_possible_pr_files(warning, request.pr_files)
+
+            if self._is_warning_in_files(warning, matched_pr_files):
+                filtered_warnings.append(warning)
+
+        return FilterWarningsOutput(warnings=filtered_warnings)
 
 
 def _fetch_issues_for_pr_file_cache_key(
