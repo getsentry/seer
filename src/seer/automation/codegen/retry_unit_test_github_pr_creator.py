@@ -37,11 +37,6 @@ class RetryUnitTestGithubPrUpdater:
             f"This PR has been updated to add tests for #{self.pr.number}\n\n"
             "### Commits:\n" + "\n".join(commit_messages)
         )
-        self.repo_client.push_new_commit_to_pr(
-            pr=self.pr,
-            commit_message=new_description,
-            file_changes=self.file_changes_payload,
-        )
         self.update_stored_pr_context(self.previous_context)
 
     def update_stored_pr_context(

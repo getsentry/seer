@@ -92,7 +92,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
             file_changes: list[FileChange] = []
             for task in coding_output.tasks:
                 repo_client = self.context.get_repo_client(
-                    task.repo_name, type=RepoClientType.CODECOV_UNIT_TEST
+                    task.repo_name, type=RepoClientType.CODECOV_PR_REVIEW
                 )
                 if task.type == "file_change":
                     file_content, _ = repo_client.get_file_content(task.file_path)

@@ -544,11 +544,17 @@ class RepoClient:
 
         return matching_file.patch
 
-    def _create_branch(self, branch_name):
+    def _create_branch(self, branch_name, from_feature_branch=False):
+        if from_feature_branch:
+            return self._create_branch_from_feature_branch(branch_name)
+
         ref = self.repo.create_git_ref(
             ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
         )
         return ref
+
+    def _create_branch_from_feature_branch(self, branch_name):
+        return self.repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=self.base_commit_sha)
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -609,6 +615,7 @@ class RepoClient:
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
+        from_feature_branch: bool = False,
     ) -> GitRef | None:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
@@ -616,12 +623,12 @@ class RepoClient:
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
-            branch_ref = self._create_branch(new_branch_name)
+            branch_ref = self._create_branch(new_branch_name, from_feature_branch)
         except GithubException as e:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
-                branch_ref = self._create_branch(new_branch_name)
+                branch_ref = self._create_branch(new_branch_name, from_feature_branch)
             else:
                 raise e
 
