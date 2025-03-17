@@ -205,7 +205,7 @@ class TestRootCauseStep(unittest.TestCase):
         assert context_manager.steps[-1].agent_comment_thread is not None
         assert (
             context_manager.steps[-1].agent_comment_thread.messages[0].content
-            == "This is a test comment"
+            == "This is a test question"
         )
 
     @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
