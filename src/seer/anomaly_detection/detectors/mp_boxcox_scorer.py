@@ -1,10 +1,9 @@
-import datetime
+import logging
 import sys
 from typing import Dict, List, Tuple
 
 import numpy as np
 import numpy.typing as npt
-import sentry_sdk
 from pydantic import Field
 from scipy import special, stats
 
@@ -19,7 +18,9 @@ from seer.anomaly_detection.models import (
     ThresholdType,
 )
 from seer.dependency_injection import inject, injected
-from seer.exceptions import ClientError, ServerError
+from seer.exceptions import ClientError
+
+logger = logging.getLogger(__name__)
 
 
 class MPBoxCoxScorer(MPScorer):
@@ -141,20 +142,7 @@ class MPBoxCoxScorer(MPScorer):
         flags = []
         thresholds = []
         confidence_levels = []
-        time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
-        time_start = datetime.datetime.now()
-        batch_size = 10 if len(mp_dist) > 10 else 1
         for i, score in enumerate(z_scores):
-            if time_allocated is not None and i % batch_size == 0:
-                time_elapsed = datetime.datetime.now() - time_start
-                if time_allocated is not None and time_elapsed > time_allocated:
-                    sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
-                    sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
-                    sentry_sdk.capture_message(
-                        "batch_detection_took_too_long",
-                        level="error",
-                    )
-                    raise ServerError("Batch detection took too long")
             flag: AnomalyFlags = "none"
             location_thresholds: List[Threshold] = []
 

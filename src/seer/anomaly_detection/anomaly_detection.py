@@ -569,11 +569,9 @@ class AnomalyDetection(BaseModel):
         time_elapsed = datetime.datetime.now() - time_start
         time_allocated = datetime.timedelta(milliseconds=time_budget_ms)
         if time_elapsed > time_allocated:
-            sentry_sdk.set_extra("time_taken", time_elapsed)
-            sentry_sdk.set_extra("time_allocated", time_allocated)
-            sentry_sdk.capture_message(
-                "batch_detection_took_too_long",
-                level="error",
+            logger.error(
+                "batch_detection_took+_too_long",
+                extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
             )
             raise ServerError(
                 "Batch detection took too long"
