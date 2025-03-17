@@ -106,13 +106,13 @@ class RetryUnittestStep(CodegenStep):
         if unittest_output:
             for file_change in unittest_output.diffs:
                 self.context.event_manager.append_file_change(file_change)
-                generator = RetryUnitTestGithubPrUpdater(
-                    file_changes_payload=unittest_output.diffs,
-                    pr=pr,
-                    repo_client=repo_client,
-                    previous_context=previous_run_context,
-                )
-                generator.update_github_pull_request()
+            generator = RetryUnitTestGithubPrUpdater(
+                file_changes_payload=unittest_output.diffs,
+                pr=pr,
+                repo_client=repo_client,
+                previous_context=previous_run_context,
+            )
+            generator.update_github_pull_request()
 
         else:
             self.logger.info("No unit tests generated, posting message to original PR")

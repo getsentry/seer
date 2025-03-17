@@ -94,6 +94,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
                 repo_client = self.context.get_repo_client(
                     task.repo_name, type=RepoClientType.CODECOV_PR_REVIEW
                 )
+                repo_client.base_commit_sha = codecov_client_params["head_sha"]
                 if task.type == "file_change":
                     file_content, _ = repo_client.get_file_content(task.file_path)
                     if not file_content:
