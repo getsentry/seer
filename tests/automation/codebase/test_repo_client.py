@@ -4,7 +4,7 @@ import pytest
 from github import GithubException, UnknownObjectException
 from johen import generate
 
-from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.models import FileChange, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
@@ -936,3 +936,67 @@ class TestRepoClientIndexFileSet:
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
 
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.requests.post")
+    def test_post_unit_test_reference_to_original_pr_codecov_request(self, mock_post, repo_client):
+        original_pr_url = "https://github.com/sentry/sentry/pull/12345"
+        unit_test_pr_url = "https://github.com/sentry/sentry/pull/67890"
+        expected_url = "https://api.github.com/repos/sentry/sentry/issues/12345/comments"
+        expected_comment = (
+            f"Codecov has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. "
+            f"View the new PR({unit_test_pr_url}) to review the changes."
+        )
+        expected_params = {"body": expected_comment}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "html_url": "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+        }
+        mock_post.return_value = mock_response
+
+        result = repo_client.post_unit_test_reference_to_original_pr(
+            original_pr_url, unit_test_pr_url, type=RepoClientType.CODECOV_PR_REVIEW
+        )
+
+        mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
+
+        assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
+
+    @patch("seer.automation.codebase.repo_client.RepoClient.process_one_file_for_git_commit")
+    def test_push_new_commit_to_pr(self, mock_process, repo_client):
+        dummy_patch = MagicMock()
+        dummy_tree_element = MagicMock()
+        dummy_tree_element.sha = "dummy_blob_sha"
+        mock_process.return_value = dummy_tree_element
+
+        dummy_pr = MagicMock()
+        dummy_pr.head.ref = "test-branch"
+
+        repo_client.get_branch_head_sha = MagicMock(return_value="old_sha")
+        dummy_commit = MagicMock()
+        dummy_commit.tree = "dummy_base_tree"
+        repo_client.repo.get_git_commit = MagicMock(return_value=dummy_commit)
+        repo_client.repo.create_git_tree = MagicMock(return_value="dummy_new_tree")
+        dummy_new_commit = MagicMock()
+        dummy_new_commit.sha = "new_commit_sha"
+        repo_client.repo.create_git_commit = MagicMock(return_value=dummy_new_commit)
+        dummy_branch_ref = MagicMock()
+        repo_client.repo.get_git_ref = MagicMock(return_value=dummy_branch_ref)
+
+        commit_message = "Test commit message"
+        new_commit = repo_client.push_new_commit_to_pr(
+            dummy_pr, commit_message, file_patches=[dummy_patch]
+        )
+
+        mock_process.assert_called_once_with(branch_ref="test-branch", patch=dummy_patch)
+        repo_client.get_branch_head_sha.assert_called_once_with("test-branch")
+        repo_client.repo.get_git_commit.assert_called_once_with("old_sha")
+        repo_client.repo.create_git_tree.assert_called_once_with(
+            [dummy_tree_element], "dummy_base_tree"
+        )
+        repo_client.repo.create_git_commit.assert_called_once_with(
+            message=commit_message, tree="dummy_new_tree", parents=[dummy_commit]
+        )
+        repo_client.repo.get_git_ref.assert_called_once_with("heads/test-branch")
+        dummy_branch_ref.edit.assert_called_once_with(sha="new_commit_sha")
+        assert new_commit == dummy_new_commit
