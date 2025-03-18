@@ -287,7 +287,7 @@ class AutofixEventManager:
 
     def on_confidence_question(self, question: str):
         log_seer_event(
-            SeerEventNames.AUTOFIX_CONFIDENCE_QUESTION,
+            SeerEventNames.AUTOFIX_ASKED_USER_QUESTION,
             {
                 "run_id": self.state.get().run_id,
                 "question": question,
