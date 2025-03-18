@@ -1,9 +1,10 @@
 import logging
+import os
 import time
 
 import flask
 import sentry_sdk
-from datadog.dogstatsd.base import statsd
+from datadog import initialize, statsd
 from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -95,13 +96,21 @@ from seer.smoke_test import check_smoke_test
 from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
-from seer.workflows.compare.service import compare_cohort
+from seer.workflows.compare.service import compareCohorts
 
 logger = logging.getLogger(__name__)
 
 app = flask.current_app
 blueprint = Blueprint("app", __name__)
 app_module = module
+
+# Initialize Datadog client for metrics
+options = {
+    "statsd_host": os.environ.get("STATSD_HOST", "127.0.0.1"),
+    "statsd_port": os.environ.get("STATSD_PORT", 8126),
+}
+
+initialize(**options)
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
@@ -415,7 +424,7 @@ def delete_alert__data_endpoint(
 def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
-    return compare_cohort(data)
+    return compareCohorts(data)
 
 
 @blueprint.route("/health/live", methods=["GET"])
