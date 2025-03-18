@@ -2,9 +2,10 @@ import logging
 import os
 import time
 
+import datadog
 import flask
 import sentry_sdk
-from datadog import initialize, statsd
+from datadog.dogstatsd.base import statsd
 from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -105,12 +106,10 @@ blueprint = Blueprint("app", __name__)
 app_module = module
 
 # Initialize Datadog client for metrics
-options = {
-    "statsd_host": os.environ.get("STATSD_HOST", "127.0.0.1"),
-    "statsd_port": os.environ.get("STATSD_PORT", 8126),
-}
-
-initialize(**options)
+datadog.initialize(
+    statsd_host=os.environ.get("STATSD_HOST", "127.0.0.1"),
+    statsd_port=int(os.environ.get("STATSD_PORT", "8126")),
+)
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
