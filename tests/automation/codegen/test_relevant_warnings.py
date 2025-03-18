@@ -137,6 +137,7 @@ class TestFilterWarningsComponent:
         return FilterWarningsComponent(context=MagicMock())
 
     def test_bad_encoded_locations_cause_errors(self, component: FilterWarningsComponent):
+        print("this is a test")
         warning = next(generate(StaticAnalysisWarning))
         warning.encoded_location = "../../getsentry/seer/../not/anymore.py:1:1"
         with pytest.raises(
