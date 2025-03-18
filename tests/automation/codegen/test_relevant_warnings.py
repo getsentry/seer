@@ -52,39 +52,47 @@ class TestFilterWarningsComponent:
             ValueError,
             match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
         ):
-            component._get_possible_pr_files(
+            component._get_matching_pr_files(
                 warning,
                 [PrFile(filename="file1.py", patch="", status="modified", changes=1, sha="abc")],
             )
 
-    def test_get_changed_lines(self, component: FilterWarningsComponent):
-        pr_file = PrFile(
-            filename="hello.py",
-            patch="""@@ -1,3 +1,4 @@
- def hello():
-     print("hello")
-+    print("world")
- print("goodbye")""",
-            status="modified",
-            changes=10,
-            sha="sha1",
-        )
-        assert component._get_pr_changed_lines(pr_file) == [1, 2, 3, 4]
-
+    def test_get_hunk_ranges(self, component: FilterWarningsComponent):
         pr_file = PrFile(
             filename="test.py",
-            patch="""@@ -10,3 +10,6 @@
- class MyTest:
-     def test_one(self):
-         assert True
-+    def test_two(self):
-+        assert False
-+    def test_three(self):""",
+            patch="""@@ -1,3 +1,4 @@
+def hello():
+    print("hello")
++    print("world")  # Line 3 is added
+print("goodbye")
+
+@@ -20,3 +21,4 @@
+    print("end")
++    print("new end")  # Line 22 is added
+    return""",
             status="modified",
             changes=15,
             sha="sha2",
         )
-        assert component._get_pr_changed_lines(pr_file) == [10, 11, 12, 13, 14, 15]
+        assert component._get_sorted_hunk_ranges(pr_file) == [(1, 5), (21, 25)]
+
+    def test_do_ranges_overlap(self, component: FilterWarningsComponent):
+        # Test overlapping ranges
+        assert component._do_ranges_overlap((1, 5), [(1, 5)])  # Exact match
+        assert component._do_ranges_overlap((2, 4), [(1, 5)])  # Warning contained within hunk
+        assert component._do_ranges_overlap((1, 3), [(2, 5)])  # Partial overlap at start
+        assert component._do_ranges_overlap((4, 6), [(2, 5)])  # Partial overlap at end
+        assert component._do_ranges_overlap((1, 6), [(2, 4)])  # Hunk contained within warning
+        assert component._do_ranges_overlap((3, 6), [(1, 4), (5, 7)])  # Overlaps multiple hunks
+        assert component._do_ranges_overlap((1, 1), [(1, 4), (5, 7)])  # Warning only has 1 line
+
+        # Test non-overlapping ranges
+        assert not component._do_ranges_overlap((1, 2), [(3, 4)])  # Warning before hunk
+        assert not component._do_ranges_overlap((5, 6), [(2, 4)])  # Warning after hunk
+        assert not component._do_ranges_overlap((1, 2), [])  # Empty hunks
+        assert not component._do_ranges_overlap(
+            (1, 2), [(10, 12), (20, 25)]
+        )  # No overlap with any hunks
 
     class _TestInvokeTestCase(BaseModel):
         id: str
