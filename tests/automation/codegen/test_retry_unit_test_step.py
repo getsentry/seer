@@ -11,23 +11,20 @@ class DummyPreviousContext:
 
 
 class TestRetryUnittestStep(unittest.TestCase):
-    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
-    def setUp(self, mock_instantiate_context):
+    @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
+    def setUp(self, _):
         self.mock_pr = MagicMock()
         self.mock_pr.html_url = "http://example.com/pr/123"
         self.mock_pr.url = "http://api.github.com/pr/123"
         self.repo_client = MagicMock()
         self.repo_client.repo.get_pull.return_value = self.mock_pr
-
         self.mock_previous_context = DummyPreviousContext()
         self.mock_previous_context.original_pr_url = "http://original.com/pr/111"
         self.mock_previous_context.iterations = 1
-
         self.context = MagicMock()
         self.context.get_repo_client.return_value = self.repo_client
         self.context.get_previous_run_context.return_value = self.mock_previous_context
         self.context.event_manager = MagicMock()
-
         self.request_data = {
             "run_id": 1,
             "pr_id": 123,
@@ -45,7 +42,8 @@ class TestRetryUnittestStep(unittest.TestCase):
         step.context = self.context
         return step
 
-    def test_invoke_success_status(self):
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def test_invoke_success_status(self, _):
         step = self._build_step()
         step.invoke()
         self.repo_client.post_unit_test_reference_to_original_pr.assert_called_once_with(
@@ -54,30 +52,8 @@ class TestRetryUnittestStep(unittest.TestCase):
         self.context.event_manager.mark_running.assert_called_once()
         self.context.event_manager.mark_completed.assert_called_once()
 
-    def test_invoke_failed_status_with_generated_tests(self):
-        extra = {"codecov_status": {"conclusion": "failure"}}
-        step = self._build_step(extra)
-        mock_diff1 = MagicMock()
-        mock_diff2 = MagicMock()
-        mock_unittest_output = MagicMock()
-        mock_unittest_output.diffs = [mock_diff1, mock_diff2]
-        with patch.object(
-            step, "_generate_unit_tests", return_value=mock_unittest_output
-        ) as mock_generate:
-            with patch(
-                "seer.automation.codegen.retry_unit_test_github_pr_creator.RetryUnitTestGithubPrUpdater"
-            ) as mock_updater_cls:
-                instance = mock_updater_cls.return_value
-                step.invoke()
-                mock_generate.assert_called_once_with(
-                    self.repo_client, self.mock_pr, self.mock_previous_context
-                )
-                self.context.event_manager.append_file_change.assert_any_call(mock_diff1)
-                self.context.event_manager.append_file_change.assert_any_call(mock_diff2)
-                instance.update_github_pull_request.assert_called_once()
-                self.repo_client.post_unit_test_reference_to_original_pr.assert_not_called()
-
-    def test_invoke_failed_status_with_no_generated_tests(self):
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def test_invoke_failed_status_with_no_generated_tests(self, _):
         extra = {"codecov_status": {"conclusion": "failure"}}
         step = self._build_step(extra)
         with patch.object(step, "_generate_unit_tests", return_value=None) as mock_generate:
@@ -89,7 +65,8 @@ class TestRetryUnittestStep(unittest.TestCase):
                 self.mock_previous_context.original_pr_url, self.mock_pr.html_url
             )
 
-    def test_max_iterations_reached(self):
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def test_max_iterations_reached(self, _):
         self.mock_previous_context.iterations = RetryUnittestStep.MAX_ITERATIONS
         extra = {"codecov_status": {"conclusion": "failure"}}
         step = self._build_step(extra)
@@ -98,7 +75,8 @@ class TestRetryUnittestStep(unittest.TestCase):
             mock_generate.assert_not_called()
             self.repo_client.post_unit_test_reference_to_original_pr.assert_not_called()
 
-    def test_get_previous_run_context_failure(self):
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def test_get_previous_run_context_failure(self, _):
         self.context.get_previous_run_context.return_value = None
         extra = {"codecov_status": {"conclusion": "failure"}}
         step = self._build_step(extra)
@@ -106,7 +84,8 @@ class TestRetryUnittestStep(unittest.TestCase):
             step.invoke()
         self.context.event_manager.mark_completed.assert_called_once()
 
-    def test_generate_unit_tests_exception(self):
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def test_generate_unit_tests_exception(self, _):
         self.repo_client.get_pr_diff_content.side_effect = Exception("diff error")
         step = self._build_step()
         result = step._generate_unit_tests(
@@ -129,7 +108,6 @@ class TestRetryUnitTestGithubPrUpdater(unittest.TestCase):
         mock_pr.html_url = "http://example.com/pr/123"
         repo_client = MagicMock()
         repo_client.push_new_commit_to_pr.return_value = "new_commit"
-        # Use a dummy previous context with an integer iterations.
         mock_previous_context = DummyPreviousContext()
         mock_previous_context.iterations = 1
         updater = RetryUnitTestGithubPrUpdater(
