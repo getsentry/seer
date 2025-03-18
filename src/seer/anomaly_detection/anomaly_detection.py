@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
+from datadog.dogstatsd.base import statsd
 from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
@@ -508,16 +509,22 @@ class AnomalyDetection(BaseModel):
         sentry_sdk.set_tag(AnomalyDetectionTags.MODE, mode)
 
         if isinstance(request.context, AlertInSeer):
-            sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
-            ts, anomalies = self._online_detect(request.context, request.config)
+            with statsd.timed("seer.anomaly_detection.detect.online_detect_duration"):
+                statsd.increment("seer.anomaly_detection.detect.online_detect")
+                sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
+                ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
-            ts, anomalies = self._combo_detect(
-                request.context, request.config, time_budget_ms=time_budget_ms
-            )
+            with statsd.timed("seer.anomaly_detection.detect.combo_detect_duration"):
+                statsd.increment("seer.anomaly_detection.detect.combo_detect")
+                ts, anomalies = self._combo_detect(
+                    request.context, request.config, time_budget_ms=time_budget_ms
+                )
         else:
-            ts, anomalies, _ = self._batch_detect(
-                request.context, request.config, time_budget_ms=time_budget_ms
-            )
+            with statsd.timed("seer.anomaly_detection.detect.batch_detect_duration"):
+                statsd.increment("seer.anomaly_detection.detect.batch_detect")
+                ts, anomalies, _ = self._batch_detect(
+                    request.context, request.config, time_budget_ms=time_budget_ms
+                )
         self._update_anomalies(ts, anomalies)
         return DetectAnomaliesResponse(success=True, timeseries=ts)
 

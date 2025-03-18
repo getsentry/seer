@@ -78,7 +78,7 @@ from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected, resolve
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
@@ -357,8 +357,12 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
             response = anomaly_detection().detect_anomalies(data)
             statsd.increment("seer.anomaly_detection.detect.success")
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.detect.error")
+        statsd.increment("seer.anomaly_detection.detect.client_error")
         response = DetectAnomaliesResponse(success=False, message=str(e))
+    except ServerError as e:
+        statsd.increment("seer.anomaly_detection.detect.server_error")
+        raise ServerError(message=str(e))
+
     return response
 
 
@@ -374,8 +378,12 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
             response = anomaly_detection().store_data(data)
             statsd.increment("seer.anomaly_detection.store.success")
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.store.error")
+        statsd.increment("seer.anomaly_detection.store.client_error")
         response = StoreDataResponse(success=False, message=str(e))
+    except ServerError as e:
+        statsd.increment("seer.anomaly_detection.store.server_error")
+        raise ServerError(message=str(e))
+
     return response
 
 
@@ -394,8 +402,12 @@ def delete_alert__data_endpoint(
             response = anomaly_detection().delete_alert_data(data)
             statsd.increment("seer.anomaly_detection.delete_alert_data.success")
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.delete_alert_data.error")
+        statsd.increment("seer.anomaly_detection.delete_alert_data.client_error")
         response = DeleteAlertDataResponse(success=False, message=str(e))
+    except ServerError as e:
+        statsd.increment("seer.anomaly_detection.delete_alert_data.server_error")
+        raise ServerError(message=str(e))
+
     return response
 
 
