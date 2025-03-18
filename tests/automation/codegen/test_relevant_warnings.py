@@ -69,7 +69,7 @@ class TestFilterWarningsComponent:
             changes=10,
             sha="sha1",
         )
-        assert component._get_changed_lines(pr_file) == [1, 2, 3, 4]
+        assert component._get_pr_changed_lines(pr_file) == [1, 2, 3, 4]
 
         pr_file = PrFile(
             filename="test.py",
@@ -84,7 +84,7 @@ class TestFilterWarningsComponent:
             changes=15,
             sha="sha2",
         )
-        assert component._get_changed_lines(pr_file) == [10, 11, 12, 13, 14, 15]
+        assert component._get_pr_changed_lines(pr_file) == [10, 11, 12, 13, 14, 15]
 
     class _TestInvokeTestCase(BaseModel):
         id: str

@@ -66,8 +66,8 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             result.append(Path(*parts).as_posix())
         return result
 
-    def _get_changed_lines(self, pr_file: PrFile) -> list[int]:
-        """Returns the 1-indexed changed line numbers in the updated file.
+    def _get_pr_changed_lines(self, pr_file: PrFile) -> list[int]:
+        """Returns the 1-indexed changed line numbers in the updated pr file.
 
         Determined by parsing git diff hunk headers of the form:
         @@ -n,m +p,q @@ where:
@@ -92,8 +92,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             List of 1-indexed line numbers in the updated file
         """
         patch_lines = pr_file.patch.split("\n")
-        current_line = 0
-        changed_lines = []
+        changed_lines: list[int] = []
 
         for line in patch_lines:
             if line.startswith("@@"):
@@ -101,8 +100,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
                     match = re.match(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", line)
                     if match:
                         _, _, new_start, num_lines = map(int, match.groups())
-                        current_line = new_start
-                        changed_lines.extend(range(current_line, current_line + num_lines))
+                        changed_lines.extend(range(new_start, new_start + num_lines))
                 except Exception:
                     self.logger.warning(f"Could not parse hunk header: {line}")
                     continue
@@ -126,42 +124,36 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         Returns:
             List of PR files that may match the warning's location
         """
-        # Extract just the path portion from the warning location
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
 
-        # Handle relative paths by skipping any leading ".." components
-        try:
-            first_non_dot_idx = next((i for i, part in enumerate(path.parts) if part != ".."), 0)
-            path = Path(*path.parts[first_non_dot_idx:])
-        except (IndexError, StopIteration):
-            return []
-
-        # Don't allow ".." in the middle of paths
+        # If the path is relative, it shouldn't contain intermediate `..`s.
+        first_non_dot_idx = next((i for i, part in enumerate(path.parts) if part != ".."), 0)
+        path = Path(*path.parts[first_non_dot_idx:])
         if ".." in path.parts:
             raise ValueError(
                 f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
             )
 
-        # Generate possible path variations to match against
-        possible_matches = {
+        # Make possible variations of the warning's path
+        warning_filepath_variations = {
             path.as_posix(),
             *self._left_truncated_paths(path, max_num_paths=2),
         }
 
-        # Build mapping of all possible path variations to their PR files
-        pr_file_map = {}
+        # Make possible variations of the pr files' paths
+        pr_file_by_filepath: dict[str, PrFile] = {}
         for pr_file in pr_files:
             pr_path = Path(pr_file.filename)
-            pr_file_map[pr_path.as_posix()] = pr_file
+            pr_file_by_filepath[pr_path.as_posix()] = pr_file
             for truncated in self._left_truncated_paths(pr_path, max_num_paths=1):
-                pr_file_map[truncated] = pr_file
+                pr_file_by_filepath[truncated] = pr_file
 
         # Find all matching PR files
         matching_pr_files = []
-        for possible_match in possible_matches:
-            if possible_match in pr_file_map:
-                matching_pr_files.append(pr_file_map[possible_match])
+        for path in warning_filepath_variations:
+            if path in pr_file_by_filepath:
+                matching_pr_files.append(pr_file_by_filepath[path])
 
         if matching_pr_files:
             self.logger.debug(
@@ -174,19 +166,9 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 
         return matching_pr_files
 
-    def _is_warning_in_files(
+    def _is_warning_line_in_files(
         self, warning: StaticAnalysisWarning, matching_pr_files: list[PrFile]
     ) -> bool:
-        """
-        Check if a warning's line number appears in any of the changed lines of matching PR files.
-
-        Args:
-            warning: The static analysis warning to check
-            matching_pr_files: List of PR files that match the warning's filename
-
-        Returns:
-            True if the warning line appears in changed lines of any matching PR file
-        """
         # Encoded location format: "file:line:col"
         location_parts = warning.encoded_location.split(":")
         if len(location_parts) < 2:
@@ -197,7 +179,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 
         warning_line = int(location_parts[1])
         return any(
-            warning_line in self._get_changed_lines(pr_file) for pr_file in matching_pr_files
+            warning_line in self._get_pr_changed_lines(pr_file) for pr_file in matching_pr_files
         )
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
@@ -205,9 +187,9 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
         filtered_warnings: list[StaticAnalysisWarning] = []
         for warning in request.warnings:
-            matched_pr_files = self._get_possible_pr_files(warning, request.pr_files)
+            possible_pr_files = self._get_possible_pr_files(warning, request.pr_files)
 
-            if self._is_warning_in_files(warning, matched_pr_files):
+            if self._is_warning_line_in_files(warning, possible_pr_files):
                 filtered_warnings.append(warning)
 
         return FilterWarningsOutput(warnings=filtered_warnings)
