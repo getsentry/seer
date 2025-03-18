@@ -71,7 +71,11 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         repos_str=repos_str,
                         original_instruction=request.original_instruction,
                         code_map=request.profile,
-                        trace_tree=request.trace_tree,
+                        trace_tree=(
+                            request.trace_tree
+                            if state.request.invoking_user.id == 3283725
+                            else None
+                        ),  # TODO temporary guard for Rohan (@roaga) to test in prod
                     ),
                 )
 
