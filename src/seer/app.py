@@ -97,7 +97,7 @@ from seer.smoke_test import check_smoke_test
 from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
-from seer.workflows.compare.service import compare_cohorts
+from seer.workflows.compare.service import compare_cohort
 
 logger = logging.getLogger(__name__)
 
@@ -423,7 +423,7 @@ def delete_alert__data_endpoint(
 def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
-    return compare_cohorts(data)
+    return compare_cohort(data)
 
 
 @blueprint.route("/health/live", methods=["GET"])
