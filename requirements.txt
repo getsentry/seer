@@ -124,8 +124,6 @@ cycler==0.11.0
     #   matplotlib
 cython==3.0.2
     # via -r requirements-constraints.txt
-datadog==0.51.0
-    # via -r requirements-constraints.txt
 datasets==3.3.2
     # via optimum
 deprecated==1.2.18
@@ -639,7 +637,6 @@ requests==2.32.2
     # via
     #   -r requirements-constraints.txt
     #   chromadb
-    #   datadog
     #   datasets
     #   fsspec
     #   google-api-core

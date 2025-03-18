@@ -488,12 +488,8 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
     try:
-        with statsd.timed("seer.anomaly_detection.detect.duration"):
-            response = anomaly_detection().detect_anomalies(data)
-            statsd.increment("seer.anomaly_detection.detect.success")
-
+        response = anomaly_detection().detect_anomalies(data)
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.detect.error")
         response = DetectAnomaliesResponse(success=False, message=str(e))
     return response
 
@@ -506,11 +502,8 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
-        with statsd.timed("seer.anomaly_detection.store.duration"):
-            response = anomaly_detection().store_data(data)
-            statsd.increment("seer.anomaly_detection.store.success")
+        response = anomaly_detection().store_data(data)
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.store.error")
         response = StoreDataResponse(success=False, message=str(e))
     return response
 
@@ -526,11 +519,8 @@ def delete_alert__data_endpoint(
         sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
-        with statsd.timed("seer.anomaly_detection.delete_alert_data.duration"):
-            response = anomaly_detection().delete_alert_data(data)
-            statsd.increment("seer.anomaly_detection.delete_alert_data.success")
+        response = anomaly_detection().delete_alert_data(data)
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.delete_alert_data.error")
         response = DeleteAlertDataResponse(success=False, message=str(e))
     return response
 
