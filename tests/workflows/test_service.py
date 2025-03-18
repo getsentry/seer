@@ -12,7 +12,7 @@ from seer.workflows.compare.models import (
     StatsAttributeBucket,
     StatsCohort,
 )
-from seer.workflows.compare.service import CompareService, compareCohorts
+from seer.workflows.compare.service import CompareService, compare_cohort
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def test_sanity_check():
     """
     with open("tests/workflows/test_data/test_payload_0.json", "r") as f:
         sampleRequest = CompareCohortsRequest(**json.load(f))
-    response = compareCohorts(sampleRequest)
+    response = compare_cohort(sampleRequest)
     resultAttributes = [attr.attributeName for attr in response.results]
     # browser is the most distrub, followed by country
     expectedAttributes = ["browser", "country"]
