@@ -411,7 +411,9 @@ def health_check():
     from seer.inference_models import models_loading_status
 
     if models_loading_status() == LoadingResult.FAILED:
+        statsd.increment("seer.health.live.500")
         return "Models failed to load", 500
+    statsd.increment("seer.health.live.200")
     return "", 200
 
 
@@ -427,9 +429,12 @@ def ready_check(app_config: AppConfig = injected):
         status = min(status, smoke_status)
 
     if status == LoadingResult.FAILED:
+        statsd.increment("seer.health.ready.500")
         return "", 500
     if status == LoadingResult.DONE:
+        statsd.increment("seer.health.ready.200")
         return "", 200
+    statsd.increment("seer.health.ready.503")
     return "", 503
 
 
