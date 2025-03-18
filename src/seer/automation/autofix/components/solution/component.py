@@ -71,11 +71,12 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         repos_str=repos_str,
                         original_instruction=request.original_instruction,
                         code_map=request.profile,
+                        trace_tree=request.trace_tree,
                     ),
                 )
 
             try:
-                if has_tools:  # run context gatherer if not obvious
+                if has_tools:  # run context gatherer
                     response = agent.run(
                         run_config=RunConfig(
                             model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
@@ -87,6 +88,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                                 repos_str=repos_str,
                                 original_instruction=request.original_instruction,
                                 code_map=request.profile,
+                                trace_tree=request.trace_tree,
                             ),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
@@ -119,6 +121,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                                     repos_str=repos_str,
                                     original_instruction=request.original_instruction,
                                     code_map=request.profile,
+                                    trace_tree=request.trace_tree,
                                 ),
                             )
                         ]

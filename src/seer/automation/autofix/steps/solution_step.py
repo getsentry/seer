@@ -83,6 +83,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
                 original_instruction=state.request.instruction,
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
+                trace_tree=state.request.trace_tree,
             )
         )
 
