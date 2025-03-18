@@ -69,4 +69,8 @@ class ConfidenceComponent(BaseComponent[ConfidenceRequest, ConfidenceOutput]):
                 output_confidence_score=0.5,
                 proceed_confidence_score=0.5,
             )
+
+        if data.question:
+            self.context.event_manager.on_confidence_question(data.question)
+
         return data

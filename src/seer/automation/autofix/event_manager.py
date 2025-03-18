@@ -114,6 +114,8 @@ class AutofixEventManager:
                 SeerEventNames.AUTOFIX_ROOT_CAUSE_STARTED,
                 {
                     "run_id": cur.run_id,
+                    "is_auto_run": cur.request.options.auto_run_source is not None,
+                    "auto_run_source": cur.request.options.auto_run_source,
                 },
             )
 
@@ -223,6 +225,7 @@ class AutofixEventManager:
             solution_step.custom_solution = (
                 payload.custom_solution if payload.custom_solution else None
             )
+            original_solution = solution_step.solution
             if payload.solution:
                 solution_step.solution = payload.solution
             solution_step.selected_mode = payload.mode
@@ -231,6 +234,30 @@ class AutofixEventManager:
             cur.clear_file_changes()
 
             cur.status = AutofixStatus.PROCESSING
+
+            log_seer_event(
+                SeerEventNames.AUTOFIX_CODING_STARTED,
+                {
+                    "run_id": cur.run_id,
+                    "has_unit_tests": any(
+                        step.timeline_item_type == "repro_test" for step in solution_step.solution
+                    ),
+                    "has_removed_steps": any(
+                        not any(
+                            original_step.title == current_step.title
+                            for current_step in solution_step.solution
+                        )
+                        for original_step in original_solution
+                    ),
+                    "has_added_steps": any(
+                        not any(
+                            solution_step.title == original_step.title
+                            for original_step in original_solution
+                        )
+                        for solution_step in solution_step.solution
+                    ),
+                },
+            )
 
     def send_coding_start(self):
         with self.state.update() as cur:
@@ -242,13 +269,6 @@ class AutofixEventManager:
             plan_step.status = AutofixStatus.PROCESSING
 
             cur.status = AutofixStatus.PROCESSING
-
-            log_seer_event(
-                SeerEventNames.AUTOFIX_CODING_STARTED,
-                {
-                    "run_id": cur.run_id,
-                },
-            )
 
     def send_coding_result(self, result: CodingOutput | None):
         with self.state.update() as cur:
@@ -280,6 +300,15 @@ class AutofixEventManager:
                     "run_id": cur.run_id,
                 },
             )
+
+    def on_confidence_question(self, question: str):
+        log_seer_event(
+            SeerEventNames.AUTOFIX_CONFIDENCE_QUESTION,
+            {
+                "run_id": self.state.get().run_id,
+                "question": question,
+            },
+        )
 
     def add_log(self, message: str):
         with self.state.update() as cur:
