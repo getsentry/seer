@@ -139,11 +139,6 @@ class AlgoConfig(BaseModel):
         description="Fixed window size for the matrix profile",
     )
 
-    direction_detection_num_timesteps_in_batch_mode: int = Field(
-        12,
-        description="Number of timesteps to do direction detection in batch mode",
-    )
-
     period_to_smooth_size: dict[int, int] = Field(
         default={5: 19, 15: 11, 30: 7, 60: 5},
         description="Flag smoothing window size based on the function smooth_size = floor(43 / sqrt(time_period))",
@@ -164,8 +159,18 @@ class AlgoConfig(BaseModel):
     )
 
     prophet_forecast_len: int = Field(
-        24,
+        36,
         description="Number of hours to forecast for the Prophet model",
+    )
+
+    max_stream_days_for_combo_detection: dict[int, float] = Field(
+        default={5: 1, 15: 1.5, 30: 3, 60: 5},
+        description="Limit on the number of days we apply streaming to during combo detection. Its 288 data points for 5 min data, 144 for 15 min data, 144 for 30 min data and 120 for 1 hour data",
+    )
+
+    max_batch_days_for_combo_detection: dict[int, float] = Field(
+        default={5: 7, 15: 15, 30: 21, 60: 28},
+        description="Limit on the number of days we apply batching to during combo detection",
     )
 
     def get_prophet_params(self, sensitivity: str) -> ProphetParams:

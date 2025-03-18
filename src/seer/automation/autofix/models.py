@@ -20,6 +20,7 @@ from seer.automation.models import (
     Line,
     Profile,
     RepoDefinition,
+    TraceTree,
 )
 from seer.automation.summarize.issue import IssueSummary
 from seer.automation.utils import make_kill_signal
@@ -151,7 +152,10 @@ class BaseStep(BaseModel):
 
     queued_user_messages: list[str] = []
     output_stream: str | None = None
-    active_comment_thread: CommentThread | None = None
+    active_comment_thread: CommentThread | None = None  # user-initiated comment thread
+    agent_comment_thread: CommentThread | None = None  # Autofix-initiated comment thread
+    output_confidence_score: float | None = None  # confidence in the step's output
+    proceed_confidence_score: float | None = None  # confidence in proceeding to the next step
 
     def receive_user_message(self, message: str):
         self.queued_user_messages.append(message)
@@ -225,6 +229,7 @@ class SolutionStep(BaseStep):
     type: Literal[StepType.SOLUTION] = StepType.SOLUTION
 
     solution: list[SolutionTimelineEvent] = []
+    description: str | None = None
     custom_solution: str | None = None
     solution_selected: bool = False
     selected_mode: Literal["all", "fix", "test"] | None = None
@@ -247,6 +252,11 @@ class CodebaseState(BaseModel):
     is_writeable: bool | None = None
 
 
+class AutofixFeedback(BaseModel):
+    root_cause_thumbs_up: bool | None = None
+    root_cause_thumbs_down: bool | None = None
+
+
 class AutofixGroupState(BaseModel):
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
@@ -261,11 +271,13 @@ class AutofixGroupState(BaseModel):
     )
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
+    feedback: AutofixFeedback | None = None
 
 
 class AutofixStateRequest(BaseModel):
     group_id: int | None = None
     run_id: int | None = None
+    check_repo_access: bool = False
 
 
 class AutofixPrIdRequest(BaseModel):
@@ -306,6 +318,7 @@ class AutofixRequestOptions(BaseModel):
     disable_codebase_indexing: bool = False
     comment_on_pr_with_url: str | None = None
     disable_interactivity: bool = False
+    auto_run_source: str | None = None
 
 
 class AutofixRequest(BaseModel):
@@ -313,10 +326,11 @@ class AutofixRequest(BaseModel):
     project_id: Annotated[int, Examples(specialized.unsigned_ints)]
     repos: list[RepoDefinition]
     issue: IssueDetails
-    invoking_user: Optional[AutofixUserDetails] = None
-    instruction: Optional[str] = Field(default=None, validation_alias="additional_context")
-    issue_summary: Optional[IssueSummary] = None
+    invoking_user: AutofixUserDetails | None = None
+    instruction: str | None = Field(default=None, validation_alias="additional_context")
+    issue_summary: IssueSummary | None = None
     profile: Profile | None = None
+    trace_tree: TraceTree | None = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 
@@ -380,6 +394,8 @@ class AutofixUpdateType(str, enum.Enum):
     RESTART_FROM_POINT_WITH_FEEDBACK = "restart_from_point_with_feedback"
     UPDATE_CODE_CHANGE = "update_code_change"
     COMMENT_THREAD = "comment_thread"
+    RESOLVE_COMMENT_THREAD = "resolve_comment_thread"
+    FEEDBACK = "feedback"
 
 
 class AutofixRootCauseUpdatePayload(BaseModel):
@@ -394,6 +410,7 @@ class AutofixSolutionUpdatePayload(BaseModel):
     custom_solution: str | None = None
     solution_selected: bool = False
     mode: Literal["all", "fix", "test"] = "fix"
+    solution: list[SolutionTimelineEvent] | None = None
 
 
 class AutofixCreatePrUpdatePayload(BaseModel):
@@ -438,6 +455,19 @@ class AutofixCommentThreadPayload(BaseModel):
     message: str
     step_index: int
     retain_insight_card_index: int | None = None
+    is_agent_comment: bool = False
+
+
+class AutofixResolveCommentThreadPayload(BaseModel):
+    type: Literal[AutofixUpdateType.RESOLVE_COMMENT_THREAD]
+    thread_id: str
+    step_index: int
+    is_agent_comment: bool = False
+
+
+class AutofixFeedbackPayload(BaseModel):
+    type: Literal[AutofixUpdateType.FEEDBACK]
+    action: Literal["root_cause_thumbs_up", "root_cause_thumbs_down"]
 
 
 class AutofixUpdateRequest(BaseModel):
@@ -451,6 +481,8 @@ class AutofixUpdateRequest(BaseModel):
         AutofixRestartFromPointPayload,
         AutofixUpdateCodeChangePayload,
         AutofixCommentThreadPayload,
+        AutofixResolveCommentThreadPayload,
+        AutofixFeedbackPayload,
     ] = Field(discriminator="type")
 
 

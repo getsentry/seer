@@ -7,11 +7,9 @@ from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmProviderType,
     LlmResponseMetadata,
-    Message,
     Usage,
 )
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.is_root_cause_obvious import IsRootCauseObviousOutput
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import (
     MultipleRootCauseAnalysisOutputPrompt,
@@ -37,13 +35,6 @@ class TestRootCauseComponent:
         with patch("seer.automation.autofix.components.root_cause.component.AutofixAgent") as mock:
             yield mock
 
-    @pytest.fixture
-    def mock_is_obvious_component(self):
-        with patch(
-            "seer.automation.autofix.components.root_cause.component.IsRootCauseObviousComponent"
-        ) as mock:
-            yield mock
-
     def test_root_cause_simple_response_parsing(self, component, mock_agent):
         mock_agent.return_value.run.side_effect = [
             "Anything really",
@@ -66,6 +57,7 @@ class TestRootCauseComponent:
                             is_most_important_event=True,
                         )
                     ],
+                    summary="The root cause of the issue is ...",
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -113,13 +105,7 @@ class TestRootCauseComponent:
         # Ensure that the formatter is not called
         assert mock_agent.return_value.run.call_count == 1
 
-    def test_root_cause_with_obvious_root_cause(
-        self, component, mock_agent, mock_is_obvious_component
-    ):
-        mock_is_obvious = MagicMock()
-        mock_is_obvious.invoke.return_value = IsRootCauseObviousOutput(is_root_cause_clear=True)
-        mock_is_obvious_component.return_value = mock_is_obvious
-
+    def test_root_cause(self, component, mock_agent):
         mock_agent.return_value.run.side_effect = [
             "Some root cause analysis",
             "Formatter",
@@ -141,54 +127,7 @@ class TestRootCauseComponent:
                             is_most_important_event=True,
                         )
                     ],
-                )
-            ),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.OPENAI,
-                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-            ),
-        )
-
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-
-        with module:
-            component.invoke(RootCauseAnalysisRequest(event_details=MagicMock(spec=EventDetails)))
-
-        # Verify agent was created without tools
-        mock_agent.assert_called_once()
-        tools_arg = mock_agent.call_args[1]["tools"]
-        assert tools_arg is None
-
-    def test_root_cause_with_non_obvious_root_cause(
-        self, component, mock_agent, mock_is_obvious_component
-    ):
-        mock_is_obvious = MagicMock()
-        mock_is_obvious.invoke.return_value = IsRootCauseObviousOutput(is_root_cause_clear=False)
-        mock_is_obvious_component.return_value = mock_is_obvious
-
-        mock_agent.return_value.run.side_effect = [
-            "Some root cause analysis",
-            "Formatter",
-        ]
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=MultipleRootCauseAnalysisOutputPrompt(
-                cause=RootCauseAnalysisItemPrompt(
-                    root_cause_reproduction=[
-                        TimelineEvent(
-                            title="Test Cause",
-                            code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="internal_code",
-                            relevant_code_file=RelevantCodeFile(
-                                file_path="test.py",
-                                repo_name="owner/repo",
-                            ),
-                            is_most_important_event=True,
-                        )
-                    ],
+                    summary="The root cause of the issue is ...",
                 )
             ),
             metadata=LlmResponseMetadata(
@@ -205,60 +144,6 @@ class TestRootCauseComponent:
             component.invoke(RootCauseAnalysisRequest(event_details=MagicMock(spec=EventDetails)))
 
         # Verify agent was created with tools
-        mock_agent.assert_called_once()
-        tools_arg = mock_agent.call_args[1]["tools"]
-        assert tools_arg is not None
-
-    def test_root_cause_with_initial_memory_skips_is_obvious(
-        self, component, mock_agent, mock_is_obvious_component
-    ):
-        mock_is_obvious = MagicMock()
-        mock_is_obvious_component.return_value = mock_is_obvious
-
-        mock_agent.return_value.run.side_effect = [
-            "Some root cause analysis",
-            "Formatter",
-        ]
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
-            parsed=MultipleRootCauseAnalysisOutputPrompt(
-                cause=RootCauseAnalysisItemPrompt(
-                    root_cause_reproduction=[
-                        TimelineEvent(
-                            title="Test Cause",
-                            code_snippet_and_analysis="The root cause of the issue is ...",
-                            timeline_item_type="internal_code",
-                            relevant_code_file=RelevantCodeFile(
-                                file_path="test.py",
-                                repo_name="owner/repo",
-                            ),
-                            is_most_important_event=True,
-                        )
-                    ],
-                )
-            ),
-            metadata=LlmResponseMetadata(
-                model="test-model",
-                provider_name=LlmProviderType.OPENAI,
-                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-            ),
-        )
-
-        module = Module()
-        module.constant(LlmClient, mock_llm_client)
-
-        with module:
-            component.invoke(
-                RootCauseAnalysisRequest(
-                    event_details=MagicMock(spec=EventDetails),
-                    initial_memory=[Message(role="user", content="Hello")],
-                )
-            )
-
-        mock_is_obvious.invoke.assert_not_called()
-
-        # Verify agent was created with tools (default behavior when skipping is_obvious)
         mock_agent.assert_called_once()
         tools_arg = mock_agent.call_args[1]["tools"]
         assert tools_arg is not None

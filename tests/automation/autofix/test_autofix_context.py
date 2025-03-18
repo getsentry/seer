@@ -29,7 +29,8 @@ from seer.automation.models import (
     ThreadDetails,
 )
 from seer.automation.state import DbStateRunTypes
-from seer.automation.summarize.issue import IssueSummary
+from seer.automation.summarize.issue import IssueSummaryWithScores
+from seer.automation.summarize.models import SummarizeIssueScores
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 
 
@@ -109,14 +110,20 @@ class TestAutofixContext(unittest.TestCase):
 
     def test_get_issue_summary(self):
         with Session() as session:
-            valid_summary_data = {
-                "title": "title",
-                "whats_wrong": "whats wrong",
-                "session_related_issues": "session_related_issues",
-                "possible_cause": "possible cause",
-            }
-            db_issue_summary = DbIssueSummary(group_id=0, summary=valid_summary_data)
-            session.add(db_issue_summary)
+            original = IssueSummaryWithScores(
+                title="title",
+                whats_wrong="whats wrong",
+                session_related_issues="session_related_issues",
+                possible_cause="possible cause",
+                scores=SummarizeIssueScores(
+                    possible_cause_confidence=0.5,
+                    possible_cause_novelty=0.8,
+                    is_fixable=True,
+                    fixability_score=0.9,
+                    fixability_score_version=1,
+                ),
+            )
+            session.add(original.to_db_state(0))
             session.commit()
 
         instance = self.autofix_context
@@ -124,12 +131,17 @@ class TestAutofixContext(unittest.TestCase):
         result = instance.get_issue_summary()
 
         self.assertIsNotNone(result)
-        self.assertIsInstance(result, IssueSummary)
+        self.assertIsInstance(result, IssueSummaryWithScores)
         if result:
             self.assertEqual(result.title, "title")
             self.assertEqual(result.whats_wrong, "whats wrong")
             self.assertEqual(result.session_related_issues, "session_related_issues")
             self.assertEqual(result.possible_cause, "possible cause")
+            self.assertEqual(result.scores.possible_cause_confidence, 0.5)
+            self.assertEqual(result.scores.possible_cause_novelty, 0.8)
+            self.assertEqual(result.scores.is_fixable, True)
+            self.assertEqual(result.scores.fixability_score, 0.9)
+            self.assertEqual(result.scores.fixability_score_version, 1)
 
         with Session() as session:
             invalid_summary_data = {"bad data": "uh oh"}

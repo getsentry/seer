@@ -9,9 +9,11 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel
 from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert
 
 from seer.anomaly_detection.models import (
     AlgoConfig,
+    ConfidenceLevel,
     DynamicAlert,
     MPTimeSeries,
     MPTimeSeriesAnomalies,
@@ -21,7 +23,13 @@ from seer.anomaly_detection.models import (
 )
 from seer.anomaly_detection.models.cleanup_predict import CleanupPredictConfig
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
-from seer.db import DbDynamicAlert, DbDynamicAlertTimeSeries, Session, TaskStatus
+from seer.db import (
+    DbDynamicAlert,
+    DbDynamicAlertTimeSeries,
+    DbProphetAlertTimeSeries,
+    Session,
+    TaskStatus,
+)
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 
@@ -44,8 +52,12 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
         data_purge_flag: str,
-    ):
+    ) -> int:
         return NotImplemented
+
+    @abc.abstractmethod
+    def store_prophet_predictions(self, alert_id: int, predictions: ProphetPrediction) -> None:
+        NotImplemented
 
     @abc.abstractmethod
     def save_timepoint(
@@ -66,7 +78,9 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         return NotImplemented
 
     @abc.abstractmethod
-    def can_queue_cleanup_predict_task(self, external_alert_id: int):
+    def can_queue_cleanup_predict_task(
+        self, external_alert_id: int, apply_time_threshold: bool = True
+    ) -> bool:
         return NotImplemented
 
     @abc.abstractmethod
@@ -105,12 +119,16 @@ class DbAlertDataAccessor(AlertDataAccessor):
         mp_fixed = []
         original_flags = ["none"] * n_points
         use_suss = [True] * n_points
+        confidence_levels = [
+            ConfidenceLevel.MEDIUM
+        ] * n_points  # Default to medium confidence level
 
         n_predictions = len(db_alert.prophet_predictions)
-        prophet_timestamps = np.array([0.0] * n_predictions)
-        prophet_yhats = np.array([0.0] * n_predictions)
-        prophet_yhat_lowers = np.array([0.0] * n_predictions)
-        prophet_yhat_uppers = np.array([0.0] * n_predictions)
+        prophet_timestamps = np.full(n_predictions, None)
+        prophet_ys = np.full(n_predictions, None)
+        prophet_yhats = np.full(n_predictions, None)
+        prophet_yhat_lowers = np.full(n_predictions, None)
+        prophet_yhat_uppers = np.full(n_predictions, None)
 
         # If the timeseries does not have both matrix profiles, then we only use the suss window
         only_suss = len(timeseries) > 0 and any(
@@ -122,13 +140,14 @@ class DbAlertDataAccessor(AlertDataAccessor):
 
         num_old_points = 0
         window_size = db_alert.anomaly_algo_data.get("window_size")
+        y_map = {}
 
         for i, point in enumerate(timeseries):
             ts[i] = point.timestamp.timestamp()
             values[i] = point.value
             flags[i] = point.anomaly_type
             scores[i] = point.anomaly_score
-
+            y_map[point.timestamp.timestamp()] = point.value
             if point.anomaly_algo_data is not None:
                 algo_data = MPTimeSeriesAnomalies.extract_algo_data(point.anomaly_algo_data)
 
@@ -152,10 +171,13 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         ]
                     )
 
-                if i >= n_points - len(algo_data.get("original_flags", [])):
-                    original_flags[i] = algo_data["original_flag"]
+                point_original_flag = algo_data.get("original_flag")
+                if point_original_flag is not None and i >= n_points - len(point_original_flag):
+                    original_flags[i] = point_original_flag
                     use_suss[i] = algo_data["use_suss"]
-
+                    confidence_levels[i] = (
+                        algo_data.get("confidence_level") or ConfidenceLevel.MEDIUM
+                    )  # Default to medium for backwards compatibility
             if ts[i] < timestamp_threshold:
                 num_old_points += 1
 
@@ -163,6 +185,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         cur_ts = datetime.now().timestamp()
         for i, prediction in enumerate(db_alert.prophet_predictions):
             prophet_timestamp = prediction.timestamp.timestamp()
+            prophet_ys[i] = y_map[prophet_timestamp] if prophet_timestamp in y_map else None
             prophet_timestamps[i] = prophet_timestamp
             prophet_yhats[i] = prediction.yhat
             prophet_yhat_lowers[i] = prediction.yhat_lower
@@ -189,6 +212,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             thresholds=[],  # Note: thresholds are not stored in the database. They are computed on the fly.
             original_flags=original_flags,
             use_suss=use_suss,
+            confidence_levels=confidence_levels,
         )
 
         return DynamicAlert(
@@ -214,6 +238,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             ),
             prophet_predictions=ProphetPrediction(
                 timestamps=prophet_timestamps,
+                y=prophet_ys,
                 yhat=prophet_yhats,
                 yhat_lower=prophet_yhat_lowers,
                 yhat_upper=prophet_yhat_uppers,
@@ -252,7 +277,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         anomalies: TimeSeriesAnomalies,
         anomaly_algo_data: dict,
         data_purge_flag: str,
-    ):
+    ) -> int:
         with Session() as session:
             existing_records = (
                 session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).count()
@@ -298,6 +323,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             )
             session.add(new_record)
             session.commit()
+            return new_record.id
 
     @sentry_sdk.trace
     def save_timepoint(
@@ -358,7 +384,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
             session.commit()
 
     @sentry_sdk.trace
-    def can_queue_cleanup_predict_task(self, alert_id: int) -> bool:
+    def can_queue_cleanup_predict_task(
+        self, alert_id: int, apply_time_threshold: bool = True
+    ) -> bool:
         """
         Checks if cleanup_predict task can be queued based on current flag or previous time of queueing
         """
@@ -370,13 +398,15 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if not dynamic_alert:
                 raise ClientError(f"Alert with id {alert_id} not found")
 
-            queued_at_threshold = datetime.now() - timedelta(hours=12)
-
-            return (
-                dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
-                or dynamic_alert.last_queued_at is not None
-                and dynamic_alert.last_queued_at < queued_at_threshold
-            )
+            if apply_time_threshold:
+                queued_at_threshold = datetime.now() - timedelta(hours=12)
+                return (
+                    dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+                    or dynamic_alert.last_queued_at is not None
+                    and dynamic_alert.last_queued_at < queued_at_threshold
+                )
+            else:
+                return dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
 
     @sentry_sdk.trace
     def reset_cleanup_predict_task(self, alert_id: int) -> None:
@@ -394,6 +424,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
             session.commit()
 
+    @sentry_sdk.trace
     def combine_anomalies(
         self,
         anomalies_suss: MPTimeSeriesAnomaliesSingleWindow,
@@ -458,4 +489,31 @@ class DbAlertDataAccessor(AlertDataAccessor):
             window_size=anomalies_suss.window_size,
             original_flags=combined_original_flags,
             use_suss=use_suss,
+            confidence_levels=anomalies_suss.confidence_levels,
         )
+
+    @sentry_sdk.trace
+    def store_prophet_predictions(self, alert_id: int, predictions: ProphetPrediction) -> None:
+        with Session() as session:
+
+            prediction_values = [
+                {
+                    "dynamic_alert_id": alert_id,
+                    "timestamp": predictions.timestamps[i],
+                    "yhat": predictions.yhat[i],
+                    "yhat_lower": predictions.yhat_lower[i],
+                    "yhat_upper": predictions.yhat_upper[i],
+                }
+                for i in range(len(predictions.timestamps))
+            ]
+            stmt = insert(DbProphetAlertTimeSeries).values(prediction_values)
+            update_stmt = stmt.on_conflict_do_update(
+                index_elements=["dynamic_alert_id", "timestamp"],
+                set_={
+                    "yhat": stmt.excluded.yhat,
+                    "yhat_lower": stmt.excluded.yhat_lower,
+                    "yhat_upper": stmt.excluded.yhat_upper,
+                },
+            )
+            session.execute(update_stmt)
+            session.commit()

@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from seer.anomaly_detection.detectors import (
+    CombinedAnomalyScorer,
     FlagsAndScores,
-    MPCascadingScorer,
     MPUtils,
     SuSSWindowSizeSelector,
 )
@@ -13,7 +13,11 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPBatchAnomalyDetector,
     MPStreamAnomalyDetector,
 )
-from seer.anomaly_detection.models import AlgoConfig, MPTimeSeriesAnomaliesSingleWindow
+from seer.anomaly_detection.models import (
+    AlgoConfig,
+    ConfidenceLevel,
+    MPTimeSeriesAnomaliesSingleWindow,
+)
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.exceptions import ServerError
@@ -52,6 +56,12 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
                 scores=[0.1, 6.5, 4.8, 0.2],
                 flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
                 thresholds=[],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
             )
         )
 
@@ -181,7 +191,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
         mock_scorer.stream_score.return_value = FlagsAndScores(
-            scores=[0.5], flags=["none"], thresholds=[]
+            scores=[0.5], flags=["none"], thresholds=[], confidence_levels=[ConfidenceLevel.MEDIUM]
         )
 
         anomalies = self.detector.detect(
@@ -221,7 +231,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 ad_config=self.config,
                 ws_selector=SuSSWindowSizeSelector(),
                 algo_config=self.algo_config,
-                scorer=MPCascadingScorer(),
+                scorer=CombinedAnomalyScorer(),
                 mp_utils=MPUtils(),
             )
             history_mp = batch_anomalies.matrix_profile
@@ -237,7 +247,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         stream_anomalies = stream_detector.detect(
             timeseries=TimeSeries(timestamps=stream_ts_timestamps, values=np.array(stream_ts)),
             ad_config=self.config,
-            scorer=MPCascadingScorer(),
+            scorer=CombinedAnomalyScorer(),
             mp_utils=MPUtils(),
         )
 
@@ -368,6 +378,6 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                     timestamps=np.arange(1.0, len(stream_ts) + 1), values=np.array(stream_ts)
                 ),
                 ad_config=self.config,
-                scorer=MPCascadingScorer(),
+                scorer=CombinedAnomalyScorer(),
                 mp_utils=MPUtils(),
             )

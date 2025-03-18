@@ -265,8 +265,7 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
             Carefully analyze the issue above. Focus on the error, the stacktrace.
             Think about the context in which the error occurs. What are possible causes to it? How do you fix it?
             Answer "does this issue originate from within the application or is it caused from an external service not behaving well?"
-            For example a TypeError or ValueError is likely to be caused by the application, while a 500 error is likely to be caused by an external service.
-            You should have a somewhat high bar for answering that the issue is unfixable.
+            For example a type error or value error is likely to be caused by the application, while a 500/server error is likely to be caused by an external service.
             """
         ).format(error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
 
@@ -274,12 +273,11 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
 class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
     class DoesFixingWarningFixIssue(BaseModel):
-        reasoning: str
-        relevance_probability: float
+        analysis: str
         does_fixing_warning_fix_issue: bool
+        relevance_probability: float
         short_description: str | None = None
         short_justification: str | None = None
-        # This justification is currenty unused. But it's cheap and we'll see later if it's useful
 
     @staticmethod
     def format_prompt(formatted_warning: str, formatted_error: str):
@@ -291,28 +289,33 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             """\
             {error_prompt}
 
-            Here is a warning that just surfaced in our codebase:
+            Here is a warning that surfaced somewhere in our codebase:
 
             {formatted_warning}
 
-            We need to know if this warning is directly relevant to the issue.
-            By relevant, we mean that fixing the warning would very likely prevent the issue.
-            We're not looking for warnings which vaguely or hypothetically relate to the issue. The relationship should be direct.
-            The file locations of the warning and the issue don't have to be identical, but they must be referring to similar functions or variables.
-            Important: if the warning and issue don't refer to similar functions or variables, then the warning is not directly relevant to the issue.
+            We have no idea if the warning is relevant to the issue. It could be completely irrelevant, for all we know!
+            We need to know if this warning is *directly* relevant to the issue. By "directly relevant", we mean that fixing the warning would very likely prevent the issue.
+            Our engineers hate sorting through noisy warnings. So we're not asking if the warning could hypothetically, under unknown and unevidenced circumstances, vaguely relate to the issue.
+            We're asking if there's a clear, explainable, and evidenced relationship between the warning and the issue.
+            The file locations of the warning and the issue don't have to be identical, but the warning and stacktrace must be referring to the same functions or variables; they must refer to the same core logic.
+            Important: if the warning and issue don't refer to the same functions or variables, then you can immediately conclude that the warning is not directly relevant to the issue.
 
-            Before giving your final answer, think out loud in a `reasoning` section about the context in which the issue occurs, independent of the warning.
-            Then think about how the warning is related and unrelated to the issue. Is the warning referring to the same functions or variables as the issue?
-            Your `reasoning` should be at most 500 words. Express in words what you're uncertain about, and what you're more confident about.
+            Before giving your final answer, think out loud in an `analysis` section about the context in which the issue occurs, independent of the warning.
+            Then think about how the warning is related and unrelated to the issue:
+            - Is the warning referring to the same functions and variables as the issue?
+            - How clear, explainable, and evidenced is the relationship between the warning and the issue?
+            - Would fixing the warning likely resolve the issue?
+            Your `analysis` should be at most 500 words. Express in words what you're uncertain about, and what you're more confident about.
+            You are more than free to point out that the warning is completely irrelevant and should be ignored in the context of the issue.
 
-            Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `reasoning`.
-            This score, the `relevance_probability`, can be very granular, e.g., 0.32.
-            Then give your final answer in `does_fixing_warning_fix_issue`.
+            Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `analysis`.
+            This score, the `relevance_probability`, must be very granular, e.g., 0.32.
+            Then give your final answer in `does_fixing_warning_fix_issue`. It should be true if and only if you're quite confident.
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
-              - `short_description`: a short and sweet description of the problem caused by not addressing the warning.
+              - `short_description`: a short, fluff-free, information-dense description of the problem caused by not addressing the warning.
                 This description must focus on the problem and not the warning itself. It should be at most 10 words.
-              - `short_justification`: a short summary of your reasoning for why the warning is relevant to the issue. This justification should be at most 10 words.
+              - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 15 words.
             """
         ).format(
             error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),

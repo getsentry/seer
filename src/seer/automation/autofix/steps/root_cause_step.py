@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from langfuse.decorators import observe
@@ -5,13 +6,18 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
+from seer.automation.autofix.components.confidence import ConfidenceComponent, ConfidenceRequest
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
 from seer.automation.autofix.config import (
     AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
 )
-from seer.automation.autofix.models import AutofixRootCauseUpdatePayload, AutofixStatus
+from seer.automation.autofix.models import (
+    AutofixRootCauseUpdatePayload,
+    AutofixStatus,
+    CommentThread,
+)
 from seer.automation.autofix.steps.solution_step import (
     AutofixSolutionStep,
     AutofixSolutionStepRequest,
@@ -80,6 +86,7 @@ class RootCauseStep(AutofixPipelineStep):
                 summary=summary,
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
+                trace_tree=state.request.trace_tree,
             )
         )
 
@@ -90,6 +97,33 @@ class RootCauseStep(AutofixPipelineStep):
             return
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
+
+        # confidence evaluation
+        if not self.context.state.get().request.options.disable_interactivity:
+            run_memory = self.context.get_memory("root_cause_analysis")
+            confidence_output = ConfidenceComponent(self.context).invoke(
+                ConfidenceRequest(
+                    run_memory=run_memory,
+                    step_goal_description="root cause analysis",
+                    next_step_goal_description="figuring out a solution",
+                )
+            )
+            if confidence_output:
+                with self.context.state.update() as cur:
+                    cur.steps[-1].output_confidence_score = (
+                        confidence_output.output_confidence_score
+                    )
+                    cur.steps[-1].proceed_confidence_score = (
+                        confidence_output.proceed_confidence_score
+                    )
+                    if confidence_output.question:
+                        cur.steps[-1].agent_comment_thread = CommentThread(
+                            id=str(uuid.uuid4()),
+                            messages=[
+                                Message(role="assistant", content=confidence_output.question)
+                            ],
+                        )
+
         self.context.event_manager.add_log(
             "Here is Autofix's proposed root cause."
             if root_cause_output.termination_reason is None and root_cause_output.causes

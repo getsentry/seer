@@ -8,16 +8,12 @@ from seer.automation.summarize.issue import IssueSummary
 
 class RootCauseAnalysisPrompts:
     @staticmethod
-    def format_system_msg(has_tools: bool = True):
+    def format_system_msg():
         return textwrap.dedent(
-            f"""\
+            """\
             You are an exceptional AI system that is amazing at researching bugs in codebases.
 
-            {
-                "You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information."
-                if has_tools
-                else ""
-            }
+            You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information.
 
             # Guidelines:
             - Your job is to simply gather all information needed to understand what happened, not to propose fixes.
@@ -33,7 +29,6 @@ class RootCauseAnalysisPrompts:
         instruction: Optional[str] = None,
         summary: Optional[IssueSummary] = None,
         code_map: Optional[Profile] = None,
-        has_tools: bool = True,
     ):
         return textwrap.dedent(
             """\
@@ -51,8 +46,6 @@ class RootCauseAnalysisPrompts:
         ).format(
             explore_msg=(
                 "Gather all information needed to understand what happened, from the entry point of the code to the error."
-                if has_tools
-                else "Figure out how and why this issue happened, from the entry point of the code to the error."
             ),
             error_str=event,
             repos_str=repos_str,
@@ -80,5 +73,8 @@ class RootCauseAnalysisPrompts:
               - Code Snippet and Analysis: any extra analysis needed and a small relevant code snippet if this is an important event. All Markdown formatted.
               - Event type: logic in the code, a human interaction, or an external system like a database, API, etc.
               - Is most important event: whether this event is the MOST important and insightfulone in the timeline to pay attention to.
-            As a whole, this timeline should tell the precise story of the root cause of the issue. Starts at the entry point of the code, ends at the error."""
+            As a whole, this timeline should tell the precise story of the root cause of the issue. Starts at the entry point of the code, ends at the error.
+
+            Then, provide a concise summary of the root cause of the issue. This summary must be less than 30 words and must be an information-dense single summary and must not contain filler words such as "The application..." or "The issue...".
+              - Use a "matter of fact" tone, such as "The `process_task` function did not check if the task was already processed, due to `foo` being `bar`."."""
         )

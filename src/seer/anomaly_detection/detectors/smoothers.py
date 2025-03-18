@@ -149,7 +149,6 @@ class MajorityVoteStreamFlagSmoother(FlagSmoother):
 
         return new_flag
 
-    @sentry_sdk.trace
     def smooth(
         self,
         original_flags: list,

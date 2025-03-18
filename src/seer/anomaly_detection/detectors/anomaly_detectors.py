@@ -4,11 +4,12 @@ import logging
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from pydantic import BaseModel, ConfigDict, Field
 
-from seer.anomaly_detection.detectors.mp_scorers import MPScorer
+from seer.anomaly_detection.detectors.anomaly_scorer import AnomalyScorer
 from seer.anomaly_detection.detectors.mp_utils import MPUtils
 from seer.anomaly_detection.detectors.smoothers import (
     MajorityVoteBatchFlagSmoother,
@@ -35,12 +36,14 @@ class AnomalyDetector(BaseModel, abc.ABC):
     Abstract base class for anomaly detection logic.
     """
 
+    @inject
     @abc.abstractmethod
     def detect(
         self,
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
-        algo_config: AlgoConfig,
+        algo_config: AlgoConfig = injected,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
     ) -> TimeSeriesAnomalies:
         return NotImplemented
@@ -58,6 +61,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
         window_size: int | None = None,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
@@ -75,8 +79,31 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         The input timeseries with an anomaly scores and a flag added
         """
         return self._compute_matrix_profile(
-            timeseries, ad_config, algo_config, window_size, time_budget_ms=time_budget_ms
+            timeseries,
+            ad_config,
+            algo_config,
+            window_size,
+            time_budget_ms=time_budget_ms,
+            prophet_df=prophet_df,
         )
+
+    @sentry_sdk.trace
+    def _stumpy_mp(
+        self,
+        ts_values: npt.NDArray[np.float64],
+        window_size: int,
+        algo_config: AlgoConfig,
+        mp_utils: MPUtils,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        mp = stumpy.stump(
+            ts_values,
+            m=max(3, window_size),
+            ignore_trivial=algo_config.mp_ignore_trivial,
+            normalize=False,  # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+        )
+
+        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        return mp, mp_dist
 
     @inject
     @sentry_sdk.trace
@@ -86,9 +113,10 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig,
         window_size: int | None = None,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
         ws_selector: WindowSizeSelector = injected,
-        scorer: MPScorer = injected,
+        scorer: AnomalyScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -113,26 +141,17 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if window_size is None:
             window_size = ws_selector.optimal_window_size(ts_values)
         if window_size <= 0:
-            # TODO: Add sentry logging of this error
             raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
-        mp = stumpy.stump(
-            ts_values,
-            m=max(3, window_size),
-            ignore_trivial=algo_config.mp_ignore_trivial,
-            normalize=False,
-        )
-
-        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
-        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        mp, mp_dist = self._stumpy_mp(ts_values, window_size, algo_config, mp_utils)
 
         flags_and_scores = scorer.batch_score(
             values=ts_values,
             timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
+            prophet_df=prophet_df,
             ad_config=ad_config,
             window_size=window_size,
-            time_budget_ms=time_budget_ms,
         )
         if flags_and_scores is None:
             raise ServerError("Failed to score the matrix profile distance")
@@ -157,6 +176,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             window_size=window_size,
             thresholds=flags_and_scores.thresholds if algo_config.return_thresholds else None,
             original_flags=original_flags,
+            confidence_levels=flags_and_scores.confidence_levels,
         )
 
 
@@ -185,8 +205,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         timeseries: TimeSeries,
         ad_config: AnomalyDetectionConfig,
         algo_config: AlgoConfig = injected,
+        prophet_df: pd.DataFrame | None = None,
         time_budget_ms: int | None = None,
-        scorer: MPScorer = injected,
+        scorer: AnomalyScorer = injected,
         mp_utils: MPUtils = injected,
     ) -> MPTimeSeriesAnomaliesSingleWindow:
         """
@@ -237,11 +258,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if time_allocated is not None and i % batch_size == 0:
                     time_elapsed = datetime.datetime.now() - time_start
                     if time_allocated is not None and time_elapsed > time_allocated:
-                        sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
-                        sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
-                        sentry_sdk.capture_message(
+                        logger.error(
                             "stream_detection_took_too_long",
-                            level="error",
+                            extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
                         )
                         raise ServerError("Stream detection took too long")
 
@@ -259,6 +278,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     history_values=self.history_values,
                     history_timestamps=self.history_timestamps,
                     history_mp_dist=mp_dist_baseline,
+                    prophet_df=prophet_df,
                     ad_config=ad_config,
                     window_size=self.window_size,
                 )
@@ -302,4 +322,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 window_size=self.window_size,
                 thresholds=thresholds if algo_config.return_thresholds else None,
                 original_flags=self.original_flags,
+                confidence_levels=flags_and_scores.confidence_levels,
             )

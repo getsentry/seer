@@ -570,24 +570,24 @@ class BaseTools:
                 ]
             )
 
-        if (
-            isinstance(self.context, AutofixContext)
-            and not self.context.state.get().request.options.disable_interactivity
-        ):
-            tools.append(
-                FunctionTool(
-                    name="ask_a_question",
-                    fn=self.ask_user_question,
-                    description="Ask the user a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else. Only use this tool if necessary.",
-                    parameters=[
-                        {
-                            "name": "question",
-                            "type": "string",
-                            "description": "The question you want to ask.",
-                        }
-                    ],
-                    required=["question"],
-                )
-            )
+        # if (
+        #     isinstance(self.context, AutofixContext)
+        #     and not self.context.state.get().request.options.disable_interactivity
+        # ):
+        #     tools.append(
+        #         FunctionTool(
+        #             name="ask_a_question",
+        #             fn=self.ask_user_question,
+        #             description="Ask the user a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else. Only use this tool if necessary.",
+        #             parameters=[
+        #                 {
+        #                     "name": "question",
+        #                     "type": "string",
+        #                     "description": "The question you want to ask.",
+        #                 }
+        #             ],
+        #             required=["question"],
+        #         )
+        #     )
 
         return tools

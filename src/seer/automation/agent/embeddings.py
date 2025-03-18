@@ -92,3 +92,10 @@ class GoogleProviderEmbeddings:
             )
 
         return np.array([text_to_embedding[text] for text in texts])
+
+
+def cosine_similarity(embeddings_a: np.ndarray, embeddings_b: np.ndarray) -> np.ndarray:
+    dot_product = embeddings_a @ embeddings_b.T
+    norm_a = np.linalg.norm(embeddings_a, axis=1, keepdims=True)
+    norm_b = np.linalg.norm(embeddings_b, axis=1, keepdims=True).T
+    return dot_product / (norm_a @ norm_b)

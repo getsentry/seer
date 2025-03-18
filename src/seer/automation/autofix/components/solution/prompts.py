@@ -93,7 +93,10 @@ class SolutionPrompts:
               - Title: a complete sentence describing what needs to change to fix the issue.
               - Code Snippet and Analysis: A snippet of the code change and an explanation of the code change and the reasoning behind it. All Markdown formatted. (don't write the full code, just tiny snippets at most)
               - Is most important: whether this change is the SINGLE MOST important part of the solution.
-            As a whole, this sequence of steps should tell the precise plan of how to fix the issue. You can put as few or as many steps as needed."""
+            As a whole, this sequence of steps should tell the precise plan of how to fix the issue. You can put as few or as many steps as needed.
+
+            Then, provide a concise summary of the solution. This summary must be less than 30 words and must be an information-dense single summary and must not contain filler words such as "The application..." or "The fix...".
+              - Use a "matter of fact" tone, such as "Add correct validation of `foo` to the `process_task` function."."""
         ).format(root_cause_str=SolutionPrompts.format_root_cause(root_cause))
 
     @staticmethod

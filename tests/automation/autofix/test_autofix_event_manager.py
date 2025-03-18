@@ -4,7 +4,7 @@ import pytest
 from johen import generate
 
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
-from seer.automation.autofix.components.solution.models import SolutionOutput
+from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixContinuation,
@@ -20,6 +20,7 @@ from seer.automation.autofix.models import (
 from seer.automation.models import FileChange
 from seer.automation.state import LocalMemoryState
 from seer.automation.utils import make_kill_signal
+from seer.events import SeerEventNames
 
 
 class TestAutofixEventManager:
@@ -382,10 +383,16 @@ class TestAutofixEventManager:
         assert state_obj.status == AutofixStatus.NEED_MORE_INFORMATION
 
     def test_set_selected_solution(self, event_manager, state):
-        # Test with custom solution
-        custom_solution = "Custom solution text"
-        payload = AutofixSolutionUpdatePayload(custom_solution=custom_solution)
+        payload = AutofixSolutionUpdatePayload(
+            solution=[
+                SolutionTimelineEvent(
+                    title="Custom solution",
+                    timeline_item_type="human_instruction",
+                )
+            ]
+        )
 
+        event_manager.send_solution_result(SolutionOutput(solution_steps=[], summary=""))
         event_manager.set_selected_solution(payload)
 
         state_obj = state.get()
@@ -394,7 +401,7 @@ class TestAutofixEventManager:
             None,
         )
         assert solution_step is not None
-        assert solution_step.custom_solution == custom_solution
+        assert solution_step.solution[0].title == "Custom solution"
         assert solution_step.solution_selected is True
         assert state_obj.status == AutofixStatus.PROCESSING
 
@@ -417,7 +424,7 @@ class TestAutofixEventManager:
         with state.update() as cur:
             cur.codebases = {
                 "repo1": CodebaseState(
-                    repo_id=1, repo_external_id="repo1", file_changes=[next(generate(FileChange))]
+                    repo_external_id="repo1", file_changes=[next(generate(FileChange))]
                 )
             }
 
@@ -429,5 +436,114 @@ class TestAutofixEventManager:
             cur.steps.append(DefaultStep(id="after_solution", title="After Solution"))
 
         event_manager.set_selected_solution(payload)
-        assert len(state.get().steps) == 1
-        assert state.get().steps[0].key == event_manager.solution_step.key
+        assert len(state.get().steps) == 2
+        assert state.get().steps[0].key == event_manager.solution_processing_step.key
+        assert state.get().steps[1].key == event_manager.solution_step.key
+
+    @patch("seer.automation.autofix.event_manager.log_seer_event")
+    def test_log_coding_start(self, mock_log_seer_event, event_manager, state):
+        """Test logging coding start event with various solution combinations."""
+        run_id = 12345
+
+        # Test Case 1: No added steps, no removed steps, no unit tests
+        original_solution = [
+            SolutionTimelineEvent(title="Step 1", is_most_important_event=True),
+            SolutionTimelineEvent(title="Step 2", is_most_important_event=False),
+        ]
+
+        new_solution = [
+            SolutionTimelineEvent(title="Step 1", is_most_important_event=True),
+            SolutionTimelineEvent(title="Step 2", is_most_important_event=False),
+        ]
+
+        event_manager._log_coding_start(run_id, new_solution, original_solution)
+
+        mock_log_seer_event.assert_called_once_with(
+            SeerEventNames.AUTOFIX_CODING_STARTED,
+            {
+                "run_id": run_id,
+                "has_unit_tests": False,
+                "has_removed_steps": False,
+                "has_added_steps": False,
+            },
+        )
+        mock_log_seer_event.reset_mock()
+
+        # Test Case 2: With added steps
+        new_solution_with_added = original_solution + [
+            SolutionTimelineEvent(title="Step 3", is_most_important_event=False)
+        ]
+
+        event_manager._log_coding_start(run_id, new_solution_with_added, original_solution)
+
+        mock_log_seer_event.assert_called_once_with(
+            SeerEventNames.AUTOFIX_CODING_STARTED,
+            {
+                "run_id": run_id,
+                "has_unit_tests": False,
+                "has_removed_steps": False,
+                "has_added_steps": True,
+            },
+        )
+        mock_log_seer_event.reset_mock()
+
+        # Test Case 3: With removed steps
+        new_solution_with_removed = [original_solution[0]]
+
+        event_manager._log_coding_start(run_id, new_solution_with_removed, original_solution)
+
+        mock_log_seer_event.assert_called_once_with(
+            SeerEventNames.AUTOFIX_CODING_STARTED,
+            {
+                "run_id": run_id,
+                "has_unit_tests": False,
+                "has_removed_steps": True,
+                "has_added_steps": False,
+            },
+        )
+        mock_log_seer_event.reset_mock()
+
+        # Test Case 4: With repro test
+        new_solution_with_test = original_solution + [
+            SolutionTimelineEvent(
+                title="Add a unit test",
+                timeline_item_type="repro_test",
+                is_most_important_event=False,
+            )
+        ]
+
+        event_manager._log_coding_start(run_id, new_solution_with_test, original_solution)
+
+        mock_log_seer_event.assert_called_once_with(
+            SeerEventNames.AUTOFIX_CODING_STARTED,
+            {
+                "run_id": run_id,
+                "has_unit_tests": True,
+                "has_removed_steps": False,
+                "has_added_steps": True,
+            },
+        )
+        mock_log_seer_event.reset_mock()
+
+        # Test Case 5: With all changes (added, removed, and tests)
+        new_complex_solution = [
+            SolutionTimelineEvent(title="Step 1", is_most_important_event=True),
+            SolutionTimelineEvent(title="New Step", is_most_important_event=False),
+            SolutionTimelineEvent(
+                title="Add a unit test",
+                timeline_item_type="repro_test",
+                is_most_important_event=False,
+            ),
+        ]
+
+        event_manager._log_coding_start(run_id, new_complex_solution, original_solution)
+
+        mock_log_seer_event.assert_called_once_with(
+            SeerEventNames.AUTOFIX_CODING_STARTED,
+            {
+                "run_id": run_id,
+                "has_unit_tests": True,
+                "has_removed_steps": True,
+                "has_added_steps": True,
+            },
+        )
