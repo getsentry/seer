@@ -9,7 +9,6 @@ from seer.automation.agent.client import LlmGenerateStructuredResponse, LlmRespo
 from seer.automation.agent.models import LlmProviderType, Usage
 from seer.automation.models import IssueDetails
 from seer.automation.summarize.issue import (
-    IssueSummary,
     IssueSummaryForLlmToGenerate,
     IssueSummaryWithScores,
     evaluate_autofixability,
@@ -87,11 +86,11 @@ class TestSummarizeIssue:
         assert (
             result.title == expected_result.title
         ), f"Title mismatch: {result.title} != {expected_result.title}"
-        assert result.whats_wrong == expected_result.whats_wrong, f"whats_wrong mismatch"
+        assert result.whats_wrong == expected_result.whats_wrong, "whats_wrong mismatch"
         assert (
             result.session_related_issues == expected_result.session_related_issues
-        ), f"session_related_issues mismatch"
-        assert result.possible_cause == expected_result.possible_cause, f"possible_cause mismatch"
+        ), "session_related_issues mismatch"
+        assert result.possible_cause == expected_result.possible_cause, "possible_cause mismatch"
         assert (
             result.scores.possible_cause_confidence
             == expected_result.scores.possible_cause_confidence

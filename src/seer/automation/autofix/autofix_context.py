@@ -22,7 +22,7 @@ from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
-from seer.automation.summarize.issue import IssueSummary, IssueSummaryWithScores
+from seer.automation.summarize.issue import IssueSummaryWithScores
 from seer.automation.utils import AgentError
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 from seer.dependency_injection import inject, injected

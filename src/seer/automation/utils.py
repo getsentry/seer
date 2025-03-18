@@ -8,7 +8,6 @@ from xml.etree import ElementTree as ET
 
 import billiard  # type: ignore[import-untyped]
 import chardet
-import numpy as np
 import torch
 from openai.types.chat import ParsedChatCompletion
 from sentence_transformers import SentenceTransformer
