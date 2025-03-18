@@ -24,7 +24,7 @@ class CompareService:
         self.processor = processor or DataProcessor()
         self.scorer = scorer or CohortsMetricsScorer()
 
-    def compareCohorts(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
+    def compare_cohort(self, request: CompareCohortsRequest) -> CompareCohortsResponse:
         """
         Compare two cohorts and identify the most suspcious attribute differences.
 
@@ -46,22 +46,22 @@ class CompareService:
             4. Extracts top K attributes and their most distinctive values
         """
 
-        dataset = self.processor.prepareCohortsData(request)
-        scoredDataset = self.scorer.computeMetrics(dataset, request.config)
+        dataset = self.processor.prepare_cohort_data(request)
+        scoredDataset = self.scorer.compute_metrics(dataset, request.config)
         results = [
             {
-                "attributeName": row["attributeName"],
-                "attributeValues": list(row["distributionSelection"].keys())[
+                "attributeName": row["attribute_name"],
+                "attributeValues": list(row["distribution_selection"].keys())[
                     : request.config.topKBuckets
                 ],
-                "attributeScore": row["rrfScore"],
+                "attributeScore": row["rrf_score"],
             }
             for _, row in scoredDataset.head(request.config.topKAttributes).iterrows()
         ]
         return CompareCohortsResponse(results=results)
 
 
-def compareCohorts(request: CompareCohortsRequest) -> CompareCohortsResponse:
+def compare_cohort(request: CompareCohortsRequest) -> CompareCohortsResponse:
     """
     Function used by the API to compare cohorts.
 
@@ -75,4 +75,4 @@ def compareCohorts(request: CompareCohortsRequest) -> CompareCohortsResponse:
         This is a simplified entry point that creates a new service instance for each call, since the service is cheap to create.
         In the future, if the service becomes more complex, we can consider implementing a singleton pattern.
     """
-    return CompareService().compareCohorts(request)
+    return CompareService().compare_cohort(request)

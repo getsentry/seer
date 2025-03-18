@@ -15,7 +15,7 @@ class CohortsMetricsScorer:
     """
 
     @staticmethod
-    def _klMetricLambda(baseline: dict[str, float], selection: dict[str, float]) -> pd.Series:
+    def _kl_metric_lambda(baseline: dict[str, float], selection: dict[str, float]) -> pd.Series:
         """
         Calculate the Kullback-Leibler divergence between baseline and selection distributions.
 
@@ -31,7 +31,7 @@ class CohortsMetricsScorer:
         """
         return rel_entr(pd.Series(baseline), pd.Series(selection))
 
-    def computeMetrics(self, dataset: pd.DataFrame, config: CompareCohortsConfig) -> pd.DataFrame:
+    def compute_metrics(self, dataset: pd.DataFrame, config: CompareCohortsConfig) -> pd.DataFrame:
         """
         Compute all metrics for the dataset and combine them using RRF.
 
@@ -49,13 +49,13 @@ class CohortsMetricsScorer:
             3. Combines scores using RRF with provided weights
         """
         dataset = (
-            dataset.pipe(self._computeKLScore)
-            .pipe(self._computeEntropyScore)
-            .pipe(self._computeRRFScore, config)
+            dataset.pipe(self._compute_kl_score)
+            .pipe(self._compute_entropy_score)
+            .pipe(self._compute_rrf_score, config)
         )
         return dataset
 
-    def _computeKLScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
+    def _compute_kl_score(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
         Compute KL divergence scores for each attribute. Higher KL divergence scores indicate greater difference between distributions.
 
@@ -72,19 +72,19 @@ class CohortsMetricsScorer:
         """
         try:
             # these scores are needed to rank the values within each attribute
-            dataset["klIndividualScores"] = dataset.apply(
-                lambda row: self._klMetricLambda(
-                    row["distributionBaseline"], row["distributionSelection"]
+            dataset["kl_individual_scores"] = dataset.apply(
+                lambda row: self._kl_metric_lambda(
+                    row["distribution_baseline"], row["distribution_selection"]
                 ).to_dict(),
                 axis=1,
             )
             # sum the scores to get the total KL divergence score for each attribute
-            dataset["klScore"] = dataset["klIndividualScores"].apply(lambda x: sum(x.values()))
+            dataset["kl_score"] = dataset["kl_individual_scores"].apply(lambda x: sum(x.values()))
             return dataset
         except Exception as e:
             raise ScoringError(f"Failed to compute KL divergence scores: {e}") from e
 
-    def _computeEntropyScore(self, dataset: pd.DataFrame) -> pd.DataFrame:
+    def _compute_entropy_score(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
         Compute entropy scores for the selection distribution. We prefer lower entropy scores, as they indicate more concentrated (less uniform) distributions.
 
@@ -99,14 +99,16 @@ class CohortsMetricsScorer:
             Lower entropy indicates more concentrated (less uniform) distributions
         """
         try:
-            dataset["entropyScore"] = dataset["distributionSelection"].apply(
+            dataset["entropy_score"] = dataset["distribution_selection"].apply(
                 lambda x: entropy(pd.Series(x))
             )
             return dataset
         except Exception as e:
             raise ScoringError(f"Failed to compute entropy scores: {e}") from e
 
-    def _computeRRFScore(self, dataset: pd.DataFrame, config: CompareCohortsConfig) -> pd.DataFrame:
+    def _compute_rrf_score(
+        self, dataset: pd.DataFrame, config: CompareCohortsConfig
+    ) -> pd.DataFrame:
         """
         Compute the final RRF score combining KL divergence and entropy rankings.
 
@@ -126,19 +128,19 @@ class CohortsMetricsScorer:
             - Intermediate rank columns are dropped from final output
         """
         try:
-            dataset["klRank"] = 1 / (
-                config.kRRF + dataset["klScore"].rank(method="min", ascending=False)
+            dataset["kl_rank"] = 1 / (
+                config.kRRF + dataset["kl_score"].rank(method="min", ascending=False)
             )
-            dataset["entropyRank"] = 1 / (
-                config.kRRF + dataset["entropyScore"].rank(method="min", ascending=True)
+            dataset["entropy_rank"] = 1 / (
+                config.kRRF + dataset["entropy_score"].rank(method="min", ascending=True)
             )
-            dataset["rrfScore"] = (
-                config.metricWeights.klDivergenceWeight * dataset["klRank"]
-                + config.metricWeights.entropyWeight * dataset["entropyRank"]
+            dataset["rrf_score"] = (
+                config.metricWeights.klDivergenceWeight * dataset["kl_rank"]
+                + config.metricWeights.entropyWeight * dataset["entropy_rank"]
             )
             # drop intermediate rank columns as they are no longer needed
-            dataset.drop(columns=["klRank", "entropyRank"], inplace=True)
+            dataset.drop(columns=["kl_rank", "entropy_rank"], inplace=True)
             # sort the dataset by RRF score in descending order
-            return dataset.sort_values(by="rrfScore", ascending=False).reset_index(drop=True)
+            return dataset.sort_values(by="rrf_score", ascending=False).reset_index(drop=True)
         except Exception as e:
             raise ScoringError(f"Failed to compute RRF score: {e}") from e

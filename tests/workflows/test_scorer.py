@@ -21,18 +21,18 @@ def config():
 def sampleDataset():
     return pd.DataFrame(
         {
-            "attributeName": ["attr1", "attr2"],
-            "distributionBaseline": [{"A": 0.5, "B": 0.5}, {"X": 0.5, "Y": 0.5}],
-            "distributionSelection": [{"A": 0.8, "B": 0.2}, {"X": 0.7, "Y": 0.3}],
+            "attribute_name": ["attr1", "attr2"],
+            "distribution_baseline": [{"A": 0.5, "B": 0.5}, {"X": 0.5, "Y": 0.5}],
+            "distribution_selection": [{"A": 0.8, "B": 0.2}, {"X": 0.7, "Y": 0.3}],
         }
     )
 
 
-def test_klMetricLambda(scorer):
+def test_kl_metric_lambda(scorer):
     baseline = pd.Series({"A": 0.5, "B": 0.5})
     selection = pd.Series({"A": 0.8, "B": 0.2})
 
-    result = scorer._klMetricLambda(baseline, selection)
+    result = scorer._kl_metric_lambda(baseline, selection)
 
     assert isinstance(result, pd.Series)
     assert len(result) == 2
@@ -40,47 +40,47 @@ def test_klMetricLambda(scorer):
     assert np.allclose(result.values, [-0.235, 0.458], atol=1e-3)
 
 
-def test_computeMetrics(scorer, sampleDataset, config):
-    result = scorer.computeMetrics(sampleDataset, config)
+def test_compute_metrics(scorer, sampleDataset, config):
+    result = scorer.compute_metrics(sampleDataset, config)
 
-    assert "rrfScore" in result.columns
-    assert result["rrfScore"].is_monotonic_decreasing
+    assert "rrf_score" in result.columns
+    assert result["rrf_score"].is_monotonic_decreasing
 
 
-def test_computeKLScore(scorer, sampleDataset):
-    result = scorer._computeKLScore(sampleDataset)
+def test_compute_kl_score(scorer, sampleDataset):
+    result = scorer._compute_kl_score(sampleDataset)
 
-    assert "klIndividualScores" in result.columns
-    assert "klScore" in result.columns
-    assert all(isinstance(s, dict) for s in result["klIndividualScores"])
-    assert all(isinstance(s, float) for s in result["klScore"])
+    assert "kl_individual_scores" in result.columns
+    assert "kl_score" in result.columns
+    assert all(isinstance(s, dict) for s in result["kl_individual_scores"])
+    assert all(isinstance(s, float) for s in result["kl_score"])
     # hardcoded values for KL
-    assert np.allclose(result["klScore"].values, [0.2231, 0.0871], atol=1e-4)
+    assert np.allclose(result["kl_score"].values, [0.2231, 0.0871], atol=1e-4)
 
 
-def test_computeEntropyScore(scorer, sampleDataset):
-    result = scorer._computeEntropyScore(sampleDataset)
-    assert "entropyScore" in result.columns
-    assert all(isinstance(s, float) for s in result["entropyScore"])
+def test_compute_entropy_score(scorer, sampleDataset):
+    result = scorer._compute_entropy_score(sampleDataset)
+    assert "entropy_score" in result.columns
+    assert all(isinstance(s, float) for s in result["entropy_score"])
     # hardcoded values for entropy
-    assert np.allclose(result["entropyScore"].values, [0.5004, 0.6109], atol=1e-4)
+    assert np.allclose(result["entropy_score"].values, [0.5004, 0.6109], atol=1e-4)
 
 
-def test_computeRRFScore(scorer, sampleDataset, config):
+def test_compute_rrf_score(scorer, sampleDataset, config):
 
     # First compute KL and entropy scores
-    dataset = scorer._computeKLScore(sampleDataset)
-    dataset = scorer._computeEntropyScore(dataset)
+    dataset = scorer._compute_kl_score(sampleDataset)
+    dataset = scorer._compute_entropy_score(dataset)
 
-    result = scorer._computeRRFScore(dataset, config)
+    result = scorer._compute_rrf_score(dataset, config)
 
-    assert "rrfScore" in result.columns
-    assert "klRank" not in result.columns  # Should be dropped
-    assert "entropyRank" not in result.columns  # Should be dropped
-    assert result["rrfScore"].is_monotonic_decreasing
+    assert "rrf_score" in result.columns
+    assert "kl_rank" not in result.columns  # Should be dropped
+    assert "entropy_rank" not in result.columns  # Should be dropped
+    assert result["rrf_score"].is_monotonic_decreasing
 
 
-def test_errorHandling(scorer):
+def test_error_handling(scorer):
     badDataset = pd.DataFrame(
         {
             "attributeName": ["attr1"],
@@ -90,4 +90,4 @@ def test_errorHandling(scorer):
     )
 
     with pytest.raises(ScoringError):
-        scorer._computeKLScore(badDataset)
+        scorer._compute_kl_score(badDataset)
