@@ -128,8 +128,8 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         path = Path(filename)
 
         # If the path is relative, it shouldn't contain intermediate `..`s.
-        first_non_dot_idx = next((i for i, part in enumerate(path.parts) if part != ".."), 0)
-        path = Path(*path.parts[first_non_dot_idx:])
+        first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
+        path = Path(*path.parts[first_idx_non_dots:])
         if ".." in path.parts:
             raise ValueError(
                 f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
@@ -142,18 +142,18 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         }
 
         # Make possible variations of the pr files' paths
-        pr_file_by_filepath: dict[str, PrFile] = {}
+        pr_file_by_filepath_variation: dict[str, PrFile] = {}
         for pr_file in pr_files:
             pr_path = Path(pr_file.filename)
-            pr_file_by_filepath[pr_path.as_posix()] = pr_file
+            pr_file_by_filepath_variation[pr_path.as_posix()] = pr_file
             for truncated in self._left_truncated_paths(pr_path, max_num_paths=1):
-                pr_file_by_filepath[truncated] = pr_file
+                pr_file_by_filepath_variation[truncated] = pr_file
 
         # Find all matching PR files
-        matching_pr_files = []
-        for path in warning_filepath_variations:
-            if path in pr_file_by_filepath:
-                matching_pr_files.append(pr_file_by_filepath[path])
+        matching_pr_files: list[PrFile] = []
+        for filepath in warning_filepath_variations:
+            if filepath in pr_file_by_filepath_variation:
+                matching_pr_files.append(pr_file_by_filepath_variation[filepath])
 
         if matching_pr_files:
             self.logger.debug(
@@ -166,7 +166,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 
         return matching_pr_files
 
-    def _is_warning_line_in_files(
+    def _is_warning_line_in_pr_files(
         self, warning: StaticAnalysisWarning, matching_pr_files: list[PrFile]
     ) -> bool:
         # Encoded location format: "file:line:col"
@@ -189,7 +189,7 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         for warning in request.warnings:
             possible_pr_files = self._get_possible_pr_files(warning, request.pr_files)
 
-            if self._is_warning_line_in_files(warning, possible_pr_files):
+            if self._is_warning_line_in_pr_files(warning, possible_pr_files):
                 filtered_warnings.append(warning)
 
         return FilterWarningsOutput(warnings=filtered_warnings)
