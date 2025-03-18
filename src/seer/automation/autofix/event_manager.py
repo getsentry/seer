@@ -235,28 +235,12 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-            log_seer_event(
-                SeerEventNames.AUTOFIX_CODING_STARTED,
-                {
-                    "run_id": cur.run_id,
-                    "has_unit_tests": any(
-                        step.timeline_item_type == "repro_test" for step in solution_step.solution
-                    ),
-                    "has_removed_steps": any(
-                        not any(
-                            original_step.title == current_step.title
-                            for current_step in solution_step.solution
-                        )
-                        for original_step in original_solution
-                    ),
-                    "has_added_steps": any(
-                        not any(
-                            solution_step.title == original_step.title
-                            for original_step in original_solution
-                        )
-                        for solution_step in solution_step.solution
-                    ),
-                },
+            # This is here so we can get the original and updated solution for the event.
+            # set_selected_solution is called at coding start anyways.
+            self._log_coding_start(
+                run_id=cur.run_id,
+                new_solution=solution_step.solution,
+                original_solution=original_solution,
             )
 
     def send_coding_start(self):
@@ -426,3 +410,32 @@ class AutofixEventManager:
             if count > 5:
                 return False  # could not kill steps
         return True  # successfully killed steps
+
+    def _log_coding_start(
+        self,
+        run_id: int,
+        new_solution: list[SolutionTimelineEvent],
+        original_solution: list[SolutionTimelineEvent],
+    ):
+        log_seer_event(
+            SeerEventNames.AUTOFIX_CODING_STARTED,
+            {
+                "run_id": run_id,
+                "has_unit_tests": any(
+                    step.timeline_item_type == "repro_test" for step in new_solution
+                ),
+                "has_removed_steps": any(
+                    not any(
+                        original_step.title == current_step.title for current_step in new_solution
+                    )
+                    for original_step in original_solution
+                ),
+                "has_added_steps": any(
+                    not any(
+                        solution_step.title == original_step.title
+                        for original_step in original_solution
+                    )
+                    for solution_step in new_solution
+                ),
+            },
+        )
