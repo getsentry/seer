@@ -156,6 +156,7 @@ class PrFile(BaseModel):
     changes: int
     sha: str
 
+
 class FilterWarningsRequest(BaseComponentRequest):
     warnings: list[StaticAnalysisWarning]
     pr_files: list[PrFile]
