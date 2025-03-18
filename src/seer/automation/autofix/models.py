@@ -318,6 +318,7 @@ class AutofixRequestOptions(BaseModel):
     disable_codebase_indexing: bool = False
     comment_on_pr_with_url: str | None = None
     disable_interactivity: bool = False
+    auto_run_source: str | None = None
 
 
 class AutofixRequest(BaseModel):
