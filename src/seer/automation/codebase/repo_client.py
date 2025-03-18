@@ -716,7 +716,7 @@ class RepoClient:
                     draft=False,
                 )
             else:
-                logger.exception(f"Error creating PR")
+                logger.exception("Error creating PR")
                 raise e
 
     def get_index_file_set(

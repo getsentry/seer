@@ -1,3 +1,4 @@
+import textwrap
 from collections import defaultdict
 from typing import Generic, TypeVar
 from unittest.mock import MagicMock, Mock, patch
@@ -9,7 +10,7 @@ from pydantic import BaseModel
 
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.agent.models import LlmGenerateStructuredResponse
-from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codebase.models import StaticAnalysisRule, StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -38,6 +39,96 @@ from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStepRequest,
 )
 from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
+
+
+@pytest.mark.parametrize(
+    "warning, expected",
+    [
+        pytest.param(
+            StaticAnalysisWarning(
+                id=1,
+                code="unused-variable",
+                encoded_location="path/to/file.py:1~2",
+                message="Warning message",
+                rule=StaticAnalysisRule(
+                    id=1,
+                    tool="mypy",
+                    code="unused-variable",
+                    category="style",
+                    is_autofixable=False,
+                    is_stable=None,
+                ),
+                encoded_code_snippet="    def test_format_code_snippet(self):\n        pass\n",
+            ),
+            textwrap.dedent(
+                """\
+                Warning message: Warning message
+                ----------
+                Location:
+                    filename: path/to/file.py
+                    start_line: 1
+                    end_line: 2
+                Code Snippet:
+                ```python
+                def test_format_code_snippet(self):
+                    pass
+                ```
+                ----------
+                Static Analysis Rule:
+                    Rule: unused-variable
+                    Tool: mypy
+                    Is auto-fixable: False
+                    Is stable: None
+                    Category: style
+
+                """
+            ),
+            id="python-warning",
+        ),
+        pytest.param(
+            StaticAnalysisWarning(
+                id=2,
+                code="unused-variable",
+                encoded_location="path/to/file.js:1~2",
+                message="Warning message",
+                rule=StaticAnalysisRule(
+                    id=2,
+                    tool="eslint",
+                    code="unused-variable",
+                    category="style",
+                    is_autofixable=False,
+                    is_stable=False,
+                ),
+                encoded_code_snippet="",
+            ),
+            textwrap.dedent(
+                """\
+                Warning message: Warning message
+                ----------
+                Location:
+                    filename: path/to/file.js
+                    start_line: 1
+                    end_line: 2
+                Code Snippet:
+                ```javascript
+
+                ```
+                ----------
+                Static Analysis Rule:
+                    Rule: unused-variable
+                    Tool: eslint
+                    Is auto-fixable: False
+                    Is stable: False
+                    Category: style
+
+                """
+            ),
+            id="javascript-warning-no-snippet",
+        ),
+    ],
+)
+def test_format_code_snippet(warning: StaticAnalysisWarning, expected: str):
+    assert warning.format_warning() == expected
 
 
 class TestFilterWarningsComponent:
