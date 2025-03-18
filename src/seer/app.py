@@ -359,9 +359,9 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     except ClientError as e:
         statsd.increment("seer.anomaly_detection.detect.client_error")
         response = DetectAnomaliesResponse(success=False, message=str(e))
-    except ServerError as e:
+    except ServerError:
         statsd.increment("seer.anomaly_detection.detect.server_error")
-        raise ServerError(message=str(e))
+        raise
 
     return response
 
@@ -380,9 +380,9 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     except ClientError as e:
         statsd.increment("seer.anomaly_detection.store.client_error")
         response = StoreDataResponse(success=False, message=str(e))
-    except ServerError as e:
+    except ServerError:
         statsd.increment("seer.anomaly_detection.store.server_error")
-        raise ServerError(message=str(e))
+        raise
 
     return response
 
@@ -404,9 +404,9 @@ def delete_alert__data_endpoint(
     except ClientError as e:
         statsd.increment("seer.anomaly_detection.delete_alert_data.client_error")
         response = DeleteAlertDataResponse(success=False, message=str(e))
-    except ServerError as e:
+    except ServerError:
         statsd.increment("seer.anomaly_detection.delete_alert_data.server_error")
-        raise ServerError(message=str(e))
+        raise
 
     return response
 
