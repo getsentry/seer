@@ -78,7 +78,9 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         return NotImplemented
 
     @abc.abstractmethod
-    def can_queue_cleanup_predict_task(self, external_alert_id: int):
+    def can_queue_cleanup_predict_task(
+        self, external_alert_id: int, apply_time_threshold: bool = True
+    ) -> bool:
         return NotImplemented
 
     @abc.abstractmethod
@@ -382,7 +384,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
             session.commit()
 
     @sentry_sdk.trace
-    def can_queue_cleanup_predict_task(self, alert_id: int) -> bool:
+    def can_queue_cleanup_predict_task(
+        self, alert_id: int, apply_time_threshold: bool = True
+    ) -> bool:
         """
         Checks if cleanup_predict task can be queued based on current flag or previous time of queueing
         """
@@ -394,13 +398,15 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if not dynamic_alert:
                 raise ClientError(f"Alert with id {alert_id} not found")
 
-            queued_at_threshold = datetime.now() - timedelta(hours=12)
-
-            return (
-                dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
-                or dynamic_alert.last_queued_at is not None
-                and dynamic_alert.last_queued_at < queued_at_threshold
-            )
+            if apply_time_threshold:
+                queued_at_threshold = datetime.now() - timedelta(hours=12)
+                return (
+                    dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+                    or dynamic_alert.last_queued_at is not None
+                    and dynamic_alert.last_queued_at < queued_at_threshold
+                )
+            else:
+                return dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
 
     @sentry_sdk.trace
     def reset_cleanup_predict_task(self, alert_id: int) -> None:
