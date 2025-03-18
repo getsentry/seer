@@ -651,8 +651,8 @@ class TraceEvent(BaseModel):
             return
 
         # Group consecutive similar spans
-        grouped_spans = []
-        current_group = None
+        grouped_spans: list[list[Span]] = []
+        current_group: list[Span] | None = None
 
         for span in spans:
             if current_group and self._are_spans_similar(current_group[0], span):
@@ -743,8 +743,8 @@ class TraceTree(BaseModel):
             return
 
         # Group consecutive similar events
-        grouped_events = []
-        current_group = None
+        grouped_events: list[list[TraceEvent]] = []
+        current_group: list[TraceEvent] | None = None
 
         for event in events:
             if current_group and self._are_events_similar(current_group[0], event):

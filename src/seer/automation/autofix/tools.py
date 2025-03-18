@@ -2,6 +2,7 @@ import fnmatch
 import logging
 import os
 import textwrap
+from typing import cast
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -10,12 +11,13 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.models import AutofixRequest
 from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
-from seer.automation.models import EventDetails, Profile
+from seer.automation.models import EventDetails, Profile, SentryEventData
 from seer.dependency_injection import inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 from seer.rpc import RpcClient
@@ -405,7 +407,13 @@ class BaseTools:
         Fetches a profile for a specific transaction event.
         """
         # get full event id and TraceEvent payload
-        trace_tree = self.context.state.get().request.trace_tree
+        state = self.context.state.get()
+        if not isinstance(self.context, AutofixContext) or not isinstance(
+            state.request, AutofixRequest
+        ):
+            return "No trace available. Cannot fetch profiles."
+
+        trace_tree = state.request.trace_tree
         if trace_tree is None:
             return "No trace available. Cannot fetch profiles."
         event = trace_tree.get_event_by_id(event_id)
@@ -436,7 +444,13 @@ class BaseTools:
         Fetches the spans under a selected transaction event or the stacktrace under an error event.
         """
         # get full event id and TraceEvent payload
-        trace_tree = self.context.state.get().request.trace_tree
+        state = self.context.state.get()
+        if not isinstance(self.context, AutofixContext) or not isinstance(
+            state.request, AutofixRequest
+        ):
+            return "No trace available. Cannot fetch details."
+
+        trace_tree = state.request.trace_tree
         if trace_tree is None:
             return "No trace available. Cannot fetch details."
         event = trace_tree.get_event_by_id(event_id)
@@ -455,15 +469,16 @@ class BaseTools:
             self.context.event_manager.add_log(f"Studying connected error `{event.title}`...")
 
             project_id = event.project_id
-            event_id = event.event_id
+            error_event_id = event.event_id
             error_data = rpc_client.call(
                 "get_error_event_details",
                 project_id=project_id,
-                event_id=event_id,
+                event_id=error_event_id,
             )  # expecting data compatible with SentryEventData model
             if not error_data:
                 return "Could not fetch error event details."
-            error_event_details = EventDetails.from_event(error_data)
+            data = cast(SentryEventData, error_data)
+            error_event_details = EventDetails.from_event(data)
             error_event_details = self.context.process_event_paths(error_event_details)
             return error_event_details.format_event_without_breadcrumbs()
         else:
@@ -667,8 +682,9 @@ class BaseTools:
         run_request = self.context.state.get().request
         if (
             isinstance(self.context, AutofixContext)
+            and isinstance(run_request, AutofixRequest)
             and not run_request.options.disable_interactivity
-            and run_request.invoking_user.id == 3283725
+            and (run_request.invoking_user and run_request.invoking_user.id == 3283725)
         ):  # TODO temporary guard for Rohan (@roaga) to test in prod
             tools.extend(
                 [

@@ -60,7 +60,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                                 instruction=request.instruction,
                                 trace_tree=(
                                     request.trace_tree
-                                    if state.request.invoking_user.id == 3283725
+                                    if (
+                                        state.request.invoking_user
+                                        and state.request.invoking_user.id == 3283725
+                                    )
                                     else None
                                 ),  # TODO temporary guard for Rohan (@roaga) to test in prod
                                 repos_str=repos_str,
