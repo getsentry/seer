@@ -101,10 +101,22 @@ class OpenAiProvider:
         return None
 
     @staticmethod
-    def is_completion_exception_retryable(exception: Exception) -> bool:
-        return isinstance(exception, openai.InternalServerError) or isinstance(
+    def is_completion_exception_retryable(exception: Exception) -> tuple[bool, bool]:
+        """
+        Determines if an exception should be retried, and if message trimming is needed.
+        
+        Returns:
+            tuple: (is_retryable, needs_trimming)
+        """
+        # Check for context length error
+        if isinstance(exception, openai.BadRequestError) and "maximum context length" in str(exception).lower():
+            return True, True  # Retry with message trimming
+            
+        is_retryable = isinstance(exception, openai.InternalServerError) or isinstance(
             exception, LlmStreamTimeoutError
         )
+        
+        return is_retryable, False  # Retry without trimming for other errors
 
     def generate_text(
         self,
@@ -451,16 +463,29 @@ class AnthropicProvider:
         return None
 
     @staticmethod
-    def is_completion_exception_retryable(exception: Exception) -> bool:
+    def is_completion_exception_retryable(exception: Exception) -> tuple[bool, bool]:
+        """
+        Determines if an exception should be retried, and if message trimming is needed.
+        
+        Returns:
+            tuple: (is_retryable, needs_trimming)
+        """
+        # Check for context length error (413)
+        if isinstance(exception, anthropic.AnthropicError) and "413" in str(exception) and "Prompt is too long" in str(exception):
+            return True, True  # Retry with message trimming
+            
         retryable_errors = (
             "overloaded_error",
             "Internal server error",
             "not_found_error",
         )
-        return (
+        
+        is_retryable = (
             isinstance(exception, anthropic.AnthropicError)
             and any(error in str(exception) for error in retryable_errors)
         ) or isinstance(exception, LlmStreamTimeoutError)
+        
+        return is_retryable, False  # Retry without trimming for other errors
 
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
