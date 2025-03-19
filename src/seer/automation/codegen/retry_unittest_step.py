@@ -90,7 +90,7 @@ class RetryUnittestStep(CodegenStep):
         return previous_run_context
 
     def _handle_successful_pr_status(self, repo_client, previous_run_context, pr) -> None:
-        repo_client.post_unit_test_reference_to_original_pr(
+        repo_client.post_unit_test_reference_to_original_pr_codecov_app(
             previous_run_context.original_pr_url, pr.html_url
         )
 
@@ -116,7 +116,7 @@ class RetryUnittestStep(CodegenStep):
 
         else:
             self.logger.info("No unit tests generated, posting message to original PR")
-            repo_client.post_unit_test_reference_to_original_pr(
+            repo_client.post_unit_test_reference_to_original_pr_codecov_app(
                 previous_run_context.original_pr_url, pr.html_url
             )
 

@@ -47,7 +47,7 @@ class CodeUnitTestOutput(BaseComponentOutput):
 class CodegenBaseRequest(BaseModel):
     repo: RepoDefinition
     pr_id: int  # The PR number
-    codecov_status: Optional[dict] = None
+    codecov_status: dict[str, str] | None = None
 
 
 class CodegenUnitTestsRequest(CodegenBaseRequest):

@@ -818,17 +818,24 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
 
-    def post_unit_test_reference_to_original_pr(
-        self,
-        original_pr_url: str,
-        unit_test_pr_url: str,
-        type: str = RepoClientType.CODECOV_UNIT_TEST,
+    def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
+        original_pr_id = int(original_pr_url.split("/")[-1])
+        repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
+        comment = f"Sentry has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
+    def post_unit_test_reference_to_original_pr_codecov_app(
+        self, original_pr_url: str, unit_test_pr_url: str
     ):
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        gh_app = "Sentry" if type == RepoClientType.CODECOV_UNIT_TEST else "Codecov"
-        comment = f"{gh_app} has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        comment = f"Codecov has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)

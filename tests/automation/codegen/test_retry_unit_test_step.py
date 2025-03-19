@@ -46,7 +46,7 @@ class TestRetryUnittestStep(unittest.TestCase):
     def test_invoke_success_status(self, _):
         step = self._build_step()
         step.invoke()
-        self.repo_client.post_unit_test_reference_to_original_pr.assert_called_once_with(
+        self.repo_client.post_unit_test_reference_to_original_pr_codecov_app.assert_called_once_with(
             self.mock_previous_context.original_pr_url, self.mock_pr.html_url
         )
         self.context.event_manager.mark_running.assert_called_once()
@@ -61,7 +61,7 @@ class TestRetryUnittestStep(unittest.TestCase):
             mock_generate.assert_called_once_with(
                 self.repo_client, self.mock_pr, self.mock_previous_context
             )
-            self.repo_client.post_unit_test_reference_to_original_pr.assert_called_once_with(
+            self.repo_client.post_unit_test_reference_to_original_pr_codecov_app.assert_called_once_with(
                 self.mock_previous_context.original_pr_url, self.mock_pr.html_url
             )
 
@@ -73,7 +73,7 @@ class TestRetryUnittestStep(unittest.TestCase):
         with patch.object(step, "_generate_unit_tests") as mock_generate:
             step.invoke()
             mock_generate.assert_not_called()
-            self.repo_client.post_unit_test_reference_to_original_pr.assert_not_called()
+            self.repo_client.post_unit_test_reference_to_original_pr_codecov_app.assert_not_called()
 
     @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
     def test_get_previous_run_context_failure(self, _):

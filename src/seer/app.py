@@ -303,11 +303,6 @@ def codegen_pr_review_state_endpoint(
     raise NotImplementedError("PR Review state is not implemented yet.")
 
 
-@json_api(blueprint, "/v1/automation/codegen/retry-unit-tests")
-def codegen_retry_unit_tests_endpoint(data: CodegenBaseRequest) -> CodegenUnitTestsResponse:
-    return codegen_retry_unittest(data)
-
-
 @json_api(blueprint, "/v1/automation/codecov-request")
 def codecov_request_endpoint(
     data: CodecovTaskRequest,
@@ -324,7 +319,7 @@ def codecov_request_endpoint(
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
     elif data.request_type == "retry-unit-tests":
-        return codegen_retry_unit_tests_endpoint(data.data)
+        return codegen_retry_unittest(data)
 
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 

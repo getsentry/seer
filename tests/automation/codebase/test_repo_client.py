@@ -954,8 +954,8 @@ class TestRepoClientIndexFileSet:
         }
         mock_post.return_value = mock_response
 
-        result = repo_client.post_unit_test_reference_to_original_pr(
-            original_pr_url, unit_test_pr_url, type=RepoClientType.CODECOV_PR_REVIEW
+        result = repo_client.post_unit_test_reference_to_original_pr_codecov_app(
+            original_pr_url, unit_test_pr_url
         )
 
         mock_post.assert_called_once_with(expected_url, headers=ANY, json=expected_params)
