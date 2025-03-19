@@ -433,8 +433,12 @@ class BaseTools:
         )  # expecting data compatible with Profile model
         if not profile_data:
             return "Could not fetch profile."
-        profile = Profile.model_validate(profile_data)
-        return profile.format_profile(context_before=100, context_after=100)
+        try:
+            profile = Profile.model_validate(profile_data)
+            return profile.format_profile(context_before=100, context_after=100)
+        except Exception as e:
+            logger.exception(f"Could not parse profile from tool call: {e}")
+            return "Could not fetch profile."
 
     @observe(name="Get Trace Event Details")
     @ai_track(description="Get Trace Event Details")
@@ -478,9 +482,13 @@ class BaseTools:
             if not error_data:
                 return "Could not fetch error event details."
             data = cast(SentryEventData, error_data)
-            error_event_details = EventDetails.from_event(data)
-            error_event_details = self.context.process_event_paths(error_event_details)
-            return error_event_details.format_event_without_breadcrumbs()
+            try:
+                error_event_details = EventDetails.from_event(data)
+                error_event_details = self.context.process_event_paths(error_event_details)
+                return error_event_details.format_event_without_breadcrumbs()
+            except Exception as e:
+                logger.exception(f"Could not parse error event details from tool call: {e}")
+                return "Could not fetch error event details."
         else:
             return "Cannot fetch information for this event."
 
