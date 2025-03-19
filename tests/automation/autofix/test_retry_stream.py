@@ -11,7 +11,8 @@ import anthropic
 import httpx
 import openai
 import pytest
-from google.api_core.exceptions import ClientError
+import requests
+from google.genai.errors import ClientError
 from johen import generate
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
@@ -131,6 +132,7 @@ AnthropicProviderFlaky = flakify(
     get_obj_with_create_stream_method_from_client=lambda client: client.messages,
     create_stream_method_name="create",
 )
+
 OpenAiProviderFlaky = flakify(
     OpenAiProvider,
     retryable_exception=openai.InternalServerError(
@@ -141,9 +143,12 @@ OpenAiProviderFlaky = flakify(
     get_obj_with_create_stream_method_from_client=lambda client: client.chat.completions,
     create_stream_method_name="create",
 )
+
+gemini_exhausted_response = requests.Response()
+gemini_exhausted_response._content = b"429 RESOURCE_EXHAUSTED."
 GeminiProviderFlaky = flakify(
     GeminiProvider,
-    retryable_exception=ClientError(message="429 RESOURCE_EXHAUSTED."),
+    retryable_exception=ClientError(code=429, response=gemini_exhausted_response),
     # https://sentry.sentry.io/issues/6301072208
     get_obj_with_create_stream_method_from_client=lambda client: client.models,
     create_stream_method_name="generate_content_stream",
