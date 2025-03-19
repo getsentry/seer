@@ -103,14 +103,17 @@ class OpenAiProvider:
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> tuple[bool, bool]:
         # First check for context length errors that need trimming
-        if isinstance(exception, openai.BadRequestError) and "maximum context length" in str(exception).lower():
+        if (
+            isinstance(exception, openai.BadRequestError)
+            and "maximum context length" in str(exception).lower()
+        ):
             return True, True  # Retry with message trimming
-        
+
         # Original logic for other retryable errors
         is_retryable = isinstance(exception, openai.InternalServerError) or isinstance(
             exception, LlmStreamTimeoutError
         )
-        
+
         return is_retryable, False  # Regular retry without trimming
 
     def generate_text(
@@ -460,9 +463,13 @@ class AnthropicProvider:
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> tuple[bool, bool]:
         # First check for context length errors that need trimming
-        if isinstance(exception, anthropic.AnthropicError) and "413" in str(exception) and "Prompt is too long" in str(exception):
+        if (
+            isinstance(exception, anthropic.AnthropicError)
+            and "413" in str(exception)
+            and "Prompt is too long" in str(exception)
+        ):
             return True, True  # Retry with message trimming
-        
+
         # Original logic for other retryable errors
         retryable_errors = (
             "overloaded_error",
@@ -473,7 +480,7 @@ class AnthropicProvider:
             isinstance(exception, anthropic.AnthropicError)
             and any(error in str(exception) for error in retryable_errors)
         ) or isinstance(exception, LlmStreamTimeoutError)
-        
+
         return is_retryable, False  # Regular retry without trimming
 
     @observe(as_type="generation", name="Anthropic Generation")
@@ -1508,35 +1515,35 @@ class LlmClient:
         """
         Trims messages from the middle of a list when they're too large for context windows.
         Preserves the first and last few messages to maintain conversation coherence.
-        
+
         Args:
             messages: List of Message objects to trim
             preserve_first: Number of messages to preserve from the beginning
             preserve_last: Number of messages to preserve from the end
-            
+
         Returns:
             A new list with fewer messages, with middle messages summarized
         """
         # Always preserve at least the first and last message
         preserve_first = max(preserve_first, 1)
         preserve_last = max(preserve_last, 1)
-        
+
         if len(messages) <= preserve_first + preserve_last:
             return messages
-            
+
         trimmed_messages = []
         trimmed_messages.extend(messages[:preserve_first])
-        
+
         # Add a summary message in the middle
         middle_summary = Message(
             role="system",
-            content=f"{len(messages) - preserve_first - preserve_last} messages were removed to reduce context length."
+            content=f"{len(messages) - preserve_first - preserve_last} messages were removed to reduce context length.",
         )
         trimmed_messages.append(middle_summary)
-        
+
         # Add the last few messages
         trimmed_messages.extend(messages[-preserve_last:])
-        
+
         return trimmed_messages
 
     def construct_message_from_stream(

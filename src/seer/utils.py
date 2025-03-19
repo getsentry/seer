@@ -83,7 +83,6 @@ class MaxTriesExceeded(Exception):
     pass
 
 
-
 def backoff_on_exception(
     is_exception_retryable,
     max_tries=4,
@@ -112,29 +111,29 @@ def backoff_on_exception(
                     result = func(*args, **kwargs)
                 except Exception as exception:
                     last_exception = exception
-                    
+
                     # Check if the exception is retryable
                     retry_info = is_exception_retryable(exception)
-                    
+
                     # Handle both bool and tuple returns for backward compatibility
                     if isinstance(retry_info, tuple):
                         should_retry, needs_trimming = retry_info
                     else:
                         should_retry, needs_trimming = retry_info, False
-                        
+
                     if should_retry:
                         # If we need trimming and have messages, trim them and retry immediately
                         if needs_trimming and "messages" in kwargs and kwargs["messages"]:
                             from seer.automation.agent.client import trim_messages_for_context_limit
-                            
+
                             original_messages = kwargs["messages"]
                             kwargs["messages"] = trim_messages_for_context_limit(original_messages)
-                            
+
                             logger.info(
                                 f"Context length exceeded. Trimming messages from {len(original_messages)} to {len(kwargs['messages'])}."
                             )
                             continue  # Skip sleep and retry immediately with trimmed messages
-                            
+
                         # Standard backoff for other retryable errors
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
                         logger.info(
