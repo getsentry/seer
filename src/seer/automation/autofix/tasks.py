@@ -878,7 +878,7 @@ def resolve_comment_thread(request: AutofixUpdateRequest):
     with state.update() as cur:
         if request.payload.is_agent_comment and step_index + 1 < len(state.get().steps):
             cur.steps[step_index + 1].agent_comment_thread = None
-        elif request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:
+        elif not cur.steps[step_index].active_comment_thread or request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:
             cur.steps[step_index].active_comment_thread = None
         else:
             raise ValueError("No matching comment thread found; unable to resolve thread")
