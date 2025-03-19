@@ -94,7 +94,7 @@ def backoff_on_exception(
     Retry a function with exponential backoff.
 
     Args:
-        is_exception_retryable: function that takes an exception and returns (bool, bool) tuple of 
+        is_exception_retryable: function that takes an exception and returns (bool, bool) tuple of
                                (should_retry, needs_trimming)
         max_tries: maximum number of tries
         sleep_sec_scaler: function that takes the number of tries and returns the number of seconds to sleep
@@ -114,25 +114,25 @@ def backoff_on_exception(
                     result = func(*args, **kwargs)
                 except Exception as exception:
                     last_exception = exception
-                    
+
                     # Get retry information as a tuple (should_retry, needs_trimming)
                     should_retry, needs_trimming = is_exception_retryable(exception)
-                    
+
                     if should_retry:
                         # Handle message trimming if needed
                         if needs_trimming and "messages" in kwargs and kwargs["messages"]:
                             from seer.automation.agent.client import trim_messages_for_context_limit
-                            
+
                             messages = kwargs["messages"]
                             trimmed_messages = trim_messages_for_context_limit(messages)
-                            
+
                             if len(trimmed_messages) < len(messages):
                                 logger.info(
                                     f"Context length exceeded. Trimming messages from {len(messages)} to {len(trimmed_messages)}."
                                 )
                                 kwargs["messages"] = trimmed_messages
                                 continue  # Skip sleep and retry immediately with trimmed messages
-                        
+
                         # Standard backoff for other retryable errors
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
                         logger.info(
