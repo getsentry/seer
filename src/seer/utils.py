@@ -76,7 +76,7 @@ def closing_queue(*queues: Queue):
 
 
 def exception_formatter(exception: Exception) -> str:
-    return f"{type(exception).__name__}: {exception}"
+    return f"{type(exception).__module__}.{type(exception).__qualname__}: {exception}"
 
 
 class MaxTriesExceeded(Exception):

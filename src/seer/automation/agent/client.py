@@ -17,7 +17,7 @@ from anthropic.types import (
     ToolUseBlockParam,
 )
 from google import genai  # type: ignore[attr-defined]
-from google.api_core.exceptions import ClientError
+from google.genai.errors import ClientError
 from google.genai.types import (
     Content,
     FunctionDeclaration,
