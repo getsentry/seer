@@ -301,12 +301,30 @@ class RepoClient:
                         shutil.move(
                             s, d
                         )  # move all directories from the root folder to the output directory
+                    elif os.path.islink(s):
+                        link_target = os.readlink(s)
+                        abs_target = os.path.normpath(os.path.join(os.path.dirname(s), link_target))
+                        if abs_target.startswith(root_folder_path):
+                            rel_target = os.path.relpath(abs_target, os.path.dirname(s))
+                            target_in_dest = os.path.join(os.path.dirname(d), rel_target)
+                            try:
+                                if os.path.exists(abs_target) and not os.path.exists(
+                                    target_in_dest
+                                ):
+                                    target_dir = os.path.dirname(target_in_dest)
+                                    os.makedirs(target_dir, exist_ok=True)
+                                    shutil.copy2(abs_target, target_in_dest)
+                                os.symlink(rel_target, d)
+                            except OSError:
+                                if os.path.exists(abs_target):
+                                    shutil.copy2(abs_target, d)
+                        else:
+                            if os.path.exists(abs_target):
+                                shutil.copy2(abs_target, d)
                     else:
-                        # Skipping symlinks to prevent FileNotFoundError.
-                        if not os.path.islink(s):
-                            shutil.copy2(
-                                s, d
-                            )  # copy all files from the root folder to the output directory
+                        shutil.copy2(
+                            s, d
+                        )  # copy all files from the root folder to the output directory
 
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
