@@ -308,7 +308,9 @@ class RepoClient:
                             rel_target = os.path.relpath(abs_target, os.path.dirname(s))
                             target_in_dest = os.path.join(os.path.dirname(d), rel_target)
                             try:
-                                if os.path.exists(abs_target) and not os.path.exists(target_in_dest):
+                                if os.path.exists(abs_target) and not os.path.exists(
+                                    target_in_dest
+                                ):
                                     target_dir = os.path.dirname(target_in_dest)
                                     os.makedirs(target_dir, exist_ok=True)
                                     shutil.copy2(abs_target, target_in_dest)

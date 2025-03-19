@@ -100,7 +100,7 @@ class CodeSearcher:
         try:
             if not os.path.exists(file_path):
                 return None
-                
+
             if os.path.getsize(file_path) > self.max_file_size_bytes:
                 logger.debug(f"Skipping {file_path} as it exceeds the maximum file size limit.")
                 return None
