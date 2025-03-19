@@ -349,12 +349,19 @@ def receive_feedback(request: AutofixUpdateRequest):
     with autofix_state.update() as cur:
         if cur.feedback is None:
             cur.feedback = AutofixFeedback()
+
         if payload.action == "root_cause_thumbs_up":
             cur.feedback.root_cause_thumbs_up = True
             cur.feedback.root_cause_thumbs_down = False
         elif payload.action == "root_cause_thumbs_down":
             cur.feedback.root_cause_thumbs_up = False
             cur.feedback.root_cause_thumbs_down = True
+        elif payload.action == "solution_thumbs_up":
+            cur.feedback.solution_thumbs_up = True
+            cur.feedback.solution_thumbs_down = False
+        elif payload.action == "solution_thumbs_down":
+            cur.feedback.solution_thumbs_up = False
+            cur.feedback.solution_thumbs_down = True
 
 
 @inject

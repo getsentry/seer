@@ -11,6 +11,8 @@ from seer.automation.autofix.models import (
     AutofixCommentThreadPayload,
     AutofixContinuation,
     AutofixCreatePrUpdatePayload,
+    AutofixFeedback,
+    AutofixFeedbackPayload,
     AutofixRequest,
     AutofixRequestOptions,
     AutofixResolveCommentThreadPayload,
@@ -38,6 +40,7 @@ from seer.automation.autofix.tasks import (
     comment_on_thread,
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    receive_feedback,
     receive_user_message,
     resolve_comment_thread,
     restart_from_point_with_feedback,
@@ -1456,3 +1459,217 @@ def test_resolve_agent_comment_thread():
     assert updated_state is not None
     updated_step2 = updated_state.get().steps[1]
     assert updated_step2.agent_comment_thread is None
+
+
+@pytest.fixture
+def autofix_state_for_feedback():
+    """Create a test autofix state with no feedback."""
+    state = next(generate(AutofixContinuation))
+    state.feedback = None
+
+    with Session() as session:
+        session.add(DbRunState(id=100, group_id=100, value=state.model_dump(mode="json")))
+        session.commit()
+
+    return 100  # Return the run_id
+
+
+@pytest.fixture
+def autofix_state_with_feedback():
+    """Create a test autofix state with existing feedback."""
+    state = next(generate(AutofixContinuation))
+    state.feedback = AutofixFeedback(
+        root_cause_thumbs_up=True,
+        root_cause_thumbs_down=False,
+        solution_thumbs_up=None,
+        solution_thumbs_down=None,
+    )
+
+    with Session() as session:
+        session.add(DbRunState(id=101, group_id=101, value=state.model_dump(mode="json")))
+        session.commit()
+
+    return 101  # Return the run_id
+
+
+def test_receive_feedback_root_cause_thumbs_up(autofix_state_for_feedback):
+    """Test receiving root cause thumbs up feedback."""
+    request = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="root_cause_thumbs_up"
+        ),
+    )
+
+    receive_feedback(request)
+
+    # Verify the state was updated correctly
+    state = ContinuationState(autofix_state_for_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is True
+    assert cur.feedback.root_cause_thumbs_down is False
+    assert cur.feedback.solution_thumbs_up is None
+    assert cur.feedback.solution_thumbs_down is None
+
+
+def test_receive_feedback_root_cause_thumbs_down(autofix_state_for_feedback):
+    """Test receiving root cause thumbs down feedback."""
+    request = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="root_cause_thumbs_down"
+        ),
+    )
+
+    receive_feedback(request)
+
+    # Verify the state was updated correctly
+    state = ContinuationState(autofix_state_for_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is False
+    assert cur.feedback.root_cause_thumbs_down is True
+    assert cur.feedback.solution_thumbs_up is None
+    assert cur.feedback.solution_thumbs_down is None
+
+
+def test_receive_feedback_solution_thumbs_up(autofix_state_for_feedback):
+    """Test receiving solution thumbs up feedback."""
+    request = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="solution_thumbs_up"
+        ),
+    )
+
+    receive_feedback(request)
+
+    # Verify the state was updated correctly
+    state = ContinuationState(autofix_state_for_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is None
+    assert cur.feedback.root_cause_thumbs_down is None
+    assert cur.feedback.solution_thumbs_up is True
+    assert cur.feedback.solution_thumbs_down is False
+
+
+def test_receive_feedback_solution_thumbs_down(autofix_state_for_feedback):
+    """Test receiving solution thumbs down feedback."""
+    request = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="solution_thumbs_down"
+        ),
+    )
+
+    receive_feedback(request)
+
+    # Verify the state was updated correctly
+    state = ContinuationState(autofix_state_for_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is None
+    assert cur.feedback.root_cause_thumbs_down is None
+    assert cur.feedback.solution_thumbs_up is False
+    assert cur.feedback.solution_thumbs_down is True
+
+
+def test_receive_feedback_existing_feedback(autofix_state_for_feedback):
+    """Test receiving feedback when feedback already exists."""
+    # First set some initial feedback
+    request1 = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="root_cause_thumbs_up"
+        ),
+    )
+    receive_feedback(request1)
+
+    # Then update with new feedback
+    request2 = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="solution_thumbs_up"
+        ),
+    )
+    receive_feedback(request2)
+
+    # Verify both feedback items were saved
+    state = ContinuationState(autofix_state_for_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is True
+    assert cur.feedback.root_cause_thumbs_down is False
+    assert cur.feedback.solution_thumbs_up is True
+    assert cur.feedback.solution_thumbs_down is False
+
+
+def test_receive_feedback_toggle(autofix_state_for_feedback):
+    """Test toggling feedback from thumbs up to thumbs down."""
+    # First set thumbs up
+    request1 = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="root_cause_thumbs_up"
+        ),
+    )
+    receive_feedback(request1)
+
+    # Then change to thumbs down
+    request2 = AutofixUpdateRequest(
+        run_id=autofix_state_for_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="root_cause_thumbs_down"
+        ),
+    )
+    receive_feedback(request2)
+
+    # Verify feedback was toggled
+    state = ContinuationState(autofix_state_for_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is False
+    assert cur.feedback.root_cause_thumbs_down is True
+
+
+def test_receive_feedback_update_existing_feedback(autofix_state_with_feedback):
+    """Test receiving feedback when feedback object already exists."""
+    request = AutofixUpdateRequest(
+        run_id=autofix_state_with_feedback,
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="solution_thumbs_up"
+        ),
+    )
+
+    receive_feedback(request)
+
+    # Verify the state was updated correctly
+    state = ContinuationState(autofix_state_with_feedback)
+    cur = state.get()
+
+    assert cur.feedback is not None
+    assert cur.feedback.root_cause_thumbs_up is True
+    assert cur.feedback.root_cause_thumbs_down is False
+    assert cur.feedback.solution_thumbs_up is True
+    assert cur.feedback.solution_thumbs_down is False
+
+
+def test_receive_feedback_invalid_run_id():
+    """Test receiving feedback for a non-existent run."""
+    request = AutofixUpdateRequest(
+        run_id=999999,  # Non-existent run ID
+        payload=AutofixFeedbackPayload(
+            type=AutofixUpdateType.FEEDBACK, action="root_cause_thumbs_up"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Autofix state not found"):
+        receive_feedback(request)
