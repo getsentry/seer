@@ -694,8 +694,12 @@ class BaseTools:
             and not run_request.options.disable_interactivity
             and (run_request.invoking_user and run_request.invoking_user.id == 3283725)
         ):  # TODO temporary guard for Rohan (@roaga) to test in prod
-            tools.extend(
-                [
+            trace_tree = run_request.trace_tree
+
+            if (
+                trace_tree and trace_tree.events
+            ):  # Only add trace events tool if there are events in the trace
+                tools.append(
                     FunctionTool(
                         name="get_trace_event_details",
                         fn=self.get_trace_event_details,
@@ -708,7 +712,13 @@ class BaseTools:
                             },
                         ],
                         required=["event_id"],
-                    ),
+                    )
+                )
+
+            if trace_tree and any(
+                event.profile_id is not None for event in trace_tree._get_all_events()
+            ):  # Only add profile tool if there are events with profile_ids in the trace
+                tools.append(
                     FunctionTool(
                         name="get_profile_for_trace_event",
                         fn=self.get_profile,
@@ -721,8 +731,7 @@ class BaseTools:
                             },
                         ],
                         required=["event_id"],
-                    ),
-                ]
-            )
+                    )
+                )
 
         return tools
