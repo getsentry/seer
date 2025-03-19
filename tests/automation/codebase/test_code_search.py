@@ -45,7 +45,9 @@ class TestCodeSearcher(unittest.TestCase):
         # Create another test file
         test_file2_path = os.path.join(self.temp_dir, "test_file2.py")
         with open(test_file2_path, "w") as f:
-            f.write("# This is another test file\ndef another_function():\n    return 'Another Test'")
+            f.write(
+                "# This is another test file\ndef another_function():\n    return 'Another Test'"
+            )
 
         try:
             # Test searching for a keyword across multiple files
@@ -56,17 +58,17 @@ class TestCodeSearcher(unittest.TestCase):
             if os.path.exists(test_file2_path):
                 os.remove(test_file2_path)
 
-    @patch('os.path.exists')
-    @patch('os.path.getsize')
+    @patch("os.path.exists")
+    @patch("os.path.getsize")
     def test_missing_file_handling(self, mock_getsize, mock_exists):
         # Simulate a file that doesn't exist
         mock_exists.return_value = False
-        
+
         # This should not raise an error even though getsize would raise FileNotFoundError
         result = self.code_searcher.search_file("/path/to/nonexistent/file.py", "keyword")
-        
+
         # Verify the result is None
         self.assertIsNone(result)
-        
+
         # Verify getsize was never called
         mock_getsize.assert_not_called()
