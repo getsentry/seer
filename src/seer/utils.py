@@ -83,22 +83,25 @@ class MaxTriesExceeded(Exception):
     pass
 
 
+
 def backoff_on_exception(
-    is_exception_retryable: Callable[[Exception], bool],
-    max_tries: int = 2,
-    sleep_sec_scaler: Callable[[int], float] | None = None,
-    jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
+    is_exception_retryable,
+    max_tries=4,
+    sleep_sec_scaler=lambda num_tries: 2**num_tries,
+    exception_formatter=lambda e: repr(e),
+    jitterer=lambda: random.random(),
 ):
     """
-    Returns a decorator which retries a function on exception iff `is_exception_retryable(exception)`.
-    Defaults to exponential backoff with random jitter and one retry.
+    Retry a function with exponential backoff.
+
+    Args:
+        is_exception_retryable: function that takes an exception and returns True if it should be retried
+                                or a tuple (should_retry, needs_trimming)
+        max_tries: maximum number of tries
+        sleep_sec_scaler: function that takes the number of tries and returns the number of seconds to sleep
+        exception_formatter: function that takes an exception and returns a string to log
+        jitterer: function that returns a random number to add to the sleep time
     """
-
-    if max_tries < 1:
-        raise ValueError("max_tries must be at least 1")  # pragma: no cover
-
-    if sleep_sec_scaler is None:
-        sleep_sec_scaler = lambda num_tries: min(2**num_tries, 10.0)
 
     def decorator(func):
         @functools.wraps(func)
@@ -109,7 +112,30 @@ def backoff_on_exception(
                     result = func(*args, **kwargs)
                 except Exception as exception:
                     last_exception = exception
-                    if is_exception_retryable(exception):
+                    
+                    # Check if the exception is retryable
+                    retry_info = is_exception_retryable(exception)
+                    
+                    # Handle both bool and tuple returns for backward compatibility
+                    if isinstance(retry_info, tuple):
+                        should_retry, needs_trimming = retry_info
+                    else:
+                        should_retry, needs_trimming = retry_info, False
+                        
+                    if should_retry:
+                        # If we need trimming and have messages, trim them and retry immediately
+                        if needs_trimming and "messages" in kwargs and kwargs["messages"]:
+                            from seer.automation.agent.client import trim_messages_for_context_limit
+                            
+                            original_messages = kwargs["messages"]
+                            kwargs["messages"] = trim_messages_for_context_limit(original_messages)
+                            
+                            logger.info(
+                                f"Context length exceeded. Trimming messages from {len(original_messages)} to {len(kwargs['messages'])}."
+                            )
+                            continue  # Skip sleep and retry immediately with trimmed messages
+                            
+                        # Standard backoff for other retryable errors
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
                         logger.info(
                             f"Encountered {exception_formatter(exception)}. Sleeping for "
