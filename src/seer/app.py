@@ -319,7 +319,7 @@ def codecov_request_endpoint(
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
     elif data.request_type == "retry-unit-tests":
-        return codegen_retry_unittest(data)
+        return codegen_retry_unittest(data.data)
 
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
