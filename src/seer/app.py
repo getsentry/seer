@@ -67,6 +67,7 @@ from seer.automation.codegen.models import (
 from seer.automation.codegen.tasks import (
     codegen_pr_review,
     codegen_relevant_warnings,
+    codegen_retry_unittest,
     codegen_unittest,
     get_unittest_state,
 )
@@ -333,6 +334,9 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
+    elif data.request_type == "retry-unit-tests":
+        return codegen_retry_unittest(data.data)
+
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
