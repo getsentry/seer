@@ -1,3 +1,4 @@
+import textwrap
 from collections import defaultdict
 from typing import Generic, TypeVar
 from unittest.mock import MagicMock, Mock, patch
@@ -9,7 +10,7 @@ from pydantic import BaseModel
 
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.agent.models import LlmGenerateStructuredResponse
-from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codebase.models import StaticAnalysisRule, StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -40,6 +41,96 @@ from seer.automation.codegen.relevant_warnings_step import (
 from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
 
 
+@pytest.mark.parametrize(
+    "warning, expected",
+    [
+        pytest.param(
+            StaticAnalysisWarning(
+                id=1,
+                code="unused-variable",
+                encoded_location="path/to/file.py:1~2",
+                message="Warning message",
+                rule=StaticAnalysisRule(
+                    id=1,
+                    tool="mypy",
+                    code="unused-variable",
+                    category="style",
+                    is_autofixable=False,
+                    is_stable=None,
+                ),
+                encoded_code_snippet="    def test_format_code_snippet(self):\n        pass\n",
+            ),
+            textwrap.dedent(
+                """\
+                Warning message: Warning message
+                ----------
+                Location:
+                    filename: path/to/file.py
+                    start_line: 1
+                    end_line: 2
+                Code Snippet:
+                ```python
+                def test_format_code_snippet(self):
+                    pass
+                ```
+                ----------
+                Static Analysis Rule:
+                    Rule: unused-variable
+                    Tool: mypy
+                    Is auto-fixable: False
+                    Is stable: None
+                    Category: style
+
+                """
+            ),
+            id="python-warning",
+        ),
+        pytest.param(
+            StaticAnalysisWarning(
+                id=2,
+                code="unused-variable",
+                encoded_location="path/to/file.js:1~2",
+                message="Warning message",
+                rule=StaticAnalysisRule(
+                    id=2,
+                    tool="eslint",
+                    code="unused-variable",
+                    category="style",
+                    is_autofixable=False,
+                    is_stable=False,
+                ),
+                encoded_code_snippet="",
+            ),
+            textwrap.dedent(
+                """\
+                Warning message: Warning message
+                ----------
+                Location:
+                    filename: path/to/file.js
+                    start_line: 1
+                    end_line: 2
+                Code Snippet:
+                ```javascript
+
+                ```
+                ----------
+                Static Analysis Rule:
+                    Rule: unused-variable
+                    Tool: eslint
+                    Is auto-fixable: False
+                    Is stable: False
+                    Category: style
+
+                """
+            ),
+            id="javascript-warning-no-snippet",
+        ),
+    ],
+)
+def test_format_code_snippet(warning: StaticAnalysisWarning, expected: str):
+    assert warning.format_warning() == expected
+
+
 class TestFilterWarningsComponent:
     @pytest.fixture
     def component(self):
@@ -52,12 +143,52 @@ class TestFilterWarningsComponent:
             ValueError,
             match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
         ):
-            component._does_warning_match_a_target_file(warning, {"file1.py"})
+            component._get_matching_pr_files(
+                warning,
+                [PrFile(filename="file1.py", patch="", status="modified", changes=1, sha="abc")],
+            )
+
+    def test_get_hunk_ranges(self, component: FilterWarningsComponent):
+        pr_file = PrFile(
+            filename="test.py",
+            patch="""@@ -1,3 +1,4 @@
+def hello():
+    print("hello")
++    print("world")  # Line 3 is added
+print("goodbye")
+
+@@ -20,3 +21,4 @@
+    print("end")
++    print("new end")  # Line 22 is added
+    return""",
+            status="modified",
+            changes=15,
+            sha="sha2",
+        )
+        assert component._get_sorted_hunk_ranges(pr_file) == [(1, 5), (21, 25)]
+
+    def test_do_ranges_overlap(self, component: FilterWarningsComponent):
+        # Test overlapping ranges
+        assert component._do_ranges_overlap((1, 5), [(1, 5)])  # Exact match
+        assert component._do_ranges_overlap((2, 4), [(1, 5)])  # Warning contained within hunk
+        assert component._do_ranges_overlap((1, 3), [(2, 5)])  # Partial overlap at start
+        assert component._do_ranges_overlap((4, 6), [(2, 5)])  # Partial overlap at end
+        assert component._do_ranges_overlap((1, 6), [(2, 4)])  # Hunk contained within warning
+        assert component._do_ranges_overlap((3, 6), [(1, 4), (5, 7)])  # Overlaps multiple hunks
+        assert component._do_ranges_overlap((1, 1), [(1, 4), (5, 7)])  # Warning only has 1 line
+
+        # Test non-overlapping ranges
+        assert not component._do_ranges_overlap((1, 2), [(3, 4)])  # Warning before hunk
+        assert not component._do_ranges_overlap((5, 6), [(2, 4)])  # Warning after hunk
+        assert not component._do_ranges_overlap((1, 2), [])  # Empty hunks
+        assert not component._do_ranges_overlap(
+            (1, 2), [(10, 12), (20, 25)]
+        )  # No overlap with any hunks
 
     class _TestInvokeTestCase(BaseModel):
         id: str
 
-        target_filenames: list[str]
+        pr_files: list[PrFile]
         "These files are relative to the repo root b/c they're from the GitHub API."
 
         encoded_locations_with_matches: list[str]
@@ -70,7 +201,17 @@ class TestFilterWarningsComponent:
         [
             _TestInvokeTestCase(
                 id="getsentry/seer",
-                target_filenames=["src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py"],
+                pr_files=[
+                    PrFile(
+                        filename="src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py",
+                        patch="""@@ -233,1 +233,2 @@
+                        def test_func():
+                        +    print("hello")""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    )
+                ],
                 encoded_locations_with_matches=[
                     "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
                     "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
@@ -85,10 +226,38 @@ class TestFilterWarningsComponent:
             ),
             _TestInvokeTestCase(
                 id="codecov/overwatch",
-                target_filenames=[
-                    "app/tools/seer_signature/generate_signature.py",
-                    "processor/tests/services/test_envelope.py",
-                    "app/app/Livewire/Actions/Logout.php",
+                pr_files=[
+                    PrFile(
+                        filename="app/tools/seer_signature/generate_signature.py",
+                        patch="""@@ -20,3 +20,4 @@
+                        def generate():
+                            print("generating")
+                            return True
+                        +    print("done")""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    ),
+                    PrFile(
+                        filename="processor/tests/services/test_envelope.py",
+                        patch="""@@ -4,2 +4,3 @@
+                        def test_envelope():
+                        +    assert True
+                            pass""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    ),
+                    PrFile(
+                        filename="app/app/Livewire/Actions/Logout.php",
+                        patch="""@@ -15,2 +15,3 @@
+                        public function logout() {
+                        +    return redirect('/');
+                        }""",
+                        status="modified",
+                        changes=1,
+                        sha="sha1",
+                    ),
                 ],
                 encoded_locations_with_matches=[
                     "app/tools/seer_signature/generate_signature.py:20",
@@ -116,7 +285,7 @@ class TestFilterWarningsComponent:
 
         request = FilterWarningsRequest(
             warnings=warnings,
-            target_filenames=test_case.target_filenames,
+            pr_files=test_case.pr_files,
             repo_full_name="getsentry/seer",
         )
         output: FilterWarningsOutput = component.invoke(request)
@@ -517,9 +686,7 @@ def test_relevant_warnings_step_invoke(
 
     mock_invoke_filter_warnings_component.assert_called_once()
     mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings
-    mock_invoke_filter_warnings_component.call_args[0][0].target_filenames = [
-        file.filename for file in mock_pr_files
-    ]
+    mock_invoke_filter_warnings_component.call_args[0][0].pr_files = mock_pr_files
 
     mock_invoke_fetch_issues_component.assert_called_once()
     mock_invoke_fetch_issues_component.call_args[0][0].organization_id = request.organization_id

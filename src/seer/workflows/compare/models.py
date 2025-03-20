@@ -17,12 +17,16 @@ class CompareCohortsConfig(BaseModel):
     )
     kRRF: int = Field(
         default=60,
-        description="Offest constant for RRF, default is 60, as recommended by the paper",
+        description="Offset constant for RRF, default is 60, as recommended by the paper",
     )
-    alphaLaplace: float = Field(default=1e-6, description="Laplace smoothing constant")
+    alphaLaplace: float = Field(default=1e-3, description="Laplace smoothing constant")
     emptyValueAttribute: str = Field(
         default="", description="Attribute used to represent missing values"
     )
+
+
+class CompareCohortsMeta(BaseModel):
+    referrer: str = Field(..., description="The referrer of the request")
 
 
 # Input models
@@ -58,6 +62,7 @@ class CompareCohortsRequest(BaseModel):
     config: CompareCohortsConfig = Field(
         default_factory=CompareCohortsConfig, description="The config for the comparison"
     )
+    meta: CompareCohortsMeta = Field(..., description="The meta data for the request")
 
 
 # Output models

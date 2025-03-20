@@ -540,6 +540,9 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             dynamic_alert.last_queued_at = datetime.now()
             session.commit()
             assert not alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
+            assert not alert_data_accessor.can_queue_cleanup_predict_task(
+                external_alert_id, apply_time_threshold=False
+            )
 
         with self.assertRaises(Exception):
             alert_data_accessor.can_queue_cleanup_predict_task(999)

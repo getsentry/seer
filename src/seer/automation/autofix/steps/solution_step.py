@@ -83,6 +83,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
                 original_instruction=state.request.instruction,
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
+                trace_tree=state.request.trace_tree,
             )
         )
 
@@ -114,8 +115,10 @@ class AutofixSolutionStep(AutofixPipelineStep):
                     cur.steps[-1].proceed_confidence_score = (
                         confidence_output.proceed_confidence_score
                     )
-                    if confidence_output.comment:
+                    if confidence_output.question:
                         cur.steps[-1].agent_comment_thread = CommentThread(
                             id=str(uuid.uuid4()),
-                            messages=[Message(role="assistant", content=confidence_output.comment)],
+                            messages=[
+                                Message(role="assistant", content=confidence_output.question)
+                            ],
                         )

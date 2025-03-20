@@ -1,8 +1,11 @@
 import logging
+import os
 import time
 
+import datadog
 import flask
 import sentry_sdk
+from datadog.dogstatsd.base import statsd
 from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -35,6 +38,7 @@ from seer.automation.autofix.tasks import (
     comment_on_thread,
     get_autofix_state,
     get_autofix_state_from_pr_id,
+    receive_feedback,
     receive_user_message,
     resolve_comment_thread,
     restart_from_point_with_feedback,
@@ -77,7 +81,7 @@ from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected, resolve
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 from seer.grouping.grouping import (
     BulkCreateGroupingRecordsResponse,
     CreateGroupingRecordsRequest,
@@ -94,13 +98,19 @@ from seer.smoke_test import check_smoke_test
 from seer.tags import AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
-from seer.workflows.compare.service import compareCohorts
+from seer.workflows.compare.service import compare_cohort
 
 logger = logging.getLogger(__name__)
 
 app = flask.current_app
 blueprint = Blueprint("app", __name__)
 app_module = module
+
+# Initialize Datadog client for metrics
+datadog.initialize(
+    statsd_host=os.environ.get("STATSD_HOST", "127.0.0.1"),
+    statsd_port=int(os.environ.get("STATSD_PORT", "8126")),
+)
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
@@ -213,6 +223,8 @@ def autofix_update_endpoint(
         comment_on_thread(data)
     elif data.payload.type == AutofixUpdateType.RESOLVE_COMMENT_THREAD:
         resolve_comment_thread(data)
+    elif data.payload.type == AutofixUpdateType.FEEDBACK:
+        receive_feedback(data)
 
     return AutofixUpdateEndpointResponse(run_id=data.run_id)
 
@@ -353,9 +365,16 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
     try:
-        response = anomaly_detection().detect_anomalies(data)
+        with statsd.timed("seer.anomaly_detection.detect.duration"):
+            response = anomaly_detection().detect_anomalies(data)
+            statsd.increment("seer.anomaly_detection.detect.success")
     except ClientError as e:
+        statsd.increment("seer.anomaly_detection.detect.client_error")
         response = DetectAnomaliesResponse(success=False, message=str(e))
+    except ServerError:
+        statsd.increment("seer.anomaly_detection.detect.server_error")
+        raise
+
     return response
 
 
@@ -367,9 +386,16 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
-        response = anomaly_detection().store_data(data)
+        with statsd.timed("seer.anomaly_detection.store.duration"):
+            response = anomaly_detection().store_data(data)
+            statsd.increment("seer.anomaly_detection.store.success")
     except ClientError as e:
+        statsd.increment("seer.anomaly_detection.store.client_error")
         response = StoreDataResponse(success=False, message=str(e))
+    except ServerError:
+        statsd.increment("seer.anomaly_detection.store.server_error")
+        raise
+
     return response
 
 
@@ -384,9 +410,16 @@ def delete_alert__data_endpoint(
         sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
-        response = anomaly_detection().delete_alert_data(data)
+        with statsd.timed("seer.anomaly_detection.delete_alert_data.duration"):
+            response = anomaly_detection().delete_alert_data(data)
+            statsd.increment("seer.anomaly_detection.delete_alert_data.success")
     except ClientError as e:
+        statsd.increment("seer.anomaly_detection.delete_alert_data.client_error")
         response = DeleteAlertDataResponse(success=False, message=str(e))
+    except ServerError:
+        statsd.increment("seer.anomaly_detection.delete_alert_data.server_error")
+        raise
+
     return response
 
 
@@ -394,7 +427,7 @@ def delete_alert__data_endpoint(
 def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
-    return compareCohorts(data)
+    return compare_cohort(data)
 
 
 @blueprint.route("/health/live", methods=["GET"])
@@ -402,7 +435,9 @@ def health_check():
     from seer.inference_models import models_loading_status
 
     if models_loading_status() == LoadingResult.FAILED:
+        statsd.increment("seer.health.live.500")
         return "Models failed to load", 500
+    statsd.increment("seer.health.live.200")
     return "", 200
 
 
@@ -418,9 +453,12 @@ def ready_check(app_config: AppConfig = injected):
         status = min(status, smoke_status)
 
     if status == LoadingResult.FAILED:
+        statsd.increment("seer.health.ready.500")
         return "", 500
     if status == LoadingResult.DONE:
+        statsd.increment("seer.health.ready.200")
         return "", 200
+    statsd.increment("seer.health.ready.503")
     return "", 503
 
 

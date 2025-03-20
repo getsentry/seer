@@ -196,6 +196,20 @@ Before committing the VCRs, you must run `make vcr-encrypt` to encrypt them.
 If you want to run tests with VCRs enabled, you must run `make vcr-decrypt` to decrypt them.
 > By default, the `CLEAN` flag is not set, so files in your local that don't exist in the repo will not be deleted. If you want your local to match exactly what is in the encrypted cassettes, run with `CLEAN=1`.
 
+### Split Tests in CI
+
+In CI, we split the tests into groups to run in parallel. The groups are divided by the test durations.
+
+The durations are stored in the `.test_durations` file.
+
+To update the durations, run:
+```bash
+pip install pytest-split
+pytest --store-durations
+```
+
+The durations should be updated every once in a while or especially when you add potentially slow tests.
+
 # Production
 
 ## Celery Worker Queue

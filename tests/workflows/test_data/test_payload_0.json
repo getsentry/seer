@@ -168,5 +168,8 @@
     "config": {
         "topKAttributes": 2,
         "topKBuckets": 3
+    },
+    "meta": {
+        "referrer": "test_referrer"
     }
 }

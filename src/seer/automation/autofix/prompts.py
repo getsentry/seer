@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.models import Profile, RepoDefinition
+from seer.automation.models import Profile, RepoDefinition, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -64,3 +64,9 @@ def format_code_map(code_map: Profile | None):
     if not code_map:
         return ""
     return f"\nHere's a partial map of the code {('at the time of the issue' if code_map.profile_matches_issue else 'that may help')}: \n{code_map.format_profile()}\n"
+
+
+def format_trace_tree(trace_tree: TraceTree | None):
+    if not trace_tree:
+        return ""
+    return f"\nHere's a high-level trace to give you context on the whole system (note it may be incomplete or irrelevant to the issue): \n{trace_tree.format_trace_tree()}\n"

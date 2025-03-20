@@ -258,11 +258,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if time_allocated is not None and i % batch_size == 0:
                     time_elapsed = datetime.datetime.now() - time_start
                     if time_allocated is not None and time_elapsed > time_allocated:
-                        sentry_sdk.set_extra("time_taken", time_elapsed)
-                        sentry_sdk.set_extra("time_allocated", time_allocated)
-                        sentry_sdk.capture_message(
+                        logger.error(
                             "stream_detection_took_too_long",
-                            level="error",
+                            extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
                         )
                         raise ServerError("Stream detection took too long")
 

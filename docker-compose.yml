@@ -38,6 +38,7 @@ services:
             - ~/.config/gcloud:/root/.config/gcloud
             # Codecov test artifacts
             - ./.artifacts:/app/.artifacts
+            - ./.test_durations:/app/.test_durations
         healthcheck:
             test: curl --fail http://localhost:9091/health/ready || exit 1
             interval: 5s

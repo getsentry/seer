@@ -38,7 +38,7 @@ from seer.automation.summarize.models import (
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
 from seer.dependency_injection import Module, resolve
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 from seer.grouping.grouping import CreateGroupingRecordData, CreateGroupingRecordsRequest
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 from seer.smoke_test import smoke_test
@@ -603,6 +603,19 @@ class TestSeer(unittest.TestCase):
         assert response.json["success"] is False
         mock_detect_anomalies.assert_called_once_with(test_data)
 
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.detect_anomalies")
+    def test_detect_anomalies_endpoint_server_error(self, mock_detect_anomalies):
+        """Test that detect_anomalies endpoint handles server errors correctly"""
+        mock_detect_anomalies.side_effect = ServerError("Test server error")
+        test_data = next(generate(DetectAnomaliesRequest))
+
+        with pytest.raises(ServerError, match="Test server error"):
+            app.test_client().post(
+                "/v1/anomaly-detection/detect",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
+
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.store_data")
     def test_store_data_endpoint_success(self, mock_store_data):
         """Test a successful run of store_data end point"""
@@ -635,6 +648,19 @@ class TestSeer(unittest.TestCase):
         assert response.json["message"] == "Test error"
         assert response.json["success"] is False
         mock_store_data.assert_called_once_with(test_data)
+
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.store_data")
+    def test_store_data_endpoint_server_error(self, mock_store_data):
+        """Test that store_data endpoint handles server errors correctly"""
+        mock_store_data.side_effect = ServerError("Test server error")
+        test_data = next(generate(StoreDataRequest))
+
+        with pytest.raises(ServerError, match="Test server error"):
+            app.test_client().post(
+                "/v1/anomaly-detection/store",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
 
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.delete_alert_data")
     def test_delete_alert_data_endpoint_success(self, mock_delete_alert_data):
@@ -669,6 +695,19 @@ class TestSeer(unittest.TestCase):
         assert response.json["message"] == "Test error"
         assert response.json["success"] is False
         mock_delete_alert_data.assert_called_once_with(test_data)
+
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.delete_alert_data")
+    def test_delete_alert_data_endpoint_server_error(self, mock_delete_alert_data):
+        """Test that delete_alert_data endpoint handles server errors correctly"""
+        mock_delete_alert_data.side_effect = ServerError("Test server error")
+        test_data = next(generate(DeleteAlertDataRequest))
+
+        with pytest.raises(ServerError, match="Test server error"):
+            app.test_client().post(
+                "/v1/anomaly-detection/delete-alert-data",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
 
 
 @parametrize(count=1)

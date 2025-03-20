@@ -689,7 +689,9 @@ class RepoClient:
         description: str,
         provided_base: str | None = None,
     ) -> PullRequest:
-        if pulls := self.repo.get_pulls(state="open", head=branch.ref):
+        pulls = self.repo.get_pulls(state="open", head=f"{self.repo_owner}:{branch.ref}")
+
+        if pulls.totalCount > 0:
             logger.error(
                 f"Branch {branch.ref} already has an open PR.",
                 extra={
@@ -721,7 +723,7 @@ class RepoClient:
                     draft=False,
                 )
             else:
-                logger.exception(f"Error creating PR")
+                logger.exception("Error creating PR")
                 raise e
 
     def get_index_file_set(
