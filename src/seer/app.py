@@ -89,7 +89,12 @@ from seer.grouping.grouping import (
     GroupingRequest,
     SimilarityResponse,
 )
-from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
+from seer.inference_models import (
+    anomaly_detection,
+    autofixability_model,
+    embeddings_model,
+    grouping_lookup,
+)
 from seer.json_api import json_api
 from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
@@ -345,8 +350,9 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 
 @json_api(blueprint, "/v1/automation/summarize/fixability")
 def get_fixability_score_endpoint(data: GetFixabilityScoreRequest) -> SummarizeIssueResponse:
+    model = autofixability_model()
     try:
-        return run_fixability_score(data)
+        return run_fixability_score(data, model)
     except APITimeoutError as e:
         raise GatewayTimeout from e
     except Exception as e:
