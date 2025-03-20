@@ -314,7 +314,7 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
               - `short_description`: a short, fluff-free, information-dense description of the problem caused by not addressing the warning.
-                This description must focus on the problem and not the warning itself. It should be at most 10 words.
+                This description must focus on the problem and not the warning itself. It should be at most 20 words.
               - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 15 words.
             """
         ).format(
