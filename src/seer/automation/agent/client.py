@@ -17,7 +17,7 @@ from anthropic.types import (
     ToolUseBlockParam,
 )
 from google import genai  # type: ignore[attr-defined]
-from google.genai.errors import ClientError, ServerError  # Add ServerError import
+from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
     FunctionDeclaration,
@@ -843,9 +843,11 @@ class GeminiProvider:
             "Internal error",
         )
         return (
-            isinstance(exception, ServerError) or  # Always retry server errors
-            (isinstance(exception, ClientError) and 
-             any(error in str(exception) for error in retryable_errors))
+            isinstance(exception, ServerError)
+            or (
+                isinstance(exception, ClientError)
+                and any(error in str(exception) for error in retryable_errors)
+            )
         ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Gemini Generation")
