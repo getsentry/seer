@@ -3,7 +3,6 @@ from scipy.special import rel_entr
 from scipy.stats import entropy
 
 from seer.workflows.compare.models import CompareCohortsConfig
-from seer.workflows.exceptions import ScoringError
 
 
 class CohortsMetricsScorer:
@@ -70,19 +69,17 @@ class CohortsMetricsScorer:
         Notes:
             Higher KL scores indicate greater difference between distributions
         """
-        try:
-            # these scores are needed to rank the values within each attribute
-            dataset["kl_individual_scores"] = dataset.apply(
-                lambda row: self._kl_metric_lambda(
-                    row["distribution_baseline"], row["distribution_selection"]
-                ).to_dict(),
-                axis=1,
-            )
-            # sum the scores to get the total KL divergence score for each attribute
-            dataset["kl_score"] = dataset["kl_individual_scores"].apply(lambda x: sum(x.values()))
-            return dataset
-        except Exception as e:
-            raise ScoringError(f"Failed to compute KL divergence scores: {e}") from e
+
+        # these scores are needed to rank the values within each attribute
+        dataset["kl_individual_scores"] = dataset.apply(
+            lambda row: self._kl_metric_lambda(
+                row["distribution_baseline"], row["distribution_selection"]
+            ).to_dict(),
+            axis=1,
+        )
+        # sum the scores to get the total KL divergence score for each attribute
+        dataset["kl_score"] = dataset["kl_individual_scores"].apply(lambda x: sum(x.values()))
+        return dataset
 
     def _compute_entropy_score(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
@@ -98,13 +95,11 @@ class CohortsMetricsScorer:
         Notes:
             Lower entropy indicates more concentrated (less uniform) distributions
         """
-        try:
-            dataset["entropy_score"] = dataset["distribution_selection"].apply(
-                lambda x: entropy(pd.Series(x))
-            )
-            return dataset
-        except Exception as e:
-            raise ScoringError(f"Failed to compute entropy scores: {e}") from e
+
+        dataset["entropy_score"] = dataset["distribution_selection"].apply(
+            lambda x: entropy(pd.Series(x))
+        )
+        return dataset
 
     def _compute_rrf_score(
         self, dataset: pd.DataFrame, config: CompareCohortsConfig
@@ -127,20 +122,18 @@ class CohortsMetricsScorer:
             - Entropy ranks are ordered ascending (lower is more interesting)
             - Intermediate rank columns are dropped from final output
         """
-        try:
-            dataset["kl_rank"] = 1 / (
-                config.kRRF + dataset["kl_score"].rank(method="min", ascending=False)
-            )
-            dataset["entropy_rank"] = 1 / (
-                config.kRRF + dataset["entropy_score"].rank(method="min", ascending=True)
-            )
-            dataset["rrf_score"] = (
-                config.metricWeights.klDivergenceWeight * dataset["kl_rank"]
-                + config.metricWeights.entropyWeight * dataset["entropy_rank"]
-            )
-            # drop intermediate rank columns as they are no longer needed
-            dataset.drop(columns=["kl_rank", "entropy_rank"], inplace=True)
-            # sort the dataset by RRF score in descending order
-            return dataset.sort_values(by="rrf_score", ascending=False).reset_index(drop=True)
-        except Exception as e:
-            raise ScoringError(f"Failed to compute RRF score: {e}") from e
+
+        dataset["kl_rank"] = 1 / (
+            config.kRRF + dataset["kl_score"].rank(method="min", ascending=False)
+        )
+        dataset["entropy_rank"] = 1 / (
+            config.kRRF + dataset["entropy_score"].rank(method="min", ascending=True)
+        )
+        dataset["rrf_score"] = (
+            config.metricWeights.klDivergenceWeight * dataset["kl_rank"]
+            + config.metricWeights.entropyWeight * dataset["entropy_rank"]
+        )
+        # drop intermediate rank columns as they are no longer needed
+        dataset.drop(columns=["kl_rank", "entropy_rank"], inplace=True)
+        # sort the dataset by RRF score in descending order
+        return dataset.sort_values(by="rrf_score", ascending=False).reset_index(drop=True)
