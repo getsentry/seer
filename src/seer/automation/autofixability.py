@@ -13,9 +13,9 @@ def _load_model(model_path: str) -> SentenceTransformer:
     if can_use_model_stubs():
         return DummySentenceTransformer(embedding_size=384)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info(f"Loading transformer model at {model_path} to device {device}")
-    return SentenceTransformer(model_path, device=device)
+    model_device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(f"Loading transformer model to device {model_device}")
+    return SentenceTransformer(model_path, device=model_device)
 
 
 class AutofixabilityModel:
