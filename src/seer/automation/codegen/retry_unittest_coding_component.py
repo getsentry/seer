@@ -40,7 +40,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
     ) -> CodeUnitTestOutput | None:
         with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_PR_REVIEW) as tools:
             previous_run_memory = self.context.get_memory(
-                "UnitTestRunMemory", past_run_id=previous_run_context.run_id
+                "unit_test_memory", past_run_id=previous_run_context.run_id
             )
 
             agent = LlmAgent(
