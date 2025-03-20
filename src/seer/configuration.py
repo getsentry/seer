@@ -116,7 +116,7 @@ class AppConfig(BaseModel):
 
     @property
     def is_autofixability_scoring_enabled(self):
-        return self.AUTOFIXABILITY_SCORING_ENABLED or "autofix" in self.HOSTNAME
+        return self.AUTOFIXABILITY_SCORING_ENABLED
 
     @property
     def is_autofix_enabled(self):
