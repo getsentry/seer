@@ -222,11 +222,11 @@ def evaluate_autofixability(
     issue_summary: IssueSummaryWithScores, autofixability_model: AutofixabilityModel
 ) -> tuple[float, bool]:
     issue_summary_input = (
-        f"Here's an issue in our code:\n"
+        f"Here's an issue:\n"
         f"Issue title: {issue_summary.title}\n"
         f"What's wrong: {issue_summary.whats_wrong}\n"
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.63774  # 80th percentile
+    is_fixable = score > 0.64727825  # 80th percentile
     return score, is_fixable

@@ -321,19 +321,20 @@ class TestFixabilityScore:
 
     def test_evaluate_autofixability(self, autofixability_model):
         issue_summary_fixable = IssueSummaryWithScores(
-            title="Null Pointer Exception",
-            whats_wrong="App crashes when clicking submit with empty form",
-            session_related_issues="No related issues",
-            possible_cause="Missing null check on form data",
+            title="KeyError: Overwriting 'message' in LogRecord during logging of similar issues embeddings",
+            whats_wrong="**KeyError** in logging: Attempt to overwrite 'message'. Occurs when logging **extra** data.  Happens in `group_similar_issues_embeddings.py`.",
+            session_related_issues="",
+            possible_cause="The `extra` parameter in `logger.info` contains a key named 'message', which conflicts with the LogRecord's internal 'message' attribute.  This is a **logging configuration issue**.",
             scores=SummarizeIssueScores(
-                possible_cause_confidence=0.9,
-                possible_cause_novelty=0.4,
+                possible_cause_confidence=0.95,
+                possible_cause_novelty=0.85,
             ),
         )
         score, is_fixable = evaluate_autofixability(issue_summary_fixable, autofixability_model)
         assert 0 < score < 1
         if not can_use_model_stubs():
-            assert is_fixable  # Checked offline that score is ~0.70 for this summary
+            assert is_fixable
+            assert score == pytest.approx(0.68511546, abs=1e-6)
 
     def test_issue_summary_db_conversions(self, sample_issue_summary):
         # Test to_db_state
