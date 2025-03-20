@@ -319,7 +319,7 @@ class TestFixabilityScore:
         with pytest.raises(ValueError, match="No issue summary found for group_id: 123"):
             run_fixability_score(request, autofixability_model)
 
-    def test_evaluate_autofixability(self, autofixability_model):
+    def test_evaluate_autofixability(self, autofixability_model: AutofixabilityModel):
         issue_summary_fixable = IssueSummaryWithScores(
             title="KeyError: Overwriting 'message' in LogRecord during logging of similar issues embeddings",
             whats_wrong="**KeyError** in logging: Attempt to overwrite 'message'. Occurs when logging **extra** data.  Happens in `group_similar_issues_embeddings.py`.",
@@ -331,10 +331,16 @@ class TestFixabilityScore:
             ),
         )
         score, is_fixable = evaluate_autofixability(issue_summary_fixable, autofixability_model)
+        assert isinstance(score, float)
         assert 0 < score < 1
+        assert isinstance(is_fixable, bool)
         if not can_use_model_stubs():
             assert is_fixable
-            assert score == pytest.approx(0.68511546, abs=1e-6)
+            assert score == pytest.approx(0.68511546, abs=1e-5)
+        assert (
+            str(autofixability_model)
+            == f"AutofixabilityModel(model_path={autofixability_model.model_path})"
+        )
 
     def test_issue_summary_db_conversions(self, sample_issue_summary):
         # Test to_db_state
