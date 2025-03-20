@@ -222,7 +222,7 @@ def evaluate_autofixability(
     issue_summary: IssueSummaryWithScores, autofixability_model: AutofixabilityModel
 ) -> tuple[float, bool]:
     issue_summary_input = (
-        f"Here's an issue:\n"
+        f"Here's an issue in our code:\n"
         f"Issue title: {issue_summary.title}\n"
         f"What's wrong: {issue_summary.whats_wrong}\n"
         f"Possible cause: {issue_summary.possible_cause}"
