@@ -1,8 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from seer.automation.models import RepoDefinition
-from seer.automation.codegen.retry_unittest_step import RetryUnittestStep
+
 from seer.automation.codegen.retry_unit_test_github_pr_creator import RetryUnitTestGithubPrUpdater
+from seer.automation.codegen.retry_unittest_step import RetryUnittestStep
+from seer.automation.models import RepoDefinition
 from seer.automation.state import DbStateRunTypes
 
 

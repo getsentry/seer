@@ -5,10 +5,7 @@ from github.PullRequest import PullRequest
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FileChange
-from seer.db import (
-    DbPrContextToUnitTestGenerationRunIdMapping,
-    Session,
-)
+from seer.db import DbPrContextToUnitTestGenerationRunIdMapping, Session
 
 logger = logging.getLogger(__name__)
 

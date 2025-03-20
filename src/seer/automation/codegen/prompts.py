@@ -327,10 +327,10 @@ class RetryUnitTestPrompts:
     @staticmethod
     def format_continue_unit_tests_prompt(code_coverage_info: str, test_result_info: str):
         return textwrap.dedent(
-            """\            
+            """\
             The tests you have generated so far are not sufficient to cover all the changes in the codebase. You need to continue generating unit tests to address the gaps in coverage and fix any failing tests.
 
-            To help you with this, you have access to code coverage information at a file level attached as a JSON in addtion to test result information also in a JSON format. 
+            To help you with this, you have access to code coverage information at a file level attached as a JSON in addtion to test result information also in a JSON format.
 
             Using the information and instructions provided, update the unit tests to ensure robust code coverage as well as fix any failing tests. Use the exact same format you used previously to regenerate tests. Your changes will be appended as a new commit to the branch of the existing PR.
 

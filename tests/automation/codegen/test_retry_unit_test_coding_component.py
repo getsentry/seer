@@ -1,9 +1,11 @@
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from seer.automation.codegen.models import CodeUnitTestRequest
+from seer.automation.codegen.retry_unittest_coding_component import RetryUnitTestCodingComponent
 from seer.automation.models import FileChange
 from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
-from seer.automation.codegen.retry_unittest_coding_component import RetryUnitTestCodingComponent
 
 
 class TestRetryUnitTestCodingComponent:

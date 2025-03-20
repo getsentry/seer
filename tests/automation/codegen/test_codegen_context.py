@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
 from seer.automation.agent.models import Message
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.models import RepoDefinition
