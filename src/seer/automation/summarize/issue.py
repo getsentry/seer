@@ -1,6 +1,6 @@
 import textwrap
 
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
@@ -197,6 +197,7 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
 def run_fixability_score(
     request: GetFixabilityScoreRequest, autofixability_model: AutofixabilityModel
 ) -> SummarizeIssueResponse:
+    langfuse_context.update_current_trace(session_id=f"group:{request.group_id}")
     with Session() as session:
         db_state = session.get(DbIssueSummary, request.group_id)
         if not db_state:
