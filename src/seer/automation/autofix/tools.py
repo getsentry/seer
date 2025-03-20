@@ -703,7 +703,7 @@ class BaseTools:
                     FunctionTool(
                         name="get_trace_event_details",
                         fn=self.get_trace_event_details,
-                        description="Fetches detailed information about a specific event in the trace. For errors, this will be a stacktrace, and for others, it will be a list of child spans.",
+                        description="Read detailed information about a specific event in the trace. You can view stack traces for connected errors and view the granular spans that make up other events, like endpoint calls, background jobs, and page loads.",
                         parameters=[
                             {
                                 "name": "event_id",
@@ -722,12 +722,12 @@ class BaseTools:
                     FunctionTool(
                         name="get_profile_for_trace_event",
                         fn=self.get_profile,
-                        description="Fetches a record of the exact code execution for a specific event in the trace (must be marked with 'profile available').",
+                        description="Read a record of the exact code execution for a specific event in the trace (any event marked with 'profile available').",
                         parameters=[
                             {
                                 "name": "event_id",
                                 "type": "string",
-                                "description": "The ID of the transaction event to fetch the profile for.",
+                                "description": "The event ID of the event to fetch the profile for.",
                             },
                         ],
                         required=["event_id"],
