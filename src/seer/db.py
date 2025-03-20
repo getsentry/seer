@@ -269,7 +269,13 @@ class DbPrContextToUnitTestGenerationRunIdMapping(Base):
     original_pr_url: Mapped[str] = mapped_column(String, nullable=False)
     __table_args__ = (
         UniqueConstraint("provider", "pr_id", "repo", "owner", "original_pr_url"),
-        Index("ix_autofix_repo_owner_pr_id", "owner", "repo", "pr_id", "original_pr_url"),
+        Index(
+            "ix_unit_test_context_repo_owner_pr_id_pr_url",
+            "owner",
+            "repo",
+            "pr_id",
+            "original_pr_url",
+        ),
     )
 
 
