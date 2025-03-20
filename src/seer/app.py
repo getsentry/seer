@@ -419,7 +419,7 @@ def delete_alert__data_endpoint(
     return response
 
 
-@json_api(blueprint, "/v1/workflows/compare-cohorts")
+@json_api(blueprint, "/v1/anomaly-detection/compare-cohorts")
 def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
