@@ -484,7 +484,7 @@ class BaseTools:
             data = cast(SentryEventData, error_data)
             try:
                 error_event_details = EventDetails.from_event(data)
-                error_event_details = self.context.process_event_paths(error_event_details)
+                self.context.process_event_paths(error_event_details)
                 return error_event_details.format_event_without_breadcrumbs()
             except Exception as e:
                 logger.exception(f"Could not parse error event details from tool call: {e}")
@@ -722,7 +722,7 @@ class BaseTools:
                     FunctionTool(
                         name="get_profile_for_trace_event",
                         fn=self.get_profile,
-                        description="Fetches a CPU profile for a specific event in the trace (must be marked with 'profile available').",
+                        description="Fetches a record of the exact code execution for a specific event in the trace (must be marked with 'profile available').",
                         parameters=[
                             {
                                 "name": "event_id",
