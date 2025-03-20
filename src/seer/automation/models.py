@@ -725,7 +725,7 @@ class TraceEvent(BaseModel):
 
 class TraceTree(BaseModel):
     trace_id: str | None = None
-    org_id: str | None = None
+    org_id: int | None = None
     events: list[TraceEvent] = Field(default_factory=list)  # only expecting transactions and errors
 
     def format_trace_tree(self):
