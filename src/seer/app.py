@@ -110,6 +110,10 @@ datadog.initialize(
     statsd_host=os.environ.get("STATSD_HOST", "127.0.0.1"),
     statsd_port=int(os.environ.get("STATSD_PORT", "8126")),
 )
+# Workaround for https://github.com/DataDog/datadogpy/issues/764 as described in https://github.com/getsentry/sentry/pull/68644/files#
+statsd.disable_telemetry()
+statsd.disable_buffering = False
+statsd._container_id = None
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
