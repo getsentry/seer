@@ -18,23 +18,23 @@ class TestCodegenUnittest(unittest.TestCase):
         # Setup
         mock_apply_async = MagicMock()
         mock_get_signature.return_value.apply_async = mock_apply_async
-        
+
         mock_state = MagicMock(spec=DbState)
         mock_state.get.return_value.run_id = 1
         mock_create_initial.return_value = mock_state
-        
+
         mock_request = MagicMock(spec=CodegenUnitTestsRequest)
         mock_request.pr_id = 123
         mock_request.repo = RepoDefinition(
             name="repo", owner="owner", provider="github", external_id="ext123"
         )
-        
+
         mock_app_config = MagicMock()
         mock_app_config.CELERY_WORKER_QUEUE = "worker_queue"
-        
+
         # Execute
         codegen_unittest(mock_request, mock_app_config)
-        
+
         # Verify
         mock_create_initial.assert_called_once_with(mock_request)
         mock_get_signature.assert_called_once()
@@ -54,23 +54,23 @@ class TestCodegenUnittest(unittest.TestCase):
         # Setup
         mock_apply_async = MagicMock()
         mock_get_signature.return_value.apply_async = mock_apply_async
-        
+
         mock_state = MagicMock(spec=DbState)
         mock_state.get.return_value.run_id = 1
         mock_create_initial.return_value = mock_state
-        
+
         mock_request = MagicMock(spec=CodegenUnitTestsRequest)
         mock_request.pr_id = 123
         mock_request.repo = RepoDefinition(
             name="repo", owner="owner", provider="github", external_id="ext123"
         )
-        
+
         mock_app_config = MagicMock()
         mock_app_config.CELERY_WORKER_QUEUE = "worker_queue"
-        
+
         # Execute
         codegen_unittest(mock_request, mock_app_config, is_codecov_request=True)
-        
+
         # Verify
         mock_create_initial.assert_called_once_with(mock_request)
         mock_get_signature.assert_called_once()
