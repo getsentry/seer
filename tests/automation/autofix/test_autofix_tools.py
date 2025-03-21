@@ -292,3 +292,211 @@ class TestExplainFile:
         autofix_tools.context.__class__ = MagicMock
         result = autofix_tools.explain_file("file.py", "owner/repo")
         assert result is None
+
+
+class TestGrepSearch:
+    def test_grep_search_validation(self, autofix_tools: BaseTools):
+        result = autofix_tools.grep_search("invalid command")
+        assert result == "Command must be a valid grep command that starts with 'grep'."
+
+    @patch("subprocess.run")
+    def test_grep_search_success(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            "file1.py:10:def example_function():\nfile2.py:20:    example_function()"
+        )
+        mock_run.return_value = mock_process
+
+        result = autofix_tools.grep_search("grep -r 'example_function' .")
+
+        mock_run.assert_called_once_with(
+            "grep -r 'example_function' .",
+            shell=True,
+            cwd="/tmp/test_dir/repo",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert "Results from owner/test_repo:" in result
+        assert "file1.py:10:def example_function()" in result
+
+    @patch("subprocess.run")
+    def test_grep_search_no_results(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        mock_process = MagicMock()
+        mock_process.returncode = 1
+        mock_process.stdout = ""
+        mock_run.return_value = mock_process
+
+        result = autofix_tools.grep_search("grep -r 'nonexistent' .")
+
+        assert "Results from owner/test_repo: no results found." in result
+
+    @patch("subprocess.run")
+    def test_grep_search_error(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        mock_process = MagicMock()
+        mock_process.returncode = 2
+        mock_process.stderr = "grep: invalid option -- z"
+        mock_run.return_value = mock_process
+
+        result = autofix_tools.grep_search("grep -z 'pattern' .")
+
+        assert "Results from owner/test_repo: grep: invalid option -- z" in result
+
+    @patch("subprocess.run")
+    def test_grep_search_multipl_repos(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {
+            "owner/repo1": ("/tmp/test_dir1", "/tmp/test_dir1/repo"),
+            "owner/repo2": ("/tmp/test_dir2", "/tmp/test_dir2/repo"),
+        }
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/repo1", "owner/repo2"])
+
+        def side_effect(cmd, **kwargs):
+            cwd = kwargs.get("cwd")
+            mock_process = MagicMock()
+
+            if cwd == "/tmp/test_dir1/repo":
+                mock_process.returncode = 0
+                mock_process.stdout = "repo1_file.py:10:result"
+            else:  # repo2
+                mock_process.returncode = 0
+                mock_process.stdout = "repo2_file.py:20:result"
+
+            return mock_process
+
+        mock_run.side_effect = side_effect
+
+        # Run test
+        result = autofix_tools.grep_search("grep -r 'pattern' .")
+
+        assert "Results from owner/repo1" in result
+        assert "repo1_file.py:10:result" in result
+        assert "Results from owner/repo2" in result
+        assert "repo2_file.py:20:result" in result
+
+    @patch("seer.automation.autofix.tools.BaseTools._ensure_repos_downloaded")
+    def test_grep_search_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+
+        with patch("subprocess.run") as mock_run:
+            mock_process = MagicMock()
+            mock_process.returncode = 0
+            mock_process.stdout = "file.py:10:result"
+            mock_run.return_value = mock_process
+
+            autofix_tools.grep_search("grep -r 'pattern' .", repo_name="owner/test_repo")
+
+            mock_ensure_repos.assert_called_once_with("owner/test_repo")
+            mock_run.assert_called_once()
+
+
+class TestFindFiles:
+    def test_find_files_validation(self, autofix_tools: BaseTools):
+        result = autofix_tools.find_files("invalid command")
+        assert result == "Command must be a valid find command that starts with 'find'."
+
+    @patch("subprocess.run")
+    def test_find_files_success(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = "./src/file1.py\n./src/dir/file2.py"
+        mock_run.return_value = mock_process
+
+        result = autofix_tools.find_files("find . -name '*.py'")
+
+        mock_run.assert_called_once_with(
+            "find . -name '*.py'",
+            shell=True,
+            cwd="/tmp/test_dir/repo",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert "Results from owner/test_repo:" in result
+        assert "./src/file1.py" in result
+        assert "./src/dir/file2.py" in result
+
+    @patch("subprocess.run")
+    def test_find_files_no_results(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = ""
+        mock_run.return_value = mock_process
+
+        result = autofix_tools.find_files("find . -name '*.nonexistent'")
+
+        assert "Results from owner/test_repo: no files found." in result
+
+    @patch("subprocess.run")
+    def test_find_files_error(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        mock_process = MagicMock()
+        mock_process.returncode = 1
+        mock_process.stderr = "find: invalid option -- z"
+        mock_run.return_value = mock_process
+
+        result = autofix_tools.find_files("find . -z '*.py'")
+
+        assert "Results from owner/test_repo: find: invalid option -- z" in result
+
+    @patch("subprocess.run")
+    def test_find_files_multiple_repos(self, mock_run, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {
+            "owner/repo1": ("/tmp/test_dir1", "/tmp/test_dir1/repo"),
+            "owner/repo2": ("/tmp/test_dir2", "/tmp/test_dir2/repo"),
+        }
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/repo1", "owner/repo2"])
+
+        def side_effect(cmd, **kwargs):
+            cwd = kwargs.get("cwd")
+            mock_process = MagicMock()
+
+            if cwd == "/tmp/test_dir1/repo":
+                mock_process.returncode = 0
+                mock_process.stdout = "./repo1_file.py"
+            else:  # repo2
+                mock_process.returncode = 0
+                mock_process.stdout = "./repo2_file.py"
+
+            return mock_process
+
+        mock_run.side_effect = side_effect
+
+        result = autofix_tools.find_files("find . -name '*.py'")
+
+        assert "Results from owner/repo1" in result
+        assert "./repo1_file.py" in result
+        assert "Results from owner/repo2" in result
+        assert "./repo2_file.py" in result
+
+    @patch("seer.automation.autofix.tools.BaseTools._ensure_repos_downloaded")
+    def test_find_files_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+
+        with patch("subprocess.run") as mock_run:
+            mock_process = MagicMock()
+            mock_process.returncode = 0
+            mock_process.stdout = "./file.py"
+            mock_run.return_value = mock_process
+
+            autofix_tools.find_files("find . -name '*.py'", repo_name="owner/test_repo")
+
+            mock_ensure_repos.assert_called_once_with("owner/test_repo")
+            mock_run.assert_called_once()
