@@ -493,7 +493,6 @@ class Profile(BaseModel):
 
     def format_profile(
         self,
-        indent: int = 0,
         context_before: int = 20,
         context_after: int = 3,
     ) -> str:
@@ -501,14 +500,13 @@ class Profile(BaseModel):
         Format the profile tree, focusing on relevant functions from the stacktrace.
 
         Args:
-            indent: Base indentation level for the tree
             context_before: Number of lines to include before first relevant function
             context_after: Number of lines to include after last relevant function
 
         Returns:
             str: Formatted profile string, showing relevant sections of the execution tree
         """
-        full_profile = self._format_profile_helper(self.execution_tree, indent)
+        full_profile = self._format_profile_helper(self.execution_tree)
 
         if self.relevant_functions:
             relevant_window = self._get_relevant_code_window(
@@ -566,33 +564,53 @@ class Profile(BaseModel):
 
         return "\n".join(result)
 
-    def _format_profile_helper(self, tree: list[ProfileFrame], indent: int = 0) -> str:
+    def _format_profile_helper(self, tree: list[ProfileFrame], prefix: str = "") -> str:
         """
-        Returns a pretty-printed string representation of the execution tree with indentation.
+        Returns a pretty-printed string representation of the execution tree using tree formatting.
 
         Args:
             tree: List of dictionaries representing the execution tree
-            indent: Current indentation level (default: 0)
+            prefix: Current line prefix for tree structure
 
         Returns:
             str: Formatted string representation of the tree
         """
+        if not tree:
+            return ""
+
         result = []
 
-        for node in tree:
-            indent_str = "  " * indent
+        for i, node in enumerate(tree):
+            is_last = i == len(tree) - 1
 
-            func_line = f"{indent_str}→ {node.get('function')}"
-            location = f"{node.get('filename')}"
-            func_line += f" ({location})"
+            # Format the current node
+            function_name = node.get("function", "Unknown function")
+            filename = node.get("filename", "Unknown file")
+            location_info = f" ({filename})"
 
-            result.append(func_line)
+            # Add tree structure characters
+            if is_last:
+                result.append(f"{prefix}└─ {function_name}{location_info}")
+                child_prefix = f"{prefix}   "
+            else:
+                result.append(f"{prefix}├─ {function_name}{location_info}")
+                child_prefix = f"{prefix}│  "
 
-            # Recursively format children with increased indentation
+            # Recursively format children
             if node.get("children"):
-                result.append(self._format_profile_helper(node.get("children", []), indent + 1))
+                children_str = self._format_profile_helper(node.get("children", []), child_prefix)
+                if children_str:
+                    result.append(children_str)
 
         return "\n".join(result)
+
+
+class Span(BaseModel):
+    span_id: str
+    title: str | None = None
+    data: dict[str, Any] | None = None
+    duration: str | None = None
+    children: list["Span"] = Field(default_factory=list)
 
 
 class TraceEvent(BaseModel):
@@ -602,14 +620,240 @@ class TraceEvent(BaseModel):
     is_error: bool = False
     platform: str | None = None
     is_current_project: bool = True
+    project_slug: str | None = None
+    project_id: int | None = None
     duration: str | None = None
     profile_id: str | None = None
     children: list["TraceEvent"] = Field(default_factory=list)
+    spans: list[Span] = Field(default_factory=list)
+
+    def format_spans_tree(self) -> str:
+        """
+        Returns a formatted string representation of the span tree.
+        """
+        if not self.spans:
+            return "No spans available"
+
+        lines = [f"Spans for {self.title or 'Unnamed Event'}"]
+        self._format_spans(self.spans, "", lines)
+        return "\n".join(lines)
+
+    def _format_spans(self, spans: list[Span], prefix: str, lines: list[str]) -> None:
+        """
+        Helper method to recursively format spans.
+
+        Args:
+            spans: List of spans to format
+            prefix: Current prefix for tree structure
+            lines: List of lines being built
+        """
+        if not spans:
+            return
+
+        # Group consecutive similar spans
+        grouped_spans: list[list[Span]] = []
+        current_group: list[Span] | None = None
+
+        for span in spans:
+            if current_group and self._are_spans_similar(current_group[0], span):
+                current_group.append(span)
+            else:
+                if current_group:
+                    grouped_spans.append(current_group)
+                current_group = [span]
+
+        if current_group:
+            grouped_spans.append(current_group)
+
+        # Format each group
+        for i, group in enumerate(grouped_spans):
+            is_last = i == len(grouped_spans) - 1
+            span = group[0]
+            count_suffix = f" (repeated {len(group)} times)" if len(group) > 1 else ""
+
+            # Create the formatted span line
+            span_line = self._format_span_line(span) + count_suffix
+
+            # Add the appropriate prefix based on position in tree
+            if is_last:
+                lines.append(f"{prefix}└─ {span_line}")
+                child_prefix = f"{prefix}   "
+                data_prefix = f"{prefix}   "
+            else:
+                lines.append(f"{prefix}├─ {span_line}")
+                child_prefix = f"{prefix}│  "
+                data_prefix = f"{prefix}│  "
+
+            # Add the span data as JSON if available
+            if span.data:
+                data_str = json.dumps(span.data, indent=2)
+                data_lines = data_str.split("\n")
+                for data_line in data_lines:
+                    lines.append(f"{data_prefix} {data_line}")
+
+            # Process children
+            if span.children:
+                self._format_spans(span.children, child_prefix, lines)
+
+    def _format_span_line(self, span: Span) -> str:
+        """Format a single span line."""
+        parts = []
+
+        title = span.title or "Unnamed Span"
+        parts.append(title)
+        if span.duration:
+            parts.append(f"({span.duration})")
+
+        return " ".join(parts)
+
+    def _are_spans_similar(self, span1: Span, span2: Span) -> bool:
+        """Check if two spans are similar enough to be grouped together."""
+        if span1.title != span2.title:
+            return False
+
+        # Check if children structures are the same
+        if len(span1.children) != len(span2.children):
+            return False
+
+        # If they have children, we consider them similar only if all children are similar
+        for i in range(len(span1.children)):
+            if not self._are_spans_similar(span1.children[i], span2.children[i]):
+                return False
+
+        return True
 
 
 class TraceTree(BaseModel):
     trace_id: str | None = None
+    org_id: int | None = None
     events: list[TraceEvent] = Field(default_factory=list)  # only expecting transactions and errors
+
+    def format_trace_tree(self):
+        if not self.events:
+            return "Trace (empty)"
+
+        lines = ["Trace"]
+        self._format_events(self.events, "", lines, is_last_child=True)
+        return "\n".join(lines)
+
+    def _format_events(
+        self, events: list[TraceEvent], prefix: str, lines: list[str], is_last_child: bool
+    ):
+        if not events:
+            return
+
+        # Group consecutive similar events
+        grouped_events: list[list[TraceEvent]] = []
+        current_group: list[TraceEvent] | None = None
+
+        for event in events:
+            if current_group and self._are_events_similar(current_group[0], event):
+                current_group.append(event)
+            else:
+                if current_group:
+                    grouped_events.append(current_group)
+                current_group = [event]
+
+        if current_group:
+            grouped_events.append(current_group)
+
+        # Format each group
+        for i, group in enumerate(grouped_events):
+            is_last = i == len(grouped_events) - 1
+            event = group[0]
+            count_suffix = f" (repeated {len(group)} times)" if len(group) > 1 else ""
+
+            # Create the formatted event line
+            event_line = self._format_event_line(event) + count_suffix
+
+            # Add the appropriate prefix based on position in tree
+            if is_last:
+                lines.append(f"{prefix}└─ {event_line}")
+                child_prefix = f"{prefix}   "
+            else:
+                lines.append(f"{prefix}├─ {event_line}")
+                child_prefix = f"{prefix}│  "
+
+            # Process children
+            if event.children:
+                self._format_events(event.children, child_prefix, lines, is_last)
+
+    def _format_event_line(self, event: TraceEvent) -> str:
+        parts = []
+
+        # Add ERROR prefix if not a transaction
+        prefix = "ERROR: " if event.is_error else ""
+
+        # Add title
+        title = event.title or "Unnamed Event"
+        parts.append(f"{prefix}{title}")
+
+        # Add duration if it exists
+        if event.duration:
+            parts.append(f"({event.duration})")
+
+        # Add event_id (first 7 digits)
+        if event.event_id:
+            parts.append(f"(event ID: {event.event_id[:7]})")
+
+        # Add project
+        if event.project_slug and event.project_id:
+            project_str = f"(project: {event.project_slug})"
+            parts.append(project_str)
+
+        # Add platform
+        if event.platform:
+            parts.append(f"({event.platform})")
+
+        # Add profile
+        if event.profile_id:
+            parts.append("(profile available)")
+
+        return " ".join(parts)
+
+    def _are_events_similar(self, event1: TraceEvent, event2: TraceEvent) -> bool:
+        """Check if two events are similar enough to be grouped together"""
+        if event1.title != event2.title:
+            return False
+
+        # Check if children structures are the same
+        if len(event1.children) != len(event2.children):
+            return False
+
+        # If they have children, we consider them similar only if all children match
+        # This is a simplified check - for a full check we'd need to recursively compare children
+        for i in range(len(event1.children)):
+            if not self._are_events_similar(event1.children[i], event2.children[i]):
+                return False
+
+        return True
+
+    def get_full_event_id(self, truncated_id: str) -> str | None:
+        """Return the full event_id given the first 7 characters"""
+        for event in self._get_all_events():
+            if event.event_id and event.event_id.startswith(truncated_id):
+                return event.event_id
+        return None
+
+    def get_event_by_id(self, truncated_id: str) -> TraceEvent | None:
+        """Return the full TraceEvent object given a truncated event ID"""
+        for event in self._get_all_events():
+            if event.event_id and event.event_id.startswith(truncated_id):
+                return event
+        return None
+
+    def _get_all_events(self) -> list[TraceEvent]:
+        """Return a flattened list of all events in the tree"""
+        all_events = []
+
+        def collect_events(events):
+            for event in events:
+                all_events.append(event)
+                if event.children:
+                    collect_events(event.children)
+
+        collect_events(self.events)
+        return all_events
 
 
 class RepoDefinition(BaseModel):

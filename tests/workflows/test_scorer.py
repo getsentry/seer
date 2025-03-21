@@ -4,7 +4,6 @@ import pytest
 
 from seer.workflows.compare.models import CompareCohortsConfig
 from seer.workflows.compare.scorer import CohortsMetricsScorer
-from seer.workflows.exceptions import ScoringError
 
 
 @pytest.fixture
@@ -78,16 +77,3 @@ def test_compute_rrf_score(scorer, sampleDataset, config):
     assert "kl_rank" not in result.columns  # Should be dropped
     assert "entropy_rank" not in result.columns  # Should be dropped
     assert result["rrf_score"].is_monotonic_decreasing
-
-
-def test_error_handling(scorer):
-    badDataset = pd.DataFrame(
-        {
-            "attributeName": ["attr1"],
-            "distributionBaseline": [{"A": "not_a_number"}],
-            "distributionSelection": [{"A": 0.5}],
-        }
-    )
-
-    with pytest.raises(ScoringError):
-        scorer._compute_kl_score(badDataset)

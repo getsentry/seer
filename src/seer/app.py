@@ -67,6 +67,7 @@ from seer.automation.codegen.models import (
 from seer.automation.codegen.tasks import (
     codegen_pr_review,
     codegen_relevant_warnings,
+    codegen_retry_unittest,
     codegen_unittest,
     get_unittest_state,
 )
@@ -94,6 +95,7 @@ from seer.inference_models import (
     autofixability_model,
     embeddings_model,
     grouping_lookup,
+    test_grouping_model,
 )
 from seer.json_api import json_api
 from seer.loading import LoadingResult
@@ -115,6 +117,10 @@ datadog.initialize(
     statsd_host=os.environ.get("STATSD_HOST", "127.0.0.1"),
     statsd_port=int(os.environ.get("STATSD_PORT", "8126")),
 )
+# Workaround for https://github.com/DataDog/datadogpy/issues/764 as described in https://github.com/getsentry/sentry/pull/68644/files#
+statsd.disable_telemetry()
+statsd.disable_buffering = False
+statsd._container_id = None
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
@@ -334,6 +340,9 @@ def codecov_request_endpoint(
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
         return codegen_unit_tests_endpoint(data.data)
+    elif data.request_type == "retry-unit-tests":
+        return codegen_retry_unittest(data.data)
+
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
 
@@ -425,7 +434,7 @@ def delete_alert__data_endpoint(
     return response
 
 
-@json_api(blueprint, "/v1/workflows/compare-cohorts")
+@json_api(blueprint, "/v1/anomaly-detection/compare-cohorts")
 def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
@@ -433,12 +442,21 @@ def compare_cohorts_endpoint(
 
 
 @blueprint.route("/health/live", methods=["GET"])
-def health_check():
+@inject
+def health_check(app_config: AppConfig = injected):
     from seer.inference_models import models_loading_status
 
-    if models_loading_status() == LoadingResult.FAILED:
+    status = models_loading_status()
+
+    if status == LoadingResult.FAILED:
         statsd.increment("seer.health.live.500")
         return "Models failed to load", 500
+
+    # Only run model tests if models are already loaded
+    if status == LoadingResult.DONE:
+        if app_config.is_grouping_enabled and not test_grouping_model():
+            return "Grouping model inference failed", 500
+
     statsd.increment("seer.health.live.200")
     return "", 200
 
@@ -453,6 +471,11 @@ def ready_check(app_config: AppConfig = injected):
         smoke_status = check_smoke_test()
         logger.info(f"Celery smoke status: {smoke_status}")
         status = min(status, smoke_status)
+
+    # Only run model tests if models are already loaded
+    if status == LoadingResult.DONE:
+        if app_config.is_grouping_enabled and not test_grouping_model():
+            return "Grouping model inference failed", 500
 
     if status == LoadingResult.FAILED:
         statsd.increment("seer.health.ready.500")

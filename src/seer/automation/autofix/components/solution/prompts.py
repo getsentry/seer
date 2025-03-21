@@ -2,8 +2,13 @@ import textwrap
 
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.prompts import format_code_map, format_instruction, format_summary
-from seer.automation.models import Profile
+from seer.automation.autofix.prompts import (
+    format_code_map,
+    format_instruction,
+    format_summary,
+    format_trace_tree,
+)
+from seer.automation.models import Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -43,6 +48,7 @@ class SolutionPrompts:
         original_instruction: str | None,
         summary: IssueSummary | None,
         code_map: Profile | None,
+        trace_tree: TraceTree | None,
     ):
         return textwrap.dedent(
             """\
@@ -53,9 +59,7 @@ class SolutionPrompts:
             </available_repos>
 
             <issue_details>
-            <summary>
             {summary_str}
-            </summary>
 
             <root_cause>
             {root_cause_str}
@@ -65,9 +69,8 @@ class SolutionPrompts:
             {event_str}
             </raw_issue_details>
 
-            <map_of_relevant_code>
             {code_map_str}
-            </map_of_relevant_code>
+            {trace_tree_str}
             </issue_details>
             """
         ).format(
@@ -79,8 +82,13 @@ class SolutionPrompts:
                 if original_instruction
                 else ""
             ),
-            summary_str=format_summary(summary),
-            code_map_str=format_code_map(code_map),
+            summary_str=f"<summary>{format_summary(summary)}</summary>" if summary else "",
+            code_map_str=(
+                f"<map_of_relevant_code>{format_code_map(code_map)}</map_of_relevant_code>"
+                if code_map
+                else ""
+            ),
+            trace_tree_str=f"<trace>{format_trace_tree(trace_tree)}</trace>" if trace_tree else "",
         )
 
     @staticmethod

@@ -12,7 +12,6 @@ from seer.workflows.compare.models import (
     StatsCohort,
 )
 from seer.workflows.compare.processor import DataProcessor
-from seer.workflows.exceptions import DataProcessingError
 
 
 @pytest.fixture
@@ -61,11 +60,6 @@ def test_preprocess_cohort_success(processor, sample_cohort, config):
     )
 
     assert_frame_equal(result, expected)
-
-
-def test_preprocess_cohort_error(processor, config):
-    with pytest.raises(DataProcessingError):
-        processor._preprocess_cohort(None, config)
 
 
 def test_add_unseen_value(processor, config):

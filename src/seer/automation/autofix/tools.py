@@ -2,6 +2,7 @@ import fnmatch
 import logging
 import os
 import textwrap
+from typing import cast
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -10,13 +11,16 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.models import AutofixRequest
 from seer.automation.codebase.code_search import CodeSearcher
 from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.automation.models import EventDetails, Profile, SentryEventData
 from seer.dependency_injection import inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
+from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +399,99 @@ class BaseTools:
             prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-001")
         )
 
+    @observe(name="Get Profile")
+    @ai_track(description="Get Profile")
+    @inject
+    def get_profile(self, event_id: str, rpc_client: RpcClient = injected):
+        """
+        Fetches a profile for a specific transaction event.
+        """
+        # get full event id and TraceEvent payload
+        state = self.context.state.get()
+        if not isinstance(self.context, AutofixContext) or not isinstance(
+            state.request, AutofixRequest
+        ):
+            return "No trace available. Cannot fetch profiles."
+
+        trace_tree = state.request.trace_tree
+        if trace_tree is None:
+            return "No trace available. Cannot fetch profiles."
+        event = trace_tree.get_event_by_id(event_id)
+        if event is None:
+            return "Invalid event ID."
+        if event.profile_id is None:
+            return "No profile available for this transaction."
+
+        self.context.event_manager.add_log(f"Studying profile for `{event.title}`...")
+
+        # if profile available, fetch it via Seer RPC
+        profile_data = rpc_client.call(
+            "get_profile_details",
+            organization_id=trace_tree.org_id,
+            project_id=event.project_id,
+            profile_id=event.profile_id,
+        )  # expecting data compatible with Profile model
+        if not profile_data:
+            return "Could not fetch profile."
+        try:
+            profile = Profile.model_validate(profile_data)
+            return profile.format_profile(context_before=100, context_after=100)
+        except Exception as e:
+            logger.exception(f"Could not parse profile from tool call: {e}")
+            return "Could not fetch profile."
+
+    @observe(name="Get Trace Event Details")
+    @ai_track(description="Get Trace Event Details")
+    @inject
+    def get_trace_event_details(self, event_id: str, rpc_client: RpcClient = injected):
+        """
+        Fetches the spans under a selected transaction event or the stacktrace under an error event.
+        """
+        # get full event id and TraceEvent payload
+        state = self.context.state.get()
+        if not isinstance(self.context, AutofixContext) or not isinstance(
+            state.request, AutofixRequest
+        ):
+            return "No trace available. Cannot fetch details."
+
+        trace_tree = state.request.trace_tree
+        if trace_tree is None:
+            return "No trace available. Cannot fetch details."
+        event = trace_tree.get_event_by_id(event_id)
+        if event is None:
+            return "Invalid event ID."
+        full_event_id = event.event_id
+        if not full_event_id:
+            return "Cannot fetch information for this event."
+
+        if event.is_transaction:
+            # if it's a transaction, use the spans already in the payload
+            self.context.event_manager.add_log(f"Studying spans under `{event.title}`...")
+            return event.format_spans_tree()
+        elif event.is_error:
+            # if it's an error, fetch the event details via Seer RPC
+            self.context.event_manager.add_log(f"Studying connected error `{event.title}`...")
+
+            project_id = event.project_id
+            error_event_id = event.event_id
+            error_data = rpc_client.call(
+                "get_error_event_details",
+                project_id=project_id,
+                event_id=error_event_id,
+            )  # expecting data compatible with SentryEventData model
+            if not error_data:
+                return "Could not fetch error event details."
+            data = cast(SentryEventData, error_data)
+            try:
+                error_event_details = EventDetails.from_event(data)
+                self.context.process_event_paths(error_event_details)
+                return error_event_details.format_event_without_breadcrumbs()
+            except Exception as e:
+                logger.exception(f"Could not parse error event details from tool call: {e}")
+                return "Could not fetch error event details."
+        else:
+            return "Cannot fetch information for this event."
+
     def get_tools(self, can_access_repos: bool = True):
 
         tools = [
@@ -589,5 +686,52 @@ class BaseTools:
         #             required=["question"],
         #         )
         #     )
+
+        run_request = self.context.state.get().request
+        if (
+            isinstance(self.context, AutofixContext)
+            and isinstance(run_request, AutofixRequest)
+            and not run_request.options.disable_interactivity
+            and (run_request.invoking_user and run_request.invoking_user.id == 3283725)
+        ):  # TODO temporary guard for Rohan (@roaga) to test in prod
+            trace_tree = run_request.trace_tree
+
+            if (
+                trace_tree and trace_tree.events
+            ):  # Only add trace events tool if there are events in the trace
+                tools.append(
+                    FunctionTool(
+                        name="get_trace_event_details",
+                        fn=self.get_trace_event_details,
+                        description="Read detailed information about a specific event in the trace. You can view stack traces for connected errors and view the granular spans that make up other events, like endpoint calls, background jobs, and page loads.",
+                        parameters=[
+                            {
+                                "name": "event_id",
+                                "type": "string",
+                                "description": "The ID of the transaction event to fetch the details for.",
+                            },
+                        ],
+                        required=["event_id"],
+                    )
+                )
+
+            if trace_tree and any(
+                event.profile_id is not None for event in trace_tree._get_all_events()
+            ):  # Only add profile tool if there are events with profile_ids in the trace
+                tools.append(
+                    FunctionTool(
+                        name="get_profile_for_trace_event",
+                        fn=self.get_profile,
+                        description="Read a record of the exact code execution for a specific event in the trace (any event marked with 'profile available').",
+                        parameters=[
+                            {
+                                "name": "event_id",
+                                "type": "string",
+                                "description": "The event ID of the event to fetch the profile for.",
+                            },
+                        ],
+                        required=["event_id"],
+                    )
+                )
 
         return tools
