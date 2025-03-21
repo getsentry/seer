@@ -90,7 +90,13 @@ from seer.grouping.grouping import (
     GroupingRequest,
     SimilarityResponse,
 )
-from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
+from seer.inference_models import (
+    anomaly_detection,
+    embeddings_model,
+    grouping_lookup,
+    test_grouping_model,
+    test_severity_model,
+)
 from seer.json_api import json_api
 from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
@@ -435,12 +441,24 @@ def compare_cohorts_endpoint(
 
 
 @blueprint.route("/health/live", methods=["GET"])
-def health_check():
+@inject
+def health_check(app_config: AppConfig = injected):
     from seer.inference_models import models_loading_status
 
-    if models_loading_status() == LoadingResult.FAILED:
+    status = models_loading_status()
+
+    if status == LoadingResult.FAILED:
         statsd.increment("seer.health.live.500")
         return "Models failed to load", 500
+
+    # Only run model tests if models are already loaded
+    if status == LoadingResult.DONE:
+        if app_config.is_grouping_enabled and not test_grouping_model():
+            return "Grouping model inference failed", 500
+
+        if app_config.is_severity_enabled and not test_severity_model():
+            return "Severity model inference failed", 500
+
     statsd.increment("seer.health.live.200")
     return "", 200
 
@@ -455,6 +473,14 @@ def ready_check(app_config: AppConfig = injected):
         smoke_status = check_smoke_test()
         logger.info(f"Celery smoke status: {smoke_status}")
         status = min(status, smoke_status)
+
+    # Only run model tests if models are already loaded
+    if status == LoadingResult.DONE:
+        if app_config.is_grouping_enabled and not test_grouping_model():
+            return "Grouping model inference failed", 500
+
+        if app_config.is_severity_enabled and not test_severity_model():
+            return "Severity model inference failed", 500
 
     if status == LoadingResult.FAILED:
         statsd.increment("seer.health.ready.500")
