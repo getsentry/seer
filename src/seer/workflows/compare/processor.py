@@ -1,7 +1,6 @@
 import pandas as pd
 
 from seer.workflows.compare.models import CompareCohortsConfig, CompareCohortsRequest, StatsCohort
-from seer.workflows.exceptions import DataProcessingError
 
 
 class DataProcessor:
@@ -21,25 +20,21 @@ class DataProcessor:
                 - attribute_name: Name of the attribute
                 - distribution: Dictionary mapping labels to normalized values
         """
-        try:
-            df = pd.DataFrame(
-                [
-                    {
-                        "attribute_name": attr.attributeName,
-                        "distribution": {
-                            item.attributeValue: item.attributeValueCount / data.totalCount
-                            for item in attr.buckets
-                        },
-                    }
-                    for attr in data.attributeDistributions.attributes
-                ]
-            )
-            df["distribution"] = df["distribution"].apply(
-                lambda x: self._add_unseen_value(x, config)
-            )
-            return df
-        except Exception as e:
-            raise DataProcessingError(f"Failed to preprocess cohort data: {e}") from e
+
+        df = pd.DataFrame(
+            [
+                {
+                    "attribute_name": attr.attributeName,
+                    "distribution": {
+                        item.attributeValue: item.attributeValueCount / data.totalCount
+                        for item in attr.buckets
+                    },
+                }
+                for attr in data.attributeDistributions.attributes
+            ]
+        )
+        df["distribution"] = df["distribution"].apply(lambda x: self._add_unseen_value(x, config))
+        return df
 
     def _add_unseen_value(
         self, distribution: dict[str, float], config: CompareCohortsConfig
@@ -81,17 +76,14 @@ class DataProcessor:
             - Missing keys are filled with 0 before smoothing
             - Adds alpha to all values and renormalizes to maintain sum = 1
         """
-        try:
-            # reindex distribution to include all keys, filling missing values with 0
-            distribution = distribution.reindex(all_keys, fill_value=0)
+        # reindex distribution to include all keys, filling missing values with 0
+        distribution = distribution.reindex(all_keys, fill_value=0)
 
-            # perform lapalce smoothing of the distribution
-            # Add alpha to all values and renormalize
-            # division by total_count is needed to ensure that the definiton of Laplace smoothing is correct
-            distribution = distribution + config.alphaLaplace / total_count
-            return dict(distribution / distribution.sum())
-        except Exception as e:
-            raise DataProcessingError(f"Failed to transform distribution: {str(e)}") from e
+        # perform lapalce smoothing of the distribution
+        # Add alpha to all values and renormalize
+        # division by total_count is needed to ensure that the definiton of Laplace smoothing is correct
+        distribution = distribution + config.alphaLaplace / total_count
+        return dict(distribution / distribution.sum())
 
     def prepare_cohort_data(self, request: CompareCohortsRequest) -> pd.DataFrame:
         """

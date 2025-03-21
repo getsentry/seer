@@ -1,6 +1,10 @@
+import logging
+
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
 from seer.workflows.compare.processor import DataProcessor
 from seer.workflows.compare.scorer import CohortsMetricsScorer
+
+logger = logging.getLogger(__name__)
 
 
 class CompareService:
