@@ -464,7 +464,6 @@ def ready_check(app_config: AppConfig = injected):
 
     # Only run model tests if models are already loaded
     if status == LoadingResult.DONE:
-        # Test appropriate models based on deployment type
         if app_config.is_grouping_enabled and not test_grouping_model():
             status = LoadingResult.FAILED
 
