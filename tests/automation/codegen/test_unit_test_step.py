@@ -63,6 +63,45 @@ class TestUnittestStep(unittest.TestCase):
             "head_sha": mock_latest_commit_sha,
         }
 
+    @patch(
+        "seer.automation.codegen.unit_test_github_pr_creator.GeneratedTestsPullRequestCreator.create_github_pull_request"
+    )
+    @patch("seer.automation.codegen.unit_test_coding_component.UnitTestCodingComponent.invoke")
+    @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
+    @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+    def test_invoke_with_codecov_request(
+        self,
+        _,
+        mock_pipeline_step,
+        mock_invoke_unit_test_component,
+        mock_create_pr,
+    ):
+        mock_repo_client = MagicMock()
+        mock_pr = MagicMock()
+        mock_diff_content = "diff content"
+        mock_latest_commit_sha = "latest_commit_sha"
+        mock_context = MagicMock()
+        mock_context.get_repo_client.return_value = mock_repo_client
+        mock_repo_client.repo.get_pull.return_value = mock_pr
+        mock_repo_client.get_pr_diff_content.return_value = mock_diff_content
+        mock_repo_client.get_pr_head_sha.return_value = mock_latest_commit_sha
+        mock_context.event_manager = MagicMock()
+
+        request_data = {
+            "run_id": 1,
+            "pr_id": 123,
+            "repo_definition": RepoDefinition(
+                name="repo1", owner="owner1", provider="github", external_id="123123"
+            ),
+            "is_codecov_request": True,
+        }
+        request = UnittestStepRequest(**request_data)
+        step = UnittestStep(request=request)
+        step.context = mock_context
+
+        step.invoke()
+        mock_context.get_repo_client.assert_called_once_with(type=RepoClientType.CODECOV_PR_REVIEW)
+
     @patch("seer.automation.codegen.unit_test_github_pr_creator.Session")
     @patch("time.time", return_value=1234567890)
     def test_create_github_pull_request_success(self, _, mock_session):
