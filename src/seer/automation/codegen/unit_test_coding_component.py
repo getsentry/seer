@@ -99,7 +99,9 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             raise ValueError("No tasks found in coding output")
         file_changes: list[FileChange] = []
         client_type = (
-            RepoClientType.PR_REVIEW if is_codecov_request else RepoClientType.CODECOV_UNIT_TEST
+            RepoClientType.CODECOV_PR_REVIEW
+            if is_codecov_request
+            else RepoClientType.CODECOV_UNIT_TEST
         )
         repo_client = self.context.get_repo_client(task.repo_name, type=client_type)
         for task in coding_output.tasks:
