@@ -68,6 +68,7 @@ class TestCleanupTasks(unittest.TestCase):
                 original_flags=np.array([]),
                 use_suss=np.array([]),
                 confidence_levels=[],
+                algorithm_types=[],
             )
         else:
             anomalies = MPBatchAnomalyDetector().detect(ts, config)
