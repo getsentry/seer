@@ -71,13 +71,24 @@ class UnittestStep(CodegenStep):
             "owner_username": self.request.repo_definition.owner,
             "head_sha": latest_commit_sha,
         }
+        is_codecov_request = self.request.is_codecov_request
+
+        if is_codecov_request:
+            repo_client.post_issue_comment(
+                pr.url, "On it! Codecov is generating unit tests for this PR."
+            )
+        else:
+            repo_client.post_issue_comment(
+                pr.url, "On it! Sentry is generating unit tests for this PR."
+            )
+
         try:
             unittest_output = UnitTestCodingComponent(self.context).invoke(
                 CodeUnitTestRequest(
                     diff=diff_content,
                     codecov_client_params=codecov_client_params,
                 ),
-                is_codecov_request=self.request.is_codecov_request,
+                is_codecov_request=is_codecov_request,
             )
 
             if unittest_output:

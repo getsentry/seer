@@ -103,8 +103,8 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             if is_codecov_request
             else RepoClientType.CODECOV_UNIT_TEST
         )
-        repo_client = self.context.get_repo_client(task.repo_name, type=client_type)
         for task in coding_output.tasks:
+            repo_client = self.context.get_repo_client(task.repo_name, type=client_type)
             if task.type == "file_change":
                 file_content, _ = repo_client.get_file_content(task.file_path)
                 if not file_content:
