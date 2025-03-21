@@ -1,7 +1,5 @@
 import logging
 
-import sentry_sdk
-
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
 from seer.workflows.compare.processor import DataProcessor
 from seer.workflows.compare.scorer import CohortsMetricsScorer
@@ -81,9 +79,4 @@ def compare_cohort(request: CompareCohortsRequest) -> CompareCohortsResponse:
         This is a simplified entry point that creates a new service instance for each call, since the service is cheap to create.
         In the future, if the service becomes more complex, we can consider implementing a singleton pattern.
     """
-    try:
-        return CompareService().compare_cohort(request)
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
-        logger.exception(e)
-        raise e
+    return CompareService().compare_cohort(request)
